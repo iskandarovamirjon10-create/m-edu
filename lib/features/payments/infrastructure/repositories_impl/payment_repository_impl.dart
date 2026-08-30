@@ -49,6 +49,12 @@ class PaymentRepositoryImpl implements PaymentRepository {
   }
 
   @override
+  Future<Payment?> fetchByIdempotencyKey(String key) async {
+    final record = await _datasource.findByIdempotencyKey(key);
+    return record == null ? null : _toEntity(record);
+  }
+
+  @override
   Future<Payment?> fetchById(String paymentId) async {
     final record = await _datasource.findById(paymentId);
     return record == null ? null : _toEntity(record);
@@ -208,6 +214,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
   PaymentRecord _toRecord(Payment payment) {
     return PaymentRecord()
       ..paymentId = payment.paymentId
+      ..idempotencyKey = payment.idempotencyKey
       ..studentIdentityId = payment.studentIdentityId
       ..studentName = payment.studentName
       ..groupId = payment.groupId
@@ -237,6 +244,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
     if (paymentType == null || status == null) return null;
     return Payment(
       paymentId: record.paymentId,
+      idempotencyKey: record.idempotencyKey,
       studentIdentityId: record.studentIdentityId,
       studentName: record.studentName,
       groupId: record.groupId,

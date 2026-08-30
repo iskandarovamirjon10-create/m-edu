@@ -70,6 +70,13 @@ class IsarPaymentDataSource {
     record.receiptNumber = 'REC-${Ulid.generateShort()}';
   }
 
+  Future<PaymentRecord?> findByIdempotencyKey(String key) {
+    return _db.paymentRecords
+        .filter()
+        .idempotencyKeyEqualTo(key)
+        .findFirst();
+    }
+
   Future<PaymentRecord?> findById(String paymentId) {
     return _db.paymentRecords
         .filter()

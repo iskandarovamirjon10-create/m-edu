@@ -13,6 +13,7 @@ abstract class PaymentRepository {
   Future<Payment> updateStatus(String paymentId, PaymentStatus newStatus);
 
   /// To'lov ID bo'yicha to'lovni topadi.
+  Future<Payment?> fetchByIdempotencyKey(String key);
   Future<Payment?> fetchById(String paymentId);
 
   /// Barcha to'lovlarni qaytaradi.

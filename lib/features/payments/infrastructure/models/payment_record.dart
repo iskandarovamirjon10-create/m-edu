@@ -10,6 +10,9 @@ class PaymentRecord {
   @Index(unique: true, replace: false)
   late String paymentId;
 
+  @Index(unique: true, replace: false)
+  String? idempotencyKey;
+
   @Index()
   late String studentIdentityId;
 

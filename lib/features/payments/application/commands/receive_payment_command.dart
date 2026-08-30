@@ -69,15 +69,17 @@ class ReceivePaymentCommand {
 
     _validate(request);
 
-    // IDEMPOTENCY (sync contract §10): to'lov paymentId unique index
-    // orqali idempotent — bir xil paymentId bilan ikki marta saqlash
-    // Unique index violated xatosini beradi. Offline → reconnect
-    // paytida ikki qurilmada bir xil to'lov kiritsa, sync engine
-    // version-based conflict resolution orqali hal qiladi.
+    // IDEMPOTENCY CHECK: prevent duplicate financial records
+    if (request.idempotencyKey != null) {
+      final existing = await _repository.fetchByIdempotencyKey(request.idempotencyKey!);
+      if (existing != null) return existing;
+    }
+
     final now = DateTime.now();
 
     final payment = Payment(
       paymentId: _generatePaymentId(),
+      idempotencyKey: request.idempotencyKey,
       studentIdentityId: request.studentIdentityId,
       studentName: request.studentName,
       groupId: request.groupId,

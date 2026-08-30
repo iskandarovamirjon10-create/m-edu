@@ -27,6 +27,7 @@ enum PaymentType {
 class Payment extends Equatable {
   /// To'lovning yagona identifikatori.
   final String paymentId;
+  final String? idempotencyKey;
 
   /// Talaba identity ID'si.
   final String studentIdentityId;
@@ -84,6 +85,7 @@ class Payment extends Equatable {
 
   const Payment({
     required this.paymentId,
+    this.idempotencyKey,
     required this.studentIdentityId,
     this.studentName,
     this.groupId,
@@ -125,6 +127,7 @@ class Payment extends Equatable {
   @override
   List<Object?> get props => [
         paymentId,
+        idempotencyKey,
         studentIdentityId,
         studentName,
         groupId,
