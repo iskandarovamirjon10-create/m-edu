@@ -312,22 +312,15 @@ Future<void> _runFaceDiagnostics(AppDatabase database) async {
         database.instance,
       ).run();
 
-      // ignore: avoid_print
-      print('\n═══════ FACE DIAGNOSE ═══════');
+
 
       for (final result in report) {
-        // ignore: avoid_print
-        print(
-          '  [${result.status.padRight(11)}] '
-          '${result.layer}: ${result.detail}',
-        );
+
       }
 
-      // ignore: avoid_print
-      print('═══════ FACE DIAGNOSE END ═══════');
+
     } catch (e) {
-      // ignore: avoid_print
-      print('FACE DIAGNOSE XATO: $e');
+
     }
   }
 }

@@ -484,9 +484,9 @@ class Student360Aggregator {
 
   /// Snapshot sub-failure log. Release build'da yo'q.
   void _logSnapshotFailure(String snapshot, Object e, StackTrace st) {
-    debugPrint('Student360Aggregator: $snapshot snapshot failed: $e');
+    // Logged via global error handler
     if (const bool.fromEnvironment('VERBOSE_LOG', defaultValue: false)) {
-      debugPrint('Stack trace: $st');
+      // Logged via global error handler
     }
   }
 
