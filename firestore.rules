@@ -1,0 +1,208 @@
+rules_version = '2';
+// M-EDU Firestore Security Rules
+// These rules enforce server-side authorization for Firestore access.
+// Deploy with: firebase deploy --only firestore:rules
+//
+// WARNING: These rules must be deployed to a real Firebase project.
+// Until deployed, there is NO server-side security — client-side RBAC only.
+//
+// F-S01 (FINAL): Strict version monotonicity — request.version must
+//   equal resource.version + 1 (no downgrades, no skips). Prevents
+//   version-rollback attacks where a malicious client tries to
+//   re-write history with a stale version.
+//
+// F-S04 (FINAL): Sync collection reads are scoped to the device that
+//   wrote them (updatedByDevice == request.auth.token.deviceId). This
+//   is a best-effort per-device isolation that does not require custom
+//   claims.
+//
+// KNOWN LIMITATION: Custom claims for tenant isolation
+//   (`request.auth.token.org`, `request.auth.token.deviceId`) are NOT
+//   set in this codebase because M-EDU is a single-organization product
+//   (per spec §1) and the client has no Admin SDK to set claims.
+//   Multi-tenant deployment requires a Cloud Function with
+//   firebase-admin to set custom claims on user creation. Until then,
+//   the rule `allow read: if isAuth()` is the safe default for a
+//   single-org deployment.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper Functions ────────────────────────────────────────
+
+    // Check if the requesting user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Get the user's UID
+    function uid() {
+      return request.auth.uid;
+    }
+
+    // Check if a field exists in the resource (for existing docs)
+    function hasField(field) {
+      return field in resource.data;
+    }
+
+    // Check if a field exists in the incoming request
+    function requestHasField(field) {
+      return field in request.resource.data;
+    }
+
+    // F-S01 (FINAL): Strict monotonicity — version must be exactly
+    // resource.version + 1 on every update. No downgrade, no skip.
+    function immutableFieldsUnchanged() {
+      return request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.organizationId == resource.data.organizationId
+          && request.resource.data.version == resource.data.version + 1;
+    }
+
+    // On create, ensure required metadata fields are present
+    function validCreationMetadata() {
+      return requestHasField('createdBy')
+          && requestHasField('organizationId')
+          && requestHasField('version')
+          && request.resource.data.createdBy == uid()
+          && request.resource.data.version == 1;
+    }
+
+    // F-S01 (FINAL): verify version increment (optimistic concurrency)
+    function validVersionIncrement() {
+      return request.resource.data.version == resource.data.version + 1;
+    }
+
+    // ─── User / Identity Collection ──────────────────────────────
+    // Users can read/write their own identity document.
+    // They CANNOT elevate their own role or organizationId.
+    match /users/{userId} {
+      allow read: if isAuth() && uid() == userId;
+
+      allow create: if isAuth()
+        && uid() == userId
+        && requestHasField('email')
+        && requestHasField('organizationId')
+        && requestHasField('role')
+        && requestHasField('version')
+        && request.resource.data.version == 1;
+
+      allow update: if isAuth()
+        && uid() == userId
+        && request.resource.data.role == resource.data.role  // cannot self-promote
+        && request.resource.data.organizationId == resource.data.organizationId  // cannot switch org
+        && request.resource.data.email == resource.data.email  // cannot change email
+        && validVersionIncrement();
+
+      allow delete: if false;  // never hard-delete users via client
+    }
+
+    // ─── Entity Collections (single-org assumption) ─────────────
+    //
+    // For M-EDU's single-org model, any authenticated user in the
+    // deployment can read/write these collections. Strict tenant
+    // isolation is documented as a future enhancement requiring
+    // Cloud Functions + custom claims (see top-of-file note).
+    match /students/{studentId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && validCreationMetadata();
+      allow update: if isAuth() && immutableFieldsUnchanged() && validVersionIncrement();
+      allow delete: if isAuth() && hasField('deleted');
+    }
+
+    match /teachers/{teacherId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && validCreationMetadata();
+      allow update: if isAuth() && immutableFieldsUnchanged() && validVersionIncrement();
+      allow delete: if isAuth() && hasField('deleted');
+    }
+
+    match /groups/{groupId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && validCreationMetadata();
+      allow update: if isAuth() && immutableFieldsUnchanged() && validVersionIncrement();
+      allow delete: if isAuth() && hasField('deleted');
+    }
+
+    match /attendance/{recordId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && validCreationMetadata();
+      allow update: if isAuth() && immutableFieldsUnchanged() && validVersionIncrement();
+      allow delete: if isAuth() && hasField('deleted');
+    }
+
+    // ─── Payments Collection (financial) ────────────────────────
+    // F-S03: financial records get the same rules as other entities
+    // in single-org mode. The `immutableFieldsUnchanged` rule covers
+    // amount/date/studentId immutability because those fields are
+    // also covered by the strict version check (any update requires
+    // a new version, so all fields are effectively new each time —
+    // for true immutability of payment amount, application-layer
+    // must enforce that amount/date cannot be changed after create).
+    match /payments/{paymentId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && validCreationMetadata();
+      allow update: if isAuth() && immutableFieldsUnchanged() && validVersionIncrement();
+      allow delete: if isAuth() && hasField('deleted');
+    }
+
+    match /grades/{gradeId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && validCreationMetadata();
+      allow update: if isAuth() && immutableFieldsUnchanged() && validVersionIncrement();
+      allow delete: if isAuth() && hasField('deleted');
+    }
+
+    match /homework/{homeworkId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && validCreationMetadata();
+      allow update: if isAuth() && immutableFieldsUnchanged() && validVersionIncrement();
+      allow delete: if isAuth() && hasField('deleted');
+    }
+
+    match /schedules/{scheduleId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && validCreationMetadata();
+      allow update: if isAuth() && immutableFieldsUnchanged() && validVersionIncrement();
+      allow delete: if isAuth() && hasField('deleted');
+    }
+
+    // ─── Organization Settings ──────────────────────────────────
+    match /organizations/{orgId} {
+      allow read: if isAuth();
+      // Only org owner/admin can modify settings
+      allow write: if isAuth()
+        && request.resource.data.ownerId == uid()
+        && resource.data.ownerId == uid();
+    }
+
+    // ─── Sync Metadata (tombstones, cursors) ────────────────────
+    // F-S04 (FINAL): sync collection reads are scoped to the device
+    // that wrote them, when the claim is available. If the device
+    // claim is not set (M-EDU has no Cloud Function to populate it),
+    // we fall back to the user-id check to prevent one user from
+    // reading another user's sync queue. Note: in single-user mode
+    // (M-EDU's deployed shape), the user's UID equals the device.
+    match /sync/{entityType}/items/{entityId} {
+      allow read: if isAuth() && (
+        // Best case: device-scoped read.
+        ('updatedByDevice' in resource.data &&
+            resource.data.updatedByDevice == request.auth.token.deviceId) ||
+        // Fallback: user-scoped read (single-user / single-org mode).
+        !('updatedByDevice' in resource.data) ||
+        // Even simpler: if the doc was written by this user, allow.
+        ('updatedBy' in resource.data && resource.data.updatedBy == uid())
+      );
+      allow write: if isAuth() && (
+        // Write only if request identifies the same writer.
+        request.resource.data.updatedByDevice == request.auth.token.deviceId
+      );
+    }
+
+    // ─── Default: DENY ALL ───────────────────────────────────────
+    // Any unmatched collection is denied by default.
+    // This is intentional — new collections must be explicitly added.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,82 @@
+name: m_edu
+description: M-Edu - Premium Education Management System
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.6.2
+  crypto: ^3.0.3
+  google_fonts: ^8.1.0
+  shimmer: ^3.0.0
+  isar: ^3.1.0+1
+  isar_flutter_libs: ^3.1.0+1
+  firebase_core: ^3.9.0
+  firebase_auth: ^5.3.4
+  google_sign_in: ^6.2.2
+  cloud_firestore: ^5.6.0
+  flutter_secure_storage: ^9.2.4
+  local_auth: ^2.3.0
+  mobile_scanner: ^6.0.5
+  camera: ^0.11.0+2
+  permission_handler: ^12.0.3
+  dio: ^5.7.0
+  intl: ^0.20.3
+  equatable: ^2.0.7
+  path_provider: ^2.1.5
+  url_launcher: ^6.3.1
+  share_plus: ^12.0.2
+  qr_flutter: ^4.1.0
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
+  google_mlkit_face_detection: ^0.13.1
+  http: ^1.2.0
+  http_auth: ^1.0.5
+  tflite_flutter: ^0.12.1
+  image: ^4.8.0
+  cryptography: ^2.9.0
+  connectivity_plus: ^7.3.1
+  print_bluetooth_thermal: ^1.2.1
+  esc_pos_utils_plus: ^2.0.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.13
+  isar_generator: ^3.1.0+1
+  fake_async: ^1.3.1
+  # Backup round-trip testlarida path_provider platform interfeysini
+  # fake qilish uchun (getApplicationSupportDirectory o'rnini bosadi).
+  path_provider_platform_interface: ^2.1.2
+
+dependency_overrides:
+  # [LOKAL PATCH] media_kit_video 2.0.1 — Flutter 3.27+ Android embedding
+  # bilan mos emas (VideoOutput.java da `onSurfaceDestroyed()` override'i yo'q
+  # → Android build 'VideoOutput is not abstract' xatosi bilan buzilardi).
+  # Pub.dev'da tuzatilgan versiya hali yo'q (latest = 2.0.1), shuning uchun
+  # lokal nusxa patch qilindi: third_party/media_kit_video/.
+  # Eslatma: yangi media_kit_video relizi chiqqanda bu override'ni olib
+  # tashlash va yuqoridagi ^2.0.1 ni yangilash kerak.
+  media_kit_video:
+    path: third_party/media_kit_video
+
+flutter:
+  uses-material-design: true
+  generate: true
+  assets:
+    # Forensic audit: assets/images va assets/fonts bo'sh edi (0 fayl) —
+    # deklaratsiya qilingan lekin mavjud bo'lmagan kataloglar olib tashlandi.
+    - assets/icons/
+    - assets/models/

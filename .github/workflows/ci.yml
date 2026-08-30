@@ -1,0 +1,80 @@
+# M-EDU CI quality gates (GAPS-G6 / Design Constitution v4.0 §AJ-§AK, C-47/48)
+#
+# Gates: format → design-literal regression lint → analyze → test → debug build.
+# The design-literal gate fails when raw Color(0x…)/BorderRadius/EdgeInsets/
+# Duration/Colors.* counts in feature + design_system code exceed the committed
+# baseline (tool/design_literal_baseline.json) — v4.0 §AG enforcement.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Note: release APK CI'da build qilinmaydi — release signing kaliti
+# (android/key.properties) CI'da yo'q va gradle fail-clear qoidasi bilan
+# debug signing'ga jim o'tishni TAQIQLAYDI (spec §50, P1-06). Release
+# build mahalliy ravishda verifikatsiya qilinadi (bash scripts/generate_release_keystore.sh).
+jobs:
+  quality-gates:
+    name: Format · Literals · Analyze · Test · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter (project version)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.0'
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Design-literal gate (§AG)
+        run: dart run tool/check_design_literals.dart
+
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed lib test tool
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+      - name: Test
+        run: flutter test
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+  windows-build:
+    name: Windows build
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter (project version)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.0'
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build Windows
+        # Windows release build — tflite_flutter FFI bilan. Natif kutubxona
+        # (blobs/libtensorflowlite_c-win.dll) yo'q bo'lsa CMake ogohlantiradi,
+        # lekin build buzilmaydi (face recognition runtime'da ishga tushadi).
+        run: flutter build windows

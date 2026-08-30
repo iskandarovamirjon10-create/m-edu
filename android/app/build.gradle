@@ -1,0 +1,82 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+    // F-G01 FIX: Google Services plugin — google-services.json'dan
+    // Firebase konfiguratsiyasini (app_id, API key, SHA) qurilma resurslariga
+    // yozadi. Shuning uchun Google Sign-In va Firebase Auth ishlaydi.
+    id "com.google.gms.google-services"
+}
+
+// C-05 (P0): release signing — key.properties dan o'qiladi (git'ga kiritilmaydi).
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    namespace = "com.medu.m_edu"
+
+    compileSdk = 36
+
+    // integration_test va boshqa Android pluginlar talab qiladigan
+    // eng yuqori mos NDK versiyasi.
+    ndkVersion = "28.2.13676358"
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        applicationId = "com.medu.m_edu"
+
+        minSdkVersion = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Production release faqat haqiqiy release signing
+            // konfiguratsiyasi mavjud bo'lganda quriladi.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+
+// Production release uchun debug signing qat'iyan taqiqlanadi.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.hasTask(':app:assembleRelease') &&
+            !keystorePropertiesFile.exists()) {
+        throw new GradleException(
+            "Release signing kaliti topilmadi: android/key.properties yo'q.\n" +
+            "Yaratish: bash scripts/generate_release_keystore.sh\n" +
+            "Debug signing bilan production release TAQIQLANADI."
+        )
+    }
+}
+
+flutter {
+    source = "../.."
+}

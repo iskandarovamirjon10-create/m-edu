@@ -1,0 +1,48 @@
+# This file configures the analyzer, which statically analyzes Dart code to
+# check for errors, warnings, and lints.
+#
+# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
+# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
+# invoked from the command line by running `flutter analyze`.
+
+# The following line activates a set of recommended lints for Flutter apps,
+# packages, and plugins designed to encourage good coding practices.
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    # Vendor (lokal patch'langan) paket — o'z lints'larini ahamiyatsiz
+    - third_party/**
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+    - "**/*.g.dart"
+  errors:
+    experimental_member_use: ignore
+
+linter:
+  rules:
+    # ── Production-safe qo'shimcha qoidalar (audit) ─────────────────────
+    # Har bir qoida yangi regressiyani erta ushlash uchun; CI `--fatal-infos`
+    # bilan ishlaydi, shuning uchun faqat amalda toza (noise'li bo'lmagan)
+    # qoidalar qo'shilgan.
+
+    # Yodda qolmagan (await qilinmagan) Future'lar — fire-and-forget xatolar.
+    unawaited_futures: true
+
+    # Await'dan keyin BuildContext ishlatish — mounted tekshiruvi talab qiladi.
+    use_build_context_synchronously: true
+
+    # Ikki marta ishlatilmaydigan null-tekshiruv — ortiqcha `!` belgilarini
+    # kamaytiradi.
+    unnecessary_null_checks: true
+
+    # Future.ignore() o'rniga aniq ishlov — jim yutilgan xatolar.
+    discarded_futures: false # (noisy — kodda ogohlantiruvchi holatlar uchun izohlar bor)
+
+# Additional information about this file can be found at
+# https://dart.dev/guides/language/analysis-options

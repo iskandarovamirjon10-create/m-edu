@@ -1,0 +1,134 @@
+// M-Edu Firestore Security Rules
+//
+// UI'da `if (isAdmin)` — security EMAS. Bu rules server tomonida RBAC'ni
+// majbur qiladi: faqat autentifikatsiyalangan va tegishli rolga ega
+// foydalanuvchi ma'lumotlarni o'qiy/yoza oladi (fail-closed).
+//
+// Rol modeli app bilan BIR XIL (lib/core/security/permissions.dart):
+// super_admin, admin, director, manager, teacher, staff.
+//
+// Custom claims app'da o'rnatiladi:
+//   admin.setCustomUserClaims(uid, { role: 'admin' })
+//
+// QO'LLASH:
+//   firebase deploy --only firestore:rules
+// Yoki emulatorda:
+//   firebase emulators:start --only firestore
+//
+// DIQQAT: har bir o'zgarish app'dagi Permissions.can matritsasi bilan
+// sinxron bo'lishi shart (test/unit/firestore_rules_test.dart tekshiradi).
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Yordamchi funksiyalar ──────────────────────────────────────────
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return request.auth.token.role;
+    }
+
+    function isAdminLevel() {
+      return signedIn() &&
+        (role() == 'super_admin' || role() == 'admin' || role() == 'director');
+    }
+
+    function isManagerOrAbove() {
+      return isAdminLevel() || (signedIn() && role() == 'manager');
+    }
+
+    function isStaffOrAbove() {
+      return isManagerOrAbove() || (signedIn() && role() == 'staff');
+    }
+
+    function isTeacher() {
+      return signedIn() && role() == 'teacher';
+    }
+
+    // App matritsasi bo'yicha teacher quyidagilarni O'QIY oladi:
+    // studentsView, attendanceView, reportsView, scheduleView, financeView,
+    // gradesView, faceIdUse. Yozish: attendanceCreate, gradesCreate.
+    function teacherCanRead() {
+      return isTeacher();
+    }
+
+    function canReadOperational() {
+      // students / attendance / grades / reports / organization
+      return isStaffOrAbove() || teacherCanRead();
+    }
+
+    // Server SDK (admin) orqali yoziladigan resurslar.
+    function serverOnly() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    // ─── Sync yozuvlari (offline mutation queue) ────────────────────────
+    // Client to'g'ridan-to'g'ri YOZA OLMAYDI (serverOnly). Sync payload
+    // to'liq entity ma'lumotlarini o'z ichiga oladi — o'qish manager+.
+    match /sync/{entityType}/{entityId} {
+      allow read: if isManagerOrAbove();
+      allow write: if serverOnly();
+    }
+
+    // ─── Users — faqat super_admin ───────────────────────────────────────
+    match /users/{userId} {
+      allow read: if signedIn() && role() == 'super_admin';
+      allow create, update, delete: if signedIn() && role() == 'super_admin';
+    }
+
+    // ─── Organization (admin+) ───────────────────────────────────────────
+    match /organization/{orgId} {
+      allow read: if canReadOperational();
+      allow write: if isAdminLevel();
+    }
+
+    // ─── Students (xodimlar va teacher o'qiydi, manager+ yozadi) ─────────
+    match /students/{studentId} {
+      allow read: if canReadOperational();
+      allow create, update: if isManagerOrAbove();
+      allow delete: if isAdminLevel();
+    }
+
+    // ─── Payments (teacher financeView — o'qish; yozish manager+) ───────
+    match /payments/{paymentId} {
+      allow read: if isManagerOrAbove() || teacherCanRead();
+      allow create, update: if isManagerOrAbove();
+      allow delete: if isAdminLevel();
+    }
+
+    // ─── Attendance (teacher belgilaydi) ─────────────────────────────────
+    match /attendance/{attendanceId} {
+      allow read: if canReadOperational();
+      allow create, update: if isAdminLevel() || teacherCanRead();
+      allow delete: if isAdminLevel();
+    }
+
+    // ─── Grades (teacher+ belgilaydi, o'chirish manager+) ────────────────
+    match /grades/{gradeId} {
+      allow read: if canReadOperational();
+      allow create, update: if isAdminLevel() || teacherCanRead();
+      allow delete: if isManagerOrAbove();
+    }
+
+    // ─── Reports (o'qish staff+/teacher, yaratish manager+) ──────────────
+    match /reports/{reportId} {
+      allow read: if canReadOperational();
+      allow create: if isManagerOrAbove();
+      allow update, delete: if isAdminLevel();
+    }
+
+    // ─── Audit logs (faqat server yozadi, admin o'qiydi) ─────────────────
+    match /audit_logs/{logId} {
+      allow read: if isAdminLevel();
+      allow write: if serverOnly();
+    }
+
+    // ─── Biometric/face data — HECh QACHON cloud'ga yuborilmaydi ────────
+    // Face embedding faqat qurilmada (shifrlangan Isar) saqlanadi.
+    // Default deny — ruxsat berilgan match yo'q.
+  }
+}

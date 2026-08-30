@@ -1,0 +1,42 @@
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = "../build"
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+
+subprojects {
+    project.evaluationDependsOn(":app")
+}
+
+gradle.projectsEvaluated {
+    subprojects.each { proj ->
+        // Skip the main :app project — Flutter plugin manages its own config
+        if (proj.name == "app") return
+
+        proj.plugins.withId("org.jetbrains.kotlin.android") {
+            proj.tasks.withType(Class.forName("org.jetbrains.kotlin.gradle.tasks.KotlinCompile")).configureEach {
+                kotlinOptions {
+                    jvmTarget = "17"
+                }
+            }
+        }
+        if (proj.plugins.hasPlugin("com.android.library")) {
+            proj.android {
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+            }
+        }
+    }
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

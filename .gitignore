@@ -1,0 +1,111 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+*.swp~
+.DS_Store
+Thumbs.db
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code (faqat loyiha sozlamalari saqlanmasa)
+.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+.pub-cache/
+.pub/
+**/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Android build cache
+**/android/.gradle/
+**/android/app/.cxx/
+**/android/local.properties
+
+# Android release signing (maxfiy — git'ga tushmasligi shart)
+**/key.properties
+**/*.jks
+**/*.keystore
+
+# Firebase konfiguratsiyasi (API kalitlari, SHA-1 fingerprint, OAuth client ID bor)
+**/m_edu_firebase.json
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase_app_id_file.json
+
+# Muhit o'zgaruvchilari (.env fayllari — API kalitlari, tokenlar, local path'lar)
+**/.env
+**/*.env
+
+# Platform ephemeral & symlinks
+**/ephemeral/
+**/.plugin_symlinks/
+
+# iOS/macOS pods
+**/ios/Pods/
+**/macos/Pods/
+
+# Desktop TFLite natif kutubxonalar (blobs/README.md ga qarang)
+blobs/*.so
+blobs/*.dll
+libisar.so
+isar.dll
+
+# Test coverage
+coverage/
+
+# Qurilma testi skrinshotlari (git'ga tushmaydi — artefakt)
+screenshots/
+screenshots_android_test/
+screenshots_device/
+
+# Live QA dump fayllari (UI hierarchy, shaxsiy ma'lumot bo'lishi mumkin)
+docs/live_qa/dumps/
+docs/live_qa/shots/
+docs/live_qa/logs_*.txt
+
+# Kalibrlash korpusi — REAL biometrik suratlar (spec §29).
+# Git'ga tushishi QAT'IYAN TAQIQLANADI (shaxsiy ma'lumot!)
+test_data/
+
+# Audit/forensic hisobotlari (vaqtinchalik — loyiha manba kodi emas)
+AGENT2_FINAL_FORENSIC_REPORT.md
+AGENT2_FORENSIC_PRODUCTION_REPORT.md
+AUDIT_REPORT.md
+FACE_RECOGNITION_PRE_FIX_FORENSIC_REPORT.md
+FINAL_AUDIT_REPORT.md
+M-EDU_FACE_RECOGNITION_FINAL_FORENSIC_REPORT.md
+M-EDU_FINAL_AUTH_SYNC_WINDOWS_ANDROID_FORENSIC_REPORT.md
+M-EDU_FINAL_FORENSIC_PRODUCTION_REPORT.md
+MULTI_CAMERA_IMPLEMENTATION.md
+docs/M-EDU_BIOMETRIC_FINAL_AUDIT.md
+docs/M-EDU_FORENSIC_AUDIT.md
+
+# Audit loglari
+.kilo_*.log
