@@ -52,63 +52,68 @@ const PaymentRecordSchema = CollectionSchema(
       name: r'groupName',
       type: IsarType.string,
     ),
-    r'lateFee': PropertySchema(
+    r'idempotencyKey': PropertySchema(
       id: 7,
+      name: r'idempotencyKey',
+      type: IsarType.string,
+    ),
+    r'lateFee': PropertySchema(
+      id: 8,
       name: r'lateFee',
       type: IsarType.long,
     ),
     r'notes': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'notes',
       type: IsarType.string,
     ),
     r'paymentDate': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'paymentDate',
       type: IsarType.dateTime,
     ),
     r'paymentId': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'paymentId',
       type: IsarType.string,
     ),
     r'paymentType': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'paymentType',
       type: IsarType.string,
     ),
     r'pendingSync': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'pendingSync',
       type: IsarType.bool,
     ),
     r'receiptNumber': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'receiptNumber',
       type: IsarType.string,
     ),
     r'receivedBy': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'receivedBy',
       type: IsarType.string,
     ),
     r'status': PropertySchema(
-      id: 15,
+      id: 16,
       name: r'status',
       type: IsarType.string,
     ),
     r'studentIdentityId': PropertySchema(
-      id: 16,
+      id: 17,
       name: r'studentIdentityId',
       type: IsarType.string,
     ),
     r'studentName': PropertySchema(
-      id: 17,
+      id: 18,
       name: r'studentName',
       type: IsarType.string,
     ),
     r'syncVersion': PropertySchema(
-      id: 18,
+      id: 19,
       name: r'syncVersion',
       type: IsarType.long,
     )
@@ -127,6 +132,19 @@ const PaymentRecordSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'paymentId',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
+    r'idempotencyKey': IndexSchema(
+      id: 6522471565226449816,
+      name: r'idempotencyKey',
+      unique: true,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'idempotencyKey',
           type: IndexType.hash,
           caseSensitive: true,
         )
@@ -224,6 +242,12 @@ int _paymentRecordEstimateSize(
     }
   }
   {
+    final value = object.idempotencyKey;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
     final value = object.notes;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -267,18 +291,19 @@ void _paymentRecordSerialize(
   writer.writeDateTime(offsets[4], object.dueDate);
   writer.writeString(offsets[5], object.groupId);
   writer.writeString(offsets[6], object.groupName);
-  writer.writeLong(offsets[7], object.lateFee);
-  writer.writeString(offsets[8], object.notes);
-  writer.writeDateTime(offsets[9], object.paymentDate);
-  writer.writeString(offsets[10], object.paymentId);
-  writer.writeString(offsets[11], object.paymentType);
-  writer.writeBool(offsets[12], object.pendingSync);
-  writer.writeString(offsets[13], object.receiptNumber);
-  writer.writeString(offsets[14], object.receivedBy);
-  writer.writeString(offsets[15], object.status);
-  writer.writeString(offsets[16], object.studentIdentityId);
-  writer.writeString(offsets[17], object.studentName);
-  writer.writeLong(offsets[18], object.syncVersion);
+  writer.writeString(offsets[7], object.idempotencyKey);
+  writer.writeLong(offsets[8], object.lateFee);
+  writer.writeString(offsets[9], object.notes);
+  writer.writeDateTime(offsets[10], object.paymentDate);
+  writer.writeString(offsets[11], object.paymentId);
+  writer.writeString(offsets[12], object.paymentType);
+  writer.writeBool(offsets[13], object.pendingSync);
+  writer.writeString(offsets[14], object.receiptNumber);
+  writer.writeString(offsets[15], object.receivedBy);
+  writer.writeString(offsets[16], object.status);
+  writer.writeString(offsets[17], object.studentIdentityId);
+  writer.writeString(offsets[18], object.studentName);
+  writer.writeLong(offsets[19], object.syncVersion);
 }
 
 PaymentRecord _paymentRecordDeserialize(
@@ -296,18 +321,19 @@ PaymentRecord _paymentRecordDeserialize(
   object.groupId = reader.readStringOrNull(offsets[5]);
   object.groupName = reader.readStringOrNull(offsets[6]);
   object.id = id;
-  object.lateFee = reader.readLong(offsets[7]);
-  object.notes = reader.readStringOrNull(offsets[8]);
-  object.paymentDate = reader.readDateTime(offsets[9]);
-  object.paymentId = reader.readString(offsets[10]);
-  object.paymentType = reader.readString(offsets[11]);
-  object.pendingSync = reader.readBool(offsets[12]);
-  object.receiptNumber = reader.readStringOrNull(offsets[13]);
-  object.receivedBy = reader.readStringOrNull(offsets[14]);
-  object.status = reader.readString(offsets[15]);
-  object.studentIdentityId = reader.readString(offsets[16]);
-  object.studentName = reader.readStringOrNull(offsets[17]);
-  object.syncVersion = reader.readLong(offsets[18]);
+  object.idempotencyKey = reader.readStringOrNull(offsets[7]);
+  object.lateFee = reader.readLong(offsets[8]);
+  object.notes = reader.readStringOrNull(offsets[9]);
+  object.paymentDate = reader.readDateTime(offsets[10]);
+  object.paymentId = reader.readString(offsets[11]);
+  object.paymentType = reader.readString(offsets[12]);
+  object.pendingSync = reader.readBool(offsets[13]);
+  object.receiptNumber = reader.readStringOrNull(offsets[14]);
+  object.receivedBy = reader.readStringOrNull(offsets[15]);
+  object.status = reader.readString(offsets[16]);
+  object.studentIdentityId = reader.readString(offsets[17]);
+  object.studentName = reader.readStringOrNull(offsets[18]);
+  object.syncVersion = reader.readLong(offsets[19]);
   return object;
 }
 
@@ -333,28 +359,30 @@ P _paymentRecordDeserializeProp<P>(
     case 6:
       return (reader.readStringOrNull(offset)) as P;
     case 7:
-      return (reader.readLong(offset)) as P;
-    case 8:
       return (reader.readStringOrNull(offset)) as P;
+    case 8:
+      return (reader.readLong(offset)) as P;
     case 9:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 10:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 11:
       return (reader.readString(offset)) as P;
     case 12:
-      return (reader.readBool(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 13:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 14:
       return (reader.readStringOrNull(offset)) as P;
     case 15:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 16:
       return (reader.readString(offset)) as P;
     case 17:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 18:
+      return (reader.readStringOrNull(offset)) as P;
+    case 19:
       return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -426,6 +454,61 @@ extension PaymentRecordByIndex on IsarCollection<PaymentRecord> {
   List<Id> putAllByPaymentIdSync(List<PaymentRecord> objects,
       {bool saveLinks = true}) {
     return putAllByIndexSync(r'paymentId', objects, saveLinks: saveLinks);
+  }
+
+  Future<PaymentRecord?> getByIdempotencyKey(String? idempotencyKey) {
+    return getByIndex(r'idempotencyKey', [idempotencyKey]);
+  }
+
+  PaymentRecord? getByIdempotencyKeySync(String? idempotencyKey) {
+    return getByIndexSync(r'idempotencyKey', [idempotencyKey]);
+  }
+
+  Future<bool> deleteByIdempotencyKey(String? idempotencyKey) {
+    return deleteByIndex(r'idempotencyKey', [idempotencyKey]);
+  }
+
+  bool deleteByIdempotencyKeySync(String? idempotencyKey) {
+    return deleteByIndexSync(r'idempotencyKey', [idempotencyKey]);
+  }
+
+  Future<List<PaymentRecord?>> getAllByIdempotencyKey(
+      List<String?> idempotencyKeyValues) {
+    final values = idempotencyKeyValues.map((e) => [e]).toList();
+    return getAllByIndex(r'idempotencyKey', values);
+  }
+
+  List<PaymentRecord?> getAllByIdempotencyKeySync(
+      List<String?> idempotencyKeyValues) {
+    final values = idempotencyKeyValues.map((e) => [e]).toList();
+    return getAllByIndexSync(r'idempotencyKey', values);
+  }
+
+  Future<int> deleteAllByIdempotencyKey(List<String?> idempotencyKeyValues) {
+    final values = idempotencyKeyValues.map((e) => [e]).toList();
+    return deleteAllByIndex(r'idempotencyKey', values);
+  }
+
+  int deleteAllByIdempotencyKeySync(List<String?> idempotencyKeyValues) {
+    final values = idempotencyKeyValues.map((e) => [e]).toList();
+    return deleteAllByIndexSync(r'idempotencyKey', values);
+  }
+
+  Future<Id> putByIdempotencyKey(PaymentRecord object) {
+    return putByIndex(r'idempotencyKey', object);
+  }
+
+  Id putByIdempotencyKeySync(PaymentRecord object, {bool saveLinks = true}) {
+    return putByIndexSync(r'idempotencyKey', object, saveLinks: saveLinks);
+  }
+
+  Future<List<Id>> putAllByIdempotencyKey(List<PaymentRecord> objects) {
+    return putAllByIndex(r'idempotencyKey', objects);
+  }
+
+  List<Id> putAllByIdempotencyKeySync(List<PaymentRecord> objects,
+      {bool saveLinks = true}) {
+    return putAllByIndexSync(r'idempotencyKey', objects, saveLinks: saveLinks);
   }
 }
 
@@ -556,6 +639,73 @@ extension PaymentRecordQueryWhere
               indexName: r'paymentId',
               lower: [],
               upper: [paymentId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterWhereClause>
+      idempotencyKeyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'idempotencyKey',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterWhereClause>
+      idempotencyKeyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'idempotencyKey',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterWhereClause>
+      idempotencyKeyEqualTo(String? idempotencyKey) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'idempotencyKey',
+        value: [idempotencyKey],
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterWhereClause>
+      idempotencyKeyNotEqualTo(String? idempotencyKey) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'idempotencyKey',
+              lower: [],
+              upper: [idempotencyKey],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'idempotencyKey',
+              lower: [idempotencyKey],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'idempotencyKey',
+              lower: [idempotencyKey],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'idempotencyKey',
+              lower: [],
+              upper: [idempotencyKey],
               includeUpper: false,
             ));
       }
@@ -1667,6 +1817,160 @@ extension PaymentRecordQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'idempotencyKey',
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'idempotencyKey',
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'idempotencyKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'idempotencyKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'idempotencyKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'idempotencyKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'idempotencyKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'idempotencyKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'idempotencyKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'idempotencyKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'idempotencyKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterFilterCondition>
+      idempotencyKeyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'idempotencyKey',
+        value: '',
       ));
     });
   }
@@ -3109,6 +3413,20 @@ extension PaymentRecordQuerySortBy
     });
   }
 
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterSortBy>
+      sortByIdempotencyKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'idempotencyKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterSortBy>
+      sortByIdempotencyKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'idempotencyKey', Sort.desc);
+    });
+  }
+
   QueryBuilder<PaymentRecord, PaymentRecord, QAfterSortBy> sortByLateFee() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'lateFee', Sort.asc);
@@ -3370,6 +3688,20 @@ extension PaymentRecordQuerySortThenBy
     });
   }
 
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterSortBy>
+      thenByIdempotencyKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'idempotencyKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<PaymentRecord, PaymentRecord, QAfterSortBy>
+      thenByIdempotencyKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'idempotencyKey', Sort.desc);
+    });
+  }
+
   QueryBuilder<PaymentRecord, PaymentRecord, QAfterSortBy> thenByLateFee() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'lateFee', Sort.asc);
@@ -3577,6 +3909,14 @@ extension PaymentRecordQueryWhereDistinct
     });
   }
 
+  QueryBuilder<PaymentRecord, PaymentRecord, QDistinct>
+      distinctByIdempotencyKey({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'idempotencyKey',
+          caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<PaymentRecord, PaymentRecord, QDistinct> distinctByLateFee() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'lateFee');
@@ -3712,6 +4052,13 @@ extension PaymentRecordQueryProperty
   QueryBuilder<PaymentRecord, String?, QQueryOperations> groupNameProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'groupName');
+    });
+  }
+
+  QueryBuilder<PaymentRecord, String?, QQueryOperations>
+      idempotencyKeyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'idempotencyKey');
     });
   }
 

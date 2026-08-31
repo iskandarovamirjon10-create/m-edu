@@ -18,23 +18,38 @@ const LeadActivityRecordSchema = CollectionSchema(
   name: r'LeadActivityRecord',
   id: 6647400023546451368,
   properties: {
-    r'description': PropertySchema(
+    r'authoredByName': PropertySchema(
       id: 0,
+      name: r'authoredByName',
+      type: IsarType.string,
+    ),
+    r'authoredByUserId': PropertySchema(
+      id: 1,
+      name: r'authoredByUserId',
+      type: IsarType.string,
+    ),
+    r'description': PropertySchema(
+      id: 2,
       name: r'description',
       type: IsarType.string,
     ),
     r'leadId': PropertySchema(
-      id: 1,
+      id: 3,
       name: r'leadId',
       type: IsarType.string,
     ),
+    r'metadata': PropertySchema(
+      id: 4,
+      name: r'metadata',
+      type: IsarType.string,
+    ),
     r'occurredAt': PropertySchema(
-      id: 2,
+      id: 5,
       name: r'occurredAt',
       type: IsarType.dateTime,
     ),
     r'type': PropertySchema(
-      id: 3,
+      id: 6,
       name: r'type',
       type: IsarType.string,
     )
@@ -86,8 +101,26 @@ int _leadActivityRecordEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
+  {
+    final value = object.authoredByName;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.authoredByUserId;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.description.length * 3;
   bytesCount += 3 + object.leadId.length * 3;
+  {
+    final value = object.metadata;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.type.length * 3;
   return bytesCount;
 }
@@ -98,10 +131,13 @@ void _leadActivityRecordSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeString(offsets[0], object.description);
-  writer.writeString(offsets[1], object.leadId);
-  writer.writeDateTime(offsets[2], object.occurredAt);
-  writer.writeString(offsets[3], object.type);
+  writer.writeString(offsets[0], object.authoredByName);
+  writer.writeString(offsets[1], object.authoredByUserId);
+  writer.writeString(offsets[2], object.description);
+  writer.writeString(offsets[3], object.leadId);
+  writer.writeString(offsets[4], object.metadata);
+  writer.writeDateTime(offsets[5], object.occurredAt);
+  writer.writeString(offsets[6], object.type);
 }
 
 LeadActivityRecord _leadActivityRecordDeserialize(
@@ -111,11 +147,14 @@ LeadActivityRecord _leadActivityRecordDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = LeadActivityRecord();
-  object.description = reader.readString(offsets[0]);
+  object.authoredByName = reader.readStringOrNull(offsets[0]);
+  object.authoredByUserId = reader.readStringOrNull(offsets[1]);
+  object.description = reader.readString(offsets[2]);
   object.id = id;
-  object.leadId = reader.readString(offsets[1]);
-  object.occurredAt = reader.readDateTime(offsets[2]);
-  object.type = reader.readString(offsets[3]);
+  object.leadId = reader.readString(offsets[3]);
+  object.metadata = reader.readStringOrNull(offsets[4]);
+  object.occurredAt = reader.readDateTime(offsets[5]);
+  object.type = reader.readString(offsets[6]);
   return object;
 }
 
@@ -127,12 +166,18 @@ P _leadActivityRecordDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 1:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 2:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 3:
+      return (reader.readString(offset)) as P;
+    case 4:
+      return (reader.readStringOrNull(offset)) as P;
+    case 5:
+      return (reader.readDateTime(offset)) as P;
+    case 6:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -382,6 +427,314 @@ extension LeadActivityRecordQueryWhere
 
 extension LeadActivityRecordQueryFilter
     on QueryBuilder<LeadActivityRecord, LeadActivityRecord, QFilterCondition> {
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'authoredByName',
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'authoredByName',
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'authoredByName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'authoredByName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'authoredByName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'authoredByName',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'authoredByName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'authoredByName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'authoredByName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'authoredByName',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'authoredByName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByNameIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'authoredByName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'authoredByUserId',
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'authoredByUserId',
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'authoredByUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'authoredByUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'authoredByUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'authoredByUserId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'authoredByUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'authoredByUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'authoredByUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'authoredByUserId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'authoredByUserId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      authoredByUserIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'authoredByUserId',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
       descriptionEqualTo(
     String value, {
@@ -711,6 +1064,160 @@ extension LeadActivityRecordQueryFilter
   }
 
   QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'metadata',
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'metadata',
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'metadata',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'metadata',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'metadata',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'metadata',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'metadata',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'metadata',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'metadata',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'metadata',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'metadata',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
+      metadataIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'metadata',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterFilterCondition>
       occurredAtEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -912,6 +1419,34 @@ extension LeadActivityRecordQueryLinks
 extension LeadActivityRecordQuerySortBy
     on QueryBuilder<LeadActivityRecord, LeadActivityRecord, QSortBy> {
   QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      sortByAuthoredByName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'authoredByName', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      sortByAuthoredByNameDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'authoredByName', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      sortByAuthoredByUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'authoredByUserId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      sortByAuthoredByUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'authoredByUserId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
       sortByDescription() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'description', Sort.asc);
@@ -936,6 +1471,20 @@ extension LeadActivityRecordQuerySortBy
       sortByLeadIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'leadId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      sortByMetadata() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'metadata', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      sortByMetadataDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'metadata', Sort.desc);
     });
   }
 
@@ -970,6 +1519,34 @@ extension LeadActivityRecordQuerySortBy
 
 extension LeadActivityRecordQuerySortThenBy
     on QueryBuilder<LeadActivityRecord, LeadActivityRecord, QSortThenBy> {
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      thenByAuthoredByName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'authoredByName', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      thenByAuthoredByNameDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'authoredByName', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      thenByAuthoredByUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'authoredByUserId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      thenByAuthoredByUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'authoredByUserId', Sort.desc);
+    });
+  }
+
   QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
       thenByDescription() {
     return QueryBuilder.apply(this, (query) {
@@ -1013,6 +1590,20 @@ extension LeadActivityRecordQuerySortThenBy
   }
 
   QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      thenByMetadata() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'metadata', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
+      thenByMetadataDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'metadata', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QAfterSortBy>
       thenByOccurredAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'occurredAt', Sort.asc);
@@ -1044,6 +1635,22 @@ extension LeadActivityRecordQuerySortThenBy
 extension LeadActivityRecordQueryWhereDistinct
     on QueryBuilder<LeadActivityRecord, LeadActivityRecord, QDistinct> {
   QueryBuilder<LeadActivityRecord, LeadActivityRecord, QDistinct>
+      distinctByAuthoredByName({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'authoredByName',
+          caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QDistinct>
+      distinctByAuthoredByUserId({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'authoredByUserId',
+          caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QDistinct>
       distinctByDescription({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'description', caseSensitive: caseSensitive);
@@ -1054,6 +1661,13 @@ extension LeadActivityRecordQueryWhereDistinct
       distinctByLeadId({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'leadId', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, LeadActivityRecord, QDistinct>
+      distinctByMetadata({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'metadata', caseSensitive: caseSensitive);
     });
   }
 
@@ -1080,6 +1694,20 @@ extension LeadActivityRecordQueryProperty
     });
   }
 
+  QueryBuilder<LeadActivityRecord, String?, QQueryOperations>
+      authoredByNameProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'authoredByName');
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, String?, QQueryOperations>
+      authoredByUserIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'authoredByUserId');
+    });
+  }
+
   QueryBuilder<LeadActivityRecord, String, QQueryOperations>
       descriptionProperty() {
     return QueryBuilder.apply(this, (query) {
@@ -1090,6 +1718,13 @@ extension LeadActivityRecordQueryProperty
   QueryBuilder<LeadActivityRecord, String, QQueryOperations> leadIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'leadId');
+    });
+  }
+
+  QueryBuilder<LeadActivityRecord, String?, QQueryOperations>
+      metadataProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'metadata');
     });
   }
 

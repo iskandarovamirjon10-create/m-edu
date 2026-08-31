@@ -197,6 +197,8 @@ class _ManyLeadsRepository implements LeadRepository {
 
 // Payment repository that returns many records (F8 bounded list).
 class _ManyPaymentsRepository implements PaymentRepository {
+  @override
+  Future<Payment?> fetchByIdempotencyKey(String key) async => null, implements PaymentRepository {
   final String _studentId;
   _ManyPaymentsRepository(this._studentId);
   @override
@@ -267,6 +269,8 @@ class _ManyPaymentsRepository implements PaymentRepository {
 
 // Payment repo that returns mix of completed/cancelled/refunded (F21).
 class _MixedPaymentsRepository implements PaymentRepository {
+  @override
+  Future<Payment?> fetchByIdempotencyKey(String key) async => null, implements PaymentRepository {
   @override
   Future<List<Payment>> fetchByStudentId(String id) async {
     return [
@@ -747,6 +751,8 @@ class _ThrowingAuditRepository implements AuditRepository {
 }
 
 class _SpecificPaymentRepository implements PaymentRepository {
+  @override
+  Future<Payment?> fetchByIdempotencyKey(String key) async => null, implements PaymentRepository {
   final List<String> _paymentIds;
   _SpecificPaymentRepository(this._paymentIds);
 
@@ -816,6 +822,8 @@ class _SpecificPaymentRepository implements PaymentRepository {
 }
 
 class _OverdueDebtRepository implements PaymentRepository {
+  @override
+  Future<Payment?> fetchByIdempotencyKey(String key) async => null, implements PaymentRepository {
   @override
   Future<List<Payment>> fetchByStudentId(String id) async => [];
   @override

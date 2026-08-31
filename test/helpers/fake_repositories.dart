@@ -1214,6 +1214,8 @@ class FakePaymentRepository implements PaymentRepository {
   }
 
   @override
+  Future<Payment?> fetchByIdempotencyKey(String key) async { return null; }
+
   Future<Payment?> fetchById(String paymentId) async {
     for (final p in payments) {
       if (p.paymentId == paymentId) return p;
