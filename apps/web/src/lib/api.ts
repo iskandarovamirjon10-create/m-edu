@@ -257,6 +257,7 @@ export const certificatesApi = {
   createTemplate: (data: unknown) => request('/certificates/templates', { method: 'POST', body: JSON.stringify(data) }),
   updateTemplate: (id: string, data: unknown) => request(`/certificates/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   setDefaultTemplate: (id: string) => request(`/certificates/templates/${id}/default`, { method: 'POST' }),
+  removeTemplate: (id: string) => request(`/certificates/templates/${id}`, { method: 'DELETE' }),
 };
 export const inventoryApi = {
   listItems: (params?: object) => request(`/inventory/items${buildQuery(params)}`),

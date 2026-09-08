@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCertificateDto } from './dto/certificate.dto';
+import { UpdateCertificateTemplateDto } from './dto/certificate-template.dto';
 import { randomUUID } from 'crypto';
 import * as pdf from 'pdf-creator-node';
 
@@ -427,13 +428,41 @@ export class CertificatesService {
     });
   }
 
-  async updateTemplate(organizationId: string, id: string, dto: any) {
+  async updateTemplate(organizationId: string, id: string, dto: UpdateCertificateTemplateDto) {
     const template = await this.findTemplateById(organizationId, id);
 
     return this.prisma.certificateTemplate.update({
       where: { id, organizationId },
       data: dto,
     });
+  }
+
+  /**
+   * Delete a certificate template.
+   *
+   * Referential safety: certificates reference templates by the optional
+   * `templateId` column (no FK relation in the schema), so deletion cannot
+   * violate a constraint. A template still referenced by issued certificates
+   * is rejected to preserve certificate/PDF reproducibility — operators
+   * should keep old templates instead of destroying issuance history.
+   */
+  async deleteTemplate(organizationId: string, id: string) {
+    await this.findTemplateById(organizationId, id);
+
+    const inUse = await this.prisma.certificate.count({
+      where: { organizationId, templateId: id },
+    });
+    if (inUse > 0) {
+      throw new ConflictException(
+        `Template is used by ${inUse} certificate(s) and cannot be deleted`,
+      );
+    }
+
+    await this.prisma.certificateTemplate.delete({
+      where: { id, organizationId },
+    });
+
+    return { deleted: true };
   }
 
   async setDefaultTemplate(organizationId: string, id: string) {

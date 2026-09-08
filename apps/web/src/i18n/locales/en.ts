@@ -1,0 +1,138 @@
+/**
+ * English dictionary (default + fallback locale).
+ *
+ * Key convention: `<domain>.<element>[.<variant>]` — flat keys keep lookups
+ * O(1) and grep-friendly. Every key here MUST exist in uz.ts and ru.ts;
+ * the i18n core warns in dev when a key falls through to English.
+ */
+const en = {
+  // Common
+  'common.cancel': 'Cancel',
+  'common.save': 'Save',
+  'common.create': 'Create',
+  'common.edit': 'Edit',
+  'common.delete': 'Delete',
+  'common.search': 'Search',
+  'common.loading': 'Loading…',
+  'common.saving': 'Saving…',
+  'common.retry': 'Retry',
+  'common.error': 'Something went wrong',
+  'common.actions': 'Actions',
+  'common.status': 'Status',
+  'common.name': 'Name',
+  'common.date': 'Date',
+  'common.close': 'Close',
+
+  // Navigation
+  'nav.dashboard': 'Dashboard',
+  'nav.students': 'Students',
+  'nav.teachers': 'Teachers',
+  'nav.groups': 'Groups',
+  'nav.courses': 'Courses',
+  'nav.schedule': 'Schedule',
+  'nav.attendance': 'Attendance',
+  'nav.payments': 'Payments',
+  'nav.certificates': 'Certificates',
+  'nav.library': 'Library',
+  'nav.inventory': 'Inventory',
+  'nav.settings': 'Settings',
+  'nav.logout': 'Log out',
+  'nav.language': 'Language',
+
+  // Auth
+  'auth.loginTitle': 'Sign in to your account',
+  'auth.email': 'Email',
+  'auth.password': 'Password',
+  'auth.login': 'Sign in',
+  'auth.loggingIn': 'Signing in…',
+  'auth.forgotPassword': 'Forgot password?',
+  'auth.invalidCredentials': 'Invalid email or password',
+
+  // Dashboard
+  'dashboard.title': 'Dashboard',
+  'dashboard.subtitle': 'Overview of your organization',
+  'dashboard.totalStudents': 'Total students',
+  'dashboard.totalTeachers': 'Total teachers',
+  'dashboard.activeGroups': 'Active groups',
+  'dashboard.monthlyRevenue': 'Monthly revenue',
+
+  // Certificates page
+  'certificates.title': 'Certificates',
+  'certificates.subtitle': 'Manage student certificates and templates',
+  'certificates.tab.certificates': 'Certificates',
+  'certificates.tab.templates': 'Templates',
+  'certificates.generate': 'Generate Certificate',
+  'certificates.generating': 'Generating…',
+  'certificates.generated': 'Certificate generated',
+  'certificates.download': 'Download',
+  'certificates.downloading': 'Downloading…',
+  'certificates.downloaded': 'Certificate downloaded',
+  'certificates.searchPlaceholder': 'Search by student name, course, or verification code…',
+  'certificates.empty': 'No certificates yet',
+  'certificates.emptySearch': 'No certificates found',
+  'certificates.emptySearchHint': 'Try adjusting your search criteria',
+  'certificates.emptyHint': 'Generate your first certificate to get started',
+  'certificates.col.student': 'Student',
+  'certificates.col.course': 'Course',
+  'certificates.col.number': 'Certificate #',
+  'certificates.col.verification': 'Verification',
+  'certificates.col.issued': 'Issued',
+  'certificates.selectStudent': 'Select student',
+  'certificates.selectCourse': 'Select course',
+  'certificates.field.student': 'Student *',
+  'certificates.field.course': 'Course *',
+  'certificates.field.notes': 'Notes',
+  'certificates.notesPlaceholder': 'Optional notes stored with the certificate',
+  'certificates.studentRequired': 'Student is required',
+  'certificates.courseRequired': 'Course is required',
+  'certificates.generateHint':
+    'The certificate is issued for the selected student and course. The student must be enrolled in an active group of that course.',
+
+  // Certificate templates
+  'templates.new': 'New Template',
+  'templates.empty': 'No templates yet',
+  'templates.emptyHint': 'Create a certificate template to control how issued certificates look.',
+  'templates.col.name': 'Name',
+  'templates.col.default': 'Default',
+  'templates.col.created': 'Created',
+  'templates.badge.default': 'Default',
+  'templates.makeDefault': 'Make default',
+  'templates.defaultUpdated': 'Default template updated',
+  'templates.edit': 'Edit Template: {name}',
+  'templates.createTitle': 'New Template',
+  'templates.field.name': 'Template name *',
+  'templates.field.html': 'Template HTML *',
+  'templates.field.css': 'Custom CSS',
+  'templates.field.isDefault': 'Set as the organization default template',
+  'templates.namePlaceholder': 'e.g. Golden Achievement',
+  'templates.nameRequired': 'Template name is required',
+  'templates.htmlRequired': 'Template HTML is required',
+  'templates.htmlTooLong': 'Template HTML must be at most 100,000 characters',
+  'templates.cssTooLong': 'CSS must be at most 50,000 characters',
+  'templates.created': 'Template created',
+  'templates.updated': 'Template updated',
+  'templates.saving': 'Saving…',
+  'templates.saveChanges': 'Save changes',
+  'templates.deleteTitle': 'Delete Template',
+  'templates.deleteConfirm': 'Delete template {name}? This cannot be undone.',
+  'templates.deleteHint':
+    'Templates used by issued certificates cannot be deleted — the API will reject the request to preserve certificate history.',
+  'templates.deleting': 'Deleting…',
+  'templates.deleteAction': 'Delete template',
+  'templates.deleted': 'Template deleted',
+  'templates.variablesHint': 'Available variables: {variables}. Values are HTML-escaped automatically when rendered.',
+
+  // Settings / language
+  'settings.title': 'Settings',
+  'settings.language': 'Language',
+  'settings.languageHint': 'Choose the interface language. The choice is saved on this device.',
+
+  // Errors
+  'error.network': 'Network error — check your connection and try again',
+  'error.unauthorized': 'Your session has expired. Please sign in again.',
+  'error.forbidden': 'You do not have permission to perform this action',
+  'error.notFound': 'The requested resource was not found',
+  'error.server': 'Server error — please try again later',
+};
+
+export default en;

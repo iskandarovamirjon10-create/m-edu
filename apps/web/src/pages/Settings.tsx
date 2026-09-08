@@ -14,6 +14,7 @@ import {
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Organization, User } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n, isLocale } from '@/i18n/I18nProvider';
 
 interface OrgFormState {
   name: string;
@@ -45,7 +46,13 @@ const TIMEZONES = [
   { value: 'America/New_York', label: 'America/New_York' },
 ];
 
-const LANGUAGES = [{ value: 'en', label: 'English' }];
+// Interface languages (i18n). uz/ru/en match the i18n dictionaries;
+// the Organization-level `language` field remains a server-side default.
+const LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'uz', label: 'Oʻzbekcha' },
+  { value: 'ru', label: 'Русский' },
+];
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -251,6 +258,18 @@ export function SettingsPage() {
     language: user?.settings?.language || 'en',
     timezone: user?.settings?.timezone || 'UTC',
   });
+
+  // Keep the i18n provider in sync with the persisted per-user language so
+  // saving the settings form (or loading a user who chose uz/ru) switches
+  // the whole interface immediately.
+  const { setLocale } = useI18n();
+  useEffect(() => {
+    const lang = user?.settings?.language;
+    if (lang && isLocale(lang)) {
+      setLocale(lang);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.settings?.language]);
 
   useEffect(() => {
     if (user?.settings) {

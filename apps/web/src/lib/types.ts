@@ -619,6 +619,7 @@ export interface CertificateTemplate {
   organizationId: string;
   name: string;
   htmlTemplate: string;
+  cssStyles?: string;
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;

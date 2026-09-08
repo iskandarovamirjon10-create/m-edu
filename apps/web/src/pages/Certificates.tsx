@@ -18,10 +18,11 @@ import {
   TextInput,
   TextArea,
   Select,
+  Badge,
   useToasts,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
-import type { Paginated, Certificate, Course, Student } from '@/lib/types';
+import type { Paginated, Certificate, CertificateTemplate, Course, Student } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 interface CertificateFormState {
@@ -36,11 +37,49 @@ const INITIAL_FORM: CertificateFormState = {
   notes: '',
 };
 
+interface TemplateFormState {
+  name: string;
+  htmlTemplate: string;
+  cssStyles: string;
+  isDefault: boolean;
+}
+
+const INITIAL_TEMPLATE_FORM: TemplateFormState = {
+  name: '',
+  htmlTemplate: [
+    '<html>',
+    '  <body style="font-family: Georgia, serif; text-align: center;">',
+    '    <h1>Certificate of Achievement</h1>',
+    '    <p>This certifies that</p>',
+    '    <div class="student-name">{{studentName}}</div>',
+    '    <p>has successfully completed</p>',
+    '    <div class="course-name">{{courseName}}</div>',
+    '    <p>Issued on {{issueDate}} — Certificate {{certificateNumber}}</p>',
+    '  </body>',
+    '</html>',
+  ].join('\n'),
+  cssStyles: '',
+  isDefault: false,
+};
+
+const TEMPLATE_VARIABLES = ['studentName', 'courseName', 'issueDate', 'certificateNumber', 'verificationCode'];
+
 function validateCertificateForm(form: CertificateFormState): Partial<Record<keyof CertificateFormState, string>> {
   const errors: Partial<Record<keyof CertificateFormState, string>> = {};
 
   if (!form.studentId) errors.studentId = 'Student is required';
   if (!form.courseId) errors.courseId = 'Course is required';
+
+  return errors;
+}
+
+function validateTemplateForm(form: TemplateFormState): Partial<Record<keyof TemplateFormState, string>> {
+  const errors: Partial<Record<keyof TemplateFormState, string>> = {};
+
+  if (!form.name.trim()) errors.name = 'Template name is required';
+  if (!form.htmlTemplate.trim()) errors.htmlTemplate = 'Template HTML is required';
+  else if (form.htmlTemplate.length > 100_000) errors.htmlTemplate = 'Template HTML must be at most 100,000 characters';
+  if (form.cssStyles.length > 50_000) errors.cssStyles = 'CSS must be at most 50,000 characters';
 
   return errors;
 }
@@ -55,12 +94,20 @@ export function CertificatesPage() {
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
+  // Tab state: certificates | templates
+  const [activeTab, setActiveTab] = useState<'certificates' | 'templates'>('certificates');
+
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<CertificateTemplate | null>(null);
+  const [deletingTemplate, setDeletingTemplate] = useState<CertificateTemplate | null>(null);
 
   // Form state
   const [form, setForm] = useState<CertificateFormState>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof CertificateFormState, string>>>({});
+  const [templateForm, setTemplateForm] = useState<TemplateFormState>(INITIAL_TEMPLATE_FORM);
+  const [templateFormErrors, setTemplateFormErrors] = useState<Partial<Record<keyof TemplateFormState, string>>>({});
 
   // Search and filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,6 +118,12 @@ export function CertificatesPage() {
   const certificates = useQuery({
     queryKey: ['certificates'],
     queryFn: () => certificatesApi.list({ limit: 100 }),
+    placeholderData: (previousData) => previousData,
+  });
+
+  const templates = useQuery({
+    queryKey: ['certificate-templates'],
+    queryFn: () => certificatesApi.listTemplates(),
     placeholderData: (previousData) => previousData,
   });
 
@@ -89,6 +142,11 @@ export function CertificatesPage() {
     const d = certificates.data as unknown;
     return Array.isArray(d) ? (d as Certificate[]) : ((d as Paginated<Certificate> | null)?.items ?? []);
   }, [certificates.data]);
+
+  const templateList = useMemo(() => {
+    const d = templates.data as unknown;
+    return Array.isArray(d) ? (d as CertificateTemplate[]) : ((d as Paginated<CertificateTemplate> | null)?.items ?? []);
+  }, [templates.data]);
 
   const courseData = courses.data as Paginated<Course> | undefined;
   const courseList = useMemo(() => courseData?.items || [], [courseData]);
@@ -180,6 +238,54 @@ export function CertificatesPage() {
     },
   });
 
+  // ---- Template mutations ----
+
+  const saveTemplate = useMutation({
+    mutationFn: () => {
+      const payload: Record<string, unknown> = {
+        name: templateForm.name.trim(),
+        htmlTemplate: templateForm.htmlTemplate,
+      };
+      if (templateForm.cssStyles.trim()) payload.cssStyles = templateForm.cssStyles.trim();
+      payload.isDefault = templateForm.isDefault;
+
+      return editingTemplate
+        ? certificatesApi.updateTemplate(editingTemplate.id, payload)
+        : certificatesApi.createTemplate(payload);
+    },
+    onSuccess: () => {
+      push({ type: 'success', message: editingTemplate ? 'Template updated' : 'Template created' });
+      qc.invalidateQueries({ queryKey: ['certificate-templates'] });
+      closeTemplateModal();
+    },
+    onError: (error) => {
+      push({ type: 'error', message: getErrorMessage(error) });
+    },
+  });
+
+  const setDefault = useMutation({
+    mutationFn: (id: string) => certificatesApi.setDefaultTemplate(id),
+    onSuccess: () => {
+      push({ type: 'success', message: 'Default template updated' });
+      qc.invalidateQueries({ queryKey: ['certificate-templates'] });
+    },
+    onError: (error) => {
+      push({ type: 'error', message: getErrorMessage(error) });
+    },
+  });
+
+  const deleteTemplate = useMutation({
+    mutationFn: (id: string) => certificatesApi.removeTemplate(id),
+    onSuccess: () => {
+      push({ type: 'success', message: 'Template deleted' });
+      setDeletingTemplate(null);
+      qc.invalidateQueries({ queryKey: ['certificate-templates'] });
+    },
+    onError: (error) => {
+      push({ type: 'error', message: getErrorMessage(error) });
+    },
+  });
+
   const openModal = useCallback(() => {
     setForm(INITIAL_FORM);
     setFormErrors({});
@@ -192,7 +298,31 @@ export function CertificatesPage() {
     setFormErrors({});
   }, []);
 
-  const handleSubmit = useCallback(() => {
+  const openTemplateModal = useCallback((template?: CertificateTemplate) => {
+    if (template) {
+      setEditingTemplate(template);
+      setTemplateForm({
+        name: template.name,
+        htmlTemplate: template.htmlTemplate,
+        cssStyles: template.cssStyles ?? '',
+        isDefault: template.isDefault,
+      });
+    } else {
+      setEditingTemplate(null);
+      setTemplateForm(INITIAL_TEMPLATE_FORM);
+    }
+    setTemplateFormErrors({});
+    setTemplateModalOpen(true);
+  }, []);
+
+  const closeTemplateModal = useCallback(() => {
+    setTemplateModalOpen(false);
+    setEditingTemplate(null);
+    setTemplateForm(INITIAL_TEMPLATE_FORM);
+    setTemplateFormErrors({});
+  }, []);
+
+  const handleCertificateSubmit = useCallback(() => {
     const errors = validateCertificateForm(form);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -200,6 +330,15 @@ export function CertificatesPage() {
     }
     generateCertificate.mutate();
   }, [form, generateCertificate]);
+
+  const handleTemplateSubmit = useCallback(() => {
+    const errors = validateTemplateForm(templateForm);
+    if (Object.keys(errors).length > 0) {
+      setTemplateFormErrors(errors);
+      return;
+    }
+    saveTemplate.mutate();
+  }, [templateForm, saveTemplate]);
 
   const getStudentName = useCallback(
     (studentId: string) => {
@@ -242,74 +381,189 @@ export function CertificatesPage() {
 
       <PageHeader
         title="Certificates"
-        subtitle="Manage student certificates"
-        action={{
-          label: 'Generate Certificate',
-          onClick: openModal,
-        }}
+        subtitle="Manage student certificates and templates"
+        action={
+          activeTab === 'certificates'
+            ? {
+                label: 'Generate Certificate',
+                onClick: openModal,
+              }
+            : {
+                label: 'New Template',
+                onClick: () => openTemplateModal(),
+              }
+        }
       />
 
-      <Card>
-        <div className="p-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-          <TextInput
-            placeholder="Search by student name, course, or verification code..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search certificates"
-          />
-        </div>
+      {/* Tab switcher */}
+      <div role="tablist" aria-label="Certificate sections" className="flex gap-2">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'certificates'}
+          onClick={() => setActiveTab('certificates')}
+          className={
+            activeTab === 'certificates'
+              ? 'glass-btn glass-btn-primary glass-btn-sm'
+              : 'glass-btn glass-btn-secondary glass-btn-sm'
+          }
+        >
+          Certificates
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'templates'}
+          onClick={() => setActiveTab('templates')}
+          className={
+            activeTab === 'templates'
+              ? 'glass-btn glass-btn-primary glass-btn-sm'
+              : 'glass-btn glass-btn-secondary glass-btn-sm'
+          }
+        >
+          Templates
+        </button>
+      </div>
 
-        {filteredCertificates.length === 0 ? (
-          <EmptyState
-            title={searchQuery ? 'No certificates found' : 'No certificates yet'}
-            description={
-              searchQuery
-                ? 'Try adjusting your search criteria'
-                : 'Generate your first certificate to get started'
-            }
-            action={!searchQuery ? { label: 'Generate Certificate', onClick: openModal } : undefined}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <THead>
-                <TR>
-                  <TH>Student</TH>
-                  <TH>Course</TH>
-                  <TH>Certificate #</TH>
-                  <TH>Verification</TH>
-                  <TH>Issued</TH>
-                  <TH>Actions</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {filteredCertificates.map((cert) => (
-                  <TR key={cert.id}>
-                    <TD className="font-medium">{getStudentName(cert.studentId)}</TD>
-                    <TD>{cert.course?.name || getCourseName(cert.courseId)}</TD>
-                    <TD className="font-mono text-sm">{cert.certificateNumber}</TD>
-                    <TD>
-                      <code className="text-xs glass-badge glass-badge-muted">
-                        {cert.verificationCode}
-                      </code>
-                    </TD>
-                    <TD>{cert.issueDate ? new Date(cert.issueDate).toLocaleDateString() : '—'}</TD>
-                    <TD>
-                      <button
-                        onClick={() => downloadCertificate.mutate(cert.id)}
-                        disabled={downloadCertificate.isPending}
-                        className="glass-btn glass-btn-ghost glass-btn-sm"
-                      >
-                        {downloadingId === cert.id ? 'Downloading…' : 'Download'}
-                      </button>
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
+      {activeTab === 'certificates' && (
+        <Card>
+          <div className="p-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+            <TextInput
+              placeholder="Search by student name, course, or verification code..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search certificates"
+            />
           </div>
-        )}
-      </Card>
+
+          {filteredCertificates.length === 0 ? (
+            <EmptyState
+              title={searchQuery ? 'No certificates found' : 'No certificates yet'}
+              description={
+                searchQuery
+                  ? 'Try adjusting your search criteria'
+                  : 'Generate your first certificate to get started'
+              }
+              action={!searchQuery ? { label: 'Generate Certificate', onClick: openModal } : undefined}
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Student</TH>
+                    <TH>Course</TH>
+                    <TH>Certificate #</TH>
+                    <TH>Verification</TH>
+                    <TH>Issued</TH>
+                    <TH>Actions</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {filteredCertificates.map((cert) => (
+                    <TR key={cert.id}>
+                      <TD className="font-medium">{getStudentName(cert.studentId)}</TD>
+                      <TD>{cert.course?.name || getCourseName(cert.courseId)}</TD>
+                      <TD className="font-mono text-sm">{cert.certificateNumber}</TD>
+                      <TD>
+                        <code className="text-xs glass-badge glass-badge-muted">
+                          {cert.verificationCode}
+                        </code>
+                      </TD>
+                      <TD>{cert.issueDate ? new Date(cert.issueDate).toLocaleDateString() : '—'}</TD>
+                      <TD>
+                        <button
+                          onClick={() => downloadCertificate.mutate(cert.id)}
+                          disabled={downloadCertificate.isPending}
+                          className="glass-btn glass-btn-ghost glass-btn-sm"
+                        >
+                          {downloadingId === cert.id ? 'Downloading…' : 'Download'}
+                        </button>
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {activeTab === 'templates' && (
+        <Card>
+          {templates.isLoading ? (
+            <div className="p-8">
+              <PageLoader />
+            </div>
+          ) : templates.isError ? (
+            <ErrorState
+              message={getErrorMessage(templates.error)}
+              onRetry={() => templates.refetch()}
+            />
+          ) : templateList.length === 0 ? (
+            <EmptyState
+              title="No templates yet"
+              description="Create a certificate template to control how issued certificates look."
+              action={{ label: 'New Template', onClick: () => openTemplateModal() }}
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Name</TH>
+                    <TH>Default</TH>
+                    <TH>Created</TH>
+                    <TH>Actions</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {templateList.map((tpl) => (
+                    <TR key={tpl.id}>
+                      <TD className="font-medium">{tpl.name}</TD>
+                      <TD>
+                        {tpl.isDefault ? (
+                          <Badge variant="success">Default</Badge>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setDefault.mutate(tpl.id)}
+                            disabled={setDefault.isPending}
+                            className="glass-btn glass-btn-ghost glass-btn-sm"
+                          >
+                            Make default
+                          </button>
+                        )}
+                      </TD>
+                      <TD>{tpl.createdAt ? new Date(tpl.createdAt).toLocaleDateString() : '—'}</TD>
+                      <TD>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openTemplateModal(tpl)}
+                            className="glass-btn glass-btn-ghost glass-btn-sm"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingTemplate(tpl)}
+                            disabled={deleteTemplate.isPending}
+                            className="glass-btn glass-btn-ghost glass-btn-sm"
+                            style={{ color: 'var(--state-error, #dc2626)' }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Certificate Generation Modal */}
       {modalOpen && (
@@ -369,11 +623,141 @@ export function CertificatesPage() {
                 Cancel
               </button>
               <button
-                onClick={handleSubmit}
+                onClick={handleCertificateSubmit}
                 disabled={generateCertificate.isPending}
                 className="glass-btn glass-btn-primary"
               >
                 {generateCertificate.isPending ? 'Generating...' : 'Generate'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Template Create/Edit Modal */}
+      {templateModalOpen && (
+        <Modal
+          isOpen={templateModalOpen}
+          onClose={closeTemplateModal}
+          title={editingTemplate ? `Edit Template: ${editingTemplate.name}` : 'New Template'}
+          wide
+        >
+          <div className="space-y-4">
+            <Field label="Template name *" error={templateFormErrors.name}>
+              <TextInput
+                value={templateForm.name}
+                onChange={(e) => {
+                  setTemplateForm((prev) => ({ ...prev, name: e.target.value }));
+                  setTemplateFormErrors((prev) => ({ ...prev, name: undefined }));
+                }}
+                placeholder="e.g. Golden Achievement"
+                aria-invalid={Boolean(templateFormErrors.name)}
+                maxLength={200}
+              />
+            </Field>
+
+            <Field
+              label="Template HTML *"
+              error={templateFormErrors.htmlTemplate}
+            >
+              <TextArea
+                value={templateForm.htmlTemplate}
+                onChange={(e) => {
+                  setTemplateForm((prev) => ({ ...prev, htmlTemplate: e.target.value }));
+                  setTemplateFormErrors((prev) => ({ ...prev, htmlTemplate: undefined }));
+                }}
+                placeholder="<html>…</html>"
+                rows={10}
+                className="font-mono text-xs"
+                aria-invalid={Boolean(templateFormErrors.htmlTemplate)}
+              />
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Available variables:{' '}
+                {TEMPLATE_VARIABLES.map((v) => (
+                  <code key={v} className="glass-badge glass-badge-muted mr-1">
+                    {`{{${v}}}`}
+                  </code>
+                ))}
+                . Values are HTML-escaped automatically when rendered.
+              </p>
+            </Field>
+
+            <Field label="Custom CSS" error={templateFormErrors.cssStyles}>
+              <TextArea
+                value={templateForm.cssStyles}
+                onChange={(e) => {
+                  setTemplateForm((prev) => ({ ...prev, cssStyles: e.target.value }));
+                  setTemplateFormErrors((prev) => ({ ...prev, cssStyles: undefined }));
+                }}
+                placeholder=".student-name { font-size: 32px; color: #111; }"
+                rows={4}
+                className="font-mono text-xs"
+                aria-invalid={Boolean(templateFormErrors.cssStyles)}
+              />
+            </Field>
+
+            <label className="flex items-center gap-2 text-sm text-[var(--text-primary)]">
+              <input
+                type="checkbox"
+                checked={templateForm.isDefault}
+                onChange={(e) =>
+                  setTemplateForm((prev) => ({ ...prev, isDefault: e.target.checked }))
+                }
+                className="h-4 w-4 rounded border-[var(--border-medium)]"
+              />
+              Set as the organization default template
+            </label>
+
+            <div className="flex gap-2 justify-end pt-4">
+              <button
+                onClick={closeTemplateModal}
+                className="glass-btn glass-btn-secondary"
+                disabled={saveTemplate.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTemplateSubmit}
+                disabled={saveTemplate.isPending}
+                className="glass-btn glass-btn-primary"
+              >
+                {saveTemplate.isPending ? 'Saving…' : editingTemplate ? 'Save changes' : 'Create template'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Template Delete Confirmation */}
+      {deletingTemplate && (
+        <Modal
+          isOpen={Boolean(deletingTemplate)}
+          onClose={() => setDeletingTemplate(null)}
+          title="Delete Template"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--text-primary)]">
+              Delete template <strong>{deletingTemplate.name}</strong>? This cannot be undone.
+            </p>
+            <p className="text-xs text-[var(--text-muted)]">
+              Templates used by issued certificates cannot be deleted — the API will reject the
+              request to preserve certificate history.
+            </p>
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                onClick={() => setDeletingTemplate(null)}
+                className="glass-btn glass-btn-secondary"
+                disabled={deleteTemplate.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteTemplate.mutate(deletingTemplate.id)}
+                disabled={deleteTemplate.isPending}
+                className="glass-btn glass-btn-primary"
+                style={{ background: 'var(--state-error, #dc2626)' }}
+              >
+                {deleteTemplate.isPending ? 'Deleting…' : 'Delete template'}
               </button>
             </div>
           </div>

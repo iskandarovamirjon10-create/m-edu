@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   ParseUUIDPipe,
@@ -12,12 +13,17 @@ import {
 } from '@nestjs/common';
 import { CertificatesService } from './certificates.service';
 import { CreateCertificateDto, VerifyCertificateDto } from './dto/certificate.dto';
+import {
+  CreateCertificateTemplateDto,
+  UpdateCertificateTemplateDto,
+} from './dto/certificate-template.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { Response } from 'express';
+import type { RequestUser } from '../auth/types';
 
 @Controller('certificates')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -28,7 +34,7 @@ export class CertificatesController {
 
   @Get()
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
-  async findAllCertificates(@CurrentUser() user: any) {
+  async findAllCertificates(@CurrentUser() user: RequestUser) {
     return this.certificatesService.findAllCertificates(user.organizationId);
   }
 
@@ -39,7 +45,7 @@ export class CertificatesController {
   @Get('student/:studentId')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER, Role.STUDENT)
   async getStudentCertificates(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('studentId', ParseUUIDPipe) studentId: string,
   ) {
     return this.certificatesService.getStudentCertificates(user.organizationId, studentId);
@@ -52,23 +58,23 @@ export class CertificatesController {
 
   @Get('templates')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
-  async findAllTemplates(@CurrentUser() user: any) {
+  async findAllTemplates(@CurrentUser() user: RequestUser) {
     return this.certificatesService.findAllTemplates(user.organizationId);
   }
 
   @Get(':id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER, Role.STUDENT)
   async findCertificateById(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.certificatesService.findCertificateById(user.organizationId, id, user.id, user.role);
+    return this.certificatesService.findCertificateById(user.organizationId, id, user.sub, user.role);
   }
 
   @Post('generate')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async generateCertificate(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Body() dto: CreateCertificateDto,
   ) {
     return this.certificatesService.generateCertificate(user.organizationId, dto);
@@ -78,7 +84,7 @@ export class CertificatesController {
   @Header('Content-Type', 'application/pdf')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async downloadCertificate(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Res() response: Response,
   ) {
@@ -92,7 +98,7 @@ export class CertificatesController {
   @Get('templates/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findTemplateById(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.certificatesService.findTemplateById(user.organizationId, id);
@@ -100,24 +106,36 @@ export class CertificatesController {
 
   @Post('templates')
   @Roles(Role.ORG_ADMIN)
-  async createTemplate(@CurrentUser() user: any, @Body() dto: any) {
+  async createTemplate(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: CreateCertificateTemplateDto,
+  ) {
     return this.certificatesService.createTemplate(user.organizationId, dto);
   }
 
   @Put('templates/:id')
   @Roles(Role.ORG_ADMIN)
   async updateTemplate(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: any,
+    @Body() dto: UpdateCertificateTemplateDto,
   ) {
     return this.certificatesService.updateTemplate(user.organizationId, id, dto);
+  }
+
+  @Delete('templates/:id')
+  @Roles(Role.ORG_ADMIN)
+  async deleteTemplate(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.certificatesService.deleteTemplate(user.organizationId, id);
   }
 
   @Post('templates/:id/default')
   @Roles(Role.ORG_ADMIN)
   async setDefaultTemplate(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.certificatesService.setDefaultTemplate(user.organizationId, id);
