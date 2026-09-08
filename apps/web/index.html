@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Primary meta -->
+    <title>M-EDU — Education Center Management Platform</title>
+    <meta name="description" content="M-EDU is a multi-tenant education center management platform with face-recognition attendance, CRM, payments, schedules and analytics." />
+    <meta name="theme-color" content="#274ee3" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph / social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="M-EDU" />
+    <meta property="og:url" content="/" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="M-EDU — Education Center Management Platform" />
+    <meta property="og:description" content="Multi-tenant education management: face-recognition attendance, CRM, payments, schedules and analytics in one platform." />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="M-EDU — Education Center Management Platform" />
+    <meta name="twitter:description" content="Multi-tenant education management: face-recognition attendance, CRM, payments, schedules and analytics." />
+
+    <!-- Performance: preconnect to same-origin API (served behind nginx /api) -->
+    <link rel="preconnect" href="/" />
+
+    <!-- Security baseline for the static shell (real headers are set in nginx) -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <div style="display:flex;min-height:100vh;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#334155">
+        <p>M-EDU requires JavaScript to run. Please enable JavaScript in your browser.</p>
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+# M-EDU robots.txt — crawl policy
+# The app is a SaaS dashboard; there is nothing to index behind the login.
+
+User-agent: *
+Disallow: /api/
+Disallow: /login
+Disallow: /register
+Disallow: /auth/callback
+
+# Allow the static shell and favicon so link-preview crawlers (OG/Twitter
+# cards) can still render the marketing/landing metadata.
+Allow: /

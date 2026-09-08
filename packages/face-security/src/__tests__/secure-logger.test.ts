@@ -1,0 +1,75 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { SecureLogger } from '../secure-logger';
+
+describe('SecureLogger — sensitive data redaction (P0 biometric exposure)', () => {
+  let consoleLogSpy: any;
+  let consoleErrorSpy: any;
+
+  beforeEach(() => {
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('redacts embedding fields from log context', () => {
+    const logger = new SecureLogger('info');
+    logger.info('recognition', {
+      embedding: [0.1, 0.2, 0.3],
+      templateData: 'base64-encoded-face-template',
+      studentId: 'student-1',
+    });
+    const output = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+    expect(output.context.embedding).toBe('[REDACTED]');
+    expect(output.context.templateData).toBe('[REDACTED]');
+    expect(output.context.studentId).toBe('student-1');
+  });
+
+  it('redacts tokens, passwords, api keys, secrets', () => {
+    const logger = new SecureLogger('info');
+    logger.info('auth', {
+      accessToken: 'jwt.token.payload',
+      password: 'hunter2',
+      apiKey: 'fp_abcdef',
+      secret: 'shh',
+      biometric: 'raw-face-data',
+    });
+    const output = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+    expect(output.context.accessToken).toBe('[REDACTED]');
+    expect(output.context.password).toBe('[REDACTED]');
+    expect(output.context.apiKey).toBe('[REDACTED]');
+    expect(output.context.secret).toBe('[REDACTED]');
+    expect(output.context.biometric).toBe('[REDACTED]');
+  });
+
+  it('recursively redacts nested objects', () => {
+    const logger = new SecureLogger('info');
+    logger.info('nested', {
+      user: { token: 'abc', name: 'Ali' },
+      meta: [{ apiKeyHash: 'xyz' }],
+    });
+    const output = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+    expect(output.context.user.token).toBe('[REDACTED]');
+    expect(output.context.user.name).toBe('Ali');
+    expect(output.context.meta[0].apiKeyHash).toBe('[REDACTED]');
+  });
+
+  it('respects min level filtering', () => {
+    const logger = new SecureLogger('error');
+    logger.debug('debug-msg');
+    logger.info('info-msg');
+    expect(consoleLogSpy).not.toHaveBeenCalled();
+    logger.error('error-msg');
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('never logs raw error stack containing sensitive values in context', () => {
+    const logger = new SecureLogger('info');
+    logger.error('failed', { password: 'secret' }, new Error('boom'));
+    const output = JSON.parse(consoleErrorSpy.mock.calls[0][0]);
+    expect(output.context.password).toBe('[REDACTED]');
+    expect(output.error).toBe('boom');
+  });
+});

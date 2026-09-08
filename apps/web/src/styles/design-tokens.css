@@ -1,0 +1,90 @@
+/* ============================================================
+   M-EDU Liquid Glass Design System — Design Tokens
+   The LIGHT theme is the visual hero. Bright, calm, premium,
+   futuristic. Apple Liquid Glass inspired, not copied.
+   ============================================================ */
+
+:root {
+  /* --- Brand / Primary Palette (M-EDU) --- */
+  --m-cyan:     #94EAEF;
+  --m-sky:      #8CDCF1;
+  --m-azure:    #7EC2F3;
+  --m-indigo:   #618CF9;
+  --m-vivid:    #5474FC;
+  --m-deep:     #4C65FD;
+
+  /* --- Light Theme (Visual Hero) --- */
+  --bg-base:         #F4F8FB;     /* Soft sky-tinted white */
+  --bg-surface:      #FFFFFF;
+  --bg-elevated:     rgba(255,255,255,0.72);
+  --bg-glass:        rgba(255,255,255,0.55);
+  --bg-glass-hover:  rgba(255,255,255,0.75);
+  --bg-card:         rgba(255,255,255,0.78);
+  --bg-card-hover:   rgba(255,255,255,0.92);
+
+  --text-primary:     #1A2332;     /* Deep charcoal, not pure black */
+  --text-secondary:   #556677;     /* Cool slate gray */
+  --text-muted:       #8899A8;     /* Soft muted */
+  --text-inverse:     #FFFFFF;
+
+  --border-subtle:    rgba(20,30,45,0.08);
+  --border-medium:    rgba(20,30,45,0.15);
+  --border-strong:    rgba(20,30,45,0.22);
+  --border-glass:     rgba(255,255,255,0.45);
+
+  --shadow-xs:   0 1px 2px rgba(20,30,45,0.04);
+  --shadow-sm:   0 4px 12px rgba(20,30,45,0.06);
+  --shadow-md:   0 12px 32px rgba(20,30,45,0.08);
+  --shadow-lg:   0 24px 56px rgba(20,30,45,0.10);
+  --shadow-glow-cyan: 0 0 40px rgba(148,234,239,0.22);
+
+  --radius-sm:  8px;
+  --radius-md:  14px;
+  --radius-lg:  22px;
+  --radius-xl:  32px;
+  --radius-pill: 9999px;
+
+  --font-heading: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-body:    'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* States */
+  --state-hover:    rgba(148,234,239,0.08);
+  --state-active:   rgba(84,115,252,0.10);
+  --state-focus:    rgba(84,115,252,0.22);
+  --state-disabled: rgba(20,30,45,0.06);
+  --state-success:  #5EE6A8;
+  --state-error:    #F07070;
+  --state-warning:  #F5B86A;
+  --state-info:     #94EAEF;
+}
+
+/* ============================================================
+   Night Theme — Luminous Midnight Glass
+   NOT generic black. A luminous blue-glass environment.
+   ============================================================ */
+.dark,
+[data-theme="dark"] {
+  --bg-base:         linear-gradient(175deg, #0B1120 0%, #0F1B36 60%, #141E3A 100%);
+  --bg-surface:      rgba(18, 28, 50, 0.55);
+  --bg-elevated:     rgba(26, 38, 65, 0.65);
+  --bg-glass:        rgba(26, 38, 65, 0.45);
+  --bg-glass-hover:  rgba(26, 38, 65, 0.65);
+  --bg-card:         rgba(26, 38, 65, 0.55);
+  --bg-card-hover:   rgba(26, 38, 65, 0.75);
+
+  --text-primary:     #F0F6FA;
+  --text-secondary:   #A8BED0;
+  --text-muted:       #6A8496;
+  --text-inverse:     #FFFFFF;
+
+  --border-subtle:    rgba(160,190,220,0.08);
+  --border-medium:    rgba(160,190,220,0.14);
+  --border-strong:    rgba(160,190,220,0.22);
+  --border-glass:     rgba(255,255,255,0.20);
+
+  --shadow-xs:   0 1px 2px rgba(0,0,0,0.3);
+  --shadow-sm:   0 4px 16px rgba(0,0,0,0.35);
+  --shadow-md:   0 16px 40px rgba(0,0,0,0.4);
+  --shadow-lg:   0 32px 72px rgba(0,0,0,0.45);
+  --shadow-glow-cyan: 0 0 60px rgba(148,234,239,0.18);
+}

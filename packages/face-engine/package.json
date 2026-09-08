@@ -1,0 +1,33 @@
+{
+  "name": "@medu/face-engine",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./mock": {
+      "types": "./dist/mock.d.ts",
+      "default": "./dist/mock.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@medu/contracts": "*",
+    "@medu/core": "*",
+    "onnxruntime-node": "^1.29.0",
+    "sharp": "^0.35.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}

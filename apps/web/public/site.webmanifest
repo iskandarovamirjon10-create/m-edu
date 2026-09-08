@@ -1,0 +1,20 @@
+{
+  "name": "M-EDU — Education Center Management Platform",
+  "short_name": "M-EDU",
+  "description": "Multi-tenant education center management: face-recognition attendance, CRM, payments, schedules and analytics.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#274ee3",
+  "lang": "en",
+  "categories": ["education", "business", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

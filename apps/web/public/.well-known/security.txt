@@ -1,0 +1,8 @@
+# M-EDU security contact (RFC 9116)
+# Replace the contact with your real security inbox before going live.
+Contact: mailto:security@medu.test
+Expires: 2027-09-06T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://app.example.com/.well-known/security.txt
+Policy: https://app.example.com/security
+# Acknowledgements: https://app.example.com/security/hall-of-fame

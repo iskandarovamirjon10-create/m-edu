@@ -1,0 +1,503 @@
+/**
+ * FaceService unit tests.
+ *
+ * Scope:
+ * - Face engine provider selection and production safety
+ * - tenant isolation on every Prisma operation
+ * - pagination normalization and boundary behavior
+ * - date query normalization
+ * - analytics calculations and zero-division safety
+ * - deterministic facade behavior
+ *
+ * Heavy recognition/enrollment algorithms belong to @medu/core,
+ * face-engine and integration/E2E suites.
+ */
+
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+
+import { FaceService } from '../face.service';
+import type { PrismaService } from '../../prisma/prisma.service';
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* Prisma mock                                                            */
+/* ────────────────────────────────────────────────────────────────────── */
+
+function makePrisma() {
+  const prisma = {
+    faceEnrollment: {
+      findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+    },
+
+    recognitionSession: {
+      count: vi.fn().mockResolvedValue(0),
+    },
+
+    recognitionAttempt: {
+      findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+      groupBy: vi.fn().mockResolvedValue([]),
+      aggregate: vi.fn().mockResolvedValue({
+        _avg: {
+          processingTimeMs: null,
+        },
+      }),
+    },
+
+    faceDevice: {
+      count: vi.fn().mockResolvedValue(0),
+    },
+
+    cameraAttendanceEvent: {
+      count: vi.fn().mockResolvedValue(0),
+    },
+  } as unknown as PrismaService;
+
+  return prisma;
+}
+
+async function makeService() {
+  const prisma = makePrisma();
+
+  const service = new FaceService(prisma);
+
+  await service.onModuleInit();
+
+  return {
+    service,
+    prisma,
+  };
+}
+
+const manager = {
+  organizationId: 'org-1',
+  userId: 'user-1',
+  role: 'MANAGER',
+};
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* Tests                                                                  */
+/* ────────────────────────────────────────────────────────────────────── */
+
+describe('FaceService', () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+
+    process.env.NODE_ENV = 'test';
+    process.env.FACE_ENGINE_PROVIDER = 'mock';
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /* Engine                                                               */
+  /* ──────────────────────────────────────────────────────────────────── */
+
+  describe('engine selection', () => {
+    it('uses the mock engine outside production when explicitly configured', async () => {
+      const { service } = await makeService();
+
+      expect(service.getEngineStatus()).toEqual({
+        provider: 'mock',
+        isReal: false,
+      });
+    });
+
+    it('never allows the mock engine in production', async () => {
+      process.env.NODE_ENV = 'production';
+      process.env.FACE_ENGINE_PROVIDER = 'mock';
+
+      const service = new FaceService(makePrisma());
+
+      await expect(service.onModuleInit()).rejects.toThrow(
+        /Mock engines are forbidden/,
+      );
+    });
+
+    it('does not silently downgrade production to the mock engine', async () => {
+      process.env.NODE_ENV = 'production';
+      delete process.env.FACE_ENGINE_PROVIDER;
+
+      const service = new FaceService(makePrisma());
+
+      await expect(service.onModuleInit()).rejects.toThrow();
+    });
+  });
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /* Enrollment list                                                       */
+  /* ──────────────────────────────────────────────────────────────────── */
+
+  describe('listEnrollments', () => {
+    it('scopes both data and count queries to the tenant', async () => {
+      const { service, prisma } = await makeService();
+
+      prisma.faceEnrollment.count.mockResolvedValue(25);
+
+      const result = await service.listEnrollments(
+        manager,
+        {
+          page: 2,
+          limit: 10,
+        },
+      );
+
+      expect(
+        prisma.faceEnrollment.findMany,
+      ).toHaveBeenCalledTimes(1);
+
+      expect(
+        prisma.faceEnrollment.count,
+      ).toHaveBeenCalledTimes(1);
+
+      const findArgs =
+        prisma.faceEnrollment.findMany.mock.calls[0][0];
+
+      const countArgs =
+        prisma.faceEnrollment.count.mock.calls[0][0];
+
+      expect(findArgs.where.organizationId).toBe('org-1');
+      expect(countArgs.where.organizationId).toBe('org-1');
+
+      expect(result).toEqual({
+        items: [],
+        total: 25,
+        page: 2,
+        limit: 10,
+        totalPages: 3,
+      });
+    });
+
+    it('normalizes string pagination parameters', async () => {
+      const { service, prisma } = await makeService();
+
+      prisma.faceEnrollment.count.mockResolvedValue(7);
+
+      const result = await service.listEnrollments(
+        manager,
+        {
+          page: '1' as unknown as number,
+          limit: '5' as unknown as number,
+        },
+      );
+
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(5);
+      expect(result.totalPages).toBe(2);
+    });
+
+    it('uses one page when total is exactly divisible by limit', async () => {
+      const { service, prisma } = await makeService();
+
+      prisma.faceEnrollment.count.mockResolvedValue(20);
+
+      const result = await service.listEnrollments(
+        manager,
+        {
+          page: 1,
+          limit: 10,
+        },
+      );
+
+      expect(result.totalPages).toBe(2);
+    });
+
+    it('returns zero total pages when there are no records', async () => {
+      const { service } = await makeService();
+
+      const result = await service.listEnrollments(
+        manager,
+        {
+          page: 1,
+          limit: 10,
+        },
+      );
+
+      expect(result.total).toBe(0);
+      expect(result.totalPages).toBe(0);
+    });
+
+    it('calculates the correct Prisma pagination offset', async () => {
+      const { service, prisma } = await makeService();
+
+      await service.listEnrollments(
+        manager,
+        {
+          page: 3,
+          limit: 10,
+        },
+      );
+
+      const args =
+        prisma.faceEnrollment.findMany.mock.calls[0][0];
+
+      expect(args.skip).toBe(20);
+      expect(args.take).toBe(10);
+    });
+  });
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /* Recognition history                                                   */
+  /* ──────────────────────────────────────────────────────────────────── */
+
+  describe('getRecognitionHistory', () => {
+    it('normalizes ISO date strings into Date instances', async () => {
+      const { service, prisma } = await makeService();
+
+      const dateFrom = '2026-09-01T00:00:00.000Z';
+      const dateTo = '2026-09-30T00:00:00.000Z';
+
+      await service.getRecognitionHistory(
+        manager,
+        {
+          dateFrom,
+          dateTo,
+          page: 1,
+          limit: 20,
+        },
+      );
+
+      const args =
+        prisma.recognitionAttempt.findMany.mock.calls[0][0];
+
+      expect(args.where.organizationId).toBe('org-1');
+
+      expect(args.where.occurredAt).toEqual(
+        expect.objectContaining({
+          gte: new Date(dateFrom),
+          lte: new Date(dateTo),
+        }),
+      );
+    });
+
+    it('does not leak another tenant through history queries', async () => {
+      const { service, prisma } = await makeService();
+
+      await service.getRecognitionHistory(
+        manager,
+        {
+          page: 1,
+          limit: 20,
+        },
+      );
+
+      const args =
+        prisma.recognitionAttempt.findMany.mock.calls[0][0];
+
+      expect(args.where).not.toMatchObject({
+        organizationId: 'org-2',
+      });
+
+      expect(args.where.organizationId).toBe('org-1');
+    });
+
+    it('does not add a date filter when dates are not provided', async () => {
+      const { service, prisma } = await makeService();
+
+      await service.getRecognitionHistory(
+        manager,
+        {
+          page: 1,
+          limit: 20,
+        },
+      );
+
+      const args =
+        prisma.recognitionAttempt.findMany.mock.calls[0][0];
+
+      expect(args.where.organizationId).toBe('org-1');
+      expect(args.where.occurredAt).toBeUndefined();
+    });
+  });
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /* Analytics                                                             */
+  /* ──────────────────────────────────────────────────────────────────── */
+
+  describe('getAnalytics', () => {
+    it('calculates success, liveness and latency metrics correctly', async () => {
+      const { service, prisma } = await makeService();
+
+      prisma.recognitionAttempt.count
+        .mockResolvedValueOnce(10)   // totalAttempts
+        .mockResolvedValueOnce(8)    // successful (IDENTIFIED)
+        .mockResolvedValueOnce(0)    // uncertain (MATCH_UNCERTAIN)
+        .mockResolvedValueOnce(1)    // failed (MATCH_NOT_FOUND)
+        .mockResolvedValueOnce(1)    // livenessFailures
+        .mockResolvedValueOnce(0);   // qualityFailures
+
+      prisma.recognitionAttempt.aggregate.mockResolvedValue({
+        _avg: {
+          processingTimeMs: 120.6,
+        },
+      });
+
+      prisma.faceEnrollment.count.mockResolvedValue(12);
+      prisma.recognitionSession.count.mockResolvedValue(4);
+      prisma.faceDevice.count.mockResolvedValue(2);
+      prisma.cameraAttendanceEvent.count.mockResolvedValue(3);
+
+      const result = await service.getAnalytics(manager);
+
+      expect(result.overview).toEqual(
+        expect.objectContaining({
+          totalEnrolled: 12,
+          totalSessions: 4,
+          totalAttempts: 10,
+
+          recognitionSuccessRate: 80,
+          livenessPassRate: 90,
+
+          averageLatencyMs: 121,
+
+          activeDevices: 2,
+          todayAttendance: 3,
+        }),
+      );
+    });
+
+    it('is completely zero-division safe', async () => {
+      const { service } = await makeService();
+
+      const result = await service.getAnalytics(manager);
+
+      expect(result.overview.recognitionSuccessRate).toBe(0);
+      expect(result.overview.livenessPassRate).toBe(0);
+      expect(result.overview.averageLatencyMs).toBe(0);
+    });
+
+    it('handles a 100% recognition success rate', async () => {
+      const { service, prisma } = await makeService();
+
+      prisma.recognitionAttempt.count
+        .mockResolvedValueOnce(10)   // totalAttempts
+        .mockResolvedValueOnce(10)   // successful
+        .mockResolvedValueOnce(0)    // uncertain
+        .mockResolvedValueOnce(0)    // failed
+        .mockResolvedValueOnce(0)    // livenessFailures
+        .mockResolvedValueOnce(0);   // qualityFailures
+
+      const result = await service.getAnalytics(manager);
+
+      expect(result.overview.recognitionSuccessRate).toBe(100);
+      expect(result.overview.livenessPassRate).toBe(100);
+    });
+
+    it('handles a 0% recognition success rate', async () => {
+      const { service, prisma } = await makeService();
+
+      prisma.recognitionAttempt.count
+        .mockResolvedValueOnce(10)   // totalAttempts
+        .mockResolvedValueOnce(0)    // successful
+        .mockResolvedValueOnce(0)    // uncertain
+        .mockResolvedValueOnce(0)    // failed
+        .mockResolvedValueOnce(0)    // livenessFailures
+        .mockResolvedValueOnce(0);   // qualityFailures
+
+      const result = await service.getAnalytics(manager);
+
+      expect(result.overview.recognitionSuccessRate).toBe(0);
+    });
+
+    it('rounds fractional latency deterministically', async () => {
+      const { service, prisma } = await makeService();
+
+      prisma.recognitionAttempt.count
+        .mockResolvedValueOnce(1)    // totalAttempts
+        .mockResolvedValueOnce(1)    // successful
+        .mockResolvedValueOnce(0)    // uncertain
+        .mockResolvedValueOnce(0)    // failed
+        .mockResolvedValueOnce(0)    // livenessFailures
+        .mockResolvedValueOnce(0);   // qualityFailures
+
+      prisma.recognitionAttempt.aggregate.mockResolvedValue({
+        _avg: {
+          processingTimeMs: 120.49,
+        },
+      });
+
+      const result = await service.getAnalytics(manager);
+
+      expect(result.overview.averageLatencyMs).toBe(120);
+    });
+
+    it('handles null average processing time', async () => {
+      const { service, prisma } = await makeService();
+
+      prisma.recognitionAttempt.count
+        .mockResolvedValueOnce(0)    // totalAttempts
+        .mockResolvedValueOnce(0)    // successful
+        .mockResolvedValueOnce(0)    // uncertain
+        .mockResolvedValueOnce(0)    // failed
+        .mockResolvedValueOnce(0)    // livenessFailures
+        .mockResolvedValueOnce(0);   // qualityFailures
+
+      prisma.recognitionAttempt.aggregate.mockResolvedValue({
+        _avg: {
+          processingTimeMs: null,
+        },
+      });
+
+      const result = await service.getAnalytics(manager);
+
+      expect(result.overview.averageLatencyMs).toBe(0);
+    });
+  });
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /* Tenant isolation across analytics                                    */
+  /* ──────────────────────────────────────────────────────────────────── */
+
+  describe('tenant isolation', () => {
+    it('applies organizationId to every analytics count', async () => {
+      const { service, prisma } = await makeService();
+
+      await service.getAnalytics(manager);
+
+      const models = [
+        prisma.faceEnrollment,
+        prisma.recognitionSession,
+        prisma.recognitionAttempt,
+        prisma.faceDevice,
+        prisma.cameraAttendanceEvent,
+      ];
+
+      for (const model of models) {
+        for (const call of model.count.mock.calls) {
+          expect(call[0]?.where?.organizationId).toBe('org-1');
+        }
+      }
+    });
+
+    it('applies organizationId to recognition aggregate/count queries', async () => {
+      const { service, prisma } = await makeService();
+
+      await service.getAnalytics(manager);
+
+      const countCalls =
+        prisma.recognitionAttempt.count.mock.calls;
+
+      for (const call of countCalls) {
+        expect(call[0]?.where?.organizationId).toBe('org-1');
+      }
+
+      const aggregateCalls =
+        prisma.recognitionAttempt.aggregate.mock.calls;
+
+      for (const call of aggregateCalls) {
+        expect(call[0]?.where?.organizationId).toBe('org-1');
+      }
+    });
+  });
+});
