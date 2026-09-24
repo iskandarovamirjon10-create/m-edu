@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { authApi, friendlyHttpMessage, type ApiError } from '@/lib/api';
+ import { GlassButton, GlassInput } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 const KEYFRAMES = `
 @keyframes auth-rise   { from { opacity:0; transform:translateY(14px) scale(.985) } to { opacity:1; transform:none } }
@@ -79,7 +81,8 @@ function BrandMark() {
 }
 
 export function ResetPasswordPage() {
-  usePageTitle('Set New Password');
+  const { t } = useI18n();
+  usePageTitle(t('auth.resetPasswordTitle'));
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
 
@@ -104,7 +107,7 @@ export function ResetPasswordPage() {
     setError('');
 
     if (password !== confirm) {
-      setError('Passwords do not match.');
+      setError(t('auth.passwordsDoNotMatch'));
       return;
     }
 
@@ -140,13 +143,13 @@ export function ResetPasswordPage() {
             className="mb-2 text-center text-[22px] font-semibold tracking-[-0.02em]"
             style={{ color: 'var(--text-primary)' }}
           >
-            Set a new password
+            {t('resetPassword.heading')}
           </h1>
           <p
             className="mb-6 text-center text-[14px] leading-relaxed"
             style={{ color: 'var(--text-secondary)' }}
           >
-            Your reset link is valid for 1 hour.
+            {t('resetPassword.linkValid')}
           </p>
 
           {!hasToken ? (
@@ -159,14 +162,17 @@ export function ResetPasswordPage() {
                   color: '#c07828',
                 }}
               >
-                Invalid or missing reset token. Please request a new password reset link.
+                {t('resetPassword.invalidToken')}
               </div>
-              <Link
-                to="/forgot-password"
-                className="glass-btn glass-btn-primary h-[48px] w-full text-[15px] font-medium"
+              <GlassButton
+                asChild
+                variant="primary"
+                className="h-[48px] w-full text-[15px] font-medium"
               >
-                Request new link
-              </Link>
+                <Link to="/forgot-password">
+                  {t('resetPassword.requestNewLink')}
+                </Link>
+              </GlassButton>
             </div>
           ) : done ? (
             <div className="space-y-4 [animation:auth-fade_.4s_ease-out]">
@@ -179,55 +185,58 @@ export function ResetPasswordPage() {
                 }}
               >
                 <Check />
-                Your password has been reset. Please sign in with your new password.
+                {t('resetPassword.success')}
               </div>
-              <Link
-                to="/login"
-                className="glass-btn glass-btn-primary h-[48px] w-full text-[15px] font-medium"
+              <GlassButton
+                asChild
+                variant="primary"
+                className="h-[48px] w-full text-[15px] font-medium"
               >
-                Sign in
-              </Link>
+                <Link to="/login">
+                  {t('auth.login')}
+                </Link>
+              </GlassButton>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="relative">
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  required
-                  autoFocus
-                  minLength={8}
-                  maxLength={128}
-                  autoComplete="new-password"
-                  placeholder="New password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={busy}
-                  className="glass-input h-[48px] pr-11 pl-4 text-[15px]"
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowPw((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
-                  style={{ color: 'var(--text-muted)' }}
-                  aria-label={showPw ? 'Hide password' : 'Show password'}
-                >
-                  <Eye off={showPw} />
-                </button>
-              </div>
+ <form onSubmit={handleSubmit} className="space-y-3">
+ <div className="relative">
+ <GlassInput
+ type={showPw ? 'text' : 'password'}
+ required
+ autoFocus
+ minLength={8}
+ maxLength={128}
+ autoComplete="new-password"
+ placeholder={t('settings.newPassword')}
+ value={password}
+ onChange={(e) => setPassword(e.target.value)}
+ disabled={busy}
+ className="h-[48px] pr-11 pl-4 text-[15px]"
+ />
+ <button
+ type="button"
+ tabIndex={-1}
+ onClick={() => setShowPw((v) => !v)}
+ className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors z-10"
+ style={{ color: 'var(--text-muted)' }}
+ aria-label={showPw ? t('auth.hidePassword') : t('auth.showPassword')}
+ >
+ <Eye off={showPw} />
+ </button>
+ </div>
 
-              <input
-                type={showPw ? 'text' : 'password'}
-                required
-                minLength={8}
-                maxLength={128}
-                autoComplete="new-password"
-                placeholder="Confirm password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                disabled={busy}
-                className="glass-input h-[48px] text-[15px]"
-              />
+ <GlassInput
+ type={showPw ? 'text' : 'password'}
+ required
+ minLength={8}
+ maxLength={128}
+ autoComplete="new-password"
+ placeholder={t('auth.confirmPassword')}
+ value={confirm}
+ onChange={(e) => setConfirm(e.target.value)}
+ disabled={busy}
+ className="h-[48px] text-[15px]"
+ />
 
               {error && (
                 <p
@@ -242,14 +251,15 @@ export function ResetPasswordPage() {
                 </p>
               )}
 
-              <button
+              <GlassButton
                 type="submit"
                 disabled={busy || !password || !confirm}
                 aria-busy={busy}
-                className="glass-btn glass-btn-primary group h-[48px] w-full text-[15px] font-medium"
+                variant="primary"
+                className="group h-[48px] w-full text-[15px] font-medium"
               >
-                {busy ? (<><Spinner /> Resetting…</>) : 'Reset password'}
-              </button>
+                {busy ? (<><Spinner /> {t('resetPassword.resetting')}</>) : t('resetPassword.submit')}
+              </GlassButton>
             </form>
           )}
         </section>
@@ -263,7 +273,7 @@ export function ResetPasswordPage() {
             className="font-medium underline-offset-[3px] hover:underline"
             style={{ color: 'var(--m-vivid)' }}
           >
-            Back to sign in
+            {t('auth.backToSignIn')}
           </Link>
         </p>
       </main>

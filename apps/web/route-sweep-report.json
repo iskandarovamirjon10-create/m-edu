@@ -1,0 +1,933 @@
+{
+  "base": "http://127.0.0.1:3000",
+  "loggedIn": true,
+  "loginUrlAfterSubmit": "http://127.0.0.1:3000/",
+  "totals": {
+    "routes": 61,
+    "pass": 52,
+    "warn": 9,
+    "fail": 0
+  },
+  "results": [
+    {
+      "kind": "public",
+      "route": "/login",
+      "status": "WARN",
+      "detail": "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 0
+      },
+      "finalUrl": "http://127.0.0.1:3000/login",
+      "textLen": 212
+    },
+    {
+      "kind": "public",
+      "route": "/register",
+      "status": "WARN",
+      "detail": "console: Failed to load resource: the server responded with a status of 401 (Unauthorized) | Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 0
+      },
+      "finalUrl": "http://127.0.0.1:3000/login?returnTo=%2Fregister",
+      "textLen": 212
+    },
+    {
+      "kind": "public",
+      "route": "/forgot-password",
+      "status": "WARN",
+      "detail": "console: Failed to load resource: the server responded with a status of 401 (Unauthorized) | Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 0
+      },
+      "finalUrl": "http://127.0.0.1:3000/login?returnTo=%2Fforgot-password",
+      "textLen": 212
+    },
+    {
+      "kind": "public",
+      "route": "/reset-password",
+      "status": "WARN",
+      "detail": "console: Failed to load resource: the server responded with a status of 401 (Unauthorized) | Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 0
+      },
+      "finalUrl": "http://127.0.0.1:3000/login?returnTo=%2Freset-password",
+      "textLen": 212
+    },
+    {
+      "kind": "public",
+      "route": "/terms",
+      "status": "WARN",
+      "detail": "console: Failed to load resource: the server responded with a status of 401 (Unauthorized) | Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 0
+      },
+      "finalUrl": "http://127.0.0.1:3000/login?returnTo=%2Fterms",
+      "textLen": 212
+    },
+    {
+      "kind": "public",
+      "route": "/privacy",
+      "status": "WARN",
+      "detail": "console: Failed to load resource: the server responded with a status of 401 (Unauthorized) | Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 0
+      },
+      "finalUrl": "http://127.0.0.1:3000/login?returnTo=%2Fprivacy",
+      "textLen": 212
+    },
+    {
+      "kind": "protected",
+      "route": "/",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1309,
+        "innerH": 900,
+        "moved": 409,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/",
+      "textLen": 1468
+    },
+    {
+      "kind": "protected",
+      "route": "/students",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/students",
+      "textLen": 693
+    },
+    {
+      "kind": "protected",
+      "route": "/students/new",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1002,
+        "innerH": 900,
+        "moved": 102,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/students/new",
+      "textLen": 854
+    },
+    {
+      "kind": "protected",
+      "route": "/teachers",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 3
+      },
+      "finalUrl": "http://127.0.0.1:3000/teachers",
+      "textLen": 645
+    },
+    {
+      "kind": "protected",
+      "route": "/groups",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/groups",
+      "textLen": 583
+    },
+    {
+      "kind": "protected",
+      "route": "/groups/new",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/groups/new",
+      "textLen": 670
+    },
+    {
+      "kind": "protected",
+      "route": "/courses",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/courses",
+      "textLen": 641
+    },
+    {
+      "kind": "protected",
+      "route": "/attendance",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 4
+      },
+      "finalUrl": "http://127.0.0.1:3000/attendance",
+      "textLen": 762
+    },
+    {
+      "kind": "protected",
+      "route": "/face",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/face",
+      "textLen": 951
+    },
+    {
+      "kind": "protected",
+      "route": "/face/enroll",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/face/enroll",
+      "textLen": 864
+    },
+    {
+      "kind": "protected",
+      "route": "/payments",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 3
+      },
+      "finalUrl": "http://127.0.0.1:3000/payments",
+      "textLen": 708
+    },
+    {
+      "kind": "protected",
+      "route": "/invoices",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1028,
+        "innerH": 900,
+        "moved": 128,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/invoices",
+      "textLen": 868
+    },
+    {
+      "kind": "protected",
+      "route": "/reports",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/reports",
+      "textLen": 1057
+    },
+    {
+      "kind": "protected",
+      "route": "/expenses",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 3
+      },
+      "finalUrl": "http://127.0.0.1:3000/expenses",
+      "textLen": 754
+    },
+    {
+      "kind": "protected",
+      "route": "/leads",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 3
+      },
+      "finalUrl": "http://127.0.0.1:3000/leads",
+      "textLen": 691
+    },
+    {
+      "kind": "protected",
+      "route": "/cameras",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/cameras",
+      "textLen": 692
+    },
+    {
+      "kind": "protected",
+      "route": "/users",
+      "status": "WARN",
+      "detail": "console: Warning: validateDOMNesting(...): %s cannot appear as a child of <%s>.%s%s%s <tr> tr   \n    at tr\n    at GlassTR (http://127.0.0.1:3000/src/components/ui/GlassTable.tsx:72:3)\n    at tr\n    at thead\n    at GlassTHead (http://127.0.0.1:3000/src/components/ui/GlassTable.tsx:37:30)\n    at table\n    at div\n    at GlassTable (http://127.0.0.1:3000/src/components/ui/GlassTable.tsx:17:30)\n    at div\n    at div\n    at div\n    at div\n    at UsersPage (http://127.0.0.1:3000/src/pages/Users.tsx?t=1790073991764:71:3)\n    at Suspense\n    at ErrorBoundary (http://127.0.0.1:3000/src/components/ErrorBoundary.tsx:5:8)\n    at ErrorBoundaryWrapper (http://127.0.0.1:3000/src/App.tsx?t=1790074135899:52:40)\n    at RenderedRoute (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=6931f98f:4112:5)\n    at Outlet (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=6931f98f:4518:26)\n    at main\n    at div\n    at div\n    at AppLayout (http://127.0.0.1:3000/src/layouts/AppLayout.tsx?t=1790073489978:497:28)\n    at Protected (http://127.0.0.1:3000/src/App.tsx?t=1790074135899:68:29)\n    at RenderedRoute (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=6931f98f:4112:5)\n    at Routes (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=6931f98f:4582:5)\n    at AppRoutes\n    at div\n    at RouteTransition (http://127.0.0.1:3000/src/App.tsx?t=1790074135899:130:35)\n    at AuthProvider (http://127.0.0.1:3000/src/auth/AuthContext.tsx?t=1790072109247:109:3)\n    at Router (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=6931f98f:4525:15)\n    at BrowserRouter (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=6931f98f:5263:5)\n    at QueryClientProvider (http://127.0.0.1:3000/node_modules/.vite/deps/@tanstack_react-query.js?v=6931f98f:26:30)\n    at App (http://127.0.0.1:3000/src/App.tsx?t=1790074135899:156:18)\n    at I18nProvider (http://127.0.0.1:3000/src/i18n/I18nProvider.tsx:30:32)\n    at ThemeProvider (http://127.0.0.1:3000/src/hooks/useTheme.tsx?t=1790073489978:21:3)",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 3
+      },
+      "finalUrl": "http://127.0.0.1:3000/users",
+      "textLen": 725
+    },
+    {
+      "kind": "protected",
+      "route": "/audit",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/audit",
+      "textLen": 844
+    },
+    {
+      "kind": "protected",
+      "route": "/audit-timeline",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/audit-timeline",
+      "textLen": 759
+    },
+    {
+      "kind": "protected",
+      "route": "/search",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 6
+      },
+      "finalUrl": "http://127.0.0.1:3000/search",
+      "textLen": 786
+    },
+    {
+      "kind": "protected",
+      "route": "/data-quality",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 6
+      },
+      "finalUrl": "http://127.0.0.1:3000/data-quality",
+      "textLen": 796
+    },
+    {
+      "kind": "protected",
+      "route": "/documents",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 3
+      },
+      "finalUrl": "http://127.0.0.1:3000/documents",
+      "textLen": 816
+    },
+    {
+      "kind": "protected",
+      "route": "/resources",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 5
+      },
+      "finalUrl": "http://127.0.0.1:3000/resources",
+      "textLen": 769
+    },
+    {
+      "kind": "protected",
+      "route": "/feature-flags",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/feature-flags",
+      "textLen": 725
+    },
+    {
+      "kind": "protected",
+      "route": "/security",
+      "status": "WARN",
+      "detail": "api: 403 GET /api/security/summary | 403 GET /api/security/alerts?status=NEW",
+      "apiFails": [
+        "403 GET /api/security/summary",
+        "403 GET /api/security/alerts?status=NEW"
+      ],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 5
+      },
+      "finalUrl": "http://127.0.0.1:3000/security",
+      "textLen": 1409
+    },
+    {
+      "kind": "protected",
+      "route": "/system-health",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/system-health",
+      "textLen": 1439
+    },
+    {
+      "kind": "protected",
+      "route": "/settings",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1377,
+        "innerH": 900,
+        "moved": 477,
+        "trapped": 9
+      },
+      "finalUrl": "http://127.0.0.1:3000/settings",
+      "textLen": 1119
+    },
+    {
+      "kind": "protected",
+      "route": "/homework",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/homework",
+      "textLen": 627
+    },
+    {
+      "kind": "protected",
+      "route": "/grades",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/grades",
+      "textLen": 673
+    },
+    {
+      "kind": "protected",
+      "route": "/schedule",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/schedule",
+      "textLen": 732
+    },
+    {
+      "kind": "protected",
+      "route": "/library",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/library",
+      "textLen": 641
+    },
+    {
+      "kind": "protected",
+      "route": "/hr",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/hr",
+      "textLen": 782
+    },
+    {
+      "kind": "protected",
+      "route": "/exams",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/exams",
+      "textLen": 697
+    },
+    {
+      "kind": "protected",
+      "route": "/certificates",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/certificates",
+      "textLen": 724
+    },
+    {
+      "kind": "protected",
+      "route": "/inventory",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/inventory",
+      "textLen": 729
+    },
+    {
+      "kind": "protected",
+      "route": "/early-warning",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/early-warning",
+      "textLen": 1209
+    },
+    {
+      "kind": "protected",
+      "route": "/academic-risk",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/academic-risk",
+      "textLen": 1181
+    },
+    {
+      "kind": "protected",
+      "route": "/teacher-workload",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/teacher-workload",
+      "textLen": 1071
+    },
+    {
+      "kind": "protected",
+      "route": "/forecast",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1298,
+        "innerH": 900,
+        "moved": 398,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/forecast",
+      "textLen": 1422
+    },
+    {
+      "kind": "protected",
+      "route": "/import-export",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 4
+      },
+      "finalUrl": "http://127.0.0.1:3000/import-export",
+      "textLen": 1281
+    },
+    {
+      "kind": "protected",
+      "route": "/relationships",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/relationships",
+      "textLen": 1162
+    },
+    {
+      "kind": "protected",
+      "route": "/notifications",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/notifications",
+      "textLen": 979
+    },
+    {
+      "kind": "protected",
+      "route": "/what-changed",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 6
+      },
+      "finalUrl": "http://127.0.0.1:3000/what-changed",
+      "textLen": 1009
+    },
+    {
+      "kind": "protected",
+      "route": "/chat",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1028,
+        "innerH": 900,
+        "moved": 128,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/chat",
+      "textLen": 728
+    },
+    {
+      "kind": "protected",
+      "route": "/parent-portal",
+      "status": "WARN",
+      "detail": "api: 403 GET /api/parent-portal/children",
+      "apiFails": [
+        "403 GET /api/parent-portal/children"
+      ],
+      "layout": {
+        "scrollH": 1028,
+        "innerH": 900,
+        "moved": 128,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/parent-portal",
+      "textLen": 618
+    },
+    {
+      "kind": "protected",
+      "route": "/executive-dashboard",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1241,
+        "innerH": 900,
+        "moved": 341,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/executive-dashboard",
+      "textLen": 1323
+    },
+    {
+      "kind": "protected",
+      "route": "/automation",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1028,
+        "innerH": 900,
+        "moved": 128,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/automation",
+      "textLen": 726
+    },
+    {
+      "kind": "protected",
+      "route": "/payroll",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1028,
+        "innerH": 900,
+        "moved": 128,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/payroll",
+      "textLen": 937
+    },
+    {
+      "kind": "protected",
+      "route": "/financial-analytics",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/financial-analytics",
+      "textLen": 789
+    },
+    {
+      "kind": "protected",
+      "route": "/payroll-analytics",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 3
+      },
+      "finalUrl": "http://127.0.0.1:3000/payroll-analytics",
+      "textLen": 786
+    },
+    {
+      "kind": "protected",
+      "route": "/crm-analytics",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1071,
+        "innerH": 900,
+        "moved": 171,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/crm-analytics",
+      "textLen": 842
+    },
+    {
+      "kind": "protected",
+      "route": "/follow-up-automation",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1028,
+        "innerH": 900,
+        "moved": 128,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/follow-up-automation",
+      "textLen": 764
+    },
+    {
+      "kind": "protected",
+      "route": "/branches",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/branches",
+      "textLen": 616
+    },
+    {
+      "kind": "protected",
+      "route": "/data-governance",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 900,
+        "innerH": 900,
+        "moved": 0,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/data-governance",
+      "textLen": 738
+    },
+    {
+      "kind": "protected",
+      "route": "/anomaly-detection",
+      "status": "PASS",
+      "detail": "",
+      "apiFails": [],
+      "layout": {
+        "scrollH": 1028,
+        "innerH": 900,
+        "moved": 128,
+        "trapped": 2
+      },
+      "finalUrl": "http://127.0.0.1:3000/anomaly-detection",
+      "textLen": 591
+    }
+  ]
+}

@@ -3,11 +3,15 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import type { Request } from 'express';
 import { AuditService } from './audit.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '@prisma/client';
 import { AuditQueryDto, AuditResponseDto } from './audit.dto';
 
 @ApiTags('Audit')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ORG_ADMIN, Role.SUPER_ADMIN)
 @Controller('audit')
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}

@@ -13,6 +13,7 @@ import {
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthError, useAuthActions, useAuthState } from '@/auth/AuthContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Motion tokens (injected once)                                            */
@@ -247,23 +248,23 @@ const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
 /*  Page                                                                     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-function friendlyMessage(err: unknown): string {
+function friendlyMessage(err: unknown, t: TranslateFn): string {
   if (err instanceof AuthError) {
     switch (err.code) {
       case 'INVALID_CREDENTIALS':
       case 'UNAUTHORIZED':
-        return "That email or password isn't right. Please try again.";
+        return t('login.wrongEmailOrPassword');
       case 'NETWORK':
-        return 'You appear to be offline. Check your connection.';
+        return t('login.offline');
       case 'VALIDATION':
-        return err.message || 'Please check the details you entered.';
+        return err.message || t('login.checkDetails');
       case 'FORBIDDEN':
-        return "This account doesn't have access.";
+        return t('login.noAccess');
       default:
-        return err.message || 'Something went wrong. Please try again.';
+        return err.message || t('login.genericError');
     }
   }
-  return 'Something went wrong. Please try again.';
+  return t('login.genericError');
 }
 
 /**
@@ -275,7 +276,8 @@ function friendlyMessage(err: unknown): string {
 export const googleOAuthUrl = '/api/auth/google';
 
 export function LoginPage() {
-  usePageTitle('Sign In');
+  const { t } = useI18n();
+  usePageTitle(t('nav.signIn'));
   const { login, clearError } = useAuthActions();
   const { pending } = useAuthState();
   const navigate = useNavigate();
@@ -318,7 +320,7 @@ export function LoginPage() {
       setDone(true);
       window.setTimeout(() => navigate(returnTo, { replace: true }), 480);
     } catch (err) {
-      setError(friendlyMessage(err));
+      setError(friendlyMessage(err, t));
       setShake((n) => n + 1);
       setPassword('');
     }
@@ -356,13 +358,13 @@ export function LoginPage() {
               className="text-[28px] font-semibold leading-tight tracking-[-0.022em]"
               style={{ color: 'var(--text-primary)' }}
             >
-              Sign in to M‑EDU
+              {t('login.heading')}
             </h1>
             <p
               className="mt-2 text-[15px] leading-snug tracking-[-0.01em]"
               style={{ color: 'var(--text-secondary)' }}
             >
-              Your education workspace, in one place.
+              {t('login.subtitle')}
             </p>
           </header>
 
@@ -371,7 +373,7 @@ export function LoginPage() {
             <div className="isolate divide-y overflow-hidden rounded-[14px]" style={{ borderColor: 'var(--border-subtle)' }}>
               <FloatingInput
                 ref={emailRef}
-                label="Email"
+                label={t('auth.email')}
                 type="email"
                 name="email"
                 inputMode="email"
@@ -384,7 +386,7 @@ export function LoginPage() {
                 disabled={busy || done || googleBusy}
               />
               <FloatingInput
-                label="Password"
+                label={t('auth.password')}
                 type={showPw ? 'text' : 'password'}
                 name="password"
                 autoComplete="current-password"
@@ -400,7 +402,7 @@ export function LoginPage() {
                     type="button"
                     tabIndex={-1}
                     onClick={() => setShowPw((v) => !v)}
-                    aria-label={showPw ? 'Hide password' : 'Show password'}
+                    aria-label={showPw ? t('auth.hidePassword') : t('auth.showPassword')}
                     className="grid h-9 w-9 place-items-center rounded-full transition-colors active:scale-95"
                     style={{ color: 'var(--text-muted)' }}
                   >
@@ -433,7 +435,7 @@ export function LoginPage() {
                   className="[animation:auth-fade_.25s_ease-out]"
                   style={{ color: 'var(--text-secondary)' }}
                 >
-                  Caps Lock is on.
+                  {t('login.capsLock')}
                 </p>
               ) : null}
             </div>
@@ -474,16 +476,16 @@ export function LoginPage() {
                 {done ? (
                   <>
                     <Check />
-                    Signed in
+                    {t('login.signedIn')}
                   </>
                 ) : busy ? (
                   <>
                     <Spinner />
-                    Signing in…
+                    {t('auth.loggingIn')}
                   </>
                 ) : (
                   <>
-                    Continue
+                    {t('login.continue')}
                     <Arrow />
                   </>
                 )}
@@ -495,7 +497,7 @@ export function LoginPage() {
           <div
             className="my-6 flex items-center gap-3"
             role="separator"
-            aria-label="or"
+            aria-label={t('login.or')}
           >
             <span
               aria-hidden
@@ -506,7 +508,7 @@ export function LoginPage() {
               className="text-[13px] tracking-[-0.01em]"
               style={{ color: 'var(--text-muted)' }}
             >
-              or
+              {t('login.or')}
             </span>
             <span
               aria-hidden
@@ -540,12 +542,12 @@ export function LoginPage() {
             {googleBusy ? (
               <>
                 <Spinner />
-                <span>Redirecting to Google…</span>
+                <span>{t('login.redirectingGoogle')}</span>
               </>
             ) : (
               <>
                 <GoogleMark />
-                <span>Continue with Google</span>
+                <span>{t('login.continueWithGoogle')}</span>
               </>
             )}
           </button>
@@ -556,7 +558,7 @@ export function LoginPage() {
               className="underline-offset-[3px] transition-colors hover:underline"
               style={{ color: 'var(--m-vivid)' }}
             >
-              Forgot password?
+              {t('auth.forgotPassword')}
             </Link>
           </div>
         </section>
@@ -566,13 +568,13 @@ export function LoginPage() {
           className="mt-7 text-center text-[14px] tracking-[-0.01em] [animation:auth-fade_.9s_.25s_ease-out_both]"
           style={{ color: 'var(--text-secondary)' }}
         >
-          New to M‑EDU?{' '}
+          {t('login.newTo')}{' '}
           <Link
             to="/register"
             className="font-medium underline-offset-[3px] hover:underline"
             style={{ color: 'var(--m-vivid)' }}
           >
-            Create an account
+            {t('login.createAccount')}
           </Link>
         </p>
 
@@ -580,13 +582,13 @@ export function LoginPage() {
           className="mt-10 text-center text-[11.5px] leading-relaxed tracking-[-0.005em] [animation:auth-fade_.9s_.4s_ease-out_both]"
           style={{ color: 'var(--text-muted)' }}
         >
-          By continuing you agree to our{' '}
+          {t('login.agreeTo')}{' '}
           <Link to="/terms" className="underline-offset-2 hover:underline">
-            Terms
+            {t('login.terms')}
           </Link>{' '}
-          and{' '}
+          {t('login.and')}{' '}
           <Link to="/privacy" className="underline-offset-2 hover:underline">
-            Privacy Policy
+            {t('login.privacy')}
           </Link>
           .
         </p>

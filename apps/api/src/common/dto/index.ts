@@ -210,6 +210,9 @@ export class CreateGroupDto {
 
   @ApiPropertyOptional() @IsOptional() @IsDateString()
   endDate?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  isActive?: boolean;
 }
 
 export class UpdateGroupDto {
@@ -300,6 +303,9 @@ export class ConvertLeadDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(6)
   password?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(1)
+  lastName?: string;
 }
 
 export class AddLeadActivityDto {
@@ -353,6 +359,9 @@ export class UpdatePaymentDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200)
   reference?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsDateString()
+  dueDate?: string;
 }
 
 // ==================== Expenses ====================
@@ -413,6 +422,14 @@ export class MarkAttendanceDto {
 
   @ApiProperty({ type: [AttendanceRecordDto] }) @IsArray()
   records: AttendanceRecordDto[];
+}
+
+export class UpdateAttendanceDto {
+  @ApiPropertyOptional() @IsOptional() @IsEnum(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'])
+  status?: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
+
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500)
+  note?: string;
 }
 
 // ==================== Grades ====================

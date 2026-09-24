@@ -21,6 +21,8 @@ export interface NetworkSecurityOptions {
 const LOOPBACK_RANGES: Array<[string, number]> = [
   ['127.0.0.0', 8],
   ['::1', 128],
+  ['0.0.0.0', 8],
+  ['255.255.255.255', 32],
 ];
 
 const PRIVATE_RANGES: Array<[string, number]> = [
@@ -28,6 +30,8 @@ const PRIVATE_RANGES: Array<[string, number]> = [
   ['172.16.0.0', 12],
   ['192.168.0.0', 16],
   ['169.254.0.0', 16], // link-local
+  ['100.64.0.0', 10], // CGNAT
+  ['224.0.0.0', 4], // Multicast
   ['fe80::', 10],
   ['fc00::', 7], // ULA
 ];
@@ -146,14 +150,14 @@ export class NetworkSecurity {
    * Validate a camera host. Throws if the host resolves to a forbidden
    * network range.
    */
-  async validateHost(host: string): Promise<void> {
+  async validateHost(host: string): Promise<string> {
     if (!host || typeof host !== 'string') {
       throw new Error('Camera host is required');
     }
     const trimmed = host.trim();
     if (net.isIP(trimmed)) {
       this.assertAllowedIp(trimmed);
-      return;
+      return trimmed;
     }
     // Hostname — resolve and validate every address
     let addresses: string[] = [];
@@ -169,6 +173,9 @@ export class NetworkSecurity {
     for (const addr of addresses) {
       this.assertAllowedIp(addr);
     }
+    
+    // Return the first resolved and validated IP to prevent DNS rebinding TOCTOU
+    return addresses[0];
   }
 
   private assertAllowedIp(ip: string): void {

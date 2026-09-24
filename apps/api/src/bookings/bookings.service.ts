@@ -1,25 +1,32 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { BookingQueryDto, CreateBookingDto } from './dto/booking.dto';
 
 @Injectable()
 export class BookingsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(orgId: string, query: any) {
-    const where: any = { organizationId: orgId };
+  async findAll(orgId: string, query: BookingQueryDto) {
+    const where: Prisma.ResourceBookingWhereInput = { organizationId: orgId };
     if (query.resourceId) where.resourceId = query.resourceId;
     if (query.status) where.status = query.status;
     if (query.bookedBy) where.bookedBy = query.bookedBy;
+
+    const skip = query.skip !== undefined ? Number(query.skip) : 0;
+    const take = query.take !== undefined ? Number(query.take) : 20;
+
     const [items, total] = await Promise.all([
       this.prisma.resourceBooking.findMany({
         where,
         orderBy: { startAt: 'desc' },
-        skip: query.skip ? parseInt(query.skip, 10) : 0,
-        take: query.take ? parseInt(query.take, 10) : 20,
+        skip,
+        take,
         include: { resource: { select: { name: true } } },
       }),
       this.prisma.resourceBooking.count({ where }),
     ]);
+
     // Flatten resource.name → resourceName so the UI can display it directly
     return {
       items: items.map(({ resource, ...b }) => ({ ...b, resourceName: resource?.name })),
@@ -27,7 +34,7 @@ export class BookingsService {
     };
   }
 
-  async create(orgId: string, dto: any) {
+  async create(orgId: string, dto: CreateBookingDto) {
     const startAt = new Date(dto.startAt);
     const endAt = new Date(dto.endAt);
 
@@ -39,8 +46,22 @@ export class BookingsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // Validate that resource exists and belongs to the same organization
+      const resource = await tx.resource.findFirst({
+        where: {
+          id: dto.resourceId,
+          organizationId: orgId,
+        },
+      });
+
+      if (!resource) {
+        throw new NotFoundException(`Resource ${dto.resourceId} not found`);
+      }
+
+      // Check for overlapping bookings for this resource in this org
       const conflicts = await tx.resourceBooking.findMany({
         where: {
+          organizationId: orgId,
           resourceId: dto.resourceId,
           status: { in: ['PENDING', 'CONFIRMED'] },
           AND: [
@@ -65,7 +86,7 @@ export class BookingsService {
           startAt,
           endAt,
           status: dto.status ?? 'PENDING',
-          bookedBy: dto.bookedBy,
+          bookedBy: dto.bookedBy ?? 'UNKNOWN',
           attendees: dto.attendees,
           notes: dto.notes,
         },

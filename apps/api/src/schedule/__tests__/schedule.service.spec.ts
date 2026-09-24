@@ -1,27 +1,52 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ScheduleService } from '../schedule.service';
+import { LessonGeneratorService } from '../lesson-generator.service';
+
+import { PrismaService } from '../../prisma/prisma.service';
 
 function createMockPrisma() {
-  return {
+  const mockPrisma: any = {
     schedule: {
+      findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn(),
       findFirst: vi.fn(),
-      findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
-      count: vi.fn(),
     },
-    group: { findFirst: vi.fn() },
+    group: {
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+    },
+    $queryRaw: vi.fn(),
+    $transaction: vi.fn(),
   };
+  mockPrisma.$transaction.mockImplementation((fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma));
+  return mockPrisma;
 }
 
 describe('ScheduleService', () => {
-  let prisma: any;
+  let prisma: ReturnType<typeof createMockPrisma>;
+  let lessonGenerator: { generate: ReturnType<typeof vi.fn> };
   let svc: ScheduleService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new ScheduleService(prisma);
+    lessonGenerator = {
+      generate: vi.fn().mockResolvedValue({
+        from: new Date(),
+        to: new Date(),
+        groupsScanned: 1,
+        schedulesMatched: 1,
+        created: 0,
+        skipped: 0,
+        pastPlannedCancelled: 0,
+      }),
+    };
+    svc = new ScheduleService(
+      prisma as unknown as PrismaService,
+      lessonGenerator as unknown as LessonGeneratorService,
+    );
   });
 
   describe('findAll', () => {
@@ -97,7 +122,8 @@ describe('ScheduleService', () => {
     });
 
     it('creates a schedule for an in-org group', async () => {
-      prisma.group.findFirst.mockResolvedValue({ id: 'g-1' });
+      prisma.group.findFirst.mockResolvedValue({ id: 'g-1', teacherId: 't-1' });
+      prisma.schedule.findMany.mockResolvedValue([]);
       prisma.schedule.create.mockResolvedValue({ id: 's-1' });
       await svc.create('org-1', { groupId: 'g-1', dayOfWeek: 'WEDNESDAY', startTime: '09:00', endTime: '10:30', room: 'A-101' });
       expect(prisma.schedule.create).toHaveBeenCalledWith(

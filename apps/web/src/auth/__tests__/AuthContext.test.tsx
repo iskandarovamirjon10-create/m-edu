@@ -1,111 +1,205 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, act, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { AuthProvider, useAuthState, useAuthActions } from '../AuthContext';
+import { authApi, userStore } from '@/lib/api';
 
-// Enable React 18 act() environment so state updates from effects are
-// flushed synchronously (no act() warnings).
-(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
-import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { AuthProvider, useAuth, AuthError } from '@/auth/AuthContext';
-
-// Unit-test the AuthContext in isolation: api module is mocked so no
-// network calls happen; localStorage is cleared per test.
 vi.mock('@/lib/api', () => ({
-  tokenStore: { get: vi.fn(() => null), set: vi.fn(), clear: vi.fn() },
-  userStore: { get: vi.fn(() => null), set: vi.fn(), clear: vi.fn() },
-  setUnauthorizedHandler: vi.fn(),
   authApi: {
-    me: vi.fn(),
     login: vi.fn(),
-    register: vi.fn(),
     logout: vi.fn(),
-    refresh: vi.fn(),
-    exchangeCode: vi.fn(),
+    me: vi.fn(),
+    register: vi.fn(),
   },
+  userStore: {
+    get: vi.fn(),
+    set: vi.fn(),
+    clear: vi.fn(),
+  },
+  setUnauthorizedHandler: vi.fn(),
 }));
 
+const mockUser = { id: '1', email: 'test@example.com', roles: ['admin'] };
+
+function TestComponent() {
+  const state = useAuthState();
+  const actions = useAuthActions();
+
+  return (
+    <div>
+      <div data-testid="status">{state.status}</div>
+      <div data-testid="user">{state.user ? state.user.email : 'none'}</div>
+      <div data-testid="error">{state.error ? state.error.code : 'none'}</div>
+      <button onClick={() => actions.login('test@example.com', 'pass').catch(() => {})}>Login</button>
+      <button onClick={() => actions.logout({ redirect: false })}>Logout</button>
+      <button onClick={() => actions.refresh()}>Refresh</button>
+    </div>
+  );
+}
+
 describe('AuthContext', () => {
-  let container: HTMLDivElement;
-  let root: Root;
-
   beforeEach(() => {
-    localStorage.clear();
     vi.clearAllMocks();
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    root = createRoot(container);
   });
 
-  afterEach(() => {
-    act(() => root.unmount());
-    container.remove();
+  it('boots with cached user from localStorage -> status = authenticated', async () => {
+    vi.mocked(userStore.get).mockReturnValue(mockUser);
+    vi.mocked(authApi.me).mockResolvedValue(mockUser);
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId('status')).toHaveTextContent('authenticated');
+    expect(screen.getByTestId('user')).toHaveTextContent('test@example.com');
   });
 
-  function renderProbe(): { read: () => any } {
-    let captured: any = null;
-    function Probe() {
-      const auth = useAuth();
-      captured = auth;
-      return null;
-    }
-    act(() => {
-      root.render(
-        <AuthProvider>
-          <Probe />
-        </AuthProvider>,
-      );
+  it('boots with no cached user, server returns 401 -> status = unauthenticated', async () => {
+    vi.mocked(userStore.get).mockReturnValue(null);
+    vi.mocked(authApi.me).mockRejectedValue({ status: 401 });
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId('status')).toHaveTextContent('booting');
+    await waitFor(() => {
+      expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
     });
-    return { read: () => captured };
-  }
-
-  it('boots to unauthenticated when the server rejects the session', async () => {
-    // Cookie-based auth: boot verifies the session with the server.
-    // A 401 from /auth/me means no valid session → unauthenticated.
-    const { authApi } = await import('@/lib/api');
-    (authApi.me as any).mockRejectedValue(Object.assign(new Error('Unauthorized'), { status: 401 }));
-    const { read } = renderProbe();
-    await act(async () => {}); // flush the async boot verification
-    const auth = read();
-    expect(auth.status).toBe('unauthenticated');
-    expect(auth.isAuthenticated).toBe(false);
-    expect(auth.loading).toBe(false);
-    expect(auth.user).toBeNull();
-    expect(auth.roles).toEqual([]);
   });
 
-  it('exposes the legacy useAuth() shape (user/loading) for compatibility', () => {
-    const { read } = renderProbe();
-    const auth = read();
-    expect(typeof auth.login).toBe('function');
-    expect(typeof auth.register).toBe('function');
-    expect(typeof auth.logout).toBe('function');
-    expect(typeof auth.setUser).toBe('function');
-    expect(typeof auth.updateUser).toBe('function');
-    expect(typeof auth.hasRole).toBe('function');
-    expect(typeof auth.hasAnyRole).toBe('function');
-  });
+  it('login() -> calls authApi.login, dispatches SIGNED_IN, persists user', async () => {
+    vi.mocked(userStore.get).mockReturnValue(null);
+    vi.mocked(authApi.me).mockRejectedValue({ status: 401 });
+    vi.mocked(authApi.login).mockResolvedValue({ user: mockUser });
 
-  it('throws AuthError with normalized code/status for 401 responses', () => {
-    const err = new AuthError('UNAUTHORIZED', 'Session expired', 401, new Error('x'));
-    expect(err.code).toBe('UNAUTHORIZED');
-    expect(err.status).toBe(401);
-    expect(err.message).toBe('Session expired');
-    expect(err).toBeInstanceOf(Error);
-  });
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
 
-  it('rejects unsafe returnTo values (open-redirect protection)', async () => {
-    // safeReturnTo is internal; verify via the exported AuthError contract
-    // plus the documented behavior: only internal paths are accepted.
-    const { read } = renderProbe();
-    const auth = read();
-    // login with returnTo pointing off-site must not navigate off-site —
-    // navigateAfterAuth only runs for safe internal paths. With no token,
-    // login would attempt a network call; mock it to reject fast.
-    const api = await import('@/lib/api');
-    (api.authApi.login as any).mockRejectedValue(new AuthError('INVALID_CREDENTIALS', 'bad', 401));
+    await waitFor(() => {
+      expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
+    });
+
     await act(async () => {
-      await expect(
-        auth.login('a@b.c', 'wrong-password', { returnTo: 'https://evil.example.com' }),
-      ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+      screen.getByText('Login').click();
     });
+
+    expect(authApi.login).toHaveBeenCalledWith('test@example.com', 'pass');
+    expect(userStore.set).toHaveBeenCalledWith(mockUser);
+    expect(screen.getByTestId('status')).toHaveTextContent('authenticated');
+    expect(screen.getByTestId('user')).toHaveTextContent('test@example.com');
+  });
+
+  it('login() with wrong credentials -> dispatches FAILED with INVALID_CREDENTIALS', async () => {
+    vi.mocked(userStore.get).mockReturnValue(null);
+    vi.mocked(authApi.me).mockRejectedValue({ status: 401 });
+    vi.mocked(authApi.login).mockRejectedValue({ status: 401 });
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
+    });
+
+    await act(async () => {
+      screen.getByText('Login').click();
+    });
+
+    expect(screen.getByTestId('error')).toHaveTextContent('INVALID_CREDENTIALS');
+  });
+
+  it('logout() -> calls authApi.logout, clears user, dispatches SIGNED_OUT', async () => {
+    vi.mocked(userStore.get).mockReturnValue(mockUser);
+    vi.mocked(authApi.me).mockResolvedValue(mockUser);
+    vi.mocked(authApi.logout).mockResolvedValue({ message: 'ok' });
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    await act(async () => {
+      screen.getByText('Logout').click();
+    });
+
+    expect(authApi.logout).toHaveBeenCalled();
+    expect(userStore.clear).toHaveBeenCalled();
+    expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
+  });
+
+  it('refresh() -> calls authApi.me, updates user', async () => {
+    vi.mocked(userStore.get).mockReturnValue(mockUser);
+    vi.mocked(authApi.me).mockResolvedValue({ ...mockUser, email: 'updated@example.com' });
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    await act(async () => {
+      screen.getByText('Refresh').click();
+    });
+
+    expect(authApi.me).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByTestId('user')).toHaveTextContent('updated@example.com');
+    });
+  });
+
+  it('Cross-tab sync: SIGNED_OUT from another tab clears session', async () => {
+    vi.mocked(userStore.get).mockReturnValue(mockUser);
+    vi.mocked(authApi.me).mockResolvedValue(mockUser);
+
+    // The provider prefers BroadcastChannel when it exists; delete it so this
+    // test exercises the `storage`-event fallback it is asserting.
+    const originalBroadcastChannel = (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel;
+    delete (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel;
+
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      value: { assign: vi.fn(), pathname: '/', search: '' },
+      writable: true,
+    });
+    
+    render(
+      <AuthProvider syncTabs={true}>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status')).toHaveTextContent('authenticated');
+    });
+    
+    act(() => {
+      const event = new StorageEvent('storage', {
+        key: '__auth_sync__',
+        newValue: JSON.stringify({ type: 'SIGNED_OUT', t: Date.now() }),
+      });
+      window.dispatchEvent(event);
+    });
+    
+    expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
+    expect(window.location.assign).toHaveBeenCalledWith('/login?returnTo=%2F');
+    
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      writable: true,
+    });
+    if (originalBroadcastChannel) {
+      (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel = originalBroadcastChannel;
+    }
   });
 });

@@ -24,6 +24,7 @@ import { Role } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { Response } from 'express';
 import type { RequestUser } from '../auth/types';
+import { AllowAnyRole } from '../auth/roles.decorator';
 
 @Controller('certificates')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -32,6 +33,7 @@ export class CertificatesController {
 
   // ===================== Certificate Management =====================
 
+  @AllowAnyRole()
   @Get()
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async findAllCertificates(@CurrentUser() user: RequestUser) {
@@ -42,26 +44,30 @@ export class CertificatesController {
   // route — NestJS matches controllers routes in declaration order, so a
   // `GET /certificates/templates` would otherwise be captured by `:id` and
   // rejected by ParseUUIDPipe with a 400 before ever reaching its handler.
+  @AllowAnyRole()
   @Get('student/:studentId')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER, Role.STUDENT)
   async getStudentCertificates(
     @CurrentUser() user: RequestUser,
     @Param('studentId', ParseUUIDPipe) studentId: string,
   ) {
-    return this.certificatesService.getStudentCertificates(user.organizationId, studentId);
+    return this.certificatesService.getStudentCertificates(user.organizationId, studentId, user.sub, user.role);
   }
 
+  @AllowAnyRole()
   @Get('verify/:code')
   async verifyCertificate(@Param('code') code: string) {
     return this.certificatesService.verifyCertificate(code);
   }
 
+  @AllowAnyRole()
   @Get('templates')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findAllTemplates(@CurrentUser() user: RequestUser) {
     return this.certificatesService.findAllTemplates(user.organizationId);
   }
 
+  @AllowAnyRole()
   @Get(':id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER, Role.STUDENT)
   async findCertificateById(
@@ -95,6 +101,7 @@ export class CertificatesController {
 
   // ===================== Templates =====================
 
+  @AllowAnyRole()
   @Get('templates/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findTemplateById(

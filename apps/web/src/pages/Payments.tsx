@@ -11,6 +11,7 @@ import {
   Select,
   Field,
   Modal,
+  GlassButton,
   useToasts,
 } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -18,9 +19,18 @@ import { formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Payment, Student, PaymentStatus, PaymentMethod } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 const PAYMENT_STATUSES: PaymentStatus[] = ['PAID', 'PENDING', 'OVERDUE', 'CANCELLED'];
-const PAYMENT_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'ONLINE'];
+const PAYMENT_METHODS: PaymentMethod[] = [
+  'CASH',
+  'CARD',
+  'BANK_TRANSFER',
+  'PAYME',
+  'CLICK',
+  'UZUM',
+  'OTHER',
+];
 
 interface PaymentFilters {
   page: number;
@@ -60,7 +70,8 @@ export function formatPaymentMethod(method: PaymentMethod): string {
 }
 
 export function PaymentsPage() {
-  usePageTitle('Payments');
+  const { t } = useI18n();
+  usePageTitle(t('payments.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
@@ -122,7 +133,7 @@ export function PaymentsPage() {
         method: form.method,
       }),
     onSuccess: () => {
-      push('success', 'Payment recorded successfully');
+      push('success', t('payments.created'));
       setModalOpen(false);
       setForm(INITIAL_FORM);
       setFormErrors({});
@@ -138,7 +149,7 @@ export function PaymentsPage() {
     mutationFn: ({ id, status }: { id: string; status: PaymentStatus }) =>
       paymentsApi.update(id, { status }),
     onSuccess: () => {
-      push('success', 'Payment status updated');
+      push('success', t('payments.updated'));
       qc.invalidateQueries({ queryKey: ['payments'] });
     },
     onError: (e: Error) => {
@@ -151,10 +162,10 @@ export function PaymentsPage() {
     const errors: Partial<Record<keyof PaymentFormState, string>> = {};
 
     if (!form.studentId) {
-      errors.studentId = 'Please select a student';
+      errors.studentId = 'payments.validation.studentRequired';
     }
     if (!form.amount || parseFloat(form.amount) <= 0) {
-      errors.amount = 'Amount must be a positive number';
+      errors.amount = 'payments.validation.amountPositive';
     }
 
     setFormErrors(errors);
@@ -228,18 +239,14 @@ export function PaymentsPage() {
   // Early return for loading state
   if (payments.isLoading && !data) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Payments"
-            subtitle="Track student payments and statuses"
+            title={t('payments.title')}
+            subtitle={t('payments.subtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label="Loading payments…" />
+            <PageLoader label={t('payments.loading')} />
           </div>
         </div>
       </div>
@@ -249,19 +256,15 @@ export function PaymentsPage() {
   // Early return for error state
   if (payments.isError) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Payments"
-            subtitle="Track student payments and statuses"
+            title={t('payments.title')}
+            subtitle={t('payments.subtitle')}
           />
           <div className="glass-card p-8">
             <ErrorState
-              title="Failed to load payments"
+              title={t('payments.loadError')}
               message={getErrorMessage(payments.error as Error)}
               onRetry={handleRetry}
             />
@@ -272,23 +275,19 @@ export function PaymentsPage() {
   }
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
       <div className="page-container space-y-4">
         <PageHeader
-          title="Payments"
-          subtitle="Track student payments and statuses"
+          title={t('payments.title')}
+          subtitle={t('payments.subtitle')}
           actions={
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               onClick={handleOpenModal}
             >
-              Record payment
-            </button>
+              {t('payments.add')}
+            </GlassButton>
           }
         />
 
@@ -297,27 +296,27 @@ export function PaymentsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
               <TextInput
-                placeholder="Search payments…"
+                placeholder={t('payments.searchPlaceholder')}
                 value={search}
                 onChange={handleSearchChange}
-                aria-label="Search payments"
+                aria-label={t('payments.searchPlaceholder')}
                 type="search"
               />
               <Select
                 value={status}
                 onChange={handleStatusFilterChange}
-                aria-label="Filter by status"
+                aria-label={t('payments.filterByStatus')}
               >
-                <option value="">All statuses</option>
+                <option value="">{t('payments.allStatuses')}</option>
                 {PAYMENT_STATUSES.map((status) => (
                   <option key={status} value={status}>
-                    {formatPaymentStatus(status)}
+                    {t(`payments.status.${status}`)}
                   </option>
                 ))}
               </Select>
             </div>
             <div className="text-sm sm:ml-4 sm:shrink-0" style={{ color: 'var(--text-muted)' }}>
-              {totalPayments} {totalPayments === 1 ? 'payment' : 'payments'}
+              {totalPayments} {totalPayments === 1 ? t('payments.countOne') : t('payments.countMany')}
             </div>
           </div>
         </div>
@@ -326,11 +325,11 @@ export function PaymentsPage() {
         <div className="glass-card">
           {paymentList.length === 0 ? (
             <EmptyState
-              title={hasActiveFilters ? 'No matching payments' : 'No payments'}
+              title={hasActiveFilters ? t('payments.emptyFiltered') : t('payments.empty')}
               message={
                 hasActiveFilters
-                  ? 'Try adjusting your filters to see more results.'
-                  : 'Record your first payment to start tracking.'
+                  ? t('payments.emptyFilteredHint')
+                  : t('payments.emptyHint')
               }
             />
           ) : (
@@ -339,11 +338,11 @@ export function PaymentsPage() {
                 <table className="glass-table">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Student</th>
-                      <th>Description</th>
-                      <th>Status</th>
-                      <th style={{ textAlign: 'right' }}>Amount</th>
+                      <th>{t('common.date')}</th>
+                      <th>{t('payments.form.student')}</th>
+                      <th>{t('payments.col.description')}</th>
+                      <th>{t('payments.col.status')}</th>
+                      <th style={{ textAlign: 'right' }}>{t('payments.col.amount')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -377,18 +376,20 @@ export function PaymentsPage() {
                                     e.target.value as PaymentStatus,
                                   )
                                 }
-                                aria-label={`Update status for ${formatStudentName(payment.student)}`}
+                                aria-label={t('payments.updateStatusFor', {
+                                  name: formatStudentName(payment.student),
+                                })}
                                 disabled={isUpdatingStatus}
                               >
                                 {PAYMENT_STATUSES.map((status) => (
                                   <option key={status} value={status}>
-                                    {formatPaymentStatus(status)}
+                                    {t(`payments.status.${status}`)}
                                   </option>
                                 ))}
                               </Select>
                               {isUpdatingStatus && (
                                 <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                                  Saving…
+                                  {t('payments.saving')}
                                 </span>
                               )}
                             </div>
@@ -417,12 +418,12 @@ export function PaymentsPage() {
         <Modal
           open={modalOpen}
           onClose={handleCloseModal}
-          title="Record payment"
+          title={t('payments.form.title')}
           wide
         >
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Student" required error={formErrors.studentId}>
+              <Field label={t('payments.form.student')} required error={formErrors.studentId ? t(formErrors.studentId) : undefined}>
                 <Select
                   value={form.studentId}
                   onChange={handleFormChange('studentId')}
@@ -432,7 +433,7 @@ export function PaymentsPage() {
                     formErrors.studentId ? 'student-error' : undefined
                   }
                 >
-                  <option value="">Select student…</option>
+                  <option value="">{t('payments.form.selectStudent')}</option>
                   {studentList.map((student) => (
                     <option key={student.id} value={student.id}>
                       {formatStudentName(student)}
@@ -444,12 +445,12 @@ export function PaymentsPage() {
                     id="student-error"
                     className="mt-1 text-sm text-red-600"
                   >
-                    {formErrors.studentId}
+                    {t(formErrors.studentId)}
                   </span>
                 )}
               </Field>
 
-              <Field label="Amount (USD)" required error={formErrors.amount}>
+              <Field label={t('payments.form.amount')} required error={formErrors.amount ? t(formErrors.amount) : undefined}>
                 <TextInput
                   type="number"
                   step="0.01"
@@ -465,26 +466,26 @@ export function PaymentsPage() {
                 />
                 {formErrors.amount && (
                   <span id="amount-error" className="mt-1 text-sm text-red-600">
-                    {formErrors.amount}
+                    {t(formErrors.amount)}
                   </span>
                 )}
               </Field>
 
-              <Field label="Method">
+              <Field label={t('payments.form.method')}>
                 <Select
                   value={form.method}
                   onChange={handleFormChange('method')}
-                  aria-label="Payment method"
+                  aria-label={t('payments.form.method')}
                 >
                   {PAYMENT_METHODS.map((method) => (
                     <option key={method} value={method}>
-                      {formatPaymentMethod(method)}
+                      {t(`payments.method.${method}`)}
                     </option>
                   ))}
                 </Select>
               </Field>
 
-              <Field label="Due date">
+              <Field label={t('payments.form.dueDate')}>
                 <TextInput
                   type="date"
                   value={form.dueDate}
@@ -493,30 +494,30 @@ export function PaymentsPage() {
               </Field>
             </div>
 
-            <Field label="Description">
+            <Field label={t('common.description')}>
               <TextInput
                 value={form.description}
                 onChange={handleFormChange('description')}
-                placeholder="Optional description…"
+                placeholder={t('common.optionalDescription')}
               />
             </Field>
 
             <div className="flex justify-end gap-2">
-              <button
+              <GlassButton
                 type="button"
-                className="glass-btn glass-btn-secondary"
+                variant="secondary"
                 onClick={handleCloseModal}
                 disabled={create.isPending}
               >
-                Cancel
-              </button>
-              <button
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton
                 type="submit"
-                className="glass-btn glass-btn-primary"
+                variant="primary"
                 disabled={create.isPending}
               >
-                {create.isPending ? 'Saving…' : 'Record payment'}
-              </button>
+                {create.isPending ? t('payments.saving') : t('payments.add')}
+              </GlassButton>
             </div>
           </form>
         </Modal>

@@ -23,6 +23,7 @@ import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
 import { PaginationParams } from '../common/dto/pagination';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { AllowAnyRole } from '../auth/roles.decorator';
 
 @Controller('hr')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,6 +32,7 @@ export class HremployeeController {
 
   // ===================== Employees =====================
 
+  @AllowAnyRole()
   @Get('employees')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findAllEmployees(
@@ -40,6 +42,7 @@ export class HremployeeController {
     return this.hrService.findAllEmployees(user.organizationId, params);
   }
 
+  @AllowAnyRole()
   @Get('employees/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findEmployeeById(
@@ -80,6 +83,7 @@ export class HremployeeController {
 
   // ===================== Leave Requests =====================
 
+  @AllowAnyRole()
   @Get('leave-requests')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findAllLeaveRequests(
@@ -127,6 +131,7 @@ export class HremployeeController {
 
   // ===================== Payroll =====================
 
+  @AllowAnyRole()
   @Get('employees/:employeeId/salary')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async getEmployeeSalaryHistory(
@@ -137,7 +142,7 @@ export class HremployeeController {
     return this.hrService.getEmployeeSalaryHistory(
       user.organizationId,
       employeeId,
-      year,
+      user.id, user.role, year,
     );
   }
 
@@ -150,6 +155,7 @@ export class HremployeeController {
     return this.hrService.generatePayroll(user.organizationId, dto);
   }
 
+  @AllowAnyRole()
   @Get('payroll/summary')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async getPayrollSummary(
@@ -170,6 +176,7 @@ export class HremployeeController {
 
   // ===================== Statistics =====================
 
+  @AllowAnyRole()
   @Get('stats')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async getHRStats(@CurrentUser() user: any) {

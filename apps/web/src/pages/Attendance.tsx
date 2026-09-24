@@ -19,13 +19,16 @@ import {
   GlassSelect,
   GlassField,
   GlassModal,
+  GlassButton,
+  GlassStatCard,
   useToasts,
 } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
-import type { Paginated, Attendance, Student, Group, AttendanceStatus } from '@/lib/types';
+import type { Paginated, Attendance, Student, Group, AttendanceStatus, AttendanceAnalytics } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 const ATTENDANCE_STATUSES: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'];
 
@@ -67,7 +70,8 @@ function statusBadgeVariant(status: AttendanceStatus): 'success' | 'error' | 'wa
 }
 
 export function AttendancePage() {
-  usePageTitle('Attendance');
+  const { t } = useI18n();
+  usePageTitle(t('attendance.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
@@ -87,6 +91,12 @@ export function AttendancePage() {
   const [form, setForm] = useState<AttendanceFormState>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof AttendanceFormState, string>>>({});
 
+  // Edit / void state
+  const [editTarget, setEditTarget] = useState<Attendance | null>(null);
+  const [editStatus, setEditStatus] = useState<AttendanceStatus>('PRESENT');
+  const [editNote, setEditNote] = useState('');
+  const [voidTarget, setVoidTarget] = useState<Attendance | null>(null);
+
   // Build query params with debounced values
   const params = useMemo<AttendanceFilters>(
     () => ({
@@ -103,6 +113,16 @@ export function AttendancePage() {
   const attendance = useQuery({
     queryKey: ['attendance', params],
     queryFn: () => attendanceApi.list(params),
+    placeholderData: (previousData) => previousData,
+  });
+
+  const analyticsQuery = useQuery({
+    queryKey: ['attendance-analytics', debouncedGroupId, debouncedDate],
+    queryFn: () =>
+      attendanceApi.analytics({
+        groupId: debouncedGroupId || undefined,
+        date: debouncedDate || undefined,
+      }) as Promise<AttendanceAnalytics>,
     placeholderData: (previousData) => previousData,
   });
 
@@ -144,18 +164,18 @@ export function AttendancePage() {
     const errors: Partial<Record<keyof AttendanceFormState, string>> = {};
 
     if (!form.studentId) {
-      errors.studentId = 'Please select a student';
+      errors.studentId = t('common.validation.selectStudent');
     }
     if (!form.groupId) {
-      errors.groupId = 'Please select a group';
+      errors.groupId = t('common.validation.selectGroup');
     }
     if (!form.date) {
-      errors.date = 'Please select a date';
+      errors.date = t('common.validation.selectDate');
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form]);
+  }, [form, t]);
 
   // Create attendance mutation
   const create = useMutation({
@@ -166,7 +186,7 @@ export function AttendancePage() {
         records: [{ studentId: form.studentId, status: form.status, note: form.note || undefined }],
       }),
     onSuccess: () => {
-      push('success', 'Attendance recorded successfully');
+      push('success', t('attendance.recordedSuccess'));
       setModalOpen(false);
       setForm(INITIAL_FORM);
       setFormErrors({});
@@ -188,6 +208,50 @@ export function AttendancePage() {
     [validateForm, create],
   );
 
+  // Edit record mutation
+  const updateRecord = useMutation({
+    mutationFn: (vars: { id: string; status: AttendanceStatus; note: string }) =>
+      attendanceApi.update(vars.id, { status: vars.status, note: vars.note }),
+    onSuccess: () => {
+      push('success', t('attendance.recordUpdated'));
+      setEditTarget(null);
+      qc.invalidateQueries({ queryKey: ['attendance'] });
+      qc.invalidateQueries({ queryKey: ['attendance-analytics'] });
+    },
+    onError: (e: Error) => {
+      push('error', getErrorMessage(e));
+    },
+  });
+
+  // Void (delete) record mutation
+  const voidRecord = useMutation({
+    mutationFn: (id: string) => attendanceApi.remove(id),
+    onSuccess: () => {
+      push('success', t('attendance.recordVoided'));
+      setVoidTarget(null);
+      qc.invalidateQueries({ queryKey: ['attendance'] });
+      qc.invalidateQueries({ queryKey: ['attendance-analytics'] });
+    },
+    onError: (e: Error) => {
+      push('error', getErrorMessage(e));
+    },
+  });
+
+  const openEdit = useCallback((record: Attendance) => {
+    setEditTarget(record);
+    setEditStatus(record.status);
+    setEditNote(record.note || '');
+  }, []);
+
+  const handleEditSubmit = useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!editTarget) return;
+      updateRecord.mutate({ id: editTarget.id, status: editStatus, note: editNote });
+    },
+    [editTarget, editStatus, editNote, updateRecord],
+  );
+
   const handleCloseModal = useCallback(() => {
     setModalOpen(false);
     setForm(INITIAL_FORM);
@@ -202,15 +266,11 @@ export function AttendancePage() {
   // Render loading state
   if (attendance.isLoading && !data) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
-          <GlassPageHeader title="Attendance" subtitle="Records and manual attendance entry" />
+          <GlassPageHeader title={t('attendance.title')} subtitle={t('attendance.pageSubtitle')} />
           <GlassCard className="p-8">
-            <GlassPageLoader label="Loading attendance records…" />
+            <GlassPageLoader label={t('attendance.loadingRecords')} />
           </GlassCard>
         </div>
       </div>
@@ -220,16 +280,12 @@ export function AttendancePage() {
   // Render error state
   if (attendance.isError) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
-          <GlassPageHeader title="Attendance" subtitle="Records and manual attendance entry" />
+          <GlassPageHeader title={t('attendance.title')} subtitle={t('attendance.pageSubtitle')} />
           <GlassCard className="p-8">
             <GlassErrorState
-              title="Failed to load attendance"
+              title={t('attendance.loadFailed')}
               message={getErrorMessage(attendance.error as Error)}
               onRetry={handleRetry}
             />
@@ -243,26 +299,46 @@ export function AttendancePage() {
   const totalRecords = data?.total || 0;
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
       <div className="page-container">
         <GlassPageHeader
-          title="Attendance"
-          subtitle="Records and manual attendance entry"
+          title={t('attendance.title')}
+          subtitle={t('attendance.pageSubtitle')}
           actions={
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               onClick={() => setModalOpen(true)}
-              aria-label="Record attendance"
+              aria-label={t('attendance.record')}
             >
-              Record attendance
-            </button>
+              {t('attendance.record')}
+            </GlassButton>
           }
         />
+
+        {/* Analytics KPIs */}
+        {analyticsQuery.data && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <GlassStatCard
+              label={t('executive.attendanceRate')}
+              value={`${analyticsQuery.data.overall.rate}%`}
+              trend={{
+                value: t('attendance.trendPresent', {
+                  present: analyticsQuery.data.overall.present,
+                  total: analyticsQuery.data.overall.total,
+                }),
+                direction: 'neutral',
+              }}
+            />
+            {analyticsQuery.data.byStatus.map((s) => (
+              <GlassStatCard
+                key={s.status}
+                label={t(`attendance.${s.status.toLowerCase()}`)}
+                value={s.count}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Filters */}
         <GlassCard className="p-4">
@@ -271,9 +347,9 @@ export function AttendancePage() {
               <GlassSelect
                 value={groupId}
                 onChange={handleFilterChange(setGroupId)}
-                aria-label="Filter by group"
+                aria-label={t('students.filterGroupLabel')}
               >
-                <option value="">All groups</option>
+                <option value="">{t('attendance.allGroups')}</option>
                 {groupList.map((g) => (
                   <option key={g.id} value={g.id}>
                     {g.name}
@@ -284,23 +360,24 @@ export function AttendancePage() {
                 type="date"
                 value={date}
                 onChange={handleFilterChange(setDate)}
-                aria-label="Filter by date"
+                aria-label={t('attendance.filterByDate')}
               />
               <GlassSelect
                 value={status}
                 onChange={handleFilterChange(setStatus)}
-                aria-label="Filter by status"
+                aria-label={t('attendance.filterByStatus')}
               >
-                <option value="">All statuses</option>
+                <option value="">{t('attendance.allStatuses')}</option>
                 {ATTENDANCE_STATUSES.map((s) => (
                   <option key={s} value={s}>
-                    {s.charAt(0) + s.slice(1).toLowerCase()}
+                    {t(`attendance.${s.toLowerCase()}`)}
                   </option>
                 ))}
               </GlassSelect>
             </div>
             <div className="text-sm sm:ml-4 sm:shrink-0" style={{ color: 'var(--text-secondary)' }}>
-              {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
+              {totalRecords}{' '}
+              {totalRecords === 1 ? t('attendance.countOne') : t('attendance.countMany')}
             </div>
           </div>
         </GlassCard>
@@ -309,11 +386,13 @@ export function AttendancePage() {
         <GlassCard className="overflow-hidden">
           {!data || data.items.length === 0 ? (
             <GlassEmptyState
-              title={hasActiveFilters ? 'No matching records' : 'No attendance records yet'}
+              title={
+                hasActiveFilters ? t('attendance.emptyFilteredTitle') : t('attendance.emptyTitle')
+              }
               message={
                 hasActiveFilters
-                  ? 'Try adjusting your filters to see more results.'
-                  : 'Attendance records will appear here once you start recording attendance.'
+                  ? t('attendance.emptyFilteredHint')
+                  : t('attendance.emptyMessage')
               }
             />
           ) : (
@@ -322,11 +401,12 @@ export function AttendancePage() {
                 <GlassTable>
                   <GlassTHead>
                     <GlassTR>
-                      <GlassTH>Date</GlassTH>
-                      <GlassTH>Student</GlassTH>
-                      <GlassTH>Group</GlassTH>
-                      <GlassTH>Status</GlassTH>
-                      <GlassTH>Source</GlassTH>
+                      <GlassTH>{t('attendance.col.date')}</GlassTH>
+                      <GlassTH>{t('attendance.col.student')}</GlassTH>
+                      <GlassTH>{t('attendance.col.group')}</GlassTH>
+                      <GlassTH>{t('attendance.col.status')}</GlassTH>
+                      <GlassTH>{t('attendance.col.source')}</GlassTH>
+                      <GlassTH>{t('attendance.col.actions')}</GlassTH>
                     </GlassTR>
                   </GlassTHead>
                   <GlassTBody>
@@ -340,9 +420,38 @@ export function AttendancePage() {
                         </GlassTD>
                         <GlassTD>{a.group?.name || '—'}</GlassTD>
                         <GlassTD>
-                          <GlassBadge variant={statusBadgeVariant(a.status)}>{a.status}</GlassBadge>
+                          <GlassBadge variant={statusBadgeVariant(a.status)}>
+                            {t(`attendance.${a.status.toLowerCase()}`)}
+                          </GlassBadge>
                         </GlassTD>
                         <GlassTD style={{ color: 'var(--text-secondary)' }}>{a.source}</GlassTD>
+ <GlassTD>
+ <div className="flex gap-2">
+ <GlassButton
+ type="button"
+ variant="ghost"
+ size="sm"
+ onClick={() => openEdit(a)}
+ aria-label={t('attendance.editAria', {
+ name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
+ })}
+ >
+ {t('common.edit')}
+ </GlassButton>
+ <GlassButton
+ type="button"
+ variant="ghost"
+ size="sm"
+ className="text-red-600"
+ onClick={() => setVoidTarget(a)}
+ aria-label={t('attendance.voidAria', {
+ name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
+ })}
+ >
+ {t('attendance.void')}
+ </GlassButton>
+ </div>
+ </GlassTD>
                       </GlassTR>
                     ))}
                   </GlassTBody>
@@ -363,12 +472,12 @@ export function AttendancePage() {
         <GlassModal
           open={modalOpen}
           onClose={handleCloseModal}
-          title="Record attendance"
+          title={t('attendance.record')}
           wide
         >
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <GlassField label="Student" required error={formErrors.studentId}>
+              <GlassField label={t('attendance.selectStudent')} required error={formErrors.studentId}>
                 <GlassSelect
                   value={form.studentId}
                   onChange={handleFormChange('studentId')}
@@ -376,7 +485,7 @@ export function AttendancePage() {
                   aria-invalid={Boolean(formErrors.studentId)}
                   aria-describedby={formErrors.studentId ? 'student-error' : undefined}
                 >
-                  <option value="">Select student…</option>
+                  <option value="">{t('attendance.studentPlaceholder')}</option>
                   {studentList.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.user?.firstName} {s.user?.lastName}
@@ -389,7 +498,7 @@ export function AttendancePage() {
                   </span>
                 )}
               </GlassField>
-              <GlassField label="Group" required error={formErrors.groupId}>
+              <GlassField label={t('attendance.selectGroup')} required error={formErrors.groupId}>
                 <GlassSelect
                   value={form.groupId}
                   onChange={handleFormChange('groupId')}
@@ -397,7 +506,7 @@ export function AttendancePage() {
                   aria-invalid={Boolean(formErrors.groupId)}
                   aria-describedby={formErrors.groupId ? 'group-error' : undefined}
                 >
-                  <option value="">Select group…</option>
+                  <option value="">{t('attendance.groupPlaceholder')}</option>
                   {groupList.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}
@@ -410,7 +519,7 @@ export function AttendancePage() {
                   </span>
                 )}
               </GlassField>
-              <GlassField label="Date" required error={formErrors.date}>
+              <GlassField label={t('attendance.selectDate')} required error={formErrors.date}>
                 <GlassInput
                   type="date"
                   value={form.date}
@@ -425,45 +534,127 @@ export function AttendancePage() {
                   </span>
                 )}
               </GlassField>
-              <GlassField label="Status" required>
+              <GlassField label={t('common.status')} required>
                 <GlassSelect
                   value={form.status}
                   onChange={handleFormChange('status')}
-                  aria-label="Attendance status"
+                  aria-label={t('attendance.selectStatus')}
                 >
                   {ATTENDANCE_STATUSES.map((s) => (
                     <option key={s} value={s}>
-                      {s.charAt(0) + s.slice(1).toLowerCase()}
+                      {t(`attendance.${s.toLowerCase()}`)}
                     </option>
                   ))}
                 </GlassSelect>
               </GlassField>
             </div>
-            <GlassField label="Note">
+            <GlassField label={t('attendance.note')}>
               <GlassInput
                 value={form.note}
                 onChange={handleFormChange('note')}
-                placeholder="Optional note…"
+                placeholder={t('attendance.notePlaceholder')}
               />
             </GlassField>
             <div className="flex justify-end gap-2">
-              <button
+              <GlassButton
                 type="button"
-                className="glass-btn glass-btn-secondary"
+                variant="secondary"
                 onClick={handleCloseModal}
                 disabled={create.isPending}
               >
-                Cancel
-              </button>
-              <button
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton
                 type="submit"
-                className="glass-btn glass-btn-primary"
+                variant="primary"
                 disabled={create.isPending}
               >
-                {create.isPending ? 'Saving…' : 'Record'}
-              </button>
+                {create.isPending ? t('common.saving') : t('attendance.recordSubmit')}
+              </GlassButton>
             </div>
           </form>
+        </GlassModal>
+
+        {/* Edit record modal */}
+        <GlassModal
+          open={Boolean(editTarget)}
+          onClose={() => setEditTarget(null)}
+          title={t('attendance.editTitle')}
+        >
+          <form className="space-y-4" onSubmit={handleEditSubmit} noValidate>
+            <GlassField label={t('common.status')} required>
+              <GlassSelect
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value as AttendanceStatus)}
+                aria-label={t('attendance.selectStatus')}
+              >
+                {ATTENDANCE_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {t(`attendance.${s.toLowerCase()}`)}
+                  </option>
+                ))}
+              </GlassSelect>
+            </GlassField>
+            <GlassField label={t('attendance.note')}>
+              <GlassInput
+                value={editNote}
+                onChange={(e) => setEditNote(e.target.value)}
+                placeholder={t('attendance.notePlaceholder')}
+              />
+            </GlassField>
+            <div className="flex justify-end gap-2">
+              <GlassButton
+                type="button"
+                variant="secondary"
+                onClick={() => setEditTarget(null)}
+                disabled={updateRecord.isPending}
+              >
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton type="submit" variant="primary" disabled={updateRecord.isPending}>
+                {updateRecord.isPending ? t('common.saving') : t('common.save')}
+              </GlassButton>
+            </div>
+          </form>
+        </GlassModal>
+
+        {/* Void confirmation modal */}
+        <GlassModal
+          open={Boolean(voidTarget)}
+          onClose={() => setVoidTarget(null)}
+          title={t('attendance.voidTitle')}
+        >
+          <div className="space-y-4">
+            <p style={{ color: 'var(--text-secondary)' }}>
+              {t('attendance.voidConfirmBefore')}{' '}
+              <strong>
+                {voidTarget?.student?.user
+                  ? `${voidTarget.student.user.firstName} ${voidTarget.student.user.lastName}`
+                  : t('attendance.thisStudent')}
+              </strong>{' '}
+              {t('attendance.voidConfirmAfter', {
+                date: voidTarget ? formatDate(voidTarget.date) : '',
+              })}
+            </p>
+            <div className="flex justify-end gap-2">
+              <GlassButton
+                type="button"
+                variant="secondary"
+                onClick={() => setVoidTarget(null)}
+                disabled={voidRecord.isPending}
+              >
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton
+                type="button"
+                variant="danger"
+                onClick={() => voidTarget && voidRecord.mutate(voidTarget.id)}
+                disabled={voidRecord.isPending}
+              >
+                {voidRecord.isPending ? t('attendance.voiding') : t('attendance.voidRecord')}
+              </GlassButton>
+            </div>
+          </div>
         </GlassModal>
 
         {toastNode}

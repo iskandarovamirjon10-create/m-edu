@@ -19,12 +19,15 @@ import {
   GlassTextArea,
   GlassSelect,
   GlassBadge,
+  GlassButton,
   useToasts,
+  ConfirmDialog,
 } from '@/components/ui';
 import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Course, CourseLevel } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 const COURSE_LEVELS: CourseLevel[] = [
   'BEGINNER',
@@ -70,12 +73,15 @@ export function formatCourseLevel(level: string | null | undefined): string {
 }
 
 export function CoursesPage() {
-  usePageTitle('Courses');
+  const { t } = useI18n();
+  usePageTitle(t('courses.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // Form state
   const [form, setForm] = useState<CourseFormState>(INITIAL_FORM);
@@ -93,21 +99,38 @@ export function CoursesPage() {
   const data = courses.data as Paginated<Course> | undefined;
   const courseList = useMemo(() => data?.items || [], [data]);
 
-  // Save course mutation
+  // Save course mutation (create or update)
   const save = useMutation({
-    mutationFn: () =>
-      coursesApi.create({
+    mutationFn: () => {
+      const payload = {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         price: parseFloat(form.price) || 0,
         duration: parseInt(form.duration, 10) || 1,
         level: (form.level as CourseLevel) || undefined,
-      }),
+      };
+      return editingId
+        ? coursesApi.update(editingId, payload)
+        : coursesApi.create(payload);
+    },
     onSuccess: () => {
-      push('success', 'Course created successfully');
+      push('success', editingId ? t('courses.updated') : t('courses.createSuccess'));
       setModalOpen(false);
+      setEditingId(null);
       setForm(INITIAL_FORM);
       setFormErrors({});
+      qc.invalidateQueries({ queryKey: ['courses'] });
+    },
+    onError: (e: Error) => {
+      push('error', getErrorMessage(e));
+    },
+  });
+
+  // Delete course mutation
+  const remove = useMutation({
+    mutationFn: (id: string) => coursesApi.remove(id),
+    onSuccess: () => {
+      push('success', t('courses.deleted'));
       qc.invalidateQueries({ queryKey: ['courses'] });
     },
     onError: (e: Error) => {
@@ -120,18 +143,18 @@ export function CoursesPage() {
     const errors: Partial<Record<keyof CourseFormState, string>> = {};
 
     if (!form.name.trim()) {
-      errors.name = 'Course name is required';
+      errors.name = t('courses.validation.nameRequired');
     }
     if (!form.price || parseFloat(form.price) < 0) {
-      errors.price = 'Price must be a positive number';
+      errors.price = t('courses.validation.priceInvalid');
     }
     if (!form.duration || parseInt(form.duration, 10) < 1) {
-      errors.duration = 'Duration must be at least 1 month';
+      errors.duration = t('courses.validation.durationMin');
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form]);
+  }, [form, t]);
 
   // Form handlers
   const handleFormChange = useCallback(
@@ -156,6 +179,7 @@ export function CoursesPage() {
 
   const handleCloseModal = useCallback(() => {
     setModalOpen(false);
+    setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
   }, []);
@@ -166,26 +190,46 @@ export function CoursesPage() {
   }, [refetchCourses]);
 
   const handleOpenModal = useCallback(() => {
+    setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
     setModalOpen(true);
   }, []);
 
+  const handleEdit = useCallback((course: Course) => {
+    setEditingId(course.id);
+    setForm({
+      name: course.name,
+      description: course.description || '',
+      price: String(course.price),
+      duration: String(course.duration),
+      level: (course.level as CourseLevel) || '',
+    });
+    setFormErrors({});
+    setModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteTarget(id);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    remove.mutate(deleteTarget);
+    setDeleteTarget(null);
+  }, [deleteTarget, remove]);
+
   // Early return for loading state
   if (courses.isLoading && !data) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
           <GlassPageHeader
-            title="Courses"
-            subtitle="Course catalog and pricing"
+            title={t('courses.title')}
+            subtitle={t('courses.pageSubtitle')}
           />
           <GlassCard className="p-8">
-            <GlassPageLoader label="Loading courses…" />
+            <GlassPageLoader label={t('courses.loading')} />
           </GlassCard>
         </div>
       </div>
@@ -195,19 +239,15 @@ export function CoursesPage() {
   // Early return for error state
   if (courses.isError) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
           <GlassPageHeader
-            title="Courses"
-            subtitle="Course catalog and pricing"
+            title={t('courses.title')}
+            subtitle={t('courses.pageSubtitle')}
           />
           <GlassCard className="p-8">
             <GlassErrorState
-              title="Failed to load courses"
+              title={t('courses.loadFailed')}
               message={getErrorMessage(courses.error as Error)}
               onRetry={handleRetry}
             />
@@ -218,23 +258,19 @@ export function CoursesPage() {
   }
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
       <div className="page-container">
         <GlassPageHeader
-          title="Courses"
-          subtitle="Course catalog and pricing"
+          title={t('courses.title')}
+          subtitle={t('courses.pageSubtitle')}
           actions={
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               onClick={handleOpenModal}
             >
-              Add course
-            </button>
+              {t('courses.add')}
+            </GlassButton>
           }
         />
 
@@ -242,19 +278,20 @@ export function CoursesPage() {
         <GlassCard className="overflow-hidden">
           {courseList.length === 0 ? (
             <GlassEmptyState
-              title="No courses yet"
-              message="Add your first course to build the catalog."
+              title={t('courses.empty')}
+              message={t('courses.emptyMessage')}
             />
           ) : (
             <div className="glass-table-wrap">
               <GlassTable>
                 <GlassTHead>
                   <GlassTR>
-                    <GlassTH>Name</GlassTH>
-                    <GlassTH>Level</GlassTH>
-                    <GlassTH>Duration</GlassTH>
-                    <GlassTH>Price</GlassTH>
-                    <GlassTH>Status</GlassTH>
+                    <GlassTH>{t('courses.col.name')}</GlassTH>
+                    <GlassTH>{t('courses.col.level')}</GlassTH>
+                    <GlassTH>{t('courses.col.duration')}</GlassTH>
+                    <GlassTH>{t('courses.col.price')}</GlassTH>
+                    <GlassTH>{t('common.status')}</GlassTH>
+                    <GlassTH>{t('common.actions')}</GlassTH>
                   </GlassTR>
                 </GlassTHead>
                 <GlassTBody>
@@ -269,15 +306,48 @@ export function CoursesPage() {
                         <GlassTD className="font-medium" style={{ color: 'var(--text-primary)' }}>
                           {course.name}
                         </GlassTD>
-                        <GlassTD>{formatCourseLevel(course.level)}</GlassTD>
-                        <GlassTD>{formatDuration(course.duration)}</GlassTD>
+                        <GlassTD>
+                          {course.level
+                            ? (() => {
+                                const key = `courses.level.${course.level}`;
+                                const label = t(key);
+                                return label === key ? formatCourseLevel(course.level) : label;
+                              })()
+                            : '—'}
+                        </GlassTD>
+                        <GlassTD>
+                          {t(
+                            course.duration === 1 ? 'courses.duration.month' : 'courses.duration.months',
+                            { count: course.duration },
+                          )}
+                        </GlassTD>
                         <GlassTD className="font-medium">
                           {formatCurrency(course.price)}
                         </GlassTD>
                         <GlassTD>
                           <GlassBadge variant={statusBadge.variant}>
-                            {statusBadge.label}
+                            {course.isActive ? t('common.active') : t('common.inactive')}
                           </GlassBadge>
+                        </GlassTD>
+                        <GlassTD>
+                          <div className="flex gap-2">
+                            <GlassButton
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(course)}
+                            >
+                              {t('common.edit')}
+                            </GlassButton>
+                            <GlassButton
+                              type="button"
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleDelete(course.id)}
+                            >
+                              {t('common.delete')}
+                            </GlassButton>
+                          </div>
                         </GlassTD>
                       </GlassTR>
                     );
@@ -292,17 +362,17 @@ export function CoursesPage() {
         <GlassModal
           open={modalOpen}
           onClose={handleCloseModal}
-          title="Add course"
+          title={editingId ? t('courses.editTitle') : t('courses.add')}
         >
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-            <GlassField label="Course name" required error={formErrors.name}>
+            <GlassField label={t('courses.form.name')} required error={formErrors.name}>
               <GlassInput
                 value={form.name}
                 onChange={handleFormChange('name')}
                 required
                 aria-invalid={Boolean(formErrors.name)}
                 aria-describedby={formErrors.name ? 'name-error' : undefined}
-                placeholder="Introduction to Computer Science"
+                placeholder={t('courses.namePlaceholder')}
               />
               {formErrors.name && (
                 <span id="name-error" className="mt-1 text-sm" style={{ color: 'var(--state-error)' }}>
@@ -312,7 +382,7 @@ export function CoursesPage() {
             </GlassField>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <GlassField label="Price (USD)" required error={formErrors.price}>
+              <GlassField label={t('courses.form.price')} required error={formErrors.price}>
                 <GlassInput
                   type="number"
                   step="0.01"
@@ -323,15 +393,14 @@ export function CoursesPage() {
                   aria-invalid={Boolean(formErrors.price)}
                   aria-describedby={formErrors.price ? 'price-error' : undefined}
                   placeholder="299.99"
-                />
-                {formErrors.price && (
+                />                {formErrors.price && (
                   <span id="price-error" className="mt-1 text-sm" style={{ color: 'var(--state-error)' }}>
                     {formErrors.price}
                   </span>
                 )}
               </GlassField>
               <GlassField
-                label="Duration (months)"
+                label={t('courses.form.durationLabel')}
                 required
                 error={formErrors.duration}
               >
@@ -359,49 +428,65 @@ export function CoursesPage() {
               </GlassField>
             </div>
 
-            <GlassField label="Level">
+            <GlassField label={t('courses.col.level')}>
               <GlassSelect
                 value={form.level}
                 onChange={handleFormChange('level')}
-                aria-label="Course level"
+                aria-label={t('courses.col.level')}
               >
-                <option value="">Select level…</option>
+                <option value="">{t('courses.levelPlaceholder')}</option>
                 {COURSE_LEVELS.map((level) => (
                   <option key={level} value={level}>
-                    {formatCourseLevel(level)}
+                    {(() => {
+                      const key = `courses.level.${level}`;
+                      const label = t(key);
+                      return label === key ? formatCourseLevel(level) : label;
+                    })()}
                   </option>
                 ))}
               </GlassSelect>
             </GlassField>
 
-            <GlassField label="Description">
+            <GlassField label={t('courses.form.description')}>
               <GlassTextArea
                 rows={3}
                 value={form.description}
                 onChange={handleFormChange('description')}
-                placeholder="Course description and learning objectives…"
+                placeholder={t('courses.descriptionPlaceholder')}
               />
             </GlassField>
 
             <div className="flex justify-end gap-2">
-              <button
+              <GlassButton
                 type="button"
-                className="glass-btn glass-btn-secondary"
+                variant="secondary"
                 onClick={handleCloseModal}
                 disabled={save.isPending}
               >
-                Cancel
-              </button>
-              <button
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton
                 type="submit"
-                className="glass-btn glass-btn-primary"
+                variant="primary"
                 disabled={save.isPending}
               >
-                {save.isPending ? 'Saving…' : 'Create course'}
-              </button>
+                {save.isPending
+                  ? t('common.saving')
+                  : editingId
+                    ? t('courses.form.update')
+                    : t('courses.form.create')}
+              </GlassButton>
             </div>
           </form>
         </GlassModal>
+
+        <ConfirmDialog
+          open={deleteTarget !== null}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+          description={t('courses.deleteConfirm')}
+          loading={remove.isPending}
+        />
 
         {toastNode}
       </div>

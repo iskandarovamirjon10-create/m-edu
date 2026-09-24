@@ -240,8 +240,11 @@ export class EnrollmentService {
     const encryptedTemplate = await this.encryption.encrypt(serializedEmbedding);
     const templateHash = await this.encryption.hash(serializedEmbedding);
 
-    // 9. Persist Template
-    const template = await this.enrollmentRepo.addTemplate({
+    // 9+10. Persist template AND activate enrollment atomically — two
+    // separate writes used to leave an ACTIVE enrollment without a template
+    // (or a template on a still-PENDING enrollment) if the process crashed
+    // between them.
+    const activated = await this.enrollmentRepo.addTemplateAndActivate({
       organizationId: tenant.organizationId,
       enrollmentId,
       studentId: enrollment.studentId,
@@ -250,15 +253,9 @@ export class EnrollmentService {
       version: 1,
       modelVersion: this.faceEngine.getModelVersion(),
       qualityScore: quality.overallScore,
+      activatedAt: new Date(),
     });
-
-    // 10. Activate Enrollment
-    await this.enrollmentRepo.updateStatus(
-      tenant.organizationId,
-      enrollmentId,
-      'ACTIVE',
-      { activatedAt: new Date() }
-    );
+    const template = activated.template;
 
     // 11. Audit
     await this.audit.log({

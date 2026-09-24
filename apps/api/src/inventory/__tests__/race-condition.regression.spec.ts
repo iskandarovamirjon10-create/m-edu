@@ -1,6 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { InventoryService } from '../../inventory/inventory.service';
-import { PrismaService } from '../../prisma/prisma.service';
 
 describe('InventoryService race-condition regression', () => {
   it('createTransaction uses atomic update for decrement types', async () => {

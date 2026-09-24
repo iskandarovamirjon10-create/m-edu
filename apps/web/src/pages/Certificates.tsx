@@ -18,12 +18,15 @@ import {
   TextInput,
   TextArea,
   Select,
-  Badge,
-  useToasts,
+   Badge,
+   GlassButton,
+   GlassSwitch,
+   useToasts,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Certificate, CertificateTemplate, Course, Student } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface CertificateFormState {
   studentId: string;
@@ -64,11 +67,12 @@ const INITIAL_TEMPLATE_FORM: TemplateFormState = {
 
 const TEMPLATE_VARIABLES = ['studentName', 'courseName', 'issueDate', 'certificateNumber', 'verificationCode'];
 
+// Module-level validators return i18n KEYS; the component applies t() at render.
 function validateCertificateForm(form: CertificateFormState): Partial<Record<keyof CertificateFormState, string>> {
   const errors: Partial<Record<keyof CertificateFormState, string>> = {};
 
-  if (!form.studentId) errors.studentId = 'Student is required';
-  if (!form.courseId) errors.courseId = 'Course is required';
+  if (!form.studentId) errors.studentId = 'certificates.studentRequired';
+  if (!form.courseId) errors.courseId = 'certificates.courseRequired';
 
   return errors;
 }
@@ -76,10 +80,10 @@ function validateCertificateForm(form: CertificateFormState): Partial<Record<key
 function validateTemplateForm(form: TemplateFormState): Partial<Record<keyof TemplateFormState, string>> {
   const errors: Partial<Record<keyof TemplateFormState, string>> = {};
 
-  if (!form.name.trim()) errors.name = 'Template name is required';
-  if (!form.htmlTemplate.trim()) errors.htmlTemplate = 'Template HTML is required';
-  else if (form.htmlTemplate.length > 100_000) errors.htmlTemplate = 'Template HTML must be at most 100,000 characters';
-  if (form.cssStyles.length > 50_000) errors.cssStyles = 'CSS must be at most 50,000 characters';
+  if (!form.name.trim()) errors.name = 'templates.nameRequired';
+  if (!form.htmlTemplate.trim()) errors.htmlTemplate = 'templates.htmlRequired';
+  else if (form.htmlTemplate.length > 100_000) errors.htmlTemplate = 'templates.htmlTooLong';
+  if (form.cssStyles.length > 50_000) errors.cssStyles = 'templates.cssTooLong';
 
   return errors;
 }
@@ -90,7 +94,8 @@ function formatStudentName(student: Student | undefined): string {
 }
 
 export function CertificatesPage() {
-  usePageTitle('Certificates');
+  const { t } = useI18n();
+  usePageTitle(t('certificates.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
@@ -183,7 +188,7 @@ export function CertificatesPage() {
       return certificatesApi.generate(payload);
     },
     onSuccess: () => {
-      push({ type: 'success', message: 'Certificate generated' });
+      push({ type: 'success', message: t('certificates.generated') });
       qc.invalidateQueries({ queryKey: ['certificates'] });
       closeModal();
     },
@@ -206,7 +211,7 @@ export function CertificatesPage() {
         credentials: 'include',
       });
       if (!res.ok) {
-        let message = `Download failed with status ${res.status}.`;
+        let message = t('certificates.downloadFailed', { status: res.status });
         try {
           const body = (await res.json()) as { message?: string };
           if (body?.message) message = body.message;
@@ -228,7 +233,7 @@ export function CertificatesPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      push({ type: 'success', message: 'Certificate downloaded' });
+      push({ type: 'success', message: t('certificates.downloaded') });
     },
     onError: (error) => {
       push({
@@ -254,7 +259,7 @@ export function CertificatesPage() {
         : certificatesApi.createTemplate(payload);
     },
     onSuccess: () => {
-      push({ type: 'success', message: editingTemplate ? 'Template updated' : 'Template created' });
+      push({ type: 'success', message: editingTemplate ? t('templates.updated') : t('templates.created') });
       qc.invalidateQueries({ queryKey: ['certificate-templates'] });
       closeTemplateModal();
     },
@@ -266,7 +271,7 @@ export function CertificatesPage() {
   const setDefault = useMutation({
     mutationFn: (id: string) => certificatesApi.setDefaultTemplate(id),
     onSuccess: () => {
-      push({ type: 'success', message: 'Default template updated' });
+      push({ type: 'success', message: t('templates.defaultUpdated') });
       qc.invalidateQueries({ queryKey: ['certificate-templates'] });
     },
     onError: (error) => {
@@ -277,7 +282,7 @@ export function CertificatesPage() {
   const deleteTemplate = useMutation({
     mutationFn: (id: string) => certificatesApi.removeTemplate(id),
     onSuccess: () => {
-      push({ type: 'success', message: 'Template deleted' });
+      push({ type: 'success', message: t('templates.deleted') });
       setDeletingTemplate(null);
       qc.invalidateQueries({ queryKey: ['certificate-templates'] });
     },
@@ -351,8 +356,8 @@ export function CertificatesPage() {
   const getCourseName = useCallback((courseId?: string) => {
     if (!courseId) return '—';
     const course = courseList.find((c) => c.id === courseId);
-    return course?.name || 'Unknown';
-  }, [courseList]);
+    return course?.name || t('common.unknown');
+  }, [courseList, t]);
 
   if (certificates.isLoading) {
     return <PageLoader />;
@@ -369,94 +374,83 @@ export function CertificatesPage() {
 
   return (
     <div className="page-container">
-      <div className="orb-container" aria-hidden="true">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
-      </div>
+      
 
       <div className="space-y-4" style={{ position: 'relative', zIndex: 1 }}>
         {toastNode}
 
       <PageHeader
-        title="Certificates"
-        subtitle="Manage student certificates and templates"
+        title={t('certificates.title')}
+        subtitle={t('certificates.subtitle')}
         action={
           activeTab === 'certificates'
             ? {
-                label: 'Generate Certificate',
+                label: t('certificates.generate'),
                 onClick: openModal,
               }
             : {
-                label: 'New Template',
+                label: t('templates.new'),
                 onClick: () => openTemplateModal(),
               }
         }
       />
 
       {/* Tab switcher */}
-      <div role="tablist" aria-label="Certificate sections" className="flex gap-2">
-        <button
+      <div role="tablist" aria-label={t('certificates.sectionsAria')} className="flex gap-2">
+        <GlassButton
           type="button"
           role="tab"
           aria-selected={activeTab === 'certificates'}
           onClick={() => setActiveTab('certificates')}
-          className={
-            activeTab === 'certificates'
-              ? 'glass-btn glass-btn-primary glass-btn-sm'
-              : 'glass-btn glass-btn-secondary glass-btn-sm'
-          }
+          variant={activeTab === 'certificates' ? 'primary' : 'secondary'}
+          size="sm"
         >
-          Certificates
-        </button>
-        <button
+          {t('certificates.tab.certificates')}
+        </GlassButton>
+        <GlassButton
           type="button"
           role="tab"
           aria-selected={activeTab === 'templates'}
           onClick={() => setActiveTab('templates')}
-          className={
-            activeTab === 'templates'
-              ? 'glass-btn glass-btn-primary glass-btn-sm'
-              : 'glass-btn glass-btn-secondary glass-btn-sm'
-          }
+          variant={activeTab === 'templates' ? 'primary' : 'secondary'}
+          size="sm"
         >
-          Templates
-        </button>
+          {t('certificates.tab.templates')}
+        </GlassButton>
       </div>
 
       {activeTab === 'certificates' && (
         <Card>
           <div className="p-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
             <TextInput
-              placeholder="Search by student name, course, or verification code..."
+              placeholder={t('certificates.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search certificates"
+              aria-label={t('certificates.searchAria')}
             />
           </div>
 
           {filteredCertificates.length === 0 ? (
             <EmptyState
-              title={searchQuery ? 'No certificates found' : 'No certificates yet'}
+              title={searchQuery ? t('certificates.emptySearch') : t('certificates.empty')}
               description={
                 searchQuery
-                  ? 'Try adjusting your search criteria'
-                  : 'Generate your first certificate to get started'
+                  ? t('certificates.emptySearchHint')
+                  : t('certificates.emptyHint')
               }
-              action={!searchQuery ? { label: 'Generate Certificate', onClick: openModal } : undefined}
+              action={!searchQuery ? { label: t('certificates.generate'), onClick: openModal } : undefined}
             />
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <THead>
                   <TR>
-                    <TH>Student</TH>
-                    <TH>Course</TH>
-                    <TH>Certificate #</TH>
-                    <TH>Verification</TH>
-                    <TH>Issued</TH>
-                    <TH>Actions</TH>
+                    <TH>{t('certificates.col.student')}</TH>
+                    <TH>{t('certificates.col.course')}</TH>
+                    <TH>{t('certificates.col.number')}</TH>
+                    <TH>{t('certificates.col.verification')}</TH>
+                    <TH>{t('certificates.col.issued')}</TH>
+                    <TH>{t('common.actions')}</TH>
                   </TR>
                 </THead>
                 <TBody>
@@ -472,13 +466,14 @@ export function CertificatesPage() {
                       </TD>
                       <TD>{cert.issueDate ? new Date(cert.issueDate).toLocaleDateString() : '—'}</TD>
                       <TD>
-                        <button
+                        <GlassButton
                           onClick={() => downloadCertificate.mutate(cert.id)}
                           disabled={downloadCertificate.isPending}
-                          className="glass-btn glass-btn-ghost glass-btn-sm"
+                          variant="ghost"
+                          size="sm"
                         >
-                          {downloadingId === cert.id ? 'Downloading…' : 'Download'}
-                        </button>
+                          {downloadingId === cert.id ? t('certificates.downloading') : t('certificates.download')}
+                        </GlassButton>
                       </TD>
                     </TR>
                   ))}
@@ -502,19 +497,19 @@ export function CertificatesPage() {
             />
           ) : templateList.length === 0 ? (
             <EmptyState
-              title="No templates yet"
-              description="Create a certificate template to control how issued certificates look."
-              action={{ label: 'New Template', onClick: () => openTemplateModal() }}
+              title={t('templates.empty')}
+              description={t('templates.emptyHint')}
+              action={{ label: t('templates.new'), onClick: () => openTemplateModal() }}
             />
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <THead>
                   <TR>
-                    <TH>Name</TH>
-                    <TH>Default</TH>
-                    <TH>Created</TH>
-                    <TH>Actions</TH>
+                    <TH>{t('templates.col.name')}</TH>
+                    <TH>{t('templates.col.default')}</TH>
+                    <TH>{t('templates.col.created')}</TH>
+                    <TH>{t('common.actions')}</TH>
                   </TR>
                 </THead>
                 <TBody>
@@ -523,37 +518,40 @@ export function CertificatesPage() {
                       <TD className="font-medium">{tpl.name}</TD>
                       <TD>
                         {tpl.isDefault ? (
-                          <Badge variant="success">Default</Badge>
+                          <Badge variant="success">{t('templates.badge.default')}</Badge>
                         ) : (
-                          <button
+                          <GlassButton
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setDefault.mutate(tpl.id)}
                             disabled={setDefault.isPending}
-                            className="glass-btn glass-btn-ghost glass-btn-sm"
                           >
-                            Make default
-                          </button>
+                            {t('templates.makeDefault')}
+                          </GlassButton>
                         )}
                       </TD>
                       <TD>{tpl.createdAt ? new Date(tpl.createdAt).toLocaleDateString() : '—'}</TD>
                       <TD>
                         <div className="flex gap-2">
-                          <button
+                          <GlassButton
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => openTemplateModal(tpl)}
-                            className="glass-btn glass-btn-ghost glass-btn-sm"
                           >
-                            Edit
-                          </button>
-                          <button
+                            {t('common.edit')}
+                          </GlassButton>
+                          <GlassButton
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setDeletingTemplate(tpl)}
                             disabled={deleteTemplate.isPending}
-                            className="glass-btn glass-btn-ghost glass-btn-sm"
                             style={{ color: 'var(--state-error, #dc2626)' }}
                           >
-                            Delete
-                          </button>
+                            {t('common.delete')}
+                          </GlassButton>
                         </div>
                       </TD>
                     </TR>
@@ -570,15 +568,15 @@ export function CertificatesPage() {
         <Modal
           isOpen={modalOpen}
           onClose={closeModal}
-          title="Generate Certificate"
+          title={t('certificates.generate')}
         >
           <div className="space-y-4">
-            <Field label="Student *" error={formErrors.studentId}>
+            <Field label={t('certificates.field.student')} error={formErrors.studentId ? t(formErrors.studentId) : undefined}>
               <Select
                 value={form.studentId}
                 onChange={(e) => setForm({ ...form, studentId: e.target.value })}
               >
-                <option value="">Select student</option>
+                <option value="">{t('certificates.selectStudent')}</option>
                 {studentList.map((student) => (
                   <option key={student.id} value={student.id}>
                     {formatStudentName(student)}
@@ -587,12 +585,12 @@ export function CertificatesPage() {
               </Select>
             </Field>
 
-            <Field label="Course *" error={formErrors.courseId}>
+            <Field label={t('certificates.field.course')} error={formErrors.courseId ? t(formErrors.courseId) : undefined}>
               <Select
                 value={form.courseId}
                 onChange={(e) => setForm({ ...form, courseId: e.target.value })}
               >
-                <option value="">Select course</option>
+                <option value="">{t('certificates.selectCourse')}</option>
                 {courseList.map((course) => (
                   <option key={course.id} value={course.id}>
                     {course.name}
@@ -601,34 +599,33 @@ export function CertificatesPage() {
               </Select>
             </Field>
 
-            <Field label="Notes" error={formErrors.notes}>
+            <Field label={t('certificates.field.notes')} error={formErrors.notes ? t(formErrors.notes) : undefined}>
               <TextArea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Optional notes stored with the certificate"
+                placeholder={t('certificates.notesPlaceholder')}
                 rows={3}
               />
             </Field>
 
             <p className="text-xs text-[var(--text-muted)]">
-              The certificate is issued for the selected student and course. The student must be
-              enrolled in an active group of that course.
+              {t('certificates.generateHint')}
             </p>
 
             <div className="flex gap-2 justify-end pt-4">
-              <button
+              <GlassButton
+                variant="secondary"
                 onClick={closeModal}
-                className="glass-btn glass-btn-secondary"
               >
-                Cancel
-              </button>
-              <button
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton
+                variant="primary"
                 onClick={handleCertificateSubmit}
                 disabled={generateCertificate.isPending}
-                className="glass-btn glass-btn-primary"
               >
-                {generateCertificate.isPending ? 'Generating...' : 'Generate'}
-              </button>
+                {generateCertificate.isPending ? t('certificates.generating') : t('certificates.generateAction')}
+              </GlassButton>
             </div>
           </div>
         </Modal>
@@ -639,26 +636,26 @@ export function CertificatesPage() {
         <Modal
           isOpen={templateModalOpen}
           onClose={closeTemplateModal}
-          title={editingTemplate ? `Edit Template: ${editingTemplate.name}` : 'New Template'}
+          title={editingTemplate ? t('templates.edit', { name: editingTemplate.name }) : t('templates.createTitle')}
           wide
         >
           <div className="space-y-4">
-            <Field label="Template name *" error={templateFormErrors.name}>
+            <Field label={t('templates.field.name')} error={templateFormErrors.name ? t(templateFormErrors.name) : undefined}>
               <TextInput
                 value={templateForm.name}
                 onChange={(e) => {
                   setTemplateForm((prev) => ({ ...prev, name: e.target.value }));
                   setTemplateFormErrors((prev) => ({ ...prev, name: undefined }));
                 }}
-                placeholder="e.g. Golden Achievement"
+                placeholder={t('templates.namePlaceholder')}
                 aria-invalid={Boolean(templateFormErrors.name)}
                 maxLength={200}
               />
             </Field>
 
             <Field
-              label="Template HTML *"
-              error={templateFormErrors.htmlTemplate}
+              label={t('templates.field.html')}
+              error={templateFormErrors.htmlTemplate ? t(templateFormErrors.htmlTemplate) : undefined}
             >
               <TextArea
                 value={templateForm.htmlTemplate}
@@ -672,17 +669,13 @@ export function CertificatesPage() {
                 aria-invalid={Boolean(templateFormErrors.htmlTemplate)}
               />
               <p className="text-xs text-[var(--text-muted)] mt-1">
-                Available variables:{' '}
-                {TEMPLATE_VARIABLES.map((v) => (
-                  <code key={v} className="glass-badge glass-badge-muted mr-1">
-                    {`{{${v}}}`}
-                  </code>
-                ))}
-                . Values are HTML-escaped automatically when rendered.
+                {t('templates.variablesHint', {
+                  variables: TEMPLATE_VARIABLES.map((v) => `{{${v}}}`).join(', '),
+                })}
               </p>
             </Field>
 
-            <Field label="Custom CSS" error={templateFormErrors.cssStyles}>
+            <Field label={t('templates.field.css')} error={templateFormErrors.cssStyles ? t(templateFormErrors.cssStyles) : undefined}>
               <TextArea
                 value={templateForm.cssStyles}
                 onChange={(e) => {
@@ -696,33 +689,36 @@ export function CertificatesPage() {
               />
             </Field>
 
-            <label className="flex items-center gap-2 text-sm text-[var(--text-primary)]">
-              <input
-                type="checkbox"
-                checked={templateForm.isDefault}
-                onChange={(e) =>
-                  setTemplateForm((prev) => ({ ...prev, isDefault: e.target.checked }))
-                }
-                className="h-4 w-4 rounded border-[var(--border-medium)]"
-              />
-              Set as the organization default template
-            </label>
+            <GlassSwitch
+              checked={templateForm.isDefault}
+              onChange={(checked) =>
+                setTemplateForm((prev) => ({ ...prev, isDefault: checked }))
+              }
+              aria-label={t('templates.field.isDefault')}
+            />
+            <span className="text-sm text-[var(--text-primary)]">
+              {t('templates.field.isDefault')}
+            </span>
 
             <div className="flex gap-2 justify-end pt-4">
-              <button
+              <GlassButton
+                variant="secondary"
                 onClick={closeTemplateModal}
-                className="glass-btn glass-btn-secondary"
                 disabled={saveTemplate.isPending}
               >
-                Cancel
-              </button>
-              <button
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton
+                variant="primary"
                 onClick={handleTemplateSubmit}
                 disabled={saveTemplate.isPending}
-                className="glass-btn glass-btn-primary"
               >
-                {saveTemplate.isPending ? 'Saving…' : editingTemplate ? 'Save changes' : 'Create template'}
-              </button>
+                {saveTemplate.isPending
+                  ? t('templates.saving')
+                  : editingTemplate
+                    ? t('templates.saveChanges')
+                    : t('templates.createAction')}
+              </GlassButton>
             </div>
           </div>
         </Modal>
@@ -733,32 +729,31 @@ export function CertificatesPage() {
         <Modal
           isOpen={Boolean(deletingTemplate)}
           onClose={() => setDeletingTemplate(null)}
-          title="Delete Template"
+          title={t('templates.deleteTitle')}
         >
           <div className="space-y-4">
             <p className="text-sm text-[var(--text-primary)]">
-              Delete template <strong>{deletingTemplate.name}</strong>? This cannot be undone.
+              {t('templates.deleteConfirm', { name: deletingTemplate.name })}
             </p>
             <p className="text-xs text-[var(--text-muted)]">
-              Templates used by issued certificates cannot be deleted — the API will reject the
-              request to preserve certificate history.
+              {t('templates.deleteHint')}
             </p>
             <div className="flex gap-2 justify-end pt-2">
-              <button
+              <GlassButton
+                variant="secondary"
                 onClick={() => setDeletingTemplate(null)}
-                className="glass-btn glass-btn-secondary"
                 disabled={deleteTemplate.isPending}
               >
-                Cancel
-              </button>
-              <button
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton
+                variant="primary"
                 onClick={() => deleteTemplate.mutate(deletingTemplate.id)}
                 disabled={deleteTemplate.isPending}
-                className="glass-btn glass-btn-primary"
                 style={{ background: 'var(--state-error, #dc2626)' }}
               >
-                {deleteTemplate.isPending ? 'Deleting…' : 'Delete template'}
-              </button>
+                {deleteTemplate.isPending ? t('templates.deleting') : t('templates.deleteAction')}
+              </GlassButton>
             </div>
           </div>
         </Modal>

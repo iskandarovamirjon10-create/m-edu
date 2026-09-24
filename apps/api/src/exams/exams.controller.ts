@@ -23,6 +23,7 @@ import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
 import { PaginationParams } from '../common/dto/pagination';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { AllowAnyRole } from '../auth/roles.decorator';
 
 @Controller('exams')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,6 +32,7 @@ export class ExamsController {
 
   // ===================== Exams =====================
 
+  @AllowAnyRole()
   @Get()
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async findAllExams(
@@ -44,12 +46,14 @@ export class ExamsController {
   // route — NestJS matches in declaration order, so `GET /exams/stats` and
   // `GET /exams/student/:id` would otherwise be captured by `:id` and
   // rejected by ParseUUIDPipe with a 400 before reaching their handlers.
+  @AllowAnyRole()
   @Get('stats')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async getExamStats(@CurrentUser() user: any) {
     return this.examsService.getExamStats(user.organizationId);
   }
 
+  @AllowAnyRole()
   @Get('student/:studentId')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async getStudentExamResults(
@@ -59,6 +63,7 @@ export class ExamsController {
     return this.examsService.getStudentExamResults(user.organizationId, studentId);
   }
 
+  @AllowAnyRole()
   @Get(':id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async findExamById(
@@ -108,6 +113,7 @@ export class ExamsController {
 
   // ===================== Exam Results =====================
 
+  @AllowAnyRole()
   @Get(':examId/results')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async getExamResults(

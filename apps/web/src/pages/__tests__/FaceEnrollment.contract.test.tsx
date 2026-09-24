@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { I18nProvider } from '@/i18n/I18nProvider';
 import { FaceEnrollmentPage } from '../FaceEnrollment';
 
 const startEnrollmentMock = vi.fn();
@@ -58,9 +59,11 @@ vi.mock('@/lib/api', () => ({
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
-    <QueryClientProvider client={qc}>
-      <FaceEnrollmentPage />
-    </QueryClientProvider>,
+    <I18nProvider initialLocale="en">
+      <QueryClientProvider client={qc}>
+        <FaceEnrollmentPage />
+      </QueryClientProvider>
+    </I18nProvider>,
   );
 }
 

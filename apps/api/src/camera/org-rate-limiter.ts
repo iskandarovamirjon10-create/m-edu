@@ -6,7 +6,17 @@ interface Bucket {
 }
 
 /**
- * Per-organization sliding-window rate limiter.
+ * An organization-aware rate limiter.
+ *
+ * ARCHITECTURE DECISION - P3-D:
+ * This rate limiter uses an in-memory bucket algorithm. Since the application
+ * is currently deployed as a single-replica architecture (`instances: 1` in
+ * ecosystem.config.js), an in-memory approach is fully sufficient. There is
+ * no need to migrate to a shared storage (like Redis) until the platform
+ * is scaled horizontally to multiple replicas. If a distributed fallback is
+ * configured, it will act as a second-stage gate.
+ *
+ * Keeps a sliding window of recent timestamps per organization.
  *
  * IMPORTANT:
  * - The in-memory limiter protects expensive operations inside a single

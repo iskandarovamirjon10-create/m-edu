@@ -434,15 +434,19 @@ export class CameraController {
     @Req() req: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    await this.workerManager.restartWorker(
+    const status = await this.workerManager.restartWorker(
       req.user.organizationId,
       id,
     );
 
+    // Report the real post-restart state instead of an unconditional success:
+    // a restart may deliberately not start when another replica owns the
+    // camera, and the operator must be able to see that.
     return {
-      success: true,
+      success: status.running === true,
       cameraId: id,
-      status: 'RESTARTED',
+      status: status.running ? 'RESTARTED' : 'NOT_STARTED',
+      worker: status,
     };
   }
 

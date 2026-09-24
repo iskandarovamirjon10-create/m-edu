@@ -7,28 +7,51 @@
  * to the client IP — meaning all tenants behind one NAT shared a single
  * bucket and a single tenant could exhaust it for everyone.
  *
- * This tracker reads the `sub` claim directly from the bearer JWT (no
- * signature verification — the guard chain still verifies the token before
- * the handler runs; the claim is used only to build a stable bucket key).
- * Anonymous traffic (login, register, bootstrap) still uses the IP.
+ * SECURITY: the `sub` claim is only trusted when the Bearer JWT signature
+ * is cryptographically verified with the same secret resolution used by
+ * JwtStrategy. Unverified/forged tokens fall back to IP so they cannot
+ * pick an arbitrary rate-limit bucket. Anonymous traffic still uses IP.
  */
-export function authTracker(req: { user?: { sub?: string }; ip?: string; headers?: { authorization?: string } } | null | undefined): string {
-  if (req?.user?.sub) return req.user.sub;
+import { verify, type JwtPayload as JwtVerifyPayload } from 'jsonwebtoken';
 
-  const header: unknown = req?.headers?.authorization;
-  if (typeof header === 'string' && header.startsWith('Bearer ')) {
-    try {
-      const token = header.slice(7);
-      const payloadPart = token.split('.')[1];
-      if (!payloadPart) return req?.ip ?? 'unknown';
-      const json = Buffer.from(payloadPart, 'base64url').toString('utf8');
-      const payload = JSON.parse(json) as { sub?: unknown };
-      if (typeof payload.sub === 'string' && payload.sub) {
-        return `user:${payload.sub}`;
-      }
-    } catch {
-      // Malformed token — the auth guard will reject it anyway; bucket by IP.
+function resolveJwtSecret(): string | null {
+  const secret = process.env.JWT_SECRET;
+  if (secret) {
+    if (process.env.NODE_ENV === 'production' && secret.length < 32) {
+      return null;
     }
+    return secret;
   }
+  if (process.env.NODE_ENV === 'production') {
+    return null;
+  }
+  return 'medu-dev-secret-do-not-use-in-production';
+}
+
+function verifiedSubFromBearer(header: unknown): string | null {
+  if (typeof header !== 'string' || !header.startsWith('Bearer ')) return null;
+  const token = header.slice(7).trim();
+  if (!token) return null;
+  const secret = resolveJwtSecret();
+  if (!secret) return null;
+  try {
+    const payload = verify(token, secret) as JwtVerifyPayload & { sub?: unknown };
+    if (typeof payload.sub === 'string' && payload.sub) {
+      return payload.sub;
+    }
+    return null;
+  } catch {
+    // Forged/expired/malformed signature — never trust the claim.
+    return null;
+  }
+}
+
+export function authTracker(req: { user?: { sub?: string }; ip?: string; headers?: { authorization?: string } } | null | undefined): string {
+  // req.user is only set after JwtAuthGuard validated the token.
+  if (req?.user?.sub) return `user:${req.user.sub}`;
+
+  const sub = verifiedSubFromBearer(req?.headers?.authorization);
+  if (sub) return `user:${sub}`;
+
   return req?.ip ?? 'unknown';
 }

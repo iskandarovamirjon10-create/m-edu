@@ -195,10 +195,6 @@ function makeFrame(
 describe('CameraWorkerSession multi-face detection (FIX-1)', () => {
   // ----- helper: standard 1-face setup --------------------------------------
 
-  function standardEngine() {
-    return makeFaceEngine();
-  }
-
   function standardTemplates() {
     return [
       {
@@ -872,9 +868,26 @@ describe('CameraWorkerSession multi-face detection (FIX-1)', () => {
 describe('CameraWorkerSession emitError regression (B)', () => {
   it('reconnect cap emits error event without throwing', async () => {
     const session = makeSession(makeFaceEngine(), makeAttendanceEngine(), makePrisma([]), makeEncryption());
-    // Manually trigger reconnect cap state by mocking health
-    const sessionAny = session as unknown as { emit: (e: string, d: unknown) => void; scheduleReconnect: () => void };
     // Verify emit method exists (EventEmitter) — pre-existing bug was undefined method
     expect(typeof (session as unknown as { emit: unknown }).emit).toBe('function');
+  });
+
+  it('constructor attaches a default error listener so emit("error") cannot crash', () => {
+    const session = makeSession(
+      makeFaceEngine(),
+      makeAttendanceEngine(),
+      makePrisma([]),
+      makeEncryption(),
+    ) as unknown as NodeJS.EventEmitter & {
+      emit: (event: string, ...args: unknown[]) => boolean;
+    };
+
+    expect(session.listenerCount('error')).toBeGreaterThanOrEqual(1);
+
+    // emit('error') with no listeners throws in Node — the default
+    // constructor listener must absorb it without throwing.
+    expect(() => {
+      session.emit('error', new Error('reconnect cap exceeded'));
+    }).not.toThrow();
   });
 });

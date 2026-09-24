@@ -1,14 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCertificateDto } from './dto/certificate.dto';
-import { UpdateCertificateTemplateDto } from './dto/certificate-template.dto';
+import { CreateCertificateTemplateDto, UpdateCertificateTemplateDto } from './dto/certificate-template.dto';
 import { randomUUID } from 'crypto';
-import * as pdf from 'pdf-creator-node';
 
 interface CertificateTemplate {
   id: string;
   html: string;
-  variables: Record<string, any>;
+  variables: string[] | Record<string, unknown>;
 }
 
 @Injectable()
@@ -84,12 +83,17 @@ export class CertificatesService {
     return certificate;
   }
 
-  async getStudentCertificates(organizationId: string, studentId: string) {
+  async getStudentCertificates(organizationId: string, studentId: string, userId: string, userRole: string) {
     const student = await this.prisma.student.findUnique({
       where: { id: studentId, organizationId },
     });
 
     if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    const isPrivileged = ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'].includes(userRole);
+    if (!isPrivileged && student.userId !== userId) {
       throw new NotFoundException('Student not found');
     }
 
@@ -151,67 +155,73 @@ export class CertificatesService {
       throw new BadRequestException('Student is not enrolled in any group of this course');
     }
 
-    // Prevent duplicate active certificates for the same student+course.
-    // Soft-deleted (isActive: false) certificates do not block re-issue.
-    const existing = await this.prisma.certificate.findFirst({
-      where: {
-        organizationId,
-        studentId,
-        courseId,
-        isActive: true,
-      },
-    });
-    if (existing) {
-      throw new BadRequestException('An active certificate already exists for this student and course');
-    }
+    // Transaction with pessimistic lock to prevent TOCTOU duplicate certificates
+    return this.prisma.$transaction(async (tx) => {
+      // Serialize on the student row to prevent concurrent certificate creation
+      await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId}::uuid FOR UPDATE`;
 
-    // Generate unique certificate number
-    const certificateNumber = `CERT-${organizationId.slice(0, 8)}-${Date.now().toString(36).toUpperCase()}`;
-
-    // Generate verification code
-    const verificationCode = randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase();
-
-    // Create certificate
-    const certificate = await this.prisma.certificate.create({
-      data: {
-        organizationId,
-        studentId,
-        courseId,
-        certificateNumber,
-        verificationCode,
-        issueDate: new Date(),
-        isActive: true,
-        metadata: {
-          generatedBy: 'system',
-          // `templateId` here is the named parameter (dto.templateId), not a
-          // scope variable shadowed by the destructured const above.
-          ...(templateId ? { templateId } : {}),
+      // Prevent duplicate active certificates for the same student+course.
+      // Soft-deleted (isActive: false) certificates do not block re-issue.
+      const existing = await tx.certificate.findFirst({
+        where: {
+          organizationId,
+          studentId,
+          courseId,
+          isActive: true,
         },
-      },
-      include: {
-        student: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true,
-                phone: true,
+      });
+      if (existing) {
+        throw new BadRequestException('An active certificate already exists for this student and course');
+      }
+
+      // Generate unique certificate number
+      const certificateNumber = `CERT-${organizationId.slice(0, 8)}-${Date.now().toString(36).toUpperCase()}`;
+
+      // Generate verification code
+      const verificationCode = randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase();
+
+      // Create certificate
+      const certificate = await tx.certificate.create({
+        data: {
+          organizationId,
+          studentId,
+          courseId,
+          certificateNumber,
+          verificationCode,
+          issueDate: new Date(),
+          isActive: true,
+          metadata: {
+            generatedBy: 'system',
+            // `templateId` here is the named parameter (dto.templateId), not a
+            // scope variable shadowed by the destructured const above.
+            ...(templateId ? { templateId } : {}),
+          },
+        },
+        include: {
+          student: {
+            include: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  phone: true,
+                },
               },
             },
           },
-        },
-        course: {
-          select: {
-            name: true,
+          course: {
+            select: {
+              name: true,
             description: true,
             price: true,
           },
         },
       },
-    });
+      });
 
-    return certificate;
+      return certificate;
+    });
   }
 
   // ===================== PDF Generation =====================
@@ -295,17 +305,10 @@ export class CertificatesService {
   }
 
   async createPdf(html: string): Promise<Buffer> {
-    // Real PDF generation using pdf-creator-node (already imported). If library unavailable,
-    // fall back to a structured PDF-like output but never return a plain HTML buffer.
+    // Real PDF generation using pdf-creator-node is removed due to security concerns (PhantomJS).
+    // Fall back to a structured PDF-like output but never return a plain HTML buffer.
     try {
-      const { createPdf } = require('pdf-creator-node');
-      return await createPdf(html, {
-        format: 'A4',
-        orientation: 'portrait',
-        border: '10mm',
-        header: { height: '15mm', contents: '<div style="font-size:10px;color:#999;"></div>' },
-        footer: { height: '15mm', contents: '<div style="font-size:10px;color:#999;text-align:center;">CERTIFICATE</div>' },
-      });
+      throw new Error('pdf-creator-node removed');
     } catch {
       // Defensive fallback: structured HTML embedded in a minimal PDF-like wrapper
       // This is still a document, not raw HTML. Never expose internals.
@@ -419,7 +422,7 @@ export class CertificatesService {
     return template;
   }
 
-  async createTemplate(organizationId: string, dto: any) {
+  async createTemplate(organizationId: string, dto: CreateCertificateTemplateDto) {
     return this.prisma.certificateTemplate.create({
       data: {
         ...dto,
@@ -429,7 +432,7 @@ export class CertificatesService {
   }
 
   async updateTemplate(organizationId: string, id: string, dto: UpdateCertificateTemplateDto) {
-    const template = await this.findTemplateById(organizationId, id);
+    await this.findTemplateById(organizationId, id);
 
     return this.prisma.certificateTemplate.update({
       where: { id, organizationId },
@@ -466,7 +469,7 @@ export class CertificatesService {
   }
 
   async setDefaultTemplate(organizationId: string, id: string) {
-    const template = await this.findTemplateById(organizationId, id);
+    await this.findTemplateById(organizationId, id);
 
     return this.prisma.$transaction([
       this.prisma.certificateTemplate.updateMany({

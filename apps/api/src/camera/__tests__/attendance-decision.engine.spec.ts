@@ -20,6 +20,10 @@ type PrismaMock = {
     findUnique: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
   };
+  lesson: {
+    findFirst: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  };
   cameraAttendanceEvent: {
     upsert: ReturnType<typeof vi.fn>;
   };
@@ -48,6 +52,11 @@ function makePrisma(): PrismaMock {
     attendance: {
       findUnique: vi.fn(),
       create: vi.fn(),
+    },
+
+    lesson: {
+      findFirst: vi.fn().mockResolvedValue({ id: 'lesson-1', status: 'PLANNED' }),
+      update: vi.fn().mockResolvedValue({ id: 'lesson-1', status: 'CONDUCTED' }),
     },
 
     cameraAttendanceEvent: {

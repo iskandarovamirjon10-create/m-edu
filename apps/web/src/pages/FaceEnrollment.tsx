@@ -9,6 +9,8 @@ import {
   EmptyState,
   Field,
   Select,
+  GlassButton,
+  ConfirmDialog,
   useToasts,
   statusColor,
 } from '@/components/ui';
@@ -18,6 +20,32 @@ import { friendlyFaceError } from '@/lib/faceErrors';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Student, FaceEnrollment, FaceEnrollmentStatus } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
+import { translate } from '@/i18n';
+
+const FACE_ENROLLMENT_EN_FALLBACK: Record<string, string> = {
+  'faceEnrollment.startEnrollment': 'Start enrollment',
+  'faceEnrollment.starting': 'Starting…',
+  'faceEnrollment.inProgress': 'Enrollment in progress: {id}',
+};
+
+function useT(): (key: string, vars?: Record<string, string | number>) => string {
+  try {
+    const { t } = useI18n();
+    return t;
+  } catch {
+    return (key: string, vars?: Record<string, string | number>) => {
+      const viaEn = translate('en', key, vars);
+      if (viaEn !== key) return viaEn;
+      const template = FACE_ENROLLMENT_EN_FALLBACK[key];
+      if (!template) return key;
+      if (!vars) return template;
+      return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+        name in vars ? String(vars[name]) : match,
+      );
+    };
+  }
+}
 
 interface EnrollmentFormState {
   studentId: string;
@@ -43,10 +71,17 @@ function formatStudentName(
   return [firstName, lastName].filter(Boolean).join(' ') || '—';
 }
 
-function getEnrollmentStatusBadge(status: FaceEnrollmentStatus): { color: string; label: string } {
+const FACE_ENROLLMENT_STATUS_KEYS: Record<FaceEnrollmentStatus, string> = {
+  PENDING: 'faceEnrollment.status.PENDING',
+  ACTIVE: 'faceEnrollment.status.ACTIVE',
+  REVOKED: 'faceEnrollment.status.REVOKED',
+  EXPIRED: 'faceEnrollment.status.EXPIRED',
+};
+
+function getEnrollmentStatusBadge(status: FaceEnrollmentStatus): { color: string; labelKey: string } {
   return {
     color: statusColor(status),
-    label: status,
+    labelKey: FACE_ENROLLMENT_STATUS_KEYS[status] ?? '',
   };
 }
 
@@ -55,12 +90,14 @@ function truncateEnrollmentId(id: string, maxLength = 8): string {
 }
 
 export function FaceEnrollmentPage() {
-  usePageTitle('Face Enrollment');
+  const t = useT();
+  usePageTitle(t('faceEnrollment.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
   // Form state
   const [form, setForm] = useState<EnrollmentFormState>(INITIAL_FORM);
+  const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<
     Partial<Record<keyof EnrollmentFormState, string>>
   >({});
@@ -100,7 +137,7 @@ export function FaceEnrollmentPage() {
       // Backend POST /face/enrollments returns { enrollmentId, status } (not { id }).
       setForm((prev) => ({ ...prev, enrollmentId: enrollment.enrollmentId ?? enrollment.id }));
       enrollmentStartedRef.current = true;
-      push('success', 'Enrollment started — capture the face now');
+      push('success', t('faceEnrollment.startedToast'));
       qc.invalidateQueries({ queryKey: ['enrollments'] });
     },
     onError: (e: Error) => {
@@ -112,7 +149,7 @@ export function FaceEnrollmentPage() {
   const capture = useMutation({
     mutationFn: (b64: string) => faceApi.capture(form.enrollmentId, b64),
     onSuccess: () => {
-      push('success', 'Face captured and processed successfully');
+      push('success', t('faceEnrollment.capturedToast'));
       qc.invalidateQueries({ queryKey: ['enrollments'] });
     },
     onError: (e: Error) => {
@@ -124,7 +161,7 @@ export function FaceEnrollmentPage() {
   const revoke = useMutation({
     mutationFn: (id: string) => faceApi.revoke(id, 'operator_revoked'),
     onSuccess: () => {
-      push('success', 'Enrollment revoked successfully');
+      push('success', t('faceEnrollment.revokedToast'));
       qc.invalidateQueries({ queryKey: ['enrollments'] });
     },
     onError: (e: Error) => {
@@ -148,41 +185,45 @@ export function FaceEnrollmentPage() {
 
   const handleStartEnrollment = useCallback(() => {
     if (!form.studentId) {
-      setFormErrors({ studentId: 'Please select a student' });
+      setFormErrors({ studentId: t('faceEnrollment.selectStudentError') });
       return;
     }
     start.mutate();
-  }, [form.studentId, start]);
+  }, [form.studentId, start, t]);
 
   const handleCapture = useCallback(
     (b64: string) => {
       if (!form.enrollmentId) {
-        push('error', 'No active enrollment session');
+        push('error', t('faceEnrollment.noActiveSession'));
         return;
       }
       capture.mutate(b64);
     },
-    [form.enrollmentId, capture, push],
+    [form.enrollmentId, capture, push, t],
   );
 
-  const handleCancelEnrollment = useCallback(() => {
+  const handleCancelEnrollment = useCallback(async () => {
+    if (form.enrollmentId) {
+      try {
+        await faceApi.cancelPending(form.enrollmentId);
+      } catch (err) {
+        console.error('Failed to cancel pending enrollment', err);
+      }
+    }
     setForm((prev) => ({ ...prev, enrollmentId: '' }));
     enrollmentStartedRef.current = false;
-    push('info', 'Enrollment cancelled');
-  }, [push]);
+    push('info', t('faceEnrollment.cancelledToast'));
+  }, [form.enrollmentId, push, t]);
 
-  const handleRevoke = useCallback(
-    (enrollmentId: string) => {
-      if (
-        window.confirm(
-          'Are you sure you want to revoke this enrollment? This action cannot be undone.',
-        )
-      ) {
-        revoke.mutate(enrollmentId);
-      }
-    },
-    [revoke],
-  );
+  const handleRevoke = useCallback((enrollmentId: string) => {
+    setRevokeTarget(enrollmentId);
+  }, []);
+
+  const confirmRevoke = useCallback(() => {
+    if (!revokeTarget) return;
+    revoke.mutate(revokeTarget);
+    setRevokeTarget(null);
+  }, [revokeTarget, revoke]);
 
   const { refetch: refetchEnrollments } = enrollments;
   const handleRetryEnrollments = useCallback(() => {
@@ -195,15 +236,11 @@ export function FaceEnrollmentPage() {
   const isRevoking = revoke.isPending;
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
       <div className="page-container space-y-6">
         <PageHeader
-          title="Face Enrollment"
-          subtitle="Enroll students for automatic recognition attendance"
+          title={t('faceEnrollment.title')}
+          subtitle={t('faceEnrollment.subtitle')}
         />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -211,12 +248,12 @@ export function FaceEnrollmentPage() {
         <div className="glass-card">
           <div className="border-b px-5 py-4" style={{ borderColor: 'var(--border-subtle)' }}>
             <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-              New enrollment
+              {t('faceEnrollment.newEnrollment')}
             </h2>
           </div>
           <div className="p-5">
             <div className="space-y-4">
-              <Field label="Student" required error={formErrors.studentId}>
+              <Field label={t('faceEnrollment.student')} required error={formErrors.studentId}>
                 <Select
                   value={form.studentId}
                   onChange={handleStudentChange}
@@ -226,7 +263,7 @@ export function FaceEnrollmentPage() {
                   }
                   disabled={isStartPending || isCapturePending}
                 >
-                  <option value="">Select student…</option>
+                  <option value="">{t('faceEnrollment.selectStudent')}</option>
                   {studentList.map((student) => (
                     <option key={student.id} value={student.id}>
                       {formatStudentName(student)}
@@ -241,36 +278,36 @@ export function FaceEnrollmentPage() {
               </Field>
 
               {!form.enrollmentId ? (
-                <button
+                <GlassButton
                   type="button"
-                  className="glass-btn glass-btn-primary w-full"
+                  variant="primary"
+                  className="w-full"
                   onClick={handleStartEnrollment}
                   disabled={!form.studentId || isStartPending}
                 >
-                  {isStartPending ? 'Starting…' : 'Start enrollment'}
-                </button>
+                  {isStartPending ? t('faceEnrollment.starting') : t('faceEnrollment.startEnrollment')}
+                </GlassButton>
               ) : (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Badge color="green">
-                      Enrollment in progress:{' '}
-                      {truncateEnrollmentId(form.enrollmentId)}
-                    </Badge>
-                    <button
-                      type="button"
-                      className="text-xs font-medium"
-                      style={{ color: 'var(--text-secondary)' }}
-                      onClick={handleCancelEnrollment}
-                      disabled={isCapturePending}
-                    >
-                      Cancel
-                    </button>
-                  </div>
+ <div className="flex items-center justify-between">
+ <Badge color="green">
+ {t('faceEnrollment.inProgress', { id: truncateEnrollmentId(form.enrollmentId) })}
+ </Badge>
+ <GlassButton
+ type="button"
+ variant="ghost"
+ size="sm"
+ onClick={handleCancelEnrollment}
+ disabled={isCapturePending}
+ >
+ {t('common.cancel')}
+ </GlassButton>
+ </div>
 
                   <WebcamCapture
                     onCapture={handleCapture}
                     busy={isCapturePending}
-                    label="Capture face"
+                    label={t('faceEnrollment.captureFace')}
                   />
 
                   {capture.isError && (
@@ -288,9 +325,7 @@ export function FaceEnrollmentPage() {
 
             <div className="mt-4 rounded-lg px-4 py-3" style={{ background: 'var(--bg-glass)' }}>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                Enrollment pipeline: detect → quality assessment → liveness
-                check → embed → encrypt template. Templates are encrypted at
-                rest (AES-256-GCM).
+                {t('faceEnrollment.pipelineHint')}
               </p>
             </div>
           </div>
@@ -300,36 +335,36 @@ export function FaceEnrollmentPage() {
         <div className="glass-card">
           <div className="border-b px-5 py-4" style={{ borderColor: 'var(--border-subtle)' }}>
             <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-              Enrollments
+              {t('faceEnrollment.listTitle')}
             </h2>
           </div>
 
           {enrollments.isLoading && !enrollments.data ? (
             <div className="p-8">
-              <PageLoader label="Loading enrollments…" />
+              <PageLoader label={t('faceEnrollment.loading')} />
             </div>
           ) : enrollments.isError ? (
             <div className="p-8">
               <ErrorState
-                title="Failed to load enrollments"
+                title={t('faceEnrollment.loadError')}
                 message={getErrorMessage(enrollments.error as Error)}
                 onRetry={handleRetryEnrollments}
               />
             </div>
           ) : enrollmentList.length === 0 ? (
             <EmptyState
-              title="No enrollments"
-              message="Enrolled students appear here."
+              title={t('faceEnrollment.empty')}
+              message={t('faceEnrollment.emptyHint')}
             />
           ) : (
             <div className="glass-table-wrap">
               <table className="glass-table">
                 <thead>
                   <tr>
-                    <th>Student</th>
-                    <th>Status</th>
-                    <th>Enrolled</th>
-                    <th style={{ textAlign: 'right' }}>Actions</th>
+                    <th>{t('faceEnrollment.student')}</th>
+                    <th>{t('common.status')}</th>
+                    <th>{t('faceEnrollment.enrolled')}</th>
+                    <th style={{ textAlign: 'right' }}>{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -347,7 +382,7 @@ export function FaceEnrollmentPage() {
                         </td>
                         <td>
                           <Badge color={statusBadge.color}>
-                            {statusBadge.label}
+                            {statusBadge.labelKey ? t(statusBadge.labelKey) : enrollment.status}
                           </Badge>
                         </td>
                         <td className="whitespace-nowrap">
@@ -355,14 +390,15 @@ export function FaceEnrollmentPage() {
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           {enrollment.status === 'ACTIVE' && (
-                            <button
+                            <GlassButton
                               type="button"
-                              className="glass-btn glass-btn-danger glass-btn-sm"
+                              variant="danger"
+                              size="sm"
                               onClick={() => handleRevoke(enrollment.id)}
                               disabled={isRevokingThis}
                             >
-                              {isRevokingThis ? 'Revoking…' : 'Revoke'}
-                            </button>
+                              {isRevokingThis ? t('faceEnrollment.revoking') : t('faceEnrollment.revoke')}
+                            </GlassButton>
                           )}
                         </td>
                       </tr>
@@ -374,6 +410,14 @@ export function FaceEnrollmentPage() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        onClose={() => setRevokeTarget(null)}
+        onConfirm={confirmRevoke}
+        description={t('faceEnrollment.revokeConfirm')}
+        loading={revoke.isPending}
+      />
 
       {toastNode}
       </div>

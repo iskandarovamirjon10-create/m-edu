@@ -1,24 +1,31 @@
-export function formatDate(value?: string | null): string {
+export function formatDate(value?: string | null, locale?: string): string {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const loc = locale || (typeof navigator !== 'undefined' ? navigator.language : undefined) || 'en-US';
+  return d.toLocaleDateString(loc, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export function formatDateTime(value?: string | null): string {
+export function formatDateTime(value?: string | null, locale?: string): string {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString('en-US', {
+  const loc = locale || (typeof navigator !== 'undefined' ? navigator.language : undefined) || 'en-US';
+  return d.toLocaleString(loc, {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 }
 
-export function formatCurrency(value: string | number | null | undefined): string {
+export function formatCurrency(
+  value: string | number | null | undefined,
+  options?: { locale?: string; currency?: string },
+): string {
   if (value === null || value === undefined || value === '') return '—';
   const n = typeof value === 'string' ? parseFloat(value) : value;
   if (Number.isNaN(n)) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+  const loc = options?.locale || (typeof navigator !== 'undefined' ? navigator.language : undefined) || 'en-US';
+  const currency = options?.currency || 'USD';
+  return new Intl.NumberFormat(loc, { style: 'currency', currency }).format(n);
 }
 
 export function fullName(
@@ -85,5 +92,6 @@ export function formatMonth(value: string | Date | null | undefined): string {
   if (!value) return '—';
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const loc = (typeof navigator !== 'undefined' ? navigator.language : undefined) || 'en-US';
+  return d.toLocaleDateString(loc, { month: 'short', year: 'numeric' });
 }

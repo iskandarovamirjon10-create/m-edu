@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthService } from '../auth.service';
+import type { PrismaService } from '../../prisma/prisma.service';
+import type { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 
-function createMockPrisma(overrides: Record<string, any> = {}) {
+function createMockPrisma(overrides: Record<string, unknown> = {}) {
   return {
     user: {
       findFirst: vi.fn(),
@@ -25,7 +27,15 @@ function createMockPrisma(overrides: Record<string, any> = {}) {
       count: vi.fn().mockResolvedValue(1),
       findMany: vi.fn().mockResolvedValue([]),
     },
-    $transaction: vi.fn((fn: any) => fn({ user: overrides.user ?? {}, organization: { create: vi.fn() } })),
+    // Default interactive-transaction stub: mirrors the real transaction client
+    // shape used by AuthService (advisory lock + organization/user writes).
+    $transaction: vi.fn((fn: (tx: unknown) => unknown) =>
+      fn({
+        $executeRaw: vi.fn().mockResolvedValue(undefined),
+        user: overrides.user ?? { create: vi.fn(), count: vi.fn(), update: vi.fn() },
+        organization: { create: vi.fn().mockResolvedValue({ id: 'org-new', name: 'X' }) },
+      }),
+    ),
     authorizationCode: {
       create: vi.fn(),
       findUnique: vi.fn(),
@@ -33,16 +43,19 @@ function createMockPrisma(overrides: Record<string, any> = {}) {
       delete: vi.fn(),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
+    passwordResetToken: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     ...overrides,
   };
 }
 
-const mockJwt: any = {
-  sign: vi.fn((payload: any) => `signed.${payload.sub}.token`),
-};
+const mockJwt = {
+  sign: vi.fn((payload: Record<string, unknown>) => `signed.${payload.sub}.token`),
+} as unknown as JwtService;
 
 describe('AuthService', () => {
-  let prisma: any;
+  let prisma: ReturnType<typeof createMockPrisma>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -52,10 +65,11 @@ describe('AuthService', () => {
   describe('login', () => {
     it('returns token + user for valid credentials', async () => {
       const passwordHash = await bcrypt.hash('secret123', 4);
-      prisma.user.findFirst.mockResolvedValue({
+      prisma.user.findUnique.mockResolvedValue({
         id: 'u1',
         email: 'a@b.com',
         passwordHash,
+        isActive: true,
         firstName: 'Ali',
         lastName: 'Valiyev',
         role: 'ORG_ADMIN',
@@ -67,6 +81,10 @@ describe('AuthService', () => {
       const svc = new AuthService(prisma, mockJwt);
       const result = await svc.login('a@b.com', 'secret123');
       expect(result.accessToken).toBeTruthy();
+      // Email is globally unique: resolve through the unique index.
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { email: 'a@b.com' } }),
+      );
       expect(result.user.email).toBe('a@b.com');
       // Local login must create a revocable session record (sid in JWT)
       expect(prisma.session.create).toHaveBeenCalledWith(
@@ -78,10 +96,11 @@ describe('AuthService', () => {
 
     it('rejects wrong password', async () => {
       const passwordHash = await bcrypt.hash('secret123', 4);
-      prisma.user.findFirst.mockResolvedValue({
+      prisma.user.findUnique.mockResolvedValue({
         id: 'u1',
         email: 'a@b.com',
         passwordHash,
+        isActive: true,
         role: 'ORG_ADMIN',
         organizationId: 'org-1',
       });
@@ -91,22 +110,61 @@ describe('AuthService', () => {
     });
 
     it('rejects google-only accounts for password login with generic error', async () => {
-      prisma.user.findFirst.mockResolvedValue({
+      prisma.user.findUnique.mockResolvedValue({
         id: 'u2',
         email: 'g@b.com',
         passwordHash: null,
+        isActive: true,
         role: 'ORG_ADMIN',
         organizationId: 'org-1',
       });
       const svc = new AuthService(prisma, mockJwt);
       await expect(svc.login('g@b.com', 'anything')).rejects.toThrow('Invalid credentials');
     });
+
+    it('rejects a deactivated account with the same generic error', async () => {
+      const passwordHash = await bcrypt.hash('secret123', 4);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u3',
+        email: 'off@b.com',
+        passwordHash,
+        isActive: false,
+        role: 'TEACHER',
+        organizationId: 'org-1',
+      });
+
+      const svc = new AuthService(prisma, mockJwt);
+      await expect(svc.login('off@b.com', 'secret123')).rejects.toThrow('Invalid credentials');
+      expect(prisma.session.create).not.toHaveBeenCalled();
+    });
+
+    it('normalizes email (trim + lowercase) before lookup', async () => {
+      const passwordHash = await bcrypt.hash('secret123', 4);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'a@b.com',
+        passwordHash,
+        isActive: true,
+        firstName: 'Ali',
+        lastName: 'Valiyev',
+        role: 'ORG_ADMIN',
+        organizationId: 'org-1',
+        organization: { id: 'org-1' },
+      });
+      prisma.user.update.mockResolvedValue({});
+
+      const svc = new AuthService(prisma, mockJwt);
+      await svc.login('  A@B.com  ', 'secret123');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { email: 'a@b.com' } }),
+      );
+    });
   });
 
   describe('register', () => {
     it('creates organization + user and returns token', async () => {
       prisma.user.findFirst.mockResolvedValue(null);
-      prisma.$transaction.mockImplementation(async (fn: any) => {
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
         const tx = {
           organization: { create: vi.fn().mockResolvedValue({ id: 'org-new' }) },
           user: {
@@ -139,7 +197,20 @@ describe('AuthService', () => {
     });
 
     it('rejects duplicate email', async () => {
-      prisma.user.findFirst.mockResolvedValue({ id: 'existing', email: 'dup@b.com' });
+      // The database is the source of truth for email uniqueness (`User.email`
+      // is globally unique); the service maps P2002 to a ConflictException.
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          $executeRaw: vi.fn().mockResolvedValue(undefined),
+          organization: { create: vi.fn().mockResolvedValue({ id: 'org-1' }) },
+          user: {
+            create: vi.fn().mockRejectedValue(
+              Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+            ),
+          },
+        };
+        return fn(tx);
+      });
       const svc = new AuthService(prisma, mockJwt);
       await expect(
         svc.register({
@@ -176,10 +247,11 @@ describe('AuthService', () => {
 
     it('login embeds sid (session id) in the JWT payload', async () => {
       const passwordHash = await bcrypt.hash('secret123', 4);
-      prisma.user.findFirst.mockResolvedValue({
+      prisma.user.findUnique.mockResolvedValue({
         id: 'u1',
         email: 'a@b.com',
         passwordHash,
+        isActive: true,
         firstName: 'Ali',
         lastName: 'Valiyev',
         role: 'ORG_ADMIN',
@@ -229,8 +301,8 @@ describe('AuthService', () => {
     it('deletes DB sessions whose expiresAt is in the past', async () => {
       prisma.session.deleteMany.mockResolvedValue({ count: 7 });
       prisma.authorizationCode.deleteMany.mockResolvedValue({ count: 0 });
-      const svc = new AuthService(prisma, mockJwt);
-      await (svc as any).cleanupExpiredEntries();
+      const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
+      await (svc as unknown as { cleanupExpiredEntries: () => Promise<void> }).cleanupExpiredEntries();
       expect(prisma.session.deleteMany).toHaveBeenCalledWith({
         where: { expiresAt: { lt: expect.any(Date) } },
       });
@@ -239,8 +311,8 @@ describe('AuthService', () => {
     it('does not throw when the DB purge fails', async () => {
       prisma.session.deleteMany.mockRejectedValue(new Error('db down'));
       prisma.authorizationCode.deleteMany.mockResolvedValue({ count: 0 });
-      const svc = new AuthService(prisma, mockJwt);
-      await expect((svc as any).cleanupExpiredEntries()).resolves.toBeUndefined();
+      const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
+      await expect((svc as unknown as { cleanupExpiredEntries: () => Promise<void> }).cleanupExpiredEntries()).resolves.toBeUndefined();
     });
 
     it('honors SESSION_RETENTION_HOURS as a purge grace period', async () => {
@@ -249,8 +321,8 @@ describe('AuthService', () => {
       try {
         prisma.session.deleteMany.mockResolvedValue({ count: 0 });
         prisma.authorizationCode.deleteMany.mockResolvedValue({ count: 0 });
-        const svc = new AuthService(prisma, mockJwt);
-        await (svc as any).cleanupExpiredEntries();
+        const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
+        await (svc as unknown as { cleanupExpiredEntries: () => Promise<void> }).cleanupExpiredEntries();
         const where = prisma.session.deleteMany.mock.calls[0][0].where;
         // cutoff = now - 24h; only sessions expired more than 24h ago are purged
         const cutoff = where.expiresAt.lt as Date;
@@ -265,7 +337,7 @@ describe('AuthService', () => {
 });
 
   describe('bootstrap (first SUPER_ADMIN provisioning, P3)', () => {
-    let prisma: any;
+    let prisma: ReturnType<typeof createMockPrisma>;
 
     beforeEach(() => {
       vi.clearAllMocks();
@@ -275,7 +347,7 @@ describe('AuthService', () => {
     it('creates the platform SUPER_ADMIN + organization and returns a token', async () => {
       prisma.user.count.mockResolvedValue(0);
       prisma.user.findFirst.mockResolvedValue(null);
-      prisma.$transaction.mockImplementation(async (fn: any) => {
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
         const tx = {
           $executeRaw: vi.fn().mockResolvedValue(undefined),
           user: {
@@ -295,7 +367,7 @@ describe('AuthService', () => {
         return fn(tx);
       });
 
-      const svc = new AuthService(prisma, mockJwt);
+      const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
       const result = await svc.bootstrap({
         email: 'platform@medu.test',
         password: 'S3cure-Bootstrap-123!',
@@ -310,7 +382,7 @@ describe('AuthService', () => {
 
     it('rejects bootstrap once a SUPER_ADMIN already exists (one-time only)', async () => {
       prisma.user.count.mockResolvedValue(1);
-      const svc = new AuthService(prisma, mockJwt);
+      const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
       await expect(
         svc.bootstrap({
           email: 'second@medu.test',
@@ -325,8 +397,22 @@ describe('AuthService', () => {
 
     it('rejects an email that is already registered', async () => {
       prisma.user.count.mockResolvedValue(0);
-      prisma.user.findFirst.mockResolvedValue({ id: 'existing', email: 'dup@medu.test' });
-      const svc = new AuthService(prisma, mockJwt);
+      // Email uniqueness is enforced by the database inside the bootstrap
+      // transaction; the service translates P2002 into a clear conflict.
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          $executeRaw: vi.fn().mockResolvedValue(undefined),
+          user: {
+            count: vi.fn().mockResolvedValue(0),
+            create: vi.fn().mockRejectedValue(
+              Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+            ),
+          },
+          organization: { create: vi.fn().mockResolvedValue({ id: 'org-1' }) },
+        };
+        return fn(tx);
+      });
+      const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
       await expect(
         svc.bootstrap({
           email: 'dup@medu.test',
@@ -336,7 +422,8 @@ describe('AuthService', () => {
           organizationName: 'X',
         }),
       ).rejects.toThrow('Email already registered');
-      expect(prisma.$transaction).not.toHaveBeenCalled();
+      // The conflict is detected inside the serialized transaction (advisory lock).
+      expect(prisma.$transaction).toHaveBeenCalled();
     });
 
     it('serializes concurrent first-bootstraps with an advisory lock + recheck', async () => {
@@ -344,7 +431,7 @@ describe('AuthService', () => {
       prisma.user.findFirst.mockResolvedValue(null);
       const txExecuteRaw = vi.fn().mockResolvedValue(undefined);
       const txCount = vi.fn().mockResolvedValue(1); // second txn sees a SUPER_ADMIN
-      prisma.$transaction.mockImplementation(async (fn: any) => {
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
         const tx = {
           $executeRaw: txExecuteRaw,
           user: { count: txCount, create: vi.fn() },

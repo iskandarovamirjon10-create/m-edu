@@ -1,0 +1,929 @@
+{
+  "pages": [
+    "RelationshipGraph.tsx",
+    "DataQualityCenter.tsx",
+    "EarlyWarning.tsx",
+    "AcademicRisk.tsx",
+    "Forecasting.tsx",
+    "TeacherWorkload.tsx",
+    "FollowUpAutomation.tsx"
+  ],
+  "keys": {
+    "relationshipGraph.subtitle": {
+      "en": "Explore connections between students, teachers, groups, courses, and payments",
+      "uz": "Oʻquvchilar, oʻqituvchilar, guruhlar, kurslar va toʻlovlar oʻrtasidagi aloqalarni koʻring",
+      "ru": "Исследуйте связи между учениками, преподавателями, группами, курсами и платежами"
+    },
+    "relationshipGraph.idPlaceholder": {
+      "en": "Paste the entity UUID or ID",
+      "uz": "UUID yoki ID raqamini yopishtiring",
+      "ru": "Вставьте UUID или ID объекта"
+    },
+    "relationshipGraph.typesTitle": {
+      "en": "Relationship types",
+      "uz": "Aloqa turlari",
+      "ru": "Типы связей"
+    },
+    "relationshipGraph.rel.student": {
+      "en": "→ ENROLLED_IN (group) · ASSIGNED_TO (teacher) · MADE (payment)",
+      "uz": "→ ENROLLED_IN (guruh) · ASSIGNED_TO (oʻqituvchi) · MADE (toʻlov)",
+      "ru": "→ ENROLLED_IN (группа) · ASSIGNED_TO (преподаватель) · MADE (платёж)"
+    },
+    "relationshipGraph.rel.teacher": {
+      "en": "→ TEACHES (group) · CREATED (course) · ASSIGNED_TO (group)",
+      "uz": "→ TEACHES (guruh) · CREATED (kurs) · ASSIGNED_TO (guruh)",
+      "ru": "→ TEACHES (группа) · CREATED (курс) · ASSIGNED_TO (группа)"
+    },
+    "relationshipGraph.rel.group": {
+      "en": "→ BELONGS_TO (course) · HAS_STUDENT (student)",
+      "uz": "→ BELONGS_TO (kurs) · HAS_STUDENT (oʻquvchi)",
+      "ru": "→ BELONGS_TO (курс) · HAS_STUDENT (ученик)"
+    },
+    "relationshipGraph.rel.course": {
+      "en": "→ HAS_GROUP (group) · CREATED_BY (teacher)",
+      "uz": "→ HAS_GROUP (guruh) · CREATED_BY (oʻqituvchi)",
+      "ru": "→ HAS_GROUP (группа) · CREATED_BY (преподаватель)"
+    },
+    "relationshipGraph.rel.lead": {
+      "en": "→ CONVERTED_TO (student) · ASSIGNED_TO (user)",
+      "uz": "→ CONVERTED_TO (oʻquvchi) · ASSIGNED_TO (foydalanuvchi)",
+      "ru": "→ CONVERTED_TO (ученик) · ASSIGNED_TO (пользователь)"
+    },
+    "relationshipGraph.rel.payment": {
+      "en": "→ MADE_BY (student) · FOR (group)",
+      "uz": "→ MADE_BY (oʻquvchi) · FOR (guruh)",
+      "ru": "→ MADE_BY (ученик) · FOR (группа)"
+    },
+    "relationshipGraph.emptyTitle": {
+      "en": "Enter an entity ID",
+      "uz": "ID raqamini kiriting",
+      "ru": "Введите ID объекта"
+    },
+    "relationshipGraph.emptyMessage": {
+      "en": "Select a type and paste an entity ID above to explore its relationships.",
+      "uz": "Turini tanlang va yuqorida ID raqamini yopishtiring, aloqalarini oʻrganing.",
+      "ru": "Выберите тип и вставьте ID объекта выше, чтобы просмотреть его связи."
+    },
+    "relationshipGraph.loading": {
+      "en": "Loading graph…",
+      "uz": "Grafik yuklanmoqda…",
+      "ru": "Загрузка графа…"
+    },
+    "relationshipGraph.noResultsTitle": {
+      "en": "No relationships found",
+      "uz": "Aloqalar topilmadi",
+      "ru": "Связи не найдены"
+    },
+    "relationshipGraph.noResultsMessage": {
+      "en": "This entity has no connections in the system.",
+      "uz": "Bu obyektning tizimda aloqalari yoʻq.",
+      "ru": "У этого объекта нет связей в системе."
+    },
+    "relationshipGraph.entities": {
+      "en": "Entities ({n})",
+      "uz": "Obyektlar ({n})",
+      "ru": "Объекты ({n})"
+    },
+    "relationshipGraph.connections": {
+      "en": "Connections ({n})",
+      "uz": "Ulanishlar ({n})",
+      "ru": "Связи ({n})"
+    },
+
+    "dataQualityCenter.title": {
+      "en": "Data Quality Center",
+      "uz": "Maʼlumotlar sifati markazi",
+      "ru": "Центр качества данных"
+    },
+    "dataQualityCenter.subtitle": {
+      "en": "Rule-based, deterministic checks — every issue has a reason. No AI inference.",
+      "uz": "Qoidalarga asoslangan aniq tekshiruvlar — har bir muammo sababga ega. Sunʼiy intellekt yoʻq.",
+      "ru": "Проверки на основе правил — у каждой проблемы есть причина. Без ИИ."
+    },
+    "dataQualityCenter.checksComplete": {
+      "en": "Checks complete",
+      "uz": "Tekshiruv yakunlandi",
+      "ru": "Проверки завершены"
+    },
+    "dataQualityCenter.newIssues": {
+      "en": "{n} new issue(s) detected",
+      "uz": "{n} yangi muammo aniqlandi",
+      "ru": "Обнаружено новых проблем: {n}"
+    },
+    "dataQualityCenter.runFailed": {
+      "en": "Could not run checks",
+      "uz": "Tekshiruvni bajarib boʻlmadi",
+      "ru": "Не удалось выполнить проверки"
+    },
+    "dataQualityCenter.resolved": {
+      "en": "Issue resolved",
+      "uz": "Muammo hal qilindi",
+      "ru": "Проблема решена"
+    },
+    "dataQualityCenter.resolveFailed": {
+      "en": "Could not resolve issue",
+      "uz": "Muammoni hal qilib boʻlmadi",
+      "ru": "Не удалось решить проблему"
+    },
+    "dataQualityCenter.runAll": {
+      "en": "Run all checks",
+      "uz": "Barcha tekshiruvlarni ishga tushirish",
+      "ru": "Запустить все проверки"
+    },
+    "dataQualityCenter.openIssues": {
+      "en": "Open issues",
+      "uz": "Ochiq muammolar",
+      "ru": "Открытые проблемы"
+    },
+    "dataQualityCenter.critical": {
+      "en": "Critical",
+      "uz": "Jiddiy",
+      "ru": "Критический"
+    },
+    "dataQualityCenter.resolvedThisWeek": {
+      "en": "Resolved this week",
+      "uz": "Shu hafta hal qilingan",
+      "ru": "Решено на этой неделе"
+    },
+    "dataQualityCenter.filter.unresolved": {
+      "en": "Unresolved",
+      "uz": "Hal qilinmagan",
+      "ru": "Нерешённые"
+    },
+    "dataQualityCenter.filter.critical": {
+      "en": "Critical",
+      "uz": "Jiddiy",
+      "ru": "Критические"
+    },
+    "dataQualityCenter.loading": {
+      "en": "Loading data quality issues…",
+      "uz": "Maʼlumotlar sifati muammolari yuklanmoqda…",
+      "ru": "Загрузка проблем качества данных…"
+    },
+    "dataQualityCenter.loadFailed": {
+      "en": "Failed to load data quality issues",
+      "uz": "Maʼlumotlar sifati muammolarini yuklab boʻlmadi",
+      "ru": "Не удалось загрузить проблемы качества данных"
+    },
+    "dataQualityCenter.emptyTitle": {
+      "en": "No data quality issues",
+      "uz": "Maʼlumotlar sifati muammolari yoʻq",
+      "ru": "Проблем качества данных нет"
+    },
+    "dataQualityCenter.emptyCritical": {
+      "en": "No critical issues detected. Your data is healthy.",
+      "uz": "Jiddiy muammo aniqlanmagan. Maʼlumotlaringiz sogʻlom.",
+      "ru": "Критических проблем не обнаружено. Данные в порядке."
+    },
+    "dataQualityCenter.emptyUnresolved": {
+      "en": "Everything looks clean — no unresolved issues.",
+      "uz": "Hammasi toza — hal qilinmagan muammo yoʻq.",
+      "ru": "Всё чисто — нерешённых проблем нет."
+    },
+    "dataQualityCenter.empty": {
+      "en": "No issues found.",
+      "uz": "Muammo topilmadi.",
+      "ru": "Проблем не найдено."
+    },
+    "dataQualityCenter.resolvedButton": {
+      "en": "Resolved",
+      "uz": "Hal qilindi",
+      "ru": "Решено"
+    },
+    "dataQualityCenter.markResolved": {
+      "en": "Mark resolved",
+      "uz": "Hal qilingan deb belgilash",
+      "ru": "Отметить решённым"
+    },
+
+    "earlyWarning.subtitle": {
+      "en": "Rule-based, deterministic monitoring — no AI predictions",
+      "uz": "Qoidalarga asoslangan aniq kuzatuv — sunʼiy intellekt bashoratlari yoʻq",
+      "ru": "Мониторинг на основе правил — без прогнозов ИИ"
+    },
+    "earlyWarning.open": {
+      "en": "Open",
+      "uz": "Ochiq",
+      "ru": "Открытые"
+    },
+    "earlyWarning.critical": {
+      "en": "Critical",
+      "uz": "Jiddiy",
+      "ru": "Критические"
+    },
+    "earlyWarning.resolvedThisWeek": {
+      "en": "Resolved this week",
+      "uz": "Shu hafta hal qilingan",
+      "ru": "Решено на этой неделе"
+    },
+    "earlyWarning.totalDetected": {
+      "en": "Total detected",
+      "uz": "Jami aniqlangan",
+      "ru": "Всего обнаружено"
+    },
+    "earlyWarning.rulesTitle": {
+      "en": "Monitored rules (deterministic)",
+      "uz": "Kuzatiladigan qoidalar (aniq)",
+      "ru": "Отслеживаемые правила (детерминированные)"
+    },
+    "earlyWarning.rule.paymentOverdue": {
+      "en": "Payment overdue > 7 days",
+      "uz": "Toʻlov 7 kundan ortiq kechikdi",
+      "ru": "Платёж просрочен > 7 дней"
+    },
+    "earlyWarning.rule.paymentOverdueDesc": {
+      "en": "student flagged on first unpaid invoice past grace",
+      "uz": "imtiyoz muddati oʻtgan birinchi toʻlanmagan hisob-faktura uchun belgilanadi",
+      "ru": "отметка при первой неоплаченной счёте после льготного периода"
+    },
+    "earlyWarning.rule.attendance": {
+      "en": "Attendance < 70%",
+      "uz": "Davomat < 70%",
+      "ru": "Посещаемость < 70%"
+    },
+    "earlyWarning.rule.attendanceDesc": {
+      "en": "in last 14 days — threshold-based, no prediction",
+      "uz": "oxirgi 14 kun ichida — chegaraga asoslangan, bashorat yoʻq",
+      "ru": "за последние 14 дней — порог, без прогноза"
+    },
+    "earlyWarning.rule.absences": {
+      "en": "3+ consecutive absences",
+      "uz": "3+ ketma-ket davomatsizlik",
+      "ru": "3+ подряд идущих пропусков"
+    },
+    "earlyWarning.rule.absencesDesc": {
+      "en": "exact run-length, not a model",
+      "uz": "aniq ketma-ketlik uzunligi, model emas",
+      "ru": "точная длина серии, не модель"
+    },
+    "earlyWarning.rule.leadStale": {
+      "en": "Lead stale > 14 days",
+      "uz": "Mijoz faoliyati 14 kundan koʻp toʻxtagan",
+      "ru": "Лид без активности > 14 дней"
+    },
+    "earlyWarning.rule.leadStaleDesc": {
+      "en": "last activity outside the SLA window",
+      "uz": "oxirgi faoliyat SLA oraligʻidan tashqarida",
+      "ru": "последняя активность вне окна SLA"
+    },
+    "earlyWarning.rule.gradeDrop": {
+      "en": "Grade average drop > 15 points",
+      "uz": "Baholar oʻrtachasi 15 baldan tushgan",
+      "ru": "Снижение среднего балла > 15 очков"
+    },
+    "earlyWarning.rule.gradeDropDesc": {
+      "en": "comparing current vs. previous term, exact delta",
+      "uz": "joriy va oldingi semestr solishtiriladi, aniq farq",
+      "ru": "сравнение текущего и прошлого семестра, точная разница"
+    },
+    "earlyWarning.rule.scheduleConflict": {
+      "en": "Schedule conflict",
+      "uz": "Jadval ziddiyati",
+      "ru": "Конфликт расписания"
+    },
+    "earlyWarning.rule.scheduleConflictDesc": {
+      "en": "overlapping bookings on a resource",
+      "uz": "bitta resursda ustma-ust band qilishlar",
+      "ru": "пересекающиеся брони ресурса"
+    },
+    "earlyWarning.runScan": {
+      "en": "Run scan now",
+      "uz": "Skanirovni hozir bajarish",
+      "ru": "Запустить сканирование"
+    },
+    "earlyWarning.loading": {
+      "en": "Loading warnings…",
+      "uz": "Ogohlantirishlar yuklanmoqda…",
+      "ru": "Загрузка предупреждений…"
+    },
+    "earlyWarning.loadFailed": {
+      "en": "Failed to load warnings",
+      "uz": "Ogohlantirishlarni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить предупреждения"
+    },
+    "earlyWarning.emptyTitle": {
+      "en": "No active warnings",
+      "uz": "Faol ogohlantirishlar yoʻq",
+      "ru": "Активных предупреждений нет"
+    },
+    "earlyWarning.emptyMessage": {
+      "en": "All monitored rules are within their thresholds.",
+      "uz": "Barcha kuzatiladigan qoidalar chegaralar ichida.",
+      "ru": "Все отслеживаемые правила в пределах порогов."
+    },
+    "earlyWarning.markResolved": {
+      "en": "Mark resolved",
+      "uz": "Hal qilingan deb belgilash",
+      "ru": "Отметить решённым"
+    },
+    "earlyWarning.resolved": {
+      "en": "Warning resolved",
+      "uz": "Ogohlantirish hal qilindi",
+      "ru": "Предупреждение решено"
+    },
+    "earlyWarning.scanComplete": {
+      "en": "Scan complete: {n} new warnings",
+      "uz": "Skaner yakunlandi: {n} yangi ogohlantirish",
+      "ru": "Сканирование завершено: новых предупреждений — {n}"
+    },
+
+    "academicRisk.subtitle": {
+      "en": "Rule-based risk score from grades, attendance, homework, behavior",
+      "uz": "Baholar, davomat, uy vazifasi va xuloga asoslangan aniq xavf balli",
+      "ru": "Риск на основе оценок, посещаемости, домашних заданий и поведения"
+    },
+    "academicRisk.atRisk": {
+      "en": "At risk",
+      "uz": "Xavf ostida",
+      "ru": "Под риском"
+    },
+    "academicRisk.avgScore": {
+      "en": "Avg score",
+      "uz": "Oʻrtacha ball",
+      "ru": "Ср. балл"
+    },
+    "academicRisk.factorsTitle": {
+      "en": "Risk factors (deterministic weights)",
+      "uz": "Xavf omillari (aniq vaznlar)",
+      "ru": "Факторы риска (детерминированные веса)"
+    },
+    "academicRisk.factor.gradeTrend": {
+      "en": "Grade trend",
+      "uz": "Baholar dinamikasi",
+      "ru": "Динамика оценок"
+    },
+    "academicRisk.factor.gradeTrendDesc": {
+      "en": "comparing last 3 grade entries to prior 3 (weight 30)",
+      "uz": "oxirgi 3 ta baho oldingi 3 ta bilan solishtiriladi (vazn 30)",
+      "ru": "последние 3 оценки сравниваются с предыдущими 3 (вес 30)"
+    },
+    "academicRisk.factor.attendanceRate": {
+      "en": "Attendance rate",
+      "uz": "Davomat darajasi",
+      "ru": "Уровень посещаемости"
+    },
+    "academicRisk.factor.attendanceRateDesc": {
+      "en": "present/(present+absent) over last 30 days (weight 25)",
+      "uz": "oxirgi 30 kunda qatnagan/(qatnagan+qatnaganmagan) nisbati (vazn 25)",
+      "ru": "присутств/(присутств+отсутств) за 30 дней (вес 25)"
+    },
+    "academicRisk.factor.homework": {
+      "en": "Homework completion",
+      "uz": "Uy vazifasi bajarilishi",
+      "ru": "Выполнение домашних заданий"
+    },
+    "academicRisk.factor.homeworkDesc": {
+      "en": "submitted/assigned in current month (weight 20)",
+      "uz": "joriy oyda topshirilgan/tayinlangan (vazn 20)",
+      "ru": "сдано/задано в текущем месяце (вес 20)"
+    },
+    "academicRisk.factor.absences": {
+      "en": "Consecutive absences",
+      "uz": "Ketma-ket qatnoshmaslik",
+      "ru": "Подряд идущие пропуски"
+    },
+    "academicRisk.factor.absencesDesc": {
+      "en": "exact run-length (weight 15)",
+      "uz": "aniq ketma-ketlik uzunligi (vazn 15)",
+      "ru": "точная длина серии (вес 15)"
+    },
+    "academicRisk.factor.lateSubmissions": {
+      "en": "Late submissions",
+      "uz": "Kech topshirilgan ishlar",
+      "ru": "Поздние сдачи работ"
+    },
+    "academicRisk.factor.lateSubmissionsDesc": {
+      "en": "count in last 30 days (weight 10)",
+      "uz": "oxirgi 30 kun ichidagi soni (vazn 10)",
+      "ru": "количество за последние 30 дней (вес 10)"
+    },
+    "academicRisk.factor.scoreFormula": {
+      "en": "Score formula",
+      "uz": "Ball formulasi",
+      "ru": "Формула балла"
+    },
+    "academicRisk.factor.scoreFormulaDesc": {
+      "en": "Σ(factor.score × factor.weight) ÷ Σ(weight); rule-based, no AI",
+      "uz": "Σ(omil.ball × omil.vazn) ÷ Σ(vazn); qoidalarga asoslangan, sunʼiy intellekt yoʻq",
+      "ru": "Σ(factor.score × factor.weight) ÷ Σ(weight); на основе правил, без ИИ"
+    },
+    "academicRisk.loading": {
+      "en": "Loading risk data…",
+      "uz": "Xavf maʼlumotlari yuklanmoqda…",
+      "ru": "Загрузка данных о риске…"
+    },
+    "academicRisk.emptyTitle": {
+      "en": "No students at risk",
+      "uz": "Xavf ostidagi oʻquvchilar yoʻq",
+      "ru": "Учеников с риском нет"
+    },
+    "academicRisk.emptyMessage": {
+      "en": "All students are within acceptable thresholds.",
+      "uz": "Barcha oʻquvchilar qabul qilinadigan chegaralar ichida.",
+      "ru": "Все ученики в пределах допустимых порогов."
+    },
+
+    "forecasting.pageTitle": {
+      "en": "Forecasting",
+      "uz": "Prognoz",
+      "ru": "Прогнозирование"
+    },
+    "forecasting.subtitle": {
+      "en": "Deterministic statistical projections — moving average, linear trend, seasonal naive",
+      "uz": "Aniq statistik proektsiyalar — koʻchirilgan oʻrtacha, chiziqli trend, mavsumiy naiv",
+      "ru": "Детерминированные статистические проекции — скользящее среднее, линейный тренд, сезонный наивный"
+    },
+    "forecasting.seriesTracked": {
+      "en": "Series tracked",
+      "uz": "Kuzatilayotgan qatorlar",
+      "ru": "Отслеживаемых рядов"
+    },
+    "forecasting.projectedRevenue": {
+      "en": "Projected revenue (next period)",
+      "uz": "Kutilayotgan daromad (keyingi davr)",
+      "ru": "Прогнозируемая выручка (следующий период)"
+    },
+    "forecasting.projectedEnrollments": {
+      "en": "Projected enrollments (next period)",
+      "uz": "Kutilayotgan qabullar (keyingi davr)",
+      "ru": "Прогнозируемые записи (следующий период)"
+    },
+    "forecasting.methodsTitle": {
+      "en": "Methods (no AI, no ML)",
+      "uz": "Usullar (sunʼiy intellekt va ML yoʻq)",
+      "ru": "Методы (без ИИ и ML)"
+    },
+    "forecasting.method.movingAvg": {
+      "en": "Moving average",
+      "uz": "Koʻchirilgan oʻrtacha",
+      "ru": "Скользящее среднее"
+    },
+    "forecasting.method.movingAvgDesc": {
+      "en": "arithmetic mean of last N periods (N=3 default)",
+      "uz": "oxirgi N davrning arifmetik oʻrtachasi (N=3 standart)",
+      "ru": "арифметическое среднее последних N периодов (N=3 по умолчанию)"
+    },
+    "forecasting.method.linearTrend": {
+      "en": "Linear trend",
+      "uz": "Chiziqli trend",
+      "ru": "Линейный тренд"
+    },
+    "forecasting.method.linearTrendDesc": {
+      "en": "least-squares fit over the full history, no extrapolation beyond ±25%",
+      "uz": "butun tarix boʻyicha eng kichik kvadrat moslash, ±25% dan tashqari ekstrapolyatsiya yoʻq",
+      "ru": "аппроксимация методом наименьших квадратов по всей истории, экстраполяция не далее ±25%"
+    },
+    "forecasting.method.seasonalNaive": {
+      "en": "Seasonal naive",
+      "uz": "Mavsumiy naiv",
+      "ru": "Сезонный наивный"
+    },
+    "forecasting.method.seasonalNaiveDesc": {
+      "en": "repeat last year's same period (for monthly metrics with ≥12 months of history)",
+      "uz": "oʻtgan yilning shu davrini takrorlash (≥12 oylik tarixga ega oylik koʻrsatkichlar uchun)",
+      "ru": "повторение того же периода прошлого года (для месячных метрик с историей ≥12 месяцев)"
+    },
+    "forecasting.method.confidenceBands": {
+      "en": "Confidence bands",
+      "uz": "Ishonch oraligʻi",
+      "ru": "Доверительные интервалы"
+    },
+    "forecasting.method.confidenceBandsDesc": {
+      "en": "empirical std-dev of historical residuals (no neural network, no probabilistic model)",
+      "uz": "tarixiy qoldiqlarning tajribaviy standart ogʻishi (neyrotarmoq va ehtimoliy model yoʻq)",
+      "ru": "эмпирическое отклонение остатков истории (без нейросетей и вероятностных моделей)"
+    },
+    "forecasting.method.metrics": {
+      "en": "Metrics",
+      "uz": "Koʻrsatkichlar",
+      "ru": "Метрики"
+    },
+    "forecasting.method.metricsDesc": {
+      "en": "revenue, enrollments, attendance, lead conversion, churn",
+      "uz": "daromad, qabullar, davomat, lidlarning aylanishi, yoʻqotish",
+      "ru": "выручка, записи, посещаемость, конверсия лидов, отток"
+    },
+    "forecasting.loading": {
+      "en": "Loading forecasts…",
+      "uz": "Prognozlar yuklanmoqda…",
+      "ru": "Загрузка прогнозов…"
+    },
+    "forecasting.emptyTitle": {
+      "en": "No forecast data",
+      "uz": "Prognoz maʼlumotlari yoʻq",
+      "ru": "Нет данных для прогноза"
+    },
+    "forecasting.emptyMessage": {
+      "en": "At least 3 months of history is required to project a metric.",
+      "uz": "Koʻrsatkichni prognoz qilish uchun kamida 3 oylik tarix kerak.",
+      "ru": "Для прогноза метрики нужно минимум 3 месяца истории."
+    },
+    "forecasting.confidence": {
+      "en": "Confidence {n}%",
+      "uz": "Ishonch {n}%",
+      "ru": "Достоверность {n}%"
+    },
+
+    "teacherWorkload.subtitle": {
+      "en": "Capacity vs. assigned hours, students per teacher, group counts",
+      "uz": "Sigʻim va biriktirilgan soatlar, oʻqituvchiga tushgan oʻquvchilar, guruhlar soni",
+      "ru": "Мощности против назначенных часов, ученики на преподавателя, количество групп"
+    },
+    "teacherWorkload.overloaded": {
+      "en": "Overloaded",
+      "uz": "Ortiqcha yuklangan",
+      "ru": "Перегруженные"
+    },
+    "teacherWorkload.balanced": {
+      "en": "Balanced",
+      "uz": "Muvozanatli",
+      "ru": "Сбалансированные"
+    },
+    "teacherWorkload.underutilized": {
+      "en": "Underutilized",
+      "uz": "Kam yuklangan",
+      "ru": "Недогруженные"
+    },
+    "teacherWorkload.avgUtilization": {
+      "en": "Avg utilization",
+      "uz": "Oʻrtacha bandlik",
+      "ru": "Средняя загрузка"
+    },
+    "teacherWorkload.modelTitle": {
+      "en": "Workload model (rule-based)",
+      "uz": "Yuklama modeli (qoidalarga asoslangan)",
+      "ru": "Модель нагрузки (на основе правил)"
+    },
+    "teacherWorkload.model.capacity": {
+      "en": "Capacity",
+      "uz": "Sigʻim",
+      "ru": "Мощность"
+    },
+    "teacherWorkload.model.capacityDesc": {
+      "en": "teacher.contractedHours per week from contract",
+      "uz": "shartnomadagi teacher.contractedHours (haftalik)",
+      "ru": "teacher.contractedHours в неделю из контракта"
+    },
+    "teacherWorkload.model.hoursWeek": {
+      "en": "Hours/week",
+      "uz": "Soat/hafta",
+      "ru": "Часов/неделю"
+    },
+    "teacherWorkload.model.hoursWeekDesc": {
+      "en": "Σ(group.schedule.slotMinutes) across all groups",
+      "uz": "barcha guruhlar boʻyicha Σ(group.schedule.slotMinutes)",
+      "ru": "Σ(group.schedule.slotMinutes) по всем группам"
+    },
+    "teacherWorkload.model.utilization": {
+      "en": "Utilization",
+      "uz": "Bandlik",
+      "ru": "Загрузка"
+    },
+    "teacherWorkload.model.utilizationDesc": {
+      "en": "hoursPerWeek ÷ capacityHours (exact ratio)",
+      "uz": "hoursPerWeek ÷ capacityHours (aniq nisbat)",
+      "ru": "hoursPerWeek ÷ capacityHours (точное соотношение)"
+    },
+    "teacherWorkload.model.thresholds": {
+      "en": "Status thresholds",
+      "uz": "Holat chegaralari",
+      "ru": "Пороги статусов"
+    },
+    "teacherWorkload.model.thresholdsDesc": {
+      "en": "<60% UNDERUTILIZED · 60–100% BALANCED · >100% OVERLOADED",
+      "uz": "<60% KAM YUKLANGAN · 60–100% MUVOZANATLI · >100% ORTIQCHA YUKLANGAN",
+      "ru": "<60% НЕДОГРУЖЕННЫЕ · 60–100% СБАЛАНСИРОВАННЫЕ · >100% ПЕРЕГРУЖЕННЫЕ"
+    },
+    "teacherWorkload.loading": {
+      "en": "Loading workload…",
+      "uz": "Yuklama yuklanmoqda…",
+      "ru": "Загрузка нагрузки…"
+    },
+    "teacherWorkload.emptyTitle": {
+      "en": "No teacher data",
+      "uz": "Oʻqituvchi maʼlumotlari yoʻq",
+      "ru": "Нет данных по преподавателям"
+    },
+    "teacherWorkload.emptyMessage": {
+      "en": "Add teachers and assign groups to see workload metrics.",
+      "uz": "Yuklama koʻrsatkichlarini koʻrish uchun oʻqituvchilar qoʻshing va guruhlar biriktiring.",
+      "ru": "Добавьте преподавателей и назначьте группы, чтобы увидеть нагрузку."
+    },
+    "teacherWorkload.rowMeta": {
+      "en": "{groups} groups · {students} students · {hours}h / {capacity}h",
+      "uz": "{groups} guruh · {students} oʻquvchi · {hours} soat / {capacity} soat",
+      "ru": "{groups} групп · {students} учеников · {hours} ч / {capacity} ч"
+    },
+
+    "followUp.title": {
+      "en": "Follow-Up Automation",
+      "uz": "Kuzatuv avtomatlashtirishi",
+      "ru": "Автоматизация последующих действий"
+    },
+    "followUp.subtitle": {
+      "en": "Configure rules and manage workflow action items",
+      "uz": "Qoidalarni sozlang va ish oqimi vazifalarini boshqaring",
+      "ru": "Настраивайте правила и управляйте задачами рабочего процесса"
+    },
+    "followUp.tab.rules": {
+      "en": "Automation Rules",
+      "uz": "Avtomatlashtirish qoidalari",
+      "ru": "Правила автоматизации"
+    },
+    "followUp.tab.actions": {
+      "en": "Action Items",
+      "uz": "Amal vazifalari",
+      "ru": "Задачи"
+    },
+    "followUp.tab.analytics": {
+      "en": "Analytics",
+      "uz": "Tahlil",
+      "ru": "Аналитика"
+    },
+    "followUp.engineRunning": {
+      "en": "Engine Running…",
+      "uz": "Mexanizm ishlayapti…",
+      "ru": "Движок работает…"
+    },
+    "followUp.runEngine": {
+      "en": "Run Engine Now",
+      "uz": "Mexanizmni hozir ishga tushirish",
+      "ru": "Запустить движок"
+    },
+    "followUp.emptyHint": {
+      "en": "Create a rule to automate follow-ups based on lead activity.",
+      "uz": "Lid faoliyatiga koʻra kuzatuvlarni avtomatlashtirish uchun qoida yarating.",
+      "ru": "Создайте правило, чтобы автоматизировать действия по активности лидов."
+    },
+    "followUp.createFailed": {
+      "en": "Failed to create rule",
+      "uz": "Qoidani yaratib boʻlmadi",
+      "ru": "Не удалось создать правило"
+    },
+    "followUp.updateFailed": {
+      "en": "Failed to update rule",
+      "uz": "Qoidani yangilab boʻlmadi",
+      "ru": "Не удалось обновить правило"
+    },
+    "followUp.deleteFailed": {
+      "en": "Failed to delete rule",
+      "uz": "Qoidani oʻchirib boʻlmadi",
+      "ru": "Не удалось удалить правило"
+    },
+    "followUp.toggleFailed": {
+      "en": "Failed to update rule status",
+      "uz": "Qoida holatini yangilab boʻlmadi",
+      "ru": "Не удалось обновить статус правила"
+    },
+    "followUp.evaluateFailed": {
+      "en": "Failed to evaluate automation engine",
+      "uz": "Avtomatlashtirish mexanizmini baholab boʻlmadi",
+      "ru": "Не удалось выполнить оценку движка автоматизации"
+    },
+    "followUp.completeFailed": {
+      "en": "Failed to complete item",
+      "uz": "Vazifani yakunlab boʻlmadi",
+      "ru": "Не удалось завершить задачу"
+    },
+    "followUp.engineEvaluated": {
+      "en": "Engine evaluated {evaluated} rules. Created {created} action items.",
+      "uz": "Mexanizm {evaluated} ta qoidani baholadi. {created} ta amal vazifasi yaratildi.",
+      "ru": "Движок обработал правил: {evaluated}. Создано задач: {created}."
+    },
+    "followUp.completed": {
+      "en": "Action item marked as complete",
+      "uz": "Amal vazifasi bajarilgan deb belgilandi",
+      "ru": "Задача отмечена как выполненная"
+    },
+    "followUp.deleteConfirm": {
+      "en": "Delete this automation rule?",
+      "uz": "Bu avtomatlashtirish qoidasini oʻchirasizmi?",
+      "ru": "Удалить это правило автоматизации?"
+    },
+    "followUp.toggleStatus": {
+      "en": "Toggle rule status",
+      "uz": "Qoida holatini almashtirish",
+      "ru": "Переключить статус правила"
+    },
+    "followUp.targetLabel": {
+      "en": "Target:",
+      "uz": "Maqsad:",
+      "ru": "Цель:"
+    },
+    "followUp.triggerLabel": {
+      "en": "Trigger after",
+      "uz": "Ishga tushirish muddati",
+      "ru": "Срабатывает через"
+    },
+    "followUp.actionLabel": {
+      "en": "Action:",
+      "uz": "Amal:",
+      "ru": "Действие:"
+    },
+    "followUp.channelLabel": {
+      "en": "Channel:",
+      "uz": "Kanal:",
+      "ru": "Канал:"
+    },
+    "followUp.trigger.NO_ACTIVITY": {
+      "en": "No activity",
+      "uz": "Faoliyat yoʻq",
+      "ru": "Нет активности"
+    },
+    "followUp.trigger.STAGE_STALE": {
+      "en": "Stage stale",
+      "uz": "Bosqich eskirgan",
+      "ru": "Этап устарел"
+    },
+    "followUp.action.CREATE_FOLLOW_UP": {
+      "en": "Create follow-up",
+      "uz": "Kuzatuv yaratish",
+      "ru": "Создать задачу"
+    },
+    "followUp.action.SEND_NOTIFICATION": {
+      "en": "Send notification",
+      "uz": "Bildirishnoma yuborish",
+      "ru": "Отправить уведомление"
+    },
+    "followUp.action.BOTH": {
+      "en": "Both",
+      "uz": "Ikkalasi",
+      "ru": "Оба"
+    },
+    "followUp.stage.NEW": {
+      "en": "New",
+      "uz": "Yangi",
+      "ru": "Новый"
+    },
+    "followUp.stage.CONTACTED": {
+      "en": "Contacted",
+      "uz": "Bogʻlangan",
+      "ru": "Контакт установлен"
+    },
+    "followUp.stage.TRIAL_LESSON": {
+      "en": "Trial lesson",
+      "uz": "Sinov darsi",
+      "ru": "Пробный урок"
+    },
+    "followUp.stage.WON": {
+      "en": "Won",
+      "uz": "Yutgan",
+      "ru": "Выигран"
+    },
+    "followUp.stage.LOST": {
+      "en": "Lost",
+      "uz": "Yoʻqotilgan",
+      "ru": "Проигран"
+    },
+    "followUp.channel.IN_APP": {
+      "en": "In-app",
+      "uz": "Ilova ichida",
+      "ru": "В приложении"
+    },
+    "followUp.channel.SMS": {
+      "en": "SMS",
+      "uz": "SMS",
+      "ru": "SMS"
+    },
+    "followUp.channel.TELEGRAM": {
+      "en": "Telegram",
+      "uz": "Telegram",
+      "ru": "Telegram"
+    },
+    "followUp.namePlaceholder": {
+      "en": "e.g. No Activity Alert",
+      "uz": "masalan. Faoliyat yoʻq ogohlantirishi",
+      "ru": "напр. Оповещение об отсутствии активности"
+    },
+    "followUp.triggerEvent": {
+      "en": "Trigger Event",
+      "uz": "Ishga tushiruvchi hodisa",
+      "ru": "Событие-триггер"
+    },
+    "followUp.timeThreshold": {
+      "en": "Time Threshold (Days)",
+      "uz": "Vaqt chegarasi (kunlar)",
+      "ru": "Временной порог (дни)"
+    },
+    "followUp.targetStage": {
+      "en": "Target Pipeline Stage",
+      "uz": "Maqsad bosqichi",
+      "ru": "Целевой этап воронки"
+    },
+    "followUp.selectStage": {
+      "en": "Select stage…",
+      "uz": "Bosqichni tanlang…",
+      "ru": "Выберите этап…"
+    },
+    "followUp.executionAction": {
+      "en": "Execution Action",
+      "uz": "Bajarish amali",
+      "ru": "Действие выполнения"
+    },
+    "followUp.deliveryChannel": {
+      "en": "Delivery Channel",
+      "uz": "Yuborish kanali",
+      "ru": "Канал доставки"
+    },
+    "followUp.messageLabel": {
+      "en": "Automated Message / Note",
+      "uz": "Avtomatik xabar / izoh",
+      "ru": "Автоматическое сообщение / заметка"
+    },
+    "followUp.messagePlaceholder": {
+      "en": "Internal note or notification text...",
+      "uz": "Ichki eslatma yoki bildirishnoma matni...",
+      "ru": "Внутренняя заметка или текст уведомления..."
+    },
+    "followUp.saveRule": {
+      "en": "Save Rule",
+      "uz": "Qoidani saqlash",
+      "ru": "Сохранить правило"
+    },
+    "followUp.loading": {
+      "en": "Fetching workflows…",
+      "uz": "Ish oqimlari yuklanmoqda…",
+      "ru": "Загрузка рабочих процессов…"
+    },
+    "followUp.loadingSubtitle": {
+      "en": "Loading engine data…",
+      "uz": "Mexanizm maʼlumotlari yuklanmoqda…",
+      "ru": "Загрузка данных движка…"
+    },
+    "followUp.connectionError": {
+      "en": "Connection error",
+      "uz": "Ulanish xatosi",
+      "ru": "Ошибка подключения"
+    },
+    "followUp.loadError": {
+      "en": "Failed to load automation data. Please try again.",
+      "uz": "Avtomatlashtirish maʼlumotlarini yuklab boʻlmadi. Qayta urinib koʻring.",
+      "ru": "Не удалось загрузить данные автоматизации. Попробуйте ещё раз."
+    },
+    "followUp.section.overdue": {
+      "en": "Overdue Actions",
+      "uz": "Muddati oʻtgan amallar",
+      "ru": "Просроченные действия"
+    },
+    "followUp.section.today": {
+      "en": "Today's Actions",
+      "uz": "Bugungi amallar",
+      "ru": "Действия на сегодня"
+    },
+    "followUp.section.upcoming": {
+      "en": "Upcoming",
+      "uz": "Yaqinlashayotgan",
+      "ru": "Предстоящие"
+    },
+    "followUp.inboxZero": {
+      "en": "Inbox Zero",
+      "uz": "Nol vazifa",
+      "ru": "Ноль задач"
+    },
+    "followUp.inboxZeroHint": {
+      "en": "No pending action items. The engine will generate them based on your rules.",
+      "uz": "Kutilayotgan amal vazifalari yoʻq. Mexanizm qoidalaringiz asosida ularni yaratadi.",
+      "ru": "Нет ожидающих задач. Движок создаст их на основе ваших правил."
+    },
+    "followUp.stat.today": {
+      "en": "Today's Load",
+      "uz": "Bugungi yuklama",
+      "ru": "Нагрузка сегодня"
+    },
+    "followUp.stat.overdue": {
+      "en": "Overdue Items",
+      "uz": "Muddati oʻtgan vazifalar",
+      "ru": "Просроченные задачи"
+    },
+    "followUp.stat.upcoming": {
+      "en": "Upcoming Items",
+      "uz": "Yaqinlashayotgan vazifalar",
+      "ru": "Предстоящие задачи"
+    },
+    "followUp.stat.completionRate": {
+      "en": "Completion Rate",
+      "uz": "Bajarilish darajasi",
+      "ru": "Доля выполнения"
+    },
+    "followUp.configureRule": {
+      "en": "Configure Rule",
+      "uz": "Qoidani sozlash",
+      "ru": "Настроить правило"
+    },
+    "followUp.newAutomationRule": {
+      "en": "New Automation Rule",
+      "uz": "Yangi avtomatlashtirish qoidasi",
+      "ru": "Новое правило автоматизации"
+    },
+    "followUp.markDone": {
+      "en": "Mark Done",
+      "uz": "Bajarilgan deb belgilash",
+      "ru": "Отметить выполненным"
+    },
+    "followUp.actionRequired": {
+      "en": "Action required.",
+      "uz": "Amal talab qilinadi.",
+      "ru": "Требуется действие."
+    }
+  }
+}

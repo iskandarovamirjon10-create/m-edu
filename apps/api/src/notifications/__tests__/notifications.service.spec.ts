@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NotificationsService } from '../notifications.service';
 
+import { PrismaService } from '../../prisma/prisma.service';
+
 function createMockPrisma() {
   return {
     notification: {
@@ -12,13 +14,13 @@ function createMockPrisma() {
 }
 
 describe('NotificationsService', () => {
-  let prisma: any;
+  let prisma: ReturnType<typeof createMockPrisma>;
   let svc: NotificationsService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new NotificationsService(prisma);
+    svc = new NotificationsService(prisma as unknown as PrismaService);
   });
 
   describe('findAll', () => {
@@ -63,7 +65,7 @@ describe('NotificationsService', () => {
         where: { id: 'n-1', userId: 'user-1' },
         data: { isRead: true },
       });
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual({ success: true, count: 1 });
     });
   });
 
@@ -75,7 +77,7 @@ describe('NotificationsService', () => {
         where: { userId: 'user-1', isRead: false },
         data: { isRead: true },
       });
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual({ success: true, count: 3 });
     });
   });
 });

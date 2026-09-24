@@ -12,6 +12,8 @@ import {
   Select,
   Field,
   Modal,
+  ConfirmDialog,
+  GlassButton,
   useToasts,
   statusColor,
 } from '@/components/ui';
@@ -19,6 +21,7 @@ import { formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Expense, ExpenseCategory } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   'SALARY',
@@ -31,6 +34,10 @@ const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   'TRAINING',
   'OTHER',
 ];
+
+function categoryKey(category: string): string {
+  return `expenses.category.${category}`;
+}
 
 interface ExpenseFilters {
   page: number;
@@ -52,14 +59,6 @@ const INITIAL_FORM: ExpenseFormState = {
   date: new Date().toISOString().slice(0, 10),
 };
 
-function formatCategory(category: string): string {
-  return category
-    .toLowerCase()
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
 function calculateTotal(expenses: Expense[]): number {
   // Backend serializes Decimal columns as strings; coerce to numbers before
   // summing or JS would concatenate ("0" + "150.00" = "0150.00").
@@ -67,7 +66,8 @@ function calculateTotal(expenses: Expense[]): number {
 }
 
 export function ExpensesPage() {
-  usePageTitle('Expenses');
+  const { t } = useI18n();
+  usePageTitle(t('expenses.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
@@ -77,6 +77,8 @@ export function ExpensesPage() {
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // Form state
   const [form, setForm] = useState<ExpenseFormState>(INITIAL_FORM);
@@ -108,20 +110,35 @@ export function ExpensesPage() {
     [expenseList],
   );
 
-  // Create expense mutation
-  const create = useMutation({
-    mutationFn: () =>
-      expensesApi.create({
+  // Create or update expense mutation
+  const save = useMutation({
+    mutationFn: () => {
+      const payload = {
         category: form.category,
         amount: parseFloat(form.amount) || 0,
         description: form.description.trim() || undefined,
         date: new Date(form.date).toISOString(),
-      }),
+      };
+      return editingId ? expensesApi.update(editingId, payload) : expensesApi.create(payload);
+    },
     onSuccess: () => {
-      push('success', 'Expense recorded successfully');
+      push('success', editingId ? t('expenses.updated') : t('expenses.recorded'));
       setModalOpen(false);
+      setEditingId(null);
       setForm(INITIAL_FORM);
       setFormErrors({});
+      qc.invalidateQueries({ queryKey: ['expenses'] });
+    },
+    onError: (e: Error) => {
+      push('error', getErrorMessage(e));
+    },
+  });
+
+  // Delete expense mutation
+  const remove = useMutation({
+    mutationFn: (id: string) => expensesApi.remove(id),
+    onSuccess: () => {
+      push('success', t('expenses.deleted'));
       qc.invalidateQueries({ queryKey: ['expenses'] });
     },
     onError: (e: Error) => {
@@ -134,15 +151,15 @@ export function ExpensesPage() {
     const errors: Partial<Record<keyof ExpenseFormState, string>> = {};
 
     if (!form.amount || parseFloat(form.amount) <= 0) {
-      errors.amount = 'Amount must be a positive number';
+      errors.amount = t('expenses.validation.amountPositive');
     }
     if (!form.date) {
-      errors.date = 'Date is required';
+      errors.date = t('expenses.validation.dateRequired');
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form]);
+  }, [form, t]);
 
   // Form handlers
   const handleFormChange = useCallback(
@@ -168,22 +185,45 @@ export function ExpensesPage() {
       if (!validateForm()) {
         return;
       }
-      create.mutate();
+      save.mutate();
     },
-    [validateForm, create],
+    [validateForm, save],
   );
-
   const handleCloseModal = useCallback(() => {
     setModalOpen(false);
+    setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
   }, []);
 
   const handleOpenModal = useCallback(() => {
+    setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
     setModalOpen(true);
   }, []);
+
+  const handleEdit = useCallback((expense: Expense) => {
+    setEditingId(expense.id);
+    setForm({
+      category: expense.category,
+      amount: String(expense.amount),
+      description: expense.description || '',
+      date: new Date(expense.date).toISOString().slice(0, 10),
+    });
+    setFormErrors({});
+    setModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteTarget(id);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    remove.mutate(deleteTarget);
+    setDeleteTarget(null);
+  }, [deleteTarget, remove]);
 
   const { refetch: refetchExpenses } = expenses;
   const handleRetry = useCallback(() => {
@@ -196,18 +236,14 @@ export function ExpensesPage() {
   // Early return for loading state
   if (expenses.isLoading && !data) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Expenses"
-            subtitle="Track organization expenses"
+            title={t('expenses.title')}
+            subtitle={t('expenses.subtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label="Loading expenses…" />
+            <PageLoader label={t('expenses.loading')} />
           </div>
         </div>
       </div>
@@ -217,19 +253,15 @@ export function ExpensesPage() {
   // Early return for error state
   if (expenses.isError) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Expenses"
-            subtitle="Track organization expenses"
+            title={t('expenses.title')}
+            subtitle={t('expenses.subtitle')}
           />
           <div className="glass-card p-8">
             <ErrorState
-              title="Failed to load expenses"
+              title={t('expenses.loadError')}
               message={getErrorMessage(expenses.error as Error)}
               onRetry={handleRetry}
             />
@@ -240,23 +272,19 @@ export function ExpensesPage() {
   }
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
       <div className="page-container space-y-4">
         <PageHeader
-          title="Expenses"
-          subtitle="Track organization expenses"
+          title={t('expenses.title')}
+          subtitle={t('expenses.subtitle')}
           actions={
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               onClick={handleOpenModal}
             >
-              Add expense
-            </button>
+              {t('expenses.add')}
+            </GlassButton>
           }
         />
 
@@ -267,23 +295,25 @@ export function ExpensesPage() {
             <Select
               value={category}
               onChange={handleCategoryChange}
-              aria-label="Filter by category"
+              aria-label={t('expenses.filterByCategory')}
             >
-              <option value="">All categories</option>
+              <option value="">{t('expenses.allCategories')}</option>
               {EXPENSE_CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>
-                  {formatCategory(cat)}
+                  {t(categoryKey(cat))}
                 </option>
               ))}
             </Select>
           </div>
           <div className="flex items-center justify-between gap-4 sm:ml-4 sm:shrink-0">
             <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              {totalExpenses} {totalExpenses === 1 ? 'expense' : 'expenses'}
+              {totalExpenses === 1
+                ? t('expenses.countOne')
+                : t('expenses.countMany', { count: totalExpenses })}
             </span>
             {expenseList.length > 0 && (
               <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                Page total: {formatCurrency(totalAmount)}
+                {t('expenses.pageTotal', { amount: formatCurrency(totalAmount) })}
               </span>
             )}
           </div>
@@ -294,11 +324,11 @@ export function ExpensesPage() {
       <div className="glass-card">
         {expenseList.length === 0 ? (
           <EmptyState
-            title={hasActiveFilter ? 'No matching expenses' : 'No expenses'}
+            title={hasActiveFilter ? t('expenses.noMatching') : t('expenses.emptyTitle')}
             message={
               hasActiveFilter
-                ? 'Try adjusting your filters to see more results.'
-                : 'Record your first expense to start tracking spending.'
+                ? t('common.adjustFilters')
+                : t('expenses.emptyMessage')
             }
           />
         ) : (
@@ -307,10 +337,11 @@ export function ExpensesPage() {
               <table className="glass-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Category</th>
-                    <th>Description</th>
-                    <th style={{ textAlign: 'right' }}>Amount</th>
+                    <th>{t('common.date')}</th>
+                    <th>{t('expenses.category')}</th>
+                    <th>{t('common.description')}</th>
+                    <th style={{ textAlign: 'right' }}>{t('payments.col.amount')}</th>
+                    <th>{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -321,7 +352,7 @@ export function ExpensesPage() {
                       </td>
                       <td>
                         <Badge color={statusColor(expense.category)}>
-                          {formatCategory(expense.category)}
+                          {t(categoryKey(expense.category))}
                         </Badge>
                       </td>
                       <td className="max-w-xs truncate" title={expense.description || undefined}>
@@ -329,6 +360,26 @@ export function ExpensesPage() {
                       </td>
                       <td style={{ textAlign: 'right' }} className="font-medium">
                         {formatCurrency(expense.amount)}
+                      </td>
+                      <td>
+                        <div className="flex gap-2">
+                          <GlassButton
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(expense)}
+                          >
+                            {t('common.edit')}
+                          </GlassButton>
+                          <GlassButton
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleDelete(expense.id)}
+                          >
+                            {t('common.delete')}
+                          </GlassButton>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -350,24 +401,24 @@ export function ExpensesPage() {
       <Modal
         open={modalOpen}
         onClose={handleCloseModal}
-        title="Add expense"
+        title={editingId ? t('expenses.editTitle') : t('expenses.addTitle')}
       >
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Category" required>
+            <Field label={t('expenses.category')} required>
               <Select
                 value={form.category}
                 onChange={handleFormChange('category')}
-                aria-label="Expense category"
+                aria-label={t('expenses.categoryAria')}
               >
                 {EXPENSE_CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
-                    {formatCategory(cat)}
+                    {t(categoryKey(cat))}
                   </option>
                 ))}
               </Select>
             </Field>
-            <Field label="Amount (USD)" required error={formErrors.amount}>
+            <Field label={t('expenses.amountUsd')} required error={formErrors.amount}>
               <TextInput
                 type="number"
                 step="0.01"
@@ -387,7 +438,7 @@ export function ExpensesPage() {
             </Field>
           </div>
 
-          <Field label="Date" required error={formErrors.date}>
+          <Field label={t('common.date')} required error={formErrors.date}>
             <TextInput
               type="date"
               value={form.date}
@@ -403,33 +454,45 @@ export function ExpensesPage() {
             )}
           </Field>
 
-          <Field label="Description">
+          <Field label={t('common.description')}>
             <TextInput
               value={form.description}
               onChange={handleFormChange('description')}
-              placeholder="Optional description…"
+              placeholder={t('common.optionalDescription')}
             />
           </Field>
 
           <div className="flex justify-end gap-2">
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-secondary"
+              variant="secondary"
               onClick={handleCloseModal}
-              disabled={create.isPending}
+              disabled={save.isPending}
             >
-              Cancel
-            </button>
-            <button
+              {t('common.cancel')}
+            </GlassButton>
+            <GlassButton
               type="submit"
-              className="glass-btn glass-btn-primary"
-              disabled={create.isPending}
+              variant="primary"
+              disabled={save.isPending}
             >
-              {create.isPending ? 'Saving…' : 'Add expense'}
-            </button>
+              {save.isPending
+                ? t('common.saving')
+                : editingId
+                  ? t('expenses.saveChanges')
+                  : t('expenses.add')}
+            </GlassButton>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        description={t('expenses.deleteConfirm')}
+        loading={remove.isPending}
+      />
 
       {toastNode}
       </div>

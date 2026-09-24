@@ -19,11 +19,13 @@ import {
   GlassTextArea,
   GlassBadge,
   GlassButton,
+  ConfirmDialog,
   useToast,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, LibraryBook } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface BookFormState {
   title: string;
@@ -72,24 +74,26 @@ const CATEGORIES = [
 function validateBookForm(form: BookFormState): Partial<Record<keyof BookFormState, string>> {
   const errors: Partial<Record<keyof BookFormState, string>> = {};
 
-  if (!form.title.trim()) errors.title = 'Title is required';
-  if (!form.barcode.trim()) errors.barcode = 'Barcode is required';
-  if (!form.category.trim()) errors.category = 'Category is required';
+  if (!form.title.trim()) errors.title = 'library.form.validation.titleRequired';
+  if (!form.barcode.trim()) errors.barcode = 'library.form.validation.barcodeRequired';
+  if (!form.category.trim()) errors.category = 'library.form.validation.categoryRequired';
   if (form.quantity && (isNaN(parseInt(form.quantity)) || parseInt(form.quantity) < 1)) {
-    errors.quantity = 'Quantity must be at least 1';
+    errors.quantity = 'library.form.validation.quantityMin';
   }
 
   return errors;
 }
 
 export function LibraryPage() {
-  usePageTitle('Library');
+  const { t } = useI18n();
+  usePageTitle(t('library.title'));
   const { push, toastNode } = useToast();
   const qc = useQueryClient();
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // Form state
   const [form, setForm] = useState<BookFormState>(INITIAL_FORM);
@@ -146,7 +150,7 @@ export function LibraryPage() {
       }
     },
     onSuccess: () => {
-      push('success', editingId ? 'Book updated' : 'Book created');
+      push('success', editingId ? t('library.bookUpdated') : t('library.bookCreated'));
       qc.invalidateQueries({ queryKey: ['library-books'] });
       closeModal();
     },
@@ -159,7 +163,7 @@ export function LibraryPage() {
   const deleteBook = useMutation({
     mutationFn: (id: string) => libraryApi.deleteBook(id),
     onSuccess: () => {
-      push('success', 'Book deleted');
+      push('success', t('library.bookDeleted'));
       qc.invalidateQueries({ queryKey: ['library-books'] });
     },
     onError: (error) => {
@@ -209,7 +213,7 @@ export function LibraryPage() {
   }, [form, saveBook]);
 
   if (books.isLoading) {
-    return <GlassPageLoader label="Loading library…" />;
+    return <GlassPageLoader label={t('library.loading')} />;
   }
 
   if (books.isError) {
@@ -223,20 +227,15 @@ export function LibraryPage() {
 
   return (
     <div className="page-container">
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
-      </div>
+      
       {toastNode}
 
       <GlassPageHeader
-        title="Library"
-        description="Manage books and borrowing"
+        title={t('library.title')}
+        description={t('library.pageDescription')}
         actions={
           <GlassButton variant="primary" size="sm" onClick={() => openModal()}>
-            Add Book
+            {t('library.addBook')}
           </GlassButton>
         }
       />
@@ -244,7 +243,7 @@ export function LibraryPage() {
       <GlassCard padding="none">
         <div className="p-4 border-b border-[var(--border-subtle)]">
           <GlassInput
-            placeholder="Search books by title, author, ISBN, or barcode..."
+            placeholder={t('library.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -252,25 +251,25 @@ export function LibraryPage() {
 
         {filteredBooks.length === 0 ? (
           <GlassEmptyState
-            title={searchQuery ? 'No books found' : 'No books yet'}
+            title={searchQuery ? t('library.emptySearch') : t('library.empty')}
             description={
               searchQuery
-                ? 'Try adjusting your search criteria'
-                : 'Create your first book to get started'
+                ? t('certificates.emptySearchHint')
+                : t('library.emptyMessage')
             }
-            action={!searchQuery ? { label: 'Add Book', onClick: () => openModal() } : undefined}
+            action={!searchQuery ? { label: t('library.addBook'), onClick: () => openModal() } : undefined}
           />
         ) : (
           <GlassTable className="overflow-x-auto">
             <GlassTHead>
               <GlassTR>
-                <GlassTH>Title</GlassTH>
-                <GlassTH>Author</GlassTH>
-                <GlassTH>Category</GlassTH>
-                <GlassTH>Barcode</GlassTH>
-                <GlassTH>Quantity</GlassTH>
-                <GlassTH>Available</GlassTH>
-                <GlassTH>Actions</GlassTH>
+                <GlassTH>{t('library.col.title')}</GlassTH>
+                <GlassTH>{t('library.form.author')}</GlassTH>
+                <GlassTH>{t('library.col.category')}</GlassTH>
+                <GlassTH>{t('library.col.barcode')}</GlassTH>
+                <GlassTH>{t('library.col.quantity')}</GlassTH>
+                <GlassTH>{t('library.col.available')}</GlassTH>
+                <GlassTH>{t('common.actions')}</GlassTH>
               </GlassTR>
             </GlassTHead>
             <GlassTBody>
@@ -279,7 +278,7 @@ export function LibraryPage() {
                   <GlassTD className="font-medium">{book.title}</GlassTD>
                   <GlassTD>{book.author || '—'}</GlassTD>
                   <GlassTD>
-                    <GlassBadge variant="azure">{book.category.replace(/_/g, ' ')}</GlassBadge>
+                    <GlassBadge variant="azure">{(() => { const k = `library.category.${book.category}`; const v = t(k); return v === k ? book.category.replace(/_/g, ' ') : v; })()}</GlassBadge>
                   </GlassTD>
                   <GlassTD className="font-mono text-sm">{book.barcode}</GlassTD>
                   <GlassTD>{book.quantity}</GlassTD>
@@ -291,18 +290,14 @@ export function LibraryPage() {
                   <GlassTD>
                     <div className="flex gap-2">
                       <GlassButton variant="ghost" size="sm" onClick={() => openModal(book)}>
-                        Edit
+                        {t('common.edit')}
                       </GlassButton>
                       <GlassButton
                         variant="danger"
                         size="sm"
-                        onClick={() => {
-                          if (window.confirm('Delete this book?')) {
-                            deleteBook.mutate(book.id);
-                          }
-                        }}
+                        onClick={() => setDeleteTarget(book.id)}
                       >
-                        Delete
+                        {t('common.delete')}
                       </GlassButton>
                     </div>
                   </GlassTD>
@@ -313,122 +308,134 @@ export function LibraryPage() {
         )}
       </GlassCard>
 
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteBook.mutate(deleteTarget);
+          setDeleteTarget(null);
+        }}
+        description={t('library.confirmDelete')}
+        loading={deleteBook.isPending}
+      />
+
       {/* Book Form Modal */}
       <GlassModal
         open={modalOpen}
         onClose={closeModal}
-        title={editingId ? 'Edit Book' : 'Add Book'}
+        title={editingId ? t('library.editBook') : t('library.addBook')}
         footer={
           <>
-            <GlassButton variant="secondary" size="sm" onClick={closeModal}>Cancel</GlassButton>
+            <GlassButton variant="secondary" size="sm" onClick={closeModal}>{t('common.cancel')}</GlassButton>
             <GlassButton variant="primary" size="sm" onClick={handleSubmit} disabled={saveBook.isPending}>
-              {saveBook.isPending ? 'Saving...' : 'Save'}
+              {saveBook.isPending ? t('common.saving') : t('common.save')}
             </GlassButton>
           </>
         }
       >
         <div className="space-y-4">
           <GlassInput
-            label="Title *"
+            label={t('library.form.title')}
             value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
-            placeholder="Enter book title"
-            error={formErrors.title}
+            placeholder={t('library.form.titlePlaceholder')}
+            error={formErrors.title ? t(formErrors.title) : undefined}
           />
 
           <GlassInput
-            label="Author"
+            label={t('library.form.author')}
             value={form.author}
             onChange={(e) => setForm({ ...form, author: e.target.value })}
-            placeholder="Enter author name"
-            error={formErrors.author}
+            placeholder={t('library.form.authorPlaceholder')}
+            error={formErrors.author ? t(formErrors.author) : undefined}
           />
 
           <GlassInput
-            label="ISBN"
+            label={t('library.form.isbn')}
             value={form.isbn}
             onChange={(e) => setForm({ ...form, isbn: e.target.value })}
-            placeholder="Enter ISBN"
-            error={formErrors.isbn}
+            placeholder={t('library.form.isbnPlaceholder')}
+            error={formErrors.isbn ? t(formErrors.isbn) : undefined}
           />
 
           <GlassInput
-            label="Barcode *"
+            label={t('library.form.barcode')}
             value={form.barcode}
             onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-            placeholder="Enter barcode"
-            error={formErrors.barcode}
+            placeholder={t('library.form.barcodePlaceholder')}
+            error={formErrors.barcode ? t(formErrors.barcode) : undefined}
           />
 
           <GlassSelect
-            label="Category *"
+            label={t('library.form.category')}
             value={form.category}
             onChange={(e) => setForm({ ...form, category: e.target.value })}
-            options={[{ value: '', label: 'Select category' }, ...CATEGORIES.map((cat) => ({ value: cat, label: cat.replace(/_/g, ' ') }))]}
-            placeholder="Select category"
-            error={formErrors.category}
+            options={[{ value: '', label: t('library.form.selectCategory') }, ...CATEGORIES.map((cat) => ({ value: cat, label: t(`library.category.${cat}`) }))]}
+            placeholder={t('library.form.selectCategory')}
+            error={formErrors.category ? t(formErrors.category) : undefined}
           />
 
           <GlassInput
-            label="Quantity *"
+            label={t('library.form.quantity')}
             type="number"
             value={form.quantity}
             onChange={(e) => setForm({ ...form, quantity: e.target.value })}
             placeholder="1"
             min="1"
-            error={formErrors.quantity}
+            error={formErrors.quantity ? t(formErrors.quantity) : undefined}
           />
 
           <GlassInput
-            label="Location"
+            label={t('library.form.location')}
             value={form.location}
             onChange={(e) => setForm({ ...form, location: e.target.value })}
-            placeholder="Enter location (e.g., Shelf A1)"
-            error={formErrors.location}
+            placeholder={t('library.form.locationPlaceholder')}
+            error={formErrors.location ? t(formErrors.location) : undefined}
           />
 
           <GlassInput
-            label="Publisher"
+            label={t('library.form.publisher')}
             value={form.publisher}
             onChange={(e) => setForm({ ...form, publisher: e.target.value })}
-            placeholder="Enter publisher"
-            error={formErrors.publisher}
+            placeholder={t('library.form.publisherPlaceholder')}
+            error={formErrors.publisher ? t(formErrors.publisher) : undefined}
           />
 
           <GlassInput
-            label="Published Year"
+            label={t('library.form.publishedYear')}
             type="number"
             value={form.publishedYear}
             onChange={(e) => setForm({ ...form, publishedYear: e.target.value })}
             placeholder="2024"
             min="1900"
             max={new Date().getFullYear()}
-            error={formErrors.publishedYear}
+            error={formErrors.publishedYear ? t(formErrors.publishedYear) : undefined}
           />
 
           <GlassInput
-            label="Language"
+            label={t('library.form.language')}
             value={form.language}
             onChange={(e) => setForm({ ...form, language: e.target.value })}
-            placeholder="e.g., English"
-            error={formErrors.language}
+            placeholder={t('library.form.languagePlaceholder')}
+            error={formErrors.language ? t(formErrors.language) : undefined}
           />
 
           <GlassTextArea
-            label="Description"
+            label={t('library.form.description')}
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Enter book description"
+            placeholder={t('library.form.descriptionPlaceholder')}
             rows={3}
-            error={formErrors.description}
+            error={formErrors.description ? t(formErrors.description) : undefined}
           />
 
           <GlassInput
-            label="Cover Image URL"
+            label={t('library.form.coverImage')}
             value={form.coverImage}
             onChange={(e) => setForm({ ...form, coverImage: e.target.value })}
-            placeholder="https://example.com/cover.jpg"
-            error={formErrors.coverImage}
+            placeholder={t('library.form.coverPlaceholder')}
+            error={formErrors.coverImage ? t(formErrors.coverImage) : undefined}
           />
         </div>
       </GlassModal>

@@ -1,79 +1,107 @@
 import {
-  Controller, Get, Post, Put, Delete, Param, Query, Body, Req, UseGuards, NotFoundException, BadRequestException,
+  Controller, Get, Post, Put, Delete, Param, Query, Body, UseGuards, NotFoundException, ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import type { Request } from 'express';
 import { DocumentsService } from './documents.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles, AllowSelfService } from '../auth/roles.decorator';
+import { STAFF_ROLES } from '../auth/authorization.policy';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { RequestUser } from '../auth/types';
+import {
+  CreateDocumentDto,
+  UpdateDocumentDto,
+  DocumentQueryDto,
+  UploadDocumentVersionDto,
+} from './dto/document.dto';
 
 @ApiTags('Documents')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('documents')
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   @Get()
+  @AllowSelfService()
   @ApiOperation({ summary: 'List documents for the organization' })
   async findAll(
-    @Req() req: Request & { user: { organizationId: string } },
-    @Query() query: any,
+    @CurrentUser() user: RequestUser,
+    @Query() query: DocumentQueryDto,
   ) {
-    return this.documentsService.findAll(req.user.organizationId, query);
+    return this.documentsService.findAll(user, query);
   }
 
   @Get(':id')
+  @AllowSelfService()
   @ApiOperation({ summary: 'Get a document by ID' })
   async findOne(
-    @Req() req: Request & { user: { organizationId: string } },
+    @CurrentUser() user: RequestUser,
     @Param('id') id: string,
   ) {
-    const doc = await this.documentsService.findOne(req.user.organizationId, id);
+    const doc = await this.documentsService.findOne(user, id);
     if (!doc) throw new NotFoundException('Document not found');
     return doc;
   }
 
   @Post()
+  @Roles(...STAFF_ROLES)
   @ApiOperation({ summary: 'Create a new document record' })
   async create(
-    @Req() req: Request & { user: { organizationId: string; id?: string; sub?: string } },
-    @Body() body: any,
+    @CurrentUser() user: RequestUser,
+    @Body() body: CreateDocumentDto,
   ) {
-    const uploadedBy = req.user.id ?? req.user.sub;
-    if (!uploadedBy) throw new BadRequestException('Authenticated user is required');
-    return this.documentsService.create(req.user.organizationId, { ...body, uploadedBy });
+    if (!user.sub) {
+      throw new ForbiddenException('Authenticated user is required');
+    }
+    return this.documentsService.create(user.organizationId, {
+      ...body,
+      uploadedBy: user.sub,
+    });
   }
 
   @Put(':id')
+  @Roles(...STAFF_ROLES)
   @ApiOperation({ summary: 'Update a document' })
   async update(
-    @Req() req: Request & { user: { organizationId: string } },
+    @CurrentUser('organizationId') organizationId: string,
     @Param('id') id: string,
-    @Body() body: any,
+    @Body() body: UpdateDocumentDto,
   ) {
-    const updated = await this.documentsService.update(req.user.organizationId, id, body);
+    const updated = await this.documentsService.update(organizationId, id, body);
     if (!updated) throw new NotFoundException('Document not found');
     return updated;
   }
 
   @Delete(':id')
+  @Roles(...STAFF_ROLES)
   @ApiOperation({ summary: 'Delete a document' })
   async delete(
-    @Req() req: Request & { user: { organizationId: string } },
+    @CurrentUser('organizationId') organizationId: string,
     @Param('id') id: string,
   ) {
-    return this.documentsService.delete(req.user.organizationId, id);
+    const deleted = await this.documentsService.delete(organizationId, id);
+    if (!deleted) throw new NotFoundException('Document not found');
+    return deleted;
   }
 
   @Post(':id/versions')
+  @Roles(...STAFF_ROLES)
   @ApiOperation({ summary: 'Upload a new version of a document' })
   async uploadVersion(
-    @Req() req: Request & { user: { organizationId: string; id?: string; sub?: string } },
+    @CurrentUser() user: RequestUser,
     @Param('id') id: string,
-    @Body() body: any,
+    @Body() body: UploadDocumentVersionDto,
   ) {
-    const uploadedBy = req.user.id ?? req.user.sub;
-    if (!uploadedBy) throw new BadRequestException('Authenticated user is required');
-    return this.documentsService.uploadVersion(req.user.organizationId, id, { ...body, uploadedBy });
+    if (!user.sub) {
+      throw new ForbiddenException('Authenticated user is required');
+    }
+    const version = await this.documentsService.uploadVersion(user.organizationId, id, {
+      ...body,
+      uploadedBy: user.sub,
+    });
+    if (!version) throw new NotFoundException('Document not found');
+    return version;
   }
 }

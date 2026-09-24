@@ -109,7 +109,7 @@ describe('RecognitionDecisionPolicy', () => {
       expect(result).toHaveProperty('studentId', 'student-123');
     });
 
-    it('identifies with MEDIUM confidence when similarity 0.6-0.8', () => {
+    it('identifies with MEDIUM confidence when similarity 0.7-0.8', () => {
       const result = policy.decide({
         qualityScore: 0.8,
         livenessDecision: 'PASS',
@@ -119,12 +119,42 @@ describe('RecognitionDecisionPolicy', () => {
       expect(result.outcome).toBe('IDENTIFIED');
       expect(result).toHaveProperty('confidence', 'MEDIUM');
     });
+
+    it('identifies with LOW confidence when similarity is at the threshold', () => {
+      const result = policy.decide({
+        qualityScore: 0.8,
+        livenessDecision: 'PASS',
+        similarityScore: 0.66,
+        bestMatchFound: true,
+      }, 'student-789');
+      expect(result.outcome).toBe('IDENTIFIED');
+      expect(result).toHaveProperty('confidence', 'LOW');
+    });
+
+    it('rejects a PASS whose liveness confidence is below the policy threshold', () => {
+      const strict = new RecognitionDecisionPolicy({
+        ...DEFAULT_FACE_RECOGNITION_CONFIG,
+        livenessPolicy: {
+          ...DEFAULT_FACE_RECOGNITION_CONFIG.livenessPolicy,
+          threshold: 0.9,
+        },
+      });
+      const result = strict.decide({
+        qualityScore: 0.8,
+        livenessDecision: 'PASS',
+        livenessConfidence: 0.85,
+        similarityScore: 0.9,
+        bestMatchFound: true,
+      }, 'student-1');
+      expect(result.outcome).toBe('REJECTED');
+      expect(result).toHaveProperty('reason', 'LIVENESS_BELOW_THRESHOLD');
+    });
   });
 
   describe('configuration', () => {
     it('returns the current config', () => {
       const config = policy.getConfig();
-      expect(config.qualityThreshold).toBe(0.3);
+      expect(config.qualityThreshold).toBe(0.4);
       expect(config.livenessPolicy.required).toBe(true);
       expect(config.matching.similarityThreshold).toBe(0.6);
     });

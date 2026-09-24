@@ -113,6 +113,25 @@ export interface EnrollmentRepository {
     expiresAt?: Date;
   }): Promise<TemplateEntity>;
 
+  /**
+   * Atomically persist a new template AND activate its enrollment.
+   * Implementations MUST run both writes in a single DB transaction so a
+   * crash between them cannot leave an orphan ACTIVE template on a PENDING
+   * enrollment (or vice versa).
+   */
+  addTemplateAndActivate(data: {
+    organizationId: string;
+    enrollmentId: string;
+    studentId: string;
+    templateData: string;
+    templateHash: string;
+    version: number;
+    modelVersion?: string;
+    qualityScore?: number;
+    expiresAt?: Date;
+    activatedAt?: Date;
+  }): Promise<{ template: TemplateEntity; enrollment: EnrollmentEntity }>;
+
   /** Find all active templates for a student (used in recognition) */
   findActiveTemplatesByStudentId(
     organizationId: string,

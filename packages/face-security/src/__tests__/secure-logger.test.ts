@@ -44,6 +44,18 @@ describe('SecureLogger — sensitive data redaction (P0 biometric exposure)', ()
     expect(output.context.biometric).toBe('[REDACTED]');
   });
 
+  it('redacts RTSP/HTTP credentials embedded in stream URIs', () => {
+    const logger = new SecureLogger('info');
+    logger.info('connecting to rtsp://admin:secret@10.0.0.5:554/ch1', {
+      streamUri: 'rtsp://admin:secret@10.0.0.5:554/ch1',
+    });
+    const output = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+    expect(output.message).not.toContain('secret');
+    expect(output.message).toContain('rtsp://***:***@');
+    expect(String(output.context.streamUri)).not.toContain('secret');
+    expect(String(output.context.streamUri)).toContain('***:***@');
+  });
+
   it('recursively redacts nested objects', () => {
     const logger = new SecureLogger('info');
     logger.info('nested', {

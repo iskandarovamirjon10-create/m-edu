@@ -7,11 +7,13 @@ import {
   EmptyState,
   ErrorState,
   GlassButton,
+  GlassSelect,
 } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
 import request from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface ImportJob {
   id: string;
@@ -29,7 +31,8 @@ interface ImportJob {
 }
 
 export function ImportExportPage() {
-  usePageTitle('Import / Export Center');
+  const { t } = useI18n();
+  usePageTitle(t('importExport.title'));
   const queryClient = useQueryClient();
   const { push } = useToast();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -37,38 +40,38 @@ export function ImportExportPage() {
 
   const jobsQuery = useQuery({
     queryKey: ['import-jobs'],
-    queryFn: () => request('/import-export/imports') as Promise<{ items: ImportJob[]; total: number }>,
+    queryFn: () => request('/imports') as Promise<{ items: ImportJob[]; total: number }>,
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async (file: File): Promise<{ id?: string }> => {
       const form = new FormData();
       form.append('file', file);
       form.append('entityType', entity);
       // FormData upload: no Content-Type header (browser sets the boundary)
-      const res = await fetch('/api/import-export/imports', {
+      const res = await fetch('/api/imports', {
         method: 'POST',
         body: form,
         credentials: 'include',
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.message || 'Upload failed');
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(body?.message || t('importExport.uploadFailed'));
       }
-      return res.json();
+      return (await res.json()) as { id?: string };
     },
-    onSuccess: (data: any) => {
-      push('success', `Import job started: ${data?.id ?? ''}`);
+    onSuccess: (data) => {
+      push('success', t('importExport.jobStarted', { id: data?.id ?? '' }));
       queryClient.invalidateQueries({ queryKey: ['import-jobs'] });
     },
     onError: (e) => push('error', getErrorMessage(e)),
   });
 
   const downloadTemplate = async (e: string) => {
-    const res = await fetch(`/api/import-export/template?entity=${encodeURIComponent(e)}`, {
+    const res = await fetch(`/api/template?entityType=${encodeURIComponent(e)}`, {
       credentials: 'include',
     });
-    if (!res.ok) return push('error', 'Template unavailable');
+    if (!res.ok) return push('error', t('importExport.templateUnavailable'));
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -79,11 +82,11 @@ export function ImportExportPage() {
   };
 
   const exportData = async (e: string) => {
-    push('info', `Preparing ${e.toLowerCase()} export…`);
-    const res = await fetch(`/api/import-export/export?entity=${encodeURIComponent(e)}&format=csv`, {
+    push('info', t('importExport.preparing', { entity: e.toLowerCase() }));
+    const res = await fetch(`/api/export?entityType=${encodeURIComponent(e)}&format=csv`, {
       credentials: 'include',
     });
-    if (!res.ok) return push('error', 'Export failed — please try again');
+    if (!res.ok) return push('error', t('importExport.exportFailed'));
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -91,33 +94,34 @@ export function ImportExportPage() {
     a.download = `${e.toLowerCase()}-export.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    push('success', 'Export downloaded');
+    push('success', t('importExport.exportDownloaded'));
   };
 
-  const jobs: ImportJob[] = (jobsQuery.data as any)?.items ?? [];
+  const jobs: ImportJob[] = jobsQuery.data?.items ?? [];
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <PageHeader
-          title="Import / Export Center"
-          subtitle="CSV-based, deterministic, transactional — no AI parsing"
+          title={t('importExport.title')}
+          subtitle={t('importExport.pageSubtitle')}
         />
 
         <div className="glass-card p-4 space-y-3">
-          <h3 className="font-semibold text-[var(--text-primary)]">Upload CSV</h3>
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={entity}
-              onChange={(e) => setEntity(e.target.value)}
-              className="rounded-xl border border-[var(--border-medium)] bg-[var(--bg-glass)] px-3 py-2 text-sm"
-            >
-              {['STUDENT', 'TEACHER', 'GROUP', 'COURSE', 'PAYMENT', 'EMPLOYEE', 'BOOK', 'LEAD'].map((e) => (
-                <option key={e} value={e}>{e}</option>
-              ))}
-            </select>
+          <h3 className="font-semibold text-[var(--text-primary)]">{t('importExport.uploadCsv')}</h3>
+ <div className="flex flex-wrap items-center gap-2">
+ <GlassSelect
+ value={entity}
+ onChange={(e) => setEntity(e.target.value)}
+ aria-label={t('importExport.uploadCsv')}
+ className="w-auto"
+ >
+ {['STUDENT', 'TEACHER', 'GROUP', 'COURSE', 'PAYMENT', 'EMPLOYEE', 'BOOK', 'LEAD'].map((e) => (
+ <option key={e} value={e}>{t(`enum.badge.${e}`)}</option>
+ ))}
+ </GlassSelect>
             <input
               ref={fileInput}
               type="file"
@@ -134,38 +138,37 @@ export function ImportExportPage() {
               onClick={() => fileInput.current?.click()}
               disabled={uploadMutation.isPending}
             >
-              {uploadMutation.isPending ? 'Uploading…' : 'Choose file'}
+              {uploadMutation.isPending ? t('importExport.uploading') : t('importExport.chooseFile')}
             </GlassButton>
             <GlassButton variant="ghost" onClick={() => downloadTemplate(entity)}>
-              Download template
+              {t('importExport.downloadTemplate')}
             </GlassButton>
             <GlassButton variant="ghost" onClick={() => exportData(entity)}>
-              Export {entity.toLowerCase()}s
+              {t('importExport.exportEntity', { entity: t(`enum.badge.${entity}`) })}
             </GlassButton>
           </div>
           <p className="text-xs text-muted">
-            CSV must match the template (UTF-8, comma-separated, header row required). Imports run in a single
-            transaction — partial failures roll back the entire batch.
+            {t('importExport.csvHint')}
           </p>
         </div>
 
         <div className="glass-card p-4 space-y-2">
-          <h3 className="font-semibold text-[var(--text-primary)]">How it works</h3>
+          <h3 className="font-semibold text-[var(--text-primary)]">{t('importExport.howItWorks')}</h3>
           <ul className="text-sm space-y-1.5 text-muted">
-            <li>• <strong className="text-[var(--text-primary)]">Validation</strong> — each row is checked against the entity DTO; bad rows are reported with line numbers</li>
-            <li>• <strong className="text-[var(--text-primary)]">Tenant isolation</strong> — every imported record is tagged with the current organizationId</li>
-            <li>• <strong className="text-[var(--text-primary)]">Audit</strong> — a single import batch creates one bulk audit entry per entity</li>
-            <li>• <strong className="text-[var(--text-primary)]">No AI column mapping</strong> — headers must match exactly</li>
+            <li>• {t('importExport.howValidation')}</li>
+            <li>• {t('importExport.howTenant')}</li>
+            <li>• {t('importExport.howAudit')}</li>
+            <li>• {t('importExport.howNoAi')}</li>
           </ul>
         </div>
 
         <div className="glass-card overflow-hidden">
           {jobsQuery.isLoading ? (
-            <div className="p-8"><PageLoader label="Loading import jobs…" /></div>
+            <div className="p-8"><PageLoader label={t('importExport.loading')} /></div>
           ) : jobsQuery.isError ? (
             <div className="p-8">
               <ErrorState
-                title="Failed to load import jobs"
+                title={t('importExport.loadError')}
                 message={getErrorMessage(jobsQuery.error)}
                 onRetry={() => jobsQuery.refetch()}
               />
@@ -173,8 +176,8 @@ export function ImportExportPage() {
           ) : jobs.length === 0 ? (
             <div className="p-8">
               <EmptyState
-                title="No imports yet"
-                message="Upload a CSV to start. The job history will appear here."
+                title={t('importExport.emptyTitle')}
+                message={t('importExport.emptyMessage')}
               />
             </div>
           ) : (
@@ -187,7 +190,7 @@ export function ImportExportPage() {
                         {j.entityType} · {j.fileName}
                       </h4>
                       <p className="text-xs text-muted">
-                        {j.startedByName ?? 'system'} · {new Date(j.startedAt).toLocaleString()}
+                        {j.startedByName ?? t('common.system')} · {new Date(j.startedAt).toLocaleString()}
                       </p>
                     </div>
                     <Badge
@@ -198,19 +201,19 @@ export function ImportExportPage() {
                         'muted'
                       }
                     >
-                      {j.status}
+                      {t(`importExport.status.${j.status}`)}
                     </Badge>
                   </div>
                   <div className="mt-2 grid grid-cols-4 gap-2 text-xs text-muted">
-                    <div>Total: <span className="text-[var(--text-primary)]">{j.total}</span></div>
-                    <div>OK: <span className="text-emerald-500">{j.succeeded}</span></div>
-                    <div>Failed: <span className="text-red-500">{j.failed}</span></div>
-                    <div>Processed: <span className="text-[var(--text-primary)]">{j.processed}</span></div>
+                    <div>{t('importExport.total')}: <span className="text-[var(--text-primary)]">{j.total}</span></div>
+                    <div>{t('importExport.ok')}: <span className="text-emerald-500">{j.succeeded}</span></div>
+                    <div>{t('importExport.failed')}: <span className="text-red-500">{j.failed}</span></div>
+                    <div>{t('importExport.processed')}: <span className="text-[var(--text-primary)]">{j.processed}</span></div>
                   </div>
                   {j.errors?.length > 0 && (
                     <ul className="mt-2 max-h-32 overflow-y-auto rounded-md bg-red-500/5 px-2 py-1 text-[11px] text-red-500">
                       {j.errors.slice(0, 20).map((e, i) => (
-                        <li key={i}>Row {e.row}: {e.message}</li>
+                        <li key={i}>{t('importExport.rowError', { row: e.row })}: {e.message}</li>
                       ))}
                     </ul>
                   )}

@@ -20,12 +20,15 @@ import {
   GlassField,
   GlassTextArea,
   useToasts,
+  GlassButton,
+  ConfirmDialog,
 } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { fullName, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Teacher } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface TeacherFilters {
   page: number;
@@ -61,8 +64,8 @@ function formatTeacherName(teacher: Teacher): string {
 
 function getTeacherStatusBadge(isActive: boolean | undefined): { variant: 'success' | 'error'; label: string } {
   return isActive === false
-    ? { variant: 'error', label: 'Inactive' }
-    : { variant: 'success', label: 'Active' };
+    ? { variant: 'error', label: 'enum.status.INACTIVE' }
+    : { variant: 'success', label: 'enum.status.ACTIVE' };
 }
 
 function validateEmail(email: string): boolean {
@@ -70,7 +73,8 @@ function validateEmail(email: string): boolean {
 }
 
 export function TeachersPage() {
-  usePageTitle('Teachers');
+  const { t } = useI18n();
+  usePageTitle(t('teachers.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
@@ -81,6 +85,8 @@ export function TeachersPage() {
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // Form state
   const [form, setForm] = useState<TeacherFormState>(INITIAL_FORM);
@@ -108,10 +114,10 @@ export function TeachersPage() {
   const data = teachers.data as Paginated<Teacher> | undefined;
   const teacherList = useMemo(() => data?.items || [], [data]);
 
-  // Create teacher mutation
+  // Create or update teacher mutation
   const create = useMutation({
-    mutationFn: () =>
-      teachersApi.create({
+    mutationFn: () => {
+      const payload = {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         email: form.email.trim() || undefined,
@@ -125,12 +131,29 @@ export function TeachersPage() {
         hourlyRate: form.hourlyRate ? parseFloat(form.hourlyRate) : undefined,
         bio: form.bio.trim() || undefined,
         experience: form.experience ? parseInt(form.experience, 10) : undefined,
-      }),
+      };
+      return editingId
+        ? teachersApi.update(editingId, payload)
+        : teachersApi.create(payload);
+    },
     onSuccess: () => {
-      push('success', 'Teacher created successfully');
+      push('success', editingId ? t('teachers.updated') : t('teachers.created'));
       setModalOpen(false);
+      setEditingId(null);
       setForm(INITIAL_FORM);
       setFormErrors({});
+      qc.invalidateQueries({ queryKey: ['teachers'] });
+    },
+    onError: (e: Error) => {
+      push('error', getErrorMessage(e));
+    },
+  });
+
+  // Delete teacher mutation
+  const remove = useMutation({
+    mutationFn: (id: string) => teachersApi.remove(id),
+    onSuccess: () => {
+      push('success', t('teachers.deleted'));
       qc.invalidateQueries({ queryKey: ['teachers'] });
     },
     onError: (e: Error) => {
@@ -143,24 +166,24 @@ export function TeachersPage() {
     const errors: Partial<Record<keyof TeacherFormState, string>> = {};
 
     if (!form.firstName.trim()) {
-      errors.firstName = 'First name is required';
+      errors.firstName = t('teachers.form.firstNameRequired');
     }
     if (!form.lastName.trim()) {
-      errors.lastName = 'Last name is required';
+      errors.lastName = t('teachers.form.lastNameRequired');
     }
     if (form.email && !validateEmail(form.email)) {
-      errors.email = 'Please enter a valid email address';
+      errors.email = t('common.emailInvalid');
     }
     if (form.hourlyRate && parseFloat(form.hourlyRate) < 0) {
-      errors.hourlyRate = 'Hourly rate must be a positive number';
+      errors.hourlyRate = t('teachers.form.hourlyRateNumber');
     }
     if (form.experience && parseInt(form.experience, 10) < 0) {
-      errors.experience = 'Experience must be a positive number';
+      errors.experience = t('teachers.form.experienceNumber');
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form]);
+  }, [form, t]);
 
   // Form handlers
   const handleFormChange = useCallback(
@@ -193,15 +216,43 @@ export function TeachersPage() {
 
   const handleCloseModal = useCallback(() => {
     setModalOpen(false);
+    setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
   }, []);
 
   const handleOpenModal = useCallback(() => {
+    setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
     setModalOpen(true);
   }, []);
+
+  const handleEdit = useCallback((teacher: Teacher) => {
+    setEditingId(teacher.id);
+    setForm({
+      firstName: teacher.user?.firstName || '',
+      lastName: teacher.user?.lastName || '',
+      email: teacher.user?.email || '',
+      phone: teacher.user?.phone || '',
+      specializations: (teacher.specializations || []).join(', '),
+      hourlyRate: teacher.hourlyRate != null ? String(teacher.hourlyRate) : '',
+      bio: teacher.bio || '',
+      experience: teacher.experience != null ? String(teacher.experience) : '',
+    });
+    setFormErrors({});
+    setModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteTarget(id);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    remove.mutate(deleteTarget);
+    setDeleteTarget(null);
+  }, [deleteTarget, remove]);
 
   const { refetch: refetchTeachers } = teachers;
   const handleRetry = useCallback(() => {
@@ -214,15 +265,14 @@ export function TeachersPage() {
   // Early return for loading state
   if (teachers.isLoading && !data) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
-          <GlassPageHeader title="Teachers" subtitle="Manage teaching staff" />
+          <GlassPageHeader
+            title={t('teachers.title')}
+            subtitle={t('teachers.subtitle')}
+          />
           <GlassCard className="p-8">
-            <GlassPageLoader label="Loading teachers…" />
+            <GlassPageLoader label={t('teachers.loading')} />
           </GlassCard>
         </div>
       </div>
@@ -232,16 +282,15 @@ export function TeachersPage() {
   // Early return for error state
   if (teachers.isError) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
-          <GlassPageHeader title="Teachers" subtitle="Manage teaching staff" />
+          <GlassPageHeader
+            title={t('teachers.title')}
+            subtitle={t('teachers.subtitle')}
+          />
           <GlassCard className="p-8">
             <GlassErrorState
-              title="Failed to load teachers"
+              title={t('teachers.loadError')}
               message={getErrorMessage(teachers.error as Error)}
               onRetry={handleRetry}
             />
@@ -252,23 +301,19 @@ export function TeachersPage() {
   }
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
       <div className="page-container">
         <GlassPageHeader
-          title="Teachers"
-          subtitle="Manage teaching staff"
+          title={t('teachers.title')}
+          subtitle={t('teachers.subtitle')}
           actions={
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               onClick={handleOpenModal}
             >
-              Add teacher
-            </button>
+              {t('teachers.add')}
+            </GlassButton>
           }
         />
 
@@ -277,15 +322,17 @@ export function TeachersPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="sm:flex-1">
               <GlassInput
-                placeholder="Search teachers…"
+                placeholder={t('teachers.searchPlaceholder')}
                 value={search}
                 onChange={handleSearchChange}
-                aria-label="Search teachers"
+                aria-label={t('teachers.searchLabel')}
                 type="search"
               />
             </div>
             <div className="text-sm sm:ml-4 sm:shrink-0" style={{ color: 'var(--text-secondary)' }}>
-              {totalTeachers} {totalTeachers === 1 ? 'teacher' : 'teachers'}
+              {totalTeachers === 1
+                ? t('teachers.countOne')
+                : t('teachers.countOther', { count: totalTeachers })}
             </div>
           </div>
         </GlassCard>
@@ -294,11 +341,15 @@ export function TeachersPage() {
         <GlassCard className="overflow-hidden">
           {teacherList.length === 0 ? (
             <GlassEmptyState
-              title={hasActiveFilter ? 'No matching teachers' : 'No teachers yet'}
+              title={
+                hasActiveFilter
+                  ? t('teachers.emptyFiltered')
+                  : t('teachers.empty')
+              }
               message={
                 hasActiveFilter
-                  ? 'Try adjusting your search to see more results.'
-                  : 'Add your first teacher to get started.'
+                  ? t('teachers.emptyFilteredHint')
+                  : t('teachers.emptyHint')
               }
             />
           ) : (
@@ -307,11 +358,12 @@ export function TeachersPage() {
                 <GlassTable>
                   <GlassTHead>
                     <GlassTR>
-                      <GlassTH>Name</GlassTH>
-                      <GlassTH>Email</GlassTH>
-                      <GlassTH>Specializations</GlassTH>
-                      <GlassTH>Hourly rate</GlassTH>
-                      <GlassTH>Status</GlassTH>
+                      <GlassTH>{t('common.name')}</GlassTH>
+                      <GlassTH>{t('common.email')}</GlassTH>
+                      <GlassTH>{t('teachers.col.specializations')}</GlassTH>
+                      <GlassTH>{t('teachers.col.hourlyRate')}</GlassTH>
+                      <GlassTH>{t('teachers.col.status')}</GlassTH>
+                      <GlassTH>{t('common.actions')}</GlassTH>
                     </GlassTR>
                   </GlassTHead>
                   <GlassTBody>
@@ -354,8 +406,28 @@ export function TeachersPage() {
                           </GlassTD>
                           <GlassTD>
                             <GlassBadge variant={statusBadge.variant}>
-                              {statusBadge.label}
+                              {t(statusBadge.label)}
                             </GlassBadge>
+                          </GlassTD>
+                          <GlassTD>
+                            <div className="flex gap-2">
+                              <GlassButton
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(teacher)}
+                              >
+                                {t('common.edit')}
+                              </GlassButton>
+                              <GlassButton
+                                type="button"
+                                variant="danger"
+                                size="sm"
+                                onClick={() => handleDelete(teacher.id)}
+                              >
+                                {t('common.delete')}
+                              </GlassButton>
+                            </div>
                           </GlassTD>
                         </GlassTR>
                       );
@@ -378,12 +450,16 @@ export function TeachersPage() {
         <GlassModal
           open={modalOpen}
           onClose={handleCloseModal}
-          title="Add teacher"
+          title={editingId ? t('teachers.editTitle') : t('teachers.add')}
           wide
         >
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <GlassField label="First name" required error={formErrors.firstName}>
+              <GlassField
+                label={t('teachers.form.firstName')}
+                required
+                error={formErrors.firstName}
+              >
                 <GlassInput
                   value={form.firstName}
                   onChange={handleFormChange('firstName')}
@@ -406,7 +482,11 @@ export function TeachersPage() {
                 )}
               </GlassField>
 
-              <GlassField label="Last name" required error={formErrors.lastName}>
+              <GlassField
+                label={t('teachers.form.lastName')}
+                required
+                error={formErrors.lastName}
+              >
                 <GlassInput
                   value={form.lastName}
                   onChange={handleFormChange('lastName')}
@@ -429,7 +509,7 @@ export function TeachersPage() {
                 )}
               </GlassField>
 
-              <GlassField label="Email" error={formErrors.email}>
+              <GlassField label={t('common.email')} error={formErrors.email}>
                 <GlassInput
                   type="email"
                   value={form.email}
@@ -448,7 +528,7 @@ export function TeachersPage() {
                 )}
               </GlassField>
 
-              <GlassField label="Phone">
+              <GlassField label={t('teachers.form.phone')}>
                 <GlassInput
                   type="tel"
                   value={form.phone}
@@ -459,18 +539,21 @@ export function TeachersPage() {
               </GlassField>
 
               <GlassField
-                label="Specializations"
-                hint="Comma-separated, e.g. Math, Physics"
+                label={t('teachers.form.specializations')}
+                hint={t('teachers.form.specializationsHint')}
               >
                 <GlassInput
                   value={form.specializations}
                   onChange={handleFormChange('specializations')}
-                  placeholder="Math, Physics"
+                  placeholder={t('teachers.specializationsPlaceholder')}
                   disabled={create.isPending}
                 />
               </GlassField>
 
-              <GlassField label="Hourly rate" error={formErrors.hourlyRate}>
+              <GlassField
+                label={t('teachers.form.hourlyRate')}
+                error={formErrors.hourlyRate}
+              >
                 <GlassInput
                   type="number"
                   step="0.01"
@@ -491,7 +574,10 @@ export function TeachersPage() {
                 )}
               </GlassField>
 
-              <GlassField label="Experience (years)" error={formErrors.experience}>
+              <GlassField
+                label={t('teachers.form.experience')}
+                error={formErrors.experience}
+              >
                 <GlassInput
                   type="number"
                   min="0"
@@ -516,35 +602,47 @@ export function TeachersPage() {
               </GlassField>
             </div>
 
-            <GlassField label="Bio">
+            <GlassField label={t('teachers.form.bio')}>
               <GlassTextArea
                 rows={3}
                 value={form.bio}
                 onChange={handleFormChange('bio')}
-                placeholder="Brief description of teaching background…"
+                placeholder={t('teachers.bioPlaceholder')}
                 disabled={create.isPending}
               />
             </GlassField>
 
             <div className="flex justify-end gap-2">
-              <button
+              <GlassButton
                 type="button"
-                className="glass-btn glass-btn-secondary"
+                variant="secondary"
                 onClick={handleCloseModal}
                 disabled={create.isPending}
               >
-                Cancel
-              </button>
-              <button
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton
                 type="submit"
-                className="glass-btn glass-btn-primary"
+                variant="primary"
                 disabled={create.isPending}
               >
-                {create.isPending ? 'Saving…' : 'Create teacher'}
-              </button>
+                {create.isPending
+                  ? t('common.saving')
+                  : editingId
+                    ? t('teachers.update')
+                    : t('teachers.create')}
+              </GlassButton>
             </div>
           </form>
         </GlassModal>
+
+        <ConfirmDialog
+          open={deleteTarget !== null}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+          description={t('teachers.deleteConfirm')}
+          loading={remove.isPending}
+        />
 
         {toastNode}
       </div>

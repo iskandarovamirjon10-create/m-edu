@@ -1,106 +1,233 @@
 /**
- * GlassButton — Primary action component for M-EDU Liquid Glass UI.
- * All states: default, hover, active, focus, disabled, loading.
+ * GlassButton V2 — Canonical button component for M-EDU Design System V2.
+ *
+ * Variants: primary | secondary | tertiary | ghost | danger | success | warning | link
+ * Sizes:    xs | sm | md | lg | xl | icon
+ * States:   default | hover | pressed | focus | disabled | loading
  */
 import { type ReactNode, type ButtonHTMLAttributes, forwardRef } from 'react';
+import { Slot } from '@radix-ui/react-slot';
 import { GlassSpinner } from './GlassSpinner';
 
-export type GlassButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
-  // Legacy variant names accepted for backwards compatibility
-  | 'success' | 'danger-outline';
-export type GlassButtonSize     = 'sm' | 'md' | 'lg' | 'icon';
+export type GlassButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'tertiary'
+  | 'ghost'
+  | 'danger'
+  | 'success'
+  | 'warning'
+  | 'link'
+  // Legacy aliases
+  | 'danger-outline';
+
+export type GlassButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'icon' | 'icon-sm' | 'icon-lg';
 
 interface GlassButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: GlassButtonVariant;
   size?: GlassButtonSize;
   loading?: boolean;
   icon?: ReactNode;
+  /** Icon placed after children */
+  iconEnd?: ReactNode;
   children?: ReactNode;
+  /** Render as a different element (e.g., Link) via Radix Slot */
+  asChild?: boolean;
+  /** Show success checkmark state */
+  success?: boolean;
 }
 
 const VARIANT_CLASSES: Record<GlassButtonVariant, string> = {
   primary: [
-    'bg-gradient-to-br from-brand-700 to-brand-800',
-    'text-white',
-    'shadow-[0_4px_16px_rgba(84,115,252,0.30)]',
-    'hover:shadow-[0_8px_28px_rgba(84,115,252,0.42)]',
-    'hover:-translate-y-px',
-    'active:translate-y-0',
-    'active:shadow-[0_2px_8px_rgba(84,115,252,0.25)]',
+    'bg-[var(--primary)]',
+    'text-[var(--text-on-brand)]',
+    'border border-transparent',
+    'shadow-[0_2px_8px_rgba(79,70,229,0.28)]',
+    'hover:bg-[var(--primary-hover)]',
+    'hover:shadow-[0_6px_20px_rgba(79,70,229,0.36)]',
+    'active:bg-[var(--primary-pressed)]',
+    'active:shadow-[0_1px_4px_rgba(79,70,229,0.20)]',
+    'active:scale-[0.98]',
   ].join(' '),
+
   secondary: [
     'bg-[var(--bg-glass)]',
     'backdrop-blur-xl',
     'text-[var(--text-primary)]',
     'border border-[var(--border-medium)]',
+    'shadow-[var(--shadow-xs)]',
     'hover:bg-[var(--bg-glass-hover)]',
     'hover:border-[var(--border-strong)]',
-    'hover:-translate-y-px',
-    'active:translate-y-0',
-    'shadow-[var(--shadow-xs)]',
+    'hover:shadow-[var(--shadow-sm)]',
+    'active:scale-[0.98]',
+    'active:shadow-none',
   ].join(' '),
+
+  tertiary: [
+    'bg-[var(--primary-soft)]',
+    'text-[var(--primary)]',
+    'border border-transparent',
+    'hover:bg-[var(--primary-soft-hover)]',
+    'hover:border-[var(--border-focus)]',
+    'active:scale-[0.98]',
+  ].join(' '),
+
   ghost: [
     'bg-transparent',
     'text-[var(--text-secondary)]',
     'border border-transparent',
     'hover:bg-[var(--state-hover)]',
     'hover:text-[var(--text-primary)]',
-    'hover:border-[var(--border-subtle)]',
+    'active:bg-[var(--state-active)]',
+    'active:scale-[0.98]',
   ].join(' '),
+
   danger: [
-    'bg-gradient-to-br from-[#F07070] to-[#D95555]',
+    'bg-[var(--danger)]',
     'text-white',
-    'shadow-[0_4px_16px_rgba(240,112,112,0.28)]',
-    'hover:shadow-[0_8px_28px_rgba(240,112,112,0.38)]',
-    'hover:-translate-y-px',
-    'active:translate-y-0',
+    'border border-transparent',
+    'shadow-[0_2px_8px_rgba(220,38,38,0.25)]',
+    'hover:bg-[var(--danger-text)]',
+    'hover:shadow-[0_6px_20px_rgba(220,38,38,0.32)]',
+    'active:scale-[0.98]',
   ].join(' '),
-  // Legacy names → sensible fallbacks
-  success: '',
-  'danger-outline': '',
+
+  'danger-outline': [
+    'bg-transparent',
+    'text-[var(--danger)]',
+    'border border-[var(--danger-border)]',
+    'hover:bg-[var(--danger-soft)]',
+    'active:scale-[0.98]',
+  ].join(' '),
+
+  success: [
+    'bg-[var(--success)]',
+    'text-white',
+    'border border-transparent',
+    'shadow-[0_2px_8px_rgba(22,163,74,0.25)]',
+    'hover:bg-[var(--success-text)]',
+    'hover:shadow-[0_6px_20px_rgba(22,163,74,0.32)]',
+    'active:scale-[0.98]',
+  ].join(' '),
+
+  warning: [
+    'bg-[var(--warning)]',
+    'text-white',
+    'border border-transparent',
+    'shadow-[0_2px_8px_rgba(217,119,6,0.25)]',
+    'hover:bg-[var(--warning-text)]',
+    'hover:shadow-[0_6px_20px_rgba(217,119,6,0.32)]',
+    'active:scale-[0.98]',
+  ].join(' '),
+
+  link: [
+    'bg-transparent',
+    'text-[var(--primary)]',
+    'border border-transparent',
+    'underline-offset-4',
+    'hover:underline',
+    'hover:text-[var(--primary-hover)]',
+    'active:text-[var(--primary-pressed)]',
+    'p-0 h-auto',
+  ].join(' '),
 };
 
 const SIZE_CLASSES: Record<GlassButtonSize, string> = {
-  sm:   'px-3.5 py-2 text-sm rounded-lg gap-1.5',
-  md:   'px-5 py-2.5 text-[0.9375rem] rounded-xl gap-2',
-  lg:   'px-7 py-3.5 text-base rounded-xl gap-2.5',
-  icon: 'p-2.5 rounded-xl aspect-square',
+  xs:      'h-7 px-2.5 text-xs rounded-[var(--radius-sm)] gap-1',
+  sm:      'h-8 px-3.5 text-sm rounded-[var(--radius-md)] gap-1.5',
+  md:      'h-9 px-4 text-[var(--text-body)] rounded-[var(--radius-md)] gap-2',
+  lg:      'h-11 px-6 text-[var(--text-body-lg)] rounded-[var(--radius-lg)] gap-2',
+  xl:      'h-13 px-8 text-lg rounded-[var(--radius-lg)] gap-2.5',
+  icon:    'h-9 w-9 rounded-[var(--radius-md)]',
+  'icon-sm': 'h-7 w-7 rounded-[var(--radius-sm)]',
+  'icon-lg': 'h-11 w-11 rounded-[var(--radius-lg)]',
 };
 
+const BASE_CLASSES = [
+  'inline-flex items-center justify-center',
+  'font-medium font-sans',
+  'whitespace-nowrap select-none',
+  'cursor-pointer',
+  'border',
+  'relative overflow-hidden',
+  'transition-[background-color,border-color,box-shadow,transform,color]',
+  'duration-[var(--duration-fast)]',
+  '[transition-timing-function:var(--ease-standard)]',
+  // Disabled
+  'disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none',
+  // Focus ring
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-focus)]',
+  'focus-visible:shadow-[0_0_0_3px_var(--focus-ring)]',
+].join(' ');
+
+// ── Success checkmark icon ────────────────────────────────────
+const CheckIcon = () => (
+  <svg className="w-[1em] h-[1em]" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M4 10l5 5 7-7" />
+  </svg>
+);
+
 export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
-  ({ variant: variantProp = 'primary', size = 'md', loading = false, icon, children, className = '', disabled, ...rest }, ref) => {
-    // Legacy pages pass variant="success" etc. — map to the closest real variant.
-    const variant = (variantProp === 'success' ? 'secondary' : variantProp === 'danger-outline' ? 'ghost' : variantProp) as GlassButtonVariant;
+  (
+    {
+      variant: variantProp = 'primary',
+      size = 'md',
+      loading = false,
+      icon,
+      iconEnd,
+      children,
+      className = '',
+      disabled,
+      asChild,
+      success: showSuccess = false,
+      ...rest
+    },
+    ref,
+  ) => {
     const isDisabled = disabled || loading;
+
+    const computedClass = [
+      BASE_CLASSES,
+      VARIANT_CLASSES[variantProp] ?? VARIANT_CLASSES.ghost,
+      SIZE_CLASSES[size],
+      className,
+    ].join(' ');
+
+    const content = (
+      <>
+        {loading ? (
+          <GlassSpinner size={size === 'lg' || size === 'xl' ? 'md' : 'sm'} />
+        ) : showSuccess ? (
+          <CheckIcon />
+        ) : icon ? (
+          <span className="flex-shrink-0 flex items-center [&>svg]:w-[1em] [&>svg]:h-[1em]">{icon}</span>
+        ) : null}
+        {children && (size !== 'icon' && size !== 'icon-sm' && size !== 'icon-lg') && (
+          <span className="leading-none">{children}</span>
+        )}
+        {iconEnd && !loading && !showSuccess && (
+          <span className="flex-shrink-0 flex items-center [&>svg]:w-[1em] [&>svg]:h-[1em]">{iconEnd}</span>
+        )}
+      </>
+    );
+
+    if (asChild) {
+      return (
+        <Slot ref={ref} className={computedClass} {...rest}>
+          {children}
+        </Slot>
+      );
+    }
 
     return (
       <button
         ref={ref}
-        className={[
-          'inline-flex items-center justify-center',
-          'font-medium font-sans tracking-[0.01em]',
-          'border-0 cursor-pointer',
-          'select-none whitespace-nowrap',
-          'transition-all duration-[220ms] ease-[cubic-bezier(.25,.46,.45,.94)]',
-          'relative overflow-hidden',
-          // Inner sheen
-          'before:absolute before:inset-0 before:rounded-[inherit]',
-          'before:bg-[linear-gradient(135deg,rgba(255,255,255,0.18)_0%,transparent_50%)]',
-          'before:pointer-events-none',
-          VARIANT_CLASSES[variant],
-          SIZE_CLASSES[size],
-          isDisabled ? 'opacity-45 cursor-not-allowed pointer-events-none' : '',
-          className,
-        ].join(' ')}
+        className={computedClass}
         disabled={isDisabled}
+        aria-busy={loading}
         {...rest}
       >
-        {loading ? (
-          <GlassSpinner size={size === 'lg' ? 'md' : size === 'sm' ? 'sm' : 'sm'} />
-        ) : icon ? (
-          <span className="flex-shrink-0 [&>svg]:w-[1em] [&>svg]:h-[1em]">{icon}</span>
-        ) : null}
-        {children && <span>{children}</span>}
+        {content}
       </button>
     );
   },

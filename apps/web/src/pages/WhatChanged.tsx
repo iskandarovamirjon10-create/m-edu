@@ -9,6 +9,7 @@ import {
   GlassButton,
 } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
 
 interface ChangeEvent {
   id: string;
@@ -24,8 +25,30 @@ interface ChangeEvent {
   changedFields?: string[] | null;
 }
 
+const ACTION_LABEL_KEYS: Record<string, string> = {
+  LOGIN: 'enum.action.LOGIN',
+  CREATE: 'enum.action.CREATE',
+  UPDATE: 'enum.action.UPDATE',
+  DELETE: 'enum.action.DELETE',
+  EXPORT: 'enum.action.EXPORT',
+  IMPORT: 'enum.action.IMPORT',
+};
+
+const FILTER_LABEL_KEYS = {
+  all: 'enum.all',
+  created: 'whatChanged.filterCreated',
+  updated: 'whatChanged.filterUpdated',
+  deleted: 'whatChanged.filterDeleted',
+} as const;
+
+function actionLabel(action: string, t: TranslateFn): string {
+  const key = ACTION_LABEL_KEYS[action];
+  return key ? t(key) : action;
+}
+
 export function WhatChangedPage() {
-  usePageTitle('What Changed?');
+  const { t } = useI18n();
+  usePageTitle(t('whatChanged.title'));
   const [filter, setFilter] = useState<'all' | 'created' | 'updated' | 'deleted'>('all');
 
   // Fetch the real audit feed. The previous query sent `tookMs=50`, an
@@ -35,7 +58,7 @@ export function WhatChangedPage() {
     queryKey: ['what-changed'],
     queryFn: async () => {
       const res = await fetch('/api/audit?limit=50', { credentials: 'include' });
-      if (!res.ok) throw new Error('Failed to load changes');
+      if (!res.ok) throw new Error(t('whatChanged.loadFailed'));
       return res.json() as Promise<{ items: ChangeEvent[]; total: number }>;
     },
   });
@@ -52,22 +75,22 @@ export function WhatChangedPage() {
   }, [events, filter]);
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <PageHeader
-          title="What Changed?"
-          subtitle="Audit-driven change tracking — every meaningful action recorded"
+          title={t('whatChanged.title')}
+          subtitle={t('whatChanged.subtitle')}
         />
 
         <div className="glass-card p-4 space-y-2">
-          <h3 className="font-semibold text-[var(--text-primary)]">How it works</h3>
+          <h3 className="font-semibold text-[var(--text-primary)]">{t('whatChanged.howItWorks')}</h3>
           <ul className="text-sm space-y-1.5 text-muted">
-            <li>• <strong className="text-[var(--text-primary)]">Source of truth</strong> — AuditLog table records before/after JSON for UPDATE actions</li>
-            <li>• <strong className="text-[var(--text-primary)]">Fields changed</strong> — only fields that actually changed are shown (not full payload)</li>
-            <li>• <strong className="text-[var(--text-primary)]">Actor tracking</strong> — every entry names the user who made the change</li>
-            <li>• <strong className="text-[var(--text-primary)]">No AI summary</strong> — changes are shown verbatim, not paraphrased by a model</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('whatChanged.sourceOfTruth')}</strong> — {t('whatChanged.sourceOfTruthDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('whatChanged.fieldsChanged')}</strong> — {t('whatChanged.fieldsChangedDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('whatChanged.actorTracking')}</strong> — {t('whatChanged.actorTrackingDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('whatChanged.noAiSummary')}</strong> — {t('whatChanged.noAiSummaryDesc')}</li>
           </ul>
         </div>
 
@@ -79,22 +102,22 @@ export function WhatChangedPage() {
               variant={filter === f ? 'primary' : 'ghost'}
               onClick={() => setFilter(f)}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {t(FILTER_LABEL_KEYS[f])}
             </GlassButton>
           ))}
         </div>
 
         <div className="glass-card overflow-hidden">
           {auditQuery.isLoading ? (
-            <div className="p-8"><PageLoader label="Loading changes…" /></div>
+            <div className="p-8"><PageLoader label={t('whatChanged.loading')} /></div>
           ) : auditQuery.isError ? (
             <div className="p-8">
               <ErrorState
-                title="Failed to load changes"
+                title={t('whatChanged.loadFailed')}
                 message={
                   auditQuery.error instanceof Error
                     ? auditQuery.error.message
-                    : 'Unknown error'
+                    : t('whatChanged.unknownError')
                 }
                 onRetry={() => auditQuery.refetch()}
               />
@@ -102,8 +125,8 @@ export function WhatChangedPage() {
           ) : filtered.length === 0 ? (
             <div className="p-8">
               <EmptyState
-                title="No changes"
-                message="No audit events match the current filter."
+                title={t('whatChanged.emptyTitle')}
+                message={t('whatChanged.emptyMessage')}
               />
             </div>
           ) : (
@@ -118,7 +141,7 @@ export function WhatChangedPage() {
                         'primary'
                       }
                     >
-                      {e.action}
+                      {actionLabel(e.action, t)}
                     </Badge>
                     <div className="min-w-0 flex-1">
                       <h4 className="font-medium text-sm text-[var(--text-primary)]">
@@ -134,21 +157,24 @@ export function WhatChangedPage() {
                           <>
                             {e.changedFields && e.changedFields.length > 0 && (
                               <>
-                                Changed fields:{' '}
+                                {t('whatChanged.changedFields')}{' '}
                                 <strong className="text-[var(--text-primary)]">{e.changedFields.join(', ')}</strong>
                               </>
                             )}
                             {e.previousValue != null && e.newValue != null && (
                               <span>
-                                {' '}· from “{JSON.stringify(e.previousValue).substring(0, 40)}” to “{JSON.stringify(e.newValue).substring(0, 40)}”
+                                {' '}{t('whatChanged.fromTo', {
+                                  from: JSON.stringify(e.previousValue).substring(0, 40),
+                                  to: JSON.stringify(e.newValue).substring(0, 40),
+                                })}
                               </span>
                             )}
                           </>
                         ) : (
                           <>
-                            {e.description || 'No description'}
+                            {e.description || t('whatChanged.noDescription')}
                             {' · '}
-                            {e.actorName ?? 'system'} · {new Date(e.createdAt).toLocaleString()}
+                            {e.actorName ?? t('whatChanged.systemActor')} · {new Date(e.createdAt).toLocaleString()}
                           </>
                         )}
                       </p>

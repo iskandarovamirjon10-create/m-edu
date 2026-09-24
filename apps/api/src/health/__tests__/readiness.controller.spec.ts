@@ -1,20 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Response } from 'express';
 import { ReadinessController } from '../readiness.controller';
+import { PrismaService } from '../../prisma/prisma.service';
 
 function makeResponse() {
-  const res: any = {};
-  res.status = vi.fn(() => res);
-  res.json = vi.fn(() => res);
-  return res;
+  const res = {
+    status: vi.fn().mockReturnThis(),
+    json: vi.fn().mockReturnThis(),
+  };
+  return res as unknown as Response & {
+    status: ReturnType<typeof vi.fn>;
+    json: ReturnType<typeof vi.fn>;
+  };
 }
 
 describe('ReadinessController', () => {
-  let prisma: any;
+  let prisma: { $queryRaw: ReturnType<typeof vi.fn> };
   let controller: ReadinessController;
 
   beforeEach(() => {
     prisma = { $queryRaw: vi.fn() };
-    controller = new ReadinessController(prisma);
+    controller = new ReadinessController(prisma as unknown as PrismaService);
   });
 
   it('returns 200 ready when the database responds', async () => {

@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   DEFAULT_LOCALE,
   LOCALES,
@@ -58,16 +66,21 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const value = useMemo<I18nContextValue>(
-    () => ({
-      locale,
-      setLocale: (next: Locale) => {
-        setLocaleState(next);
-        storeLocale(next);
-      },
-      t: (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars),
-    }),
+  // Stable identity across locale changes — consumers may put setLocale in
+  // effect deps without re-running (and clobbering) on every language switch.
+  const setLocale = useCallback((next: Locale) => {
+    setLocaleState(next);
+    storeLocale(next);
+  }, []);
+
+  const t = useCallback(
+    (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars),
     [locale],
+  );
+
+  const value = useMemo<I18nContextValue>(
+    () => ({ locale, setLocale, t }),
+    [locale, setLocale, t],
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
@@ -80,4 +93,25 @@ export function useI18n(): I18nContextValue {
     throw new Error('useI18n must be used within an I18nProvider');
   }
   return ctx;
+}
+
+/**
+ * Like {@link useI18n} but never throws — shared leaf components (spinners,
+ * modals, toasts) can use it without requiring a provider in unit tests.
+ * Outside the provider it falls back to the default English dictionary.
+ */
+export function useSafeI18n(): I18nContextValue {
+  const ctx = useContext(I18nContext);
+  const fallbackT = useCallback<TranslateFn>(
+    (key, vars) => translate(DEFAULT_LOCALE, key, vars),
+    [],
+  );
+  const fallbackSetLocale = useCallback((_next: Locale) => {
+    /* no-op outside provider */
+  }, []);
+  const fallback = useMemo(
+    () => ({ locale: DEFAULT_LOCALE, setLocale: fallbackSetLocale, t: fallbackT }),
+    [fallbackSetLocale, fallbackT],
+  );
+  return ctx ?? fallback;
 }

@@ -54,8 +54,12 @@ export class QualityAssessor {
     const sharp = (await import('sharp')).default;
     const { imageBuffer, face } = input;
 
-    const metadata = await sharp(imageBuffer).metadata();
-    const imageArea = (metadata.width || 1) * (metadata.height || 1);
+    const rawMeta = await sharp(imageBuffer).metadata();
+    const orientation = rawMeta.orientation ?? 1;
+    const swapsAxes = orientation >= 5 && orientation <= 8;
+    const imageWidth = (swapsAxes ? rawMeta.height : rawMeta.width) || 1;
+    const imageHeight = (swapsAxes ? rawMeta.width : rawMeta.height) || 1;
+    const imageArea = imageWidth * imageHeight;
     const faceArea = face.boundingBox.width * face.boundingBox.height;
 
     // 1. Face size ratio
@@ -67,11 +71,11 @@ export class QualityAssessor {
     const cropY = Math.max(0, Math.round(face.boundingBox.y - face.boundingBox.height * margin));
     const cropW = Math.min(
       Math.round(face.boundingBox.width * (1 + 2 * margin)),
-      (metadata.width || 0) - cropX
+      imageWidth - cropX
     );
     const cropH = Math.min(
       Math.round(face.boundingBox.height * (1 + 2 * margin)),
-      (metadata.height || 0) - cropY
+      imageHeight - cropY
     );
 
     if (cropW <= 0 || cropH <= 0) {
@@ -79,6 +83,7 @@ export class QualityAssessor {
     }
 
     const faceBuffer = await sharp(imageBuffer)
+      .rotate()
       .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
       .greyscale()
       .raw()
@@ -91,7 +96,7 @@ export class QualityAssessor {
     const brightness = this.computeBrightness(faceBuffer);
 
     // 5. Pose estimation (simplified — based on face position in image)
-    const pose = this.estimatePose(face.boundingBox, metadata.width || 1, metadata.height || 1);
+    const pose = this.estimatePose(face.boundingBox, imageWidth, imageHeight);
 
     // 6. Compute overall score
     const sharpnessScore = Math.min(1, sharpness / 200);

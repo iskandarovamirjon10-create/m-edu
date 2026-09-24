@@ -58,6 +58,21 @@ export interface TokenUser {
   organization?: { id: string; name: string } | null;
 }
 
+/** Response type for getMe route */
+export interface GetMeResponse {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  avatar: string | null;
+  role: string;
+  organizationId: string;
+  organization: { id: string; name: string } | null;
+  settings: any; // We can use the Prisma settings type if imported, but any is safe here for now
+  lastLoginAt: Date | null;
+}
+
 /** Safe error-message extraction for `catch (err: unknown)` blocks. */
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

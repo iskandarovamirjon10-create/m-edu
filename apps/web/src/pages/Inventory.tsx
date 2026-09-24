@@ -19,12 +19,15 @@ import {
   TextArea,
   Select,
   Badge,
+  GlassButton,
   useToasts,
+  ConfirmDialog,
 } from '@/components/ui';
 import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, InventoryItem, InventoryCategory } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface ItemFormState {
   name: string;
@@ -56,36 +59,38 @@ const CATEGORIES: InventoryCategory[] = ['BOOKS', 'EQUIPMENT', 'FURNITURE', 'SUP
 function validateItemForm(form: ItemFormState): Partial<Record<keyof ItemFormState, string>> {
   const errors: Partial<Record<keyof ItemFormState, string>> = {};
 
-  if (!form.name.trim()) errors.name = 'Name is required';
-  if (!form.category) errors.category = 'Category is required';
+  if (!form.name.trim()) errors.name = 'inventory.error.nameRequired';
+  if (!form.category) errors.category = 'inventory.error.categoryRequired';
   if (!form.quantity || isNaN(parseInt(form.quantity)) || parseInt(form.quantity) < 0) {
-    errors.quantity = 'Valid quantity is required';
+    errors.quantity = 'inventory.error.quantityInvalid';
   }
-  if (!form.unit.trim()) errors.unit = 'Unit is required';
+  if (!form.unit.trim()) errors.unit = 'inventory.error.unitRequired';
 
   return errors;
 }
 
 function getCategoryBadge(category: InventoryCategory): { color: string; label: string } {
   const badges: Record<InventoryCategory, { color: string; label: string }> = {
-    BOOKS: { color: 'blue', label: 'Books' },
-    EQUIPMENT: { color: 'purple', label: 'Equipment' },
-    FURNITURE: { color: 'amber', label: 'Furniture' },
-    SUPPLIES: { color: 'green', label: 'Supplies' },
-    ELECTRONICS: { color: 'indigo', label: 'Electronics' },
-    OTHER: { color: 'slate', label: 'Other' },
+    BOOKS: { color: 'blue', label: 'inventory.category.BOOKS' },
+    EQUIPMENT: { color: 'purple', label: 'inventory.category.EQUIPMENT' },
+    FURNITURE: { color: 'amber', label: 'inventory.category.FURNITURE' },
+    SUPPLIES: { color: 'green', label: 'inventory.category.SUPPLIES' },
+    ELECTRONICS: { color: 'indigo', label: 'inventory.category.ELECTRONICS' },
+    OTHER: { color: 'slate', label: 'inventory.category.OTHER' },
   };
   return badges[category];
 }
 
 export function InventoryPage() {
-  usePageTitle('Inventory');
+  const { t } = useI18n();
+  usePageTitle(t('inventory.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // Form state
   const [form, setForm] = useState<ItemFormState>(INITIAL_FORM);
@@ -148,7 +153,7 @@ export function InventoryPage() {
       }
     },
     onSuccess: () => {
-      push({ type: 'success', message: editingId ? 'Item updated' : 'Item created' });
+      push({ type: 'success', message: editingId ? t('inventory.updated') : t('inventory.created') });
       qc.invalidateQueries({ queryKey: ['inventory-items'] });
       closeModal();
     },
@@ -159,6 +164,28 @@ export function InventoryPage() {
       });
     },
   });
+
+  // Delete item mutation
+  const removeItem = useMutation({
+    mutationFn: (id: string) => inventoryApi.deleteItem(id),
+    onSuccess: () => {
+      push({ type: 'success', message: t('inventory.deleted') });
+      qc.invalidateQueries({ queryKey: ['inventory-items'] });
+    },
+    onError: (error) => {
+      push({ type: 'error', message: getErrorMessage(error) });
+    },
+  });
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteTarget(id);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    removeItem.mutate(deleteTarget);
+    setDeleteTarget(null);
+  }, [deleteTarget, removeItem]);
 
   const openModal = useCallback((item?: InventoryItem) => {
     if (item) {
@@ -213,21 +240,16 @@ export function InventoryPage() {
 
   return (
     <div className="page-container">
-      <div className="orb-container" aria-hidden="true">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
-      </div>
+      
 
       <div className="space-y-4" style={{ position: 'relative', zIndex: 1 }}>
         {toastNode}
 
       <PageHeader
-        title="Inventory"
-        subtitle="Manage inventory items and transactions"
+        title={t('inventory.title')}
+        subtitle={t('inventory.pageSubtitle')}
         action={{
-          label: 'Add Item',
+          label: t('inventory.addItem'),
           onClick: () => openModal(),
         }}
       />
@@ -237,7 +259,7 @@ export function InventoryPage() {
           <div className="flex gap-4">
             <div className="flex-1">
               <TextInput
-                placeholder="Search items by name, category, or supplier..."
+                placeholder={t('inventory.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -247,10 +269,10 @@ export function InventoryPage() {
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
               >
-                <option value="">All Categories</option>
+                <option value="">{t('inventory.allCategories')}</option>
                 {CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
-                    {cat.replace(/_/g, ' ')}
+                    {t(`inventory.category.${cat}`)}
                   </option>
                 ))}
               </Select>
@@ -260,28 +282,28 @@ export function InventoryPage() {
 
         {filteredItems.length === 0 ? (
           <EmptyState
-            title={searchQuery || filterCategory ? 'No items found' : 'No inventory yet'}
+            title={searchQuery || filterCategory ? t('inventory.emptySearch') : t('inventory.empty')}
             description={
               searchQuery || filterCategory
-                ? 'Try adjusting your search criteria'
-                : 'Add your first inventory item to get started'
+                ? t('certificates.emptySearchHint')
+                : t('inventory.emptyMessage')
             }
-            action={!searchQuery && !filterCategory ? { label: 'Add Item', onClick: () => openModal() } : undefined}
+            action={!searchQuery && !filterCategory ? { label: t('inventory.addItem'), onClick: () => openModal() } : undefined}
           />
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <THead>
                 <TR>
-                  <TH>Item Name</TH>
-                  <TH>Category</TH>
-                  <TH>Quantity</TH>
-                  <TH>Unit</TH>
-                  <TH>Location</TH>
-                  <TH>Supplier</TH>
-                  <TH>Stock Status</TH>
-                  <TH>Value</TH>
-                  <TH>Actions</TH>
+                  <TH>{t('inventory.col.name')}</TH>
+                  <TH>{t('inventory.col.category')}</TH>
+                  <TH>{t('inventory.col.quantity')}</TH>
+                  <TH>{t('inventory.col.unit')}</TH>
+                  <TH>{t('inventory.col.location')}</TH>
+                  <TH>{t('inventory.col.supplier')}</TH>
+                  <TH>{t('inventory.col.stockStatus')}</TH>
+                  <TH>{t('inventory.col.value')}</TH>
+                  <TH>{t('common.actions')}</TH>
                 </TR>
               </THead>
               <TBody>
@@ -295,7 +317,7 @@ export function InventoryPage() {
                       <TD className="font-medium">{item.name}</TD>
                       <TD>
                         <Badge variant={categoryBadge.color === 'blue' ? 'primary' : categoryBadge.color === 'purple' ? 'primary' : categoryBadge.color === 'amber' ? 'warning' : categoryBadge.color === 'green' ? 'success' : categoryBadge.color === 'indigo' ? 'cyan' : 'muted'}>
-                          {categoryBadge.label}
+                          {t(categoryBadge.label)}
                         </Badge>
                       </TD>
                       <TD className="font-mono">{item.quantity}</TD>
@@ -304,17 +326,28 @@ export function InventoryPage() {
                       <TD>{item.supplier || '—'}</TD>
                       <TD>
                         <Badge variant={isLowStock ? 'error' : 'success'}>
-                          {isLowStock ? 'Low Stock' : 'In Stock'}
+                          {isLowStock ? t('inventory.lowStock') : t('inventory.inStock')}
                         </Badge>
                       </TD>
                       <TD>{item.purchasePrice ? formatCurrency(value) : '—'}</TD>
                       <TD>
-                        <button
-                          onClick={() => openModal(item)}
-                          className="glass-btn glass-btn-ghost glass-btn-sm"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex gap-2">
+                          <GlassButton
+                            onClick={() => openModal(item)}
+                            variant="ghost"
+                            size="sm"
+                          >
+                            {t('common.edit')}
+                          </GlassButton>
+                          <GlassButton
+                            onClick={() => handleDelete(item.id)}
+                            variant="danger"
+                            size="sm"
+                            disabled={removeItem.isPending && removeItem.variables === item.id}
+                          >
+                            {t('common.delete')}
+                          </GlassButton>
+                        </div>
                       </TD>
                     </TR>
                   );
@@ -330,33 +363,33 @@ export function InventoryPage() {
         <Modal
           isOpen={modalOpen}
           onClose={closeModal}
-          title={editingId ? 'Edit Inventory Item' : 'Add Inventory Item'}
+          title={editingId ? t('inventory.editTitle') : t('inventory.addTitle')}
         >
           <div className="space-y-4">
-            <Field label="Item Name *" error={formErrors.name}>
+            <Field label={t('inventory.field.name')} error={formErrors.name ? t(formErrors.name) : undefined}>
               <TextInput
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Enter item name"
+                placeholder={t('inventory.namePlaceholder')}
               />
             </Field>
 
-            <Field label="Category *" error={formErrors.category}>
+            <Field label={t('inventory.field.category')} error={formErrors.category ? t(formErrors.category) : undefined}>
               <Select
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value as InventoryCategory })}
               >
-                <option value="">Select category</option>
+                <option value="">{t('inventory.categoryPlaceholder')}</option>
                 {CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
-                    {cat.replace(/_/g, ' ')}
+                    {t(`inventory.category.${cat}`)}
                   </option>
                 ))}
               </Select>
             </Field>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Quantity *" error={formErrors.quantity}>
+              <Field label={t('inventory.field.quantity')} error={formErrors.quantity ? t(formErrors.quantity) : undefined}>
                 <TextInput
                   type="number"
                   value={form.quantity}
@@ -366,17 +399,17 @@ export function InventoryPage() {
                 />
               </Field>
 
-              <Field label="Unit *" error={formErrors.unit}>
+              <Field label={t('inventory.field.unit')} error={formErrors.unit ? t(formErrors.unit) : undefined}>
                 <TextInput
                   value={form.unit}
                   onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                  placeholder="e.g., piece, box, kg"
+                  placeholder={t('inventory.unitPlaceholder')}
                 />
               </Field>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Minimum Stock" error={formErrors.minStock}>
+              <Field label={t('inventory.field.minStock')} error={formErrors.minStock ? t(formErrors.minStock) : undefined}>
                 <TextInput
                   type="number"
                   value={form.minStock}
@@ -386,7 +419,7 @@ export function InventoryPage() {
                 />
               </Field>
 
-              <Field label="Purchase Price" error={formErrors.purchasePrice}>
+              <Field label={t('inventory.field.purchasePrice')} error={formErrors.purchasePrice ? t(formErrors.purchasePrice) : undefined}>
                 <TextInput
                   type="number"
                   value={form.purchasePrice}
@@ -398,49 +431,57 @@ export function InventoryPage() {
               </Field>
             </div>
 
-            <Field label="Location" error={formErrors.location}>
+            <Field label={t('inventory.field.location')} error={formErrors.location ? t(formErrors.location) : undefined}>
               <TextInput
                 value={form.location}
                 onChange={(e) => setForm({ ...form, location: e.target.value })}
-                placeholder="Storage location"
+                placeholder={t('inventory.locationPlaceholder')}
               />
             </Field>
 
-            <Field label="Supplier" error={formErrors.supplier}>
+            <Field label={t('inventory.field.supplier')} error={formErrors.supplier ? t(formErrors.supplier) : undefined}>
               <TextInput
                 value={form.supplier}
                 onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-                placeholder="Supplier name"
+                placeholder={t('inventory.supplierPlaceholder')}
               />
             </Field>
 
-            <Field label="Description" error={formErrors.description}>
+            <Field label={t('inventory.field.description')} error={formErrors.description ? t(formErrors.description) : undefined}>
               <TextArea
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Item description"
+                placeholder={t('inventory.descriptionPlaceholder')}
                 rows={2}
               />
             </Field>
 
             <div className="flex gap-2 justify-end pt-4">
-              <button
+              <GlassButton
                 onClick={closeModal}
-                className="glass-btn glass-btn-secondary"
+                variant="secondary"
               >
-                Cancel
-              </button>
-              <button
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton
                 onClick={handleSubmit}
                 disabled={saveItem.isPending}
-                className="glass-btn glass-btn-primary"
+                variant="primary"
               >
-                {saveItem.isPending ? 'Saving...' : 'Save'}
-              </button>
+                {saveItem.isPending ? t('common.saving') : t('common.save')}
+              </GlassButton>
             </div>
           </div>
         </Modal>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        description={t('inventory.deleteConfirm')}
+        loading={removeItem.isPending}
+      />
       </div>
     </div>
   );

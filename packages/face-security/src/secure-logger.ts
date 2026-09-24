@@ -35,6 +35,13 @@ const SENSITIVE_PATTERNS = [
 function redactSensitiveData(data: unknown): unknown {
   if (typeof data === 'string') {
     let redacted = data;
+    // Mask URL userinfo first: rtsp://user:pass@host → rtsp://***:***@host.
+    // (Not in SENSITIVE_PATTERNS: after masking, *** would re-match and
+    // wipe the whole scheme prefix down to [REDACTED].)
+    redacted = redacted.replace(
+      /\b(rtsp|rtsps|http|https):\/\/[^:@/\s]+:[^@/\s]+@/gi,
+      '$1://***:***@',
+    );
     for (const pattern of SENSITIVE_PATTERNS) {
       redacted = redacted.replace(pattern, '[REDACTED]');
     }
@@ -81,10 +88,11 @@ export class SecureLogger {
 
     const entry: LogEntry = {
       level,
-      message,
+      // Message may embed a full stream URI — run the same redaction as context.
+      message: redactSensitiveData(message) as string,
       timestamp: new Date().toISOString(),
       context: context ? redactSensitiveData(context) as Record<string, unknown> : undefined,
-      error: error instanceof Error ? error.message : undefined,
+      error: error instanceof Error ? (redactSensitiveData(error.message) as string) : undefined,
     };
 
     const output = JSON.stringify(entry);

@@ -10,11 +10,13 @@ import {
   GlassField,
   GlassInput,
   GlassSelect,
+  GlassButton,
   useToasts,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Group, Course, Teacher } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface GroupFormState {
   name: string;
@@ -39,7 +41,8 @@ const EMPTY_FORM: GroupFormState = {
 };
 
 export function GroupFormPage() {
-  usePageTitle('Group');
+  const { t } = useI18n();
+  usePageTitle(t('enum.badge.GROUP'));
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
   const navigate = useNavigate();
@@ -100,14 +103,14 @@ export function GroupFormPage() {
 
   const validateForm = useCallback((): boolean => {
     const errors: Partial<Record<keyof GroupFormState, string>> = {};
-    if (!form.name.trim()) errors.name = 'Group name is required';
-    if (!form.courseId) errors.courseId = 'Please select a course';
+    if (!form.name.trim()) errors.name = t('groups.form.nameRequired');
+    if (!form.courseId) errors.courseId = t('groups.form.courseRequired');
     if (form.capacity && (parseInt(form.capacity, 10) < 1 || parseInt(form.capacity, 10) > 100)) {
-      errors.capacity = 'Capacity must be between 1 and 100';
+      errors.capacity = t('groupForm.capacityRange');
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form]);
+  }, [form, t]);
 
   const save = useMutation({
     mutationFn: () => {
@@ -124,7 +127,7 @@ export function GroupFormPage() {
       return isEdit ? groupsApi.update(id!, payload) : groupsApi.create(payload);
     },
     onSuccess: (res) => {
-      push('success', isEdit ? 'Group updated successfully' : 'Group created successfully');
+      push('success', isEdit ? t('groups.updated') : t('groups.created'));
       qc.invalidateQueries({ queryKey: ['groups'] });
       qc.invalidateQueries({ queryKey: ['group', id] });
       navigate(`/groups/${(res as Group).id}`, { replace: true });
@@ -149,14 +152,15 @@ export function GroupFormPage() {
 
   if (isEdit && existing.isLoading && !existing.data) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
-          <GlassPageHeader title="Edit group" subtitle="Loading group…" />
-          <GlassCard className="p-8"><GlassPageLoader label="Loading group…" /></GlassCard>
+          <GlassPageHeader
+            title={t('groupForm.editTitle')}
+            subtitle={t('groups.loadingGroup')}
+          />
+          <GlassCard className="p-8">
+            <GlassPageLoader label={t('groups.loadingGroup')} />
+          </GlassCard>
         </div>
       </div>
     );
@@ -164,15 +168,14 @@ export function GroupFormPage() {
 
   if (isEdit && existing.isError) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
-          <GlassPageHeader title="Edit group" subtitle="Group details" />
+          <GlassPageHeader
+            title={t('groupForm.editTitle')}
+            subtitle={t('groups.detailsSubtitle')}
+          />
           <GlassCard className="p-8">
-            <GlassErrorState title="Group not found" message={getErrorMessage(existing.error as Error)} onRetry={() => existing.refetch()} />
+            <GlassErrorState title={t('groups.notFound')} message={getErrorMessage(existing.error as Error)} onRetry={() => existing.refetch()} />
           </GlassCard>
         </div>
       </div>
@@ -180,66 +183,80 @@ export function GroupFormPage() {
   }
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
       <div className="page-container">
         <GlassPageHeader
-          title={isEdit ? 'Edit group' : 'New group'}
-          subtitle={isEdit ? 'Update group details' : 'Create a study group'}
+          title={
+            isEdit ? t('groupForm.editTitle') : t('groupForm.newTitle')
+          }
+          subtitle={
+            isEdit ? t('groupForm.editSubtitle') : t('groupForm.createSubtitle')
+          }
         />
         <GlassCard className="p-6">
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <GlassField label="Name" required error={formErrors.name}>
+              <GlassField
+                label={t('common.name')}
+                required
+                error={formErrors.name}
+              >
                 <GlassInput value={form.name} onChange={(e) => set('name', e.target.value)} required aria-invalid={Boolean(formErrors.name)} />
               </GlassField>
-              <GlassField label="Course" required error={formErrors.courseId}>
+              <GlassField
+                label={t('groups.form.course')}
+                required
+                error={formErrors.courseId}
+              >
                 <GlassSelect value={form.courseId} onChange={(e) => set('courseId', e.target.value)} required aria-invalid={Boolean(formErrors.courseId)}>
-                  <option value="">Select course…</option>
+                  <option value="">{t('groups.selectCoursePlaceholder')}</option>
                   {courseList.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </GlassSelect>
               </GlassField>
-              <GlassField label="Teacher">
+              <GlassField label={t('groups.form.teacher')}>
                 <GlassSelect value={form.teacherId} onChange={(e) => set('teacherId', e.target.value)}>
-                  <option value="">No teacher</option>
-                  {teacherList.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.user ? `${t.user.firstName} ${t.user.lastName}` : t.id.slice(0, 8)}
+                  <option value="">{t('groupForm.noTeacher')}</option>
+                  {teacherList.map((tm) => (
+                    <option key={tm.id} value={tm.id}>
+                      {tm.user ? `${tm.user.firstName} ${tm.user.lastName}` : tm.id.slice(0, 8)}
                     </option>
                   ))}
                 </GlassSelect>
               </GlassField>
-              <GlassField label="Capacity" error={formErrors.capacity}>
+              <GlassField label={t('groups.form.capacity')} error={formErrors.capacity}>
                 <GlassInput type="number" min={1} max={100} value={form.capacity} onChange={(e) => set('capacity', e.target.value)} aria-invalid={Boolean(formErrors.capacity)} />
               </GlassField>
-              <GlassField label="Room">
+              <GlassField label={t('groups.form.room')}>
                 <GlassInput value={form.room} onChange={(e) => set('room', e.target.value)} />
               </GlassField>
-              <GlassField label="Start date">
+              <GlassField label={t('groups.form.startDate')}>
                 <GlassInput type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} />
               </GlassField>
-              <GlassField label="End date">
+              <GlassField label={t('groupForm.endDate')}>
                 <GlassInput type="date" value={form.endDate} onChange={(e) => set('endDate', e.target.value)} />
               </GlassField>
               {isEdit && (
-                <GlassField label="Active">
+                <GlassField label={t('enum.status.ACTIVE')}>
                   <GlassSelect value={form.isActive ? 'true' : 'false'} onChange={(e) => set('isActive', e.target.value === 'true')}>
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
+                    <option value="true">{t('enum.status.ACTIVE')}</option>
+                    <option value="false">{t('enum.status.INACTIVE')}</option>
                   </GlassSelect>
                 </GlassField>
               )}
             </div>
             <div className="flex justify-end gap-2">
-              <button type="button" className="glass-btn glass-btn-secondary" onClick={handleCancel} disabled={save.isPending}>Cancel</button>
-              <button type="submit" className="glass-btn glass-btn-primary" disabled={save.isPending}>
-                {save.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create group'}
-              </button>
+              <GlassButton type="button" variant="secondary" onClick={handleCancel} disabled={save.isPending}>
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton type="submit" variant="primary" disabled={save.isPending}>
+                {save.isPending
+                  ? t('common.saving')
+                  : isEdit
+                    ? t('templates.saveChanges')
+                    : t('groups.create')}
+              </GlassButton>
             </div>
           </form>
         </GlassCard>

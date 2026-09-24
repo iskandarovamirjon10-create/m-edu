@@ -8,22 +8,32 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "lint": "turbo lint",
-    "test": "turbo test",
+    "lint": "cross-env NODE_OPTIONS=--max-old-space-size=4096 turbo lint --concurrency=2",
+    "test": "turbo test --concurrency=1",
     "db:generate": "cd apps/api && npx prisma generate",
     "db:push": "cd apps/api && npx prisma db push",
     "db:migrate": "cd apps/api && npx prisma migrate dev",
     "db:seed": "cd apps/api && npx prisma db seed"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
     "cross-env": "^10.1.0",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "turbo": "^2.1.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.70.0"
   },
   "packageManager": "npm@10.2.0",
+  "overrides": {
+    "vite": "~5.4.3"
+  },
   "dependencies": {
-    "express-session": "^1.19.0",
-    "nodemailer": "^10.0.0",
-    "pdf-creator-node": "^4.0.1"
+    "chart.js": "^4.5.1",
+    "glob": "^13.0.6"
   }
 }

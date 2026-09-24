@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { hrApi } from '@/lib/api';
+import { hrApi, usersApi } from '@/lib/api';
 import {
   GlassPageHeader,
   GlassCard,
@@ -16,51 +16,48 @@ import {
   GlassModal,
   GlassSelect,
   GlassInput,
-  GlassTextArea,
   GlassBadge,
   GlassButton,
   useToast,
 } from '@/components/ui';
 import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
-import type { Paginated, Employee, ContractType } from '@/lib/types';
+import type { Paginated, Employee, ContractType, User } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface EmployeeFormState {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
+  userId: string;
+  employeeNumber: string;
   position: string;
   department: string;
   contractType: ContractType | '';
   salary: string;
   hireDate: string;
-  emergencyContact: string;
-  address: string;
-  nationalId: string;
   bankAccount: string;
   taxId: string;
 }
 
 const INITIAL_FORM: EmployeeFormState = {
-  firstName: '',
-  lastName: '',
-  email: '',
-  phone: '',
+  userId: '',
+  employeeNumber: '',
   position: '',
   department: '',
   contractType: '',
   salary: '',
   hireDate: new Date().toISOString().split('T')[0],
-  emergencyContact: '',
-  address: '',
-  nationalId: '',
   bankAccount: '',
   taxId: '',
 };
 
 const CONTRACT_TYPES: ContractType[] = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN'];
+
+const CONTRACT_TYPE_LABEL_KEYS: Record<ContractType, string> = {
+  FULL_TIME: 'hr.contractType.fullTime',
+  PART_TIME: 'hr.contractType.partTime',
+  CONTRACT: 'hr.contractType.contract',
+  INTERN: 'hr.contractType.intern',
+};
 
 const DEPARTMENTS = [
   'Administration',
@@ -73,72 +70,112 @@ const DEPARTMENTS = [
   'Student Services',
 ];
 
-function validateEmployeeForm(form: EmployeeFormState): Partial<Record<keyof EmployeeFormState, string>> {
+const DEPARTMENT_LABEL_KEYS: Record<string, string> = {
+  Administration: 'hr.department.administration',
+  Teaching: 'hr.department.teaching',
+  IT: 'hr.department.it',
+  Finance: 'hr.department.finance',
+  'Human Resources': 'hr.department.humanResources',
+  Marketing: 'hr.department.marketing',
+  Operations: 'hr.department.operations',
+  'Student Services': 'hr.department.studentServices',
+};
+
+function validateEmployeeForm(
+  form: EmployeeFormState,
+  isEdit: boolean
+): Partial<Record<keyof EmployeeFormState, string>> {
   const errors: Partial<Record<keyof EmployeeFormState, string>> = {};
 
-  if (!form.firstName.trim()) errors.firstName = 'First name is required';
-  if (!form.lastName.trim()) errors.lastName = 'Last name is required';
-  if (!form.email.trim()) errors.email = 'Email is required';
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = 'Invalid email format';
-  if (!form.position.trim()) errors.position = 'Position is required';
-  if (!form.contractType) errors.contractType = 'Contract type is required';
-  if (!form.salary || isNaN(parseFloat(form.salary)) || parseFloat(form.salary) <= 0) {
-    errors.salary = 'Valid salary is required';
+  if (!isEdit) {
+    if (!form.userId) errors.userId = 'hr.form.validation.userIdRequired';
+    if (!form.employeeNumber.trim()) errors.employeeNumber = 'hr.form.validation.employeeNumberRequired';
+    if (!form.hireDate) errors.hireDate = 'hr.form.validation.hireDateRequired';
+    if (!form.contractType) errors.contractType = 'hr.form.validation.contractTypeRequired';
   }
-  if (!form.hireDate) errors.hireDate = 'Hire date is required';
+
+  if (!form.position.trim()) errors.position = 'hr.form.validation.positionRequired';
+  if (!form.department.trim()) errors.department = 'hr.form.validation.departmentRequired';
+  if (!form.salary || isNaN(parseFloat(form.salary)) || parseFloat(form.salary) <= 0) {
+    errors.salary = 'hr.form.validation.salaryInvalid';
+  }
 
   return errors;
 }
 
-function getContractTypeBadge(type: ContractType): { variant: 'primary' | 'success' | 'warning' | 'muted'; label: string } {
-  const badges: Record<ContractType, { variant: 'primary' | 'success' | 'warning' | 'muted'; label: string }> = {
-    FULL_TIME: { variant: 'success', label: 'Full Time' },
-    PART_TIME: { variant: 'primary', label: 'Part Time' },
-    CONTRACT: { variant: 'warning', label: 'Contract' },
-    INTERN: { variant: 'muted', label: 'Intern' },
+function getContractTypeBadge(type: ContractType): { variant: 'primary' | 'success' | 'warning' | 'muted'; labelKey: string } {
+  const badges: Record<ContractType, { variant: 'primary' | 'success' | 'warning' | 'muted'; labelKey: string }> = {
+    FULL_TIME: { variant: 'success', labelKey: CONTRACT_TYPE_LABEL_KEYS.FULL_TIME },
+    PART_TIME: { variant: 'primary', labelKey: CONTRACT_TYPE_LABEL_KEYS.PART_TIME },
+    CONTRACT: { variant: 'warning', labelKey: CONTRACT_TYPE_LABEL_KEYS.CONTRACT },
+    INTERN: { variant: 'muted', labelKey: CONTRACT_TYPE_LABEL_KEYS.INTERN },
   };
-  return badges[type];
+  return badges[type] ?? { variant: 'muted', labelKey: '' };
+}
+
+function employeeName(emp: Employee): string {
+  if (emp.user) {
+    return [emp.user.firstName, emp.user.lastName].filter(Boolean).join(' ') || '—';
+  }
+  return emp.employeeNumber || emp.id.slice(0, 8);
+}
+
+function employeeEmail(emp: Employee): string {
+  return emp.user?.email || '—';
 }
 
 export function HRPage() {
-  usePageTitle('HR & Payroll');
+  const { t } = useI18n();
+  usePageTitle(t('hr.title'));
   const { push, toastNode } = useToast();
   const qc = useQueryClient();
 
-  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Form state
   const [form, setForm] = useState<EmployeeFormState>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof EmployeeFormState, string>>>({});
 
-  // Search and filter
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState('');
+  const [terminateTarget, setTerminateTarget] = useState<Employee | null>(null);
+  const [terminateReason, setTerminateReason] = useState('');
+  const [terminateError, setTerminateError] = useState<string | null>(null);
 
-  // Data fetching
   const employees = useQuery({
     queryKey: ['hr-employees'],
     queryFn: () => hrApi.listEmployees({ limit: 100 }),
     placeholderData: (previousData) => previousData,
   });
 
+  const users = useQuery({
+    queryKey: ['hr-users-for-employee'],
+    queryFn: () => usersApi.list({ limit: 200 }) as Promise<Paginated<User>>,
+    enabled: modalOpen && !editingId,
+  });
+
   const data = employees.data as Paginated<Employee> | undefined;
   const employeeList = useMemo(() => data?.items || [], [data]);
+
+  const userList = useMemo(
+    () => (users.data as Paginated<User> | undefined)?.items || [],
+    [users.data]
+  );
 
   const filteredEmployees = useMemo(() => {
     let filtered = employeeList;
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (emp) =>
-          emp.firstName.toLowerCase().includes(q) ||
-          emp.lastName.toLowerCase().includes(q) ||
-          emp.email.toLowerCase().includes(q) ||
-          emp.position.toLowerCase().includes(q)
-      );
+      filtered = filtered.filter((emp) => {
+        const name = employeeName(emp).toLowerCase();
+        const email = employeeEmail(emp).toLowerCase();
+        return (
+          name.includes(q) ||
+          email.includes(q) ||
+          (emp.position || '').toLowerCase().includes(q)
+        );
+      });
     }
 
     if (filterDepartment) {
@@ -148,35 +185,31 @@ export function HRPage() {
     return filtered;
   }, [employeeList, searchQuery, filterDepartment]);
 
-  // Save employee mutation
+  // CreateEmployeeDto: userId, employeeNumber, department, position, hireDate, salary, contractType
+  // UpdateEmployeeDto: department, position, salary, bankAccount, taxId only
   const saveEmployee = useMutation({
     mutationFn: () => {
-      const payload: Record<string, unknown> = {
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        email: form.email.trim(),
+      const base = {
         position: form.position.trim(),
-        contractType: form.contractType,
+        department: form.department.trim(),
         salary: parseFloat(form.salary),
-        hireDate: form.hireDate,
+        bankAccount: form.bankAccount.trim() || undefined,
+        taxId: form.taxId.trim() || undefined,
       };
 
-      if (form.phone.trim()) payload.phone = form.phone.trim();
-      if (form.department.trim()) payload.department = form.department.trim();
-      if (form.emergencyContact.trim()) payload.emergencyContact = form.emergencyContact.trim();
-      if (form.address.trim()) payload.address = form.address.trim();
-      if (form.nationalId.trim()) payload.nationalId = form.nationalId.trim();
-      if (form.bankAccount.trim()) payload.bankAccount = form.bankAccount.trim();
-      if (form.taxId.trim()) payload.taxId = form.taxId.trim();
-
       if (editingId) {
-        return hrApi.updateEmployee(editingId, payload);
-      } else {
-        return hrApi.createEmployee(payload);
+        return hrApi.updateEmployee(editingId, base);
       }
+      return hrApi.createEmployee({
+        ...base,
+        userId: form.userId,
+        employeeNumber: form.employeeNumber.trim(),
+        hireDate: form.hireDate,
+        contractType: form.contractType,
+      });
     },
     onSuccess: () => {
-      push('success', editingId ? 'Employee updated' : 'Employee created');
+      push('success', editingId ? t('hr.employeeUpdated') : t('hr.employeeCreated'));
       qc.invalidateQueries({ queryKey: ['hr-employees'] });
       closeModal();
     },
@@ -185,12 +218,15 @@ export function HRPage() {
     },
   });
 
-  // Terminate employee mutation
+  // Controller reads @Body('reason'); empty reason is rejected by service.
   const terminateEmployee = useMutation({
-    mutationFn: (id: string) =>
-      hrApi.terminateEmployee(id, { terminationDate: new Date().toISOString().split('T')[0] }),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      hrApi.terminateEmployee(id, { reason }),
     onSuccess: () => {
-      push('success', 'Employee terminated');
+      push('success', t('hr.employeeTerminated'));
+      setTerminateTarget(null);
+      setTerminateReason('');
+      setTerminateError(null);
       qc.invalidateQueries({ queryKey: ['hr-employees'] });
     },
     onError: (error) => {
@@ -202,18 +238,13 @@ export function HRPage() {
     if (employee) {
       setEditingId(employee.id);
       setForm({
-        firstName: employee.firstName,
-        lastName: employee.lastName,
-        email: employee.email,
-        phone: employee.phone || '',
-        position: employee.position,
+        userId: employee.userId || '',
+        employeeNumber: employee.employeeNumber || '',
+        position: employee.position || '',
         department: employee.department || '',
         contractType: employee.contractType,
-        salary: employee.salary.toString(),
-        hireDate: employee.hireDate.split('T')[0],
-        emergencyContact: employee.emergencyContact || '',
-        address: employee.address || '',
-        nationalId: employee.nationalId || '',
+        salary: employee.salary?.toString() || '',
+        hireDate: (employee.hireDate || '').split('T')[0],
         bankAccount: employee.bankAccount || '',
         taxId: employee.taxId || '',
       });
@@ -233,16 +264,35 @@ export function HRPage() {
   }, []);
 
   const handleSubmit = useCallback(() => {
-    const errors = validateEmployeeForm(form);
+    const rawErrors = validateEmployeeForm(form, Boolean(editingId));
+    const errors: Partial<Record<keyof EmployeeFormState, string>> = {};
+    for (const [key, value] of Object.entries(rawErrors)) {
+      if (value) errors[key as keyof EmployeeFormState] = t(value);
+    }
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
     saveEmployee.mutate();
-  }, [form, saveEmployee]);
+  }, [form, editingId, saveEmployee, t]);
+
+  const handleTerminate = useCallback((employee: Employee) => {
+    setTerminateTarget(employee);
+    setTerminateReason('');
+    setTerminateError(null);
+  }, []);
+
+  const confirmTerminate = useCallback(() => {
+    if (!terminateTarget) return;
+    if (!terminateReason.trim()) {
+      setTerminateError(t('hr.terminationReasonRequired'));
+      return;
+    }
+    terminateEmployee.mutate({ id: terminateTarget.id, reason: terminateReason.trim() });
+  }, [terminateTarget, terminateReason, terminateEmployee, t]);
 
   if (employees.isLoading) {
-    return <GlassPageLoader label="Loading employees…" />;
+    return <GlassPageLoader label={t('hr.loading')} />;
   }
 
   if (employees.isError) {
@@ -256,20 +306,15 @@ export function HRPage() {
 
   return (
     <div className="page-container">
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
-      </div>
+      
       {toastNode}
 
       <GlassPageHeader
-        title="HR & Payroll"
-        description="Manage employees and payroll"
+        title={t('hr.title')}
+        description={t('hr.subtitle')}
         actions={
           <GlassButton variant="primary" size="sm" onClick={() => openModal()}>
-            Add Employee
+            {t('hr.addEmployee')}
           </GlassButton>
         }
       />
@@ -279,7 +324,7 @@ export function HRPage() {
           <div className="flex gap-4 flex-wrap">
             <div className="flex-1 min-w-64">
               <GlassInput
-                placeholder="Search employees by name, email, or position..."
+                placeholder={t('hr.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -287,34 +332,40 @@ export function HRPage() {
             <GlassSelect
               value={filterDepartment}
               onChange={(e) => setFilterDepartment(e.target.value)}
-              options={[{ value: '', label: 'All Departments' }, ...DEPARTMENTS.map((dept) => ({ value: dept, label: dept }))]}
-              placeholder="All Departments"
+              options={[
+                { value: '', label: t('hr.allDepartments') },
+                ...DEPARTMENTS.map((dept) => ({
+                  value: dept,
+                  label: DEPARTMENT_LABEL_KEYS[dept] ? t(DEPARTMENT_LABEL_KEYS[dept]) : dept,
+                })),
+              ]}
+              placeholder={t('hr.allDepartments')}
             />
           </div>
         </div>
 
         {filteredEmployees.length === 0 ? (
           <GlassEmptyState
-            title={searchQuery || filterDepartment ? 'No employees found' : 'No employees yet'}
+            title={searchQuery || filterDepartment ? t('hr.emptySearch') : t('hr.empty')}
             description={
               searchQuery || filterDepartment
-                ? 'Try adjusting your search criteria'
-                : 'Add your first employee to get started'
+                ? t('hr.emptySearchHint')
+                : t('hr.emptyHint')
             }
-            action={!searchQuery && !filterDepartment ? { label: 'Add Employee', onClick: () => openModal() } : undefined}
+            action={!searchQuery && !filterDepartment ? { label: t('hr.addEmployee'), onClick: () => openModal() } : undefined}
           />
         ) : (
           <GlassTable className="overflow-x-auto">
             <GlassTHead>
               <GlassTR>
-                <GlassTH>Name</GlassTH>
-                <GlassTH>Email</GlassTH>
-                <GlassTH>Position</GlassTH>
-                <GlassTH>Department</GlassTH>
-                <GlassTH>Contract</GlassTH>
-                <GlassTH>Salary</GlassTH>
-                <GlassTH>Status</GlassTH>
-                <GlassTH>Actions</GlassTH>
+                <GlassTH>{t('hr.col.name')}</GlassTH>
+                <GlassTH>{t('common.email')}</GlassTH>
+                <GlassTH>{t('hr.col.position')}</GlassTH>
+                <GlassTH>{t('hr.col.department')}</GlassTH>
+                <GlassTH>{t('hr.col.contract')}</GlassTH>
+                <GlassTH>{t('hr.col.salary')}</GlassTH>
+                <GlassTH>{t('hr.col.status')}</GlassTH>
+                <GlassTH>{t('hr.col.actions')}</GlassTH>
               </GlassTR>
             </GlassTHead>
             <GlassTBody>
@@ -322,37 +373,31 @@ export function HRPage() {
                 const badge = getContractTypeBadge(employee.contractType);
                 return (
                   <GlassTR key={employee.id}>
-                    <GlassTD className="font-medium">
-                      {employee.firstName} {employee.lastName}
-                    </GlassTD>
-                    <GlassTD>{employee.email}</GlassTD>
+                    <GlassTD className="font-medium">{employeeName(employee)}</GlassTD>
+                    <GlassTD>{employeeEmail(employee)}</GlassTD>
                     <GlassTD>{employee.position}</GlassTD>
                     <GlassTD>{employee.department || '—'}</GlassTD>
                     <GlassTD>
-                      <GlassBadge variant={badge.variant}>{badge.label}</GlassBadge>
+                      <GlassBadge variant={badge.variant}>{badge.labelKey ? t(badge.labelKey) : employee.contractType}</GlassBadge>
                     </GlassTD>
                     <GlassTD>{formatCurrency(employee.salary)}</GlassTD>
                     <GlassTD>
                       <GlassBadge variant={employee.isActive ? 'success' : 'error'}>
-                        {employee.isActive ? 'Active' : 'Inactive'}
+                        {employee.isActive ? t('common.active') : t('common.inactive')}
                       </GlassBadge>
                     </GlassTD>
                     <GlassTD>
                       <div className="flex gap-2">
                         <GlassButton variant="ghost" size="sm" onClick={() => openModal(employee)}>
-                          Edit
+                          {t('common.edit')}
                         </GlassButton>
                         {employee.isActive && (
                           <GlassButton
                             variant="danger"
                             size="sm"
-                            onClick={() => {
-                              if (window.confirm('Terminate this employee?')) {
-                                terminateEmployee.mutate(employee.id);
-                              }
-                            }}
+                            onClick={() => handleTerminate(employee)}
                           >
-                            Terminate
+                            {t('hr.terminate')}
                           </GlassButton>
                         )}
                       </div>
@@ -365,89 +410,89 @@ export function HRPage() {
         )}
       </GlassCard>
 
-      {/* Employee Form Modal */}
       <GlassModal
         open={modalOpen}
         onClose={closeModal}
-        title={editingId ? 'Edit Employee' : 'Add Employee'}
+        title={editingId ? t('hr.editEmployee') : t('hr.addEmployee')}
         footer={
           <>
-            <GlassButton variant="secondary" size="sm" onClick={closeModal}>Cancel</GlassButton>
+            <GlassButton variant="secondary" size="sm" onClick={closeModal}>{t('common.cancel')}</GlassButton>
             <GlassButton variant="primary" size="sm" onClick={handleSubmit} disabled={saveEmployee.isPending}>
-              {saveEmployee.isPending ? 'Saving...' : 'Save'}
+              {saveEmployee.isPending ? t('common.saving') : t('common.save')}
             </GlassButton>
           </>
         }
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-          <div className="grid grid-cols-2 gap-4">
-            <GlassInput
-              label="First Name *"
-              value={form.firstName}
-              onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-              placeholder="Enter first name"
-              error={formErrors.firstName}
-            />
+          {!editingId && (
+            <>
+              <GlassSelect
+                label={t('hr.form.user')}
+                value={form.userId}
+                onChange={(e) => setForm({ ...form, userId: e.target.value })}
+                options={[
+                  { value: '', label: users.isLoading ? t('hr.loadingUsers') : t('hr.selectUser') },
+                  ...userList.map((u) => ({
+                    value: u.id,
+                    label: [u.firstName, u.lastName].filter(Boolean).join(' ') + (u.email ? ` — ${u.email}` : ''),
+                  })),
+                ]}
+                placeholder={t('hr.selectUser')}
+                error={formErrors.userId}
+              />
 
-            <GlassInput
-              label="Last Name *"
-              value={form.lastName}
-              onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-              placeholder="Enter last name"
-              error={formErrors.lastName}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <GlassInput
-              label="Email *"
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="email@example.com"
-              error={formErrors.email}
-            />
-
-            <GlassInput
-              label="Phone"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              placeholder="+998 90 123 45 67"
-              error={formErrors.phone}
-            />
-          </div>
+              <GlassInput
+                label={t('hr.form.employeeNumber')}
+                value={form.employeeNumber}
+                onChange={(e) => setForm({ ...form, employeeNumber: e.target.value })}
+                placeholder={t('hr.form.employeeNumberPlaceholder')}
+                error={formErrors.employeeNumber}
+              />
+            </>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <GlassInput
-              label="Position *"
+              label={t('hr.form.position')}
               value={form.position}
               onChange={(e) => setForm({ ...form, position: e.target.value })}
-              placeholder="e.g., Senior Teacher"
+              placeholder={t('hr.form.positionPlaceholder')}
               error={formErrors.position}
             />
 
             <GlassSelect
-              label="Department"
+              label={t('hr.form.department')}
               value={form.department}
               onChange={(e) => setForm({ ...form, department: e.target.value })}
-              options={[{ value: '', label: 'Select department' }, ...DEPARTMENTS.map((dept) => ({ value: dept, label: dept }))]}
-              placeholder="Select department"
+              options={[
+                { value: '', label: t('hr.selectDepartment') },
+                ...DEPARTMENTS.map((dept) => ({
+                  value: dept,
+                  label: DEPARTMENT_LABEL_KEYS[dept] ? t(DEPARTMENT_LABEL_KEYS[dept]) : dept,
+                })),
+              ]}
+              placeholder={t('hr.selectDepartment')}
               error={formErrors.department}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <GlassSelect
-              label="Contract Type *"
-              value={form.contractType}
-              onChange={(e) => setForm({ ...form, contractType: e.target.value as ContractType })}
-              options={[{ value: '', label: 'Select type' }, ...CONTRACT_TYPES.map((type) => ({ value: type, label: type.replace(/_/g, ' ') }))]}
-              placeholder="Select type"
-              error={formErrors.contractType}
-            />
+            {!editingId && (
+              <GlassSelect
+                label={t('hr.form.contractType')}
+                value={form.contractType}
+                onChange={(e) => setForm({ ...form, contractType: e.target.value as ContractType })}
+                options={[
+                  { value: '', label: t('hr.selectContractType') },
+                  ...CONTRACT_TYPES.map((type) => ({ value: type, label: t(CONTRACT_TYPE_LABEL_KEYS[type]) })),
+                ]}
+                placeholder={t('hr.selectContractType')}
+                error={formErrors.contractType}
+              />
+            )}
 
             <GlassInput
-              label="Salary *"
+              label={t('hr.form.salary')}
               type="number"
               value={form.salary}
               onChange={(e) => setForm({ ...form, salary: e.target.value })}
@@ -458,56 +503,82 @@ export function HRPage() {
             />
           </div>
 
-          <GlassInput
-            label="Hire Date *"
-            type="date"
-            value={form.hireDate}
-            onChange={(e) => setForm({ ...form, hireDate: e.target.value })}
-            error={formErrors.hireDate}
-          />
-
-          <GlassInput
-            label="Emergency Contact"
-            value={form.emergencyContact}
-            onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })}
-            placeholder="Contact name and phone"
-            error={formErrors.emergencyContact}
-          />
-
-          <GlassTextArea
-            label="Address"
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-            placeholder="Enter address"
-            rows={2}
-            error={formErrors.address}
-          />
-
-          <div className="grid grid-cols-3 gap-4">
+          {!editingId && (
             <GlassInput
-              label="National ID"
-              value={form.nationalId}
-              onChange={(e) => setForm({ ...form, nationalId: e.target.value })}
-              placeholder="ID number"
-              error={formErrors.nationalId}
+              label={t('hr.form.hireDate')}
+              type="date"
+              value={form.hireDate}
+              onChange={(e) => setForm({ ...form, hireDate: e.target.value })}
+              error={formErrors.hireDate}
             />
+          )}
 
+          <div className="grid grid-cols-2 gap-4">
             <GlassInput
-              label="Bank Account"
+              label={t('hr.form.bankAccount')}
               value={form.bankAccount}
               onChange={(e) => setForm({ ...form, bankAccount: e.target.value })}
-              placeholder="Account number"
+              placeholder={t('hr.form.bankAccountPlaceholder')}
               error={formErrors.bankAccount}
             />
 
             <GlassInput
-              label="Tax ID"
+              label={t('hr.form.taxId')}
               value={form.taxId}
               onChange={(e) => setForm({ ...form, taxId: e.target.value })}
-              placeholder="Tax ID"
+              placeholder={t('hr.form.taxId')}
               error={formErrors.taxId}
             />
           </div>
+
+          {editingId && (
+            <p className="text-xs text-[var(--text-muted)]">
+              {t('hr.editNotice')}
+            </p>
+          )}
+        </div>
+      </GlassModal>
+
+      <GlassModal
+        open={terminateTarget !== null}
+        onClose={() => setTerminateTarget(null)}
+        title={t('hr.terminate')}
+        footer={
+          <>
+            <GlassButton
+              variant="secondary"
+              onClick={() => setTerminateTarget(null)}
+              disabled={terminateEmployee.isPending}
+            >
+              {t('common.cancel')}
+            </GlassButton>
+            <GlassButton
+              variant="danger"
+              onClick={confirmTerminate}
+              loading={terminateEmployee.isPending}
+              disabled={terminateEmployee.isPending}
+            >
+              {terminateEmployee.isPending ? t('common.saving') : t('hr.terminate')}
+            </GlassButton>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--text-primary)]">
+            {t('hr.terminationPrompt', { name: terminateTarget ? employeeName(terminateTarget) : '' })}
+          </p>
+          <GlassInput
+            label={t('hr.rejectModal.reasonLabel')}
+            value={terminateReason}
+            onChange={(e) => {
+              setTerminateReason(e.target.value);
+              if (terminateError) setTerminateError(null);
+            }}
+            placeholder={t('hr.rejectModal.reasonPlaceholder')}
+            error={terminateError ?? undefined}
+            autoFocus
+          />
+          <p className="text-xs text-[var(--text-muted)]">{t('hr.terminateConfirm')}</p>
         </div>
       </GlassModal>
     </div>

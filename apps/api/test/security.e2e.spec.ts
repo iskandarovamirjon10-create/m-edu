@@ -429,7 +429,7 @@ describe('M-EDU Security E2E', () => {
     expect(students.status).toBe(200);
     const items = (students.data as { items: unknown[] }).items;
     expect(Array.isArray(items)).toBe(true);
-    const ids = items.map((s: any) => s.id);
+    const ids = items.map((s: unknown) => (s as { id: string }).id);
     expect(ids).not.toContain(studentAId);
   });
 });

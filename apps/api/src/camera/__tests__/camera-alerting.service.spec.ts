@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CameraAlertingService } from '../camera-alerting.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 describe('CameraAlertingService (FIX-4)', () => {
   let service: CameraAlertingService;
@@ -10,11 +11,11 @@ describe('CameraAlertingService (FIX-4)', () => {
     notification: {
       createMany: vi.fn(),
     },
-  } as any;
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new CameraAlertingService(mockPrisma);
+    service = new CameraAlertingService(mockPrisma as unknown as PrismaService);
     service.onModuleInit();
   });
 

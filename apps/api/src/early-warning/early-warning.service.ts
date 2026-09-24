@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EarlyWarningQueryDto } from './dto/early-warning.dto';
 
 export interface EarlyWarningSummary {
   open: number;
@@ -120,7 +121,7 @@ export class EarlyWarningService {
 
   async findAll(
     orgId: string,
-    query: any,
+    query: EarlyWarningQueryDto,
   ): Promise<{ items: EarlyWarningItem[]; total: number }> {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -236,10 +237,10 @@ export class EarlyWarningService {
   }
 
   async resolve(
-    orgId: string,
-    id: string,
-    userId: string,
-    note?: string,
+    _orgId: string,
+    _id: string,
+    _userId: string,
+    _note?: string,
   ): Promise<{ ok: boolean }> {
     return { ok: true };
   }
@@ -248,13 +249,10 @@ export class EarlyWarningService {
     orgId: string,
     since: Date,
   ): Promise<Array<{ id: string; name: string; rate: number }>> {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
     const records = await this.prisma.attendance.findMany({
       where: {
         organizationId: orgId,
-        date: { gte: thirtyDaysAgo },
+        date: { gte: since },
       },
       select: {
         studentId: true,
@@ -297,3 +295,4 @@ export class EarlyWarningService {
     return result;
   }
 }
+

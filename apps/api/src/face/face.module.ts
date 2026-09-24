@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+import { CameraModule } from '../camera/camera.module';
 
 import { PrismaModule } from '../prisma/prisma.module';
 
@@ -8,6 +9,7 @@ import { FaceService } from './face.service';
 @Module({
   imports: [
     PrismaModule,
+    forwardRef(() => CameraModule),
   ],
 
   controllers: [

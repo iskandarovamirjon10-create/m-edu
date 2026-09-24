@@ -1,5 +1,7 @@
+import { computeAttendanceRate } from '../common/attendance-rate';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AcademicRiskQueryDto } from './dto/academic-risk-query.dto';
 
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
@@ -61,7 +63,7 @@ export class AcademicRiskService {
 
   async findAll(
     orgId: string,
-    query: any,
+    query: AcademicRiskQueryDto,
   ): Promise<{ items: AcademicRiskItem[]; total: number }> {
     let items = await this.computeAllRisks(orgId);
 
@@ -112,22 +114,36 @@ export class AcademicRiskService {
       submittedAt: Date | null;
     }> = [];
     try {
-      const submissions = (this.prisma as any).homeworkSubmission;
-      if (submissions && typeof submissions.findMany === 'function') {
-        homeworkRecords = await submissions.findMany({
-          where: {
-            student: { organizationId: orgId },
-            submittedAt: { gte: thirtyDaysAgo },
-          },
-          select: {
-            studentId: true,
-            isLate: true,
-            submittedAt: true,
-          },
-        });
-      }
-    } catch (_e) {
+      homeworkRecords = await this.prisma.homeworkSubmission.findMany({
+        where: {
+          organizationId: orgId,
+          submittedAt: { gte: thirtyDaysAgo },
+        },
+        select: {
+          studentId: true,
+          isLate: true,
+          submittedAt: true,
+        },
+      });
+    } catch {
       homeworkRecords = [];
+    }
+
+    const absentRecords = await this.prisma.attendance.findMany({
+      where: {
+        organizationId: orgId,
+        status: { in: ['ABSENT', 'EXCUSED'] },
+        date: { gte: sixtyDaysAgo },
+      },
+      orderBy: { date: 'desc' },
+      select: { studentId: true, date: true },
+    });
+
+    const absentMap = new Map<string, Date[]>();
+    for (const r of absentRecords) {
+      if (!absentMap.has(r.studentId)) absentMap.set(r.studentId, []);
+      const dates = absentMap.get(r.studentId)!;
+      if (dates.length < 10) dates.push(r.date);
     }
 
     const gradeRecords = await this.prisma.grade.findMany({
@@ -196,19 +212,15 @@ export class AcademicRiskService {
           ? Math.round((grades[0].value / grades[0].maxValue) * 100)
           : null;
 
-      const attendanceRate =
-        attendanceData && attendanceData.total > 0
-          ? Math.round((attendanceData.present / attendanceData.total) * 100)
-          : 100;
+      const attendanceRate = attendanceData ? (computeAttendanceRate([{ status: 'PRESENT', count: attendanceData.present }, { status: 'ABSENT', count: attendanceData.absent }, { status: 'LATE', count: attendanceData.late }], true) ?? 100) : 100;
 
       const homeworkCompletion =
         homeworkData && homeworkData.total > 0
           ? Math.round((homeworkData.submitted / homeworkData.total) * 100)
           : 100;
 
-      const consecutiveAbsences = await this.getConsecutiveAbsences(
-        orgId,
-        student.id,
+      const consecutiveAbsences = this.calculateConsecutiveAbsences(
+        absentMap.get(student.id) ?? [],
       );
 
       const lateSubmissionRate =
@@ -287,33 +299,19 @@ export class AcademicRiskService {
     return Math.min(100, Math.max(0, Math.round(trendScore)));
   }
 
-  private async getConsecutiveAbsences(
-    orgId: string,
-    studentId: string,
-  ): Promise<number> {
-    const records = await this.prisma.attendance.findMany({
-      where: {
-        organizationId: orgId,
-        studentId,
-        status: { in: ['ABSENT', 'EXCUSED'] },
-      },
-      orderBy: { date: 'desc' },
-      take: 10,
-      select: { date: true },
-    });
-
-    if (records.length === 0) return 0;
+  private calculateConsecutiveAbsences(dates: Date[]): number {
+    if (dates.length === 0) return 0;
 
     let consecutive = 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    for (let i = 0; i < records.length; i++) {
+    for (let i = 0; i < dates.length; i++) {
       const expected = new Date(today);
       expected.setDate(today.getDate() - i);
       expected.setHours(0, 0, 0, 0);
 
-      const recDate = new Date(records[i].date);
+      const recDate = new Date(dates[i]);
       recDate.setHours(0, 0, 0, 0);
 
       const diffDays = Math.abs(
@@ -336,3 +334,6 @@ export class AcademicRiskService {
     return 'HIGH';
   }
 }
+
+
+

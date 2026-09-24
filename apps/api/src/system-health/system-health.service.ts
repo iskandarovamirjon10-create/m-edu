@@ -6,7 +6,7 @@ export interface ComponentHealth {
   status: 'UP' | 'DOWN' | 'DEGRADED';
   latencyMs: number;
   lastChecked: string;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 export interface SystemSummary {
@@ -45,13 +45,13 @@ export class SystemHealthService {
         latencyMs: Date.now() - start,
         lastChecked: new Date().toISOString(),
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         name: 'database',
         status: 'DOWN',
         latencyMs: Date.now() - start,
         lastChecked: new Date().toISOString(),
-        details: { error: err?.message ?? 'unknown' },
+        details: { error: err instanceof Error ? err.message : 'unknown' },
       };
     }
   }
@@ -67,13 +67,13 @@ export class SystemHealthService {
         lastChecked: new Date().toISOString(),
         details: { organizationCount: count },
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         name: 'prisma',
         status: 'DOWN',
         latencyMs: Date.now() - start,
         lastChecked: new Date().toISOString(),
-        details: { error: err?.message ?? 'unknown' },
+        details: { error: err instanceof Error ? err.message : 'unknown' },
       };
     }
   }

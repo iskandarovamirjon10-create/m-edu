@@ -8,6 +8,7 @@ vi.mock('sharp', () => {
 
   const chain = () => ({
     metadata: vi.fn().mockResolvedValue({ width: 640, height: 480 }),
+    rotate: vi.fn().mockReturnThis(),
     extract: vi.fn().mockImplementation((opts: any) => {
       lastWidth = opts.width || 100;
       lastHeight = opts.height || 100;

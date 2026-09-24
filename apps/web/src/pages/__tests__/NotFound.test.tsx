@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { I18nProvider } from '@/i18n/I18nProvider';
 import { NotFoundPage } from '../NotFound';
 
 vi.mock('@/hooks/usePageTitle', () => ({
@@ -17,9 +18,11 @@ vi.mock('@/hooks/usePageTitle', () => ({
 
 function renderPage() {
   return render(
-    <MemoryRouter>
-      <NotFoundPage />
-    </MemoryRouter>,
+    <I18nProvider initialLocale="en">
+      <MemoryRouter>
+        <NotFoundPage />
+      </MemoryRouter>
+    </I18nProvider>,
   );
 }
 

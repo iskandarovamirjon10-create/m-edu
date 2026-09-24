@@ -9,6 +9,7 @@ import type {
 import type { RecognitionSessionStatus, RecognitionAttemptStatus, AttendanceDecision } from '@medu/contracts';
 import type { RecognitionSession, RecognitionAttempt, Prisma, Attendance } from '@prisma/client';
 import { AttendanceStatus } from '@prisma/client';
+import { startOfDay, endOfDayInclusive } from '../../common/date-range';
 
 interface AttendanceRowInput {
   id: string;
@@ -65,6 +66,35 @@ interface AttendanceListFilters {
 @Injectable()
 export class PrismaRecognitionAdapter implements RecognitionRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Organization-local calendar date (stored as UTC midnight of the local
+   * day). MUST match AttendanceDecisionEngine.getOrganizationDate so the
+   * camera path and this session path never split one local day across two
+   * rows (P0 timezone divergence).
+   */
+  private async getOrganizationLocalDate(organizationId: string, at: Date = new Date()): Promise<Date> {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { timezone: true },
+    });
+    const tz = org?.timezone?.trim() || 'UTC';
+
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(at);
+
+    const get = (type: 'year' | 'month' | 'day') => {
+      const value = parts.find((p) => p.type === type)?.value;
+      if (!value) throw new Error(`Unable to resolve local date part: ${type}`);
+      return Number(value);
+    };
+
+    return new Date(Date.UTC(get('year'), get('month') - 1, get('day')));
+  }
 
   private mapSessionEntity(row: RecognitionSession): RecognitionSessionEntity {
     return {
@@ -204,8 +234,8 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
     if (filters.status) where.status = filters.status;
     if (filters.dateFrom || filters.dateTo) {
       where.occurredAt = {};
-      if (filters.dateFrom) (where.occurredAt as Record<string, Date>).gte = filters.dateFrom;
-      if (filters.dateTo) (where.occurredAt as Record<string, Date>).lte = filters.dateTo;
+      if (filters.dateFrom) (where.occurredAt as Record<string, Date>).gte = startOfDay(filters.dateFrom);
+      if (filters.dateTo) (where.occurredAt as Record<string, Date>).lte = endOfDayInclusive(filters.dateTo);
     }
 
     const page = Math.max(1, Number(filters.page) || 1);
@@ -251,8 +281,7 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
     decision: AttendanceDecision;
     metadata?: Record<string, unknown>;
   }): Promise<AttendanceRecordEntity> {
-    const now = new Date();
-    const utcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const attendanceDate = await this.getOrganizationLocalDate(data.organizationId);
 
     let row: Attendance;
     try {
@@ -261,9 +290,10 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
           organizationId: data.organizationId,
           studentId: data.studentId,
           groupId: data.groupId,
-          date: utcMidnight,
+          lessonId: data.lessonId ?? null,
+          date: attendanceDate,
           status: AttendanceStatus.PRESENT,
-          source: 'FACE_RECOGNITION',
+          source: 'FACE',
           recognitionAttemptId: data.recognitionAttemptId,
           note: JSON.stringify({
             decision: data.decision,
@@ -275,14 +305,15 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
       });
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'P2002') {
+        const dayEnd = new Date(attendanceDate.getTime() + 24 * 60 * 60 * 1000);
         const existing = await this.prisma.attendance.findFirst({
           where: {
             organizationId: data.organizationId,
             studentId: data.studentId,
             groupId: data.groupId,
             date: {
-              gte: utcMidnight,
-              lt: new Date(utcMidnight.getTime() + 24 * 60 * 60 * 1000),
+              gte: attendanceDate,
+              lt: dayEnd,
             },
           },
         });
@@ -323,8 +354,7 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
     groupId: string,
     _lessonId: string | null
   ): Promise<AttendanceRecordEntity | null> {
-    const now = new Date();
-    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const dayStart = await this.getOrganizationLocalDate(organizationId);
     const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
     const row = await this.prisma.attendance.findFirst({
@@ -347,8 +377,8 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
     if (filters.groupId) where.groupId = filters.groupId;
     if (filters.dateFrom || filters.dateTo) {
       where.date = {};
-      if (filters.dateFrom) (where.date as Record<string, Date>).gte = filters.dateFrom;
-      if (filters.dateTo) (where.date as Record<string, Date>).lte = filters.dateTo;
+      if (filters.dateFrom) (where.date as Record<string, Date>).gte = startOfDay(filters.dateFrom);
+      if (filters.dateTo) (where.date as Record<string, Date>).lte = endOfDayInclusive(filters.dateTo);
     }
 
     const [rows, total] = await Promise.all([
@@ -380,7 +410,7 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
   }> {
     const where = {
       organizationId,
-      occurredAt: { gte: dateFrom, lte: dateTo },
+      occurredAt: { gte: startOfDay(dateFrom), lte: endOfDayInclusive(dateTo) },
     };
 
     const [totalAttempts, successful, uncertain, failed, livenessFailures, qualityFailures, avgLatencyResult] = await Promise.all([
@@ -415,12 +445,16 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
   }> {
     const where = {
       organizationId,
-      createdAt: { gte: dateFrom, lte: dateTo },
+      createdAt: { gte: startOfDay(dateFrom), lte: endOfDayInclusive(dateTo) },
     };
 
     const [_total, recorded] = await Promise.all([
       this.prisma.attendance.count({ where }),
-      this.prisma.attendance.count({ where: { ...where, source: 'FACE_RECOGNITION' } }),
+      // Accept both the canonical 'FACE' source and the legacy
+      // 'FACE_RECOGNITION' rows written by older builds.
+      this.prisma.attendance.count({
+        where: { ...where, source: { in: ['FACE', 'FACE_RECOGNITION'] } },
+      }),
     ]);
 
     return {

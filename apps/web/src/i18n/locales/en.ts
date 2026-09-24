@@ -22,6 +22,16 @@ const en = {
   'common.name': 'Name',
   'common.date': 'Date',
   'common.close': 'Close',
+  'common.add': 'Add',
+  'common.optional': 'Optional',
+  'common.deleting': 'Deleting…',
+  'confirm.title': 'Confirm action',
+  'confirm.description': 'Are you sure you want to perform this action? This cannot be undone.',
+  'automation.rule.deleteConfirm': 'Delete this automation rule?',
+  'automation.rule.toggleAria': 'Toggle rule {name}',
+  'branches.deactivateConfirm': 'Deactivate this branch? It can be reactivated later.',
+  'apiKeys.revokeConfirm': 'Revoke this API key? Integrations using it will stop working immediately.',
+  'hr.terminateConfirm': 'Terminate this employee? This action cannot be undone.',
 
   // Navigation
   'nav.dashboard': 'Dashboard',
@@ -38,6 +48,33 @@ const en = {
   'nav.settings': 'Settings',
   'nav.logout': 'Log out',
   'nav.language': 'Language',
+  'nav.faceRecognition': 'Face Recognition',
+  'nav.exams': 'Exams',
+  'nav.invoices': 'Invoices',
+  'nav.reports': 'Reports',
+  'nav.homework': 'Homework',
+  'nav.chat': 'Chat',
+  'nav.executiveDashboard': 'Executive Dashboard',
+  'nav.financialAnalytics': 'Financial Analytics',
+  'nav.payrollAnalytics': 'Payroll Analytics',
+  'nav.crmAnalytics': 'CRM Analytics',
+  'nav.parentPortal': 'Parent Portal',
+  'nav.hrPayroll': 'HR & Payroll',
+  'nav.payrollRuns': 'Payroll Runs',
+  'nav.automation': 'Automation',
+  'nav.followUpRules': 'Follow-Up Rules',
+  'nav.branches': 'Branches',
+  'nav.expenses': 'Expenses',
+  'nav.leads': 'Leads',
+  'nav.cameras': 'Cameras',
+  'nav.anomalyDetection': 'Anomaly Detection',
+  'nav.dataGovernance': 'Data Governance',
+  'nav.users': 'Users',
+  'nav.audit': 'Audit Log',
+  'nav.administration': 'Administration',
+  'nav.searchPlaceholder': 'Search students, teachers, groups…',
+  'nav.signIn': 'Sign In',
+  'nav.createAccount': 'Create Account',
 
   // Auth
   'auth.loginTitle': 'Sign in to your account',
@@ -126,6 +163,33 @@ const en = {
   'settings.title': 'Settings',
   'settings.language': 'Language',
   'settings.languageHint': 'Choose the interface language. The choice is saved on this device.',
+  'settings.subtitle': 'Organization and account configuration',
+  'settings.loading': 'Loading settings…',
+  'settings.loadFailed': 'Failed to load settings',
+  'settings.appearance': 'Appearance',
+  'settings.appearanceHint': 'Choose how M-EDU looks to you',
+  'settings.themeHint': 'Pick a theme — your selection is saved on this device.',
+  'settings.themeLight': 'Light',
+  'settings.themeDark': 'Dark',
+  'settings.organization': 'Organization',
+  'settings.organizationHint': 'Branding and contact details for your center',
+  'settings.orgName': 'Organization name',
+  'settings.contactEmail': 'Contact email',
+  'settings.phone': 'Phone',
+  'settings.saveOrg': 'Save organization',
+  'settings.orgUpdated': 'Organization updated successfully',
+  'settings.account': 'Account settings',
+  'settings.accountHint': 'Language and timezone preferences',
+  'settings.timezone': 'Timezone',
+  'settings.save': 'Save settings',
+  'settings.saved': 'Settings saved successfully',
+  'settings.changePassword': 'Change password',
+  'settings.changePasswordHint': "Use a strong password you don't reuse elsewhere",
+  'settings.currentPassword': 'Current password',
+  'settings.newPassword': 'New password',
+  'settings.confirmPassword': 'Confirm new password',
+  'settings.changePasswordAction': 'Change password',
+  'settings.passwordChanged': 'Password changed successfully',
 
   // Errors
   'error.network': 'Network error — check your connection and try again',
@@ -135,4 +199,9 @@ const en = {
   'error.server': 'Server error — please try again later',
 };
 
-export default en;
+import { legacyEn } from './legacy-slices';
+import { analyticsEn } from './analytics-slices';
+import { pagesEn } from './pages-slices';
+
+// Legacy fills gaps → analytics fills more → curated base wins for overrides.
+export default { ...legacyEn, ...analyticsEn, ...pagesEn, ...en };

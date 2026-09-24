@@ -11,10 +11,12 @@ import {
   Select,
   TextArea,
   useToasts,
+  GlassButton,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Student } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface StudentFormState {
   firstName: string;
@@ -47,9 +49,9 @@ const EMPTY_FORM: StudentFormState = {
 };
 
 const GENDERS = [
-  { value: 'MALE', label: 'Male' },
-  { value: 'FEMALE', label: 'Female' },
-  { value: 'OTHER', label: 'Other' },
+  { value: 'MALE', label: 'enum.gender.MALE' },
+  { value: 'FEMALE', label: 'enum.gender.FEMALE' },
+  { value: 'OTHER', label: 'enum.gender.OTHER' },
 ];
 
 function validateEmail(email: string): boolean {
@@ -57,7 +59,8 @@ function validateEmail(email: string): boolean {
 }
 
 export function StudentFormPage() {
-  usePageTitle('Student');
+  const { t } = useI18n();
+  usePageTitle(t('enum.badge.STUDENT'));
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
   const navigate = useNavigate();
@@ -111,21 +114,21 @@ export function StudentFormPage() {
     const errors: Partial<Record<keyof StudentFormState, string>> = {};
 
     if (!form.firstName.trim()) {
-      errors.firstName = 'First name is required';
+      errors.firstName = t('teachers.form.firstNameRequired');
     }
     if (!form.lastName.trim()) {
-      errors.lastName = 'Last name is required';
+      errors.lastName = t('teachers.form.lastNameRequired');
     }
     if (!isEdit && form.email && !validateEmail(form.email)) {
-      errors.email = 'Please enter a valid email address';
+      errors.email = t('common.emailInvalid');
     }
     if (form.parentEmail && !validateEmail(form.parentEmail)) {
-      errors.parentEmail = 'Please enter a valid email address';
+      errors.parentEmail = t('common.emailInvalid');
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form, isEdit]);
+  }, [form, isEdit, t]);
 
   const save = useMutation({
     mutationFn: () => {
@@ -150,7 +153,10 @@ export function StudentFormPage() {
       return studentsApi.update(id!, payload);
     },
     onSuccess: (res) => {
-      push('success', isEdit ? 'Student updated successfully' : 'Student created successfully');
+      push(
+        'success',
+        isEdit ? t('studentForm.updated') : t('studentForm.created'),
+      );
       qc.invalidateQueries({ queryKey: ['students'] });
       qc.invalidateQueries({ queryKey: ['student', id] });
       navigate(`/students/${(res as Student).id}`, { replace: true });
@@ -184,19 +190,14 @@ export function StudentFormPage() {
   if (isEdit && existing.isLoading && !existing.data) {
     return (
       <>
-        <div className="orb-container" aria-hidden="true">
-          <div className="orb orb-cyan-1" />
-          <div className="orb orb-cyan-2" />
-          <div className="orb orb-indigo-1" />
-          <div className="orb orb-deep-1" />
-        </div>
+        
         <div className="page-container mx-auto max-w-3xl space-y-4">
           <PageHeader
-            title="Edit student"
-            subtitle="Student profile information"
+            title={t('studentForm.editTitle')}
+            subtitle={t('studentForm.subtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label="Loading student…" />
+            <PageLoader label={t('studentForm.loading')} />
           </div>
         </div>
       </>
@@ -207,20 +208,15 @@ export function StudentFormPage() {
   if (isEdit && existing.isError) {
     return (
       <>
-        <div className="orb-container" aria-hidden="true">
-          <div className="orb orb-cyan-1" />
-          <div className="orb orb-cyan-2" />
-          <div className="orb orb-indigo-1" />
-          <div className="orb orb-deep-1" />
-        </div>
+        
         <div className="page-container mx-auto max-w-3xl space-y-4">
           <PageHeader
-            title="Edit student"
-            subtitle="Student profile information"
+            title={t('studentForm.editTitle')}
+            subtitle={t('studentForm.subtitle')}
           />
           <div className="glass-card p-8">
             <ErrorState
-              title="Failed to load student"
+              title={t('studentForm.loadFailed')}
               message={getErrorMessage(existing.error as Error)}
               onRetry={handleRetry}
             />
@@ -232,22 +228,19 @@ export function StudentFormPage() {
 
   return (
     <>
-      <div className="orb-container" aria-hidden="true">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
-      </div>
+      
       <div className="page-container mx-auto max-w-3xl space-y-4">
       <PageHeader
-        title={isEdit ? 'Edit student' : 'Add student'}
-        subtitle="Student profile information"
+        title={
+          isEdit ? t('studentForm.editTitle') : t('studentForm.addTitle')
+        }
+        subtitle={t('studentForm.subtitle')}
       />
 
       <div className="glass-card overflow-hidden">
         <div className="border-b border-[var(--border-subtle)] px-6 py-4">
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-            Student information
+            {t('studentForm.sectionInfo')}
           </h2>
         </div>
         <div className="p-6">
@@ -257,7 +250,11 @@ export function StudentFormPage() {
             noValidate
           >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="First name" required error={formErrors.firstName}>
+              <Field
+                label={t('teachers.form.firstName')}
+                required
+                error={formErrors.firstName}
+              >
                 <TextInput
                   value={form.firstName}
                   onChange={(e) => set('firstName', e.target.value)}
@@ -279,7 +276,11 @@ export function StudentFormPage() {
                 )}
               </Field>
 
-              <Field label="Last name" required error={formErrors.lastName}>
+              <Field
+                label={t('teachers.form.lastName')}
+                required
+                error={formErrors.lastName}
+              >
                 <TextInput
                   value={form.lastName}
                   onChange={(e) => set('lastName', e.target.value)}
@@ -304,8 +305,8 @@ export function StudentFormPage() {
               {!isEdit && (
                 <>
                   <Field
-                    label="Email"
-                    hint="Optional — used for login credentials."
+                    label={t('common.email')}
+                    hint={t('studentForm.emailHint')}
                     error={formErrors.email}
                   >
                     <TextInput
@@ -330,8 +331,8 @@ export function StudentFormPage() {
                   </Field>
 
                   <Field
-                    label="Password"
-                    hint="Optional — leave empty for no login."
+                    label={t('auth.password')}
+                    hint={t('studentForm.passwordHint')}
                   >
                     <TextInput
                       type="password"
@@ -344,7 +345,7 @@ export function StudentFormPage() {
                 </>
               )}
 
-              <Field label="Phone">
+              <Field label={t('common.phone')}>
                 <TextInput
                   type="tel"
                   value={form.phone}
@@ -354,7 +355,7 @@ export function StudentFormPage() {
                 />
               </Field>
 
-              <Field label="Date of birth">
+              <Field label={t('studentForm.dateOfBirth')}>
                 <TextInput
                   type="date"
                   value={form.dateOfBirth}
@@ -363,38 +364,38 @@ export function StudentFormPage() {
                 />
               </Field>
 
-              <Field label="Gender">
+              <Field label={t('studentForm.gender')}>
                 <Select
                   value={form.gender}
                   onChange={(e) => set('gender', e.target.value)}
-                  aria-label="Select gender"
+                  aria-label={t('studentForm.selectGenderAria')}
                   disabled={save.isPending}
                 >
                   <option value="">—</option>
                   {GENDERS.map((gender) => (
                     <option key={gender.value} value={gender.value}>
-                      {gender.label}
+                      {t(gender.label)}
                     </option>
                   ))}
                 </Select>
               </Field>
 
-              <Field label="Address">
+              <Field label={t('hr.form.address')}>
                 <TextInput
                   value={form.address}
                   onChange={(e) => set('address', e.target.value)}
-                  placeholder="Street, city"
+                  placeholder={t('studentForm.addressPlaceholder')}
                   disabled={save.isPending}
                 />
               </Field>
             </div>
 
-            <Field label="Notes">
+            <Field label={t('common.notes')}>
               <TextArea
                 rows={3}
                 value={form.notes}
                 onChange={(e) => set('notes', e.target.value)}
-                placeholder="Additional notes…"
+                placeholder={t('studentForm.notesPlaceholder')}
                 disabled={save.isPending}
               />
             </Field>
@@ -402,10 +403,10 @@ export function StudentFormPage() {
             {/* Parent/Guardian section */}
             <div className="border-t border-[var(--border-subtle)] pt-5">
               <h3 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">
-                Parent / Guardian
+                {t('studentForm.parentSection')}
               </h3>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <Field label="Parent name">
+                <Field label={t('studentForm.parentName')}>
                   <TextInput
                     value={form.parentName}
                     onChange={(e) => set('parentName', e.target.value)}
@@ -414,7 +415,7 @@ export function StudentFormPage() {
                   />
                 </Field>
 
-                <Field label="Parent phone">
+                <Field label={t('studentForm.parentPhone')}>
                   <TextInput
                     type="tel"
                     value={form.parentPhone}
@@ -424,7 +425,10 @@ export function StudentFormPage() {
                   />
                 </Field>
 
-                <Field label="Parent email" error={formErrors.parentEmail}>
+                <Field
+                  label={t('studentForm.parentEmail')}
+                  error={formErrors.parentEmail}
+                >
                   <TextInput
                     type="email"
                     value={form.parentEmail}
@@ -449,25 +453,25 @@ export function StudentFormPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
-              <button
+              <GlassButton
                 type="button"
-                className="glass-btn-secondary"
+                variant="secondary"
                 onClick={handleCancel}
                 disabled={save.isPending}
               >
-                Cancel
-              </button>
-              <button
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton
                 type="submit"
-                className="glass-btn-primary"
+                variant="primary"
                 disabled={save.isPending}
               >
                 {save.isPending
-                  ? 'Saving…'
+                  ? t('common.saving')
                   : isEdit
-                    ? 'Save changes'
-                    : 'Create student'}
-              </button>
+                    ? t('templates.saveChanges')
+                    : t('studentForm.create')}
+              </GlassButton>
             </div>
           </form>
         </div>

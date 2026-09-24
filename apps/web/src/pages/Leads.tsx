@@ -11,6 +11,8 @@ import {
   Select,
   Field,
   Modal,
+  ConfirmDialog,
+  GlassButton,
   useToasts,
 } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -18,6 +20,7 @@ import { formatDate } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Lead, LeadStage } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 const LEAD_STAGES: LeadStage[] = [
   'NEW',
@@ -26,6 +29,10 @@ const LEAD_STAGES: LeadStage[] = [
   'WON',
   'LOST',
 ];
+
+function stageKey(stage: string): string {
+  return `leads.stage.${stage}`;
+}
 
 interface LeadFilters {
   page: number;
@@ -54,20 +61,13 @@ const INITIAL_FORM: LeadFormState = {
   notes: '',
 };
 
-function formatStage(stage: string): string {
-  return stage
-    .toLowerCase()
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
 function formatLeadName(lead: Lead): string {
   return [lead.firstName, lead.lastName].filter(Boolean).join(' ');
 }
 
 export function LeadsPage() {
-  usePageTitle('Leads');
+  const { t } = useI18n();
+  usePageTitle(t('leads.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
@@ -79,6 +79,9 @@ export function LeadsPage() {
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [convertTarget, setConvertTarget] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // Form state
   const [form, setForm] = useState<LeadFormState>(INITIAL_FORM);
@@ -107,22 +110,40 @@ export function LeadsPage() {
   const data = leads.data as Paginated<Lead> | undefined;
   const leadList = useMemo(() => data?.items || [], [data]);
 
-  // Create lead mutation
+  // Create or update lead mutation
   const create = useMutation({
-    mutationFn: () =>
-      leadsApi.create({
+    mutationFn: () => {
+      const payload = {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim() || undefined,
         phone: form.phone.trim() || undefined,
         email: form.email.trim() || undefined,
         source: form.source.trim() || undefined,
         notes: form.notes.trim() || undefined,
-      }),
+        stage: form.stage,
+      };
+      return editingId
+        ? leadsApi.update(editingId, payload)
+        : leadsApi.create(payload);
+    },
     onSuccess: () => {
-      push('success', 'Lead created successfully');
+      push('success', editingId ? t('leads.updated') : t('leads.created'));
       setModalOpen(false);
+      setEditingId(null);
       setForm(INITIAL_FORM);
       setFormErrors({});
+      qc.invalidateQueries({ queryKey: ['leads'] });
+    },
+    onError: (e: Error) => {
+      push('error', getErrorMessage(e));
+    },
+  });
+
+  // Delete lead mutation
+  const remove = useMutation({
+    mutationFn: (id: string) => leadsApi.remove(id),
+    onSuccess: () => {
+      push('success', t('leads.deleted'));
       qc.invalidateQueries({ queryKey: ['leads'] });
     },
     onError: (e: Error) => {
@@ -135,7 +156,7 @@ export function LeadsPage() {
     mutationFn: ({ id, stage }: { id: string; stage: LeadStage }) =>
       leadsApi.updateStage(id, stage),
     onSuccess: () => {
-      push('success', 'Lead stage updated');
+      push('success', t('leads.stageUpdated'));
       qc.invalidateQueries({ queryKey: ['leads'] });
     },
     onError: (e: Error) => {
@@ -147,7 +168,7 @@ export function LeadsPage() {
   const convert = useMutation({
     mutationFn: (id: string) => leadsApi.convert(id, {}),
     onSuccess: () => {
-      push('success', 'Lead converted to student');
+      push('success', t('leads.converted'));
       qc.invalidateQueries({ queryKey: ['leads'] });
       qc.invalidateQueries({ queryKey: ['students'] });
     },
@@ -161,18 +182,18 @@ export function LeadsPage() {
     const errors: Partial<Record<keyof LeadFormState, string>> = {};
 
     if (!form.firstName.trim()) {
-      errors.firstName = 'First name is required';
+      errors.firstName = t('leads.form.firstNameRequired');
     }
     if (
       form.email &&
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
     ) {
-      errors.email = 'Please enter a valid email address';
+      errors.email = t('leads.form.emailInvalid');
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form]);
+  }, [form, t]);
 
   // Form handlers
   const handleFormChange = useCallback(
@@ -207,18 +228,40 @@ export function LeadsPage() {
     [updateStage],
   );
 
-  const handleConvert = useCallback(
-    (leadId: string) => {
-      if (
-        window.confirm(
-          'Are you sure you want to convert this lead to a student?',
-        )
-      ) {
-        convert.mutate(leadId);
-      }
-    },
-    [convert],
-  );
+  const handleConvert = useCallback((leadId: string) => {
+    setConvertTarget(leadId);
+  }, []);
+
+  const handleEdit = useCallback((lead: Lead) => {
+    setEditingId(lead.id);
+    setForm({
+      firstName: lead.firstName,
+      lastName: lead.lastName || '',
+      phone: lead.phone || '',
+      email: lead.email || '',
+      source: lead.source || '',
+      stage: lead.stage,
+      notes: lead.notes || '',
+    });
+    setFormErrors({});
+    setModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteTarget(id);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    remove.mutate(deleteTarget);
+    setDeleteTarget(null);
+  }, [deleteTarget, remove]);
+
+  const confirmConvert = useCallback(() => {
+    if (!convertTarget) return;
+    convert.mutate(convertTarget);
+    setConvertTarget(null);
+  }, [convertTarget, convert]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
@@ -233,11 +276,13 @@ export function LeadsPage() {
 
   const handleCloseModal = useCallback(() => {
     setModalOpen(false);
+    setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
   }, []);
 
   const handleOpenModal = useCallback(() => {
+    setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
     setModalOpen(true);
@@ -254,18 +299,14 @@ export function LeadsPage() {
   // Early return for loading state
   if (leads.isLoading && !data) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Leads"
-            subtitle="Manage prospective students through the funnel"
+            title={t('leads.title')}
+            subtitle={t('leads.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label="Loading leads…" />
+            <PageLoader label={t('leads.loading')} />
           </div>
         </div>
       </div>
@@ -275,19 +316,15 @@ export function LeadsPage() {
   // Early return for error state
   if (leads.isError) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Leads"
-            subtitle="Manage prospective students through the funnel"
+            title={t('leads.title')}
+            subtitle={t('leads.pageSubtitle')}
           />
           <div className="glass-card p-8">
             <ErrorState
-              title="Failed to load leads"
+              title={t('leads.loadFailed')}
               message={getErrorMessage(leads.error as Error)}
               onRetry={handleRetry}
             />
@@ -298,23 +335,19 @@ export function LeadsPage() {
   }
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
       <div className="page-container space-y-4">
         <PageHeader
-          title="Leads"
-          subtitle="Manage prospective students through the funnel"
+          title={t('leads.title')}
+          subtitle={t('leads.pageSubtitle')}
           actions={
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               onClick={handleOpenModal}
             >
-              Add lead
-            </button>
+              {t('leads.add')}
+            </GlassButton>
           }
         />
 
@@ -323,27 +356,29 @@ export function LeadsPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
             <TextInput
-              placeholder="Search leads…"
+              placeholder={t('leads.searchPlaceholder')}
               value={search}
               onChange={handleSearchChange}
-              aria-label="Search leads"
+              aria-label={t('leads.searchPlaceholder')}
               type="search"
             />
             <Select
               value={stage}
               onChange={handleStageFilterChange}
-              aria-label="Filter by stage"
+              aria-label={t('leads.filterHint')}
             >
-              <option value="">All stages</option>
+              <option value="">{t('leads.allStages')}</option>
               {LEAD_STAGES.map((stage) => (
                 <option key={stage} value={stage}>
-                  {formatStage(stage)}
+                  {t(stageKey(stage))}
                 </option>
               ))}
             </Select>
           </div>
           <div className="text-sm sm:ml-4 sm:shrink-0" style={{ color: 'var(--text-muted)' }}>
-            {totalLeads} {totalLeads === 1 ? 'lead' : 'leads'}
+            {totalLeads === 1
+              ? t('leads.countOne')
+              : t('leads.countOther', { count: totalLeads })}
           </div>
         </div>
       </div>
@@ -352,11 +387,11 @@ export function LeadsPage() {
       <div className="glass-card">
         {leadList.length === 0 ? (
           <EmptyState
-            title={hasActiveFilters ? 'No matching leads' : 'No leads'}
+            title={hasActiveFilters ? t('leads.noMatching') : t('leads.noLeads')}
             message={
               hasActiveFilters
-                ? 'Try adjusting your filters to see more results.'
-                : 'Add a lead to start tracking.'
+                ? t('common.adjustFilters')
+                : t('leads.addHint')
             }
           />
         ) : (
@@ -365,12 +400,12 @@ export function LeadsPage() {
               <table className="glass-table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Contact</th>
-                    <th>Source</th>
-                    <th>Stage</th>
-                    <th>Created</th>
-                    <th style={{ textAlign: 'right' }}>Actions</th>
+                    <th>{t('leads.col.name')}</th>
+                    <th>{t('leads.col.contact')}</th>
+                    <th>{t('leads.col.source')}</th>
+                    <th>{t('leads.col.stage')}</th>
+                    <th>{t('leads.col.created')}</th>
+                    <th style={{ textAlign: 'right' }}>{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -415,18 +450,18 @@ export function LeadsPage() {
                                   e.target.value as LeadStage,
                                 )
                               }
-                              aria-label={`Update stage for ${formatLeadName(lead)}`}
+                              aria-label={t('leads.updateStageAria', { name: formatLeadName(lead) })}
                               disabled={isUpdatingStage}
                             >
                               {LEAD_STAGES.map((stage) => (
                                 <option key={stage} value={stage}>
-                                  {formatStage(stage)}
+                                  {t(stageKey(stage))}
                                 </option>
                               ))}
                             </Select>
                             {isUpdatingStage && (
                               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                                Saving…
+                                {t('common.saving')}
                               </span>
                             )}
                           </div>
@@ -435,16 +470,36 @@ export function LeadsPage() {
                           {formatDate(lead.createdAt)}
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          {lead.stage !== 'WON' && lead.stage !== 'LOST' && (
-                            <button
+                          <div className="flex items-center justify-end gap-2">
+                            <GlassButton
                               type="button"
-                              className="glass-btn glass-btn-primary glass-btn-sm"
-                              onClick={() => handleConvert(lead.id)}
-                              disabled={isConverting}
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(lead)}
                             >
-                              {isConverting ? 'Converting…' : 'Convert'}
-                            </button>
-                          )}
+                              {t('common.edit')}
+                            </GlassButton>
+                            <GlassButton
+                              type="button"
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleDelete(lead.id)}
+                              disabled={remove.isPending && remove.variables === lead.id}
+                            >
+                              {t('common.delete')}
+                            </GlassButton>
+                            {lead.stage !== 'WON' && lead.stage !== 'LOST' && (
+                              <GlassButton
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleConvert(lead.id)}
+                                disabled={isConverting}
+                              >
+                                {isConverting ? t('leads.converting') : t('leads.convert')}
+                              </GlassButton>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -467,12 +522,12 @@ export function LeadsPage() {
       <Modal
         open={modalOpen}
         onClose={handleCloseModal}
-        title="Add lead"
+        title={editingId ? t('leads.editTitle') : t('leads.add')}
         wide
       >
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="First name" required error={formErrors.firstName}>
+            <Field label={t('leads.form.firstName')} required error={formErrors.firstName}>
               <TextInput
                 value={form.firstName}
                 onChange={handleFormChange('firstName')}
@@ -493,7 +548,7 @@ export function LeadsPage() {
               )}
             </Field>
 
-            <Field label="Last name">
+            <Field label={t('leads.form.lastName')}>
               <TextInput
                 value={form.lastName}
                 onChange={handleFormChange('lastName')}
@@ -501,7 +556,7 @@ export function LeadsPage() {
               />
             </Field>
 
-            <Field label="Phone">
+            <Field label={t('common.phone')}>
               <TextInput
                 type="tel"
                 value={form.phone}
@@ -510,7 +565,7 @@ export function LeadsPage() {
               />
             </Field>
 
-            <Field label="Email" error={formErrors.email}>
+            <Field label={t('common.email')} error={formErrors.email}>
               <TextInput
                 type="email"
                 value={form.email}
@@ -528,56 +583,78 @@ export function LeadsPage() {
               )}
             </Field>
 
-            <Field label="Source">
+            <Field label={t('leads.col.source')}>
               <TextInput
                 value={form.source}
                 onChange={handleFormChange('source')}
-                placeholder="Social media, referral…"
+                placeholder={t('leads.form.sourcePlaceholder')}
               />
             </Field>
 
-            <Field label="Stage">
+            <Field label={t('leads.col.stage')}>
               <Select
                 value={form.stage}
                 onChange={handleFormChange('stage')}
-                aria-label="Lead stage"
+                aria-label={t('leads.col.stage')}
               >
                 {LEAD_STAGES.map((stage) => (
                   <option key={stage} value={stage}>
-                    {formatStage(stage)}
+                    {t(stageKey(stage))}
                   </option>
                 ))}
               </Select>
             </Field>
           </div>
 
-          <Field label="Notes">
+          <Field label={t('common.notes')}>
             <TextInput
               value={form.notes}
               onChange={handleFormChange('notes')}
-              placeholder="Additional notes…"
+              placeholder={t('leads.form.notesPlaceholder')}
             />
           </Field>
 
           <div className="flex justify-end gap-2">
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-secondary"
+              variant="secondary"
               onClick={handleCloseModal}
               disabled={create.isPending}
             >
-              Cancel
-            </button>
-            <button
+              {t('common.cancel')}
+            </GlassButton>
+            <GlassButton
               type="submit"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               disabled={create.isPending}
             >
-              {create.isPending ? 'Saving…' : 'Add lead'}
-            </button>
+              {create.isPending
+                ? t('common.saving')
+                : editingId
+                  ? t('common.save')
+                  : t('leads.add')}
+            </GlassButton>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={convertTarget !== null}
+        onClose={() => setConvertTarget(null)}
+        onConfirm={confirmConvert}
+        description={t('leads.convertConfirm')}
+        confirmLabel={t('leads.convert')}
+        tone="primary"
+        loading={convert.isPending}
+      />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        description={t('leads.deleteConfirm')}
+        loading={remove.isPending}
+      />
 
       {toastNode}
       </div>

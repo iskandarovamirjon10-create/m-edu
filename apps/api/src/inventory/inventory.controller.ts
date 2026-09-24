@@ -24,6 +24,7 @@ import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
 import { PaginationParams } from '../common/dto/pagination';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { AllowAnyRole } from '../auth/roles.decorator';
 
 @Controller('inventory')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -32,6 +33,7 @@ export class InventoryController {
 
   // ===================== Inventory Items =====================
 
+  @AllowAnyRole()
   @Get('items')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findAllItems(
@@ -41,6 +43,7 @@ export class InventoryController {
     return this.inventoryService.findAllItems(user.organizationId, params);
   }
 
+  @AllowAnyRole()
   @Get('items/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findItemById(
@@ -80,6 +83,7 @@ export class InventoryController {
 
   // ===================== Transactions =====================
 
+  @AllowAnyRole()
   @Get('items/:itemId/transactions')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async getTransactionHistory(
@@ -124,12 +128,14 @@ export class InventoryController {
 
   // ===================== Reports =====================
 
+  @AllowAnyRole()
   @Get('stock-report')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async getStockReport(@CurrentUser() user: any) {
     return this.inventoryService.getStockReport(user.organizationId);
   }
 
+  @AllowAnyRole()
   @Get('categories')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async getCategoryStats(@CurrentUser() user: any) {

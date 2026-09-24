@@ -152,12 +152,34 @@ export class CameraHealthTracker {
     this.framesDropped++;
   }
 
+  /**
+   * Record a non-stream error (e.g. a single frame failed processing).
+   * Errors are tracked but must NOT consume the reconnect budget — only
+   * actual stream/connection failures may count toward MAX_RECONNECT_ATTEMPTS.
+   */
   recordError(err: Error | string): void {
     this.errors++;
-    this._reconnectAttempts++;
     this.lastErrorAt = Date.now();
     this.lastErrorMessage = err instanceof Error ? err.message : String(err);
     this.status = 'ERROR';
+  }
+
+  /**
+   * Record a stream/connection failure that should count toward the
+   * reconnect-attempt budget and drive exponential backoff.
+   */
+  recordStreamFailure(err: Error | string): void {
+    this.recordError(err);
+    this._reconnectAttempts++;
+  }
+
+  /**
+   * Reset the reconnect budget after a successful (re)connect so a camera
+   * that has been healthy for a while gets a fresh set of attempts instead
+   * of staying permanently near the ERROR cap.
+   */
+  resetReconnectAttempts(): void {
+    this._reconnectAttempts = 0;
   }
 
   /** Exponential backoff: 5s → 10s → 20s → … capped at 60s. */
@@ -284,7 +306,10 @@ export class FfmpegStreamIngester {
 
     const args = FfmpegStreamIngester.buildArgs(this.streamUri, this.fps, this.transport);
 
-    this.proc = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    this.proc = spawn('ffmpeg', args, { 
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false 
+    });
 
     this.proc.stdout?.on('data', (chunk: Buffer) => this.handleData(chunk));
     this.proc.stderr?.on('data', () => {

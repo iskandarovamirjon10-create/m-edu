@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { WorkflowRuleDto, WorkflowInstanceDto, WorkflowStepConfig } from './workflow.types';
+import { WorkflowRuleDto, WorkflowInstanceDto, WorkflowCondition } from './workflow.types';
 import { PaginationQuery } from '../common/dto/query';
 
 // ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ export class WorkflowService {
   // Condition evaluator
   // ---------------------------------------------------------------------------
 
-  private evaluateConditions(conditions: any[], payload: Record<string, unknown>): boolean {
+  private evaluateConditions(conditions: WorkflowCondition[], payload: Record<string, unknown>): boolean {
     if (!conditions || conditions.length === 0) return true;
     for (const cond of conditions) {
       const value = payload[cond.field];

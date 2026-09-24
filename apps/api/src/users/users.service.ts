@@ -1,15 +1,23 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePagination } from '../lib/pagination';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { CreateUserDto, UpdateUserDto, UpdateUserSettingsDto } from '../common/dto';
 import { UserQuery } from '../common/dto/query';
 
+/**
+ * Service for managing user accounts and RBAC access across multi-tenant environments.
+ */
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * List all users within an organization with pagination and filters.
+   */
   async findAll(organizationId: string, query: UserQuery) {
     const { page, limit, skip } = parsePagination(query);
     const where: Prisma.UserWhereInput = { organizationId };
@@ -21,7 +29,7 @@ export class UsersService {
         { email: { contains: query.search, mode: 'insensitive' } },
       ];
     }
-    if (query.role) where.role = query.role as Prisma.UserWhereInput['role'];
+    if (query.role) where.role = query.role as Role;
     if (query.isActive !== undefined) where.isActive = query.isActive === 'true';
 
     const [items, total] = await Promise.all([
@@ -48,6 +56,9 @@ export class UsersService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
+  /**
+   * Retrieves a single user profile including basic settings.
+   */
   async findOne(organizationId: string, id: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, organizationId },
@@ -66,38 +77,47 @@ export class UsersService {
         settings: true,
       },
     });
-    if (!user) throw new NotFoundException('User not found');
+    
+    if (!user) {
+      this.logger.warn(`User ${id} not found in org ${organizationId}`);
+      throw new NotFoundException('User not found');
+    }
     return user;
   }
 
+  /**
+   * Creates a new user with proper RBAC permission checks.
+   */
   async create(organizationId: string, data: CreateUserDto, actorRole?: string) {
-    // Only a platform SUPER_ADMIN may mint another SUPER_ADMIN — an ORG_ADMIN
-    // must not be able to grant the role that bypasses all permission checks.
-    if (data.role === 'SUPER_ADMIN' && actorRole !== 'SUPER_ADMIN') {
+    // Only a platform SUPER_ADMIN may mint another SUPER_ADMIN
+    if (data.role === Role.SUPER_ADMIN && actorRole !== Role.SUPER_ADMIN) {
+      this.logger.error(`Attempt to mint SUPER_ADMIN by role ${actorRole}`);
       throw new ForbiddenException('Only a SUPER_ADMIN can assign the SUPER_ADMIN role');
     }
-    // ORG_ADMINs create MANAGER-and-below accounts only; admin accounts are
-    // the tenant trust anchor and are minted exclusively by SUPER_ADMIN.
-    if (data.role === 'ORG_ADMIN' && actorRole !== 'SUPER_ADMIN') {
+    
+    // Only a SUPER_ADMIN may mint an ORG_ADMIN
+    if (data.role === Role.ORG_ADMIN && actorRole !== Role.SUPER_ADMIN) {
+      this.logger.warn(`Unauthorized attempt to mint ORG_ADMIN by role ${actorRole}`);
       throw new ForbiddenException('Only a SUPER_ADMIN can grant the ORG_ADMIN role');
     }
 
-    const existing = await this.prisma.user.findFirst({ where: { email: data.email } });
+    const existing = await this.prisma.user.findFirst({ where: { email: data.email, organizationId } });
     if (existing) throw new BadRequestException('Email already registered');
 
     const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : null;
 
-    return this.prisma.user.create({
-      data: {
-        organizationId,
-        email: data.email,
-        passwordHash,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phone: data.phone,
-        role: data.role,
-        settings: { create: {} },
-      },
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          organizationId,
+          email: data.email,
+          passwordHash,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          phone: data.phone,
+          role: data.role,
+          settings: { create: {} },
+        },
       select: {
         id: true,
         email: true,
@@ -107,8 +127,19 @@ export class UsersService {
         isActive: true,
       },
     });
+      this.logger.log(`User created: ${user.id} with role ${user.role}`);
+      return user;
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        throw new BadRequestException('This email is unavailable');
+      }
+      throw error;
+    }
   }
 
+  /**
+   * Safely update a user profile. Enforces strict hierarchy protections.
+   */
   async update(
     organizationId: string,
     id: string,
@@ -118,49 +149,36 @@ export class UsersService {
   ) {
     const target = await this.findOne(organizationId, id);
 
-    // Privilege-escalation guards:
     // 1. Only a SUPER_ADMIN may assign the SUPER_ADMIN role.
-    if (data.role === 'SUPER_ADMIN' && actorRole !== 'SUPER_ADMIN') {
+    if (data.role === Role.SUPER_ADMIN && actorRole !== Role.SUPER_ADMIN) {
       throw new ForbiddenException('Only a SUPER_ADMIN can assign the SUPER_ADMIN role');
     }
-    // 2. An ORG_ADMIN must not manage (demote/deactivate) another admin or a
-    //    SUPER_ADMIN account — admin accounts are the tenant's trust anchor.
+    // 2. ORG_ADMIN must not manage another admin
     if (
-      actorRole === 'ORG_ADMIN' &&
-      (target.role === 'ORG_ADMIN' || target.role === 'SUPER_ADMIN') &&
+      actorRole === Role.ORG_ADMIN &&
+      (target.role === Role.ORG_ADMIN || target.role === Role.SUPER_ADMIN) &&
       (data.role !== undefined || data.isActive !== undefined)
     ) {
       throw new ForbiddenException('ORG_ADMIN cannot change the role or status of an admin account');
     }
-    // 3. An ORG_ADMIN may not promote a user to ORG_ADMIN either (same reason);
-    //    only SUPER_ADMIN decides who is an administrator.
-    if (
-      actorRole === 'ORG_ADMIN' &&
-      data.role === 'ORG_ADMIN'
-    ) {
+    // 3. ORG_ADMIN may not promote someone to ORG_ADMIN
+    if (actorRole === Role.ORG_ADMIN && data.role === Role.ORG_ADMIN) {
       throw new ForbiddenException('Only a SUPER_ADMIN can grant the ORG_ADMIN role');
     }
-
-    // 4. No user may change their OWN role or account status. Without this, a
-    //    SUPER_ADMIN could demote or deactivate themselves and permanently
-    //    lock the platform out of admin control (only the seed can mint a
-    //    SUPER_ADMIN today).
-    if (
-      actorUserId === id &&
-      (data.role !== undefined || data.isActive !== undefined)
-    ) {
+    // 4. No user may change their OWN role or status
+    if (actorUserId === id && (data.role !== undefined || data.isActive !== undefined)) {
       throw new ForbiddenException('You cannot change your own role or account status');
     }
-    // 5. The LAST active SUPER_ADMIN must not be demoted or deactivated — that
-    //    would leave the platform with no bootstrap path to admin control.
+    
+    // 5. Protect the last SUPER_ADMIN
     if (
-      target.role === 'SUPER_ADMIN' &&
+      target.role === Role.SUPER_ADMIN &&
       target.isActive &&
       (data.role !== undefined || data.isActive !== undefined) &&
-      (data.role !== 'SUPER_ADMIN' || data.isActive === false)
+      (data.role !== Role.SUPER_ADMIN || data.isActive === false)
     ) {
       const activeSuperAdmins = await this.prisma.user.count({
-        where: { role: 'SUPER_ADMIN', isActive: true },
+        where: { role: Role.SUPER_ADMIN, isActive: true },
       });
       if (activeSuperAdmins <= 1) {
         throw new ForbiddenException('Cannot demote or deactivate the last active SUPER_ADMIN');
@@ -176,18 +194,23 @@ export class UsersService {
 
     if (Object.keys(updateData).length === 0) return this.findOne(organizationId, id);
 
-    return this.prisma.user.update({ where: { id, organizationId }, data: updateData });
+    const updated = await this.prisma.user.update({ where: { id, organizationId }, data: updateData });
+    this.logger.log(`User ${id} updated by ${actorUserId}`);
+    return updated;
   }
 
+  /**
+   * Allows a user to change their own password, invalidating old sessions.
+   */
   async changePassword(
+    organizationId: string,
     userId: string,
     currentPassword: string,
     newPassword: string,
     currentSessionId?: string | null,
   ) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId } });
     if (!user) throw new NotFoundException('User not found');
-
     if (!user.passwordHash) {
       throw new BadRequestException('This account uses Google Sign-In and has no password');
     }
@@ -196,15 +219,12 @@ export class UsersService {
     if (!valid) throw new BadRequestException('Current password is incorrect');
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
+    
     await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: userId },
+      await tx.user.updateMany({
+        where: { id: userId, organizationId },
         data: { passwordHash },
       });
-      // Revoke every other session — a password change must invalidate
-      // tokens issued before the change (stolen-token mitigation). The
-      // current session (where the user just proved possession of the old
-      // password) is kept for a smooth UX.
       await tx.session.updateMany({
         where: {
           userId,
@@ -214,9 +234,13 @@ export class UsersService {
         data: { revokedAt: new Date(), revokedReason: 'password_changed' },
       });
     });
+    this.logger.log(`Password changed for user ${userId}`);
     return { message: 'Password changed successfully' };
   }
 
+  /**
+   * Update internal user preferences/settings safely.
+   */
   async updateSettings(
     organizationId: string,
     id: string,
@@ -224,66 +248,61 @@ export class UsersService {
     actorUserId?: string,
     actorRole?: string,
   ) {
-    // IDOR guard: users may only change their OWN settings; org admins may
-    // change settings for any user inside their tenant.
-    if (actorUserId !== id && actorRole !== 'ORG_ADMIN' && actorRole !== 'SUPER_ADMIN') {
+    if (actorUserId !== id && actorRole !== Role.ORG_ADMIN && actorRole !== Role.SUPER_ADMIN) {
       throw new ForbiddenException('You can only update your own settings');
     }
-    await this.findOne(organizationId, id);
-    const existing = await this.prisma.userSettings.findUnique({ where: { userId: id } });
+    
+    // FIX: EXPLICIT organization check to prevent IDOR!
+    const target = await this.findOne(organizationId, id);
+
+    const existing = await this.prisma.userSettings.findUnique({ where: { userId: target.id } });
     if (!existing) {
-      return this.prisma.userSettings.create({ data: { userId: id, ...data } });
+      return this.prisma.userSettings.create({ data: { userId: target.id, ...data } });
     }
-    return this.prisma.userSettings.update({ where: { userId: id }, data });
+    return this.prisma.userSettings.update({ where: { userId: target.id }, data });
   }
 
   /**
-   * Permanently delete a user account.
-   *
-   * Only safe for accounts WITHOUT a Student/Teacher profile (those rows are
-   * RESTRICT-ed by FKs and carry historical records — deactivate instead).
-   * Guard rails: no self-deletion, ORG_ADMINs cannot delete admin accounts,
-   * the last active SUPER_ADMIN is protected. Audit events are preserved
-   * (FaceAuditEvent.userId is SET NULL on delete).
+   * Permanently delete a user account safely (RESTRICT FKs, Audit trail persistence).
    */
   async remove(organizationId: string, id: string, actorUserId?: string, actorRole?: string) {
     const target = await this.findOne(organizationId, id);
 
-    if (actorUserId === id) {
-      throw new BadRequestException('You cannot delete your own account');
-    }
-    if (actorRole === 'ORG_ADMIN' && (target.role === 'ORG_ADMIN' || target.role === 'SUPER_ADMIN')) {
+    if (actorUserId === id) throw new BadRequestException('You cannot delete your own account');
+    
+    if (actorRole === Role.ORG_ADMIN && (target.role === Role.ORG_ADMIN || target.role === Role.SUPER_ADMIN)) {
       throw new ForbiddenException('ORG_ADMIN cannot delete an admin account');
     }
-    if (target.role === 'SUPER_ADMIN' && target.isActive) {
+    
+    if (target.role === Role.SUPER_ADMIN && target.isActive) {
       const activeSuperAdmins = await this.prisma.user.count({
-        where: { role: 'SUPER_ADMIN', isActive: true },
+        where: { role: Role.SUPER_ADMIN, isActive: true },
       });
-      if (activeSuperAdmins <= 1) {
-        throw new ForbiddenException('Cannot delete the last active SUPER_ADMIN');
-      }
+      if (activeSuperAdmins <= 1) throw new ForbiddenException('Cannot delete the last active SUPER_ADMIN');
     }
 
     const [student, teacher] = await Promise.all([
       this.prisma.student.findUnique({ where: { userId: id } }),
       this.prisma.teacher.findUnique({ where: { userId: id } }),
     ]);
+    
     if (student || teacher) {
-      throw new BadRequestException(
-        'This account has a Student/Teacher profile with historical records — deactivate the account instead of deleting it',
-      );
+      throw new BadRequestException('This account has a Student/Teacher profile with historical records — deactivate the account instead of deleting it');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      // RESTRICT FKs must be cleared before the User row can go.
-      await tx.notification.deleteMany({ where: { userId: id } });
-      await tx.session.deleteMany({ where: { userId: id } });
-      await tx.userSettings.deleteMany({ where: { userId: id } });
-      // FaceAuditEvent.userId is SET NULL — the audit trail survives.
-      await tx.user.delete({ where: { id, organizationId } });
-    });
-
-    return { message: 'User deleted successfully' };
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.notification.deleteMany({ where: { userId: id } });
+        await tx.session.deleteMany({ where: { userId: id } });
+        await tx.userSettings.deleteMany({ where: { userId: id } });
+        await tx.user.delete({ where: { id, organizationId } });
+      });
+      this.logger.log(`User ${id} deleted by ${actorUserId}`);
+      return { message: 'User deleted successfully' };
+    } catch (e: any) {
+      this.logger.error(`Failed to delete user ${id}`, e.stack);
+      throw new BadRequestException('Cannot delete user due to system constraints.');
+    }
   }
 }
 

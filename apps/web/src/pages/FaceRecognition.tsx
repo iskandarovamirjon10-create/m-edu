@@ -11,12 +11,15 @@ import {
   statusColor,
   Field,
   Select,
+  GlassButton,
 } from '@/components/ui';
 import { WebcamCapture } from '@/components/WebcamCapture';
 import { formatDateTime } from '@/lib/format';
 import { friendlyFaceError } from '@/lib/faceErrors';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
+import { translate } from '@/i18n';
 import type {
   Paginated,
   RecognitionAttempt,
@@ -24,6 +27,32 @@ import type {
   Group,
   FaceEngineStatus,
 } from '@/lib/types';
+
+const FACE_RECOGNITION_EN_FALLBACK: Record<string, string> = {
+  'faceRecognition.startSession': 'Start recognition session',
+  'faceRecognition.starting': 'Starting…',
+  'faceRecognition.sessionActive': 'Session active',
+  'faceRecognition.finishSession': 'Finish session',
+  'faceRecognition.finishing': 'Finishing…',
+};
+
+function useT(): (key: string, vars?: Record<string, string | number>) => string {
+  try {
+    const { t } = useI18n();
+    return t;
+  } catch {
+    return (key: string, vars?: Record<string, string | number>) => {
+      const viaEn = translate('en', key, vars);
+      if (viaEn !== key) return viaEn;
+      const template = FACE_RECOGNITION_EN_FALLBACK[key];
+      if (!template) return key;
+      if (!vars) return template;
+      return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+        name in vars ? String(vars[name]) : match,
+      );
+    };
+  }
+}
 
 interface RecognitionFormState {
   sessionId: string;
@@ -83,7 +112,8 @@ function formatRecognitionResult(result: unknown): RecognitionResult | null {
 }
 
 export function FaceRecognitionPage() {
-  usePageTitle('Face Recognition');
+  const t = useT();
+  usePageTitle(t('faceRecognition.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
@@ -133,7 +163,7 @@ export function FaceRecognitionPage() {
       // Backend POST /face/sessions returns { sessionId, status } (not { id }).
       setForm((prev) => ({ ...prev, sessionId: session.sessionId ?? session.id }));
       setResult(null);
-      push('success', 'Recognition session started');
+      push('success', t('faceRecognition.sessionStarted'));
     },
     onError: (e: Error) => {
       push('error', friendlyFaceError(e));
@@ -145,7 +175,7 @@ export function FaceRecognitionPage() {
     mutationFn: (b64: string) => faceApi.submitAttempt(form.sessionId, b64),
     onSuccess: (res) => {
       setResult(res);
-      push('success', 'Attempt processed');
+      push('success', t('faceRecognition.attemptProcessed'));
       qc.invalidateQueries({ queryKey: ['face-history'] });
     },
     onError: (e: Error) => {
@@ -157,7 +187,7 @@ export function FaceRecognitionPage() {
   const finish = useMutation({
     mutationFn: () => faceApi.finishSession(form.sessionId, 'operator_finished'),
     onSuccess: () => {
-      push('success', 'Session finished');
+      push('success', t('faceRecognition.sessionFinished'));
       setForm((prev) => ({ ...prev, sessionId: '' }));
       setResult(null);
       qc.invalidateQueries({ queryKey: ['face-history'] });
@@ -186,12 +216,12 @@ export function FaceRecognitionPage() {
   const handleCapture = useCallback(
     (b64: string) => {
       if (!form.sessionId) {
-        push('error', 'No active recognition session');
+        push('error', t('faceRecognition.noSession'));
         return;
       }
       submit.mutate(b64);
     },
-    [form.sessionId, submit, push],
+    [form.sessionId, submit, push, t],
   );
 
   const { refetch: refetchHistory } = history;
@@ -210,15 +240,11 @@ export function FaceRecognitionPage() {
   const recognitionResult = formatRecognitionResult(result);
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
       <div className="page-container space-y-6">
         <PageHeader
-          title="Face Recognition"
-          subtitle="Live recognition sessions with liveness checks"
+          title={t('faceRecognition.title')}
+          subtitle={t('faceRecognition.subtitle')}
         />
 
       {/* Engine status and session controls */}
@@ -226,51 +252,53 @@ export function FaceRecognitionPage() {
         <div className="p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Engine:</span>
+              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t('faceRecognition.engineLabel')}</span>
               {engine.isLoading && !engineStatus ? (
-                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</span>
-              ) : engine.isError ? (
-                <button
-                  type="button"
-                  className="text-sm font-medium"
-                  style={{ color: 'var(--state-error)' }}
-                  onClick={handleRetryEngine}
-                >
-                  Failed to load — retry
-                </button>
-              ) : engineStatus ? (
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{t('common.loading')}</span>
+ ) : engine.isError ? (
+ <GlassButton
+ type="button"
+ variant="ghost"
+ size="sm"
+ className="text-red-600"
+ onClick={handleRetryEngine}
+ >
+ {t('faceRecognition.engineRetry')}
+ </GlassButton>
+ ) : engineStatus ? (
                 <Badge color={engineStatus.isReal ? 'green' : 'amber'}>
-                  {engineStatus.provider || 'unknown'}
+                  {engineStatus.provider || t('common.unknown')}
                 </Badge>
               ) : null}
             </div>
 
             {isSessionActive ? (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Badge color="green">Session active</Badge>
+                <Badge color="green">{t('faceRecognition.sessionActive')}</Badge>
                 <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
                   {truncateSessionId(form.sessionId)}
                 </span>
-                <button
+                <GlassButton
                   type="button"
-                  className="glass-btn glass-btn-secondary glass-btn-sm"
+                  variant="secondary"
+                  size="sm"
                   onClick={handleFinishSession}
                   disabled={finish.isPending}
                 >
-                  {finish.isPending ? 'Finishing…' : 'Finish session'}
-                </button>
+                  {finish.isPending ? t('faceRecognition.finishing') : t('faceRecognition.finishSession')}
+                </GlassButton>
               </div>
             ) : (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <Field label="Group (optional)">
+                <Field label={t('faceRecognition.groupOptional')}>
                   <Select
                     value={form.groupId}
                     onChange={handleGroupChange}
                     className="w-full sm:w-48"
-                    aria-label="Select group for recognition"
+                    aria-label={t('faceRecognition.groupSelectAria')}
                     disabled={startSession.isPending}
                   >
-                    <option value="">Any group</option>
+                    <option value="">{t('faceRecognition.anyGroup')}</option>
                     {activeGroups.map((group) => (
                       <option key={group.id} value={group.id}>
                         {group.name}
@@ -278,16 +306,17 @@ export function FaceRecognitionPage() {
                     ))}
                   </Select>
                 </Field>
-                <button
+                <GlassButton
                   type="button"
-                  className="glass-btn glass-btn-primary glass-btn-sm"
+                  variant="primary"
+                  size="sm"
                   onClick={handleStartSession}
                   disabled={startSession.isPending}
                 >
                   {startSession.isPending
-                    ? 'Starting…'
-                    : 'Start recognition session'}
-                </button>
+                    ? t('faceRecognition.starting')
+                    : t('faceRecognition.startSession')}
+                </GlassButton>
               </div>
             )}
           </div>
@@ -298,8 +327,7 @@ export function FaceRecognitionPage() {
               style={{ background: 'rgba(245,184,106,0.12)', color: '#c07828' }}
               role="note"
             >
-              Mock engine is active (development only). Production requires the
-              real ONNX engine with liveness.
+              {t('faceRecognition.mockNotice')}
             </div>
           )}
 
@@ -320,7 +348,7 @@ export function FaceRecognitionPage() {
         <div className="glass-card">
           <div className="border-b px-5 py-4" style={{ borderColor: 'var(--border-subtle)' }}>
             <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-              {isSessionActive ? 'Submit a capture' : 'Start a session first'}
+              {isSessionActive ? t('faceRecognition.submitCapture') : t('faceRecognition.startFirst')}
             </h2>
           </div>
           <div className="p-5">
@@ -328,12 +356,11 @@ export function FaceRecognitionPage() {
               <WebcamCapture
                 onCapture={handleCapture}
                 busy={submit.isPending}
-                label="Recognize face"
+                label={t('faceRecognition.recognizeFace')}
               />
             ) : (
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                Start a recognition session to begin capturing faces for
-                attendance.
+                {t('faceRecognition.captureHint')}
               </p>
             )}
 
@@ -350,30 +377,30 @@ export function FaceRecognitionPage() {
             {recognitionResult && (
               <div className="mt-4 space-y-3 rounded-lg p-4" style={{ background: 'var(--bg-glass)' }}>
                 <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-                  Recognition result
+                  {t('faceRecognition.resultTitle')}
                 </h3>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Student</span>
+                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t('faceRecognition.student')}</span>
                     <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                       {formatStudentName(recognitionResult.student)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Status</span>
+                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t('common.status')}</span>
                     <Badge color={statusColor(recognitionResult.status)}>
                       {recognitionResult.status}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Confidence</span>
+                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t('faceRecognition.confidence')}</span>
                     <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                       {formatConfidence(recognitionResult.confidence)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Liveness</span>
+                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t('faceRecognition.liveness')}</span>
                     <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                       {formatLivenessResult(recognitionResult.livenessResult)}
                     </span>
@@ -382,7 +409,7 @@ export function FaceRecognitionPage() {
 
                 <details className="mt-2">
                   <summary className="cursor-pointer text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                    View raw response
+                    {t('faceRecognition.viewRaw')}
                   </summary>
                   <pre className="mt-2 whitespace-pre-wrap rounded p-3 font-mono text-xs" style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>
                     {JSON.stringify(result, null, 2)}
@@ -397,37 +424,37 @@ export function FaceRecognitionPage() {
         <div className="glass-card">
           <div className="border-b px-5 py-4" style={{ borderColor: 'var(--border-subtle)' }}>
             <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-              Recognition history
+              {t('faceRecognition.historyTitle')}
             </h2>
           </div>
 
           {history.isLoading && !historyData ? (
             <div className="p-8">
-              <PageLoader label="Loading history…" />
+              <PageLoader label={t('faceRecognition.loadingHistory')} />
             </div>
           ) : history.isError ? (
             <div className="p-8">
               <ErrorState
-                title="Failed to load recognition history"
+                title={t('faceRecognition.historyError')}
                 message={getErrorMessage(history.error as Error)}
                 onRetry={handleRetryHistory}
               />
             </div>
           ) : historyList.length === 0 ? (
             <EmptyState
-              title="No recognition attempts"
-              message="Attempts will appear here after sessions run."
+              title={t('faceRecognition.emptyHistory')}
+              message={t('faceRecognition.emptyHistoryHint')}
             />
           ) : (
             <div className="glass-table-wrap">
               <table className="glass-table">
                 <thead>
                   <tr>
-                    <th>Time</th>
-                    <th>Student</th>
-                    <th>Status</th>
-                    <th>Confidence</th>
-                    <th>Liveness</th>
+                    <th>{t('faceRecognition.colTime')}</th>
+                    <th>{t('faceRecognition.colStudent')}</th>
+                    <th>{t('common.status')}</th>
+                    <th>{t('faceRecognition.confidence')}</th>
+                    <th>{t('faceRecognition.liveness')}</th>
                   </tr>
                 </thead>
                 <tbody>

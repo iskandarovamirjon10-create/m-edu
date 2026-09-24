@@ -1,11 +1,12 @@
 import { useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '@/layouts/AuthLayout';
-import { useAuth } from '@/auth/AuthContext';
-import { GlassInput } from '@/components/ui';
+import { useAuth, AuthError } from '@/auth/AuthContext';
+import { GlassInput, GlassButton } from '@/components/ui';
 import { ApiError } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
 
 interface RegisterFormState {
   firstName: string;
@@ -40,21 +41,22 @@ function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-function validatePassword(password: string): string | undefined {
+function validatePassword(password: string, t: TranslateFn): string | undefined {
   if (password.length < 8) {
-    return 'Password must be at least 8 characters.';
+    return `${t('auth.passwordMinLength', { min: 8 })}.`;
   }
   if (!/[A-Z]/.test(password)) {
-    return 'Password must contain at least one uppercase letter.';
+    return t('register.passwordUppercase');
   }
   if (!/[0-9]/.test(password)) {
-    return 'Password must contain at least one number.';
+    return t('register.passwordNumber');
   }
   return undefined;
 }
 
 export function RegisterPage() {
-  usePageTitle('Create Account');
+  const { t } = useI18n();
+  usePageTitle(t('auth.registerTitle'));
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -75,30 +77,30 @@ export function RegisterPage() {
     const newErrors: FormErrors = {};
 
     if (!form.firstName.trim()) {
-      newErrors.firstName = 'First name is required';
+      newErrors.firstName = t('teachers.form.firstNameRequired');
     }
     if (!form.lastName.trim()) {
-      newErrors.lastName = 'Last name is required';
+      newErrors.lastName = t('teachers.form.lastNameRequired');
     }
     if (!form.email.trim()) {
-      newErrors.email = 'Email is required';
+      newErrors.email = t('hr.form.validation.emailRequired');
     } else if (!validateEmail(form.email)) {
-      newErrors.email = 'Please enter a valid email address';
+      newErrors.email = t('register.emailInvalid');
     }
     if (!form.organizationName.trim()) {
-      newErrors.organizationName = 'Organization name is required';
+      newErrors.organizationName = t('register.organizationRequired');
     }
-    const passwordError = validatePassword(form.password);
+    const passwordError = validatePassword(form.password, t);
     if (passwordError) {
       newErrors.password = passwordError;
     }
     if (form.password !== form.confirm) {
-      newErrors.confirm = 'Passwords do not match';
+      newErrors.confirm = t('auth.passwordsDoNotMatch');
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [form]);
+  }, [form, t]);
 
   const onSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -122,15 +124,15 @@ export function RegisterPage() {
         navigate('/', { replace: true });
       } catch (err) {
         setSubmitError(
-          err instanceof ApiError
+          err instanceof ApiError || err instanceof AuthError
             ? getErrorMessage(err)
-            : 'Registration failed. Please try again.',
+            : t('register.failed'),
         );
       } finally {
         setBusy(false);
       }
     },
-    [form, validateForm, register, navigate],
+    [form, validateForm, register, navigate, t],
   );
 
   const canSubmit = useMemo(
@@ -147,8 +149,8 @@ export function RegisterPage() {
 
   return (
     <AuthLayout
-      title="Create your account"
-      subtitle="Set up your education center in minutes"
+      title={t('register.title')}
+      subtitle={t('register.subtitle')}
     >
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {submitError && (
@@ -182,81 +184,53 @@ export function RegisterPage() {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <GlassInput
-            label="First name"
+            label={t('teachers.form.firstName')}
             required
             error={errors.firstName}
             value={form.firstName}
             onChange={(e) => set('firstName', e.target.value)}
-            aria-invalid={Boolean(errors.firstName)}
-            aria-describedby={errors.firstName ? 'firstname-error' : undefined}
-            placeholder="John"
+            placeholder={t('register.firstNamePlaceholder')}
             autoComplete="given-name"
             disabled={busy}
           />
-          {errors.firstName && (
-            <span id="firstname-error" className="text-sm" style={{ color: 'var(--state-error)' }}>
-              {errors.firstName}
-            </span>
-          )}
 
           <GlassInput
-            label="Last name"
+            label={t('teachers.form.lastName')}
             required
             error={errors.lastName}
             value={form.lastName}
             onChange={(e) => set('lastName', e.target.value)}
-            aria-invalid={Boolean(errors.lastName)}
-            aria-describedby={errors.lastName ? 'lastname-error' : undefined}
-            placeholder="Doe"
+            placeholder={t('register.lastNamePlaceholder')}
             autoComplete="family-name"
             disabled={busy}
           />
-          {errors.lastName && (
-            <span id="lastname-error" className="text-sm" style={{ color: 'var(--state-error)' }}>
-              {errors.lastName}
-            </span>
-          )}
         </div>
 
         <GlassInput
-          label="Email address"
+          label={t('auth.emailAddress')}
           required
           error={errors.email}
           type="email"
           value={form.email}
           onChange={(e) => set('email', e.target.value)}
-          aria-invalid={Boolean(errors.email)}
-          aria-describedby={errors.email ? 'email-error' : undefined}
           placeholder="john@example.com"
           autoComplete="email"
           disabled={busy}
         />
-        {errors.email && (
-          <span id="email-error" className="text-sm" style={{ color: 'var(--state-error)' }}>
-            {errors.email}
-          </span>
-        )}
 
         <GlassInput
-          label="Organization name"
+          label={t('settings.orgName')}
           required
-          hint="The name of your education center."
+          hint={t('register.organizationHint')}
           error={errors.organizationName}
           value={form.organizationName}
           onChange={(e) => set('organizationName', e.target.value)}
-          aria-invalid={Boolean(errors.organizationName)}
-          aria-describedby={errors.organizationName ? 'org-error' : undefined}
-          placeholder="Bright Future Academy"
+          placeholder={t('register.organizationPlaceholder')}
           disabled={busy}
         />
-        {errors.organizationName && (
-          <span id="org-error" className="text-sm" style={{ color: 'var(--state-error)' }}>
-            {errors.organizationName}
-          </span>
-        )}
 
         <GlassInput
-          label="Phone"
+          label={t('common.phone')}
           type="tel"
           value={form.phone}
           onChange={(e) => set('phone', e.target.value)}
@@ -267,46 +241,33 @@ export function RegisterPage() {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <GlassInput
-            label="Password"
+            label={t('auth.password')}
             required
-            hint="At least 8 characters with uppercase and number."
+            hint={t('register.passwordHint')}
             error={errors.password}
             type="password"
             value={form.password}
             onChange={(e) => set('password', e.target.value)}
-            aria-invalid={Boolean(errors.password)}
-            aria-describedby={errors.password ? 'password-error' : undefined}
             autoComplete="new-password"
             disabled={busy}
           />
-          {errors.password && (
-            <span id="password-error" className="text-sm" style={{ color: 'var(--state-error)' }}>
-              {errors.password}
-            </span>
-          )}
 
           <GlassInput
-            label="Confirm password"
+            label={t('auth.confirmPassword')}
             required
             error={errors.confirm}
             type="password"
             value={form.confirm}
             onChange={(e) => set('confirm', e.target.value)}
-            aria-invalid={Boolean(errors.confirm)}
-            aria-describedby={errors.confirm ? 'confirm-error' : undefined}
             autoComplete="new-password"
             disabled={busy}
           />
-          {errors.confirm && (
-            <span id="confirm-error" className="text-sm" style={{ color: 'var(--state-error)' }}>
-              {errors.confirm}
-            </span>
-          )}
         </div>
 
-        <button
+        <GlassButton
           type="submit"
-          className="glass-btn glass-btn-primary w-full"
+          variant="primary"
+          className="w-full"
           style={{ height: '50px', fontSize: '1rem' }}
           disabled={!canSubmit}
           aria-busy={busy}
@@ -334,22 +295,22 @@ export function RegisterPage() {
                   strokeLinecap="round"
                 />
               </svg>
-              Creating account…
+              {t('register.creating')}
             </span>
           ) : (
-            'Create account'
+            t('register.createAccount')
           )}
-        </button>
+        </GlassButton>
       </form>
 
       <p className="mt-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-        Already have an account?{' '}
+        {t('register.haveAccount')}{' '}
         <Link
           to="/login"
           className="font-medium underline-offset-[3px] hover:underline"
           style={{ color: 'var(--m-vivid)' }}
         >
-          Sign in
+          {t('auth.login')}
         </Link>
       </p>
     </AuthLayout>

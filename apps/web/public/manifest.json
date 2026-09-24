@@ -1,0 +1,14 @@
+{
+  "name": "M-EDU Education Platform",
+  "short_name": "M-EDU",
+  "description": "Enterprise education management platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#8473fc",
+  "orientation": "any",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

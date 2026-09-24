@@ -1,0 +1,1898 @@
+{
+  "pages": [
+    "Dashboard",
+    "Chat",
+    "Cameras",
+    "FaceRecognition",
+    "FaceEnrollment",
+    "HR",
+    "ParentPortal",
+    "NotificationsCenter",
+    "SystemHealth",
+    "FeatureFlags",
+    "SecurityCenter",
+    "UniversalSearch"
+  ],
+  "keys": {
+    "dashboard.loadFailed": {
+      "en": "Failed to load dashboard",
+      "uz": "Boshqaruv panelini yuklab boʻlmadi",
+      "ru": "Не удалось загрузить панель управления"
+    },
+    "dashboard.records": {
+      "en": "records",
+      "uz": "yozuvlar",
+      "ru": "записей"
+    },
+    "dashboard.revenueChartLabel": {
+      "en": "Monthly revenue chart",
+      "uz": "Oylik daromad grafigi",
+      "ru": "График месячной выручки"
+    },
+    "chat.active": {
+      "en": "Active",
+      "uz": "Faol",
+      "ru": "Активен"
+    },
+    "chat.backToInbox": {
+      "en": "Back to inbox",
+      "uz": "Kirish qutisiga qaytish",
+      "ru": "Назад во входящие"
+    },
+    "chat.connectionError": {
+      "en": "Connection error",
+      "uz": "Ulanish xatosi",
+      "ru": "Ошибка подключения"
+    },
+    "chat.fetching": {
+      "en": "Fetching conversations…",
+      "uz": "Suhbatlar olinmoqda…",
+      "ru": "Загрузка бесед…"
+    },
+    "chat.inbox": {
+      "en": "Inbox",
+      "uz": "Kirish qutisi",
+      "ru": "Входящие"
+    },
+    "chat.inboxZero": {
+      "en": "Inbox Zero",
+      "uz": "Quti boʻsh",
+      "ru": "Пустой ящик"
+    },
+    "chat.inboxZeroHint": {
+      "en": "You have no active conversations.",
+      "uz": "Faol suhbatlaringiz yoʻq.",
+      "ru": "У вас нет активных бесед."
+    },
+    "chat.loadingHistory": {
+      "en": "Loading history…",
+      "uz": "Tarix yuklanmoqda…",
+      "ru": "Загрузка истории…"
+    },
+    "chat.loadingInbox": {
+      "en": "Loading your inbox…",
+      "uz": "Kirish qutingiz yuklanmoqda…",
+      "ru": "Загрузка входящих…"
+    },
+    "chat.newConversation": {
+      "en": "New conversation",
+      "uz": "Yangi suhbat",
+      "ru": "Новый разговор"
+    },
+    "chat.placeholder": {
+      "en": "iMessage…",
+      "uz": "iMessage…",
+      "ru": "iMessage…"
+    },
+    "chat.selectConversation": {
+      "en": "Select a conversation",
+      "uz": "Suhbatni tanlang",
+      "ru": "Выберите разговор"
+    },
+    "chat.selectConversationHint": {
+      "en": "Choose a contact from the inbox to start messaging.",
+      "uz": "Yozishma uchun kirish qutisidan aloqadorni tanlang.",
+      "ru": "Выберите контакт во входящих, чтобы начать общение."
+    },
+    "chat.sendMessage": {
+      "en": "Send message",
+      "uz": "Xabar yuborish",
+      "ru": "Отправить сообщение"
+    },
+    "chat.someone": {
+      "en": "Someone",
+      "uz": "Kimdir",
+      "ru": "Кто-то"
+    },
+    "chat.startConversation": {
+      "en": "Start a conversation",
+      "uz": "Suhbatni boshlash",
+      "ru": "Начать разговор"
+    },
+    "chat.subtitle": {
+      "en": "Communicate directly with students, parents, and staff.",
+      "uz": "Oʻquvchilar, ota-onalar va xodimlar bilan toʻgʻridan-toʻgʻri muloqot qiling.",
+      "ru": "Общайтесь напрямую с учениками, родителями и сотрудниками."
+    },
+    "chat.time.days": {
+      "en": "{n}d ago",
+      "uz": "{n} kun oldin",
+      "ru": "{n} дн. назад"
+    },
+    "chat.time.hours": {
+      "en": "{n}h ago",
+      "uz": "{n} soat oldin",
+      "ru": "{n} ч. назад"
+    },
+    "chat.time.minutes": {
+      "en": "{n}m ago",
+      "uz": "{n} daqiqa oldin",
+      "ru": "{n} мин. назад"
+    },
+    "chat.time.now": {
+      "en": "now",
+      "uz": "hozir",
+      "ru": "сейчас"
+    },
+    "chat.typingOne": {
+      "en": "{names} is typing…",
+      "uz": "{names} yozmoqda…",
+      "ru": "{names} печатает…"
+    },
+    "chat.typingOther": {
+      "en": "{names} are typing…",
+      "uz": "{names} yozmoqda…",
+      "ru": "{names} печатают…"
+    },
+    "common.disable": {
+      "en": "Disable",
+      "uz": "Oʻchirish",
+      "ru": "Отключить"
+    },
+    "common.enable": {
+      "en": "Enable",
+      "uz": "Yoqish",
+      "ru": "Включить"
+    },
+    "common.off": {
+      "en": "Off",
+      "uz": "Oʻchiq",
+      "ru": "Выкл"
+    },
+    "common.on": {
+      "en": "On",
+      "uz": "Yoqiq",
+      "ru": "Вкл"
+    },
+    "common.password": {
+      "en": "Password",
+      "uz": "Parol",
+      "ru": "Пароль"
+    },
+    "common.username": {
+      "en": "Username",
+      "uz": "Foydalanuvchi nomi",
+      "ru": "Имя пользователя"
+    },
+    "cameras.add": {
+      "en": "Add camera",
+      "uz": "Kamera qoʻshish",
+      "ru": "Добавить камеру"
+    },
+    "cameras.addedToast": {
+      "en": "Camera added successfully",
+      "uz": "Kamera muvaffaqiyatli qoʻshildi",
+      "ru": "Камера успешно добавлена"
+    },
+    "cameras.colAction": {
+      "en": "Actions",
+      "uz": "Amallar",
+      "ru": "Действия"
+    },
+    "cameras.colConfidence": {
+      "en": "Confidence",
+      "uz": "Ishonch",
+      "ru": "Уверенность"
+    },
+    "cameras.colDecision": {
+      "en": "Decision",
+      "uz": "Qaror",
+      "ru": "Решение"
+    },
+    "cameras.colSimilarity": {
+      "en": "Similarity",
+      "uz": "Oʻxshashlik",
+      "ru": "Схожесть"
+    },
+    "cameras.colStudent": {
+      "en": "Student",
+      "uz": "Oʻquvchi",
+      "ru": "Ученик"
+    },
+    "cameras.colTime": {
+      "en": "Time",
+      "uz": "Vaqt",
+      "ru": "Время"
+    },
+    "cameras.configAttendance": {
+      "en": "Attendance tracking",
+      "uz": "Davomat kuzatuvi",
+      "ru": "Отслеживание посещаемости"
+    },
+    "cameras.configFps": {
+      "en": "FPS",
+      "uz": "FPS",
+      "ru": "FPS"
+    },
+    "cameras.configRecognition": {
+      "en": "Recognition",
+      "uz": "Tanib olish",
+      "ru": "Распознавание"
+    },
+    "cameras.configTitle": {
+      "en": "Configure camera",
+      "uz": "Kamerani sozlash",
+      "ru": "Настроить камеру"
+    },
+    "cameras.configUpdatedToast": {
+      "en": "Configuration updated",
+      "uz": "Sozlamalar yangilandi",
+      "ru": "Конфигурация обновлена"
+    },
+    "cameras.configure": {
+      "en": "Configure",
+      "uz": "Sozlash",
+      "ru": "Настроить"
+    },
+    "cameras.configureAria": {
+      "en": "Configure {name}",
+      "uz": "{name} ni sozlash",
+      "ru": "Настроить {name}"
+    },
+    "cameras.connectionToast": {
+      "en": "Connection successful",
+      "uz": "Ulanish muvaffaqiyatli",
+      "ru": "Подключение успешно"
+    },
+    "cameras.deleteAria": {
+      "en": "Delete camera {name}",
+      "uz": "{name} kamerasini oʻchirish",
+      "ru": "Удалить камеру {name}"
+    },
+    "cameras.deleteConfirm": {
+      "en": "Delete camera \"{name}\"?",
+      "uz": "\"{name}\" kamerasi oʻchirilsinmi?",
+      "ru": "Удалить камеру «{name}»?"
+    },
+    "cameras.deletedToast": {
+      "en": "Camera deleted",
+      "uz": "Kamera oʻchirildi",
+      "ru": "Камера удалена"
+    },
+    "cameras.discover": {
+      "en": "Discover cameras",
+      "uz": "Kameralarni aniqlash",
+      "ru": "Найти камеры"
+    },
+    "cameras.discoverHint": {
+      "en": "Scan the local network for ONVIF-compatible cameras. Optionally specify a subnet.",
+      "uz": "ONVIF mos kameralar uchun mahalliy tarmoqni skanerlang. Kerak boʻlsa, subnet kiriting.",
+      "ru": "Просканируйте локальную сеть на наличие ONVIF-камер. При необходимости укажите подсеть."
+    },
+    "cameras.discoverTitle": {
+      "en": "Discover cameras",
+      "uz": "Kamerlarni aniqlash",
+      "ru": "Обнаружение камер"
+    },
+    "cameras.discoveryToast": {
+      "en": "Discovery finished — found cameras below",
+      "uz": "Aniqlash tugadi — topilgan kameralar quyida",
+      "ru": "Поиск завершён — найденные камеры ниже"
+    },
+    "cameras.empty": {
+      "en": "No cameras",
+      "uz": "Kameralar yoʻq",
+      "ru": "Нет камер"
+    },
+    "cameras.emptyHint": {
+      "en": "Add a camera or discover devices on your network.",
+      "uz": "Kamera qoʻshing yoki tarmoqdagi qurilmalarni aniqlang.",
+      "ru": "Добавьте камеру или найдите устройства в сети."
+    },
+    "cameras.endpoint": {
+      "en": "Endpoint",
+      "uz": "Nuqta",
+      "ru": "Конечная точка"
+    },
+    "cameras.form.credentialsHint": {
+      "en": "Optional — leave blank to use stored credentials",
+      "uz": "Ixtiyoriy — saqlangan maʼlumotlar uchun boʻsh qoldiring",
+      "ru": "Необязательно — оставьте пустым для сохранённых учётных данных"
+    },
+    "cameras.form.host": {
+      "en": "Host",
+      "uz": "Host",
+      "ru": "Хост"
+    },
+    "cameras.form.location": {
+      "en": "Location",
+      "uz": "Joylashuv",
+      "ru": "Расположение"
+    },
+    "cameras.form.locationPlaceholder": {
+      "en": "Building A, entrance",
+      "uz": "A binosi, kirish",
+      "ru": "Корпус A, вход"
+    },
+    "cameras.form.name": {
+      "en": "Camera name",
+      "uz": "Kamera nomi",
+      "ru": "Название камеры"
+    },
+    "cameras.form.namePlaceholder": {
+      "en": "Front entrance camera",
+      "uz": "Oldingi kirish kamerasi",
+      "ru": "Камера переднего входа"
+    },
+    "cameras.form.port": {
+      "en": "Port",
+      "uz": "Port",
+      "ru": "Порт"
+    },
+    "cameras.form.protocol": {
+      "en": "Protocol",
+      "uz": "Protokol",
+      "ru": "Протокол"
+    },
+    "cameras.form.streamPath": {
+      "en": "Stream path",
+      "uz": "Oqim yoʻli",
+      "ru": "Путь потока"
+    },
+    "cameras.lastSeen": {
+      "en": "Last seen",
+      "uz": "Oxirgi koʻrinish",
+      "ru": "Последний раз замечена"
+    },
+    "cameras.loadError": {
+      "en": "Failed to load cameras",
+      "uz": "Kameralarni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить камеры"
+    },
+    "cameras.loading": {
+      "en": "Loading cameras…",
+      "uz": "Kameralar yuklanmoqda…",
+      "ru": "Загрузка камер…"
+    },
+    "cameras.loadingEvents": {
+      "en": "Loading events…",
+      "uz": "Hodisalar yuklanmoqda…",
+      "ru": "Загрузка событий…"
+    },
+    "cameras.loadingHealth": {
+      "en": "Loading health…",
+      "uz": "Holat yuklanmoqda…",
+      "ru": "Загрузка состояния…"
+    },
+    "cameras.loadingWorker": {
+      "en": "Loading worker status…",
+      "uz": "Ishchi holati yuklanmoqda…",
+      "ru": "Загрузка состояния воркера…"
+    },
+    "cameras.noCamerasFound": {
+      "en": "No cameras found",
+      "uz": "Kameralar topilmadi",
+      "ru": "Камеры не найдены"
+    },
+    "cameras.noEvents": {
+      "en": "No recognition events yet.",
+      "uz": "Hali tanib olish hodisalari yoʻq.",
+      "ru": "Пока нет событий распознавания."
+    },
+    "cameras.noHealth": {
+      "en": "No health data available.",
+      "uz": "Holat maʼlumotlari mavjud emas.",
+      "ru": "Данные о состоянии недоступны."
+    },
+    "cameras.noWorker": {
+      "en": "No worker running.",
+      "uz": "Ishchi ishlamayapti.",
+      "ru": "Воркер не запущен."
+    },
+    "cameras.recognition": {
+      "en": "Recognition",
+      "uz": "Tanib olish",
+      "ru": "Распознавание"
+    },
+    "cameras.restartWorker": {
+      "en": "Restart Worker",
+      "uz": "Ishchini qayta ishga tushirish",
+      "ru": "Перезапустить воркер"
+    },
+    "cameras.restartWorkerAria": {
+      "en": "Restart worker for {name}",
+      "uz": "{name} uchun ishchini qayta ishga tushirish",
+      "ru": "Перезапустить воркер для {name}"
+    },
+    "cameras.scan": {
+      "en": "Scan",
+      "uz": "Skanerlash",
+      "ru": "Сканировать"
+    },
+    "cameras.scanning": {
+      "en": "Scanning…",
+      "uz": "Skanerlanmoqda…",
+      "ru": "Сканирование…"
+    },
+    "cameras.startWorker": {
+      "en": "Start worker",
+      "uz": "Ishchini ishga tushirish",
+      "ru": "Запустить воркер"
+    },
+    "cameras.startWorkerAria": {
+      "en": "Start worker for {name}",
+      "uz": "{name} uchun ishchini ishga tushirish",
+      "ru": "Запустить воркер для {name}"
+    },
+    "cameras.startWorkerTitle": {
+      "en": "Start Worker",
+      "uz": "Ishchini ishga tushirish",
+      "ru": "Запустить воркер"
+    },
+    "cameras.starting": {
+      "en": "Starting…",
+      "uz": "Ishga tushirilmoqda…",
+      "ru": "Запуск…"
+    },
+    "cameras.status.CONFIGURED": {
+      "en": "Configured",
+      "uz": "Sozlangan",
+      "ru": "Настроена"
+    },
+    "cameras.status.CONNECTING": {
+      "en": "Connecting",
+      "uz": "Ulanmoqda",
+      "ru": "Подключение"
+    },
+    "cameras.status.DISABLED": {
+      "en": "Disabled",
+      "uz": "Oʻchirilgan",
+      "ru": "Отключена"
+    },
+    "cameras.status.ERROR": {
+      "en": "Error",
+      "uz": "Xato",
+      "ru": "Ошибка"
+    },
+    "cameras.status.ONLINE": {
+      "en": "Online",
+      "uz": "Onlayn",
+      "ru": "Онлайн"
+    },
+    "cameras.status.RECONNECTING": {
+      "en": "Reconnecting",
+      "uz": "Qayta ulanmoqda",
+      "ru": "Переподключение"
+    },
+    "cameras.stopWorker": {
+      "en": "Stop Worker",
+      "uz": "Ishchini toʻxtatish",
+      "ru": "Остановить воркер"
+    },
+    "cameras.stopWorkerAria": {
+      "en": "Stop worker for {name}",
+      "uz": "{name} uchun ishchini toʻxtatish",
+      "ru": "Остановить воркер для {name}"
+    },
+    "cameras.subnetAria": {
+      "en": "Subnet (optional)",
+      "uz": "Subtarmoq (ixtiyoriy)",
+      "ru": "Подсеть (необязательно)"
+    },
+    "cameras.subnetPlaceholder": {
+      "en": "e.g. 192.168.1.0/24",
+      "uz": "masalan 192.168.1.0/24",
+      "ru": "напр. 192.168.1.0/24"
+    },
+    "cameras.subtitle": {
+      "en": "IP camera management for automatic attendance",
+      "uz": "Avtomatik davomat uchun IP boshqaruvi",
+      "ru": "Управление IP-камерами для автоматического посещения"
+    },
+    "cameras.tabEvents": {
+      "en": "Events",
+      "uz": "Hodisalar",
+      "ru": "События"
+    },
+    "cameras.tabHealth": {
+      "en": "Health",
+      "uz": "Holat",
+      "ru": "Состояние"
+    },
+    "cameras.tabWorker": {
+      "en": "Worker Status",
+      "uz": "Ishchi holati",
+      "ru": "Состояние воркера"
+    },
+    "cameras.testConnection": {
+      "en": "Test Connection",
+      "uz": "Ulanishni sinash",
+      "ru": "Проверить подключение"
+    },
+    "cameras.testConnectionAria": {
+      "en": "Test connection to {name}",
+      "uz": "{name} ga ulanishni sinash",
+      "ru": "Проверить подключение к {name}"
+    },
+    "cameras.updatedToast": {
+      "en": "Camera updated",
+      "uz": "Kamera yangilandi",
+      "ru": "Камера обновлена"
+    },
+    "cameras.use": {
+      "en": "Use",
+      "uz": "Foydalanish",
+      "ru": "Использовать"
+    },
+    "cameras.validation.hostRequired": {
+      "en": "Host is required",
+      "uz": "Host majburiy",
+      "ru": "Хост обязателен"
+    },
+    "cameras.validation.nameRequired": {
+      "en": "Camera name is required",
+      "uz": "Kamera nomi majburiy",
+      "ru": "Название камеры обязательно"
+    },
+    "cameras.validation.portRange": {
+      "en": "Port must be between 1 and 65535",
+      "uz": "Port 1 dan 65535 gacha boʻlishi kerak",
+      "ru": "Порт должен быть от 1 до 65535"
+    },
+    "cameras.viewAria": {
+      "en": "View camera {name}",
+      "uz": "{name} kamerasini koʻrish",
+      "ru": "Просмотр камеры {name}"
+    },
+    "cameras.workerRestartedToast": {
+      "en": "Worker restarted",
+      "uz": "Ishchi qayta ishga tushirildi",
+      "ru": "Воркер перезапущен"
+    },
+    "cameras.workerStartedToast": {
+      "en": "Worker started",
+      "uz": "Ishchi ishga tushirildi",
+      "ru": "Воркер запущен"
+    },
+    "cameras.workerStoppedToast": {
+      "en": "Worker stopped",
+      "uz": "Ishchi toʻxtatildi",
+      "ru": "Воркер остановлен"
+    },
+    "faceEnrollment.cancelledToast": {
+      "en": "Enrollment cancelled",
+      "uz": "Roʻyxatdan oʻtkazish bekor qilindi",
+      "ru": "Регистрация отменена"
+    },
+    "faceEnrollment.captureFace": {
+      "en": "Capture face",
+      "uz": "Yuzni olish",
+      "ru": "Сделать снимок лица"
+    },
+    "faceEnrollment.capturedToast": {
+      "en": "Face captured and processed successfully",
+      "uz": "Yuz muvaffaqiyatli olinib qayta ishlandi",
+      "ru": "Лицо успешно снято и обработано"
+    },
+    "faceEnrollment.empty": {
+      "en": "No enrollments",
+      "uz": "Roʻyxatlar yoʻq",
+      "ru": "Нет регистраций"
+    },
+    "faceEnrollment.emptyHint": {
+      "en": "Enrolled students appear here.",
+      "uz": "Roʻyxatdan oʻtgan oʻquvchilar shu yerda koʻrinadi.",
+      "ru": "Зарегистрированные ученики появятся здесь."
+    },
+    "faceEnrollment.enrolled": {
+      "en": "Enrolled",
+      "uz": "Roʻyxatdan oʻtgan",
+      "ru": "Зарегистрирован"
+    },
+    "faceEnrollment.inProgress": {
+      "en": "Enrollment in progress: {id}",
+      "uz": "Roʻyxatdan oʻtkazish davom etmoqda: {id}",
+      "ru": "Идёт регистрация: {id}"
+    },
+    "faceEnrollment.listTitle": {
+      "en": "Enrollments",
+      "uz": "Roʻyxatlar",
+      "ru": "Регистрации"
+    },
+    "faceEnrollment.loadError": {
+      "en": "Failed to load enrollments",
+      "uz": "Roʻyxatlarni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить регистрации"
+    },
+    "faceEnrollment.loading": {
+      "en": "Loading enrollments…",
+      "uz": "Roʻyxatlar yuklanmoqda…",
+      "ru": "Загрузка регистраций…"
+    },
+    "faceEnrollment.newEnrollment": {
+      "en": "New enrollment",
+      "uz": "Yangi roʻyxatdan oʻtkazish",
+      "ru": "Новая регистрация"
+    },
+    "faceEnrollment.noActiveSession": {
+      "en": "No active enrollment session",
+      "uz": "Faol roʻyxatdan oʻtkazish sessiyasi yoʻq",
+      "ru": "Нет активной сессии регистрации"
+    },
+    "faceEnrollment.pipelineHint": {
+      "en": "Enrollment pipeline: detect → quality assessment → liveness",
+      "uz": "Oqim: aniqlash → sifat baholash → jonlilik",
+      "ru": "Конвейер регистрации: обнаружение → оценка качества → живость"
+    },
+    "faceEnrollment.revoke": {
+      "en": "Revoke",
+      "uz": "Bekor qilish",
+      "ru": "Отозвать"
+    },
+    "faceEnrollment.revokeConfirm": {
+      "en": "Are you sure you want to revoke this enrollment? This action cannot be undone.",
+      "uz": "Bu roʻyxatdan oʻtkazishni bekor qilishni xohlaysizmi? Bu amalni ortga qaytarib boʻlmaydi.",
+      "ru": "Вы уверены, что хотите отозвать эту регистрацию? Это действие нельзя отменить."
+    },
+    "faceEnrollment.revokedToast": {
+      "en": "Enrollment revoked successfully",
+      "uz": "Roʻyxatdan oʻtkazish muvaffaqiyatli bekor qilindi",
+      "ru": "Регистрация успешно отозвана"
+    },
+    "faceEnrollment.revoking": {
+      "en": "Revoking…",
+      "uz": "Bekor qilinmoqda…",
+      "ru": "Отзыв…"
+    },
+    "faceEnrollment.selectStudent": {
+      "en": "Select student…",
+      "uz": "Oʻquvchini tanlang…",
+      "ru": "Выберите ученика…"
+    },
+    "faceEnrollment.selectStudentError": {
+      "en": "Please select a student",
+      "uz": "Iltimos, oʻquvchini tanlang",
+      "ru": "Пожалуйста, выберите ученика"
+    },
+    "faceEnrollment.startEnrollment": {
+      "en": "Start enrollment",
+      "uz": "Roʻyxatdan oʻtkazishni boshlash",
+      "ru": "Начать регистрацию"
+    },
+    "faceEnrollment.startedToast": {
+      "en": "Enrollment started — capture the face now",
+      "uz": "Roʻyxatdan oʻtkazish boshlandi — endi yuzni oling",
+      "ru": "Регистрация начата — теперь сделайте снимок лица"
+    },
+    "faceEnrollment.starting": {
+      "en": "Starting…",
+      "uz": "Ishga tushirilmoqda…",
+      "ru": "Запуск…"
+    },
+    "faceEnrollment.status.ACTIVE": {
+      "en": "Active",
+      "uz": "Faol",
+      "ru": "Активна"
+    },
+    "faceEnrollment.status.EXPIRED": {
+      "en": "Expired",
+      "uz": "Muddati tugagan",
+      "ru": "Истекла"
+    },
+    "faceEnrollment.status.PENDING": {
+      "en": "Pending",
+      "uz": "Kutilmoqda",
+      "ru": "Ожидает"
+    },
+    "faceEnrollment.status.REVOKED": {
+      "en": "Revoked",
+      "uz": "Bekor qilingan",
+      "ru": "Отозвана"
+    },
+    "faceEnrollment.student": {
+      "en": "Student",
+      "uz": "Oʻquvchi",
+      "ru": "Ученик"
+    },
+    "faceEnrollment.subtitle": {
+      "en": "Enroll students for automatic recognition attendance",
+      "uz": "Avtomatik tanib olish davomati uchun oʻquvchilarni roʻyxatdan oʻtkazing",
+      "ru": "Регистрация учеников для автоматического распознавания посещаемости"
+    },
+    "faceRecognition.anyGroup": {
+      "en": "Any group",
+      "uz": "Istalgan guruh",
+      "ru": "Любая группа"
+    },
+    "faceRecognition.attemptProcessed": {
+      "en": "Attempt processed",
+      "uz": "Urinish qayta ishlandi",
+      "ru": "Попытка обработана"
+    },
+    "faceRecognition.captureHint": {
+      "en": "Position your face in the frame and hold still.",
+      "uz": "Yuzingizni ramkaga qoʻying va jim turing.",
+      "ru": "Расположите лицо в рамке и не двигайтесь."
+    },
+    "faceRecognition.colStudent": {
+      "en": "Student",
+      "uz": "Oʻquvchi",
+      "ru": "Ученик"
+    },
+    "faceRecognition.colTime": {
+      "en": "Time",
+      "uz": "Vaqt",
+      "ru": "Время"
+    },
+    "faceRecognition.confidence": {
+      "en": "Confidence",
+      "uz": "Ishonch",
+      "ru": "Уверенность"
+    },
+    "faceRecognition.emptyHistory": {
+      "en": "No recognition history",
+      "uz": "Tanib olish tarixi yoʻq",
+      "ru": "Нет истории распознавания"
+    },
+    "faceRecognition.emptyHistoryHint": {
+      "en": "Recognition attempts will appear here after a session.",
+      "uz": "Sessiyadan keyin tanib olish urinishlari shu yerda koʻrinadi.",
+      "ru": "Попытки распознавания появятся здесь после сессии."
+    },
+    "faceRecognition.engineLabel": {
+      "en": "Engine",
+      "uz": "Dvigatel",
+      "ru": "Движок"
+    },
+    "faceRecognition.engineRetry": {
+      "en": "Retry",
+      "uz": "Qayta urinish",
+      "ru": "Повторить"
+    },
+    "faceRecognition.finishSession": {
+      "en": "Finish session",
+      "uz": "Sessiyani tugatish",
+      "ru": "Завершить сессию"
+    },
+    "faceRecognition.finishing": {
+      "en": "Finishing…",
+      "uz": "Tugatilmoqda…",
+      "ru": "Завершение…"
+    },
+    "faceRecognition.groupOptional": {
+      "en": "Group (optional)",
+      "uz": "Guruh (ixtiyoriy)",
+      "ru": "Группа (необязательно)"
+    },
+    "faceRecognition.groupSelectAria": {
+      "en": "Select group",
+      "uz": "Guruhni tanlang",
+      "ru": "Выберите группу"
+    },
+    "faceRecognition.historyError": {
+      "en": "Failed to load history",
+      "uz": "Tarixni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить историю"
+    },
+    "faceRecognition.historyTitle": {
+      "en": "Recognition history",
+      "uz": "Tanib olish tarixi",
+      "ru": "История распознавания"
+    },
+    "faceRecognition.liveness": {
+      "en": "Liveness",
+      "uz": "Jonlilik",
+      "ru": "Живость"
+    },
+    "faceRecognition.loadingHistory": {
+      "en": "Loading history…",
+      "uz": "Tarix yuklanmoqda…",
+      "ru": "Загрузка истории…"
+    },
+    "faceRecognition.mockNotice": {
+      "en": "Mock engine is active (development only). Production requires the real ONNX engine with liveness.",
+      "uz": "Mock dvigatel faol (faqat ishlab chiqish uchun). Ishlab chiqarish jonlilik bilan haqiqiy ONNX dvigatelini talab qiladi.",
+      "ru": "Активен тестовый движок (только для разработки). Для продакшена требуется настоящий ONNX-движок с проверкой живости."
+    },
+    "faceRecognition.noSession": {
+      "en": "No active session",
+      "uz": "Faol sessiya yoʻq",
+      "ru": "Нет активной сессии"
+    },
+    "faceRecognition.recognizeFace": {
+      "en": "Recognize face",
+      "uz": "Yuzni tanib olish",
+      "ru": "Распознать лицо"
+    },
+    "faceRecognition.resultTitle": {
+      "en": "Recognition result",
+      "uz": "Tanib olish natijasi",
+      "ru": "Результат распознавания"
+    },
+    "faceRecognition.sessionActive": {
+      "en": "Session active",
+      "uz": "Sessiya faol",
+      "ru": "Сессия активна"
+    },
+    "faceRecognition.sessionFinished": {
+      "en": "Session finished",
+      "uz": "Sessiya tugadi",
+      "ru": "Сессия завершена"
+    },
+    "faceRecognition.sessionStarted": {
+      "en": "Recognition session started",
+      "uz": "Tanib olish sessiyasi boshlandi",
+      "ru": "Сессия распознавания начата"
+    },
+    "faceRecognition.startFirst": {
+      "en": "Start a session first",
+      "uz": "Avval sessiyani boshlang",
+      "ru": "Сначала начните сессию"
+    },
+    "faceRecognition.startSession": {
+      "en": "Start recognition session",
+      "uz": "Tanib olish sessiyasini boshlash",
+      "ru": "Начать сессию распознавания"
+    },
+    "faceRecognition.starting": {
+      "en": "Starting…",
+      "uz": "Ishga tushirilmoqda…",
+      "ru": "Запуск…"
+    },
+    "faceRecognition.student": {
+      "en": "Student",
+      "uz": "Oʻquvchi",
+      "ru": "Ученик"
+    },
+    "faceRecognition.submitCapture": {
+      "en": "Submit a capture",
+      "uz": "Rasm yuborish",
+      "ru": "Отправить снимок"
+    },
+    "faceRecognition.subtitle": {
+      "en": "Live recognition sessions with liveness checks",
+      "uz": "Jonlilik tekshiruvi bilan jonli tanib olish sessiyalari",
+      "ru": "Живые сессии распознавания с проверкой живости"
+    },
+    "faceRecognition.viewRaw": {
+      "en": "View raw response",
+      "uz": "Xom javobni koʻrish",
+      "ru": "Показать сырой ответ"
+    },
+    "featureFlags.activeFlags": {
+      "en": "Active flags",
+      "uz": "Faol bayroqlar",
+      "ru": "Активные флаги"
+    },
+    "featureFlags.create": {
+      "en": "Create flag",
+      "uz": "Bayroq yaratish",
+      "ru": "Создать флаг"
+    },
+    "featureFlags.createHint": {
+      "en": "New flags start disabled and are visible to all organizations.",
+      "uz": "Yangi bayroqlar oʻchirilgan holatda boshlanadi va barcha tashkilotlarga koʻrinadi.",
+      "ru": "Новые флаги создаются отключёнными и видны всем организациям."
+    },
+    "featureFlags.createTitle": {
+      "en": "New feature flag",
+      "uz": "Yangi funksional bayroq",
+      "ru": "Новый feature flag"
+    },
+    "featureFlags.createdToast": {
+      "en": "Flag created",
+      "uz": "Bayroq yaratildi",
+      "ru": "Флаг создан"
+    },
+    "featureFlags.creating": {
+      "en": "Creating…",
+      "uz": "Yaratilmoqda…",
+      "ru": "Создание…"
+    },
+    "featureFlags.disabledToast": {
+      "en": "Flag disabled",
+      "uz": "Bayroq oʻchirildi",
+      "ru": "Флаг отключён"
+    },
+    "featureFlags.empty": {
+      "en": "No feature flags yet",
+      "uz": "Hali funksional bayroqlar yoʻq",
+      "ru": "Пока нет feature flags"
+    },
+    "featureFlags.emptyHint": {
+      "en": "Create your first flag to control platform capabilities per rollout.",
+      "uz": "Platforma imkoniyatlarini bosqichma-bosqich boshqarish uchun birinchi bayrogʻingizni yarating.",
+      "ru": "Создайте первый флаг, чтобы управлять возможностями платформы поэтапно."
+    },
+    "featureFlags.enabledToast": {
+      "en": "Flag enabled",
+      "uz": "Bayroq yoqildi",
+      "ru": "Флаг включён"
+    },
+    "featureFlags.form.description": {
+      "en": "Description",
+      "uz": "Tavsif",
+      "ru": "Описание"
+    },
+    "featureFlags.form.descriptionPlaceholder": {
+      "en": "What does this flag control?",
+      "uz": "Bu bayroq nima uchun?",
+      "ru": "Что контролирует этот флаг?"
+    },
+    "featureFlags.form.key": {
+      "en": "Key",
+      "uz": "Kalit",
+      "ru": "Ключ"
+    },
+    "featureFlags.form.keyPlaceholder": {
+      "en": "e.g. new-dashboard",
+      "uz": "masalan new-dashboard",
+      "ru": "напр. new-dashboard"
+    },
+    "featureFlags.form.name": {
+      "en": "Name",
+      "uz": "Nomi",
+      "ru": "Название"
+    },
+    "featureFlags.form.namePlaceholder": {
+      "en": "Human-readable name",
+      "uz": "Oʻqiladigan nom",
+      "ru": "Человекочитаемое название"
+    },
+    "featureFlags.form.type": {
+      "en": "Type",
+      "uz": "Turi",
+      "ru": "Тип"
+    },
+    "featureFlags.fullRollout": {
+      "en": "full rollout",
+      "uz": "toʻliq tarqatish",
+      "ru": "полный rollout"
+    },
+    "featureFlags.loadError": {
+      "en": "Failed to load flags",
+      "uz": "Bayroqlarni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить флаги"
+    },
+    "featureFlags.loading": {
+      "en": "Loading feature flags…",
+      "uz": "Funksional bayroqlar yuklanmoqda…",
+      "ru": "Загрузка feature flags…"
+    },
+    "featureFlags.newFlag": {
+      "en": "New flag",
+      "uz": "Yangi bayroq",
+      "ru": "Новый флаг"
+    },
+    "featureFlags.rolloutPercent": {
+      "en": "{n}% rollout",
+      "uz": "{n}% tarqatish",
+      "ru": "rollout {n}%"
+    },
+    "featureFlags.subtitle": {
+      "en": "Enable or disable platform capabilities without deploying code",
+      "uz": "Kodni joylashtirmasdan platforma imkoniyatlarini yoqish yoki oʻchirish",
+      "ru": "Включайте или отключайте возможности платформы без деплоя кода"
+    },
+    "featureFlags.toggleAria": {
+      "en": "Toggle {name}",
+      "uz": "{name} ni almashtirish",
+      "ru": "Переключить {name}"
+    },
+    "featureFlags.type.boolean": {
+      "en": "Boolean",
+      "uz": "Mantiqiy",
+      "ru": "Логический"
+    },
+    "featureFlags.type.json": {
+      "en": "JSON",
+      "uz": "JSON",
+      "ru": "JSON"
+    },
+    "featureFlags.type.number": {
+      "en": "Number",
+      "uz": "Raqam",
+      "ru": "Число"
+    },
+    "featureFlags.type.string": {
+      "en": "String",
+      "uz": "Satr",
+      "ru": "Строка"
+    },
+    "featureFlags.updateError": {
+      "en": "Could not update flag",
+      "uz": "Bayroqni yangib boʻlmadi",
+      "ru": "Не удалось обновить флаг"
+    },
+    "featureFlags.validation.keyPattern": {
+      "en": "Key may only contain letters, numbers, dots, dashes and underscores.",
+      "uz": "Kalit faqat harflar, raqamlar, nuqtalar, tire va pastki chiziqlardan iborat boʻlishi mumkin.",
+      "ru": "Ключ может содержать только буквы, цифры, точки, дефисы и подчёркивания."
+    },
+    "featureFlags.validation.required": {
+      "en": "Key and name are required.",
+      "uz": "Kalit va nom majburiy.",
+      "ru": "Ключ и название обязательны."
+    },
+    "hr.department.administration": {
+      "en": "Administration",
+      "uz": "Maʼmuriyat",
+      "ru": "Администрация"
+    },
+    "hr.department.finance": {
+      "en": "Finance",
+      "uz": "Moliya",
+      "ru": "Финансы"
+    },
+    "hr.department.humanResources": {
+      "en": "Human Resources",
+      "uz": "Inson resurslari",
+      "ru": "Кадры"
+    },
+    "hr.department.it": {
+      "en": "IT",
+      "uz": "IT",
+      "ru": "IT"
+    },
+    "hr.department.marketing": {
+      "en": "Marketing",
+      "uz": "Marketing",
+      "ru": "Маркетинг"
+    },
+    "hr.department.operations": {
+      "en": "Operations",
+      "uz": "Operatsiyalar",
+      "ru": "Операции"
+    },
+    "hr.department.studentServices": {
+      "en": "Student Services",
+      "uz": "Oʻquvchilar xizmatlari",
+      "ru": "Службы для учащихся"
+    },
+    "hr.department.teaching": {
+      "en": "Teaching",
+      "uz": "Oʻqitish",
+      "ru": "Преподавание"
+    },
+    "hr.editNotice": {
+      "en": "You are editing an existing employee. User cannot be changed.",
+      "uz": "Mavjud xodimni tahrirlayapsiz. Foydalanuvchini oʻzgartirib boʻlmaydi.",
+      "ru": "Вы редактируете существующего сотрудника. Пользователя нельзя изменить."
+    },
+    "hr.form.bankAccountPlaceholder": {
+      "en": "Account number",
+      "uz": "Hisob raqami",
+      "ru": "Номер счёта"
+    },
+    "hr.form.employeeNumber": {
+      "en": "Employee number",
+      "uz": "Xodim raqami",
+      "ru": "Табельный номер"
+    },
+    "hr.form.employeeNumberPlaceholder": {
+      "en": "e.g. EMP-001",
+      "uz": "masalan EMP-001",
+      "ru": "напр. EMP-001"
+    },
+    "hr.form.positionPlaceholder": {
+      "en": "e.g., Senior Teacher",
+      "uz": "masalan, Bosh oʻqituvchi",
+      "ru": "напр., Старший преподаватель"
+    },
+    "hr.form.user": {
+      "en": "User",
+      "uz": "Foydalanuvchi",
+      "ru": "Пользователь"
+    },
+    "hr.form.validation.departmentRequired": {
+      "en": "Department is required",
+      "uz": "Boʻlim majburiy",
+      "ru": "Отдел обязателен"
+    },
+    "hr.form.validation.employeeNumberRequired": {
+      "en": "Employee number is required",
+      "uz": "Xodim raqami majburiy",
+      "ru": "Табельный номер обязателен"
+    },
+    "hr.form.validation.salaryInvalid": {
+      "en": "Valid salary is required",
+      "uz": "Toʻgʻri maosh majburiy",
+      "ru": "Требуется корректная зарплата"
+    },
+    "hr.form.validation.userIdRequired": {
+      "en": "User is required",
+      "uz": "Foydalanuvchi majburiy",
+      "ru": "Пользователь обязателен"
+    },
+    "hr.loadingUsers": {
+      "en": "Loading users…",
+      "uz": "Foydalanuvchilar yuklanmoqda…",
+      "ru": "Загрузка пользователей…"
+    },
+    "hr.selectContractType": {
+      "en": "Select contract type",
+      "uz": "Shartnoma turini tanlang",
+      "ru": "Выберите тип договора"
+    },
+    "hr.selectDepartment": {
+      "en": "Select department",
+      "uz": "Boʻlimni tanlang",
+      "ru": "Выберите отдел"
+    },
+    "hr.selectUser": {
+      "en": "Select user",
+      "uz": "Foydalanuvchini tanlang",
+      "ru": "Выберите пользователя"
+    },
+    "hr.terminationPrompt": {
+      "en": "Terminate {name}? Enter a reason:",
+      "uz": "{name} ishdan boʻshatilsinmi? Sabab kiriting:",
+      "ru": "Уволить {name}? Укажите причину:"
+    },
+    "hr.terminationReasonRequired": {
+      "en": "Termination reason is required",
+      "uz": "Ishdan boʻshatish sababi majburiy",
+      "ru": "Причина увольнения обязательна"
+    },
+    "notifications.allCaughtUp": {
+      "en": "All caught up",
+      "uz": "Hammasi joyida",
+      "ru": "Всё прочитано"
+    },
+    "notifications.allReadToast": {
+      "en": "All notifications marked as read",
+      "uz": "Barcha bildirishnomalar oʻqilgan deb belgilandi",
+      "ru": "Все уведомления отмечены как прочитанные"
+    },
+    "notifications.empty": {
+      "en": "No notifications",
+      "uz": "Bildirishnomalar yoʻq",
+      "ru": "Нет уведомлений"
+    },
+    "notifications.emptyHint": {
+      "en": "You're all caught up. New events will appear here.",
+      "uz": "Hammasi oʻqilgan. Yangi hodisalar shu yerda paydo boʻladi.",
+      "ru": "Всё прочитано. Новые события появятся здесь."
+    },
+    "notifications.loadError": {
+      "en": "Failed to load notifications",
+      "uz": "Bildirishnomalarni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить уведомления"
+    },
+    "notifications.loading": {
+      "en": "Loading notifications…",
+      "uz": "Bildirishnomalar yuklanmoqda…",
+      "ru": "Загрузка уведомлений…"
+    },
+    "notifications.markAllRead": {
+      "en": "Mark all as read",
+      "uz": "Barchasini oʻqilgan deb belgilash",
+      "ru": "Отметить все как прочитанные"
+    },
+    "notifications.markRead": {
+      "en": "Mark read",
+      "uz": "Oʻqilgan deb belgilash",
+      "ru": "Отметить прочитанным"
+    },
+    "notifications.open": {
+      "en": "Open",
+      "uz": "Ochish",
+      "ru": "Открыть"
+    },
+    "notifications.sourceAudit": {
+      "en": "Audit anomalies",
+      "uz": "Audit anomaliyalari",
+      "ru": "Аномалии аудита"
+    },
+    "notifications.sourceAuditDesc": {
+      "en": "security center pushes critical events",
+      "uz": "xavfsizlik markazi muhim hodisalarni yuboradi",
+      "ru": "центр безопасности отправляет критические события"
+    },
+    "notifications.sourceDataQuality": {
+      "en": "Data quality",
+      "uz": "Maʼlumot sifati",
+      "ru": "Качество данных"
+    },
+    "notifications.sourceDataQualityDesc": {
+      "en": "new issue, issue resolved",
+      "uz": "yangi muammo, muammo hal boʻldi",
+      "ru": "новая проблема, проблема решена"
+    },
+    "notifications.sourceEarlyWarning": {
+      "en": "Early warning",
+      "uz": "Oldindan ogohlantirish",
+      "ru": "Предупреждение"
+    },
+    "notifications.sourceEarlyWarningDesc": {
+      "en": "payment overdue, attendance threshold, etc.",
+      "uz": "toʻlov kechikishi, davomat chegarasi va h.k.",
+      "ru": "просрочка платежа, порог посещаемости и т.д."
+    },
+    "notifications.sourceSystem": {
+      "en": "System",
+      "uz": "Tizim",
+      "ru": "Система"
+    },
+    "notifications.sourceSystemDesc": {
+      "en": "backup, version, scheduled job results",
+      "uz": "zaxira nusxa, versiya, rejalashtirilgan vazifa natijalari",
+      "ru": "резервное копирование, версия, результаты запланированных задач"
+    },
+    "notifications.sourceWorkflow": {
+      "en": "Workflow engine",
+      "uz": "Ish jarayoni dvigateli",
+      "ru": "Движок рабочих процессов"
+    },
+    "notifications.sourceWorkflowDesc": {
+      "en": "rule match triggers a notification",
+      "uz": "qoida mos kelganda bildirishnoma yuboriladi",
+      "ru": "совпадение правила вызывает уведомление"
+    },
+    "notifications.sourcesTitle": {
+      "en": "Notification sources",
+      "uz": "Bildirishnoma manbalari",
+      "ru": "Источники уведомлений"
+    },
+    "notifications.subtitle": {
+      "en": "System, workflow, and rule-based alerts",
+      "uz": "Tizim, ish jarayoni va qoidaga asoslangan ogohlantirishlar",
+      "ru": "Системные, процессные и规则-based оповещения"
+    },
+    "notifications.unreadCount": {
+      "en": "{n} unread",
+      "uz": "{n} oʻqilmagan",
+      "ru": "{n} непрочитанных"
+    },
+    "parentPortal.attendanceOverview": {
+      "en": "Attendance Overview",
+      "uz": "Davomat koʻrinishi",
+      "ru": "Обзор посещаемости"
+    },
+    "parentPortal.connectionError": {
+      "en": "Connection error",
+      "uz": "Ulanish xatosi",
+      "ru": "Ошибка подключения"
+    },
+    "parentPortal.courseAssessments": {
+      "en": "Course Assessments",
+      "uz": "Fan baholari",
+      "ru": "Оценки по курсам"
+    },
+    "parentPortal.currentBalance": {
+      "en": "Current Balance",
+      "uz": "Joriy balans",
+      "ru": "Текущий баланс"
+    },
+    "parentPortal.dueDate": {
+      "en": "Due {date}",
+      "uz": "Muddat {date}",
+      "ru": "Срок {date}"
+    },
+    "parentPortal.examFallback": {
+      "en": "Exam",
+      "uz": "Imtihon",
+      "ru": "Экзамен"
+    },
+    "parentPortal.examResults": {
+      "en": "Exam Results",
+      "uz": "Imtihon natijalari",
+      "ru": "Результаты экзаменов"
+    },
+    "parentPortal.failed": {
+      "en": "Failed",
+      "uz": "Yiqildi",
+      "ru": "Не сдал"
+    },
+    "parentPortal.finances": {
+      "en": "Finances",
+      "uz": "Moliya",
+      "ru": "Финансы"
+    },
+    "parentPortal.gradeFallback": {
+      "en": "Grade",
+      "uz": "Baholash",
+      "ru": "Оценка"
+    },
+    "parentPortal.gradesTitle": {
+      "en": "Academic Grades",
+      "uz": "Akademik baholar",
+      "ru": "Учебные оценки"
+    },
+    "parentPortal.invoiceFallback": {
+      "en": "Invoice",
+      "uz": "Hisob-faktura",
+      "ru": "Счёт"
+    },
+    "parentPortal.invoiceStatus.DRAFT": {
+      "en": "Draft",
+      "uz": "Qoralama",
+      "ru": "Черновик"
+    },
+    "parentPortal.invoiceStatus.ISSUED": {
+      "en": "Issued",
+      "uz": "Chiqarilgan",
+      "ru": "Выставлен"
+    },
+    "parentPortal.invoiceStatus.PARTIALLY_PAID": {
+      "en": "Partially paid",
+      "uz": "Qisman toʻlangan",
+      "ru": "Частично оплачен"
+    },
+    "parentPortal.invoiceStatus.REFUNDED": {
+      "en": "Refunded",
+      "uz": "Qaytarilgan",
+      "ru": "Возвращён"
+    },
+    "parentPortal.invoices": {
+      "en": "Invoices",
+      "uz": "Hisob-fakturalar",
+      "ru": "Счета"
+    },
+    "parentPortal.loadingProfile": {
+      "en": "Loading your family profile…",
+      "uz": "Oilaviy profilingiz yuklanmoqda…",
+      "ru": "Загрузка семейного профиля…"
+    },
+    "parentPortal.maxMarks": {
+      "en": "max {n} marks",
+      "uz": "maks. {n} ball",
+      "ru": "макс. {n} баллов"
+    },
+    "parentPortal.noAttendance": {
+      "en": "No attendance records found.",
+      "uz": "Davomat yozuvlari topilmadi.",
+      "ru": "Записи о посещаемости не найдены."
+    },
+    "parentPortal.noChildren": {
+      "en": "No Children Linked",
+      "uz": "Bogʻlangan bolalar yoʻq",
+      "ru": "Нет привязанных детей"
+    },
+    "parentPortal.noChildrenHint": {
+      "en": "There are no student profiles linked to your account. Please contact the school administration.",
+      "uz": "Hisobingizga bogʻlangan oʻquvchi profillari yoʻq. Iltimos, maktab maʼmuriyati bilan bogʻlaning.",
+      "ru": "К вашему аккаунту не привязаны профили учеников. Обратитесь в администрацию школы."
+    },
+    "parentPortal.noFinances": {
+      "en": "No financial records.",
+      "uz": "Moliyaviy yozuvlar yoʻq.",
+      "ru": "Нет финансовых записей."
+    },
+    "parentPortal.noGrades": {
+      "en": "No grades available.",
+      "uz": "Baholar mavjud emas.",
+      "ru": "Оценок нет."
+    },
+    "parentPortal.outstanding": {
+      "en": "Outstanding",
+      "uz": "Toʻlanmagan",
+      "ru": "К оплате"
+    },
+    "parentPortal.overdue": {
+      "en": "Overdue",
+      "uz": "Muddati oʻtgan",
+      "ru": "Просрочено"
+    },
+    "parentPortal.overview": {
+      "en": "Overview",
+      "uz": "Koʻrinish",
+      "ru": "Обзор"
+    },
+    "parentPortal.passed": {
+      "en": "Passed",
+      "uz": "Oʻtdi",
+      "ru": "Сдал"
+    },
+    "parentPortal.payment": {
+      "en": "Payment",
+      "uz": "Toʻlov",
+      "ru": "Платёж"
+    },
+    "parentPortal.paymentWithRef": {
+      "en": "Payment {ref}",
+      "uz": "Toʻlov {ref}",
+      "ru": "Платёж {ref}"
+    },
+    "parentPortal.rate": {
+      "en": "Rate",
+      "uz": "Daraja",
+      "ru": "Процент"
+    },
+    "parentPortal.recentPayments": {
+      "en": "Recent Payments",
+      "uz": "Soʻnggi toʻlovlar",
+      "ru": "Недавние платежи"
+    },
+    "parentPortal.relationship.BROTHER": {
+      "en": "Brother",
+      "uz": "Aka-uka",
+      "ru": "Брат"
+    },
+    "parentPortal.relationship.FATHER": {
+      "en": "Father",
+      "uz": "Ota",
+      "ru": "Отец"
+    },
+    "parentPortal.relationship.GUARDIAN": {
+      "en": "Guardian",
+      "uz": "Vasiy",
+      "ru": "Опекун"
+    },
+    "parentPortal.relationship.MOTHER": {
+      "en": "Mother",
+      "uz": "Ona",
+      "ru": "Мать"
+    },
+    "parentPortal.relationship.OTHER": {
+      "en": "Other",
+      "uz": "Boshqa",
+      "ru": "Другое"
+    },
+    "parentPortal.relationship.PARENT": {
+      "en": "Parent",
+      "uz": "Ota-ona",
+      "ru": "Родитель"
+    },
+    "parentPortal.relationship.SISTER": {
+      "en": "Sister",
+      "uz": "Singil",
+      "ru": "Сестра"
+    },
+    "parentPortal.subtitle": {
+      "en": "Monitor academic progress, attendance, and finances",
+      "uz": "Akademik rivojlanish, davomat va moliyani kuzating",
+      "ru": "Следите за учебным прогрессом, посещаемостью и финансами"
+    },
+    "search.foundSummary": {
+      "en": "Found {n} results in {ms}ms",
+      "uz": "{ms} ms da {n} natija topildi",
+      "ru": "Найдено результатов: {n} за {ms} мс"
+    },
+    "search.matchCount": {
+      "en": "{n} matches",
+      "uz": "{n} moslik",
+      "ru": "совпадений: {n}"
+    },
+    "search.noResults": {
+      "en": "No results",
+      "uz": "Natijalar yoʻq",
+      "ru": "Нет результатов"
+    },
+    "search.noResultsHint": {
+      "en": "No matches for \"{query}\". Try fewer words or a different filter.",
+      "uz": "\"{query}\" uchun moslik yoʻq. Kamroq soʻz yoki boshqa filtr bilan urinib koʻring.",
+      "ru": "Нет совпадений для «{query}». Попробуйте меньше слов или другой фильтр."
+    },
+    "search.placeholder": {
+      "en": "Search for anyone or anything…",
+      "uz": "Kimdir yoki nimadir qidiring…",
+      "ru": "Ищите кого-нибудь или что-нибудь…"
+    },
+    "search.searching": {
+      "en": "Searching…",
+      "uz": "Qidirilmoqda…",
+      "ru": "Поиск…"
+    },
+    "search.subtitle": {
+      "en": "Find any record across the platform — students, teachers, groups, courses, payments, books, certificates, and more",
+      "uz": "Platforma boʻylab istalgan yozuvni toping — oʻquvchilar, oʻqituvchilar, guruhlar, kurslar, toʻlovlar, kitoblar, sertifikatlar va boshqalar",
+      "ru": "Найдите любую запись на платформе — ученики, учителя, группы, курсы, платежи, книги, сертификаты и многое другое"
+    },
+    "search.typeMore": {
+      "en": "Type at least 2 characters to start searching.",
+      "uz": "Qidirishni boshlash uchun kamida 2 ta belgi kiriting.",
+      "ru": "Введите не менее 2 символов для начала поиска."
+    },
+    "search.untitled": {
+      "en": "Untitled",
+      "uz": "Sarlavhasiz",
+      "ru": "Без названия"
+    },
+    "security.alertsThisWeek": {
+      "en": "Alerts this week",
+      "uz": "Shu haftadagi ogohlantirishlar",
+      "ru": "Оповещений на этой неделе"
+    },
+    "security.critical": {
+      "en": "Critical",
+      "uz": "Jiddiy",
+      "ru": "Критические"
+    },
+    "security.empty": {
+      "en": "No security alerts",
+      "uz": "Xavfsizlik ogohlantirishlari yoʻq",
+      "ru": "Нет предупреждений безопасности"
+    },
+    "security.emptyHint": {
+      "en": "No suspicious activity detected. Your account is secure.",
+      "uz": "Shubhali faoliyat aniqlanmadi. Hisobingiz xavfsiz.",
+      "ru": "Подозрительная активность не обнаружена. Ваш аккаунт защищён."
+    },
+    "security.filter.all": {
+      "en": "All",
+      "uz": "Barchasi",
+      "ru": "Все"
+    },
+    "security.filter.critical": {
+      "en": "Critical",
+      "uz": "Jiddiy",
+      "ru": "Критические"
+    },
+    "security.filter.new": {
+      "en": "New",
+      "uz": "Yangi",
+      "ru": "Новые"
+    },
+    "security.loadError": {
+      "en": "Failed to load security alerts",
+      "uz": "Xavfsizlik ogohlantirishlarini yuklab boʻlmadi",
+      "ru": "Не удалось загрузить предупреждения безопасности"
+    },
+    "security.loading": {
+      "en": "Loading security alerts…",
+      "uz": "Xavfsizlik ogohlantirishlari yuklanmoqda…",
+      "ru": "Загрузка предупреждений безопасности…"
+    },
+    "security.markResolved": {
+      "en": "Mark resolved",
+      "uz": "Hal boʻlgan deb belgilash",
+      "ru": "Отметить решённым"
+    },
+    "security.protection.csrf": {
+      "en": "CSRF / CORS",
+      "uz": "CSRF / CORS",
+      "ru": "CSRF / CORS"
+    },
+    "security.protection.csrfDesc": {
+      "en": "restricted origins, credentials only for same-origin",
+      "uz": "cheklangan manbalar, faqat bir xil manba uchun hisob maʼlumotlari",
+      "ru": "ограниченные источники, учётные данные только для того же источника"
+    },
+    "security.protection.helmet": {
+      "en": "Helmet",
+      "uz": "Helmet",
+      "ru": "Helmet"
+    },
+    "security.protection.helmetDesc": {
+      "en": "secure HTTP headers (HSTS, X-Content-Type-Options, etc.)",
+      "uz": "xavfsiz HTTP sarlavhalari (HSTS, X-Content-Type-Options va boshqalar)",
+      "ru": "безопасные HTTP-заголовки (HSTS, X-Content-Type-Options и др.)"
+    },
+    "security.protection.jwt": {
+      "en": "JWT authentication",
+      "uz": "JWT autentifikatsiya",
+      "ru": "Аутентификация JWT"
+    },
+    "security.protection.jwtDesc": {
+      "en": "short-lived tokens, server-side verification",
+      "uz": "qisqa muddatli tokenlar, server tomonidan tekshirish",
+      "ru": "краткоживущие токены, проверка на сервере"
+    },
+    "security.protection.oauth": {
+      "en": "Google OAuth 2.0",
+      "uz": "Google OAuth 2.0",
+      "ru": "Google OAuth 2.0"
+    },
+    "security.protection.oauthDesc": {
+      "en": "standard OAuth flow with PKCE",
+      "uz": "PKCE bilan standart OAuth oqimi",
+      "ru": "стандартный поток OAuth с PKCE"
+    },
+    "security.protection.passwordHashing": {
+      "en": "Password hashing",
+      "uz": "Parol xeshlash",
+      "ru": "Хеширование паролей"
+    },
+    "security.protection.passwordHashingDesc": {
+      "en": "bcrypt, configurable cost factor",
+      "uz": "bcrypt, sozlanuvchi xarajat koeffitsienti",
+      "ru": "bcrypt, настраиваемый cost factor"
+    },
+    "security.protection.prisma": {
+      "en": "Prisma ORM",
+      "uz": "Prisma ORM",
+      "ru": "Prisma ORM"
+    },
+    "security.protection.prismaDesc": {
+      "en": "parameterised queries (SQL injection-safe)",
+      "uz": "parametrlangan soʻrovlar (SQL inʼyeksiyadan himoyalangan)",
+      "ru": "параметризованные запросы (защита от SQL-инъекций)"
+    },
+    "security.protection.rateLimiting": {
+      "en": "Rate limiting",
+      "uz": "Tezlikni cheklash",
+      "ru": "Ограничение частоты"
+    },
+    "security.protection.rateLimitingDesc": {
+      "en": "100 req/min per user (auth endpoints tighter)",
+      "uz": "foydalanuvchiga 100 soʻrov/daq (auth nuqtalari qatʼiyroq)",
+      "ru": "100 запросов/мин на пользователя (для auth строже)"
+    },
+    "security.protection.rbac": {
+      "en": "RBAC",
+      "uz": "RBAC",
+      "ru": "RBAC"
+    },
+    "security.protection.rbacDesc": {
+      "en": "6-role permission system with role guards",
+      "uz": "rol himoyachilari bilan 6 rolli ruxsat tizimi",
+      "ru": "система прав на 6 ролей с роль-гардами"
+    },
+    "security.protection.tenantIsolation": {
+      "en": "Tenant isolation",
+      "uz": "Tenant izolyatsiyasi",
+      "ru": "Изоляция арендаторов"
+    },
+    "security.protection.tenantIsolationDesc": {
+      "en": "every query scoped to organizationId",
+      "uz": "har bir soʻrov organizationId bilan chegaralanadi",
+      "ru": "каждый запрос ограничен organizationId"
+    },
+    "security.protection.title": {
+      "en": "Security protections",
+      "uz": "Xavfsizlik himoyalari",
+      "ru": "Средства защиты"
+    },
+    "security.protection.validation": {
+      "en": "class-validator",
+      "uz": "class-validator",
+      "ru": "class-validator"
+    },
+    "security.protection.validationDesc": {
+      "en": "strict DTO validation, rejects unknown fields",
+      "uz": "qatʼiy DTO tekshiruvi, nomaʼlum maydonlarni rad etadi",
+      "ru": "строгая валидация DTO, отклоняет неизвестные поля"
+    },
+    "security.resolveError": {
+      "en": "Could not resolve alert",
+      "uz": "Ogohlantirishni hal qilib boʻlmadi",
+      "ru": "Не удалось разрешить оповещение"
+    },
+    "security.resolved": {
+      "en": "Resolved",
+      "uz": "Hal boʻldi",
+      "ru": "Решено"
+    },
+    "security.resolvedThisWeek": {
+      "en": "Resolved this week",
+      "uz": "Shu haftada hal boʻldi",
+      "ru": "Решено на этой неделе"
+    },
+    "security.resolvedToast": {
+      "en": "Alert resolved",
+      "uz": "Ogohlantirish hal boʻldi",
+      "ru": "Оповещение разрешено"
+    },
+    "security.riskScore": {
+      "en": "Risk score",
+      "uz": "Xavf balli",
+      "ru": "Оценка риска"
+    },
+    "security.severity.CRITICAL": {
+      "en": "Critical",
+      "uz": "Jiddiy",
+      "ru": "Критический"
+    },
+    "security.severity.HIGH": {
+      "en": "High",
+      "uz": "Yuqori",
+      "ru": "Высокий"
+    },
+    "security.severity.INFO": {
+      "en": "Info",
+      "uz": "Maʼlumot",
+      "ru": "Информация"
+    },
+    "security.severity.LOW": {
+      "en": "Low",
+      "uz": "Past",
+      "ru": "Низкий"
+    },
+    "security.severity.MEDIUM": {
+      "en": "Medium",
+      "uz": "Oʻrta",
+      "ru": "Средний"
+    },
+    "security.subtitle": {
+      "en": "Login attempts, suspicious activity, brute-force protection, audit anomalies",
+      "uz": "Kirish urinishlari, shubhali faoliyat, brute-force himoyasi, audit anomaliyalari",
+      "ru": "Попытки входа, подозрительная активность, защита от brute-force, аномалии аудита"
+    },
+    "security.title": {
+      "en": "Security Center",
+      "uz": "Xavfsizlik markazi",
+      "ru": "Центр безопасности"
+    },
+    "systemHealth.approachTitle": {
+      "en": "Monitoring approach",
+      "uz": "Kuzatish yondashuvi",
+      "ru": "Подход к мониторингу"
+    },
+    "systemHealth.avgResponse": {
+      "en": "Avg response",
+      "uz": "Oʻrtacha javob",
+      "ru": "Среднее время ответа"
+    },
+    "systemHealth.component.api": {
+      "en": "API",
+      "uz": "API",
+      "ru": "API"
+    },
+    "systemHealth.component.apiDesc": {
+      "en": "HTTP endpoints / health check",
+      "uz": "HTTP nuqtalar / holat tekshiruvi",
+      "ru": "HTTP-эндпоинты / проверка состояния"
+    },
+    "systemHealth.component.backgroundJobs": {
+      "en": "Background Jobs",
+      "uz": "Fon vazifalari",
+      "ru": "Фоновые задачи"
+    },
+    "systemHealth.component.backgroundJobsDesc": {
+      "en": "Queue workers / schedulers",
+      "uz": "Navbat ishchilari / jadvalchilar",
+      "ru": "Воркеры очередей / планировщики"
+    },
+    "systemHealth.component.cache": {
+      "en": "Cache",
+      "uz": "Kesh",
+      "ru": "Кэш"
+    },
+    "systemHealth.component.cacheDesc": {
+      "en": "Redis in-memory cache",
+      "uz": "Redis xotira keshi",
+      "ru": "Кэш Redis в памяти"
+    },
+    "systemHealth.component.database": {
+      "en": "Database",
+      "uz": "Maʼlumotlar bazasi",
+      "ru": "База данных"
+    },
+    "systemHealth.component.databaseDesc": {
+      "en": "PostgreSQL / Prisma ORM",
+      "uz": "PostgreSQL / Prisma ORM",
+      "ru": "PostgreSQL / Prisma ORM"
+    },
+    "systemHealth.component.notifications": {
+      "en": "Notifications",
+      "uz": "Bildirishnomalar",
+      "ru": "Уведомления"
+    },
+    "systemHealth.component.notificationsDesc": {
+      "en": "Email / push delivery",
+      "uz": "Email / push yetkazib berish",
+      "ru": "Доставка email / push"
+    },
+    "systemHealth.component.storage": {
+      "en": "Storage",
+      "uz": "Saqlash",
+      "ru": "Хранилище"
+    },
+    "systemHealth.component.storageDesc": {
+      "en": "File storage (S3-compatible)",
+      "uz": "Fayl saqlash (S3 mos)",
+      "ru": "Файловое хранилище (S3-совместимое)"
+    },
+    "systemHealth.lastIncident": {
+      "en": "Last incident",
+      "uz": "Oxirgi hodisa",
+      "ru": "Последний инцидент"
+    },
+    "systemHealth.loading": {
+      "en": "Loading system status…",
+      "uz": "Tizim holati yuklanmoqda…",
+      "ru": "Загрузка состояния системы…"
+    },
+    "systemHealth.noAiMl": {
+      "en": "No AI/ML monitoring",
+      "uz": "AI/ML kuzatuvi yoʻq",
+      "ru": "Без мониторинга AI/ML"
+    },
+    "systemHealth.noAiMlDesc": {
+      "en": "purely deterministic thresholds and binary ok/warn/error states",
+      "uz": "sof deterministik chegaralar va ikkilik ok/ogohlantirish/xato holatlari",
+      "ru": "чисто детерминированные пороги и бинарные состояния ok/warn/error"
+    },
+    "systemHealth.noAnomaly": {
+      "en": "No anomaly detection",
+      "uz": "Anomaliya aniqlash yoʻq",
+      "ru": "Без обнаружения аномалий"
+    },
+    "systemHealth.noAnomalyDesc": {
+      "en": "no ML models, no trained classifiers, no behavioral baselines",
+      "uz": "ML modellari yoʻq, oʻqitilgan klassifikatorlar yoʻq, xatti-harakat asoslari yoʻq",
+      "ru": "нет ML-моделей, нет обученных классификаторов, нет поведенческих базовых линий"
+    },
+    "systemHealth.noErrors": {
+      "en": "No recent errors",
+      "uz": "Soʻnggi xatolar yoʻq",
+      "ru": "Нет недавних ошибок"
+    },
+    "systemHealth.noErrorsHint": {
+      "en": "No errors recorded in the recent window. All systems operating normally.",
+      "uz": "Soʻnggi davrda xatolar qayd etilmadi. Barcha tizimlar normal ishlamoqda.",
+      "ru": "В 최근 기간 ошибок не зафиксировано. Все системы работают нормально."
+    },
+    "systemHealth.noIncident": {
+      "en": "None",
+      "uz": "Yoʻq",
+      "ru": "Нет"
+    },
+    "systemHealth.recentErrors": {
+      "en": "Recent errors",
+      "uz": "Soʻnggi xatolar",
+      "ru": "Недавние ошибки"
+    },
+    "systemHealth.responseTime": {
+      "en": "Response time:",
+      "uz": "Javob vaqti:",
+      "ru": "Время ответа:"
+    },
+    "systemHealth.ruleBased": {
+      "en": "Rule-based checks",
+      "uz": "Qoidaga asoslangan tekshiruvlar",
+      "ru": "Правила-based проверки"
+    },
+    "systemHealth.ruleBasedDesc": {
+      "en": "health ping, disk/memory thresholds, job queue depth, delivery receipts",
+      "uz": "holat pingi, disk/xotira chegaralari, vazifa navbatining chuqurligi, yetkazib berish kvitansiyalari",
+      "ru": "ping состояния, пороги диска/памяти, глубина очереди задач, квитанции доставки"
+    },
+    "systemHealth.status.down": {
+      "en": "Down",
+      "uz": "Ishlamayapti",
+      "ru": "Не работает"
+    },
+    "systemHealth.status.error": {
+      "en": "Error",
+      "uz": "Xato",
+      "ru": "Ошибка"
+    },
+    "systemHealth.status.ok": {
+      "en": "OK",
+      "uz": "OK",
+      "ru": "OK"
+    },
+    "systemHealth.status.warning": {
+      "en": "Warning",
+      "uz": "Ogohlantirish",
+      "ru": "Предупреждение"
+    },
+    "systemHealth.subtitle": {
+      "en": "Operational health dashboard — deterministic, rule-based monitoring (no AI)",
+      "uz": "Operatsion holat paneli — deterministik, qoidaga asoslangan kuzatuv (AI yoʻq)",
+      "ru": "Панель операционного здоровья — детерминированный мониторинг по правилам (без ИИ)"
+    },
+    "systemHealth.totalErrors": {
+      "en": "Total errors",
+      "uz": "Jami xatolar",
+      "ru": "Всего ошибок"
+    },
+    "systemHealth.transparentRules": {
+      "en": "Transparent rules",
+      "uz": "Shaffof qoidalar",
+      "ru": "Прозрачные правила"
+    },
+    "systemHealth.transparentRulesDesc": {
+      "en": "every status is derived from a fixed condition you can audit",
+      "uz": "har bir holat siz tekshira oladigan qatʼiy shartdan kelib chiqadi",
+      "ru": "каждый статус выводится из фиксированного условия, которое можно проверить"
+    },
+    "systemHealth.uptime": {
+      "en": "Uptime",
+      "uz": "Ishlash vaqti",
+      "ru": "Аптайм"
+    }
+  }
+}

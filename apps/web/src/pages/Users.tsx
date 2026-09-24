@@ -18,13 +18,16 @@ import {
   TextInput,
   Select,
   Modal,
+  ConfirmDialog,
   useToasts,
   statusColor,
+  GlassButton,
 } from '@/components/ui';
 import { fullName, formatDate } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, User, UserRole } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 // SUPER_ADMIN can only be minted by an existing SUPER_ADMIN (backend-enforced
 // and enforced here in the UI so other roles never see a role they cannot use).
@@ -53,12 +56,8 @@ const INITIAL_FORM: UserFormState = {
   role: 'MANAGER',
 };
 
-function formatRole(role: UserRole): string {
-  return role
-    .toLowerCase()
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+function roleKey(role: string): string {
+  return `users.role.${role}`;
 }
 
 function formatUserName(user: User): string {
@@ -70,7 +69,8 @@ function validateEmail(email: string): boolean {
 }
 
 export function UsersPage() {
-  usePageTitle('Users');
+  const { t } = useI18n();
+  usePageTitle(t('users.title'));
   const { push, toastNode } = useToasts();
   const { user: currentUser } = useAuth();
   const qc = useQueryClient();
@@ -88,6 +88,8 @@ export function UsersPage() {
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Form state
   const [form, setForm] = useState<UserFormState>(INITIAL_FORM);
@@ -105,19 +107,24 @@ export function UsersPage() {
   const data = users.data as Paginated<User> | undefined;
   const userList = useMemo(() => data?.items || [], [data]);
 
-  // Create user mutation
+  // Create or update user mutation (password only sent on create)
   const create = useMutation({
-    mutationFn: () =>
-      usersApi.create({
-        ...form,
+    mutationFn: () => {
+      const payload = {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         email: form.email.trim(),
-        password: form.password || undefined,
-      }),
+        role: form.role,
+        ...(editingId ? {} : { password: form.password || undefined }),
+      };
+      return editingId
+        ? usersApi.update(editingId, payload)
+        : usersApi.create(payload);
+    },
     onSuccess: () => {
-      push('success', 'User created successfully');
+      push('success', editingId ? t('users.updated') : t('users.created'));
       setModalOpen(false);
+      setEditingId(null);
       setForm(INITIAL_FORM);
       setFormErrors({});
       qc.invalidateQueries({ queryKey: ['users'] });
@@ -132,7 +139,7 @@ export function UsersPage() {
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
       usersApi.update(id, { isActive: active }),
     onSuccess: () => {
-      push('success', 'User status updated');
+      push('success', t('users.statusUpdated'));
       qc.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (e: Error) => {
@@ -144,7 +151,7 @@ export function UsersPage() {
   const removeUser = useMutation({
     mutationFn: (id: string) => usersApi.remove(id),
     onSuccess: () => {
-      push('success', 'User deleted successfully');
+      push('success', t('users.deleted'));
       qc.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (e: Error) => {
@@ -157,20 +164,20 @@ export function UsersPage() {
     const errors: Partial<Record<keyof UserFormState, string>> = {};
 
     if (!form.firstName.trim()) {
-      errors.firstName = 'First name is required';
+      errors.firstName = t('users.validation.firstNameRequired');
     }
     if (!form.lastName.trim()) {
-      errors.lastName = 'Last name is required';
+      errors.lastName = t('users.validation.lastNameRequired');
     }
     if (!form.email.trim()) {
-      errors.email = 'Email is required';
+      errors.email = t('users.validation.emailRequired');
     } else if (!validateEmail(form.email)) {
-      errors.email = 'Please enter a valid email address';
+      errors.email = t('users.validation.emailInvalid');
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form]);
+  }, [form, t]);
 
   // Form handlers
   const handleFormChange = useCallback(
@@ -195,12 +202,27 @@ export function UsersPage() {
 
   const handleCloseModal = useCallback(() => {
     setModalOpen(false);
+    setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
   }, []);
 
   const handleOpenModal = useCallback(() => {
+    setEditingId(null);
     setForm(INITIAL_FORM);
+    setFormErrors({});
+    setModalOpen(true);
+  }, []);
+
+  const handleEdit = useCallback((user: User) => {
+    setEditingId(user.id);
+    setForm({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      password: '',
+      role: user.role,
+    });
     setFormErrors({});
     setModalOpen(true);
   }, []);
@@ -212,20 +234,15 @@ export function UsersPage() {
     [toggleActive],
   );
 
-  const handleDelete = useCallback(
-    (user: User) => {
-      const userName = formatUserName(user);
-      if (
-        !window.confirm(
-          `Permanently delete ${userName}?\n\nThis removes the account and revokes all sessions. Users with a Student/Teacher profile must be deactivated instead.`,
-        )
-      ) {
-        return;
-      }
-      removeUser.mutate(user.id);
-    },
-    [removeUser],
-  );
+  const handleDelete = useCallback((user: User) => {
+    setDeleteTarget({ id: user.id, name: formatUserName(user) });
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    removeUser.mutate(deleteTarget.id);
+    setDeleteTarget(null);
+  }, [deleteTarget, removeUser]);
 
   const { refetch: refetchUsers } = users;
   const handleRetry = useCallback(() => {
@@ -235,14 +252,14 @@ export function UsersPage() {
   // Early return for loading state
   if (users.isLoading && !data) {
     return (
-      <div className="orb-container">
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Users"
-            subtitle="Manage organization users and roles"
+            title={t('users.title')}
+            subtitle={t('users.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label="Loading users…" />
+            <PageLoader label={t('users.loading')} />
           </div>
         </div>
       </div>
@@ -252,15 +269,15 @@ export function UsersPage() {
   // Early return for error state
   if (users.isError) {
     return (
-      <div className="orb-container">
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Users"
-            subtitle="Manage organization users and roles"
+            title={t('users.title')}
+            subtitle={t('users.pageSubtitle')}
           />
           <div className="glass-card p-8">
             <ErrorState
-              title="Failed to load users"
+              title={t('users.loadError')}
               message={getErrorMessage(users.error as Error)}
               onRetry={handleRetry}
             />
@@ -271,23 +288,23 @@ export function UsersPage() {
   }
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1"></div>
       <div className="orb orb-cyan-2"></div>
       <div className="orb orb-indigo-1"></div>
       <div className="orb orb-deep-1"></div>
     <div className="page-container space-y-4">
       <PageHeader
-        title="Users"
-        subtitle="Manage organization users and roles"
+        title={t('users.title')}
+        subtitle={t('users.pageSubtitle')}
         actions={
-          <button
+          <GlassButton
             type="button"
-            className="glass-btn glass-btn-primary"
+            variant="primary"
             onClick={handleOpenModal}
           >
-            Add user
-          </button>
+            {t('users.add')}
+          </GlassButton>
         }
       />
 
@@ -295,20 +312,20 @@ export function UsersPage() {
       <div className="glass-card overflow-hidden">
         {userList.length === 0 ? (
           <EmptyState
-            title="No users"
-            message="Add team members to collaborate."
+            title={t('users.emptyTitle')}
+            message={t('users.emptyMessage')}
           />
         ) : (
           <div className="glass-table-wrap">
             <Table>
               <THead>
                 <TR>
-                  <TH>Name</TH>
-                  <TH>Email</TH>
-                  <TH>Role</TH>
-                  <TH>Last login</TH>
-                  <TH>Status</TH>
-                  <TH className="text-right">Actions</TH>
+                  <TH>{t('common.name')}</TH>
+                  <TH>{t('common.email')}</TH>
+                  <TH>{t('users.col.role')}</TH>
+                  <TH>{t('users.col.lastLogin')}</TH>
+                  <TH>{t('common.status')}</TH>
+                  <TH className="text-right">{t('common.actions')}</TH>
                 </TR>
               </THead>
               <TBody>
@@ -328,14 +345,14 @@ export function UsersPage() {
                         {formatUserName(user)}
                         {isCurrentUser && (
                           <span className="ml-2 text-xs text-muted">
-                            (you)
+                            {t('users.you')}
                           </span>
                         )}
                       </TD>
                       <TD>{user.email}</TD>
                       <TD>
                         <Badge color={statusColor(user.role)}>
-                          {formatRole(user.role)}
+                          {t(roleKey(user.role))}
                         </Badge>
                       </TD>
                       <TD className="whitespace-nowrap">
@@ -343,41 +360,57 @@ export function UsersPage() {
                       </TD>
                       <TD>
                         <Badge color={user.isActive ? 'green' : 'red'}>
-                          {user.isActive ? 'Active' : 'Inactive'}
+                          {user.isActive ? t('users.status.ACTIVE') : t('users.status.INACTIVE')}
                         </Badge>
                       </TD>
                       <TD className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button
+                          <GlassButton
                             type="button"
-                            className="glass-btn glass-btn-ghost glass-btn-sm"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(user)}
+                            disabled={isCurrentUser}
+                            title={
+                              isCurrentUser
+                                ? t('users.cannotEditSelf')
+                                : undefined
+                            }
+                          >
+                            {t('common.edit')}
+                          </GlassButton>
+                          <GlassButton
+                            type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleToggleActive(user)}
                             disabled={isToggling || isCurrentUser}
                             title={
                               isCurrentUser
-                                ? 'You cannot deactivate your own account'
+                                ? t('users.cannotDeactivateSelf')
                                 : undefined
                             }
                           >
                             {isToggling
-                              ? 'Updating…'
+                              ? t('users.updating')
                               : user.isActive
-                                ? 'Deactivate'
-                                : 'Activate'}
-                          </button>
-                          <button
+                                ? t('users.deactivate')
+                                : t('users.activate')}
+                          </GlassButton>
+                          <GlassButton
                             type="button"
-                            className="glass-btn glass-btn-danger glass-btn-sm"
+                            variant="danger"
+                            size="sm"
                             onClick={() => handleDelete(user)}
                             disabled={isDeleting || isCurrentUser}
                             title={
                               isCurrentUser
-                                ? 'You cannot delete your own account'
+                                ? t('users.cannotDeleteSelf')
                                 : undefined
                             }
                           >
-                            {isDeleting ? 'Deleting…' : 'Delete'}
-                          </button>
+                            {isDeleting ? t('templates.deleting') : t('common.delete')}
+                          </GlassButton>
                         </div>
                       </TD>
                     </TR>
@@ -389,16 +422,16 @@ export function UsersPage() {
         )}
       </div>
 
-      {/* Add user modal */}
+      {/* Add/edit user modal */}
       <Modal
         open={modalOpen}
         onClose={handleCloseModal}
-        title="Add user"
+        title={editingId ? t('users.editTitle') : t('users.add')}
         wide
       >
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="First name" required error={formErrors.firstName}>
+            <Field label={t('users.form.firstName')} required error={formErrors.firstName}>
               <TextInput
                 value={form.firstName}
                 onChange={handleFormChange('firstName')}
@@ -420,7 +453,7 @@ export function UsersPage() {
               )}
             </Field>
 
-            <Field label="Last name" required error={formErrors.lastName}>
+            <Field label={t('users.form.lastName')} required error={formErrors.lastName}>
               <TextInput
                 value={form.lastName}
                 onChange={handleFormChange('lastName')}
@@ -442,7 +475,7 @@ export function UsersPage() {
               )}
             </Field>
 
-            <Field label="Email" required error={formErrors.email}>
+            <Field label={t('common.email')} required error={formErrors.email}>
               <TextInput
                 type="email"
                 value={form.email}
@@ -462,26 +495,28 @@ export function UsersPage() {
               )}
             </Field>
 
-            <Field label="Password" hint="Optional for OAuth users.">
-              <TextInput
-                type="password"
-                value={form.password}
-                onChange={handleFormChange('password')}
-                autoComplete="new-password"
-                disabled={create.isPending}
-              />
-            </Field>
+            {!editingId && (
+              <Field label={t('users.form.password')} hint={t('users.form.passwordHint')}>
+                <TextInput
+                  type="password"
+                  value={form.password}
+                  onChange={handleFormChange('password')}
+                  autoComplete="new-password"
+                  disabled={create.isPending}
+                />
+              </Field>
+            )}
 
-            <Field label="Role">
+            <Field label={t('users.form.role')}>
               <Select
                 value={form.role}
                 onChange={handleFormChange('role')}
-                aria-label="Select user role"
+                aria-label={t('users.form.roleAria')}
                 disabled={create.isPending}
               >
                 {availableRoles.map((role) => (
                   <option key={role} value={role}>
-                    {formatRole(role)}
+                    {t(roleKey(role))}
                   </option>
                 ))}
               </Select>
@@ -489,24 +524,36 @@ export function UsersPage() {
           </div>
 
           <div className="flex justify-end gap-2">
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-secondary"
+              variant="secondary"
               onClick={handleCloseModal}
               disabled={create.isPending}
             >
-              Cancel
-            </button>
-            <button
+              {t('common.cancel')}
+            </GlassButton>
+            <GlassButton
               type="submit"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               disabled={create.isPending}
             >
-              {create.isPending ? 'Saving…' : 'Create user'}
-            </button>
+              {create.isPending
+                ? t('common.saving')
+                : editingId
+                  ? t('common.save')
+                  : t('users.create')}
+            </GlassButton>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        description={deleteTarget ? t('users.deleteConfirm', { name: deleteTarget.name }) : ''}
+        loading={removeUser.isPending}
+      />
 
       {toastNode}
     </div>

@@ -17,11 +17,13 @@ import {
   GlassSelect,
   GlassInput,
   GlassButton,
+  ConfirmDialog,
   useToast,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Grade, Student, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface GradeFilters {
   page: number;
@@ -59,7 +61,8 @@ function percent(value: number, max: number): string {
 }
 
 export function GradesPage() {
-  usePageTitle('Grades');
+  const { t } = useI18n();
+  usePageTitle(t('grades.title'));
   const { push, toastNode } = useToast();
   const qc = useQueryClient();
 
@@ -68,6 +71,7 @@ export function GradesPage() {
   const [groupFilter, setGroupFilter] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editGrade, setEditGrade] = useState<Grade | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const [form, setForm] = useState<GradeFormState>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof GradeFormState, string>>>({});
@@ -114,7 +118,7 @@ export function GradesPage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['grades'] });
-      push('success', 'Grade created');
+      push('success', t('grades.createSuccess'));
       closeModal();
     },
     onError: (e: unknown) => push('error', getErrorMessage(e)),
@@ -130,7 +134,7 @@ export function GradesPage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['grades'] });
-      push('success', 'Grade updated');
+      push('success', t('grades.updated'));
       closeModal();
     },
     onError: (e: unknown) => push('error', getErrorMessage(e)),
@@ -140,7 +144,7 @@ export function GradesPage() {
     mutationFn: (id: string) => gradesApi.remove(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['grades'] });
-      push('success', 'Grade deleted');
+      push('success', t('grades.deleted'));
     },
     onError: (e: unknown) => push('error', getErrorMessage(e)),
   });
@@ -173,9 +177,9 @@ export function GradesPage() {
 
   const validate = (): boolean => {
     const errs: Partial<Record<keyof GradeFormState, string>> = {};
-    if (!form.studentId) errs.studentId = 'Required';
-    if (!form.groupId) errs.groupId = 'Required';
-    if (!form.value || isNaN(parseFloat(form.value))) errs.value = 'Enter a number';
+    if (!form.studentId) errs.studentId = t('common.required');
+    if (!form.groupId) errs.groupId = t('common.required');
+    if (!form.value || isNaN(parseFloat(form.value))) errs.value = t('grades.validation.number');
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -195,19 +199,25 @@ export function GradesPage() {
 
   return (
     <div className="page-container">
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
-      </div>
+
       {toastNode}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteMut.mutate(deleteTarget);
+          setDeleteTarget(null);
+        }}
+        description={t('grades.confirmDelete')}
+        loading={deleteMut.isPending}
+      />
       <GlassPageHeader
-        title="Grades"
-        description={`${data?.total ?? 0} total`}
+        title={t('grades.title')}
+        description={t('grades.total', { n: data?.total ?? 0 })}
         actions={
           <GlassButton variant="primary" size="sm" onClick={openCreate}>
-            Add Grade
+            {t('grades.add')}
           </GlassButton>
         }
       />
@@ -216,40 +226,40 @@ export function GradesPage() {
         <GlassSelect
           value={groupFilter}
           onChange={(e) => { setGroupFilter(e.target.value); setPage(1); }}
-          options={[{ value: '', label: 'All groups' }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
-          placeholder="All groups"
+          options={[{ value: '', label: t('grades.allGroups') }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
+          placeholder={t('grades.allGroups')}
         />
         <GlassSelect
           value={studentFilter}
           onChange={(e) => { setStudentFilter(e.target.value); setPage(1); }}
-          options={[{ value: '', label: 'All students' }, ...students.map((s) => ({ value: s.id, label: formatStudentName(s) }))]}
-          placeholder="All students"
+          options={[{ value: '', label: t('grades.allStudents') }, ...students.map((s) => ({ value: s.id, label: formatStudentName(s) }))]}
+          placeholder={t('grades.allStudents')}
         />
       </div>
 
       {isLoading ? (
         <GlassCard>
-          <GlassPageLoader label="Loading grades…" />
+          <GlassPageLoader label={t('grades.loading')} />
         </GlassCard>
       ) : error ? (
         <GlassErrorState message={getErrorMessage(error)} />
       ) : items.length === 0 ? (
         <GlassEmptyState
-          title="No grades yet"
-          description="Create the first grade to get started."
-          action={{ label: 'Add Grade', onClick: openCreate }}
+          title={t('grades.empty')}
+          description={t('grades.emptyMessage')}
+          action={{ label: t('grades.add'), onClick: openCreate }}
         />
       ) : (
         <GlassCard padding="none">
           <GlassTable className="overflow-x-auto">
             <GlassTHead>
               <GlassTR>
-                <GlassTH>Student</GlassTH>
-                <GlassTH>Group</GlassTH>
-                <GlassTH className="text-right">Score</GlassTH>
+                <GlassTH>{t('grades.col.student')}</GlassTH>
+                <GlassTH>{t('grades.col.group')}</GlassTH>
+                <GlassTH className="text-right">{t('grades.col.score')}</GlassTH>
                 <GlassTH className="text-right">%</GlassTH>
-                <GlassTH>Label</GlassTH>
-                <GlassTH>Notes</GlassTH>
+                <GlassTH>{t('grades.col.label')}</GlassTH>
+                <GlassTH>{t('grades.col.notes')}</GlassTH>
                 <GlassTH className="w-20" />
               </GlassTR>
             </GlassTHead>
@@ -265,14 +275,14 @@ export function GradesPage() {
                   <GlassTD>
                     <div className="flex gap-2 justify-end">
                       <GlassButton variant="ghost" size="sm" onClick={() => openEdit(g)}>
-                        Edit
+                        {t('common.edit')}
                       </GlassButton>
                       <GlassButton
                         variant="danger"
                         size="sm"
-                        onClick={() => { if (confirm('Delete this grade?')) deleteMut.mutate(g.id); }}
+                        onClick={() => setDeleteTarget(g.id)}
                       >
-                        Delete
+                        {t('common.delete')}
                       </GlassButton>
                     </div>
                   </GlassTD>
@@ -285,18 +295,15 @@ export function GradesPage() {
               <div className="flex justify-center">
                 <div className="flex gap-1">
                   {Array.from({ length: data.totalPages }, (_, i) => i + 1).map((p) => (
-                    <button
+                    <GlassButton
                       key={p}
+                      variant={p === page ? 'primary' : 'ghost'}
+                      size="sm"
+                      className="w-9 h-9 text-sm font-medium rounded-xl transition-all duration-200"
                       onClick={() => setPage(p)}
-                      className={[
-                        'w-9 h-9 text-sm font-medium rounded-xl transition-all duration-200',
-                        p === page
-                          ? 'glass-btn-primary glass-btn-sm'
-                          : 'glass-btn-ghost glass-btn-sm',
-                      ].join(' ')}
                     >
                       {p}
-                    </button>
+                    </GlassButton>
                   ))}
                 </div>
               </div>
@@ -308,54 +315,54 @@ export function GradesPage() {
       <GlassModal
         open={modalOpen}
         onClose={closeModal}
-        title={editGrade ? 'Edit Grade' : 'New Grade'}
+        title={editGrade ? t('grades.editTitle') : t('grades.newTitle')}
         footer={
           <>
-            <GlassButton variant="secondary" size="sm" onClick={closeModal}>Cancel</GlassButton>
+            <GlassButton variant="secondary" size="sm" onClick={closeModal}>{t('common.cancel')}</GlassButton>
             <GlassButton
               variant="primary"
               size="sm"
               onClick={handleSubmit}
               disabled={createMut.isPending || updateMut.isPending}
             >
-              {editGrade ? 'Save' : 'Create'}
+              {editGrade ? t('common.save') : t('common.create')}
             </GlassButton>
           </>
         }
       >
         <div className="space-y-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[var(--text-secondary)]">Student</label>
+            <label className="text-sm font-medium text-[var(--text-secondary)]">{t('grades.col.student')}</label>
             <GlassSelect
               value={form.studentId}
               onChange={(e) => setForm((f) => ({ ...f, studentId: e.target.value }))}
-              options={[{ value: '', label: 'Select student' }, ...students.map((s) => ({ value: s.id, label: formatStudentName(s) }))]}
-              placeholder="Select student"
+              options={[{ value: '', label: t('grades.studentPlaceholder') }, ...students.map((s) => ({ value: s.id, label: formatStudentName(s) }))]}
+              placeholder={t('grades.studentPlaceholder')}
               error={formErrors.studentId}
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[var(--text-secondary)]">Group</label>
+            <label className="text-sm font-medium text-[var(--text-secondary)]">{t('grades.col.group')}</label>
             <GlassSelect
               value={form.groupId}
               onChange={(e) => setForm((f) => ({ ...f, groupId: e.target.value }))}
-              options={[{ value: '', label: 'Select group' }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
-              placeholder="Select group"
+              options={[{ value: '', label: t('grades.groupPlaceholder') }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
+              placeholder={t('grades.groupPlaceholder')}
               error={formErrors.groupId}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <GlassInput
-              label="Score"
+              label={t('grades.col.score')}
               type="number"
               min={0}
               value={form.value}
               onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
-              placeholder="e.g. 85"
+              placeholder={t('grades.scorePlaceholder')}
               error={formErrors.value}
             />
             <GlassInput
-              label="Max Score"
+              label={t('grades.maxScore')}
               type="number"
               min={1}
               value={form.maxValue}
@@ -365,17 +372,17 @@ export function GradesPage() {
             />
           </div>
           <GlassInput
-            label="Label"
+            label={t('grades.col.label')}
             value={form.label}
             onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-            placeholder="e.g. A, B+, Excellent"
+            placeholder={t('grades.labelSamplePlaceholder')}
             error={formErrors.label}
           />
           <GlassInput
-            label="Notes"
+            label={t('grades.col.notes')}
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            placeholder="Optional notes"
+            placeholder={t('grades.optionalNotesPlaceholder')}
             error={formErrors.notes}
           />
         </div>

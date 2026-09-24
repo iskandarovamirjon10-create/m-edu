@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import type { JwtService } from '@nestjs/jwt';
+import type { PrismaService } from '../../prisma/prisma.service';
+import type { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
 import { buildOAuthSessionOptions, resolveOAuthSessionSecret } from '../oauth-session';
 
@@ -45,9 +48,9 @@ function createMockPrisma() {
   };
 }
 
-const mockJwt: any = {
-  sign: vi.fn((payload: any) => `jwt.${payload.sub}.${payload.sid}`),
-};
+const mockJwt = {
+  sign: vi.fn((payload: Record<string, unknown>) => `jwt.${payload.sub}.${payload.sid}`),
+} as unknown as JwtService;
 
 const orgRow = { id: 'o1', name: 'Org' };
 
@@ -58,7 +61,7 @@ describe('AuthService.googleLogin — account-linking policy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new AuthService(prisma as any, mockJwt);
+    svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
   });
 
   afterEach(() => {
@@ -156,7 +159,7 @@ describe('AuthService.googleLogin — account-linking policy', () => {
       organizationId: 'o9', firstName: 'Jane', lastName: 'Doe',
       organization: { id: 'o9', name: "Jane Doe's Education Center" },
     };
-    prisma.$transaction.mockImplementation(async (_fn: any) => {
+    prisma.$transaction.mockImplementation(async (_fn: unknown) => {
       const org = { id: 'o9', name: "Jane Doe's Education Center" };
       return { ...txUser, organization: org };
     });
@@ -236,7 +239,7 @@ describe('OAuth session (express-session + PostgreSQL store)', () => {
     // requires the express-session middleware — regression for
     // "OAuth 2.0 authentication requires session support".
     const { GoogleStrategy } = await import('../google.strategy');
-    const instance = new GoogleStrategy({ get: (_k: string, _d?: unknown) => undefined } as any);
+    const instance = new GoogleStrategy({ get: (_k: string, _d?: unknown) => undefined } as unknown as ConfigService);
     expect(instance).toBeDefined();
     // Verify the option the strategy was constructed with by checking the
     // underlying passport-oauth2 state store type via the prototype chain is

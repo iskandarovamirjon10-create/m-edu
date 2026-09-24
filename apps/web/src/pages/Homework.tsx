@@ -18,12 +18,15 @@ import {
   TextArea,
   Select,
   Modal,
+  ConfirmDialog,
+  GlassButton,
   useToasts,
 } from '@/components/ui';
 import { formatDate } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Homework, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface HomeworkFormState {
   groupId: string;
@@ -66,12 +69,15 @@ export function isDeadlineSoon(deadline: string | null | undefined): boolean {
 }
 
 export function HomeworkPage() {
-  usePageTitle('Homework');
+  const { t } = useI18n();
+  usePageTitle(t('homework.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // Form state
   const [form, setForm] = useState<HomeworkFormState>(INITIAL_FORM);
@@ -100,10 +106,10 @@ export function HomeworkPage() {
     [groups.data],
   );
 
-  // Create homework mutation
-  const create = useMutation({
-    mutationFn: () =>
-      homeworkApi.create({
+  // Create or update homework mutation
+  const save = useMutation({
+    mutationFn: () => {
+      const payload = {
         groupId: form.groupId,
         title: form.title.trim(),
         description: form.description.trim() || undefined,
@@ -111,12 +117,27 @@ export function HomeworkPage() {
           ? new Date(form.deadline).toISOString()
           : undefined,
         maxScore: form.maxScore ? parseFloat(form.maxScore) : undefined,
-      }),
+      };
+      return editingId ? homeworkApi.update(editingId, payload) : homeworkApi.create(payload);
+    },
     onSuccess: () => {
-      push('success', 'Homework created successfully');
+      push('success', editingId ? t('homework.updateSuccess') : t('homework.createSuccess'));
       setModalOpen(false);
+      setEditingId(null);
       setForm(INITIAL_FORM);
       setFormErrors({});
+      qc.invalidateQueries({ queryKey: ['homework'] });
+    },
+    onError: (e: Error) => {
+      push('error', getErrorMessage(e));
+    },
+  });
+
+  // Delete homework mutation
+  const remove = useMutation({
+    mutationFn: (id: string) => homeworkApi.remove(id),
+    onSuccess: () => {
+      push('success', t('homework.deleteSuccess'));
       qc.invalidateQueries({ queryKey: ['homework'] });
     },
     onError: (e: Error) => {
@@ -129,18 +150,18 @@ export function HomeworkPage() {
     const errors: Partial<Record<keyof HomeworkFormState, string>> = {};
 
     if (!form.title.trim()) {
-      errors.title = 'Title is required';
+      errors.title = t('homework.titleRequired');
     }
     if (!form.groupId) {
-      errors.groupId = 'Please select a group';
+      errors.groupId = t('common.validation.selectGroup');
     }
     if (form.maxScore && parseFloat(form.maxScore) < 0) {
-      errors.maxScore = 'Max score must be a positive number';
+      errors.maxScore = t('homework.maxScorePositive');
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form]);
+  }, [form, t]);
 
   // Form handlers
   const handleFormChange = useCallback(
@@ -162,22 +183,50 @@ export function HomeworkPage() {
       if (!validateForm()) {
         return;
       }
-      create.mutate();
+      save.mutate();
     },
-    [validateForm, create],
+    [validateForm, save],
   );
 
   const handleCloseModal = useCallback(() => {
     setModalOpen(false);
+    setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
   }, []);
 
   const handleOpenModal = useCallback(() => {
+    setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
     setModalOpen(true);
   }, []);
+
+  const handleEdit = useCallback(
+    (item: Homework) => {
+      setEditingId(item.id);
+      setForm({
+        groupId: item.groupId,
+        title: item.title,
+        description: item.description || '',
+        deadline: item.deadline ? item.deadline.slice(0, 16) : '',
+        maxScore: item.maxScore != null ? String(item.maxScore) : '',
+      });
+      setFormErrors({});
+      setModalOpen(true);
+    },
+    [],
+  );
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteTarget(id);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    remove.mutate(deleteTarget);
+    setDeleteTarget(null);
+  }, [deleteTarget, remove]);
 
   const { refetch: refetchHomework } = homework;
   const handleRetry = useCallback(() => {
@@ -187,14 +236,14 @@ export function HomeworkPage() {
   // Early return for loading state
   if (homework.isLoading && !data) {
     return (
-      <div className="orb-container">
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Homework"
-            subtitle="Assignments for groups"
+            title={t('homework.title')}
+            subtitle={t('homework.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label="Loading homework…" />
+            <PageLoader label={t('homework.loading')} />
           </div>
         </div>
       </div>
@@ -204,15 +253,15 @@ export function HomeworkPage() {
   // Early return for error state
   if (homework.isError) {
     return (
-      <div className="orb-container">
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Homework"
-            subtitle="Assignments for groups"
+            title={t('homework.title')}
+            subtitle={t('homework.pageSubtitle')}
           />
           <div className="glass-card p-8">
             <ErrorState
-              title="Failed to load homework"
+              title={t('homework.loadFailed')}
               message={getErrorMessage(homework.error as Error)}
               onRetry={handleRetry}
             />
@@ -223,23 +272,23 @@ export function HomeworkPage() {
   }
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1"></div>
       <div className="orb orb-cyan-2"></div>
       <div className="orb orb-indigo-1"></div>
       <div className="orb orb-deep-1"></div>
     <div className="page-container space-y-4">
       <PageHeader
-        title="Homework"
-        subtitle="Assignments for groups"
+        title={t('homework.title')}
+        subtitle={t('homework.pageSubtitle')}
         actions={
-          <button
+          <GlassButton
             type="button"
-            className="glass-btn glass-btn-primary"
+            variant="primary"
             onClick={handleOpenModal}
           >
-            Add homework
-          </button>
+            {t('homework.addButton')}
+          </GlassButton>
         }
       />
 
@@ -247,19 +296,20 @@ export function HomeworkPage() {
       <div className="glass-card overflow-hidden">
         {homeworkList.length === 0 ? (
           <EmptyState
-            title="No homework"
-            message="Create an assignment for a group."
+            title={t('homework.empty')}
+            message={t('homework.emptyMessage')}
           />
         ) : (
           <div className="glass-table-wrap">
             <Table>
               <THead>
                 <TR>
-                  <TH>Title</TH>
-                  <TH>Group</TH>
-                  <TH>Deadline</TH>
-                  <TH>Max score</TH>
-                  <TH>Status</TH>
+                  <TH>{t('homework.form.title')}</TH>
+                  <TH>{t('homework.form.group')}</TH>
+                  <TH>{t('homework.form.deadline')}</TH>
+                  <TH>{t('homework.form.maxScore')}</TH>
+                  <TH>{t('common.status')}</TH>
+                  <TH>{t('common.actions')}</TH>
                 </TR>
               </THead>
               <TBody>
@@ -281,12 +331,32 @@ export function HomeworkPage() {
                       <TD>{formatMaxScore(homeworkItem.maxScore)}</TD>
                       <TD>
                         {isPast ? (
-                          <Badge color="slate">Past due</Badge>
+                          <Badge color="slate">{t('homework.status.pastDue')}</Badge>
                         ) : isSoon ? (
-                          <Badge color="amber">Due soon</Badge>
+                          <Badge color="amber">{t('homework.status.dueSoon')}</Badge>
                         ) : (
-                          <Badge color="green">Open</Badge>
+                          <Badge color="green">{t('homework.status.open')}</Badge>
                         )}
+                      </TD>
+                      <TD>
+                        <div className="flex gap-2">
+                          <GlassButton
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(homeworkItem)}
+                          >
+                            {t('common.edit')}
+                          </GlassButton>
+                          <GlassButton
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleDelete(homeworkItem.id)}
+                          >
+                            {t('common.delete')}
+                          </GlassButton>
+                        </div>
                       </TD>
                     </TR>
                   );
@@ -301,19 +371,19 @@ export function HomeworkPage() {
       <Modal
         open={modalOpen}
         onClose={handleCloseModal}
-        title="Add homework"
+        title={editingId ? t('homework.editTitle') : t('homework.addButton')}
         wide
       >
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Title" required error={formErrors.title}>
+            <Field label={t('homework.form.title')} required error={formErrors.title}>
               <TextInput
                 value={form.title}
                 onChange={handleFormChange('title')}
                 required
                 aria-invalid={Boolean(formErrors.title)}
                 aria-describedby={formErrors.title ? 'title-error' : undefined}
-                placeholder="Chapter 5 exercises"
+                placeholder={t('homework.titlePlaceholder')}
               />
               {formErrors.title && (
                 <span id="title-error" className="mt-1 text-sm text-red-600">
@@ -322,7 +392,7 @@ export function HomeworkPage() {
               )}
             </Field>
 
-            <Field label="Group" required error={formErrors.groupId}>
+            <Field label={t('homework.form.group')} required error={formErrors.groupId}>
               <Select
                 value={form.groupId}
                 onChange={handleFormChange('groupId')}
@@ -332,7 +402,7 @@ export function HomeworkPage() {
                   formErrors.groupId ? 'group-error' : undefined
                 }
               >
-                <option value="">Select group…</option>
+                <option value="">{t('homework.groupPlaceholder')}</option>
                 {groupList.map((group) => (
                   <option key={group.id} value={group.id}>
                     {group.name}
@@ -346,7 +416,7 @@ export function HomeworkPage() {
               )}
             </Field>
 
-            <Field label="Deadline">
+            <Field label={t('homework.form.deadline')}>
               <TextInput
                 type="datetime-local"
                 value={form.deadline}
@@ -354,7 +424,7 @@ export function HomeworkPage() {
               />
             </Field>
 
-            <Field label="Max score" error={formErrors.maxScore}>
+            <Field label={t('homework.form.maxScore')} error={formErrors.maxScore}>
               <TextInput
                 type="number"
                 min="0"
@@ -378,34 +448,46 @@ export function HomeworkPage() {
             </Field>
           </div>
 
-          <Field label="Description">
+          <Field label={t('homework.form.description')}>
             <TextArea
               rows={3}
               value={form.description}
               onChange={handleFormChange('description')}
-              placeholder="Assignment instructions and requirements…"
+              placeholder={t('homework.descriptionPlaceholder')}
             />
           </Field>
 
           <div className="flex justify-end gap-2">
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-secondary"
+              variant="secondary"
               onClick={handleCloseModal}
-              disabled={create.isPending}
+              disabled={save.isPending}
             >
-              Cancel
-            </button>
-            <button
+              {t('common.cancel')}
+            </GlassButton>
+            <GlassButton
               type="submit"
-              className="glass-btn glass-btn-primary"
-              disabled={create.isPending}
+              variant="primary"
+              disabled={save.isPending}
             >
-              {create.isPending ? 'Saving…' : 'Create homework'}
-            </button>
+              {save.isPending
+                ? t('common.saving')
+                : editingId
+                  ? t('templates.saveChanges')
+                  : t('homework.createSubmit')}
+            </GlassButton>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        description={t('homework.confirmDelete')}
+        loading={remove.isPending}
+      />
 
       {toastNode}
     </div>

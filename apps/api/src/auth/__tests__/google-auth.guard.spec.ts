@@ -11,6 +11,8 @@
  * single clean 302.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { ExecutionContext } from '@nestjs/common';
+import type { Response, Request } from 'express';
 import { GoogleAuthGuard } from '../google-auth.guard';
 import { OAuthRedirectException } from '../oauth-redirect.exception';
 
@@ -29,13 +31,13 @@ describe('GoogleAuthGuard initiation behavior', () => {
   });
 
   function makeCtx(query: Record<string, unknown> = {}) {
-    const res = { redirect: vi.fn(), status: vi.fn(), json: vi.fn(), end: vi.fn() } as any;
-    const req = { query, headers: {}, ip: '127.0.0.1' } as any;
+    const res = { redirect: vi.fn(), status: vi.fn(), json: vi.fn(), end: vi.fn() } as unknown as Response;
+    const req = { query, headers: {}, ip: '127.0.0.1' } as unknown as Request;
     const ctx = {
       switchToHttp: () => ({ getRequest: () => req, getResponse: () => res }),
       getHandler: () => undefined,
       getClass: () => undefined,
-    } as any;
+    } as unknown as ExecutionContext;
     return { ctx, res, req };
   }
 
@@ -44,9 +46,13 @@ describe('GoogleAuthGuard initiation behavior', () => {
     expect(() => guard.canActivate(ctx)).toThrow(OAuthRedirectException);
     try {
       guard.canActivate(ctx);
-    } catch (e: any) {
-      expect(e.url).toContain('http://front.test/auth/callback?error=');
-      expect(e.url).toContain(encodeURIComponent('Google sign-in is not configured'));
+    } catch (e: unknown) {
+      if (e instanceof OAuthRedirectException) {
+        expect(e.url).toContain('http://front.test/auth/callback?error=');
+        expect(e.url).toContain(encodeURIComponent('Google sign-in is not configured'));
+      } else {
+        throw e;
+      }
     }
     // The guard must not write the response — the filter owns the single 302.
     expect(res.redirect).not.toHaveBeenCalled();
@@ -57,8 +63,12 @@ describe('GoogleAuthGuard initiation behavior', () => {
     expect(() => guard.canActivate(ctx)).toThrow(OAuthRedirectException);
     try {
       guard.canActivate(ctx);
-    } catch (e: any) {
-      expect(e.url).toContain(encodeURIComponent('You cancelled Google sign-in.'));
+    } catch (e: unknown) {
+      if (e instanceof OAuthRedirectException) {
+        expect(e.url).toContain(encodeURIComponent('You cancelled Google sign-in.'));
+      } else {
+        throw e;
+      }
     }
     expect(res.redirect).not.toHaveBeenCalled();
   });

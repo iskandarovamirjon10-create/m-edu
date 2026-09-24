@@ -20,18 +20,16 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import type { PrismaClient } from '@prisma/client';
 import { PrismaRecognitionAdapter } from '../adapters/prisma-recognition.adapter';
 
 function makePrisma() {
   return {
+    organization: { findUnique: vi.fn().mockResolvedValue({ timezone: 'UTC' }) },
     attendance: {
       create: vi.fn(),
       findFirst: vi.fn(),
-    },
-
-    recognitionSession: {
-      create: vi.fn(),
-      findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
       count: vi.fn(),
     },
@@ -43,7 +41,7 @@ function makePrisma() {
       groupBy: vi.fn(),
       aggregate: vi.fn(),
     },
-  } as any;
+  } as unknown as PrismaClient;
 }
 
 function attendanceRow(overrides: Record<string, unknown> = {}) {

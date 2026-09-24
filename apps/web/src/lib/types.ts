@@ -11,7 +11,7 @@ export type ExpenseCategory =
   | 'SALARY' | 'RENT' | 'UTILITIES' | 'MARKETING' | 'SUPPLIES'
   | 'MAINTENANCE' | 'SOFTWARE' | 'TRAINING' | 'OTHER';
 export type DayOfWeek = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
-export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE';
+export type PaymentMethod = 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'PAYME' | 'CLICK' | 'UZUM' | 'OTHER';
 
 export interface Organization {
   id: string;
@@ -424,6 +424,13 @@ export interface AttendanceStat {
   count: number;
 }
 
+export interface AttendanceAnalytics {
+  overall: { total: number; present: number; rate: number };
+  byStatus: AttendanceStat[];
+  byGroup: Array<{ groupId: string | null; _count: { status: number } }>;
+  daily: Array<{ date: string; status: AttendanceStatus; count: number }>;
+}
+
 export type CameraProtocol = 'RTSP' | 'ONVIF';
 
 export type CameraStatus =
@@ -489,22 +496,17 @@ export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export interface Employee {
   id: string;
   organizationId: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone?: string;
+  userId: string;
+  employeeNumber?: string | null;
   position: string;
-  department?: string;
+  department?: string | null;
   contractType: ContractType;
   salary: number;
   hireDate: string;
-  terminationDate?: string;
   isActive: boolean;
-  emergencyContact?: string;
-  address?: string;
-  nationalId?: string;
-  bankAccount?: string;
-  taxId?: string;
+  bankAccount?: string | null;
+  taxId?: string | null;
+  user?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'phone' | 'avatar'>;
   createdAt: string;
   updatedAt: string;
 }
@@ -555,17 +557,18 @@ export type ExamType = 'MIDTERM' | 'FINAL' | 'QUIZ' | 'ASSIGNMENT';
 export interface Exam {
   id: string;
   organizationId: string;
-  courseId: string;
-  groupId?: string;
+  groupId: string;
+  subject: string;
   title: string;
-  type: ExamType;
-  date: string;
-  duration?: number;
-  maxScore: number;
-  passingScore: number;
+  description?: string | null;
+  examDate: string;
+  duration: number;
+  totalMarks: number;
+  passingMarks: number;
+  examType: ExamType;
   isPublished: boolean;
-  course?: Course;
-  group?: Group;
+  group?: { id: string; name: string; courseId?: string; course?: Course };
+  results?: { id: string; marksObtained: number; isPassed: boolean }[];
   createdAt: string;
   updatedAt: string;
 }
@@ -1138,6 +1141,234 @@ export interface Forecast {
   points: ForecastPoint[];
   generatedAt: string;
   insights: string[];
+}
+
+// ==================== Branches ====================
+export interface Branch {
+  id: string;
+  organizationId: string;
+  name: string;
+  code: string;
+  address?: string | null;
+  phone?: string | null;
+  managerId?: string | null;
+  email?: string | null;
+  timezone?: string | null;
+  currency?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  manager?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>;
+  _count?: { users?: number; courses?: number; students?: number; teachers?: number; groups?: number };
+}
+
+// ==================== Chat ====================
+export interface ChatConversation {
+  id: string;
+  organizationId: string;
+  title?: string | null;
+  createdBy: string;
+  lastMessageAt?: string | null;
+  createdAt: string;
+  participants?: ChatParticipant[];
+  messages?: ChatMessage[];
+  unreadCount?: number;
+}
+
+export interface ChatParticipant {
+  id: string;
+  conversationId: string;
+  userId: string;
+  user?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>;
+}
+
+export interface ChatMessage {
+  id: string;
+  organizationId: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
+  sender?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>;
+}
+
+// ==================== Invoices ====================
+export type InvoiceStatus = 'DRAFT' | 'ISSUED' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'REFUNDED';
+
+export interface Invoice {
+  id: string;
+  organizationId: string;
+  studentId: string;
+  number: string;
+  status: InvoiceStatus;
+  subtotal: string;
+  discount: string;
+  penalty: string;
+  total: string;
+  paidAmount: string;
+  refundedAmount?: string;
+  currency?: string | null;
+  dueDate?: string | null;
+  issueDate?: string | null;
+  paidAt?: string | null;
+  notes?: string | null;
+  /** Present on GET /invoices/:id detail response. */
+  remaining?: number;
+  student?: Student;
+  items?: InvoiceItem[];
+  payments?: InvoicePayment[];
+  refunds?: InvoiceRefund[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InvoicePayment {
+  id: string;
+  amount: string;
+  status: string;
+  method?: string | null;
+  reference?: string | null;
+  receiptNumber?: string | null;
+  receiptIssuedAt?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+}
+
+export interface InvoiceRefund {
+  id: string;
+  amount: string;
+  status: 'REQUESTED' | 'PROCESSED' | 'REJECTED';
+  reason?: string | null;
+  requestedBy: string;
+  processedBy?: string | null;
+  requestedAt: string;
+  processedAt?: string | null;
+}
+
+export interface InvoiceItem {
+  id: string;
+  invoiceId: string;
+  description: string;
+  quantity: number;
+  unitPrice: string;
+  amount: string;
+}
+
+export interface InvoiceTotals {
+  invoiced: number;
+  paid: number;
+  outstanding: number;
+  refunded: number;
+  totalOutstanding: number;
+  totalPaid: number;
+  totalOverdue: number;
+  countByStatus: Record<InvoiceStatus, number>;
+}
+
+// ==================== Parent Portal ====================
+export interface ParentChild {
+  studentId: string;
+  studentName: string;
+  groups: { id: string; name: string }[];
+  attendanceRate: number;
+  averageGrade: number;
+  pendingPayments: number;
+  permissions?: Record<string, boolean>;
+  student?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    status: string;
+    balance: number;
+    groups: { id: string; name: string }[];
+    user: { firstName: string; lastName: string; avatar?: string };
+  };
+  relationship?: string;
+}
+
+export interface ParentAttendanceRecord {
+  id: string;
+  date: string;
+  status: AttendanceStatus;
+  groupName: string;
+  note?: string | null;
+  group?: { id: string; name: string };
+  lesson?: { topic: string; startTime: string };
+}
+
+export interface ParentAttendanceSummary {
+  totalDays: number;
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  rate: number;
+  byStatus?: Record<string, number>;
+  total?: number;
+  attendanceRate?: number;
+}
+
+export interface ParentGradesResponse {
+  grades: { id: string; groupName: string; subject?: string; value: number; maxValue?: number; label?: string; date: string; group?: { name: string }; notes?: string }[];
+  average: number;
+  examResults?: { id: string; examTitle?: string; score: number; totalMarks?: number; date?: string; isPassed?: boolean; exam?: { title: string; examType: string; totalMarks: number } }[];
+}
+
+export interface ParentInvoicesResponse {
+  invoices: Invoice[];
+  totalOutstanding: number;
+  outstanding?: number;
+  overdue?: number;
+  payments?: { id: string; amount: string; method?: string; reference?: string; paidAt?: string; createdAt: string }[];
+}
+
+// ==================== Payroll ====================
+export type PayrollStatus = 'DRAFT' | 'CALCULATED' | 'REVIEWED' | 'APPROVED' | 'PAID' | 'CANCELLED';
+
+export interface PayrollRun {
+  id: string;
+  organizationId: string;
+  teacherId?: string | null;
+  employeeId?: string | null;
+  period: string;
+  year: number;
+  month: number;
+  periodYear: number;
+  periodMonth: number;
+  salaryType?: string;
+  status: PayrollStatus;
+  baseSalary: string;
+  adjustments: string;
+  deductions: string;
+  tax: string;
+  grossAmount?: string;
+  netPay: string;
+  netAmount?: string;
+  processedAt?: string | null;
+  approvedAt?: string | null;
+  paidAt?: string | null;
+  notes?: string | null;
+  teacher?: Teacher;
+  employee?: Employee;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PayrollPeriodSummary {
+  year: number;
+  month: number;
+  totalTeachers: number;
+  totalEmployees: number;
+  totalGross: number;
+  totalDeductions: number;
+  totalTax: number;
+  totalNet: number;
+  paid?: number;
+  unpaid?: number;
+  teachersCount?: number;
+  status: PayrollStatus;
 }
 
 // ==================== Feature Flags ====================

@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Delete,
   ParseUUIDPipe,
   Post,
   Query,
@@ -184,6 +185,21 @@ export class FaceController {
       req.tenantContext,
       id,
       dto.reason,
+    );
+  }
+
+  @Delete('enrollments/:id/pending')
+  @FacePermissions(Permissions.FACE_ENROLL)
+  @ApiOperation({
+    summary: 'Cancel a pending enrollment',
+  })
+  cancelPendingEnrollment(
+    @Req() req: FaceRequest,
+    @Param('id', UUID_PIPE) id: string,
+  ) {
+    return this.faceService.cancelPendingEnrollment(
+      req.tenantContext,
+      id,
     );
   }
 

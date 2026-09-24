@@ -13,6 +13,7 @@ import { formatCurrency, formatDate, formatMonth } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { DashboardStats, MonthlyRevenue, AttendanceStat } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Helpers                                                                   */
@@ -30,14 +31,20 @@ function getMaxRevenue(monthlyRevenue: MonthlyRevenue[]): number {
   return Math.max(1, ...monthlyRevenue.map((m) => m.total));
 }
 
-function formatStudentName(payment: { student?: { user?: { firstName?: string; lastName?: string } } }): string {
+function formatStudentName(
+  payment: { student?: { user?: { firstName?: string; lastName?: string } } },
+  fallback: string,
+): string {
   const firstName = payment.student?.user?.firstName;
   const lastName = payment.student?.user?.lastName;
-  return [firstName, lastName].filter(Boolean).join(' ') || 'Student';
+  return [firstName, lastName].filter(Boolean).join(' ') || fallback;
 }
 
-function formatLeadName(lead: { firstName?: string | null; lastName?: string | null }): string {
-  return [lead.firstName, lead.lastName].filter(Boolean).join(' ') || 'Lead';
+function formatLeadName(
+  lead: { firstName?: string | null; lastName?: string | null },
+  fallback: string,
+): string {
+  return [lead.firstName, lead.lastName].filter(Boolean).join(' ') || fallback;
 }
 
 function toGlassBadgeColor(color: string): string {
@@ -56,14 +63,7 @@ function toGlassBadgeColor(color: string): string {
 /*  Orb Backdrop                                                             */
 /* ────────────────────────────────────────────────────────────────────────── */
 function OrbBackdrop() {
-  return (
-    <div className="orb-container" aria-hidden="true">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
-    </div>
-  );
+  return null;
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -92,11 +92,12 @@ function MiniSparkline({ values, color }: { values: number[]; color: string }) {
 /*  Revenue Area Chart                                                        */
 /* ────────────────────────────────────────────────────────────────────────── */
 function RevenueChart({ monthlyRevenue, maxRevenue }: { monthlyRevenue: MonthlyRevenue[]; maxRevenue: number }) {
+  const { t } = useI18n();
   if (!monthlyRevenue || monthlyRevenue.length === 0) {
     return (
       <EmptyState
-        title="No revenue yet"
-        message="Payments recorded here will appear as a monthly chart."
+        title={t('dashboard.noRevenue')}
+        message={t('dashboard.noRevenueHint')}
       />
     );
   }
@@ -106,10 +107,10 @@ function RevenueChart({ monthlyRevenue, maxRevenue }: { monthlyRevenue: MonthlyR
   return (
     <div className="relative">
       <div
-        className="flex items-end gap-1"
+        className="flex items-end gap-2"
         style={{ height: `${h}px` }}
         role="img"
-        aria-label="Monthly revenue chart"
+        aria-label={t('dashboard.revenueChartLabel')}
       >
         {monthlyRevenue.map((month) => {
           const barH = Math.max(4, (month.total / maxRevenue) * h);
@@ -163,6 +164,13 @@ function RevenueChart({ monthlyRevenue, maxRevenue }: { monthlyRevenue: MonthlyR
 /*  Attendance Ring                                                           */
 /* ────────────────────────────────────────────────────────────────────────── */
 function AttendanceRing({ stats }: { stats: AttendanceStat[] }) {
+  const { t } = useI18n();
+  const statusLabels: Record<string, string> = {
+    PRESENT: t('attendance.present'),
+    ABSENT: t('attendance.absent'),
+    LATE: t('attendance.late'),
+    EXCUSED: t('attendance.excused'),
+  };
   const total = stats.reduce((s, a) => s + a.count, 0);
   if (total === 0) return null;
 
@@ -214,7 +222,7 @@ function AttendanceRing({ stats }: { stats: AttendanceStat[] }) {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{total}</span>
-          <span className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>records</span>
+          <span className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('dashboard.records')}</span>
         </div>
       </div>
 
@@ -227,7 +235,7 @@ function AttendanceRing({ stats }: { stats: AttendanceStat[] }) {
               style={{ background: colors[s.status] || 'var(--text-muted)' }}
             />
             <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-              {s.status}
+              {statusLabels[s.status] ?? s.status}
             </span>
             <span className="text-xs font-semibold ml-auto pl-4" style={{ color: 'var(--text-primary)' }}>
               {s.count}
@@ -310,7 +318,8 @@ function PaymentRow({
   payment: DashboardStats['recentPayments'][0];
   maxAmount: number;
 }) {
-  const name = formatStudentName(payment);
+  const { t } = useI18n();
+  const name = formatStudentName(payment, t('dashboard.student'));
   const barWidth = maxAmount > 0 ? Math.round((Number(payment.amount) / maxAmount) * 100) : 0;
   const variant = toGlassBadgeColor(statusColor(payment.status));
 
@@ -364,7 +373,7 @@ function PaymentRow({
                  'var(--m-vivid)',
         }}
       >
-        {payment.status}
+        {t(`payments.status.${payment.status}`)}
       </span>
     </div>
   );
@@ -448,7 +457,8 @@ function StatCard({
 /*  Dashboard Page                                                           */
 /* ────────────────────────────────────────────────────────────────────────── */
 export function DashboardPage() {
-  usePageTitle('Dashboard');
+  const { t } = useI18n();
+  usePageTitle(t('dashboard.title'));
 
   const {
     data,
@@ -478,13 +488,18 @@ export function DashboardPage() {
 
   const handleRetry = useCallback(() => { void refetch(); }, [refetch]);
 
+  const maxPayment = useMemo(
+    () => Math.max(1, ...(stats?.recentPayments ?? []).map((p) => Number(p.amount))),
+    [stats?.recentPayments],
+  );
+
   // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading && !stats) {
     return (
       <>
         <OrbBackdrop />
         <div className="page-container space-y-4">
-          <PageHeader title="Dashboard" subtitle="Overview of your education center" />
+          <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.subtitle')} />
           <div
             className="rounded-2xl p-8 flex items-center justify-center"
             style={{
@@ -493,7 +508,7 @@ export function DashboardPage() {
               border: '1px solid var(--border-glass)',
             }}
           >
-            <PageLoader label="Loading dashboard…" />
+            <PageLoader label={t('dashboard.loading')} />
           </div>
         </div>
       </>
@@ -506,7 +521,7 @@ export function DashboardPage() {
       <>
         <OrbBackdrop />
         <div className="page-container space-y-4">
-          <PageHeader title="Dashboard" subtitle="Overview of your education center" />
+          <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.subtitle')} />
           <div
             className="rounded-2xl p-8"
             style={{
@@ -516,7 +531,7 @@ export function DashboardPage() {
             }}
           >
             <ErrorState
-              title="Failed to load dashboard"
+              title={t('dashboard.loadFailed')}
               message={getErrorMessage(error as Error)}
               onRetry={handleRetry}
             />
@@ -527,11 +542,6 @@ export function DashboardPage() {
   }
 
   // ── Max payment amount for bar widths ──────────────────────────────────────
-  const maxPayment = useMemo(
-    () => Math.max(1, ...(stats.recentPayments ?? []).map((p) => Number(p.amount))),
-    [stats.recentPayments],
-  );
-
   return (
     <>
       <OrbBackdrop />
@@ -539,16 +549,16 @@ export function DashboardPage() {
 
         {/* Page header */}
         <PageHeader
-          title="Dashboard"
-          description="Intelligent overview of your education center"
+          title={t('dashboard.title')}
+          description={t('dashboard.description')}
         />
 
         {/* ── Stat Cards ─────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="Active Students"
+            label={t('dashboard.activeStudents')}
             value={stats.totalStudents.toLocaleString()}
-            sub={`${stats.activeStudents} enrolled and active`}
+            sub={t('dashboard.activeStudentsSub', { count: stats.activeStudents })}
             icon={
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Z" />
@@ -558,9 +568,9 @@ export function DashboardPage() {
             gradient="var(--m-cyan)"
           />
           <StatCard
-            label="Active Groups"
-            value={stats.totalTeachers.toLocaleString()}
-            sub={`${stats.activeGroups} groups running this month`}
+            label={t('dashboard.activeGroups')}
+            value={stats.activeGroups.toLocaleString()}
+            sub={t('dashboard.activeGroupsSub', { count: stats.activeGroups })}
             icon={
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
@@ -569,9 +579,12 @@ export function DashboardPage() {
             gradient="var(--m-vivid)"
           />
           <StatCard
-            label="Revenue Collected"
+            label={t('dashboard.revenueCollected')}
             value={formatCurrency(stats.totalPaid)}
-            sub={`${paidShare}% collection rate · ${formatCurrency(stats.totalPending)} pending`}
+            sub={t('dashboard.revenueSub', {
+              rate: paidShare,
+              pending: formatCurrency(stats.totalPending),
+            })}
             icon={
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -581,9 +594,12 @@ export function DashboardPage() {
             gradient="#2ea870"
           />
           <StatCard
-            label="Lead Conversion"
+            label={t('dashboard.leadConversion')}
             value={`${stats.conversionRate}%`}
-            sub={`${stats.totalLeads} total leads · ${stats.newLeadsThisMonth} new this month`}
+            sub={t('dashboard.leadSub', {
+              newCount: stats.newLeadsThisMonth,
+              total: stats.totalLeads,
+            })}
             icon={
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
@@ -618,10 +634,10 @@ export function DashboardPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    Monthly Revenue
+                    {t('dashboard.monthlyRevenue')}
                   </h2>
                   <p className="text-[0.75rem] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                    Payment collection over time
+                    {t('dashboard.paymentCollection')}
                   </p>
                 </div>
                 <Link
@@ -629,7 +645,7 @@ export function DashboardPage() {
                   className="text-[0.8125rem] font-medium transition-all hover:opacity-80 active:scale-95"
                   style={{ color: 'var(--m-vivid)' }}
                 >
-                  View payments →
+                  {t('dashboard.viewPayments')} →
                 </Link>
               </div>
               <RevenueChart monthlyRevenue={stats.monthlyRevenue ?? []} maxRevenue={maxRevenue} />
@@ -656,10 +672,10 @@ export function DashboardPage() {
             <div className="relative z-10 p-5">
               <div className="mb-5">
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Attendance
+                  {t('dashboard.attendance')}
                 </h2>
                 <p className="text-[0.75rem] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Last 30 days
+                  {t('dashboard.last30Days')}
                 </p>
               </div>
               {stats.attendanceStats && stats.attendanceStats.length > 0 ? (
@@ -669,7 +685,7 @@ export function DashboardPage() {
                   <div className="mt-6 pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        Collection rate
+                        {t('dashboard.collectionRate')}
                       </span>
                       <span className="text-xs font-semibold" style={{ color: 'var(--m-vivid)' }}>
                         {paidShare}%
@@ -689,17 +705,17 @@ export function DashboardPage() {
                     </div>
                     <div className="flex justify-between mt-1.5">
                       <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                        {formatCurrency(stats.totalPaid)} paid
+                        {formatCurrency(stats.totalPaid)} {t('dashboard.paid')}
                       </span>
                       <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                        {formatCurrency(stats.totalOverdue)} overdue
+                        {formatCurrency(stats.totalOverdue)} {t('dashboard.overdue')}
                       </span>
                     </div>
                   </div>
                 </>
               ) : (
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  No attendance records yet.
+                  {t('dashboard.noAttendance')}
                 </p>
               )}
             </div>
@@ -732,14 +748,14 @@ export function DashboardPage() {
                 style={{ borderBottom: '1px solid var(--border-subtle)' }}
               >
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Recent Payments
+                  {t('dashboard.recentPayments')}
                 </h2>
                 <Link
                   to="/payments"
                   className="text-[0.8125rem] font-medium transition-all hover:opacity-80 active:scale-95"
                   style={{ color: 'var(--m-vivid)' }}
                 >
-                  View all →
+                  {t('dashboard.viewAll')} →
                 </Link>
               </div>
               {stats.recentPayments && stats.recentPayments.length > 0 ? (
@@ -751,8 +767,8 @@ export function DashboardPage() {
               ) : (
                 <div className="px-5 py-8">
                   <EmptyState
-                    title="No payments yet"
-                    message="Payment records will appear here."
+                    title={t('dashboard.noPayments')}
+                    message={t('dashboard.noPaymentsHint')}
                   />
                 </div>
               )}
@@ -782,14 +798,14 @@ export function DashboardPage() {
                 style={{ borderBottom: '1px solid var(--border-subtle)' }}
               >
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Upcoming Follow-ups
+                  {t('dashboard.upcomingFollowUps')}
                 </h2>
                 <Link
                   to="/leads"
                   className="text-[0.8125rem] font-medium transition-all hover:opacity-80 active:scale-95"
                   style={{ color: 'var(--m-vivid)' }}
                 >
-                  View leads →
+                  {t('dashboard.viewLeads')} →
                 </Link>
               </div>
               {stats.upcomingFollowUps && stats.upcomingFollowUps.length > 0 ? (
@@ -797,9 +813,9 @@ export function DashboardPage() {
                   {stats.upcomingFollowUps.slice(0, 5).map((followUp) => (
                     <TimelineItem
                       key={followUp.id}
-                      title={formatLeadName(followUp.lead || {})}
+                      title={formatLeadName(followUp.lead || {}, t('dashboard.lead'))}
                       subtitle={followUp.note || undefined}
-                      badge="Scheduled"
+                      badge={t('dashboard.scheduled')}
                       badgeColor="var(--m-vivid)"
                       time={formatDate(followUp.scheduledAt)}
                       accentColor="var(--m-cyan)"
@@ -809,8 +825,8 @@ export function DashboardPage() {
               ) : (
                 <div className="px-5 py-8">
                   <EmptyState
-                    title="No follow-ups"
-                    message="Scheduled lead follow-ups will appear here."
+                    title={t('dashboard.noFollowUps')}
+                    message={t('dashboard.noFollowUpsHint')}
                   />
                 </div>
               )}

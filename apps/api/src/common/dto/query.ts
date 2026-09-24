@@ -1,100 +1,175 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString } from 'class-validator';
+
 /**
  * Typed query-string shapes for listing endpoints.
  *
  * Every `@Query()` object in a controller is validated by the global
- * ValidationPipe (whitelist + forbidNonWhitelisted), so the services can
- * trust these fields. `page`/`limit` come through as strings from the URL
- * and are normalized by `parsePagination`.
+ * ValidationPipe (whitelist + forbidNonWhitelisted). Because these are now
+ * classes with validation decorators, `whitelist` correctly drops arbitrary 
+ * object injections.
  */
 
-export interface PaginationQuery {
-  page?: string | number;
-  limit?: string | number;
+export class PaginationQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  page?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  limit?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   search?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   examType?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   isPublished?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   department?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   isActive?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   employeeId?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   status?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   type?: string;
 }
 
-export interface SearchQuery extends PaginationQuery {
-  search?: string;
+export class SearchQuery extends PaginationQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override search?: string;
 }
 
-export interface StudentQuery extends SearchQuery {
+export class StudentQuery extends SearchQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
   groupId?: string;
-  isActive?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override isActive?: string;
 }
 
-export interface TeacherQuery extends SearchQuery {
-  isActive?: string;
+export class TeacherQuery extends SearchQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override isActive?: string;
 }
 
-export interface CourseQuery extends SearchQuery {
-  isActive?: string;
+export class CourseQuery extends SearchQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override isActive?: string;
 }
 
-export interface GroupQuery extends SearchQuery {
+export class GroupQuery extends SearchQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
   courseId?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   teacherId?: string;
-  isActive?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override isActive?: string;
 }
 
-export interface GradeQuery extends PaginationQuery {
+export class GradeQuery extends PaginationQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
   studentId?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   groupId?: string;
 }
 
-export interface PaymentQuery extends SearchQuery {
+export class PaymentQuery extends SearchQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
   studentId?: string;
-  status?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override status?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   method?: string;
 }
 
-export interface ExpenseQuery extends SearchQuery {
+export class ExpenseQuery extends SearchQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
   category?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   dateFrom?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   dateTo?: string;
 }
 
-export interface LeadQuery extends SearchQuery {
+export class LeadQuery extends SearchQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
   stage?: string;
-  status?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override status?: string;
 }
 
-export interface HomeworkQuery extends PaginationQuery {
+export class HomeworkQuery extends PaginationQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
   groupId?: string;
-  isActive?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override isActive?: string;
 }
 
-export interface NotificationQuery extends PaginationQuery {
+export class NotificationQuery extends PaginationQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
   isRead?: string;
 }
 
-export interface UserQuery extends SearchQuery {
+export class UserQuery extends SearchQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
   role?: string;
-  isActive?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override isActive?: string;
 }
 
-export interface ScheduleQuery extends PaginationQuery {
+export class ScheduleQuery extends PaginationQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
   groupId?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   dayOfWeek?: string;
 }
 
-export interface AttendanceQuery extends PaginationQuery {
+export class AttendanceQuery extends PaginationQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
   groupId?: string;
-  status?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override status?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   date?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   dateFrom?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   dateTo?: string;
 }
 
-export interface CameraEventQuery extends PaginationQuery {
-  status?: string;
-  type?: string;
+export class CameraEventQuery extends PaginationQuery {
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override status?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  override type?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   dateFrom?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
   dateTo?: string;
 }

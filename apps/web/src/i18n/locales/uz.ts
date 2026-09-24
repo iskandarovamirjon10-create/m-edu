@@ -21,6 +21,16 @@ const uz = {
   'common.name': 'Nomi',
   'common.date': 'Sana',
   'common.close': 'Yopish',
+  'common.add': 'Qoʻshish',
+  'common.optional': 'Ixtiyoriy',
+  'common.deleting': 'Oʻchirilmoqda…',
+  'confirm.title': 'Amalni tasdiqlash',
+  'confirm.description': 'Bu amalni bajarishni xohlaysizmi? Buni qaytarib boʻlmaydi.',
+  'automation.rule.deleteConfirm': 'Bu avtomatlashtirish qoidasi oʻchirilsinmi?',
+  'automation.rule.toggleAria': '{name} qoidasini almashtirish',
+  'branches.deactivateConfirm': 'Bu filial oʻchirilsinmi? Keyin qayta faollashtirish mumkin.',
+  'apiKeys.revokeConfirm': 'Bu API kaliti bekor qilinsinmi? Undan foydalanuvchi integratsiyalar darhol ishlashni toʻxtatadi.',
+  'hr.terminateConfirm': 'Bu xodim ishdan boʻshatilsinmi? Buni qaytarib boʻlmaydi.',
 
   // Navigation
   'nav.dashboard': 'Boshqaruv paneli',
@@ -37,6 +47,33 @@ const uz = {
   'nav.settings': 'Sozlamalar',
   'nav.logout': 'Chiqish',
   'nav.language': 'Til',
+  'nav.faceRecognition': 'Yuz tanish',
+  'nav.exams': 'Imtihonlar',
+  'nav.invoices': 'Hisob-fakturalar',
+  'nav.reports': 'Hisobotlar',
+  'nav.homework': 'Uy vazifalari',
+  'nav.chat': 'Chat',
+  'nav.executiveDashboard': 'Ijrochi paneli',
+  'nav.financialAnalytics': 'Moliyaviy tahlil',
+  'nav.payrollAnalytics': 'Isht haqi tahlili',
+  'nav.crmAnalytics': 'CRM tahlili',
+  'nav.parentPortal': 'Ota-onalar portal',
+  'nav.hrPayroll': 'HR va isht haqi',
+  'nav.payrollRuns': 'Isht haqi hisoblari',
+  'nav.automation': 'Avtomatlashtirish',
+  'nav.followUpRules': 'Kuzatuv qoidalari',
+  'nav.branches': 'Filiallar',
+  'nav.expenses': 'Xarajatlar',
+  'nav.leads': 'Mijozlar',
+  'nav.cameras': 'Kameralar',
+  'nav.anomalyDetection': 'Anomaliyalarni aniqlash',
+  'nav.dataGovernance': 'Maʼlumotlar boshqaruvi',
+  'nav.users': 'Foydalanuvchilar',
+  'nav.audit': 'Audit jurnali',
+  'nav.administration': 'Boshqaruv',
+  'nav.searchPlaceholder': 'Oʻquvchi, oʻqituvchi, guruhlarni qidirish…',
+  'nav.signIn': 'Kirish',
+  'nav.createAccount': 'Hisob yaratish',
 
   // Auth
   'auth.loginTitle': 'Hisobingizga kirish',
@@ -125,6 +162,33 @@ const uz = {
   'settings.title': 'Sozlamalar',
   'settings.language': 'Til',
   'settings.languageHint': 'Interfeys tilini tanlang. Tanlov shu qurilmada saqlanadi.',
+  'settings.subtitle': 'Tashkilot va hisob sozlamalari',
+  'settings.loading': 'Sozlamalar yuklanmoqda…',
+  'settings.loadFailed': 'Sozlamalarni yuklab boʻlmadi',
+  'settings.appearance': 'Koʻrinish',
+  'settings.appearanceHint': 'M-EDU qanday koʻrinishini tanlang',
+  'settings.themeHint': 'Mavzuni tanlang — tanlov shu qurilmada saqlanadi.',
+  'settings.themeLight': 'Yorugʻ',
+  'settings.themeDark': 'Tungi',
+  'settings.organization': 'Tashkilot',
+  'settings.organizationHint': 'Markazingiz brendi va aloqa maʼlumotlari',
+  'settings.orgName': 'Tashkilot nomi',
+  'settings.contactEmail': 'Aloqa email',
+  'settings.phone': 'Telefon',
+  'settings.saveOrg': 'Tashkilotni saqlash',
+  'settings.orgUpdated': 'Tashkilot yangilandi',
+  'settings.account': 'Hisob sozlamalari',
+  'settings.accountHint': 'Til va vaqt mintaqasi afzalliklari',
+  'settings.timezone': 'Vaqt mintaqasi',
+  'settings.save': 'Sozlamalarni saqlash',
+  'settings.saved': 'Sozlamalar saqlandi',
+  'settings.changePassword': 'Parolni oʻzgartirish',
+  'settings.changePasswordHint': 'Boshqa joyda ishlatilmagan kuchli paroldan foydalaning',
+  'settings.currentPassword': 'Joriy parol',
+  'settings.newPassword': 'Yangi parol',
+  'settings.confirmPassword': 'Yangi parolni tasdiqlang',
+  'settings.changePasswordAction': 'Parolni oʻzgartirish',
+  'settings.passwordChanged': 'Parol muvaffaqiyatli oʻzgartirildi',
 
   // Errors
   'error.network': 'Tarmoq xatosi — ulanishni tekshirib qayta urinib koʻring',
@@ -134,4 +198,9 @@ const uz = {
   'error.server': 'Server xatosi — keyinroq qayta urinib koʻring',
 };
 
-export default uz;
+import { legacyUz } from './legacy-slices.uz';
+import { analyticsUz } from './analytics-slices.uz';
+import { pagesUz } from './pages-slices.uz';
+
+// Legacy fills gaps → analytics fills more → curated base wins for overrides.
+export default { ...legacyUz, ...analyticsUz, ...pagesUz, ...uz };

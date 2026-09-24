@@ -29,10 +29,14 @@ function getAppGuardProvider() {
     Reflect.getMetadata('providers', AppModule) ?? [];
 
   return providers.find(
-    (provider: any) =>
-      provider &&
-      provider.provide === APP_GUARD,
-  );
+    (provider: unknown) =>
+      Boolean(
+        provider &&
+          typeof provider === 'object' &&
+          'provide' in provider &&
+          (provider as { provide: unknown }).provide === APP_GUARD,
+      ),
+  ) as { provide: unknown; useClass: unknown } | undefined;
 }
 
 /**

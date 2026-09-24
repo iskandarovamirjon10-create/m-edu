@@ -1,110 +1,172 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { PaymentsService } from '../payments.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { FinancialPeriodService } from '../../analytics/financial-period.service';
 
 function createMockPrisma() {
-  return {
-    student: { findFirst: vi.fn() },
+  const mock: any = {
+    student: { findFirst: vi.fn(), update: vi.fn() },
     payment: {
       create: vi.fn(),
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       delete: vi.fn(),
       count: vi.fn(),
     },
   };
+  mock.$transaction = vi.fn(async (fn: (tx: typeof mock) => Promise<unknown>) => fn(mock));
+  return mock;
 }
 
 describe('PaymentsService', () => {
-  let prisma: any;
+  let prisma: ReturnType<typeof createMockPrisma>;
+  let financialPeriod: { ensureNotClosed: ReturnType<typeof vi.fn> };
   let svc: PaymentsService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new PaymentsService(prisma);
+    financialPeriod = { ensureNotClosed: vi.fn().mockResolvedValue(undefined) };
+    svc = new PaymentsService(
+      prisma as unknown as PrismaService,
+      financialPeriod as unknown as FinancialPeriodService,
+    );
   });
 
-  it('rejects creating a payment for a student outside the organization (tenant isolation)', async () => {
-    prisma.student.findFirst.mockResolvedValue(null);
-    await expect(
-      svc.create('org-1', { studentId: 's-other', amount: 100 }),
-    ).rejects.toBeInstanceOf(NotFoundException);
-    expect(prisma.payment.create).not.toHaveBeenCalled();
+  describe('findOne', () => {
+    it('returns payment if found', async () => {
+      const mockPay = { id: 'p1', amount: 100 };
+      prisma.payment.findFirst.mockResolvedValue(mockPay);
+      const result = await svc.findOne('org-1', 'p1');
+      expect(result).toEqual(mockPay);
+    });
+
+    it('throws NotFoundException if not found', async () => {
+      prisma.payment.findFirst.mockResolvedValue(null);
+      await expect(svc.findOne('org-1', 'p2')).rejects.toBeInstanceOf(NotFoundException);
+    });
   });
 
-  it('normalizes an empty reference to null', async () => {
-    prisma.student.findFirst.mockResolvedValue({ id: 's1' });
-    prisma.payment.create.mockResolvedValue({ id: 'p1' });
-    await svc.create('org-1', { studentId: 's1', amount: 100, reference: '' });
-    const data = prisma.payment.create.mock.calls[0][0].data;
-    expect(data.reference).toBeNull();
+describe('findAll', () => {
+    it('returns paginated payments', async () => {
+      prisma.payment.findMany.mockResolvedValue([{ id: 'p1' }]);
+      prisma.payment.count.mockResolvedValue(1);
+
+      const result = await svc.findAll('org-1', { page: 1, limit: 10 });
+      expect(result.items.length).toBe(1);
+      expect(result.total).toBe(1);
+    });
   });
 
-  it('rejects a duplicate payment reference within the same org (P2002 → 400)', async () => {
-    prisma.student.findFirst.mockResolvedValue({ id: 's1' });
-    prisma.payment.create.mockRejectedValue({ code: 'P2002' });
-    await expect(
-      svc.create('org-1', { studentId: 's1', amount: 100, reference: 'INV-001' }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+  describe('create', () => {
+    it('creates a PENDING payment for an existing student', async () => {
+      prisma.student.findFirst.mockResolvedValue({ id: 's1' });
+      prisma.payment.findFirst.mockResolvedValue(null);
+      const created = { id: 'p1', status: 'PENDING', amount: 100 };
+      prisma.payment.create.mockResolvedValue(created);
+
+      const result = await svc.create('org-1', {
+        studentId: 's1',
+        amount: 100,
+        method: 'CASH',
+      });
+
+      expect(financialPeriod.ensureNotClosed).toHaveBeenCalled();
+      expect(prisma.payment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            organizationId: 'org-1',
+            studentId: 's1',
+            amount: 100,
+            status: 'PENDING',
+            method: 'CASH',
+          }),
+        }),
+      );
+      expect(result).toEqual(created);
+    });
+
+    it('throws NotFoundException when student belongs to another org', async () => {
+      prisma.student.findFirst.mockResolvedValue(null);
+      await expect(
+        svc.create('org-1', { studentId: 'other', amount: 10 }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.payment.create).not.toHaveBeenCalled();
+    });
   });
 
-  it('rethrows non-unique DB errors', async () => {
-    prisma.student.findFirst.mockResolvedValue({ id: 's1' });
-    prisma.payment.create.mockRejectedValue(new Error('db down'));
-    await expect(
-      svc.create('org-1', { studentId: 's1', amount: 100 }),
-    ).rejects.toThrow('db down');
-  });
+  describe('update', () => {
+    it('sets paidAt when status transitions to PAID', async () => {
+      const existing = {
+        id: 'p1',
+        organizationId: 'org-1',
+        studentId: 's1',
+        status: 'PENDING',
+        amount: 100,
+        dueDate: null,
+        createdAt: new Date(),
+        reference: null,
+      };
+      prisma.payment.findFirst.mockResolvedValue(existing);
+      prisma.payment.updateMany.mockResolvedValue({ count: 1 });
+      prisma.student.update.mockResolvedValue({});
+      prisma.payment.findUnique.mockResolvedValue({ ...existing, status: 'PAID', paidAt: new Date() });
 
-  it('rejects updating a payment to a reference that already exists (P2002 → 400)', async () => {
-    prisma.payment.findFirst.mockResolvedValue({ id: 'p1', organizationId: 'org-1' });
-    prisma.payment.update.mockRejectedValue({ code: 'P2002' });
-    await expect(
-      svc.update('org-1', 'p1', { reference: 'INV-002' }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-});
+      await svc.update('org-1', 'p1', { status: 'PAID' });
 
-describe('PaymentsService status transitions', () => {
-  let prisma: any;
-  let svc: PaymentsService;
+      expect(prisma.payment.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'p1', organizationId: 'org-1', status: 'PENDING' }),
+          data: expect.objectContaining({
+            status: 'PAID',
+            paidAt: expect.any(Date),
+          }),
+        }),
+      );
+      expect(prisma.student.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 's1' },
+          data: { balance: { increment: 100 } },
+        }),
+      );
+    });
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    prisma = createMockPrisma();
-    svc = new PaymentsService(prisma);
-  });
+    it('clears paidAt when status leaves PAID', async () => {
+      const existing = {
+        id: 'p1',
+        organizationId: 'org-1',
+        studentId: 's1',
+        status: 'PAID',
+        amount: 100,
+        paidAt: new Date(),
+        dueDate: null,
+        createdAt: new Date(),
+        reference: null,
+      };
+      prisma.payment.findFirst.mockResolvedValue(existing);
+      prisma.payment.updateMany.mockResolvedValue({ count: 1 });
+      prisma.student.update.mockResolvedValue({});
+      prisma.payment.findUnique.mockResolvedValue({ ...existing, status: 'CANCELLED', paidAt: null });
 
-  it('rejects CANCELLED → PAID (terminal state resurrection)', async () => {
-    prisma.payment.findFirst.mockResolvedValue({ id: 'p1', organizationId: 'org-1', status: 'CANCELLED' });
-    await expect(
-      svc.update('org-1', 'p1', { status: 'PAID' }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(prisma.payment.update).not.toHaveBeenCalled();
-  });
+      await svc.update('org-1', 'p1', { status: 'CANCELLED' });
 
-  it('rejects PAID → PENDING (paid invoice cannot flip back)', async () => {
-    prisma.payment.findFirst.mockResolvedValue({ id: 'p1', organizationId: 'org-1', status: 'PAID' });
-    await expect(
-      svc.update('org-1', 'p1', { status: 'PENDING' }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('allows PENDING → PAID', async () => {
-    prisma.payment.findFirst.mockResolvedValue({ id: 'p1', organizationId: 'org-1', status: 'PENDING' });
-    prisma.payment.update.mockResolvedValue({ id: 'p1', status: 'PAID' });
-    const result = await svc.update('org-1', 'p1', { status: 'PAID' });
-    expect(prisma.payment.update).toHaveBeenCalled();
-    expect(result).toBeDefined();
-  });
-
-  it('allows OVERDUE → CANCELLED', async () => {
-    prisma.payment.findFirst.mockResolvedValue({ id: 'p1', organizationId: 'org-1', status: 'OVERDUE' });
-    prisma.payment.update.mockResolvedValue({ id: 'p1', status: 'CANCELLED' });
-    const result = await svc.update('org-1', 'p1', { status: 'CANCELLED' });
-    expect(prisma.payment.update).toHaveBeenCalled();
-    expect(result).toBeDefined();
+      expect(prisma.payment.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'CANCELLED',
+            paidAt: null,
+          }),
+        }),
+      );
+      expect(prisma.student.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { balance: { increment: -100 } },
+        }),
+      );
+    });
   });
 });

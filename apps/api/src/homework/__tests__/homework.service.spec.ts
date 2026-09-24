@@ -16,13 +16,13 @@ function createMockPrisma() {
 }
 
 describe('HomeworkService', () => {
-  let prisma: any;
+  let prisma: ReturnType<typeof createMockPrisma>;
   let svc: HomeworkService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new HomeworkService(prisma);
+    svc = new HomeworkService(prisma as unknown as ConstructorParameters<typeof HomeworkService>[0]);
   });
 
   describe('create', () => {

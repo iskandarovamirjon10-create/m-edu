@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UnauthorizedException } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
+import type { PrismaService } from '../../prisma/prisma.service';
 import { JwtStrategy } from '../jwt.strategy';
 
 function createMockPrisma() {
@@ -13,15 +15,15 @@ function createMockPrisma() {
   };
 }
 
-function createStrategy(prisma: any, env: Record<string, string | undefined> = {}) {
+function createStrategy(prisma: ReturnType<typeof createMockPrisma>, env: Record<string, string | undefined> = {}) {
   const configService = {
     get: (key: string) => env[key],
   };
-  return new JwtStrategy(configService as any, prisma);
+  return new JwtStrategy(configService as unknown as ConfigService, prisma as unknown as PrismaService);
 }
 
 describe('JwtStrategy', () => {
-  let prisma: any;
+  let prisma: ReturnType<typeof createMockPrisma>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -40,6 +42,8 @@ describe('JwtStrategy', () => {
       id: 'session-123',
       revokedAt: null,
       expiresAt: new Date(Date.now() + 60_000),
+      userId: 'u1',
+      organizationId: 'org-1',
     });
 
     const strategy = createStrategy(prisma);
@@ -86,6 +90,8 @@ describe('JwtStrategy', () => {
       id: 'session-123',
       revokedAt: new Date(),
       expiresAt: new Date(Date.now() + 60_000),
+      userId: 'u1',
+      organizationId: 'org-1',
     });
 
     const strategy = createStrategy(prisma);

@@ -3,23 +3,27 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { authApi, userStore } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
+import { GlassButton } from '@/components/ui';
 import type { User } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 type CallbackStatus = 'processing' | 'success' | 'error';
 
 interface CallbackState {
   status: CallbackStatus;
-  message: string;
+  messageKey: string;
+  rawMessage?: string;
 }
 
 const INITIAL_STATE: CallbackState = {
   status: 'processing',
-  message: 'Please wait while we finish authenticating you…',
+  messageKey: 'authCallback.processing',
 };
 
 export function AuthCallbackPage() {
-  usePageTitle('Signing In');
+  const { t } = useI18n();
+  usePageTitle(t('authCallback.pageTitle'));
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { setUser } = useAuth();
@@ -27,10 +31,11 @@ export function AuthCallbackPage() {
   const exchangeAttemptedRef = useRef(false);
 
   const handleError = useCallback(
-    (message: string) => {
+    (messageKey: string, rawMessage?: string) => {
       setState({
         status: 'error',
-        message,
+        messageKey,
+        rawMessage,
       });
     },
     [],
@@ -46,7 +51,7 @@ export function AuthCallbackPage() {
 
         setState({
           status: 'success',
-          message: 'Sign-in successful! Redirecting…',
+          messageKey: 'authCallback.success',
         });
 
         // Small delay to allow the success message to be visible
@@ -55,9 +60,7 @@ export function AuthCallbackPage() {
           navigate('/', { replace: true });
         }, 500);
       } catch {
-        handleError(
-          'Unable to complete sign-in. Your account information could not be retrieved. Please try again.',
-        );
+        handleError('authCallback.errorRetrieval');
       }
     },
     [navigate, setUser, handleError],
@@ -68,10 +71,8 @@ export function AuthCallbackPage() {
       try {
         await authApi.exchangeCode(code);
         await handleSuccess();
-      } catch (error) {
-        handleError(
-          'Unable to complete sign-in. The authorization code may have expired. Please try again.',
-        );
+      } catch {
+        handleError('authCallback.errorExpired');
       }
     },
     [handleSuccess, handleError],
@@ -93,13 +94,13 @@ export function AuthCallbackPage() {
       const decodedError = errorDescription
         ? decodeURIComponent(errorDescription)
         : decodeURIComponent(errorParam);
-      handleError(decodedError);
+      handleError('authCallback.oauthError', decodedError);
       return;
     }
 
     // Validate authorization code
     if (!code) {
-      handleError('Missing authorization code. Please try signing in again.');
+      handleError('authCallback.errorMissingCode');
       return;
     }
 
@@ -112,7 +113,7 @@ export function AuthCallbackPage() {
   }, [navigate]);
 
   return (
-    <AuthLayout title="Completing sign-in…">
+    <AuthLayout title={t('authCallback.completing')}>
       <div className="w-full max-w-md mx-auto">
         {state.status === 'error' ? (
           <div
@@ -141,18 +142,19 @@ export function AuthCallbackPage() {
                 />
               </svg>
               <div className="flex-1">
-                <p className="font-medium" style={{ color: 'var(--state-error)' }}>Sign-in failed</p>
-                <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>{state.message}</p>
+                <p className="font-medium" style={{ color: 'var(--state-error)' }}>{t('authCallback.failedTitle')}</p>
+                <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>{state.rawMessage ?? t(state.messageKey)}</p>
               </div>
             </div>
             <div className="mt-4">
-              <button
+              <GlassButton
                 type="button"
-                className="glass-btn glass-btn-secondary w-full sm:w-auto"
+                variant="secondary"
+                className="w-full sm:w-auto"
                 onClick={handleBackToLogin}
               >
-                Back to sign in
-              </button>
+                {t('auth.backToSignIn')}
+              </GlassButton>
             </div>
           </div>
         ) : state.status === 'success' ? (
@@ -181,7 +183,7 @@ export function AuthCallbackPage() {
                   d="M5 13l4 4L19 7"
                 />
               </svg>
-              <p className="font-medium">{state.message}</p>
+              <p className="font-medium">{t(state.messageKey)}</p>
             </div>
           </div>
         ) : (
@@ -189,10 +191,10 @@ export function AuthCallbackPage() {
             <div
               className="spinner spinner-lg"
               role="progressbar"
-              aria-label="Authenticating"
+              aria-label={t('auth.authenticating')}
             />
             <p className="text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {state.message}
+              {t(state.messageKey)}
             </p>
           </div>
         )}

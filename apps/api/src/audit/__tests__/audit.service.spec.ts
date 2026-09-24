@@ -4,6 +4,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuditService } from '../audit.service';
+import type { PrismaService } from '../../prisma/prisma.service';
+import type { AuditQueryDto } from '../audit.dto';
 
 function makePrisma() {
   return {
@@ -17,7 +19,7 @@ function makePrisma() {
       findMany: vi.fn(),
       findUnique: vi.fn(),
     },
-  } as any;
+  };
 }
 
 describe('AuditService', () => {
@@ -26,7 +28,7 @@ describe('AuditService', () => {
 
   beforeEach(() => {
     prisma = makePrisma();
-    svc = new AuditService(prisma);
+    svc = new AuditService(prisma as unknown as PrismaService);
     vi.clearAllMocks();
   });
 
@@ -34,7 +36,7 @@ describe('AuditService', () => {
     it('always filters by organizationId', async () => {
       prisma.auditLog.findMany.mockResolvedValue([]);
       prisma.auditLog.count.mockResolvedValue(0);
-      await svc.findAll('org-xyz', {} as any);
+      await svc.findAll('org-xyz', {} as AuditQueryDto);
       const where = prisma.auditLog.findMany.mock.calls[0][0].where;
       expect(where.organizationId).toBe('org-xyz');
     });
@@ -44,7 +46,7 @@ describe('AuditService', () => {
     it('maps action filter', async () => {
       prisma.auditLog.findMany.mockResolvedValue([]);
       prisma.auditLog.count.mockResolvedValue(0);
-      await svc.findAll('org-1', { action: 'CREATE' } as any);
+      await svc.findAll('org-1', { action: 'CREATE' } as AuditQueryDto);
       const where = prisma.auditLog.findMany.mock.calls[0][0].where;
       expect(where.action).toBe('CREATE');
     });
@@ -52,7 +54,7 @@ describe('AuditService', () => {
     it('maps entityType → resource', async () => {
       prisma.auditLog.findMany.mockResolvedValue([]);
       prisma.auditLog.count.mockResolvedValue(0);
-      await svc.findAll('org-1', { entityType: 'STUDENT' } as any);
+      await svc.findAll('org-1', { entityType: 'STUDENT' } as AuditQueryDto);
       const where = prisma.auditLog.findMany.mock.calls[0][0].where;
       expect(where.resource).toBe('STUDENT');
     });
@@ -60,7 +62,7 @@ describe('AuditService', () => {
     it('maps entityId → resourceId', async () => {
       prisma.auditLog.findMany.mockResolvedValue([]);
       prisma.auditLog.count.mockResolvedValue(0);
-      await svc.findAll('org-1', { entityId: 'ent-1' } as any);
+      await svc.findAll('org-1', { entityId: 'ent-1' } as AuditQueryDto);
       const where = prisma.auditLog.findMany.mock.calls[0][0].where;
       expect(where.resourceId).toBe('ent-1');
     });
@@ -68,7 +70,7 @@ describe('AuditService', () => {
     it('maps actorId → userId', async () => {
       prisma.auditLog.findMany.mockResolvedValue([]);
       prisma.auditLog.count.mockResolvedValue(0);
-      await svc.findAll('org-1', { actorId: 'u-1' } as any);
+      await svc.findAll('org-1', { actorId: 'u-1' } as AuditQueryDto);
       const where = prisma.auditLog.findMany.mock.calls[0][0].where;
       expect(where.userId).toBe('u-1');
     });
@@ -76,7 +78,7 @@ describe('AuditService', () => {
     it('maps search to OR clause across resource/path/method', async () => {
       prisma.auditLog.findMany.mockResolvedValue([]);
       prisma.auditLog.count.mockResolvedValue(0);
-      await svc.findAll('org-1', { search: 'student' } as any);
+      await svc.findAll('org-1', { search: 'student' } as AuditQueryDto);
       const where = prisma.auditLog.findMany.mock.calls[0][0].where;
       expect(where.OR).toBeDefined();
       expect(where.OR).toHaveLength(3);
@@ -85,7 +87,7 @@ describe('AuditService', () => {
     it('maps date range to timestamp filter', async () => {
       prisma.auditLog.findMany.mockResolvedValue([]);
       prisma.auditLog.count.mockResolvedValue(0);
-      await svc.findAll('org-1', { fromDate: '2024-01-01', toDate: '2024-12-31' } as any);
+      await svc.findAll('org-1', { fromDate: '2024-01-01', toDate: '2024-12-31' } as AuditQueryDto);
       const where = prisma.auditLog.findMany.mock.calls[0][0].where;
       expect(where.timestamp.gte).toBeInstanceOf(Date);
       expect(where.timestamp.lte).toBeInstanceOf(Date);
@@ -107,7 +109,7 @@ describe('AuditService', () => {
         { id: 'u-1', firstName: 'Ali', lastName: 'Karim', email: 'ali@x.com' },
       ]);
 
-      const r = await svc.findAll('org-1', {} as any);
+      const r = await svc.findAll('org-1', {} as AuditQueryDto);
       expect(r.items[0].actorName).toBe('Ali Karim');
     });
 
@@ -125,7 +127,7 @@ describe('AuditService', () => {
         { id: 'u-1', firstName: '', lastName: '', email: 'a@x.com' },
       ]);
 
-      const r = await svc.findAll('org-1', {} as any);
+      const r = await svc.findAll('org-1', {} as AuditQueryDto);
       expect(r.items[0].actorName).toBe('a@x.com');
     });
 
@@ -140,7 +142,7 @@ describe('AuditService', () => {
       ]);
       prisma.auditLog.count.mockResolvedValue(1);
 
-      const r = await svc.findAll('org-1', {} as any);
+      const r = await svc.findAll('org-1', {} as AuditQueryDto);
       expect(r.items[0].actorName).toBeNull();
       expect(prisma.user.findMany).not.toHaveBeenCalled();
     });
@@ -159,7 +161,7 @@ describe('AuditService', () => {
       ]);
       prisma.auditLog.count.mockResolvedValue(1);
 
-      const r = await svc.findAll('org-1', {} as any);
+      const r = await svc.findAll('org-1', {} as AuditQueryDto);
       expect(r.items[0].changedFields).toEqual(['firstName', 'status']);
       expect(r.items[0].previousValue).toEqual({ firstName: 'Ali', status: 'ACTIVE' });
       expect(r.items[0].newValue).toEqual({ firstName: 'Alisher', status: 'PAUSED' });
@@ -176,7 +178,7 @@ describe('AuditService', () => {
       ]);
       prisma.auditLog.count.mockResolvedValue(1);
 
-      const r = await svc.findAll('org-1', {} as any);
+      const r = await svc.findAll('org-1', {} as AuditQueryDto);
       expect(r.items[0].changedFields).toBeNull();
       expect(r.items[0].previousValue).toBeNull();
       expect(r.items[0].newValue).toBeNull();
@@ -210,7 +212,7 @@ describe('AuditService', () => {
       ]);
       prisma.auditLog.count.mockResolvedValue(1);
 
-      const r = await svc.findAll('org-1', {} as any);
+      const r = await svc.findAll('org-1', {} as AuditQueryDto);
       expect(r.items[0].action).toBe(expected);
     });
   });
@@ -219,7 +221,7 @@ describe('AuditService', () => {
     it('returns page/limit/total/totalPages', async () => {
       prisma.auditLog.findMany.mockResolvedValue([]);
       prisma.auditLog.count.mockResolvedValue(45);
-      const r = await svc.findAll('org-1', { page: '2', limit: '10' } as any);
+      const r = await svc.findAll('org-1', { page: 2, limit: 10 } as AuditQueryDto);
       expect(r.page).toBe(2);
       expect(r.limit).toBe(10);
       expect(r.total).toBe(45);

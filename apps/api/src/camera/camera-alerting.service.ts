@@ -7,6 +7,7 @@
  */
 
 import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecureLogger } from '@medu/face-security';
 
@@ -57,7 +58,7 @@ export class CameraAlertingService implements OnModuleInit {
     const admins = await this.prisma.user.findMany({
       where: {
         organizationId: params.organizationId,
-        role: 'ORG_ADMIN',
+        role: Role.ORG_ADMIN,
         isActive: true,
       },
       select: { id: true },
@@ -84,6 +85,15 @@ export class CameraAlertingService implements OnModuleInit {
       lastAlertAt: now,
       alertType: 'offline',
     });
+
+    if (Math.random() < 0.1) {
+      const expiration = Date.now() - ALERT_DEBOUNCE_MS;
+      for (const [k, v] of this.debounce.entries()) {
+        if (v.lastAlertAt < expiration) {
+          this.debounce.delete(k);
+        }
+      }
+    }
 
     this.logger.info('Camera offline alert sent', {
       cameraId: params.cameraId,
@@ -136,7 +146,7 @@ export class CameraAlertingService implements OnModuleInit {
     const admins = await this.prisma.user.findMany({
       where: {
         organizationId: params.organizationId,
-        role: 'ORG_ADMIN',
+        role: Role.ORG_ADMIN,
         isActive: true,
       },
       select: { id: true },
@@ -155,6 +165,15 @@ export class CameraAlertingService implements OnModuleInit {
     }
 
     this.debounce.set(key, { lastAlertAt: now, alertType: 'frozen' });
+
+    if (Math.random() < 0.1) {
+      const expiration = Date.now() - ALERT_DEBOUNCE_MS;
+      for (const [k, v] of this.debounce.entries()) {
+        if (v.lastAlertAt < expiration) {
+          this.debounce.delete(k);
+        }
+      }
+    }
     return { alerted: true, suppressed: false };
   }
 }

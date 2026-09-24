@@ -1,7 +1,7 @@
 /**
- * GlassTooltip — Hover tooltip wrapper.
+ * GlassTooltip V2 — Hover tooltip with V2 animation and tokens.
  */
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useState, useId } from 'react';
 
 interface GlassTooltipProps {
   children: ReactNode;
@@ -10,14 +10,19 @@ interface GlassTooltipProps {
 }
 
 const PLACEMENT_CLASSES: Record<string, string> = {
-  top:    'bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2',
-  bottom: 'top-[calc(100%+8px)] left-1/2 -translate-x-1/2',
-  left:   'right-[calc(100%+8px)] top-1/2 -translate-y-1/2',
-  right:  'left-[calc(100%+8px)] top-1/2 -translate-y-1/2',
+  top:    'bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2',
+  bottom: 'top-[calc(100%+6px)] left-1/2 -translate-x-1/2',
+  left:   'right-[calc(100%+6px)] top-1/2 -translate-y-1/2',
+  right:  'left-[calc(100%+6px)] top-1/2 -translate-y-1/2',
 };
 
-export function GlassTooltip({ children, content, placement = 'top' }: GlassTooltipProps) {
+export function GlassTooltip({
+  children,
+  content,
+  placement = 'top',
+}: GlassTooltipProps) {
   const [visible, setVisible] = useState(false);
+  const id = useId();
 
   return (
     <span
@@ -27,23 +32,24 @@ export function GlassTooltip({ children, content, placement = 'top' }: GlassTool
       onFocus={() => setVisible(true)}
       onBlur={() => setVisible(false)}
     >
-      {children}
+      <span aria-describedby={visible ? id : undefined}>{children}</span>
       {visible && (
         <span
+          id={id}
           role="tooltip"
           className={[
-            'absolute z-50',
-            'px-3 py-1.5',
+            'absolute z-[var(--z-tooltip)]',
+            'px-2.5 py-1.5',
             'bg-[var(--text-primary)]',
             'text-[var(--text-inverse)]',
-            'text-xs font-medium',
-            'rounded-lg',
-            'whitespace-nowrap',
-            'shadow-[var(--shadow-md)]',
-            'animate-[scale-in_0.15s_ease_forwards]',
-            'pointer-events-none',
+            'text-[var(--text-caption)] font-medium',
+            'rounded-[var(--radius-sm)]',
+            'whitespace-nowrap max-w-[200px]',
+            'shadow-[var(--shadow-lg)]',
+            'pointer-events-none select-none',
             PLACEMENT_CLASSES[placement],
           ].join(' ')}
+          style={{ animation: 'scale-in var(--duration-fast) var(--ease-enter) both' }}
         >
           {content}
         </span>

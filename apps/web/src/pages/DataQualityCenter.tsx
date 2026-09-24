@@ -5,6 +5,7 @@ import { useToast } from '@/components/ui/GlassToast';
 import { dataQualityApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface DataQualityIssue {
   id: string;
@@ -29,8 +30,28 @@ const severityColor: Record<DataQualityIssue['severity'], 'success' | 'warning' 
   CRITICAL: 'error',
 };
 
+const SEVERITY_LABEL_KEY: Record<DataQualityIssue['severity'], string> = {
+  LOW: 'anomaly.lowSeverity',
+  MEDIUM: 'anomaly.mediumSeverity',
+  HIGH: 'anomaly.highSeverity',
+  CRITICAL: 'dataQualityCenter.critical',
+};
+
+const FILTER_LABEL_KEY = {
+  unresolved: 'dataQualityCenter.filter.unresolved',
+  critical: 'dataQualityCenter.filter.critical',
+  all: 'enum.all',
+} as const;
+
+interface DataQualitySummary {
+  total: number;
+  resolvedThisWeek: number;
+  bySeverity?: Partial<Record<DataQualityIssue['severity'], number>>;
+}
+
 export function DataQualityCenterPage() {
-  usePageTitle('Data Quality Center');
+  const { t } = useI18n();
+  usePageTitle(t('dataQualityCenter.title'));
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'critical' | 'unresolved'>('unresolved');
 
@@ -38,7 +59,7 @@ export function DataQualityCenterPage() {
 
   const summaryQuery = useQuery({
     queryKey: ['data-quality-summary'],
-    queryFn: () => dataQualityApi.summary() as Promise<Record<string, any>>,
+    queryFn: () => dataQualityApi.summary() as Promise<DataQualitySummary>,
   });
 
   const issuesQuery = useQuery({
@@ -57,52 +78,55 @@ export function DataQualityCenterPage() {
   const runMutation = useMutation({
     mutationFn: () => dataQualityApi.run() as Promise<{ created?: number }>,
     onSuccess: (data) => {
-      toast.success('Checks complete', data?.created != null ? `${data.created} new issue(s) detected` : undefined);
+      toast.success(
+        t('dataQualityCenter.checksComplete'),
+        data?.created != null ? t('dataQualityCenter.newIssues', { n: data.created }) : undefined,
+      );
       queryClient.invalidateQueries({ queryKey: ['data-quality-summary'] });
       queryClient.invalidateQueries({ queryKey: ['data-quality-issues'] });
     },
-    onError: (e) => toast.error('Could not run checks', getErrorMessage(e)),
+    onError: (e) => toast.error(t('dataQualityCenter.runFailed'), getErrorMessage(e)),
   });
 
   const resolveMutation = useMutation({
     mutationFn: (id: string) => dataQualityApi.resolve(id),
     onSuccess: () => {
-      toast.success('Issue resolved');
+      toast.success(t('dataQualityCenter.resolved'));
       queryClient.invalidateQueries({ queryKey: ['data-quality-issues'] });
       queryClient.invalidateQueries({ queryKey: ['data-quality-summary'] });
     },
-    onError: (e) => toast.error('Could not resolve issue', getErrorMessage(e)),
+    onError: (e) => toast.error(t('dataQualityCenter.resolveFailed'), getErrorMessage(e)),
   });
 
   const issues = Array.isArray(issuesQuery.data) ? issuesQuery.data : [];
   const summary = summaryQuery.data;
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <div className="flex items-start justify-between">
           <PageHeader
-            title="Data Quality Center"
-            subtitle="Rule-based, deterministic checks — every issue has a reason. No AI inference."
+            title={t('dataQualityCenter.title')}
+            subtitle={t('dataQualityCenter.subtitle')}
           />
           <GlassButton
             variant="primary"
             onClick={() => runMutation.mutate()}
             disabled={runMutation.isPending}
           >
-            {runMutation.isPending ? 'Running…' : 'Run all checks'}
+            {runMutation.isPending ? t('automation.running') : t('dataQualityCenter.runAll')}
           </GlassButton>
         </div>
 
         {/* Summary cards */}
         {summary && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard label="Open issues" value={summary.total} color="error" />
-            <StatCard label="Critical" value={summary.bySeverity?.CRITICAL ?? 0} color="error" />
-            <StatCard label="High" value={summary.bySeverity?.HIGH ?? 0} color="warning" />
-            <StatCard label="Resolved this week" value={summary.resolvedThisWeek} color="success" />
+            <StatCard label={t('dataQualityCenter.openIssues')} value={summary.total} color="error" />
+            <StatCard label={t('dataQualityCenter.critical')} value={summary.bySeverity?.CRITICAL ?? 0} color="error" />
+            <StatCard label={t('anomaly.highSeverity')} value={summary.bySeverity?.HIGH ?? 0} color="warning" />
+            <StatCard label={t('dataQualityCenter.resolvedThisWeek')} value={summary.resolvedThisWeek} color="success" />
           </div>
         )}
 
@@ -115,7 +139,7 @@ export function DataQualityCenterPage() {
               variant={filter === f ? 'primary' : 'ghost'}
               onClick={() => setFilter(f)}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {t(FILTER_LABEL_KEY[f])}
             </GlassButton>
           ))}
         </div>
@@ -123,11 +147,11 @@ export function DataQualityCenterPage() {
         {/* Issues list */}
         <div className="glass-card overflow-hidden">
           {issuesQuery.isLoading ? (
-            <div className="p-8"><PageLoader label="Loading data quality issues…" /></div>
+            <div className="p-8"><PageLoader label={t('dataQualityCenter.loading')} /></div>
           ) : issuesQuery.isError ? (
             <div className="p-8">
               <ErrorState
-                title="Failed to load data quality issues"
+                title={t('dataQualityCenter.loadFailed')}
                 message={getErrorMessage(issuesQuery.error)}
                 onRetry={() => issuesQuery.refetch()}
               />
@@ -135,13 +159,13 @@ export function DataQualityCenterPage() {
           ) : issues.length === 0 ? (
             <div className="p-8">
               <EmptyState
-                title="No data quality issues"
+                title={t('dataQualityCenter.emptyTitle')}
                 message={
                   filter === 'critical'
-                    ? 'No critical issues detected. Your data is healthy.'
+                    ? t('dataQualityCenter.emptyCritical')
                     : filter === 'unresolved'
-                    ? 'Everything looks clean — no unresolved issues.'
-                    : 'No issues found.'
+                    ? t('dataQualityCenter.emptyUnresolved')
+                    : t('dataQualityCenter.empty')
                 }
               />
             </div>
@@ -150,7 +174,7 @@ export function DataQualityCenterPage() {
               {issues.map((issue) => (
                 <li key={issue.id} className="px-4 py-3 flex items-start gap-3">
                   <div className="shrink-0 mt-0.5">
-                    <Badge color={severityColor[issue.severity]}>{issue.severity}</Badge>
+                    <Badge color={severityColor[issue.severity]}>{t(SEVERITY_LABEL_KEY[issue.severity])}</Badge>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-[var(--text-primary)]">{issue.message}</p>
@@ -172,7 +196,7 @@ export function DataQualityCenterPage() {
                     onClick={() => resolveMutation.mutate(issue.id)}
                     disabled={!!issue.resolvedAt}
                   >
-                    {issue.resolvedAt ? 'Resolved' : 'Mark resolved'}
+                    {issue.resolvedAt ? t('dataQualityCenter.resolvedButton') : t('dataQualityCenter.markResolved')}
                   </GlassButton>
                 </li>
               ))}

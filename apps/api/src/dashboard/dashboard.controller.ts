@@ -5,6 +5,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { OrgRateLimiter } from '../camera/org-rate-limiter';
 import { DashboardService } from './dashboard.service';
+import { AllowAnyRole } from '../auth/roles.decorator';
 
 @ApiTags('Dashboard')
 @ApiBearerAuth()
@@ -16,6 +17,7 @@ export class DashboardController {
 
   constructor(private readonly dashboardService: DashboardService) {}
 
+  @AllowAnyRole()
   @Get('stats')
   @ApiOperation({ summary: 'Get dashboard statistics' })
   getStats(@CurrentUser('organizationId') orgId: string) {

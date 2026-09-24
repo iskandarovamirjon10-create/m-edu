@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { authApi, friendlyHttpMessage, type ApiError } from '@/lib/api';
+import { GlassButton, GlassInput } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 const KEYFRAMES = `
 @keyframes auth-rise   { from { opacity:0; transform:translateY(14px) scale(.985) } to { opacity:1; transform:none } }
@@ -77,7 +79,8 @@ function BrandMark() {
 }
 
 export function ForgotPasswordPage() {
-  usePageTitle('Reset Password');
+  const { t } = useI18n();
+  usePageTitle(t('auth.forgotPasswordTitle'));
 
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -128,13 +131,13 @@ export function ForgotPasswordPage() {
             className="mb-2 text-center text-[22px] font-semibold tracking-[-0.02em]"
             style={{ color: 'var(--text-primary)' }}
           >
-            Reset your password
+            {t('forgotPassword.heading')}
           </h1>
           <p
             className="mb-6 text-center text-[14px] leading-relaxed"
             style={{ color: 'var(--text-secondary)' }}
           >
-            Enter your email and we'll send you a link to reset your password.
+            {t('forgotPassword.subtitle')}
           </p>
 
           {done ? (
@@ -148,27 +151,30 @@ export function ForgotPasswordPage() {
                 }}
               >
                 <Check />
-                If an account with that email exists, a reset link has been sent. Check your inbox.
+                {t('forgotPassword.success')}
               </div>
-              <Link
-                to="/login"
-                className="glass-btn glass-btn-primary h-[48px] w-full text-[15px] font-medium"
+              <GlassButton
+                asChild
+                variant="primary"
+                className="h-[48px] w-full text-[15px] font-medium"
               >
-                Back to sign in
-              </Link>
+                <Link to="/login">
+                  {t('auth.backToSignIn')}
+                </Link>
+              </GlassButton>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              <input
+              <GlassInput
                 type="email"
                 required
                 autoFocus
                 autoComplete="email"
-                placeholder="Email address"
+                placeholder={t('auth.emailAddress')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={busy}
-                className="glass-input h-[48px] text-[15px]"
+                className="h-[48px] text-[15px]"
               />
 
               {error && (
@@ -184,14 +190,15 @@ export function ForgotPasswordPage() {
                 </p>
               )}
 
-              <button
+              <GlassButton
                 type="submit"
                 disabled={busy || !email}
                 aria-busy={busy}
-                className="glass-btn glass-btn-primary group h-[48px] w-full text-[15px] font-medium"
+                variant="primary"
+                className="group h-[48px] w-full text-[15px] font-medium"
               >
-                {busy ? (<><Spinner /> Sending…</>) : (<><span>Send reset link</span><Arrow /></>)}
-              </button>
+                {busy ? (<><Spinner /> {t('forgotPassword.sending')}</>) : (<><span>{t('forgotPassword.submit')}</span><Arrow /></>)}
+              </GlassButton>
             </form>
           )}
         </section>
@@ -205,7 +212,7 @@ export function ForgotPasswordPage() {
             className="font-medium underline-offset-[3px] hover:underline"
             style={{ color: 'var(--m-vivid)' }}
           >
-            Back to sign in
+            {t('auth.backToSignIn')}
           </Link>
         </p>
       </main>

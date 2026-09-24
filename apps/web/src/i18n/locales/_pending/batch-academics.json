@@ -1,0 +1,1255 @@
+{
+  "pages": [
+    "Attendance",
+    "Grades",
+    "Homework",
+    "Exams",
+    "Courses",
+    "Library",
+    "Documents",
+    "ResourceBooking",
+    "Inventory"
+  ],
+  "keys": {
+    "attendance.countMany": {
+      "en": "records",
+      "uz": "yozuvlar",
+      "ru": "записей"
+    },
+    "attendance.countOne": {
+      "en": "record",
+      "uz": "yozuv",
+      "ru": "запись"
+    },
+    "attendance.editAria": {
+      "en": "Edit attendance for {name}",
+      "uz": "{name} davomatini tahrirlash",
+      "ru": "Изменить посещаемость: {name}"
+    },
+    "attendance.editTitle": {
+      "en": "Edit attendance",
+      "uz": "Davomatni tahrirlash",
+      "ru": "Изменить посещаемость"
+    },
+    "attendance.emptyFilteredHint": {
+      "en": "Try adjusting your filters to see more results.",
+      "uz": "Koʻproq natija koʻrish uchun filtrlarni oʻzgartirib koʻring.",
+      "ru": "Попробуйте изменить фильтры, чтобы увидеть больше результатов."
+    },
+    "attendance.emptyFilteredTitle": {
+      "en": "No matching records",
+      "uz": "Mos yozuvlar yoʻq",
+      "ru": "Нет подходящих записей"
+    },
+    "attendance.emptyMessage": {
+      "en": "Attendance records will appear here once you start recording attendance.",
+      "uz": "Davomatni qayd etishni boshlaganingizdan soʻng yozuvlar shu yerda paydo boʻladi.",
+      "ru": "Записи о посещаемости появятся здесь, как только вы начнёте отмечать посещаемость."
+    },
+    "attendance.emptyTitle": {
+      "en": "No attendance records yet",
+      "uz": "Hali davomat yozuvlari yoʻq",
+      "ru": "Записей о посещаемости пока нет"
+    },
+    "attendance.filterByDate": {
+      "en": "Filter by date",
+      "uz": "Sana boʻyicha filtrlash",
+      "ru": "Фильтр по дате"
+    },
+    "attendance.filterByStatus": {
+      "en": "Filter by status",
+      "uz": "Holat boʻyicha filtrlash",
+      "ru": "Фильтр по статусу"
+    },
+    "attendance.groupPlaceholder": {
+      "en": "Select group…",
+      "uz": "Guruhni tanlang…",
+      "ru": "Выберите группу…"
+    },
+    "attendance.loadFailed": {
+      "en": "Failed to load attendance",
+      "uz": "Davomatni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить посещаемость"
+    },
+    "attendance.loadingRecords": {
+      "en": "Loading attendance records…",
+      "uz": "Davomat yozuvlari yuklanmoqda…",
+      "ru": "Загрузка записей о посещаемости…"
+    },
+    "attendance.note": {
+      "en": "Note",
+      "uz": "Izoh",
+      "ru": "Заметка"
+    },
+    "attendance.notePlaceholder": {
+      "en": "Optional note…",
+      "uz": "Ixtiyoriy izoh…",
+      "ru": "Необязательная заметка…"
+    },
+    "attendance.pageSubtitle": {
+      "en": "Records and manual attendance entry",
+      "uz": "Yozuvlar va qoʻlda davomat kiritish",
+      "ru": "Записи и ручной ввод посещаемости"
+    },
+    "attendance.record": {
+      "en": "Record attendance",
+      "uz": "Davomatni qayd etish",
+      "ru": "Отметить посещаемость"
+    },
+    "attendance.recordSubmit": {
+      "en": "Record",
+      "uz": "Qayd etish",
+      "ru": "Записать"
+    },
+    "attendance.recordUpdated": {
+      "en": "Attendance updated",
+      "uz": "Davomat yangilandi",
+      "ru": "Посещаемость обновлена"
+    },
+    "attendance.recordVoided": {
+      "en": "Attendance record voided",
+      "uz": "Davomat yozuvi bekor qilindi",
+      "ru": "Запись о посещаемости аннулирована"
+    },
+    "attendance.recordedSuccess": {
+      "en": "Attendance recorded successfully",
+      "uz": "Davomat muvaffaqiyatli qayd etildi",
+      "ru": "Посещаемость успешно отмечена"
+    },
+    "attendance.selectStatus": {
+      "en": "Attendance status",
+      "uz": "Davomat holati",
+      "ru": "Статус посещаемости"
+    },
+    "attendance.studentPlaceholder": {
+      "en": "Select student…",
+      "uz": "Oʻquvchini tanlang…",
+      "ru": "Выберите ученика…"
+    },
+    "attendance.thisStudent": {
+      "en": "this student",
+      "uz": "shu oʻquvchi",
+      "ru": "этого ученика"
+    },
+    "attendance.trendPresent": {
+      "en": "{present} of {total} present",
+      "uz": "{total} nafardan {present} nafari keldi",
+      "ru": "{present} из {total} присутствуют"
+    },
+    "attendance.void": {
+      "en": "Void",
+      "uz": "Bekor qilish",
+      "ru": "Аннулировать"
+    },
+    "attendance.voidAria": {
+      "en": "Void attendance for {name}",
+      "uz": "{name} davomatini bekor qilish",
+      "ru": "Аннулировать посещаемость: {name}"
+    },
+    "attendance.voidConfirmAfter": {
+      "en": "on {date}?",
+      "uz": "sanasidagi {date} yozuvini?",
+      "ru": "за {date}?"
+    },
+    "attendance.voidConfirmBefore": {
+      "en": "Void the record for",
+      "uz": "Quyidagi talabaning yozuvini bekor qilish:",
+      "ru": "Аннулировать запись:"
+    },
+    "attendance.voidRecord": {
+      "en": "Void record",
+      "uz": "Yozuvni bekor qilish",
+      "ru": "Аннулировать запись"
+    },
+    "attendance.voidTitle": {
+      "en": "Void attendance record",
+      "uz": "Davomat yozuvini bekor qilish",
+      "ru": "Аннулировать запись о посещаемости"
+    },
+    "attendance.voiding": {
+      "en": "Voiding…",
+      "uz": "Bekor qilinmoqda…",
+      "ru": "Аннулирование…"
+    },
+    "common.active": {
+      "en": "Active",
+      "uz": "Faol",
+      "ru": "Активно"
+    },
+    "common.inactive": {
+      "en": "Inactive",
+      "uz": "Faol emas",
+      "ru": "Неактивно"
+    },
+    "common.open": {
+      "en": "Open",
+      "uz": "Ochish",
+      "ru": "Открыть"
+    },
+    "common.optional": {
+      "en": "Optional",
+      "uz": "Ixtiyoriy",
+      "ru": "Необязательно"
+    },
+    "common.validation.selectDate": {
+      "en": "Please select a date",
+      "uz": "Iltimos, sanani tanlang",
+      "ru": "Пожалуйста, выберите дату"
+    },
+    "common.validation.selectGroup": {
+      "en": "Please select a group",
+      "uz": "Iltimos, guruhni tanlang",
+      "ru": "Пожалуйста, выберите группу"
+    },
+    "common.validation.selectStudent": {
+      "en": "Please select a student",
+      "uz": "Iltimos, oʻquvchini tanlang",
+      "ru": "Пожалуйста, выберите ученика"
+    },
+    "courses.createSuccess": {
+      "en": "Course created successfully",
+      "uz": "Kurs muvaffaqiyatli yaratildi",
+      "ru": "Курс успешно создан"
+    },
+    "courses.descriptionPlaceholder": {
+      "en": "Course description and learning objectives…",
+      "uz": "Kurs tavsifi va oʻquv maqsadlari…",
+      "ru": "Описание курса и цели обучения…"
+    },
+    "courses.emptyMessage": {
+      "en": "Add your first course to build the catalog.",
+      "uz": "Katalogni shakllantirish uchun birinchi kursni qoʻshing.",
+      "ru": "Добавьте первый курс, чтобы наполнить каталог."
+    },
+    "courses.form.description": {
+      "en": "Description",
+      "uz": "Tavsif",
+      "ru": "Описание"
+    },
+    "courses.form.price": {
+      "en": "Price (USD)",
+      "uz": "Narx (USD)",
+      "ru": "Цена (USD)"
+    },
+    "courses.level.ADVANCED": {
+      "en": "Advanced",
+      "uz": "Yuqori",
+      "ru": "Продвинутый"
+    },
+    "courses.level.BEGINNER": {
+      "en": "Beginner",
+      "uz": "Boshlangʻich",
+      "ru": "Начальный"
+    },
+    "courses.level.ELEMENTARY": {
+      "en": "Elementary",
+      "uz": "Elementar",
+      "ru": "Элементарный"
+    },
+    "courses.level.EXPERT": {
+      "en": "Expert",
+      "uz": "Ekspert",
+      "ru": "Экспертный"
+    },
+    "courses.level.INTERMEDIATE": {
+      "en": "Intermediate",
+      "uz": "Oʻrta",
+      "ru": "Средний"
+    },
+    "courses.level.UPPER_INTERMEDIATE": {
+      "en": "Upper Intermediate",
+      "uz": "Oʻrtadan yuqori",
+      "ru": "Выше среднего"
+    },
+    "courses.levelPlaceholder": {
+      "en": "Select level…",
+      "uz": "Darajani tanlang…",
+      "ru": "Выберите уровень…"
+    },
+    "courses.loadFailed": {
+      "en": "Failed to load courses",
+      "uz": "Kurslarni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить курсы"
+    },
+    "courses.namePlaceholder": {
+      "en": "Introduction to Computer Science",
+      "uz": "Kompyuter fanlariga kirish",
+      "ru": "Введение в информатику"
+    },
+    "courses.pageSubtitle": {
+      "en": "Course catalog and pricing",
+      "uz": "Kurslar katalogi va narxlari",
+      "ru": "Каталог курсов и цены"
+    },
+    "courses.validation.priceInvalid": {
+      "en": "Price must be a positive number",
+      "uz": "Narx musbat son boʻlishi kerak",
+      "ru": "Цена должна быть положительным числом"
+    },
+    "documents.add": {
+      "en": "Add document",
+      "uz": "Hujjat qoʻshish",
+      "ru": "Добавить документ"
+    },
+    "documents.added": {
+      "en": "Document added",
+      "uz": "Hujjat qoʻshildi",
+      "ru": "Документ добавлен"
+    },
+    "documents.category.CERTIFICATE": {
+      "en": "Certificates",
+      "uz": "Sertifikatlar",
+      "ru": "Сертификаты"
+    },
+    "documents.category.CONTRACT": {
+      "en": "Contracts",
+      "uz": "Shartnomalar",
+      "ru": "Договоры"
+    },
+    "documents.category.CURRICULUM": {
+      "en": "Curriculum",
+      "uz": "Oʻquv dasturi",
+      "ru": "Учебная программа"
+    },
+    "documents.category.ID": {
+      "en": "ID Documents",
+      "uz": "Shaxs hujjatlari",
+      "ru": "Удостоверяющие документы"
+    },
+    "documents.category.INVOICE": {
+      "en": "Invoices",
+      "uz": "Hisob-fakturalar",
+      "ru": "Счета"
+    },
+    "documents.category.MEDIA": {
+      "en": "Media",
+      "uz": "Media",
+      "ru": "Медиа"
+    },
+    "documents.category.OTHER": {
+      "en": "Other",
+      "uz": "Boshqa",
+      "ru": "Другое"
+    },
+    "documents.category.POLICY": {
+      "en": "Policies",
+      "uz": "Shartlar",
+      "ru": "Политики"
+    },
+    "documents.category.REPORT": {
+      "en": "Reports",
+      "uz": "Hisobotlar",
+      "ru": "Отчёты"
+    },
+    "documents.category.all": {
+      "en": "All categories",
+      "uz": "Barcha toifalar",
+      "ru": "Все категории"
+    },
+    "documents.count": {
+      "en": "{n} documents",
+      "uz": "{n} ta hujjat",
+      "ru": "Документов: {n}"
+    },
+    "documents.deleteConfirm": {
+      "en": "Delete \"{title}\"? This cannot be undone.",
+      "uz": "\"{title}\" oʻchirilsinmi? Bu amalni ortga qaytarib boʻlmaydi.",
+      "ru": "Удалить «{title}»? Это действие нельзя отменить."
+    },
+    "documents.deleteFailed": {
+      "en": "Could not delete document",
+      "uz": "Hujjatni oʻchirib boʻlmadi",
+      "ru": "Не удалось удалить документ"
+    },
+    "documents.deleted": {
+      "en": "Document deleted",
+      "uz": "Hujjat oʻchirildi",
+      "ru": "Документ удалён"
+    },
+    "documents.empty": {
+      "en": "No documents yet",
+      "uz": "Hali hujjatlar yoʻq",
+      "ru": "Документов пока нет"
+    },
+    "documents.emptyMessage": {
+      "en": "Add contracts, IDs, certificates, and any other files here.",
+      "uz": "Shartnomalar, shaxs hujjatlari, sertifikatlar va boshqa fayllarni shu yerga qoʻshing.",
+      "ru": "Добавьте сюда договоры, удостоверения, сертификаты и другие файлы."
+    },
+    "documents.emptySearch": {
+      "en": "No matching documents",
+      "uz": "Mos hujjatlar topilmadi",
+      "ru": "Подходящих документов не найдено"
+    },
+    "documents.emptySearchMessage": {
+      "en": "Try a different search term or category filter.",
+      "uz": "Boshqa qidiruv soʻzi yoki toifa filtrini sinab koʻring.",
+      "ru": "Попробуйте другой поисковый запрос или фильтр по категории."
+    },
+    "documents.field.category": {
+      "en": "Category",
+      "uz": "Toifa",
+      "ru": "Категория"
+    },
+    "documents.field.description": {
+      "en": "Description",
+      "uz": "Tavsif",
+      "ru": "Описание"
+    },
+    "documents.field.fileSize": {
+      "en": "File size (bytes)",
+      "uz": "Fayl hajmi (bayt)",
+      "ru": "Размер файла (байты)"
+    },
+    "documents.field.fileUrl": {
+      "en": "File URL",
+      "uz": "Fayl manzili",
+      "ru": "URL файла"
+    },
+    "documents.field.mimeType": {
+      "en": "MIME type",
+      "uz": "MIME turi",
+      "ru": "MIME-тип"
+    },
+    "documents.field.tags": {
+      "en": "Tags",
+      "uz": "Teglar",
+      "ru": "Теги"
+    },
+    "documents.field.title": {
+      "en": "Title",
+      "uz": "Sarlavha",
+      "ru": "Название"
+    },
+    "documents.fileUrlInvalid": {
+      "en": "File URL must be a valid link starting with http:// or https://",
+      "uz": "Fayl manzili http:// yoki https:// bilan boshlanadigan haqiqiy havq boʻlishi kerak",
+      "ru": "URL файла должен быть действительной ссылкой, начинающейся с http:// или https://"
+    },
+    "documents.fileUrlRequired": {
+      "en": "File URL is required — upload the file to your storage and paste its link.",
+      "uz": "Fayl manzili majburiy — faylni omboriga yuklab, havqasini shu yerga joylang.",
+      "ru": "URL файла обязателен — загрузите файл в свое хранилище и вставьте ссылку."
+    },
+    "documents.filterByCategory": {
+      "en": "Filter by category",
+      "uz": "Toifa boʻyicha filtrlash",
+      "ru": "Фильтр по категории"
+    },
+    "documents.loadFailed": {
+      "en": "Failed to load documents",
+      "uz": "Hujjatlarni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить документы"
+    },
+    "documents.loading": {
+      "en": "Loading documents…",
+      "uz": "Hujjatlar yuklanmoqda…",
+      "ru": "Загрузка документов…"
+    },
+    "documents.pageSubtitle": {
+      "en": "Centralised file management with versioning, tags, and entity links",
+      "uz": "Versiyalar, teglar va bogʻlanishlar bilan markazlashgan fayllarni boshqarish",
+      "ru": "Централизованное управление файлами с версиями, тегами и связями с сущностями"
+    },
+    "documents.searchPlaceholder": {
+      "en": "Search documents…",
+      "uz": "Hujjatlarni qidirish…",
+      "ru": "Поиск документов…"
+    },
+    "documents.tagsHint": {
+      "en": "Comma-separated",
+      "uz": "Vergul bilan ajratilgan",
+      "ru": "Через запятую"
+    },
+    "documents.titlePlaceholder": {
+      "en": "e.g. Tuition contract — 2026",
+      "uz": "masalan: Kontrakt — 2026",
+      "ru": "напр. Договор на обучение — 2026"
+    },
+    "exams.col.type": {
+      "en": "Type",
+      "uz": "Turi",
+      "ru": "Тип"
+    },
+    "exams.durationInvalid": {
+      "en": "Valid duration is required",
+      "uz": "Toʻgʻri davomiylik majburiy",
+      "ru": "Требуется корректная длительность"
+    },
+    "exams.durationMinutes": {
+      "en": "{n} min",
+      "uz": "{n} daqiqa",
+      "ru": "{n} мин"
+    },
+    "exams.editLockedHint": {
+      "en": "Group and subject are set at creation and cannot be changed on an existing exam.",
+      "uz": "Guruh va fan yaratish paytida belgilanadi va mavjud imtihonda oʻzgartirib boʻlmaydi.",
+      "ru": "Группа и предмет задаются при создании и не могут быть изменены у существующего экзамена."
+    },
+    "exams.empty": {
+      "en": "No exams yet",
+      "uz": "Hali imtihonlar yoʻq",
+      "ru": "Экзаменов пока нет"
+    },
+    "exams.emptyMessage": {
+      "en": "Create your first exam to get started",
+      "uz": "Boshlash uchun birinchi imtihoningizni yarating",
+      "ru": "Создайте первый экзамен, чтобы начать"
+    },
+    "exams.emptySearch": {
+      "en": "No exams found",
+      "uz": "Imtihonlar topilmadi",
+      "ru": "Экзамены не найдены"
+    },
+    "exams.field.date": {
+      "en": "Date *",
+      "uz": "Sana *",
+      "ru": "Дата *"
+    },
+    "exams.field.duration": {
+      "en": "Duration (min) *",
+      "uz": "Davomiylik (daqiqa) *",
+      "ru": "Длительность (мин) *"
+    },
+    "exams.field.examType": {
+      "en": "Exam Type *",
+      "uz": "Imtihon turi *",
+      "ru": "Тип экзамена *"
+    },
+    "exams.field.group": {
+      "en": "Group *",
+      "uz": "Guruh *",
+      "ru": "Группа *"
+    },
+    "exams.field.passingMarks": {
+      "en": "Passing Marks *",
+      "uz": "Oʻtish balli *",
+      "ru": "Проходной балл *"
+    },
+    "exams.field.subject": {
+      "en": "Subject *",
+      "uz": "Fan *",
+      "ru": "Предмет *"
+    },
+    "exams.field.title": {
+      "en": "Title *",
+      "uz": "Sarlavha *",
+      "ru": "Название *"
+    },
+    "exams.field.totalMarks": {
+      "en": "Total Marks *",
+      "uz": "Umumiy ball *",
+      "ru": "Максимум баллов *"
+    },
+    "exams.groupPlaceholder": {
+      "en": "Select group",
+      "uz": "Guruhni tanlang",
+      "ru": "Выберите группу"
+    },
+    "exams.groupRequired": {
+      "en": "Group is required",
+      "uz": "Guruh majburiy",
+      "ru": "Группа обязательна"
+    },
+    "exams.pageDescription": {
+      "en": "Manage exams and assessments",
+      "uz": "Imtihon va baholarni boshqarish",
+      "ru": "Управление экзаменами и оценками"
+    },
+    "exams.passingMarksExceed": {
+      "en": "Passing marks cannot exceed total marks",
+      "uz": "Oʻtish balli umumiy balldan oshmasligi kerak",
+      "ru": "Проходной балл не может превышать максимальный"
+    },
+    "exams.passingMarksInvalid": {
+      "en": "Valid passing marks are required",
+      "uz": "Toʻgʻri oʻtish balli majburiy",
+      "ru": "Требуется корректный проходной балл"
+    },
+    "exams.searchInputPlaceholder": {
+      "en": "Search exams by title or subject...",
+      "uz": "Imtihonlarni sarlavha yoki fan boʻyicha qidirish...",
+      "ru": "Поиск экзаменов по названию или предмету..."
+    },
+    "exams.status.draft": {
+      "en": "Draft",
+      "uz": "Qoralama",
+      "ru": "Черновик"
+    },
+    "exams.status.published": {
+      "en": "Published",
+      "uz": "Eʼlon qilingan",
+      "ru": "Опубликовано"
+    },
+    "exams.subjectPlaceholder": {
+      "en": "e.g. Mathematics",
+      "uz": "masalan: Matematika",
+      "ru": "напр. Математика"
+    },
+    "exams.subjectRequired": {
+      "en": "Subject is required",
+      "uz": "Fan majburiy",
+      "ru": "Предмет обязателен"
+    },
+    "exams.titlePlaceholder": {
+      "en": "Enter exam title",
+      "uz": "Imtihon nomini kiriting",
+      "ru": "Введите название экзамена"
+    },
+    "exams.totalMarksInvalid": {
+      "en": "Valid total marks are required",
+      "uz": "Toʻgʻri umumiy ball majburiy",
+      "ru": "Требуется корректный максимум баллов"
+    },
+    "exams.type.ASSIGNMENT": {
+      "en": "Assignment",
+      "uz": "Vazifa",
+      "ru": "Задание"
+    },
+    "exams.type.FINAL": {
+      "en": "Final",
+      "uz": "Yakuniy",
+      "ru": "Итоговый"
+    },
+    "exams.type.MIDTERM": {
+      "en": "Midterm",
+      "uz": "Semestr",
+      "ru": "Промежуточный"
+    },
+    "exams.type.QUIZ": {
+      "en": "Quiz",
+      "uz": "Viktorina",
+      "ru": "Квиз"
+    },
+    "grades.createSuccess": {
+      "en": "Grade created",
+      "uz": "Baho yaratildi",
+      "ru": "Оценка создана"
+    },
+    "grades.emptyMessage": {
+      "en": "Create the first grade to get started.",
+      "uz": "Boshlash uchun birinchi bahoni yarating.",
+      "ru": "Создайте первую оценку, чтобы начать."
+    },
+    "grades.groupPlaceholder": {
+      "en": "Select group",
+      "uz": "Guruhni tanlang",
+      "ru": "Выберите группу"
+    },
+    "grades.labelSamplePlaceholder": {
+      "en": "e.g. A, B+, Excellent",
+      "uz": "masalan: A, B+, Aʼlo",
+      "ru": "напр. A, B+, Отлично"
+    },
+    "grades.optionalNotesPlaceholder": {
+      "en": "Optional notes",
+      "uz": "Ixtiyoriy izohlar",
+      "ru": "Необязательные заметки"
+    },
+    "grades.scorePlaceholder": {
+      "en": "e.g. 85",
+      "uz": "masalan: 85",
+      "ru": "напр. 85"
+    },
+    "grades.studentPlaceholder": {
+      "en": "Select student",
+      "uz": "Oʻquvchini tanlang",
+      "ru": "Выберите ученика"
+    },
+    "grades.total": {
+      "en": "{n} total",
+      "uz": "jami {n} ta",
+      "ru": "Всего: {n}"
+    },
+    "grades.validation.number": {
+      "en": "Enter a number",
+      "uz": "Son kiriting",
+      "ru": "Введите число"
+    },
+    "homework.addButton": {
+      "en": "Add homework",
+      "uz": "Uy vazifasi qoʻshish",
+      "ru": "Добавить домашнее задание"
+    },
+    "homework.confirmDelete": {
+      "en": "Delete this homework?",
+      "uz": "Bu uy vazifasi oʻchirilsinmi?",
+      "ru": "Удалить это домашнее задание?"
+    },
+    "homework.createSubmit": {
+      "en": "Create homework",
+      "uz": "Uy vazifasini yaratish",
+      "ru": "Создать домашнее задание"
+    },
+    "homework.createSuccess": {
+      "en": "Homework created",
+      "uz": "Uy vazifasi yaratildi",
+      "ru": "Домашнее задание создано"
+    },
+    "homework.deleteSuccess": {
+      "en": "Homework deleted",
+      "uz": "Uy vazifasi oʻchirildi",
+      "ru": "Домашнее задание удалено"
+    },
+    "homework.descriptionPlaceholder": {
+      "en": "Assignment instructions and requirements…",
+      "uz": "Topshiriq koʻrsatmalari va talablar…",
+      "ru": "Инструкции и требования к заданию…"
+    },
+    "homework.editTitle": {
+      "en": "Edit homework",
+      "uz": "Uy vazifasini tahrirlash",
+      "ru": "Редактировать домашнее задание"
+    },
+    "homework.empty": {
+      "en": "No homework",
+      "uz": "Uy vazifalari yoʻq",
+      "ru": "Домашних заданий нет"
+    },
+    "homework.emptyMessage": {
+      "en": "Create an assignment for a group.",
+      "uz": "Guruh uchun topshiriq yarating.",
+      "ru": "Создайте задание для группы."
+    },
+    "homework.groupPlaceholder": {
+      "en": "Select group…",
+      "uz": "Guruhni tanlang…",
+      "ru": "Выберите группу…"
+    },
+    "homework.loadFailed": {
+      "en": "Failed to load homework",
+      "uz": "Uy vazifalarini yuklab boʻlmadi",
+      "ru": "Не удалось загрузить домашние задания"
+    },
+    "homework.maxScorePositive": {
+      "en": "Max score must be a positive number",
+      "uz": "Maksimal ball musbat son boʻlishi kerak",
+      "ru": "Максимальный балл должен быть положительным числом"
+    },
+    "homework.pageSubtitle": {
+      "en": "Assignments and deadlines",
+      "uz": "Topshiriqlar va muddatlar",
+      "ru": "Задания и сроки сдачи"
+    },
+    "homework.status.dueSoon": {
+      "en": "Due soon",
+      "uz": "Muddati yaqin",
+      "ru": "Скоро срок"
+    },
+    "homework.status.open": {
+      "en": "Open",
+      "uz": "Ochiq",
+      "ru": "Открыто"
+    },
+    "homework.status.pastDue": {
+      "en": "Past due",
+      "uz": "Muddati oʻtgan",
+      "ru": "Срок истёк"
+    },
+    "homework.titlePlaceholder": {
+      "en": "Chapter 5 exercises",
+      "uz": "5-boʻlim mashqlari",
+      "ru": "Упражнения главы 5"
+    },
+    "homework.updateSuccess": {
+      "en": "Homework updated",
+      "uz": "Uy vazifasi yangilandi",
+      "ru": "Домашнее задание обновлено"
+    },
+    "inventory.addTitle": {
+      "en": "Add Inventory Item",
+      "uz": "Ombor buyumini qoʻshish",
+      "ru": "Добавить товар на склад"
+    },
+    "inventory.allCategories": {
+      "en": "All Categories",
+      "uz": "Barcha toifalar",
+      "ru": "Все категории"
+    },
+    "inventory.category.BOOKS": {
+      "en": "Books",
+      "uz": "Kitoblar",
+      "ru": "Книги"
+    },
+    "inventory.category.ELECTRONICS": {
+      "en": "Electronics",
+      "uz": "Elektronika",
+      "ru": "Электроника"
+    },
+    "inventory.category.EQUIPMENT": {
+      "en": "Equipment",
+      "uz": "Jihozlar",
+      "ru": "Оборудование"
+    },
+    "inventory.category.FURNITURE": {
+      "en": "Furniture",
+      "uz": "Mebel",
+      "ru": "Мебель"
+    },
+    "inventory.category.OTHER": {
+      "en": "Other",
+      "uz": "Boshqa",
+      "ru": "Другое"
+    },
+    "inventory.category.SUPPLIES": {
+      "en": "Supplies",
+      "uz": "Kerakli buyumlar",
+      "ru": "Расходные материалы"
+    },
+    "inventory.categoryPlaceholder": {
+      "en": "Select category",
+      "uz": "Toifani tanlang",
+      "ru": "Выберите категорию"
+    },
+    "inventory.col.category": {
+      "en": "Category",
+      "uz": "Toifa",
+      "ru": "Категория"
+    },
+    "inventory.col.location": {
+      "en": "Location",
+      "uz": "Joylashuv",
+      "ru": "Расположение"
+    },
+    "inventory.col.name": {
+      "en": "Item Name",
+      "uz": "Buyum nomi",
+      "ru": "Название товара"
+    },
+    "inventory.col.quantity": {
+      "en": "Quantity",
+      "uz": "Miqdor",
+      "ru": "Количество"
+    },
+    "inventory.col.stockStatus": {
+      "en": "Stock Status",
+      "uz": "Zaxira holati",
+      "ru": "Статус запаса"
+    },
+    "inventory.col.supplier": {
+      "en": "Supplier",
+      "uz": "Yetkazib beruvchi",
+      "ru": "Поставщик"
+    },
+    "inventory.col.unit": {
+      "en": "Unit",
+      "uz": "Oʻlchov birligi",
+      "ru": "Единица"
+    },
+    "inventory.col.value": {
+      "en": "Value",
+      "uz": "Qiymat",
+      "ru": "Стоимость"
+    },
+    "inventory.descriptionPlaceholder": {
+      "en": "Item description",
+      "uz": "Buyum tavsifi",
+      "ru": "Описание товара"
+    },
+    "inventory.editTitle": {
+      "en": "Edit Inventory Item",
+      "uz": "Ombor buyumini tahrirlash",
+      "ru": "Редактировать товар на складе"
+    },
+    "inventory.empty": {
+      "en": "No inventory yet",
+      "uz": "Hali ombor yoʻq",
+      "ru": "На складе пока нет товаров"
+    },
+    "inventory.emptyMessage": {
+      "en": "Add your first inventory item to get started",
+      "uz": "Boshlash uchun birinchi buyumni qoʻshing",
+      "ru": "Добавьте первый товар, чтобы начать"
+    },
+    "inventory.emptySearch": {
+      "en": "No items found",
+      "uz": "Buyumlar topilmadi",
+      "ru": "Товары не найдены"
+    },
+    "inventory.error.quantityInvalid": {
+      "en": "Valid quantity is required",
+      "uz": "Toʻgʻri miqdor majburiy",
+      "ru": "Требуется корректное количество"
+    },
+    "inventory.field.category": {
+      "en": "Category *",
+      "uz": "Toifa *",
+      "ru": "Категория *"
+    },
+    "inventory.field.description": {
+      "en": "Description",
+      "uz": "Tavsif",
+      "ru": "Описание"
+    },
+    "inventory.field.location": {
+      "en": "Location",
+      "uz": "Joylashuv",
+      "ru": "Расположение"
+    },
+    "inventory.field.minStock": {
+      "en": "Minimum Stock",
+      "uz": "Minimal zaxira",
+      "ru": "Минимальный запас"
+    },
+    "inventory.field.name": {
+      "en": "Item Name *",
+      "uz": "Buyum nomi *",
+      "ru": "Название товара *"
+    },
+    "inventory.field.purchasePrice": {
+      "en": "Purchase Price",
+      "uz": "Xarid narxi",
+      "ru": "Закупочная цена"
+    },
+    "inventory.field.quantity": {
+      "en": "Quantity *",
+      "uz": "Miqdor *",
+      "ru": "Количество *"
+    },
+    "inventory.field.supplier": {
+      "en": "Supplier",
+      "uz": "Yetkazib beruvchi",
+      "ru": "Поставщик"
+    },
+    "inventory.field.unit": {
+      "en": "Unit *",
+      "uz": "Oʻlchov birligi *",
+      "ru": "Единица *"
+    },
+    "inventory.inStock": {
+      "en": "In Stock",
+      "uz": "Zaxirada",
+      "ru": "В наличии"
+    },
+    "inventory.locationPlaceholder": {
+      "en": "Storage location",
+      "uz": "Saqlash joyi",
+      "ru": "Место хранения"
+    },
+    "inventory.lowStock": {
+      "en": "Low Stock",
+      "uz": "Zaxira kam",
+      "ru": "Мало на складе"
+    },
+    "inventory.namePlaceholder": {
+      "en": "Enter item name",
+      "uz": "Buyum nomini kiriting",
+      "ru": "Введите название товара"
+    },
+    "inventory.pageSubtitle": {
+      "en": "Manage inventory items and transactions",
+      "uz": "Ombor buyumlari va amallarni boshqarish",
+      "ru": "Управление товарами и операциями склада"
+    },
+    "inventory.searchPlaceholder": {
+      "en": "Search items by name, category, or supplier...",
+      "uz": "Buyumlarni nom, toifa yoki yetkazib beruvchi boʻyicha qidirish...",
+      "ru": "Поиск товаров по названию, категории или поставщику..."
+    },
+    "inventory.supplierPlaceholder": {
+      "en": "Supplier name",
+      "uz": "Yetkazib beruvchi nomi",
+      "ru": "Название поставщика"
+    },
+    "inventory.unitPlaceholder": {
+      "en": "e.g., piece, box, kg",
+      "uz": "masalan: dona, quti, kg",
+      "ru": "напр. шт., коробка, кг"
+    },
+    "library.category.ART": {
+      "en": "Art",
+      "uz": "Sanʼat",
+      "ru": "Искусство"
+    },
+    "library.category.BIOGRAPHY": {
+      "en": "Biography",
+      "uz": "Biografiya",
+      "ru": "Биография"
+    },
+    "library.category.BUSINESS": {
+      "en": "Business",
+      "uz": "Biznes",
+      "ru": "Бизнес"
+    },
+    "library.category.EDUCATIONAL": {
+      "en": "Educational",
+      "uz": "Taʼlimiy",
+      "ru": "Учебная"
+    },
+    "library.category.FICTION": {
+      "en": "Fiction",
+      "uz": "Badiiy adabiyot",
+      "ru": "Художественная"
+    },
+    "library.category.HISTORY": {
+      "en": "History",
+      "uz": "Tarix",
+      "ru": "История"
+    },
+    "library.category.NON_FICTION": {
+      "en": "Non-fiction",
+      "uz": "Nobadiiy adabiyot",
+      "ru": "Нон-фикшн"
+    },
+    "library.category.OTHER": {
+      "en": "Other",
+      "uz": "Boshqa",
+      "ru": "Другое"
+    },
+    "library.category.REFERENCE": {
+      "en": "Reference",
+      "uz": "Maʼlumotnoma",
+      "ru": "Справочная"
+    },
+    "library.category.SCIENCE": {
+      "en": "Science",
+      "uz": "Fan",
+      "ru": "Наука"
+    },
+    "library.category.TECHNOLOGY": {
+      "en": "Technology",
+      "uz": "Texnologiya",
+      "ru": "Технологии"
+    },
+    "library.emptyMessage": {
+      "en": "Create your first book to get started",
+      "uz": "Boshlash uchun birinchi kitobni yarating",
+      "ru": "Добавьте первую книгу, чтобы начать"
+    },
+    "library.form.coverImage": {
+      "en": "Cover Image URL",
+      "uz": "Muqova rasm manzili",
+      "ru": "URL обложки"
+    },
+    "library.form.coverPlaceholder": {
+      "en": "https://example.com/cover.jpg",
+      "uz": "https://example.com/cover.jpg",
+      "ru": "https://example.com/cover.jpg"
+    },
+    "library.form.language": {
+      "en": "Language",
+      "uz": "Til",
+      "ru": "Язык"
+    },
+    "library.form.languagePlaceholder": {
+      "en": "e.g., English",
+      "uz": "masalan, ingliz tili",
+      "ru": "напр., английский"
+    },
+    "library.pageDescription": {
+      "en": "Manage books and borrowing",
+      "uz": "Kitoblar va qarzga olishni boshqarish",
+      "ru": "Управление книгами и выдачей"
+    },
+    "resourceBooking.add": {
+      "en": "New booking",
+      "uz": "Yangi band qilish",
+      "ru": "Новое бронирование"
+    },
+    "resourceBooking.allStatuses": {
+      "en": "All statuses",
+      "uz": "Barcha holatlar",
+      "ru": "Все статусы"
+    },
+    "resourceBooking.attendees": {
+      "en": "{n} attendees",
+      "uz": "{n} nafar ishtirokchi",
+      "ru": "Участников: {n}"
+    },
+    "resourceBooking.attendeesPlaceholder": {
+      "en": "e.g. 12",
+      "uz": "masalan: 12",
+      "ru": "напр. 12"
+    },
+    "resourceBooking.capacity": {
+      "en": "Capacity {n}",
+      "uz": "Sigʻim {n}",
+      "ru": "Вместимость {n}"
+    },
+    "resourceBooking.chooseResource": {
+      "en": "Choose a resource…",
+      "uz": "Resursni tanlang…",
+      "ru": "Выберите ресурс…"
+    },
+    "resourceBooking.createSubmit": {
+      "en": "Create booking",
+      "uz": "Band qilishni yaratish",
+      "ru": "Создать бронирование"
+    },
+    "resourceBooking.created": {
+      "en": "Booking created",
+      "uz": "Band qilish yaratildi",
+      "ru": "Бронирование создано"
+    },
+    "resourceBooking.creating": {
+      "en": "Creating…",
+      "uz": "Yaratilmoqda…",
+      "ru": "Создание…"
+    },
+    "resourceBooking.empty": {
+      "en": "No bookings yet",
+      "uz": "Hali band qilishlar yoʻq",
+      "ru": "Бронирований пока нет"
+    },
+    "resourceBooking.emptyFiltered": {
+      "en": "No bookings with this status",
+      "uz": "Bu holatdagi band qilishlar yoʻq",
+      "ru": "Бронирований с этим статусом нет"
+    },
+    "resourceBooking.emptyFilteredMessage": {
+      "en": "Try a different status filter.",
+      "uz": "Boshqa holat filtrini sinab koʻring.",
+      "ru": "Попробуйте другой фильтр статуса."
+    },
+    "resourceBooking.emptyMessage": {
+      "en": "Schedule a room or piece of equipment to see it here.",
+      "uz": "Shu yerda koʻrish uchun xona yoki jihozni jadvalga qoʻying.",
+      "ru": "Запланируйте комнату или оборудование, чтобы увидеть это здесь."
+    },
+    "resourceBooking.emptyResources": {
+      "en": "No active resources",
+      "uz": "Faol resurslar yoʻq",
+      "ru": "Активных ресурсов нет"
+    },
+    "resourceBooking.emptyResourcesMessage": {
+      "en": "Add rooms, projectors, and other shared equipment in the Resources API to see them here.",
+      "uz": "Shu yerda koʻrish uchun xonalar, proektorlar va boshqa umumiy jihozlarni Resurslar API orqali qoʻshing.",
+      "ru": "Добавьте комнаты, проекторы и другое общее оборудование через API ресурсов, чтобы увидеть их здесь."
+    },
+    "resourceBooking.field.attendees": {
+      "en": "Attendees",
+      "uz": "Ishtirokchilar",
+      "ru": "Участники"
+    },
+    "resourceBooking.field.description": {
+      "en": "Description",
+      "uz": "Tavsif",
+      "ru": "Описание"
+    },
+    "resourceBooking.field.ends": {
+      "en": "Ends",
+      "uz": "Tugash",
+      "ru": "Окончание"
+    },
+    "resourceBooking.field.resource": {
+      "en": "Resource",
+      "uz": "Resurs",
+      "ru": "Ресурс"
+    },
+    "resourceBooking.field.starts": {
+      "en": "Starts",
+      "uz": "Boshlanish",
+      "ru": "Начало"
+    },
+    "resourceBooking.field.title": {
+      "en": "Title",
+      "uz": "Sarlavha",
+      "ru": "Название"
+    },
+    "resourceBooking.filterByStatus": {
+      "en": "Filter by status",
+      "uz": "Holat boʻyicha filtrlash",
+      "ru": "Фильтр по статусу"
+    },
+    "resourceBooking.loadFailed": {
+      "en": "Failed to load bookings",
+      "uz": "Band qilishlarni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить бронирования"
+    },
+    "resourceBooking.loadFailedResources": {
+      "en": "Failed to load resources",
+      "uz": "Resurslarni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить ресурсы"
+    },
+    "resourceBooking.loading": {
+      "en": "Loading bookings…",
+      "uz": "Band qilishlar yuklanmoqda…",
+      "ru": "Загрузка бронирований…"
+    },
+    "resourceBooking.loadingResources": {
+      "en": "Loading resources…",
+      "uz": "Resurslar yuklanmoqda…",
+      "ru": "Загрузка ресурсов…"
+    },
+    "resourceBooking.pageSubtitle": {
+      "en": "Rooms, equipment, vehicles — every shared resource in one place",
+      "uz": "Xonalar, jihozlar, transport — barcha umumiy resurslar bitta joyda",
+      "ru": "Комнаты, оборудование, транспорт — все общие ресурсы в одном месте"
+    },
+    "resourceBooking.status.CANCELLED": {
+      "en": "Cancelled",
+      "uz": "Bekor qilingan",
+      "ru": "Отменено"
+    },
+    "resourceBooking.status.COMPLETED": {
+      "en": "Completed",
+      "uz": "Yakunlangan",
+      "ru": "Завершено"
+    },
+    "resourceBooking.status.CONFIRMED": {
+      "en": "Confirmed",
+      "uz": "Tasdiqlangan",
+      "ru": "Подтверждено"
+    },
+    "resourceBooking.status.PENDING": {
+      "en": "Pending",
+      "uz": "Kutilmoqda",
+      "ru": "Ожидает"
+    },
+    "resourceBooking.tab.bookings": {
+      "en": "Bookings",
+      "uz": "Band qilishlar",
+      "ru": "Бронирования"
+    },
+    "resourceBooking.tab.resources": {
+      "en": "Resources",
+      "uz": "Resurslar",
+      "ru": "Ресурсы"
+    },
+    "resourceBooking.titlePlaceholder": {
+      "en": "e.g. IELTS mock exam — Room 2",
+      "uz": "masalan: IELTS sinov imtihoni — 2-xona",
+      "ru": "напр. Пробный IELTS — Комната 2"
+    },
+    "resourceBooking.type.EQUIPMENT": {
+      "en": "Equipment",
+      "uz": "Jihoz",
+      "ru": "Оборудование"
+    },
+    "resourceBooking.type.OTHER": {
+      "en": "Other",
+      "uz": "Boshqa",
+      "ru": "Другое"
+    },
+    "resourceBooking.type.ROOM": {
+      "en": "Room",
+      "uz": "Xona",
+      "ru": "Комната"
+    },
+    "resourceBooking.type.VEHICLE": {
+      "en": "Vehicle",
+      "uz": "Transport",
+      "ru": "Транспорт"
+    },
+    "resourceBooking.validation.endAfterStart": {
+      "en": "End time must be after the start time.",
+      "uz": "Tugash vaqti boshlanish vaqtidan keyin boʻlishi kerak.",
+      "ru": "Время окончания должно быть позже времени начала."
+    },
+    "resourceBooking.validation.resourceRequired": {
+      "en": "Please choose a resource.",
+      "uz": "Iltimos, resursni tanlang.",
+      "ru": "Пожалуйста, выберите ресурс."
+    },
+    "resourceBooking.validation.timesInvalid": {
+      "en": "Start and end must be valid dates.",
+      "uz": "Boshlanish va tugash haqiqiy sanalar boʻlishi kerak.",
+      "ru": "Начало и окончание должны быть корректными датами."
+    },
+    "resourceBooking.validation.timesRequired": {
+      "en": "Start and end times are required.",
+      "uz": "Boshlanish va tugash vaqtlari majburiy.",
+      "ru": "Время начала и окончания обязательны."
+    }
+  }
+}

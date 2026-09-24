@@ -197,9 +197,14 @@ export class RealLivenessChecker {
 
     const sharp = (await import('sharp')).default;
     const { boundingBox } = input.face;
-    const metadata = await sharp(input.imageBuffer).metadata();
-    const srcW = metadata.width || 0;
-    const srcH = metadata.height || 0;
+    // Oriented dimensions: the detector auto-applies EXIF rotation, so bbox
+    // coordinates are in the rotated frame. metadata() returns pre-rotation
+    // size — swap W/H for orientations that transpose axes.
+    const rawMeta = await sharp(input.imageBuffer).metadata();
+    const orientation = rawMeta.orientation ?? 1;
+    const swapsAxes = orientation >= 5 && orientation <= 8;
+    const srcW = (swapsAxes ? rawMeta.height : rawMeta.width) || 0;
+    const srcH = (swapsAxes ? rawMeta.width : rawMeta.height) || 0;
 
     if (srcW === 0 || srcH === 0) {
       return {
@@ -218,6 +223,7 @@ export class RealLivenessChecker {
     );
 
     const { data } = await sharp(input.imageBuffer)
+      .rotate()
       .extract({
         left: cropX,
         top: cropY,

@@ -13,7 +13,7 @@ export class AuditService {
    * Maps the existing `AuditLog` model to a richer `SystemAuditEventDto` shape.
    */
   async findAll(organizationId: string, query: AuditQuery) {
-    const { page, limit, skip } = parsePagination(query as any, { limit: 20, maxLimit: 100 });
+    const { page, limit, skip } = parsePagination(query, { limit: 20, maxLimit: 100 });
 
     const where: Prisma.AuditLogWhereInput = { organizationId };
 
@@ -184,7 +184,7 @@ export class AuditService {
         action: params.action,
         resource: params.resource,
         resourceId: params.resourceId ?? null,
-        changes: (params.changes as any) ?? Prisma.JsonNull,
+        changes: (params.changes as unknown as Prisma.InputJsonValue) ?? Prisma.JsonNull,
         ipAddress: params.ipAddress ?? null,
         userAgent: params.userAgent ?? null,
         method: params.method ?? null,

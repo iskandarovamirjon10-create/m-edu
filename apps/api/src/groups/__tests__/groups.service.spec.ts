@@ -16,13 +16,13 @@ function createMockPrisma() {
 }
 
 describe('GroupsService cross-tenant reference guards', () => {
-  let prisma: any;
+  let prisma: ReturnType<typeof createMockPrisma>;
   let svc: GroupsService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new GroupsService(prisma);
+    svc = new GroupsService(prisma as unknown as ConstructorParameters<typeof GroupsService>[0]);
   });
 
   it('rejects creating a group referencing a course from another organization', async () => {

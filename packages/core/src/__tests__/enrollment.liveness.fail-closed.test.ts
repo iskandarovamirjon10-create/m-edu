@@ -27,6 +27,10 @@ function makeService(overrides: { livenessDecision?: string; acceptUncertain?: b
     findByStudentId: vi.fn().mockResolvedValue(null),
     create: vi.fn().mockResolvedValue({ id: 'env-1', status: 'PENDING', studentId: 's-1', organizationId: 'org-1', enrolledBy: 'user-1', enrolledAt: new Date(), activatedAt: null, revokedAt: null, revokedBy: null, revocationReason: null, metadata: null, createdAt: new Date(), updatedAt: new Date() }),
     addTemplate: vi.fn().mockResolvedValue({ id: 'tpl-1' }),
+    addTemplateAndActivate: vi.fn().mockResolvedValue({
+      template: { id: 'tpl-1' },
+      enrollment: { id: 'env-1', status: 'ACTIVE' },
+    }),
     updateStatus: vi.fn().mockResolvedValue(undefined),
     revokeTemplates: vi.fn().mockResolvedValue(undefined),
     streamActiveTemplates: vi.fn().mockReturnValue((async function* () { yield []; })()),

@@ -15,11 +15,13 @@ import {
   GlassTR,
   GlassTH,
   GlassTD,
+  GlassButton,
 } from '@/components/ui';
 import { fullName, formatDate, formatTime } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Group, GroupSchedule } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface GroupMember {
   student: {
@@ -35,7 +37,7 @@ interface GroupMember {
 }
 
 function formatDayOfWeek(day: string): string {
-  return day.charAt(0).toUpperCase() + day.slice(1).toLowerCase();
+  return `schedule.day.${day.toUpperCase()}`;
 }
 
 function formatCapacity(current: number, max?: number | null): string {
@@ -45,8 +47,8 @@ function formatCapacity(current: number, max?: number | null): string {
 
 function getGroupStatusBadge(isActive: boolean): { variant: 'success' | 'muted'; label: string } {
   return isActive
-    ? { variant: 'success', label: 'Active' }
-    : { variant: 'muted', label: 'Inactive' };
+    ? { variant: 'success', label: 'enum.status.ACTIVE' }
+    : { variant: 'muted', label: 'enum.status.INACTIVE' };
 }
 
 function formatScheduleTime(time: string): string {
@@ -58,7 +60,8 @@ function getScheduleRoom(schedule: GroupSchedule, groupRoom?: string | null): st
 }
 
 export function GroupDetailPage() {
-  usePageTitle('Group Details');
+  const { t } = useI18n();
+  usePageTitle(t('groups.detailsTitle'));
   const { id } = useParams<{ id: string }>();
 
   const group = useQuery({
@@ -90,15 +93,14 @@ export function GroupDetailPage() {
   // Early return for loading state
   if (group.isLoading && !groupData) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
-          <GlassPageHeader title="Group" subtitle="Loading group details…" />
+          <GlassPageHeader
+            title={t('enum.badge.GROUP')}
+            subtitle={t('groupDetail.loadingSubtitle')}
+          />
           <GlassCard className="p-8">
-            <GlassPageLoader label="Loading group…" />
+            <GlassPageLoader label={t('groups.loadingGroup')} />
           </GlassCard>
         </div>
       </div>
@@ -108,16 +110,15 @@ export function GroupDetailPage() {
   // Early return for error state
   if (group.isError || !groupData) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
-          <GlassPageHeader title="Group" subtitle="Group details" />
+          <GlassPageHeader
+            title={t('enum.badge.GROUP')}
+            subtitle={t('groups.detailsSubtitle')}
+          />
           <GlassCard className="p-8">
             <GlassErrorState
-              title="Group not found"
+              title={t('groups.notFound')}
               message={getErrorMessage(group.error as Error)}
               onRetry={handleRetry}
             />
@@ -136,22 +137,19 @@ export function GroupDetailPage() {
     : '—';
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
       <div className="page-container">
         <GlassPageHeader
           title={groupData.name}
-          subtitle={`${groupData.course?.name || 'Course'} · ${groupData.room || 'No room'}`}
+          subtitle={`${groupData.course?.name || t('enum.badge.COURSE')} · ${
+            groupData.room || t('groupDetail.noRoom')
+          }`}
           actions={
-            <Link
-              to={`/groups/${groupData.id}/edit`}
-              className="glass-btn glass-btn-secondary"
-            >
-              Edit group
-            </Link>
+            <GlassButton asChild variant="secondary">
+              <Link to={`/groups/${groupData.id}/edit`}>
+                {t('groupForm.editTitle')}
+              </Link>
+            </GlassButton>
           }
         />
 
@@ -159,39 +157,51 @@ export function GroupDetailPage() {
           {/* Group details */}
           <GlassCard className="overflow-hidden">
             <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Details</h2>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {t('groupDetail.details')}
+              </h2>
             </div>
             <div className="p-5">
               <dl className="space-y-4">
                 <div className="flex items-start justify-between">
-                  <dt className="text-sm" style={{ color: 'var(--text-secondary)' }}>Teacher</dt>
+                  <dt className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    {t('groups.form.teacher')}
+                  </dt>
                   <dd className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                     {teacherName}
                   </dd>
                 </div>
                 <div className="flex items-start justify-between">
-                  <dt className="text-sm" style={{ color: 'var(--text-secondary)' }}>Capacity</dt>
+                  <dt className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    {t('groups.form.capacity')}
+                  </dt>
                   <dd className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                     {formatCapacity(members.length, groupData.capacity)}
                   </dd>
                 </div>
                 <div className="flex items-start justify-between">
-                  <dt className="text-sm" style={{ color: 'var(--text-secondary)' }}>Start date</dt>
+                  <dt className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    {t('groups.form.startDate')}
+                  </dt>
                   <dd className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                     {formatDate(groupData.startDate)}
                   </dd>
                 </div>
                 <div className="flex items-start justify-between">
-                  <dt className="text-sm" style={{ color: 'var(--text-secondary)' }}>End date</dt>
+                  <dt className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    {t('groupForm.endDate')}
+                  </dt>
                   <dd className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                     {formatDate(groupData.endDate)}
                   </dd>
                 </div>
                 <div className="flex items-start justify-between">
-                  <dt className="text-sm" style={{ color: 'var(--text-secondary)' }}>Status</dt>
+                  <dt className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    {t('groups.col.status')}
+                  </dt>
                   <dd>
                     <GlassBadge variant={statusBadge.variant}>
-                      {statusBadge.label}
+                      {t(statusBadge.label)}
                     </GlassBadge>
                   </dd>
                 </div>
@@ -203,23 +213,23 @@ export function GroupDetailPage() {
           <GlassCard className="overflow-hidden lg:col-span-2">
             <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                Members ({members.length})
+                {t('groupDetail.members', { count: members.length })}
               </h2>
             </div>
 
             {members.length === 0 ? (
               <GlassEmptyState
-                title="No members"
-                message="Assign students to this group to see them here."
+                title={t('groupDetail.noMembers')}
+                message={t('groupDetail.noMembersHint')}
               />
             ) : (
               <div className="glass-table-wrap">
                 <GlassTable>
                   <GlassTHead>
                     <GlassTR>
-                      <GlassTH>Student</GlassTH>
-                      <GlassTH>Email</GlassTH>
-                      <GlassTH>Joined</GlassTH>
+                      <GlassTH>{t('attendance.col.student')}</GlassTH>
+                      <GlassTH>{t('common.email')}</GlassTH>
+                      <GlassTH>{t('groupDetail.joined')}</GlassTH>
                     </GlassTR>
                   </GlassTHead>
                   <GlassTBody>
@@ -254,17 +264,17 @@ export function GroupDetailPage() {
           <GlassCard className="overflow-hidden">
             <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                Schedule
+                {t('nav.schedule')}
               </h2>
             </div>
             <div className="glass-table-wrap">
               <GlassTable>
                 <GlassTHead>
                   <GlassTR>
-                    <GlassTH>Day</GlassTH>
-                    <GlassTH>Start</GlassTH>
-                    <GlassTH>End</GlassTH>
-                    <GlassTH>Room</GlassTH>
+                    <GlassTH>{t('schedule.col.day')}</GlassTH>
+                    <GlassTH>{t('schedule.col.start')}</GlassTH>
+                    <GlassTH>{t('schedule.col.end')}</GlassTH>
+                    <GlassTH>{t('groups.col.room')}</GlassTH>
                   </GlassTR>
                 </GlassTHead>
                 <GlassTBody>
@@ -274,7 +284,7 @@ export function GroupDetailPage() {
                       className="transition-colors"
                     >
                       <GlassTD className="capitalize">
-                        {formatDayOfWeek(schedule.dayOfWeek)}
+                        {t(formatDayOfWeek(schedule.dayOfWeek))}
                       </GlassTD>
                       <GlassTD className="whitespace-nowrap">
                         {formatScheduleTime(schedule.startTime)}

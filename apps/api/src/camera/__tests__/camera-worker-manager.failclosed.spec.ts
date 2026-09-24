@@ -121,7 +121,16 @@ describe('CameraWorkerManagerService — fail-closed face engine policy', () => 
         manager.onModuleInit(),
       ).resolves.toBeUndefined();
 
-      expect(warnSpy).toHaveBeenCalledTimes(1);
+      // Scoped to the face-engine warning on purpose: `onModuleInit` also
+      // initialises Redis-backed camera coordination, whose unavailability is
+      // reported asynchronously — counting every `warn` call would make this
+      // assertion depend on connection timing rather than on the policy under
+      // test.
+      const faceEngineWarnings = warnSpy.mock.calls.filter(
+        ([message]) => message === 'Face engine initialization failed in development',
+      );
+
+      expect(faceEngineWarnings).toHaveLength(1);
 
       expect(warnSpy).toHaveBeenCalledWith(
         'Face engine initialization failed in development',

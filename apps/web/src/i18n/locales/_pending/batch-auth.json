@@ -1,0 +1,586 @@
+{
+  "pages": [
+    "Login.tsx",
+    "Register.tsx",
+    "ForgotPassword.tsx",
+    "ResetPassword.tsx",
+    "AuthCallback.tsx",
+    "NotFound.tsx",
+    "Terms.tsx",
+    "Privacy.tsx",
+    "Unauthorized.tsx",
+    "WhatChanged.tsx"
+  ],
+  "keys": {
+    "auth.emailAddress": {
+      "en": "Email address",
+      "uz": "Email manzil",
+      "ru": "Адрес электронной почты"
+    },
+    "auth.confirmPassword": {
+      "en": "Confirm password",
+      "uz": "Parolni tasdiqlang",
+      "ru": "Подтвердите пароль"
+    },
+    "auth.passwordsDoNotMatch": {
+      "en": "Passwords do not match",
+      "uz": "Parollar mos kelmaydi",
+      "ru": "Пароли не совпадают"
+    },
+    "auth.backToSignIn": {
+      "en": "Back to sign in",
+      "uz": "Kirish sahifasiga qaytish",
+      "ru": "Назад ко входу"
+    },
+    "auth.showPassword": {
+      "en": "Show password",
+      "uz": "Parolni koʻrsatish",
+      "ru": "Показать пароль"
+    },
+    "auth.hidePassword": {
+      "en": "Hide password",
+      "uz": "Parolni yashirish",
+      "ru": "Скрыть пароль"
+    },
+    "login.heading": {
+      "en": "Sign in to M‑EDU",
+      "uz": "M‑EDU tizimiga kiring",
+      "ru": "Вход в M‑EDU"
+    },
+    "login.subtitle": {
+      "en": "Your education workspace, in one place.",
+      "uz": "Taʼlim maydonchangiz — bitta joyda.",
+      "ru": "Ваше образовательное пространство — в одном месте."
+    },
+    "login.wrongEmailOrPassword": {
+      "en": "That email or password isn't right. Please try again.",
+      "uz": "Email yoki parol notoʻgʻri. Iltimos, qayta urinib koʻring.",
+      "ru": "Неверный email или пароль. Попробуйте ещё раз."
+    },
+    "login.offline": {
+      "en": "You appear to be offline. Check your connection.",
+      "uz": "Internetga ulanmagan koʻrinasiz. Ulanishingizni tekshiring.",
+      "ru": "Похоже, вы офлайн. Проверьте подключение."
+    },
+    "login.checkDetails": {
+      "en": "Please check the details you entered.",
+      "uz": "Iltimos, kiritgan maʼlumotlaringizni tekshiring.",
+      "ru": "Пожалуйста, проверьте введённые данные."
+    },
+    "login.noAccess": {
+      "en": "This account doesn't have access.",
+      "uz": "Bu hisobga kirish huquqi yoʻq.",
+      "ru": "У этой учётной записи нет доступа."
+    },
+    "login.genericError": {
+      "en": "Something went wrong. Please try again.",
+      "uz": "Nimadir xato boʻldi. Iltimos, qayta urinib koʻring.",
+      "ru": "Что-то пошло не так. Попробуйте ещё раз."
+    },
+    "login.capsLock": {
+      "en": "Caps Lock is on.",
+      "uz": "Caps Lock yoqilgan.",
+      "ru": "Caps Lock включён."
+    },
+    "login.signedIn": {
+      "en": "Signed in",
+      "uz": "Kirildi",
+      "ru": "Вход выполнен"
+    },
+    "login.continue": {
+      "en": "Continue",
+      "uz": "Davom etish",
+      "ru": "Продолжить"
+    },
+    "login.or": {
+      "en": "or",
+      "uz": "yoki",
+      "ru": "или"
+    },
+    "login.redirectingGoogle": {
+      "en": "Redirecting to Google…",
+      "uz": "Googleʼga yoʻnaltirilmoqda…",
+      "ru": "Перенаправление в Google…"
+    },
+    "login.continueWithGoogle": {
+      "en": "Continue with Google",
+      "uz": "Google orqali davom etish",
+      "ru": "Продолжить с Google"
+    },
+    "login.newTo": {
+      "en": "New to M‑EDU?",
+      "uz": "M‑EDU tizimida yangimisiz?",
+      "ru": "Впервые в M‑EDU?"
+    },
+    "login.createAccount": {
+      "en": "Create an account",
+      "uz": "Hisob yaratish",
+      "ru": "Создать аккаунт"
+    },
+    "login.agreeTo": {
+      "en": "By continuing you agree to our",
+      "uz": "Davom etish orqali siz bizning",
+      "ru": "Продолжая, вы соглашаетесь с"
+    },
+    "login.terms": {
+      "en": "Terms",
+      "uz": "shartlarimizga",
+      "ru": "условиями"
+    },
+    "login.and": {
+      "en": "and",
+      "uz": "va",
+      "ru": "и"
+    },
+    "login.privacy": {
+      "en": "Privacy Policy",
+      "uz": "maxfiylik siyosatiga rozilik bildirasiz",
+      "ru": "политикой конфиденциальности"
+    },
+    "register.title": {
+      "en": "Create your account",
+      "uz": "Hisobingizni yarating",
+      "ru": "Создайте учётную запись"
+    },
+    "register.subtitle": {
+      "en": "Set up your education center in minutes",
+      "uz": "Taʼlim markazingizni bir necha daqiqada sozlang",
+      "ru": "Настройте образовательный центр за считанные минуты"
+    },
+    "register.passwordUppercase": {
+      "en": "Password must contain at least one uppercase letter.",
+      "uz": "Parolda kamida bitta katta harf boʻlishi kerak.",
+      "ru": "Пароль должен содержать хотя бы одну заглавную букву."
+    },
+    "register.passwordNumber": {
+      "en": "Password must contain at least one number.",
+      "uz": "Parolda kamida bitta raqam boʻlishi kerak.",
+      "ru": "Пароль должен содержать хотя бы одну цифру."
+    },
+    "register.emailInvalid": {
+      "en": "Please enter a valid email address",
+      "uz": "Iltimos, toʻgʻri email manzil kiriting",
+      "ru": "Пожалуйста, введите корректный email"
+    },
+    "register.organizationRequired": {
+      "en": "Organization name is required",
+      "uz": "Tashkilot nomi majburiy",
+      "ru": "Название организации обязательно"
+    },
+    "register.failed": {
+      "en": "Registration failed. Please try again.",
+      "uz": "Roʻyxatdan oʻtish amalga oshmadi. Iltimos, qayta urinib koʻring.",
+      "ru": "Регистрация не удалась. Попробуйте ещё раз."
+    },
+    "register.firstNamePlaceholder": {
+      "en": "John",
+      "uz": "Ali",
+      "ru": "Иван"
+    },
+    "register.lastNamePlaceholder": {
+      "en": "Doe",
+      "uz": "Karimov",
+      "ru": "Петров"
+    },
+    "register.organizationPlaceholder": {
+      "en": "Bright Future Academy",
+      "uz": "Yorqin Kelajak Akademiyasi",
+      "ru": "Академия «Яркое Будущее»"
+    },
+    "register.passwordHint": {
+      "en": "At least 8 characters with uppercase and number.",
+      "uz": "Kamida 8 ta belgi, katta harf va raqam bilan.",
+      "ru": "Не менее 8 символов, с заглавной буквой и цифрой."
+    },
+    "register.organizationHint": {
+      "en": "The name of your education center.",
+      "uz": "Taʼlim markazingizning nomi.",
+      "ru": "Название вашего образовательного центра."
+    },
+    "register.creating": {
+      "en": "Creating account…",
+      "uz": "Hisob yaratilmoqda…",
+      "ru": "Создание аккаунта…"
+    },
+    "register.createAccount": {
+      "en": "Create account",
+      "uz": "Hisob yaratish",
+      "ru": "Создать аккаунт"
+    },
+    "register.haveAccount": {
+      "en": "Already have an account?",
+      "uz": "Hisobingiz bormi?",
+      "ru": "Уже есть аккаунт?"
+    },
+    "forgotPassword.heading": {
+      "en": "Reset your password",
+      "uz": "Parolingizni tiklang",
+      "ru": "Сбросьте пароль"
+    },
+    "forgotPassword.subtitle": {
+      "en": "Enter your email and we'll send you a link to reset your password.",
+      "uz": "Email manzilingizni kiriting, biz sizga parolni tiklash havolasini yuboramiz.",
+      "ru": "Введите email, и мы отправим вам ссылку для сброса пароля."
+    },
+    "forgotPassword.success": {
+      "en": "If an account with that email exists, a reset link has been sent. Check your inbox.",
+      "uz": "Agar bu emailga tegishli hisob boʻlsa, tiklash havolasi yuborildi. Pochta qutingizni tekshiring.",
+      "ru": "Если аккаунт с таким email существует, ссылка для сброса отправлена. Проверьте почту."
+    },
+    "forgotPassword.sending": {
+      "en": "Sending…",
+      "uz": "Yuborilmoqda…",
+      "ru": "Отправка…"
+    },
+    "forgotPassword.submit": {
+      "en": "Send reset link",
+      "uz": "Tiklash havolasini yuborish",
+      "ru": "Отправить ссылку для сброса"
+    },
+    "resetPassword.heading": {
+      "en": "Set a new password",
+      "uz": "Yangi parol oʻrnating",
+      "ru": "Установите новый пароль"
+    },
+    "resetPassword.linkValid": {
+      "en": "Your reset link is valid for 1 hour.",
+      "uz": "Tiklash havolasi 1 soat davomida amal qiladi.",
+      "ru": "Ссылка для сброса действует 1 час."
+    },
+    "resetPassword.invalidToken": {
+      "en": "Invalid or missing reset token. Please request a new password reset link.",
+      "uz": "Tiklash tokeni yaroqsiz yoki yoʻq. Iltimos, yangi parol tiklash havolasini soʻrang.",
+      "ru": "Недействительный или отсутствующий токен сброса. Запросите новую ссылку для сброса пароля."
+    },
+    "resetPassword.requestNewLink": {
+      "en": "Request new link",
+      "uz": "Yangi havola soʻrash",
+      "ru": "Запросить новую ссылку"
+    },
+    "resetPassword.success": {
+      "en": "Your password has been reset. Please sign in with your new password.",
+      "uz": "Parolingiz tiklandi. Iltimos, yangi parol bilan kiring.",
+      "ru": "Пароль был сброшен. Войдите с новым паролем."
+    },
+    "resetPassword.resetting": {
+      "en": "Resetting…",
+      "uz": "Tiklanmoqda…",
+      "ru": "Сброс пароля…"
+    },
+    "resetPassword.submit": {
+      "en": "Reset password",
+      "uz": "Parolni tiklash",
+      "ru": "Сбросить пароль"
+    },
+    "authCallback.pageTitle": {
+      "en": "Signing In",
+      "uz": "Kirish",
+      "ru": "Вход"
+    },
+    "authCallback.completing": {
+      "en": "Completing sign-in…",
+      "uz": "Kirish yakunlanmoqda…",
+      "ru": "Завершение входа…"
+    },
+    "authCallback.processing": {
+      "en": "Please wait while we finish authenticating you…",
+      "uz": "Iltimos, autentifikatsiya tugaguncha kuting…",
+      "ru": "Пожалуйста, подождите, пока мы завершим проверку…"
+    },
+    "authCallback.success": {
+      "en": "Sign-in successful! Redirecting…",
+      "uz": "Muvaffaqiyatli kirdingiz! Yoʻnaltirilmoqda…",
+      "ru": "Вход выполнен! Перенаправление…"
+    },
+    "authCallback.errorRetrieval": {
+      "en": "Unable to complete sign-in. Your account information could not be retrieved. Please try again.",
+      "uz": "Kirishni yakunlab boʻlmadi. Hisob maʼlumotlarini olib boʻlmadi. Iltimos, qayta urinib koʻring.",
+      "ru": "Не удалось завершить вход. Не удалось получить данные учётной записи. Попробуйте ещё раз."
+    },
+    "authCallback.errorExpired": {
+      "en": "Unable to complete sign-in. The authorization code may have expired. Please try again.",
+      "uz": "Kirishni yakunlab boʻlmadi. Autorizatsiya kodi muddati tugagan boʻlishi mumkin. Iltimos, qayta urinib koʻring.",
+      "ru": "Не удалось завершить вход. Код авторизации, возможно, истёк. Попробуйте ещё раз."
+    },
+    "authCallback.errorMissingCode": {
+      "en": "Missing authorization code. Please try signing in again.",
+      "uz": "Autorizatsiya kodi topilmadi. Iltimos, qaytadan kirishga urinib koʻring.",
+      "ru": "Код авторизации отсутствует. Попробуйте войти снова."
+    },
+    "authCallback.oauthError": {
+      "en": "Unable to complete sign-in. Please try again.",
+      "uz": "Kirishni yakunlab boʻlmadi. Iltimos, qayta urinib koʻring.",
+      "ru": "Не удалось завершить вход. Попробуйте ещё раз."
+    },
+    "authCallback.failedTitle": {
+      "en": "Sign-in failed",
+      "uz": "Kirish amalga oshmadi",
+      "ru": "Не удалось войти"
+    },
+    "notFound.heading": {
+      "en": "Page not found",
+      "uz": "Sahifa topilmadi",
+      "ru": "Страница не найдена"
+    },
+    "notFound.description": {
+      "en": "The page you're looking for doesn't exist or may have been moved. Check the address, or head back to your dashboard to continue.",
+      "uz": "Siz izlayotgan sahifa mavjud emas yoki koʻchirilgan boʻlishi mumkin. Manzilni tekshiring yoki davom etish uchun boshqaruv paneliga qayting.",
+      "ru": "Страница, которую вы ищете, не существует или была перемещена. Проверьте адрес или вернитесь на панель управления."
+    },
+    "notFound.backToDashboard": {
+      "en": "Back to dashboard",
+      "uz": "Boshqaruv paneliga qaytish",
+      "ru": "Назад к панели управления"
+    },
+    "notFound.goHome": {
+      "en": "Go home",
+      "uz": "Bosh sahifaga oʻtish",
+      "ru": "На главную"
+    },
+    "unauthorized.heading": {
+      "en": "Access Restricted",
+      "uz": "Kirish cheklangan",
+      "ru": "Доступ ограничен"
+    },
+    "unauthorized.description": {
+      "en": "You don't have the necessary clearance to view this area. Please contact an administrator.",
+      "uz": "Bu boʻlumni koʻrish uchun zarur ruxsatingiz yoʻq. Iltimos, administratorga murojaat qiling.",
+      "ru": "У вас нет необходимых прав для просмотра этого раздела. Обратитесь к администратору."
+    },
+    "unauthorized.goBack": {
+      "en": "Go Back",
+      "uz": "Orqaga qaytish",
+      "ru": "Назад"
+    },
+    "terms.intro": {
+      "en": "Welcome to M-EDU. These Terms of Service govern your use of the M-EDU education management platform, including all related websites, APIs, and services.",
+      "uz": "M-EDU ga xush kelibsiz. Ushbu Xizmat shartlari M-EDU taʼlim boshqaruv platformasidan, jumladan barcha tegishli veb-saytlar, API va xizmatlardan foydalanishingizni tartibga soladi.",
+      "ru": "Добро пожаловать в M-EDU. Эти Условия использования регулируют ваше использование платформы управления образованием M-EDU, включая все связанные веб-сайты, API и службы."
+    },
+    "terms.section1Title": {
+      "en": "1. Acceptance of Terms",
+      "uz": "1. Shartlarni qabul qilish",
+      "ru": "1. Принятие условий"
+    },
+    "terms.section1Body": {
+      "en": "By accessing or using M-EDU, you agree to be bound by these Terms. If you do not agree, do not use the service.",
+      "uz": "M-EDU ga kirish yoki undan foydalanish orqali siz ushbu Shartlarga rozilik bildirasiz. Agar rozilik bildirmasangiz, xizmatdan foydalanmang.",
+      "ru": "Используя или получая доступ к M-EDU, вы соглашаетесь соблюдать эти Условия. Если вы не согласны, не используйте сервис."
+    },
+    "terms.section2Title": {
+      "en": "2. Use of Service",
+      "uz": "2. Xizmatdan foydalanish",
+      "ru": "2. Использование сервиса"
+    },
+    "terms.section2Body": {
+      "en": "M-EDU provides education management tools for organizations, including student management, attendance tracking, grading, payments, and face recognition features. You may use the service only for lawful purposes and in accordance with these Terms.",
+      "uz": "M-EDU tashkilotlar uchun talabalar boshqaruvi, davomatni kuzatish, baholash, toʻlovlar va yuzni tanish funksiyalarini oʻz ichiga olgan taʼlim boshqaruv vositalarini taqdim etadi. Xizmatdan faqat qonuniy maqsadlarda va ushbu Shartlarga muvofiq foydalanishingiz mumkin.",
+      "ru": "M-EDU предоставляет организациям инструменты управления образованием, включая управление учениками, отслеживание посещаемости, оценки, платежи и функции распознавания лиц. Вы можете использовать сервис только в законных целях и в соответствии с настоящими Условиями."
+    },
+    "terms.section3Title": {
+      "en": "3. User Accounts",
+      "uz": "3. Foydalanuvchi hisoblari",
+      "ru": "3. Учётные записи пользователей"
+    },
+    "terms.section3Body": {
+      "en": "You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You must notify us immediately of any unauthorized use.",
+      "uz": "Hisobingiz maxfiyligini saqlash va hisobingiz ostidagi barcha faoliyat uchun siz javobgarsiz. Har qanday ruxsatsiz foydalanish haqida darhol xabar berishingiz kerak.",
+      "ru": "Вы несёте ответственность за конфиденциальность данных вашей учётной записи и за всю деятельность, происходящую под ней. Вы обязаны немедленно уведомить нас о любом несанкционированном использовании."
+    },
+    "terms.section4Title": {
+      "en": "4. Data",
+      "uz": "4. Maʼlumotlar",
+      "ru": "4. Данные"
+    },
+    "terms.section4Body": {
+      "en": "Your organization's data belongs to you. We process data on your behalf according to our Privacy Policy. We do not sell or share your data with third parties for marketing purposes.",
+      "uz": "Tashkilotingiz maʼlumotlari sizga tegishli. Biz maʼlumotlarni Maxfiylik siyosatimizga muvofiq sizning nomingizdan qayta ishlaymiz. Biz maʼlumotlaringizni uchinchi shaxslarga marketing maqsadlarida sotmaymiz yoki ulashmaymiz.",
+      "ru": "Данные вашей организации принадлежат вам. Мы обрабатываем данные от вашего имени в соответствии с нашей Политикой конфиденциальности. Мы не продаём и не передаём ваши данные третьим лицам в маркетинговых целях."
+    },
+    "terms.section5Title": {
+      "en": "5. Termination",
+      "uz": "5. Bekor qilish",
+      "ru": "5. Расторжение"
+    },
+    "terms.section5Body": {
+      "en": "Either party may terminate this agreement. Upon termination, your right to use the service ceases. We will provide data export upon request.",
+      "uz": "Istalgan tomon ushbu kelishuvni bekor qilishi mumkin. Bekor qilingandan soʻng xizmatdan foydalanish huquqingiz tugaydi. Soʻrov boʻyicha maʼlumotlarni eksport qilamiz.",
+      "ru": "Любая сторона может расторгнуть настоящее соглашение. После расторжения ваше право на использование сервиса прекращается. По запросу мы предоставим экспорт данных."
+    },
+    "terms.footer": {
+      "en": "Last updated: September 2026. These are placeholder terms for demonstration purposes. Consult a legal professional for production use.",
+      "uz": "Oxirgi yangilangan: Sentabr 2026. Ushbu shartlar namoyish uchun vaqtincha matn hisoblanadi. Ishlab chiqarishda foydalanish uchun huquq mutaxassisi bilan maslahatlashing.",
+      "ru": "Последнее обновление: сентябрь 2026. Это демонстрационные условия-заглушки. Для продакшена проконсультируйтесь с юристом."
+    },
+    "privacy.intro": {
+      "en": "This Privacy Policy describes how M-EDU collects, uses, and protects your personal information when you use our education management platform.",
+      "uz": "Ushbu Maxfiylik siyosati M-EDU taʼlim boshqaruv platformasidan foydalanayotganda shaxsiy maʼlumotlaringizni qanday yigʻishini, foydalanishini va himoya qilishini tavsiflaydi.",
+      "ru": "Настоящая Политика конфиденциальности описывает, как M-EDU собирает, использует и защищает вашу личную информацию при использовании нашей платформы управления образованием."
+    },
+    "privacy.section1Title": {
+      "en": "1. Information We Collect",
+      "uz": "1. Biz yigʻadigan maʼlumotlar",
+      "ru": "1. Какую информацию мы собираем"
+    },
+    "privacy.section1Body": {
+      "en": "We collect information you provide directly, including account registration details (name, email), student and teacher records managed by your organization, attendance data, grades, payment information, and face biometric templates when enrolled.",
+      "uz": "Biz toʻgʻridan-toʻgʻri taqdim etadigan maʼlumotlarni, jumladan hisobni roʻyxatdan oʻtkazish maʼlumotlari (ism, email), tashkilotingiz boshqaruvidagi oʻquvchi va oʻqituvchilar yozuvlari, davomat maʼlumotlari, baholar, toʻlov maʼlumotlari va roʻyxatdan oʻtgan paytda yuz biometrik shablonlarini yigʻamiz.",
+      "ru": "Мы собираем информацию, которую вы предоставляете напрямую, включая данные регистрации учётной записи (имя, email), записи учеников и преподавателей, управляемые вашей организацией, данные посещаемости, оценки, платёжную информацию и лицевые биометрические шаблоны при регистрации."
+    },
+    "privacy.section2Title": {
+      "en": "2. How We Use Information",
+      "uz": "2. Maʼlumotlardan qanday foydalanamiz",
+      "ru": "2. Как мы используем информацию"
+    },
+    "privacy.section2Body": {
+      "en": "We use your information to provide and improve the M-EDU service, process attendance via face recognition, generate reports and analytics, and communicate service-related notices.",
+      "uz": "Biz maʼlumotlaringizdan M-EDU xizmatini taqdim etish va yaxshilash, yuzni tanish orqali davomatni qayta ishlash, hisobotlar va tahlillar yaratish hamda xizmatga oid bildirishnomalarni yuborish uchun foydalanamiz.",
+      "ru": "Мы используем ваши данные для предоставления и улучшения сервиса M-EDU, обработки посещаемости с помощью распознавания лиц, создания отчётов и аналитики, а также для отправки уведомлений, связанных с сервисом."
+    },
+    "privacy.section3Title": {
+      "en": "3. Biometric Data",
+      "uz": "3. Biometrik maʼlumotlar",
+      "ru": "3. Биометрические данные"
+    },
+    "privacy.section3Body": {
+      "en": "Face recognition templates are encrypted at rest using AES-256-GCM and are only used for attendance verification within your organization. Biometric data is never shared with third parties or used for any purpose other than the stated attendance feature.",
+      "uz": "Yuzni tanish shablonlari AES-256-GCM yordamida saqlanish paytida shifrlanadi va faqat tashkilotingiz ichida davomatni tasdiqlash uchun ishlatiladi. Biometrik maʼlumotlar hech qachon uchinchi shaxslarga ulashilmaydi yoki aytilgan davomat funksiyasidan boshqa maqsadda ishlatilmaydi.",
+      "ru": "Шаблоны распознавания лиц шифруются при хранении с помощью AES-256-GCM и используются только для подтверждения посещаемости внутри вашей организации. Биометрические данные никогда не передаются третьим лицам и не используются ни для какой цели, кроме указанной функции посещаемости."
+    },
+    "privacy.section4Title": {
+      "en": "4. Data Security",
+      "uz": "4. Maʼlumotlar xavfsizligi",
+      "ru": "4. Безопасность данных"
+    },
+    "privacy.section4Body": {
+      "en": "We implement industry-standard security measures including encryption in transit (TLS) and at rest, role-based access control, rate limiting, and audit logging. No system is 100% secure, but we take reasonable measures to protect your data.",
+      "uz": "Biz uzatish (TLS) va saqlanish paytida shifrlash, rollarga asoslangan kirish nazorati, chastotani cheklash va audit jurnallashini oʻz ichiga olgan soha standartidagi xavfsizlik choralarni amalga oshiramiz. Hech qanday tizim 100% xavfsiz emas, ammo biz maʼlumotlaringizni himoya qilish uchun oqilona choralar koʻramiz.",
+      "ru": "Мы применяем отраслевые стандарты безопасности, включая шифрование при передаче (TLS) и хранении, контроль доступа на основе ролей, ограничение частоты запросов и журнал аудита. Ни одна система не является на 100% безопасной, но мы принимаем разумные меры для защиты ваших данных."
+    },
+    "privacy.section5Title": {
+      "en": "5. Data Retention",
+      "uz": "5. Maʼlumotlarni saqlash",
+      "ru": "5. Хранение данных"
+    },
+    "privacy.section5Body": {
+      "en": "Your data is retained as long as your account is active. Upon account deletion, we will remove your personal data within 30 days, except where required by law.",
+      "uz": "Maʼlumotlaringiz hisobingiz faol boʻlgan davomda saqlanadi. Hisob oʻchirilgandan soʻng shaxsiy maʼlumotlaringizni 30 kun ichida oʻchiramiz, qonunda talab qilinadigan hollardan mustasno.",
+      "ru": "Ваши данные хранятся, пока ваша учётная запись активна. После удаления учётной записи мы удалим ваши личные данные в течение 30 дней, за исключением случаев, предусмотренных законом."
+    },
+    "privacy.footer": {
+      "en": "Last updated: September 2026. These are placeholder terms for demonstration purposes. Consult a legal professional for production use.",
+      "uz": "Oxirgi yangilangan: Sentabr 2026. Ushbu shartlar namoyish uchun vaqtincha matn hisoblanadi. Ishlab chiqarishda foydalanish uchun huquq mutaxassisi bilan maslahatlashing.",
+      "ru": "Последнее обновление: сентябрь 2026. Это демонстрационные условия-заглушки. Для продакшена проконсультируйтесь с юристом."
+    },
+    "whatChanged.subtitle": {
+      "en": "Audit-driven change tracking — every meaningful action recorded",
+      "uz": "Audit asosidagi oʻzgarishlarni kuzatish — har bir muhim amal yozib olinadi",
+      "ru": "Отслеживание изменений на основе аудита — каждое значимое действие записывается"
+    },
+    "whatChanged.howItWorks": {
+      "en": "How it works",
+      "uz": "Qanday ishlaydi",
+      "ru": "Как это работает"
+    },
+    "whatChanged.sourceOfTruth": {
+      "en": "Source of truth",
+      "uz": "Haqiqiy manba",
+      "ru": "Источник истины"
+    },
+    "whatChanged.sourceOfTruthDesc": {
+      "en": "AuditLog table records before/after JSON for UPDATE actions",
+      "uz": "AuditLog jadvali UPDATE amallari uchun oldin/keyin JSON ni yozib qoʻyadi",
+      "ru": "Таблица AuditLog хранит JSON до/после для действий UPDATE"
+    },
+    "whatChanged.fieldsChanged": {
+      "en": "Fields changed",
+      "uz": "Oʻzgarigan maydonlar",
+      "ru": "Изменённые поля"
+    },
+    "whatChanged.fieldsChangedDesc": {
+      "en": "only fields that actually changed are shown (not full payload)",
+      "uz": "faqat haqiqatan oʻzgan maydonlar koʻrsatiladi (toʻliq yuklama emas)",
+      "ru": "показываются только фактически изменённые поля (не вся полезная нагрузка)"
+    },
+    "whatChanged.actorTracking": {
+      "en": "Actor tracking",
+      "uz": "Amalga oshiruvchini kuzatish",
+      "ru": "Отслеживание автора"
+    },
+    "whatChanged.actorTrackingDesc": {
+      "en": "every entry names the user who made the change",
+      "uz": "har bir yozuv oʻzgarishni kiritgan foydalanuvchi nomini koʻrsatadi",
+      "ru": "каждая запись указывает пользователя, внесшего изменение"
+    },
+    "whatChanged.noAiSummary": {
+      "en": "No AI summary",
+      "uz": "AI xulosasi yoʻq",
+      "ru": "Без ИИ-резюме"
+    },
+    "whatChanged.noAiSummaryDesc": {
+      "en": "changes are shown verbatim, not paraphrased by a model",
+      "uz": "oʻzgarishlar aynan koʻrsatiladi, model tomonidan qayta yozilmaydi",
+      "ru": "изменения показываются дословно, а не пересказываются моделью"
+    },
+    "whatChanged.filterCreated": {
+      "en": "Created",
+      "uz": "Yaratilgan",
+      "ru": "Создано"
+    },
+    "whatChanged.filterUpdated": {
+      "en": "Updated",
+      "uz": "Yangilangan",
+      "ru": "Обновлено"
+    },
+    "whatChanged.filterDeleted": {
+      "en": "Deleted",
+      "uz": "Oʻchirilgan",
+      "ru": "Удалено"
+    },
+    "whatChanged.loading": {
+      "en": "Loading changes…",
+      "uz": "Oʻzgarishlar yuklanmoqda…",
+      "ru": "Загрузка изменений…"
+    },
+    "whatChanged.loadFailed": {
+      "en": "Failed to load changes",
+      "uz": "Oʻzgarishlarni yuklab boʻlmadi",
+      "ru": "Не удалось загрузить изменения"
+    },
+    "whatChanged.unknownError": {
+      "en": "Unknown error",
+      "uz": "Nomaʼlum xato",
+      "ru": "Неизвестная ошибка"
+    },
+    "whatChanged.emptyTitle": {
+      "en": "No changes",
+      "uz": "Oʻzgarishlar yoʻq",
+      "ru": "Нет изменений"
+    },
+    "whatChanged.emptyMessage": {
+      "en": "No audit events match the current filter.",
+      "uz": "Joriy filtrga mos audit hodisalar yoʻq.",
+      "ru": "Нет событий аудита, соответствующих текущему фильтру."
+    },
+    "whatChanged.changedFields": {
+      "en": "Changed fields:",
+      "uz": "Oʻzgan maydonlar:",
+      "ru": "Изменённые поля:"
+    },
+    "whatChanged.fromTo": {
+      "en": "· from “{from}” to “{to}”",
+      "uz": "· “{from}” dan “{to}” gacha",
+      "ru": "· из “{from}” в “{to}”"
+    },
+    "whatChanged.noDescription": {
+      "en": "No description",
+      "uz": "Tavsif yoʻq",
+      "ru": "Без описания"
+    },
+    "whatChanged.systemActor": {
+      "en": "system",
+      "uz": "tizim",
+      "ru": "система"
+    }
+  }
+}

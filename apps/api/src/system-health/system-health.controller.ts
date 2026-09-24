@@ -3,10 +3,14 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { SystemHealthService } from './system-health.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { ADMIN_ROLES } from '../auth/authorization.policy';
 
 @ApiTags('System Health')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(...ADMIN_ROLES)
 @Controller('system-health')
 export class SystemHealthController {
   constructor(private readonly systemHealthService: SystemHealthService) {}

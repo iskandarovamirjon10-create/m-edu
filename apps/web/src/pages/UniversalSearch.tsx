@@ -1,41 +1,44 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PageHeader, TextInput, EmptyState, GlassButton, Badge, PageLoader } from '@/components/ui';
+import { PageHeader, TextInput, EmptyState, GlassButton, Badge, PageLoader, ErrorState } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useUniversalSearch } from '@/hooks/useUniversalSearch';
+import { getErrorMessage } from '@/lib/errorMessages';
+import { useI18n } from '@/i18n/I18nProvider';
 
-const TYPE_BADGE: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'primary' | 'muted' }> = {
-  STUDENT: { label: 'Student', color: 'primary' },
-  TEACHER: { label: 'Teacher', color: 'success' },
-  GROUP: { label: 'Group', color: 'warning' },
-  COURSE: { label: 'Course', color: 'primary' },
-  LEAD: { label: 'Lead', color: 'warning' },
-  PAYMENT: { label: 'Payment', color: 'success' },
-  EMPLOYEE: { label: 'Employee', color: 'primary' },
-  BOOK: { label: 'Book', color: 'muted' },
-  CERTIFICATE: { label: 'Certificate', color: 'success' },
-  USER: { label: 'User', color: 'muted' },
+const TYPE_BADGE: Record<string, { labelKey: string; color: 'success' | 'warning' | 'error' | 'primary' | 'muted' }> = {
+  STUDENT: { labelKey: 'enum.badge.STUDENT', color: 'primary' },
+  TEACHER: { labelKey: 'enum.badge.TEACHER', color: 'success' },
+  GROUP: { labelKey: 'enum.badge.GROUP', color: 'warning' },
+  COURSE: { labelKey: 'enum.badge.COURSE', color: 'primary' },
+  LEAD: { labelKey: 'enum.badge.LEAD', color: 'warning' },
+  PAYMENT: { labelKey: 'enum.badge.PAYMENT', color: 'success' },
+  EMPLOYEE: { labelKey: 'enum.badge.EMPLOYEE', color: 'primary' },
+  BOOK: { labelKey: 'enum.badge.BOOK', color: 'muted' },
+  CERTIFICATE: { labelKey: 'enum.badge.CERTIFICATE', color: 'success' },
+  USER: { labelKey: 'enum.badge.USER', color: 'muted' },
 };
 
 const TYPE_FILTERS = [
-  { value: '', label: 'All' },
-  { value: 'STUDENT', label: 'Students' },
-  { value: 'TEACHER', label: 'Teachers' },
-  { value: 'GROUP', label: 'Groups' },
-  { value: 'COURSE', label: 'Courses' },
-  { value: 'LEAD', label: 'Leads' },
-  { value: 'PAYMENT', label: 'Payments' },
-  { value: 'BOOK', label: 'Books' },
-  { value: 'CERTIFICATE', label: 'Certificates' },
+  { value: '', labelKey: 'enum.all' },
+  { value: 'STUDENT', labelKey: 'enum.searchType.STUDENT' },
+  { value: 'TEACHER', labelKey: 'enum.searchType.TEACHER' },
+  { value: 'GROUP', labelKey: 'enum.searchType.GROUP' },
+  { value: 'COURSE', labelKey: 'enum.searchType.COURSE' },
+  { value: 'LEAD', labelKey: 'enum.searchType.LEAD' },
+  { value: 'PAYMENT', labelKey: 'enum.searchType.PAYMENT' },
+  { value: 'BOOK', labelKey: 'enum.searchType.BOOK' },
+  { value: 'CERTIFICATE', labelKey: 'enum.searchType.CERTIFICATE' },
 ];
 
 export function UniversalSearchPage() {
-  usePageTitle('Search');
+  const { t } = useI18n();
+  usePageTitle(t('search.title'));
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  const { results, loading, runSearch } = useUniversalSearch(query, typeFilter ? [typeFilter] : []);
+  const { results, loading, error, runSearch } = useUniversalSearch(query, typeFilter ? [typeFilter] : []);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -65,13 +68,13 @@ export function UniversalSearchPage() {
   }, [results.results]);
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <PageHeader
-          title="Universal Search"
-          subtitle="Find any record across the platform — students, teachers, groups, courses, payments, books, certificates, and more"
+          title={t('search.title')}
+          subtitle={t('search.subtitle')}
         />
 
         <div className="glass-card p-4 space-y-3">
@@ -79,11 +82,11 @@ export function UniversalSearchPage() {
             <TextInput
               ref={inputRef as unknown as React.Ref<HTMLInputElement>}
               type="search"
-              placeholder="Search for anyone or anything…"
+              placeholder={t('search.placeholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="text-lg py-3 pl-12"
-              aria-label="Search query"
+              aria-label={t('search.placeholder')}
             />
             <svg className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -98,7 +101,7 @@ export function UniversalSearchPage() {
                 variant={typeFilter === f.value ? 'primary' : 'ghost'}
                 onClick={() => setTypeFilter(f.value)}
               >
-                {f.label}
+                {t(f.labelKey)}
               </GlassButton>
             ))}
           </div>
@@ -106,33 +109,39 @@ export function UniversalSearchPage() {
 
         {query.length < 2 ? (
           <div className="glass-card p-12 text-center">
-            <p className="text-muted text-sm">Type at least 2 characters to start searching.</p>
+            <p className="text-muted text-sm">{t('search.typeMore')}</p>
           </div>
         ) : loading ? (
           <div className="glass-card p-8">
-            <PageLoader label="Searching…" />
+            <PageLoader label={t('search.searching')} />
+          </div>
+        ) : error ? (
+          <div className="glass-card p-8">
+            <ErrorState
+              message={getErrorMessage(error)}
+              onRetry={() => runSearch(query)}
+            />
           </div>
         ) : results.results.length === 0 ? (
           <div className="glass-card p-8">
             <EmptyState
-              title="No results"
-              message={`No matches for "${query}". Try fewer words or a different filter.`}
+              title={t('search.noResults')}
+              message={t('search.noResultsHint', { query })}
             />
           </div>
         ) : (
           <>
             <div className="text-sm text-muted px-1">
-              Found <strong className="text-[var(--text-primary)]">{results.total}</strong> results
-              in <span className="font-mono">{results.tookMs}ms</span>
+              {t('search.foundSummary', { n: results.total, ms: results.tookMs })}
             </div>
             {Object.entries(grouped).map(([type, items]) => {
-              const meta = TYPE_BADGE[type] || { label: type, color: 'muted' as const };
+              const meta = TYPE_BADGE[type] || { labelKey: '', color: 'muted' as const };
               return (
                 <section key={type} className="glass-card overflow-hidden">
                   <header className="flex items-center justify-between px-4 py-3 border-b border-subtle">
                     <div className="flex items-center gap-2">
-                      <Badge color={meta.color}>{meta.label}</Badge>
-                      <span className="text-xs text-muted">{items.length} match{items.length === 1 ? '' : 'es'}</span>
+                      <Badge color={meta.color}>{meta.labelKey ? t(meta.labelKey) : type}</Badge>
+                      <span className="text-xs text-muted">{t('search.matchCount', { n: items.length })}</span>
                     </div>
                   </header>
                   <ul className="divide-y divide-[var(--border-subtle)]">
@@ -145,7 +154,7 @@ export function UniversalSearchPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <h3 className="font-medium text-sm text-[var(--text-primary)] truncate">
-                              {item.title || 'Untitled'}
+                              {item.title || t('search.untitled')}
                             </h3>
                             {item.subtitle && (
                               <p className="text-xs text-muted mt-0.5 truncate">{item.subtitle}</p>

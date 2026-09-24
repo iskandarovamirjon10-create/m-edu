@@ -21,6 +21,16 @@ const ru = {
   'common.name': 'Название',
   'common.date': 'Дата',
   'common.close': 'Закрыть',
+  'common.add': 'Добавить',
+  'common.optional': 'Необязательно',
+  'common.deleting': 'Удаление…',
+  'confirm.title': 'Подтверждение действия',
+  'confirm.description': 'Вы уверены, что хотите выполнить это действие? Это действие нельзя отменить.',
+  'automation.rule.deleteConfirm': 'Удалить это правило автоматизации?',
+  'automation.rule.toggleAria': 'Переключить правило {name}',
+  'branches.deactivateConfirm': 'Деактивировать этот филиал? Его можно будет активировать позже.',
+  'apiKeys.revokeConfirm': 'Отозвать этот API-ключ? Интеграции, использующие его, перестанут работать немедленно.',
+  'hr.terminateConfirm': 'Уволить этого сотрудника? Это действие нельзя отменить.',
 
   // Navigation
   'nav.dashboard': 'Панель управления',
@@ -37,6 +47,33 @@ const ru = {
   'nav.settings': 'Настройки',
   'nav.logout': 'Выйти',
   'nav.language': 'Язык',
+  'nav.faceRecognition': 'Распознавание лиц',
+  'nav.exams': 'Экзамены',
+  'nav.invoices': 'Счета',
+  'nav.reports': 'Отчёты',
+  'nav.homework': 'Домашние задания',
+  'nav.chat': 'Чат',
+  'nav.executiveDashboard': 'Панель руководителя',
+  'nav.financialAnalytics': 'Финансовая аналитика',
+  'nav.payrollAnalytics': 'Аналитика зарплат',
+  'nav.crmAnalytics': 'CRM-аналитика',
+  'nav.parentPortal': 'Портал родителей',
+  'nav.hrPayroll': 'HR и зарплаты',
+  'nav.payrollRuns': 'Расчёты зарплат',
+  'nav.automation': 'Автоматизация',
+  'nav.followUpRules': 'Правила follow-up',
+  'nav.branches': 'Филиалы',
+  'nav.expenses': 'Расходы',
+  'nav.leads': 'Лиды',
+  'nav.cameras': 'Камеры',
+  'nav.anomalyDetection': 'Обнаружение аномалий',
+  'nav.dataGovernance': 'Управление данными',
+  'nav.users': 'Пользователи',
+  'nav.audit': 'Журнал аудита',
+  'nav.administration': 'Администрирование',
+  'nav.searchPlaceholder': 'Поиск учеников, учителей, групп…',
+  'nav.signIn': 'Вход',
+  'nav.createAccount': 'Создать аккаунт',
 
   // Auth
   'auth.loginTitle': 'Вход в ваш аккаунт',
@@ -125,6 +162,33 @@ const ru = {
   'settings.title': 'Настройки',
   'settings.language': 'Язык',
   'settings.languageHint': 'Выберите язык интерфейса. Выбор сохраняется на этом устройстве.',
+  'settings.subtitle': 'Настройки организации и аккаунта',
+  'settings.loading': 'Загрузка настроек…',
+  'settings.loadFailed': 'Не удалось загрузить настройки',
+  'settings.appearance': 'Оформление',
+  'settings.appearanceHint': 'Выберите, как выглядит M-EDU',
+  'settings.themeHint': 'Выберите тему — выбор сохраняется на этом устройстве.',
+  'settings.themeLight': 'Светлая',
+  'settings.themeDark': 'Тёмная',
+  'settings.organization': 'Организация',
+  'settings.organizationHint': 'Бренд и контактные данные вашего центра',
+  'settings.orgName': 'Название организации',
+  'settings.contactEmail': 'Контактный email',
+  'settings.phone': 'Телефон',
+  'settings.saveOrg': 'Сохранить организацию',
+  'settings.orgUpdated': 'Организация успешно обновлена',
+  'settings.account': 'Настройки аккаунта',
+  'settings.accountHint': 'Язык и часовой пояс',
+  'settings.timezone': 'Часовой пояс',
+  'settings.save': 'Сохранить настройки',
+  'settings.saved': 'Настройки успешно сохранены',
+  'settings.changePassword': 'Сменить пароль',
+  'settings.changePasswordHint': 'Используйте надёжный пароль, который не используется в других местах',
+  'settings.currentPassword': 'Текущий пароль',
+  'settings.newPassword': 'Новый пароль',
+  'settings.confirmPassword': 'Подтвердите новый пароль',
+  'settings.changePasswordAction': 'Сменить пароль',
+  'settings.passwordChanged': 'Пароль успешно изменён',
 
   // Errors
   'error.network': 'Ошибка сети — проверьте подключение и попробуйте снова',
@@ -134,4 +198,9 @@ const ru = {
   'error.server': 'Ошибка сервера — попробуйте позже',
 };
 
-export default ru;
+import { legacyRu } from './legacy-slices.ru';
+import { analyticsRu } from './analytics-slices.ru';
+import { pagesRu } from './pages-slices.ru';
+
+// Legacy fills gaps → analytics fills more → curated base wins for overrides.
+export default { ...legacyRu, ...analyticsRu, ...pagesRu, ...ru };

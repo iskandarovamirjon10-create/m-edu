@@ -1,9 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UsersService } from '../users.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 
+type MockTx = {
+  user: { update: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+  session: { updateMany: ReturnType<typeof vi.fn>; deleteMany: ReturnType<typeof vi.fn> };
+  userSettings: { deleteMany: ReturnType<typeof vi.fn> };
+  notification: { deleteMany: ReturnType<typeof vi.fn> };
+};
+
 function createMockPrisma() {
-  return {
+  const tx: MockTx = {
+    user: { update: vi.fn(), delete: vi.fn() },
+    session: { updateMany: vi.fn(), deleteMany: vi.fn() },
+    userSettings: { deleteMany: vi.fn() },
+    notification: { deleteMany: vi.fn() },
+  };
+
+  const obj = {
     user: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
@@ -32,43 +47,44 @@ function createMockPrisma() {
     teacher: {
       findUnique: vi.fn(),
     },
-    $transaction: vi.fn((fn: any) => fn({
-      user: { update: vi.fn(), delete: vi.fn() },
-      session: { updateMany: vi.fn(), deleteMany: vi.fn() },
-      userSettings: { deleteMany: vi.fn() },
-      notification: { deleteMany: vi.fn() },
-    })),
+    $transaction: vi.fn((fn: (innerTx: MockTx) => Promise<unknown>) => fn(tx)),
   };
+  return obj;
 }
 
+type MockPrisma = ReturnType<typeof createMockPrisma>;
+
 describe('UsersService.changePassword', () => {
-  let prisma: any;
+  let prisma: MockPrisma;
   let svc: UsersService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new UsersService(prisma);
+    svc = new UsersService(prisma as unknown as PrismaService);
   });
 
   it('revokes all other sessions after a successful password change', async () => {
     const passwordHash = await bcrypt.hash('old-password-123', 4);
-    prisma.user.findUnique.mockResolvedValue({
+    prisma.user.findFirst.mockResolvedValue({
       id: 'u1',
+      organizationId: 'org-1',
       email: 'a@b.com',
       passwordHash,
       isActive: true,
     });
     const txUserUpdate = vi.fn().mockResolvedValue({});
     const txSessionUpdate = vi.fn().mockResolvedValue({ count: 3 });
-    prisma.$transaction.mockImplementation(async (fn: any) =>
+    prisma.$transaction.mockImplementation(async (fn: (innerTx: MockTx) => Promise<unknown>) =>
       fn({
-        user: { update: txUserUpdate },
-        session: { updateMany: txSessionUpdate },
+        user: { updateMany: txUserUpdate, delete: vi.fn() },
+        session: { updateMany: txSessionUpdate, deleteMany: vi.fn() },
+        userSettings: { deleteMany: vi.fn() },
+        notification: { deleteMany: vi.fn() },
       }),
     );
 
-    await svc.changePassword('u1', 'old-password-123', 'new-password-456', 'session-current');
+    await svc.changePassword('org-1', 'u1', 'old-password-123', 'new-password-456', 'session-current');
 
     expect(txSessionUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -84,21 +100,24 @@ describe('UsersService.changePassword', () => {
 
   it('revokes ALL sessions when no current session id is provided', async () => {
     const passwordHash = await bcrypt.hash('old-password-123', 4);
-    prisma.user.findUnique.mockResolvedValue({
+    prisma.user.findFirst.mockResolvedValue({
       id: 'u1',
+      organizationId: 'org-1',
       email: 'a@b.com',
       passwordHash,
       isActive: true,
     });
     const txSessionUpdate = vi.fn().mockResolvedValue({ count: 5 });
-    prisma.$transaction.mockImplementation(async (fn: any) =>
+    prisma.$transaction.mockImplementation(async (fn: (innerTx: MockTx) => Promise<unknown>) =>
       fn({
-        user: { update: vi.fn().mockResolvedValue({}) },
-        session: { updateMany: txSessionUpdate },
+        user: { updateMany: vi.fn().mockResolvedValue({ count: 1 }), delete: vi.fn() },
+        session: { updateMany: txSessionUpdate, deleteMany: vi.fn() },
+        userSettings: { deleteMany: vi.fn() },
+        notification: { deleteMany: vi.fn() },
       }),
     );
 
-    await svc.changePassword('u1', 'old-password-123', 'new-password-456', null);
+    await svc.changePassword('org-1', 'u1', 'old-password-123', 'new-password-456', null);
 
     expect(txSessionUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -109,14 +128,15 @@ describe('UsersService.changePassword', () => {
 
   it('rejects an incorrect current password without touching sessions', async () => {
     const passwordHash = await bcrypt.hash('old-password-123', 4);
-    prisma.user.findUnique.mockResolvedValue({
+    prisma.user.findFirst.mockResolvedValue({
       id: 'u1',
+      organizationId: 'org-1',
       email: 'a@b.com',
       passwordHash,
       isActive: true,
     });
 
-    await expect(svc.changePassword('u1', 'wrong-password', 'new-password-456')).rejects.toThrow(
+    await expect(svc.changePassword('org-1', 'u1', 'wrong-password', 'new-password-456')).rejects.toThrow(
       /Current password is incorrect/,
     );
     expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -124,13 +144,13 @@ describe('UsersService.changePassword', () => {
 });
 
 describe('UsersService privilege-escalation guards (P1)', () => {
-  let prisma: any;
+  let prisma: MockPrisma;
   let svc: UsersService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new UsersService(prisma);
+    svc = new UsersService(prisma as unknown as PrismaService);
   });
 
   it('rejects ORG_ADMIN creating a SUPER_ADMIN account', async () => {
@@ -209,13 +229,13 @@ describe('UsersService privilege-escalation guards (P1)', () => {
 });
 
 describe('UsersService admin lifecycle guards (P1/P3)', () => {
-  let prisma: any;
+  let prisma: MockPrisma;
   let svc: UsersService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new UsersService(prisma);
+    svc = new UsersService(prisma as unknown as PrismaService);
   });
 
   it('rejects a SUPER_ADMIN changing their own role (self-demotion lockout)', async () => {
@@ -264,13 +284,13 @@ describe('UsersService admin lifecycle guards (P1/P3)', () => {
 });
 
 describe('UsersService.remove (DELETE /users/:id)', () => {
-  let prisma: any;
+  let prisma: MockPrisma;
   let svc: UsersService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new UsersService(prisma);
+    svc = new UsersService(prisma as unknown as PrismaService);
   });
 
   it('rejects deleting your own account', async () => {
@@ -325,12 +345,12 @@ describe('UsersService.remove (DELETE /users/:id)', () => {
     const txSession = vi.fn().mockResolvedValue({ count: 3 });
     const txSettings = vi.fn().mockResolvedValue({ count: 1 });
     const txUserDelete = vi.fn().mockResolvedValue({ id: 'u2' });
-    prisma.$transaction.mockImplementation(async (fn: any) =>
+    prisma.$transaction.mockImplementation(async (fn: (innerTx: MockTx) => Promise<unknown>) =>
       fn({
         notification: { deleteMany: txNotification },
         session: { deleteMany: txSession },
         userSettings: { deleteMany: txSettings },
-        user: { delete: txUserDelete },
+        user: { delete: txUserDelete, update: vi.fn() },
       }),
     );
 

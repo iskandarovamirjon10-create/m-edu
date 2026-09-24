@@ -1,5 +1,16 @@
-import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  CreateFeatureFlagDto,
+  UpdateFeatureFlagDto,
+} from './dto/feature-flag.dto';
 
 @Injectable()
 export class FeatureFlagsService {
@@ -28,21 +39,13 @@ export class FeatureFlagsService {
     return { items, total };
   }
 
-  async create(dto: {
-    key: string;
-    name: string;
-    description?: string;
-    type?: string;
-    enabled?: boolean;
-    value?: unknown;
-    rolloutPercentage?: number;
-  }) {
+  async create(orgId: string, dto: CreateFeatureFlagDto) {
     const key = dto.key?.trim();
     if (!key) {
-      throw new NotFoundException('Flag key is required');
+      throw new BadRequestException('Flag key is required');
     }
     if (!dto.name?.trim()) {
-      throw new NotFoundException('Flag name is required');
+      throw new BadRequestException('Flag name is required');
     }
 
     const existing = await this.prisma.featureFlag.findUnique({ where: { key } });
@@ -58,14 +61,15 @@ export class FeatureFlagsService {
         type: dto.type || 'BOOLEAN',
         enabled: dto.enabled ?? false,
         value: (dto.value as never) ?? undefined,
-        // Empty rolloutOrganizations = visible to every organization
-        rolloutOrganizations: [],
+        // Seed rollout with the creating org only (empty array = every org,
+        // which would leak platform-wide flags from a single-tenant admin).
+        rolloutOrganizations: [orgId],
         rolloutPercentage: dto.rolloutPercentage ?? null,
       },
     });
   }
 
-  async update(orgId: string, key: string, dto: any) {
+  async update(orgId: string, key: string, dto: UpdateFeatureFlagDto) {
     // Verify flag applies to this org
     const flag = await this.prisma.featureFlag.findUnique({ where: { key } });
     if (!flag) {
@@ -76,12 +80,17 @@ export class FeatureFlagsService {
     if (!applies) {
       throw new ForbiddenException('This feature flag does not apply to your organization');
     }
+    const data: Prisma.FeatureFlagUpdateInput = {};
+    if (dto.enabled !== undefined) data.enabled = dto.enabled;
+    if (dto.value !== undefined) data.value = dto.value as Prisma.InputJsonValue;
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.description !== undefined) data.description = dto.description.trim();
+    if (dto.rolloutPercentage !== undefined) data.rolloutPercentage = dto.rolloutPercentage;
+
     return this.prisma.featureFlag.update({
       where: { key },
-      data: {
-        enabled: dto.enabled !== undefined ? dto.enabled : flag.enabled,
-        value: dto.value !== undefined ? dto.value : flag.value,
-      },
+      data,
     });
   }
 }
+

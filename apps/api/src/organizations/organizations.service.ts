@@ -38,7 +38,9 @@ export class OrganizationsService {
         name: data.name,
         email: data.email,
         phone: data.phone,
+        timezone: data.timezone,
       },
     });
   }
 }
+

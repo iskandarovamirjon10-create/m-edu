@@ -10,6 +10,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '@/auth/AuthContext';
+import { I18nProvider } from '@/i18n/I18nProvider';
 import { LoginPage, googleOAuthUrl } from '../Login';
 
 const loginMock = vi.fn();
@@ -50,11 +51,13 @@ vi.mock('@/lib/api', () => ({
 
 function renderLogin() {
   return render(
-    <MemoryRouter initialEntries={['/login']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <AuthProvider>
-        <LoginPage />
-      </AuthProvider>
-    </MemoryRouter>,
+    <I18nProvider initialLocale="en">
+      <MemoryRouter initialEntries={['/login']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>
+    </I18nProvider>,
   );
 }
 

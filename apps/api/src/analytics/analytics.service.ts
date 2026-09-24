@@ -1,11 +1,22 @@
+import { computeAttendanceRate } from '../common/attendance-rate';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AnalyticsService {
+  // Simple in-memory cache to prevent DB overload from dashboard refresh spam
+  private cache = new Map<string, { data: any; expiry: number }>();
+  private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
   constructor(private readonly prisma: PrismaService) {}
 
   async getOverview(organizationId: string) {
+    const cacheKey = `overview:${organizationId}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && cached.expiry > Date.now()) {
+      return cached.data;
+    }
+
     const now = new Date();
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -37,10 +48,10 @@ export class AnalyticsService {
         _sum: { amount: true },
       }),
       this.prisma.$queryRaw`
-        SELECT DATE_TRUNC('month', "createdAt") as month, SUM(amount)::decimal as total
+        SELECT DATE_TRUNC('month', COALESCE("paidAt", "createdAt")) as month, SUM(amount)::decimal as total
         FROM "Payment"
         WHERE "organizationId" = ${organizationId}::uuid AND status = 'PAID'
-        GROUP BY DATE_TRUNC('month', "createdAt")
+        GROUP BY DATE_TRUNC('month', COALESCE("paidAt", "createdAt"))
         ORDER BY month DESC
         LIMIT 12
       ` as unknown as { month: Date; total: string }[],
@@ -79,7 +90,7 @@ export class AnalyticsService {
           ? 100
           : 0;
 
-    return {
+    const result = {
       students: {
         total: totalStudents,
         newThisMonth: newStudentsThisMonth,
@@ -98,8 +109,6 @@ export class AnalyticsService {
       },
       attendance: {
         rate: attendanceRate,
-        // The raw query returns one row per (date, status); collapse into a
-        // single row per date so charts get exactly one point per day.
         daily: (() => {
           const byDate = new Map<string, { present: number; absent: number; late: number; excused: number }>();
           for (const r of dailyAttendance) {
@@ -123,5 +132,10 @@ export class AnalyticsService {
         })),
       },
     };
+
+    this.cache.set(cacheKey, { data: result, expiry: Date.now() + this.CACHE_TTL_MS });
+    return result;
   }
 }
+
+

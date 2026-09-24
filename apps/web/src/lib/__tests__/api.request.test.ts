@@ -40,12 +40,20 @@ describe('request transport', () => {
     expect(init.headers.Authorization).toBeUndefined();
   });
 
-  it('clears the session and notifies the app on 401', async () => {
+  it('clears the session and notifies the app on 401 for a protected path', async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    fetchMock.mockResolvedValue(jsonResponse(401, { message: 'Unauthorized' }));
+    await expect(request('/students')).rejects.toThrow('session has expired');
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not sign out on /auth/me 401 (normal logged-out probe)', async () => {
     const onUnauthorized = vi.fn();
     setUnauthorizedHandler(onUnauthorized);
     fetchMock.mockResolvedValue(jsonResponse(401, { message: 'Unauthorized' }));
     await expect(request('/auth/me')).rejects.toThrow('session has expired');
-    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(onUnauthorized).not.toHaveBeenCalled();
   });
 
   it('returns parsed JSON on success', async () => {

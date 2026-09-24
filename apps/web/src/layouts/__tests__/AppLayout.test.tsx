@@ -11,6 +11,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppLayout } from '../AppLayout';
+import { ThemeProvider } from '../../hooks/useTheme';
+import { I18nProvider } from '../../i18n/I18nProvider';
 
 const { logoutMock, currentUser } = vi.hoisted(() => ({
   logoutMock: vi.fn(),
@@ -38,14 +40,18 @@ function makeQueryClient() {
 
 function renderLayout() {
   return render(
-    <QueryClientProvider client={makeQueryClient()}>
-      <MemoryRouter initialEntries={['/dashboard']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Routes>
-          <Route path="/dashboard" element={<AppLayout />} />
-          <Route path="/login" element={<div>login page</div>} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <I18nProvider initialLocale="en">
+      <ThemeProvider>
+        <QueryClientProvider client={makeQueryClient()}>
+          <MemoryRouter initialEntries={['/dashboard']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <Routes>
+              <Route path="/dashboard" element={<AppLayout />} />
+              <Route path="/login" element={<div>login page</div>} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </I18nProvider>,
   );
 }
 
@@ -100,7 +106,7 @@ describe('AppLayout navigation by role', () => {
   it('logs out and redirects to /login', async () => {
     const user = userEvent.setup();
     renderLayout();
-    await user.click(screen.getByRole('button', { name: /sign out|logout/i }));
+    await user.click(screen.getByRole('button', { name: /log out|sign out|logout/i }));
     expect(logoutMock).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('login page')).toBeInTheDocument();
   });

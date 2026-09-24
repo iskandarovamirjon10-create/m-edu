@@ -2,33 +2,44 @@
  * Unit tests for WorkflowService — deterministic, rule-based, no AI.
  * Tests cover condition evaluation across all supported operators.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { WorkflowService } from '../workflow.service';
+import { WorkflowCondition, WorkflowRuleDto, WorkflowStepConfig } from '../workflow.types';
 
 const ORG = 'org-1';
 
-function makeRule(conditions: any[] = [], steps: any[] = [{ name: 'step-1' }]) {
+function makeRule(
+  conditions: WorkflowCondition[] = [],
+  steps: WorkflowStepConfig[] = [
+    { order: 1, type: 'SEND_NOTIFICATION', name: 'step-1', config: {} },
+  ],
+): WorkflowRuleDto {
   return {
     id: 'rule-1',
     organizationId: ORG,
     name: 'Test rule',
     description: 'A test rule',
-    trigger: 'manual',
+    trigger: 'MANUAL',
+    entityType: 'STUDENT',
     conditions,
     steps,
     enabled: true,
-  } as any;
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 describe('WorkflowService', () => {
   let svc: WorkflowService;
-  beforeEach(() => { svc = new WorkflowService(); });
+  beforeEach(() => {
+    svc = new WorkflowService();
+  });
 
   describe('evaluate', () => {
     it('returns PENDING when no conditions', () => {
       const result = svc.evaluate(makeRule([]), {});
       expect(result.status).toBe('PENDING');
-      expect(result.steps.every(s => s.status === 'pending')).toBe(true);
+      expect(result.steps.every((s) => s.status === 'pending')).toBe(true);
     });
 
     it('returns CANCELLED when conditions fail', () => {
@@ -72,8 +83,7 @@ describe('WorkflowService', () => {
   });
 
   describe('evaluateConditions — operators', () => {
-    const cases: Array<[string, string, any, any, boolean]> = [
-      // [description, operator, conditionValue, payloadValue, expected]
+    const cases: Array<[string, WorkflowCondition['operator'], unknown, Record<string, unknown>, boolean]> = [
       ['eq matches', 'eq', 'A', { x: 'A' }, true],
       ['eq mismatch', 'eq', 'A', { x: 'B' }, false],
       ['ne matches', 'ne', 'A', { x: 'B' }, true],
@@ -140,6 +150,31 @@ describe('WorkflowService', () => {
     it('leaves completedAt null when pending', () => {
       const result = svc.evaluate(makeRule(), {});
       expect(result.completedAt).toBeNull();
+    });
+  });
+
+  describe('listRules and getRule', () => {
+    it('stores and retrieves rules for tenant', async () => {
+      const rule = makeRule([]);
+      svc.addRule(rule);
+
+      const list = await svc.listRules(ORG, { page: '1', limit: '10' });
+      expect(list.total).toBe(1);
+      expect(list.items[0].id).toBe('rule-1');
+
+      const found = await svc.getRule(ORG, 'rule-1');
+      expect(found).toBe(rule);
+
+      const otherOrg = await svc.getRule('other-org', 'rule-1');
+      expect(otherOrg).toBeNull();
+    });
+  });
+
+  describe('listInstances', () => {
+    it('returns tenant instances sorted by startedAt desc', async () => {
+      svc.evaluate(makeRule(), {});
+      const list = await svc.listInstances(ORG, { page: '1', limit: '10' });
+      expect(list.total).toBe(1);
     });
   });
 });

@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DataQualityService } from '../data-quality.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 function makePrisma() {
   return {
@@ -32,7 +33,8 @@ function makePrisma() {
     libraryBook: {
       findMany: vi.fn(),
     },
-  } as any;
+    $transaction: vi.fn().mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops)),
+  } as unknown as PrismaService;
 }
 
 describe('DataQualityService', () => {
@@ -73,7 +75,7 @@ describe('DataQualityService', () => {
       prisma.group.findMany.mockResolvedValue([]);
       prisma.teacher.findMany.mockResolvedValue([]);
       prisma.libraryBook.findMany.mockResolvedValue([]);
-      prisma.dataQualityIssue.upsert.mockResolvedValue({} as any);
+      prisma.dataQualityIssue.upsert.mockResolvedValue({} as never);
 
       const result = await svc.runAllChecks('org-1');
 
@@ -93,7 +95,7 @@ describe('DataQualityService', () => {
       prisma.group.findMany.mockResolvedValue([]);
       prisma.teacher.findMany.mockResolvedValue([]);
       prisma.libraryBook.findMany.mockResolvedValue([]);
-      prisma.dataQualityIssue.upsert.mockResolvedValue({} as any);
+      prisma.dataQualityIssue.upsert.mockResolvedValue({} as never);
 
       const result = await svc.runAllChecks('org-1');
 
@@ -109,7 +111,7 @@ describe('DataQualityService', () => {
       prisma.group.findMany.mockResolvedValue([]);
       prisma.teacher.findMany.mockResolvedValue([]);
       prisma.libraryBook.findMany.mockResolvedValue([]);
-      prisma.dataQualityIssue.upsert.mockResolvedValue({} as any);
+      prisma.dataQualityIssue.upsert.mockResolvedValue({} as never);
 
       // Should NOT throw — errors are caught internally
       const result = await svc.runAllChecks('org-1');
@@ -146,7 +148,7 @@ describe('DataQualityService', () => {
 
   describe('resolveIssue', () => {
     it('updates resolvedAt, resolvedBy, resolutionNote', async () => {
-      prisma.dataQualityIssue.updateMany.mockResolvedValue({ count: 1 } as any);
+      prisma.dataQualityIssue.updateMany.mockResolvedValue({ count: 1 });
       await svc.resolveIssue('org-1', 'q1', 'user-1', 'Fixed manually');
       expect(prisma.dataQualityIssue.updateMany).toHaveBeenCalledWith({
         where: { id: 'q1', organizationId: 'org-1' },
@@ -161,19 +163,18 @@ describe('DataQualityService', () => {
 
   describe('rule definitions', () => {
     it('has exactly 8 rules', () => {
-      // Access private field via any cast
-      const rules = (svc as any).rules as Array<{ id: string }>;
+      const rules = (svc as unknown as { rules: Array<{ id: string }> }).rules;
       expect(rules).toHaveLength(8);
     });
 
     it('every rule has a unique id', () => {
-      const rules = (svc as any).rules as Array<{ id: string }>;
+      const rules = (svc as unknown as { rules: Array<{ id: string }> }).rules;
       const ids = rules.map(r => r.id);
       expect(new Set(ids).size).toBe(ids.length);
     });
 
     it('every rule has severity from the allowed set', () => {
-      const rules = (svc as any).rules as Array<{ severity: string }>;
+      const rules = (svc as unknown as { rules: Array<{ severity: string }> }).rules;
       const allowed = new Set(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
       rules.forEach(r => {
         expect(allowed.has(r.severity)).toBe(true);

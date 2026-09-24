@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { toDateToInclusive, startOfDay, getOrganizationDate } from '../common/date-range';
 import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
-import { MarkAttendanceDto } from '../common/dto';
+import { MarkAttendanceDto, UpdateAttendanceDto } from '../common/dto';
 import { AttendanceQuery } from '../common/dto/query';
 
 @Injectable()
@@ -15,7 +16,9 @@ export class AttendanceService {
     });
     if (!group) throw new NotFoundException('Group not found');
 
-    const date = new Date(data.date);
+    const org = await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });
+    const rawDate = new Date(data.date);
+    const date = getOrganizationDate(rawDate, org?.timezone);
 
     // Deduplicate by studentId within the payload — a repeated student would
     // otherwise violate the (studentId, groupId, date) unique constraint and
@@ -29,7 +32,7 @@ export class AttendanceService {
     // memberships are created org-scoped, so this is provably equivalent —
     // but it makes the tenant invariant explicit and self-documenting.
     const enrollments = await this.prisma.studentGroup.findMany({
-      where: { groupId: data.groupId, organizationId, isActive: true },
+      where: { groupId: data.groupId, organizationId, joinedAt: { lte: startOfDay }, OR: [{ leftAt: null }, { leftAt: { gte: startOfDay } }], student: { status: { notIn: ['PAUSED', 'DROPPED'] } } },
       select: { studentId: true },
     });
     const enrolledStudentIds = new Set(enrollments.map((e) => e.studentId));
@@ -42,85 +45,202 @@ export class AttendanceService {
       }
     }
 
-    const existingRecords = await this.prisma.attendance.findMany({
+    // [BUSINESS LOGIC FIX]: Validate that a planned/conducted Lesson exists for this date.
+    // Also attach the lessonId to the attendance record for accurate payroll and history.
+    const startOfDay = date;
+    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+    // P0: deterministic lesson selection — never rely on unordered findFirst().
+    // Prefer a non-cancelled lesson for the day; fall back to the first ordered
+    // lesson so an all-cancelled day still blocks attendance below.
+    const dayLessons = await this.prisma.lesson.findMany({
       where: {
         groupId: data.groupId,
-        date,
-        studentId: { in: data.records.map((r) => r.studentId) },
+        organizationId,
+        date: { gte: startOfDay, lt: endOfDay },
       },
+      orderBy: [{ date: 'asc' }, { id: 'asc' }],
     });
-    const existingMap = new Map(existingRecords.map((e) => [e.studentId, e]));
+    const lesson =
+      dayLessons.find((candidate) => candidate.status !== 'CANCELLED') ??
+      dayLessons[0];
 
-    const toUpdate: Array<{ existing: { id: string }; record: MarkAttendanceDto['records'][number] }> = [];
-    const toCreate: MarkAttendanceDto['records'][number][] = [];
-
-    for (const record of data.records) {
-      const existing = existingMap.get(record.studentId);
-      if (existing) {
-        toUpdate.push({ existing, record });
-      } else {
-        toCreate.push(record);
-      }
+    if (!lesson) {
+      throw new BadRequestException(`Siz davomat yozmoqchi bo'lgan kunda ushbu guruh uchun dars (Lesson) rejalashtirilmagan.`);
     }
 
-    let createdCount = 0;
-    const updatedRecords: unknown[] = [];
-    if (toCreate.length > 0) {
-      try {
-        const result = await this.prisma.attendance.createMany({
-          data: toCreate.map((record) => ({
-            organizationId,
-            studentId: record.studentId,
-            groupId: data.groupId,
-            date,
-            status: record.status,
-            note: record.note,
-          })),
-        });
-        createdCount = result.count;
-      } catch (err: unknown) {
-        // P2002 = unique constraint (studentId, groupId, date) — a concurrent
-        // request already recorded this attendance. Treat as an update: fetch
-        // the now-existing rows and update their status/note.
-        if ((err as { code?: string })?.code === 'P2002') {
-          const existing = await this.prisma.attendance.findMany({
+    if (lesson.status === 'CANCELLED') {
+      throw new BadRequestException(`Ushbu dars bekor qilingan (CANCELLED). Bekor qilingan darsga davomat qilib bo'lmaydi.`);
+    }
+
+    /**
+     * P0: all writes (auto-conduct lesson + create/update attendance) commit or
+     * roll back together. Previously the PLANNED→CONDUCTED update committed
+     * even when createMany failed, leaving a conducted lesson with no attendance.
+     */
+    const commitAttendance = async (allowCreate: boolean) =>
+      this.prisma.$transaction(
+        async (tx) => {
+          let lessonStatus = lesson.status;
+          if (lessonStatus === 'PLANNED') {
+            await tx.lesson.update({
+              where: { id: lesson.id },
+              data: { status: 'CONDUCTED' },
+            });
+            lessonStatus = 'CONDUCTED';
+          }
+
+          const existingRecords = await tx.attendance.findMany({
             where: {
               groupId: data.groupId,
               date,
-              studentId: { in: toCreate.map((r) => r.studentId) },
+              studentId: { in: data.records.map((r) => r.studentId) },
             },
           });
-          const map = new Map(existing.map((e) => [e.studentId, e]));
-          const updates = toCreate
-            .filter((record) => map.has(record.studentId))
-            .map((record) => {
-              const row = map.get(record.studentId)!;
-              return this.prisma.attendance.update({
-                where: { id: row.id },
-                data: { status: record.status, note: record.note },
-              });
-            });
-          updatedRecords.push(...(await Promise.all(updates)));
-        } else {
-          throw err;
-        }
-      }
-    }
-    if (toUpdate.length > 0) {
-      const updates = toUpdate.map(({ existing, record }) =>
-        this.prisma.attendance.update({
-          where: { id: existing.id },
-          data: { status: record.status, note: record.note },
-        }),
-      );
-      updatedRecords.push(...(await Promise.all(updates)));
-    }
+          const existingMap = new Map(existingRecords.map((e) => [e.studentId, e]));
 
-    return {
-      created: createdCount,
-      updated: updatedRecords.length,
-      total: data.records.length,
-    };
+          let createdCount = 0;
+          const updatedRecords: unknown[] = [];
+
+          for (const record of data.records) {
+            const payload = {
+              status: record.status,
+              note: record.note,
+              lessonId: lesson.id,
+            };
+            const existing = existingMap.get(record.studentId);
+
+            if (existing) {
+              updatedRecords.push(
+                await tx.attendance.update({
+                  where: { id: existing.id },
+                  data: payload,
+                }),
+              );
+              continue;
+            }
+
+            if (!allowCreate) {
+              // P2002 recovery pass: a concurrent request already inserted
+              // this row — re-read and update instead of creating.
+              const row = await tx.attendance.findUnique({
+                where: {
+                  studentId_groupId_date: {
+                    studentId: record.studentId,
+                    groupId: data.groupId,
+                    date,
+                  },
+                },
+              });
+              if (row) {
+                updatedRecords.push(
+                  await tx.attendance.update({
+                    where: { id: row.id },
+                    data: payload,
+                  }),
+                );
+                continue;
+              }
+            }
+
+            await tx.attendance.create({
+              data: {
+                organizationId,
+                studentId: record.studentId,
+                groupId: data.groupId,
+                lessonId: lesson.id,
+                date,
+                status: record.status,
+                note: record.note,
+              },
+            });
+            createdCount += 1;
+          }
+
+          return { created: createdCount, updated: updatedRecords.length };
+        },
+        { maxWait: 5_000, timeout: 10_000 },
+      );
+
+    try {
+      const result = await commitAttendance(true);
+      return {
+        created: result.created,
+        updated: result.updated,
+        total: data.records.length,
+      };
+    } catch (err: unknown) {
+      // P2002 = unique constraint (studentId, groupId, date) — a concurrent
+      // request already recorded attendance. The failed transaction rolled
+      // back completely (including any lesson auto-conduct); retry once with
+      // create disabled so only the current operation's missing rows are
+      // reconciled as updates.
+      if ((err as { code?: string })?.code === 'P2002') {
+        const result = await commitAttendance(false);
+        return {
+          created: result.created,
+          updated: result.updated,
+          total: data.records.length,
+        };
+      }
+      throw err;
+    }
+  }
+
+  async update(user: any, id: string, dto: UpdateAttendanceDto) {
+    const organizationId = user.organizationId;
+    const existing = await this.prisma.attendance.findFirst({
+      where: { id, organizationId },
+    });
+    if (!existing) throw new NotFoundException('Attendance record not found');
+
+    const data: Prisma.AttendanceUpdateInput = {};
+    if (dto.status !== undefined) data.status = dto.status;
+    if (dto.note !== undefined) data.note = dto.note;
+    if (Object.keys(data).length === 0) return existing;
+
+    // A human correction is authoritative: flip provenance to MANUAL so the
+    // camera pipeline (MANUAL_PRESERVED) never silently overwrites it.
+    data.source = 'MANUAL';
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.attendance.update({ where: { id }, data });
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          userId: user.sub || user.id,
+          action: 'UPDATE',
+          resource: 'Attendance',
+          resourceId: id,
+          changes: { from: existing.status, to: updated.status, note: updated.note },
+        },
+      });
+      return updated;
+    });
+  }
+
+  async remove(user: any, id: string) {
+    const organizationId = user.organizationId;
+    const existing = await this.prisma.attendance.findFirst({
+      where: { id, organizationId },
+    });
+    if (!existing) throw new NotFoundException('Attendance record not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.attendance.delete({ where: { id } });
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          userId: user.sub || user.id,
+          action: 'DELETE',
+          resource: 'Attendance',
+          resourceId: id,
+          changes: { deletedRecord: existing },
+        },
+      });
+    });
+    
+    return { deleted: true, id };
   }
 
   async findAll(organizationId: string, query: AttendanceQuery) {
@@ -131,8 +251,9 @@ export class AttendanceService {
     if (query.status) where.status = query.status as Prisma.AttendanceWhereInput['status'];
     if (query.dateFrom || query.dateTo) {
       where.date = {};
-      if (query.dateFrom) where.date.gte = new Date(query.dateFrom);
-      if (query.dateTo) where.date.lte = new Date(query.dateTo);
+      if (query.dateFrom) where.date.gte = startOfDay(query.dateFrom);
+      const dateTo = toDateToInclusive(query.dateTo);
+      if (dateTo) where.date.lte = dateTo;
     }
     // Single-day filter (frontend sends `date=YYYY-MM-DD`). Attendance rows
     // store a full timestamp, so match the whole local day range instead of
@@ -153,7 +274,7 @@ export class AttendanceService {
           student: { include: { user: { select: { id: true, firstName: true, lastName: true } } } },
           group: { select: { id: true, name: true } },
         },
-        orderBy: { date: 'desc' },
+        orderBy: [{ date: 'desc' }, { id: 'desc' }],
         skip,
         take: limit,
       }),
@@ -168,8 +289,9 @@ export class AttendanceService {
     if (query.groupId) where.groupId = query.groupId;
     if (query.dateFrom || query.dateTo) {
       where.date = {};
-      if (query.dateFrom) where.date.gte = new Date(query.dateFrom);
-      if (query.dateTo) where.date.lte = new Date(query.dateTo);
+      if (query.dateFrom) where.date.gte = startOfDay(query.dateFrom);
+      const dateTo = toDateToInclusive(query.dateTo);
+      if (dateTo) where.date.lte = dateTo;
     }
     if (query.date) {
       const day = new Date(query.date);
@@ -202,30 +324,27 @@ export class AttendanceService {
   }
 
   private async getDailyStats(organizationId: string, query: AttendanceQuery) {
-    const conditions = ['"organizationId" = $1::uuid'];
-    const params: (string | Date)[] = [organizationId];
-    let paramIndex = 2;
+    const conditions: Prisma.Sql[] = [Prisma.sql`"organizationId" = ${organizationId}::uuid`];
 
+    if (query.groupId) {
+      conditions.push(Prisma.sql`"groupId" = ${query.groupId}::uuid`);
+    }
     if (query.dateFrom) {
-      conditions.push(`date >= $${paramIndex}`);
-      params.push(new Date(query.dateFrom));
-      paramIndex++;
+      conditions.push(Prisma.sql`date >= ${startOfDay(query.dateFrom)}`);
     }
-    if (query.dateTo) {
-      conditions.push(`date <= $${paramIndex}`);
-      params.push(new Date(query.dateTo));
-      paramIndex++;
+    const dateTo = toDateToInclusive(query.dateTo);
+    if (dateTo) {
+      conditions.push(Prisma.sql`date <= ${dateTo}`);
     }
 
-    const whereClause = conditions.join(' AND ');
-    return this.prisma.$queryRawUnsafe(
-      `SELECT date, status, COUNT(*)::int as count
-       FROM "Attendance"
-       WHERE ${whereClause}
-       GROUP BY date, status
-       ORDER BY date DESC
-       LIMIT 30`,
-      ...params,
-    );
+    const whereClause = Prisma.join(conditions, ' AND ');
+    return this.prisma.$queryRaw`
+      SELECT DATE(date) as date, status, COUNT(*)::int as count
+      FROM "Attendance"
+      WHERE ${whereClause}
+      GROUP BY DATE(date), status
+      ORDER BY date DESC
+      LIMIT 30`;
   }
 }
+

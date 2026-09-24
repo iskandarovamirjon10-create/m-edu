@@ -21,7 +21,7 @@ function createMockPrisma() {
 }
 
 describe('DashboardService.getStats', () => {
-  let prisma: any;
+  let prisma: ReturnType<typeof createMockPrisma>;
   let svc: DashboardService;
 
   beforeEach(() => {
@@ -128,7 +128,17 @@ describe('DashboardService.getStats', () => {
     const call = prisma.$queryRaw.mock.calls[0];
     // The org id is bound as a parameter — search the parameter array.
     const params = call.slice(1);
-    const orgBound = params.some((p: any) => p === 'org-1');
+    const orgBound = params.some((p: unknown) => p === 'org-1');
     expect(orgBound).toBe(true);
+  });
+
+  it('aggregates monthly revenue by paidAt, not createdAt', async () => {
+    prisma.$queryRaw.mockResolvedValue([]);
+    await svc.getStats('org-1');
+    const [strings, ...params] = prisma.$queryRaw.mock.calls[0] as [string[], ...unknown[]];
+    const sql = strings.join('?');
+    expect(sql).toContain('"paidAt"');
+    expect(sql).toContain(`status = 'PAID'`);
+    expect(sql).not.toContain(`DATE_TRUNC('month', "createdAt")`);
   });
 });

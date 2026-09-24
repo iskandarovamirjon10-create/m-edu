@@ -5,6 +5,7 @@ import { useToast } from '@/components/ui/GlassToast';
 import { featureFlagsApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface FeatureFlag {
   id: string;
@@ -17,39 +18,45 @@ interface FeatureFlag {
 }
 
 const FLAG_TYPES = [
-  { value: 'BOOLEAN', label: 'Boolean' },
-  { value: 'STRING', label: 'String' },
-  { value: 'NUMBER', label: 'Number' },
-  { value: 'JSON', label: 'JSON' },
+  { value: 'BOOLEAN', labelKey: 'featureFlags.type.boolean' },
+  { value: 'STRING', labelKey: 'featureFlags.type.string' },
+  { value: 'NUMBER', labelKey: 'featureFlags.type.number' },
+  { value: 'JSON', labelKey: 'featureFlags.type.json' },
 ];
 
-function FeatureFlagRow({ flag, onToggle, isUpdating }: { flag: FeatureFlag; onToggle: () => void; isUpdating: boolean }) {
+function FeatureFlagRow({ flag, onToggle, onEdit, isUpdating }: { flag: FeatureFlag; onToggle: () => void; onEdit: () => void; isUpdating: boolean }) {
+  const { t } = useI18n();
   return (
     <li className="px-4 py-3 flex items-center gap-3 hover:bg-[rgba(148,234,239,0.04)] transition-colors">
       <GlassSwitch
         checked={flag.enabled}
         onChange={onToggle}
         disabled={isUpdating}
-        aria-label={`Toggle ${flag.name}`}
+        aria-label={t('featureFlags.toggleAria', { name: flag.name })}
       />
       <div className="flex-1 min-w-0">
         <h4 className="font-medium text-sm text-[var(--text-primary)] truncate">{flag.name}</h4>
         <p className="text-xs text-muted">{flag.description || flag.key}</p>
         <div className="flex items-center gap-1.5 mt-1">
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(148,234,239,0.12)] text-[var(--m-vivid)] font-mono">{flag.type}</span>
-          <span className="text-[10px] text-muted">{flag.rolloutPercentage ? `${flag.rolloutPercentage}% rollout` : 'full rollout'}</span>
+          <span className="text-[10px] text-muted">{flag.rolloutPercentage ? t('featureFlags.rolloutPercent', { n: flag.rolloutPercentage }) : t('featureFlags.fullRollout')}</span>
         </div>
       </div>
-      <Badge color={flag.enabled ? 'success' : 'muted'}>{flag.enabled ? 'On' : 'Off'}</Badge>
+      <Badge color={flag.enabled ? 'success' : 'muted'}>{flag.enabled ? t('common.on') : t('common.off')}</Badge>
+      <GlassButton size="sm" variant="ghost" onClick={onEdit} disabled={isUpdating}>
+        {t('common.edit')}
+      </GlassButton>
     </li>
   );
 }
 
 export function FeatureFlagsPage() {
-  usePageTitle('Feature Flags');
+  const { t } = useI18n();
+  usePageTitle(t('featureFlags.title'));
   const queryClient = useQueryClient();
   const toast = useToast();
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [form, setForm] = useState({ key: '', name: '', description: '', type: 'BOOLEAN' });
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -65,17 +72,25 @@ export function FeatureFlagsPage() {
     mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) =>
       featureFlagsApi.update(key, { enabled }),
     onSuccess: (_data, variables) => {
-      toast.success(variables.enabled ? 'Flag enabled' : 'Flag disabled');
+      toast.success(variables.enabled ? t('featureFlags.enabledToast') : t('featureFlags.disabledToast'));
       queryClient.invalidateQueries({ queryKey: ['feature-flags'] });
     },
-    onError: (e) => toast.error('Could not update flag', getErrorMessage(e)),
+    onError: (e) => toast.error(t('featureFlags.updateError'), getErrorMessage(e)),
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: typeof form) => featureFlagsApi.create(data),
+    mutationFn: (data: typeof form) =>
+      editingKey
+        ? featureFlagsApi.update(editingKey, {
+            name: data.name,
+            description: data.description,
+            type: data.type,
+          })
+        : featureFlagsApi.create(data),
     onSuccess: () => {
-      toast.success('Flag created');
+      toast.success(editingKey ? t('featureFlags.updated') : t('featureFlags.createdToast'));
       setCreateOpen(false);
+      setEditingKey(null);
       setForm({ key: '', name: '', description: '', type: 'BOOLEAN' });
       setFormError(null);
       queryClient.invalidateQueries({ queryKey: ['feature-flags'] });
@@ -83,47 +98,77 @@ export function FeatureFlagsPage() {
     onError: (e) => setFormError(getErrorMessage(e)),
   });
 
-  const flags: FeatureFlag[] = (flagsQuery.data as any)?.items ?? [];
+  interface FeatureFlagsList { items: FeatureFlag[]; total: number }
+  const flags: FeatureFlag[] = ((flagsQuery.data as FeatureFlagsList | undefined)?.items) ?? [];
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     const keyPattern = /^[a-z0-9][a-z0-9._-]*$/i;
-    if (!form.key.trim() || !form.name.trim()) {
-      setFormError('Key and name are required.');
+    if (!form.name.trim() || (!editingKey && !form.key.trim())) {
+      setFormError(t('featureFlags.validation.required'));
       return;
     }
-    if (!keyPattern.test(form.key.trim())) {
-      setFormError('Key may only contain letters, numbers, dots, dashes and underscores.');
+    if (!editingKey && !keyPattern.test(form.key.trim())) {
+      setFormError(t('featureFlags.validation.keyPattern'));
       return;
     }
     setFormError(null);
-    createMutation.mutate({ ...form, key: form.key.trim(), name: form.name.trim() });
+    createMutation.mutate({
+      ...form,
+      key: form.key.trim(),
+      name: form.name.trim(),
+    });
+  };
+
+  const closeForm = () => {
+    setCreateOpen(false);
+    setEditingKey(null);
+    setFormError(null);
+  };
+
+  const openCreate = () => {
+    setEditingKey(null);
+    setForm({ key: '', name: '', description: '', type: 'BOOLEAN' });
+    setFormError(null);
+    setCreateOpen(true);
+  };
+
+  const openEdit = (flag: FeatureFlag) => {
+    setEditingKey(flag.key);
+    setForm({
+      key: flag.key,
+      name: flag.name,
+      description: flag.description || '',
+      type: flag.type,
+    });
+    setFormError(null);
+    setCreateOpen(true);
   };
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <PageHeader
-          title="Feature Flags"
-          subtitle="Enable or disable platform capabilities without deploying code"
+          title={t('featureFlags.title')}
+          subtitle={t('featureFlags.subtitle')}
         />
 
         <div className="glass-card">
           <div className="px-4 py-3 border-b border-subtle flex items-center justify-between">
-            <h3 className="font-semibold text-[var(--text-primary)]">Active flags</h3>
-            <GlassButton size="sm" variant="primary" onClick={() => setCreateOpen(true)}>
-              New flag
+            <h3 className="font-semibold text-[var(--text-primary)]">{t('featureFlags.activeFlags')}</h3>
+            <GlassButton size="sm" variant="primary" onClick={openCreate}>
+              {t('featureFlags.newFlag')}
             </GlassButton>
           </div>
           <div className="divide-y divide-[var(--border-subtle)]">
             {flagsQuery.isLoading ? (
-              <div className="p-8"><PageLoader label="Loading feature flags…" /></div>
+              <div className="p-8"><PageLoader label={t('featureFlags.loading')} /></div>
             ) : flagsQuery.isError ? (
               <div className="p-8">
                 <ErrorState
-                  title="Failed to load flags"
+                  title={t('featureFlags.loadError')}
                   message={getErrorMessage(flagsQuery.error)}
                   onRetry={() => flagsQuery.refetch()}
                 />
@@ -131,8 +176,8 @@ export function FeatureFlagsPage() {
             ) : flags.length === 0 ? (
               <div className="p-8">
                 <EmptyState
-                  title="No feature flags yet"
-                  message="Create your first flag to control platform capabilities per rollout."
+                  title={t('featureFlags.empty')}
+                  message={t('featureFlags.emptyHint')}
                 />
               </div>
             ) : (
@@ -140,8 +185,9 @@ export function FeatureFlagsPage() {
                 <FeatureFlagRow
                   key={flag.id}
                   flag={flag}
-                  isUpdating={toggleMutation.isPending}
+                  isUpdating={toggleMutation.isPending || createMutation.isPending}
                   onToggle={() => toggleMutation.mutate({ key: flag.key, enabled: !flag.enabled })}
+                  onEdit={() => openEdit(flag)}
                 />
               ))
             )}
@@ -151,48 +197,49 @@ export function FeatureFlagsPage() {
 
       <GlassModal
         open={createOpen}
-        onClose={() => { setCreateOpen(false); setFormError(null); }}
-        title="New feature flag"
+        onClose={closeForm}
+        title={editingKey ? t('featureFlags.editTitle') : t('featureFlags.createTitle')}
       >
         <form onSubmit={handleCreate} className="space-y-4" noValidate>
-          <Field label="Key" required>
+          <Field label={t('featureFlags.form.key')} required={!editingKey}>
             <TextInput
               value={form.key}
               onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
-              placeholder="e.g. new-dashboard"
-              disabled={createMutation.isPending}
-              autoFocus
+              placeholder={t('featureFlags.form.keyPlaceholder')}
+              disabled={createMutation.isPending || Boolean(editingKey)}
+              readOnly={Boolean(editingKey)}
+              autoFocus={!editingKey}
             />
           </Field>
-          <Field label="Name" required>
+          <Field label={t('featureFlags.form.name')} required>
             <TextInput
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Human-readable name"
+              placeholder={t('featureFlags.form.namePlaceholder')}
               disabled={createMutation.isPending}
             />
           </Field>
-          <Field label="Description">
+          <Field label={t('featureFlags.form.description')}>
             <TextInput
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="What does this flag control?"
+              placeholder={t('featureFlags.form.descriptionPlaceholder')}
               disabled={createMutation.isPending}
             />
           </Field>
-          <Field label="Type">
+          <Field label={t('featureFlags.form.type')}>
             <Select
               value={form.type}
               onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
               disabled={createMutation.isPending}
             >
-              {FLAG_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
+              {FLAG_TYPES.map((ft) => (
+                <option key={ft.value} value={ft.value}>{t(ft.labelKey)}</option>
               ))}
             </Select>
           </Field>
           <p className="text-xs text-muted">
-            New flags start disabled and are visible to all organizations.
+            {t('featureFlags.createHint')}
           </p>
           {formError && (
             <p className="text-sm text-[var(--state-error)]" role="alert">{formError}</p>
@@ -201,13 +248,19 @@ export function FeatureFlagsPage() {
             <GlassButton
               type="button"
               variant="ghost"
-              onClick={() => { setCreateOpen(false); setFormError(null); }}
+              onClick={closeForm}
               disabled={createMutation.isPending}
             >
-              Cancel
+              {t('common.cancel')}
             </GlassButton>
             <GlassButton type="submit" variant="primary" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Creating…' : 'Create flag'}
+              {createMutation.isPending
+                ? editingKey
+                  ? t('users.updating')
+                  : t('featureFlags.creating')
+                : editingKey
+                  ? t('common.save')
+                  : t('featureFlags.create')}
             </GlassButton>
           </div>
         </form>

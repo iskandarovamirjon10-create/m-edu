@@ -7,6 +7,7 @@ import type {
 } from '@medu/core/src/ports/audit-repository.port';
 import type { AuditEventType } from '@medu/contracts';
 import type { FaceAuditEvent } from '@prisma/client';
+import { startOfDay, endOfDayInclusive } from '../../common/date-range';
 
 interface AuditQueryFilters {
   type?: AuditEventType;
@@ -75,8 +76,8 @@ export class PrismaAuditAdapter implements AuditRepository {
     if (filters.userId) where.userId = filters.userId;
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
-      if (filters.dateFrom) (where.createdAt as Record<string, Date>).gte = filters.dateFrom;
-      if (filters.dateTo) (where.createdAt as Record<string, Date>).lte = filters.dateTo;
+      if (filters.dateFrom) (where.createdAt as Record<string, Date>).gte = startOfDay(filters.dateFrom);
+      if (filters.dateTo) (where.createdAt as Record<string, Date>).lte = endOfDayInclusive(filters.dateTo);
     }
     // Search filter: case-insensitive substring match on the description
     // column. The previous adapter silently dropped this filter — users

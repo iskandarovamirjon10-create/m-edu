@@ -7,11 +7,15 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ImportExportService, StartImportDto, ImportListQuery, ExportListQuery } from './import-export.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 
 @ApiTags('Import / Export')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ORG_ADMIN, Role.SUPER_ADMIN)
 @Controller()
 export class ImportExportController {
   constructor(private readonly importExportService: ImportExportService) {}

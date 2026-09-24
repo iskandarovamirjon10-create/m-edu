@@ -29,6 +29,8 @@ import {
 import { Permissions } from '@medu/contracts';
 
 export class RecognitionService {
+  private static templateCache = new Map<string, { hash: string, embedding: FaceEmbedding }>();
+
   constructor(
     private readonly faceEngine: FaceEngine,
     private readonly encryption: EncryptionPort,
@@ -99,6 +101,13 @@ export class RecognitionService {
     qualityScore: number;
     attendanceRecorded: boolean;
     attendanceDecision: string | null;
+    /**
+     * Id of the Attendance row THIS attempt created, or null when nothing was
+     * created (not identified, duplicate prevented, or no group on session).
+     * Callers that must undo the attendance (e.g. an insufficient-funds entry
+     * gate) delete exactly this row — never a time window (F-009).
+     */
+    attendanceRecordId: string | null;
     message: string;
   }> {
     await this.authorization.requirePermission(Permissions.FACE_RECOGNIZE, tenant.role);
@@ -133,6 +142,7 @@ export class RecognitionService {
     }
 
     const startTime = Date.now();
+    // config was already obtained above for TTL check — reuse it here.
     let attemptStatus: RecognitionAttemptStatus = RecognitionAttemptStatus.DETECTED;
     let qualityScore = 0;
     let livenessResult = 'UNAVAILABLE';
@@ -153,7 +163,7 @@ export class RecognitionService {
       qualityScore = quality.overallScore;
       if (!quality.passesThreshold) {
         attemptStatus = RecognitionAttemptStatus.QUALITY_FAILED;
-        throw new FaceQualityTooLowError(qualityScore, 0.4);
+        throw new FaceQualityTooLowError(qualityScore, config.qualityThreshold);
       }
       attemptStatus = RecognitionAttemptStatus.QUALITY_PASSED;
 
@@ -185,7 +195,6 @@ export class RecognitionService {
       // correctness behaviour — we just stop materialising the whole gallery
       // at once.
       const BATCH_SIZE = 500;
-      const config = this.decisionPolicy.getConfig();
 
       let bestSimilarity = -1;
       let bestMatch:
@@ -198,27 +207,48 @@ export class RecognitionService {
       );
 
       for await (const batch of stream) {
+        // Yield to event loop between batches to prevent starvation during massive streaming
+        await new Promise((resolve) => setImmediate(resolve));
+
         for (const template of batch) {
           try {
-            const decryptedData = await this.encryption.decrypt(template.templateData);
-            const storedEmbedding = FaceEmbedding.deserialize(decryptedData);
-
-            // Verify integrity
-            const hashValid = await this.encryption.verifyHash(decryptedData, template.templateHash);
-            if (!hashValid) {
-              await this.audit.log({
-                organizationId: tenant.organizationId,
-                type: 'TEMPLATE_CORRUPTED',
-                resourceType: 'FaceTemplate',
-                resourceId: template.id,
-                description: `Template integrity check failed: ${template.id}`,
-              });
-              continue;
+            // Memory Cache: Avoid O(N) AES decryptions per frame.
+            // Templates are encrypted at rest, but we can cache them in-memory (in use).
+            const cacheKey = `${tenant.organizationId}:${template.id}`;
+            let storedEmbedding = RecognitionService.templateCache.get(cacheKey);
+            
+            // Cache invalidation: if hash changed (re-enrollment), re-decrypt.
+            if (!storedEmbedding || storedEmbedding.hash !== template.templateHash) {
+              const decryptedData = await this.encryption.decrypt(template.templateData);
+              
+              // Verify integrity
+              const hashValid = await this.encryption.verifyHash(decryptedData, template.templateHash);
+              if (!hashValid) {
+                await this.audit.log({
+                  organizationId: tenant.organizationId,
+                  type: 'TEMPLATE_CORRUPTED',
+                  resourceType: 'FaceTemplate',
+                  resourceId: template.id,
+                  description: `Template integrity check failed: ${template.id}`,
+                });
+                continue;
+              }
+              
+              storedEmbedding = {
+                hash: template.templateHash,
+                embedding: FaceEmbedding.deserialize(decryptedData),
+              };
+              
+              // Enforce bounds to prevent memory leaks (max 100,000 templates = ~50MB)
+              if (RecognitionService.templateCache.size > 100000) {
+                RecognitionService.templateCache.clear();
+              }
+              RecognitionService.templateCache.set(cacheKey, storedEmbedding);
             }
 
             const similarity = await this.faceEngine.compareEmbeddings({
               embeddingA: probeEmbedding,
-              embeddingB: storedEmbedding,
+              embeddingB: storedEmbedding.embedding,
             });
 
             if (similarity > bestSimilarity) {
@@ -247,6 +277,7 @@ export class RecognitionService {
       const decision = this.decisionPolicy.decide({
         qualityScore,
         livenessDecision: liveness.decision as 'PASS' | 'FAIL' | 'UNCERTAIN' | 'UNAVAILABLE',
+        livenessConfidence: liveness.confidence,
         similarityScore,
         bestMatchFound: bestMatch !== null,
       }, identifiedStudentId ?? undefined);
@@ -280,6 +311,7 @@ export class RecognitionService {
       // Stage 7: Attendance (if identified)
       let attendanceRecorded = false;
       let attendanceDecision: string | null = null;
+      let attendanceRecordId: string | null = null;
 
       if (decision.outcome === 'IDENTIFIED' && session.groupId) {
         const attendanceCheck = await this.attendancePolicy.validate(
@@ -304,6 +336,9 @@ export class RecognitionService {
           // (decision 'DUPLICATE_PREVENTED') — reflect the true outcome.
           attendanceRecorded = record.decision === 'RECORDED';
           attendanceDecision = record.decision;
+          // Only expose the id when this attempt is what created the row, so a
+          // caller can never delete a pre-existing attendance record.
+          attendanceRecordId = attendanceRecorded ? record.id : null;
         } else {
           attendanceDecision = attendanceCheck.decision;
         }
@@ -330,6 +365,7 @@ export class RecognitionService {
         qualityScore,
         attendanceRecorded,
         attendanceDecision,
+        attendanceRecordId,
         message,
       };
     } catch (error) {
@@ -354,6 +390,7 @@ export class RecognitionService {
         qualityScore,
         attendanceRecorded: false,
         attendanceDecision: null,
+        attendanceRecordId: null,
         message: error instanceof Error ? error.message : 'Recognition failed',
       };
     }

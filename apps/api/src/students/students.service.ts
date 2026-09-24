@@ -6,6 +6,7 @@ import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
 import { CreateStudentDto, UpdateStudentDto } from '../common/dto';
 import { StudentQuery } from '../common/dto/query';
+import { userPublicSelect } from '../common/selects/user.select';
 
 @Injectable()
 export class StudentsService {
@@ -68,38 +69,48 @@ export class StudentsService {
 
   async create(organizationId: string, data: CreateStudentDto) {
     if (data.email) {
-      const existing = await this.prisma.user.findFirst({ where: { email: data.email } });
+      const existing = await this.prisma.user.findFirst({ where: { email: data.email, organizationId } });
       if (existing) throw new BadRequestException('Email already registered');
     }
 
     const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : null;
     const email = data.email || `student-${randomUUID()}@placeholder.local`;
 
-    return this.prisma.student.create({
-      data: {
-        organization: { connect: { id: organizationId } },
-        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
-        gender: data.gender,
-        address: data.address,
-        notes: data.notes,
-        parentName: data.parentName,
-        parentPhone: data.parentPhone,
-        parentEmail: data.parentEmail,
-        user: {
-          create: {
-            organization: { connect: { id: organizationId } },
-            email,
-            passwordHash,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            phone: data.phone,
-            role: 'STUDENT',
-            settings: { create: {} },
+    try {
+      return await this.prisma.student.create({
+        data: {
+          organization: { connect: { id: organizationId } },
+          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+          gender: data.gender,
+          address: data.address,
+          notes: data.notes,
+          parentName: data.parentName,
+          parentPhone: data.parentPhone,
+          parentEmail: data.parentEmail,
+          user: {
+            create: {
+              organization: { connect: { id: organizationId } },
+              email,
+              passwordHash,
+              firstName: data.firstName,
+              lastName: data.lastName,
+              phone: data.phone,
+              role: 'STUDENT',
+              settings: { create: {} },
+            },
           },
         },
-      },
-      include: { user: true },
-    });
+        include: { user: userPublicSelect },
+      });
+    } catch (error: unknown) {
+      // User.email is globally unique — the org-scoped pre-check above can
+      // race a concurrent create (in this or another tenant) and surface as
+      // Prisma P2002 instead of a clean 409.
+      if ((error as { code?: string })?.code === 'P2002') {
+        throw new BadRequestException('Email already registered');
+      }
+      throw error;
+    }
   }
 
   async update(organizationId: string, id: string, data: UpdateStudentDto) {
@@ -129,7 +140,7 @@ export class StudentsService {
         ...studentData,
         ...(Object.keys(userData).length > 0 ? { user: { update: userData } } : {}),
       },
-      include: { user: true },
+      include: { user: userPublicSelect },
     });
   }
 
@@ -148,22 +159,21 @@ export class StudentsService {
   async remove(organizationId: string, id: string) {
     const student = await this.findOne(organizationId, id);
 
-    const [paymentCount, attendanceCount, gradeCount, enrollmentCount, attemptCount, cameraEventCount] =
+    const [paymentCount, attendanceCount, gradeCount, cameraEventCount, invoiceCount] =
       await Promise.all([
         this.prisma.payment.count({ where: { studentId: id, organizationId } }),
         this.prisma.attendance.count({ where: { studentId: id, organizationId } }),
         this.prisma.grade.count({ where: { studentId: id, organizationId } }),
-        this.prisma.faceEnrollment.count({ where: { studentId: id, organizationId } }),
-        this.prisma.recognitionAttempt.count({ where: { identifiedStudentId: id, organizationId } }),
         this.prisma.cameraAttendanceEvent.count({ where: { studentId: id, organizationId } }),
+        this.prisma.invoice.count({ where: { studentId: id, organizationId } }),
       ]);
 
     if (
-      paymentCount + attendanceCount + gradeCount + enrollmentCount + attemptCount + cameraEventCount >
+      paymentCount + attendanceCount + gradeCount + cameraEventCount + invoiceCount >
       0
     ) {
       throw new BadRequestException(
-        'This student has historical records (payments, attendance, grades, or face data) — deactivate the student instead of deleting them',
+        'This student has historical records (invoices, payments, attendance, or grades) — deactivate the student instead of deleting them',
       );
     }
 
@@ -171,7 +181,26 @@ export class StudentsService {
       // StudentGroup memberships cascade on Student delete; remove explicitly
       // for clarity and to keep the transaction deterministic.
       await tx.studentGroup.deleteMany({ where: { studentId: id, organizationId } });
-      await tx.student.delete({ where: { id, organizationId } });
+      
+      // Biometric data MUST be deleted immediately when the subject is deleted
+      const enrollments = await tx.faceEnrollment.findMany({
+        where: { studentId: id, organizationId },
+        select: { id: true },
+      });
+      if (enrollments.length > 0) {
+        const enrollmentIds = enrollments.map((e) => e.id);
+        await tx.faceTemplate.deleteMany({
+          where: { enrollmentId: { in: enrollmentIds }, organizationId }
+        });
+        await tx.faceEnrollment.deleteMany({
+          where: { studentId: id, organizationId }
+        });
+        await tx.recognitionAttempt.deleteMany({
+          where: { identifiedStudentId: id, organizationId }
+        });
+      }
+
+      await tx.student.deleteMany({ where: { id, organizationId } });
 
       // Remove the linked login account so a deleted student cannot sign in.
       // (FaceAuditEvent.userId is SET NULL automatically.)
@@ -179,7 +208,7 @@ export class StudentsService {
         await tx.notification.deleteMany({ where: { userId: student.userId } });
         await tx.session.deleteMany({ where: { userId: student.userId } });
         await tx.userSettings.deleteMany({ where: { userId: student.userId } });
-        await tx.user.delete({ where: { id: student.userId } });
+        await tx.user.deleteMany({ where: { id: student.userId, organizationId } });
       }
     });
 
@@ -189,15 +218,25 @@ export class StudentsService {
   async assignToGroup(organizationId: string, studentId: string, groupId: string) {
     const group = await this.prisma.group.findFirst({ where: { id: groupId, organizationId } });
     if (!group) throw new NotFoundException('Group not found');
+    if (group.isActive === false) {
+      throw new BadRequestException('Cannot assign students to an inactive group');
+    }
 
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, organizationId },
+      include: { user: { select: { isActive: true } } },
     });
     if (!student) throw new NotFoundException('Student not found');
+    if (student.user?.isActive === false) {
+      throw new BadRequestException('Cannot assign a deactivated student to a group');
+    }
 
     // Enforce group capacity BEFORE adding — check within a transaction so two
     // concurrent requests cannot both pass when only 1 slot remains.
     return this.prisma.$transaction(async (tx) => {
+      // Serialize access to this group to prevent TOCTOU race condition
+      await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${groupId}::uuid FOR UPDATE`;
+
       // Count active enrollments (including this student if re-activating).
       const currentCount = await tx.studentGroup.count({
         where: { groupId, isActive: true },
@@ -221,7 +260,7 @@ export class StudentsService {
       // this transaction because the unique constraint is enforced by the DB.
       return tx.studentGroup.upsert({
         where: { studentId_groupId: { studentId, groupId } },
-        update: { isActive: true, organizationId },
+        update: { isActive: true, leftAt: null, organizationId },
         create: { organizationId, studentId, groupId, isActive: true },
       });
     });
@@ -234,7 +273,8 @@ export class StudentsService {
     if (!membership) throw new NotFoundException('Membership not found');
     return this.prisma.studentGroup.update({
       where: { studentId_groupId: { studentId, groupId } },
-      data: { isActive: false },
+      data: { isActive: false, leftAt: new Date() },
     });
   }
 }
+

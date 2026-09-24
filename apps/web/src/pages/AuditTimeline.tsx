@@ -2,26 +2,50 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, Table, THead, TBody, TR, TH, TD, Pagination, TextInput, Select } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n, type Locale } from '@/i18n/I18nProvider';
 
-import type { Paginated, SystemAuditEvent } from '@/lib/types';
+import type { Paginated, SystemAuditEvent, AuditAction } from '@/lib/types';
 
 /**
  * Global Audit Timeline — rule-based, deterministic (NO AI).
  * Uses the AuditLog model via the backend audit endpoint.
  */
 
+// Reuse enum.action.* for exact-match actions; everything else uses audit.action.*.
+const ENUM_ACTION_SET = new Set<AuditAction>([
+  'CREATE',
+  'UPDATE',
+  'DELETE',
+  'LOGIN',
+  'EXPORT',
+  'IMPORT',
+]);
+
+function actionKey(action: string): string {
+  return ENUM_ACTION_SET.has(action as AuditAction)
+    ? `enum.action.${action}`
+    : `audit.action.${action}`;
+}
+
 const EVENT_TYPE_FILTERS = [
-  { value: '', label: 'All actions' },
-  { value: 'LOGIN', label: 'Login' },
-  { value: 'CREATE', label: 'Create' },
-  { value: 'UPDATE', label: 'Update' },
-  { value: 'DELETE', label: 'Delete' },
-  { value: 'EXPORT', label: 'Export' },
-  { value: 'IMPORT', label: 'Import' },
+  { value: '', label: 'enum.allActions' },
+  { value: 'LOGIN', label: 'enum.action.LOGIN' },
+  { value: 'CREATE', label: 'enum.action.CREATE' },
+  { value: 'UPDATE', label: 'enum.action.UPDATE' },
+  { value: 'DELETE', label: 'enum.action.DELETE' },
+  { value: 'EXPORT', label: 'enum.action.EXPORT' },
+  { value: 'IMPORT', label: 'enum.action.IMPORT' },
 ];
 
+const DATE_LOCALES: Record<Locale, string> = {
+  en: 'en-US',
+  ru: 'ru-RU',
+  uz: 'uz-UZ',
+};
+
 export function AuditTimelinePage() {
-  usePageTitle('Audit Timeline');
+  const { t, locale } = useI18n();
+  usePageTitle(t('auditTimeline.title'));
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [action, setAction] = useState('');
@@ -44,7 +68,7 @@ export function AuditTimelinePage() {
         ...(params.action && { action: params.action }),
         ...(params.search && { search: params.search }),
       })}`);
-      if (!res.ok) throw new Error('Failed to load audit timeline');
+      if (!res.ok) throw new Error(t('auditTimeline.loadError'));
       return res.json() as Promise<Paginated<SystemAuditEvent>>;
     },
     placeholderData: (prev) => prev,
@@ -62,8 +86,6 @@ export function AuditTimelinePage() {
     setPage(1);
   }, []);
 
-  const formatAction = (a: string) => a.toLowerCase().replace(/_/g, ' ');
-
   const statusColor = (action: string) => {
     if (action === 'CREATE') return 'success';
     if (action === 'UPDATE') return 'warning';
@@ -73,14 +95,14 @@ export function AuditTimelinePage() {
   };
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-cyan-2" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <PageHeader
-          title="Audit Timeline"
-          subtitle="Every meaningful change across the platform — rule-based, explainable, no AI"
+          title={t('auditTimeline.title')}
+          subtitle={t('auditTimeline.pageSubtitle')}
         />
 
         {/* Filters */}
@@ -88,8 +110,8 @@ export function AuditTimelinePage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
               <TextInput
-                placeholder="Search events, descriptions, resources…"
-                aria-label="Search audit timeline"
+                placeholder={t('auditTimeline.searchPlaceholder')}
+                aria-label={t('auditTimeline.searchAria')}
                 value={search}
                 onChange={handleSearchChange}
                 type="search"
@@ -97,15 +119,15 @@ export function AuditTimelinePage() {
               <Select
                 value={action}
                 onChange={handleActionChange}
-                aria-label="Filter by action"
+                aria-label={t('common.filterByAction')}
               >
                 {EVENT_TYPE_FILTERS.map((f) => (
-                  <option key={f.value} value={f.value}>{f.label}</option>
+                  <option key={f.value} value={f.value}>{t(f.label)}</option>
                 ))}
               </Select>
             </div>
             <div className="text-sm text-muted sm:ml-4 sm:shrink-0">
-              {data ? `${data.total} events` : '—'}
+              {data ? t('auditTimeline.count', { count: data.total }) : '—'}
             </div>
           </div>
         </div>
@@ -113,13 +135,13 @@ export function AuditTimelinePage() {
         {/* Table */}
         <div className="glass-card overflow-hidden">
           {auditQuery.isLoading && !data ? (
-            <div className="p-8"><PageLoader label="Loading audit timeline…" /></div>
+            <div className="p-8"><PageLoader label={t('auditTimeline.loading')} /></div>
           ) : auditQuery.isError ? (
-            <div className="p-8"><ErrorState title="Failed to load audit timeline" message={auditQuery.error instanceof Error ? auditQuery.error.message : 'Unknown error'} /></div>
+            <div className="p-8"><ErrorState title={t('auditTimeline.loadError')} message={auditQuery.error instanceof Error ? auditQuery.error.message : t('common.unknownError')} /></div>
           ) : (!data || data.items.length === 0) ? (
             <EmptyState
-              title={search || action ? 'No matching events' : 'No audit events yet'}
-              message={search || action ? 'Adjust filters to see results.' : 'Platform changes will appear here as they occur.'}
+              title={search || action ? t('auditTimeline.emptyFilteredTitle') : t('auditTimeline.emptyTitle')}
+              message={search || action ? t('common.adjustFilters') : t('auditTimeline.emptyMessage')}
             />
           ) : (
             <>
@@ -127,22 +149,22 @@ export function AuditTimelinePage() {
                 <Table>
                   <THead>
                     <TR>
-                      <TH>Time</TH>
-                      <TH>Action</TH>
-                      <TH>Resource</TH>
-                      <TH>Actor</TH>
-                      <TH>Details</TH>
+                      <TH>{t('audit.col.time')}</TH>
+                      <TH>{t('audit.col.action')}</TH>
+                      <TH>{t('auditTimeline.col.resource')}</TH>
+                      <TH>{t('audit.col.actor')}</TH>
+                      <TH>{t('auditTimeline.col.details')}</TH>
                     </TR>
                   </THead>
                   <TBody>
                     {data.items.map((item) => (
                       <TR key={item.id} className="group hover:bg-[rgba(148,234,239,0.06)] transition-colors">
                         <TD className="whitespace-nowrap font-mono text-xs text-muted">
-                          {new Date(item.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          {new Date(item.createdAt).toLocaleString(DATE_LOCALES[locale], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </TD>
                         <TD>
                           <Badge color={statusColor(item.action)}>
-                            {formatAction(item.action || '')}
+                            {t(actionKey(item.action || ''))}
                           </Badge>
                         </TD>
                         <TD className="text-xs text-muted font-medium">
@@ -150,7 +172,7 @@ export function AuditTimelinePage() {
                           {item.entityId ? ` · ${String(item.entityId).slice(0, 8)}` : ''}
                         </TD>
                         <TD className="whitespace-nowrap text-sm">
-                          {item.actorName || 'System'}
+                          {item.actorName || t('common.system')}
                         </TD>
                         <TD className="max-w-xs truncate text-xs text-muted" title={item.description}>
                           {item.description}

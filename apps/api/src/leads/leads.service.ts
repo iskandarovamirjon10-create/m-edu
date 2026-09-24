@@ -5,6 +5,7 @@ import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
 import { AddLeadActivityDto, ConvertLeadDto, CreateLeadDto, UpdateLeadDto } from '../common/dto';
 import { LeadQuery } from '../common/dto/query';
+import { userPublicSelect } from '../common/selects/user.select';
 
 @Injectable()
 export class LeadsService {
@@ -85,20 +86,20 @@ export class LeadsService {
 
     if (Object.keys(updateData).length === 0) return this.findOne(organizationId, id);
 
-    return this.prisma.lead.update({ where: { id, organizationId }, data: updateData });
+    await this.prisma.lead.updateMany({ where: { id, organizationId }, data: updateData });
+    return this.findOne(organizationId, id);
   }
 
   async updateStage(organizationId: string, id: string, stage: string, lostReason?: string) {
     const lead = await this.findOne(organizationId, id);
-    // WON is terminal: a converted lead must not be moved back to an earlier
-    // stage (the conversion already created a student + set the WON flag).
     if (lead.stage === 'WON' && stage !== 'WON') {
       throw new BadRequestException('A converted (WON) lead cannot move back to an earlier stage');
     }
-    return this.prisma.lead.update({
+    await this.prisma.lead.updateMany({
       where: { id, organizationId },
       data: { stage: stage as Prisma.LeadUpdateInput['stage'], lostReason: stage === 'LOST' ? lostReason : null },
     });
+    return this.findOne(organizationId, id);
   }
 
   async convert(organizationId: string, id: string, data: ConvertLeadDto) {
@@ -108,32 +109,34 @@ export class LeadsService {
     const email = data.email || lead.email;
     if (!email) throw new BadRequestException('Email is required for conversion');
 
-    const existing = await this.prisma.user.findFirst({ where: { email } });
+    const lastName = data.lastName || lead.lastName;
+    if (!lastName) throw new BadRequestException('Last name is required for conversion');
+
+    const existing = await this.prisma.user.findFirst({ where: { email, organizationId } });
     if (existing) throw new BadRequestException('Email already registered');
 
     const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : null;
 
-    // Atomic conversion: student+user creation and the lead WON transition
-    // must succeed or fail together (no half-converted leads).
-    return this.prisma.$transaction(async (tx) => {
-      const student = await tx.student.create({
-        data: {
-          organization: { connect: { id: organizationId } },
-          user: {
-            create: {
-              organization: { connect: { id: organizationId } },
-              email,
-              passwordHash,
-              firstName: lead.firstName,
-              lastName: lead.lastName || '',
-              phone: lead.phone,
-              role: 'STUDENT',
-              settings: { create: {} },
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const student = await tx.student.create({
+          data: {
+            organization: { connect: { id: organizationId } },
+            user: {
+              create: {
+                organization: { connect: { id: organizationId } },
+                email,
+                passwordHash,
+                firstName: lead.firstName,
+                lastName: lastName,
+                phone: lead.phone,
+                role: 'STUDENT',
+                settings: { create: {} },
+              },
             },
           },
-        },
-        include: { user: true },
-      });
+          include: { user: userPublicSelect },
+        });
 
       await tx.lead.update({
         where: { id, organizationId },
@@ -142,12 +145,16 @@ export class LeadsService {
 
       return student;
     });
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        throw new BadRequestException('This email is unavailable');
+      }
+      throw error;
+    }
   }
 
   async addActivity(organizationId: string, id: string, data: AddLeadActivityDto) {
     await this.findOne(organizationId, id);
-    // LeadActivity has no organizationId column — the lead FK already
-    // pins the activity to a single tenant (verified via findOne above).
     return this.prisma.leadActivity.create({
       data: {
         leadId: id,
@@ -160,22 +167,15 @@ export class LeadsService {
   }
 
   async remove(organizationId: string, id: string) {
-    await this.findOne(organizationId, id);
-    // LeadActivity.leadId and FollowUp.leadId are ON DELETE RESTRICT — a bare
-    // lead.delete() throws P2003 (raw 500) whenever the lead has activities
-    // or follow-ups. Delete the child rows first (the intended cascade) in
-    // the same transaction as the lead.
-    return this.prisma.$transaction(async (tx) => {
+    const lead = await this.findOne(organizationId, id);
+    await this.prisma.$transaction(async (tx) => {
       await tx.leadActivity.deleteMany({ where: { leadId: id } });
       await tx.followUp.deleteMany({ where: { leadId: id } });
-      return tx.lead.delete({ where: { id, organizationId } });
+      await tx.lead.deleteMany({ where: { id, organizationId } });
     });
+    return lead;
   }
-  /**
-   * Cross-tenant guard: a lead's owner must belong to the same organization.
-   * Prevents a tenant from referencing (and later pulling data through)
-   * another tenant's user account.
-   */
+
   private async assertOwnerInOrg(organizationId: string, ownerId?: string): Promise<void> {
     if (!ownerId) return;
     const owner = await this.prisma.user.findFirst({
@@ -186,6 +186,4 @@ export class LeadsService {
       throw new BadRequestException('Owner user not found in this organization');
     }
   }
-
-
 }

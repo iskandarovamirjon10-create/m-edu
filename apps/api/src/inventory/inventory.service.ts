@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInventoryItemDto, UpdateInventoryItemDto, CreateTransactionDto } from './dto/inventory.dto';
 import { PaginationParams } from '../common/dto/pagination';
@@ -11,11 +12,14 @@ export class InventoryService {
   // ===================== Inventory Items =====================
 
   async findAllItems(organizationId: string, params: PaginationParams) {
-    const { search, category, status } = params as any;
+    const rawParams = params as Record<string, unknown>;
+    const search = typeof rawParams.search === 'string' ? rawParams.search : undefined;
+    const category = typeof rawParams.category === 'string' ? rawParams.category as Prisma.EnumInventoryCategoryFilter['equals'] : undefined;
+    const status = typeof rawParams.status === 'string' ? rawParams.status as Prisma.EnumAssetStatusFilter['equals'] : undefined;
     const { skip, limit: limitVal } = parsePagination(params);
     const pageVal = Math.max(1, parseInt(String(params?.page ?? ''), 10) || 1);
 
-    const where: any = { organizationId };
+    const where: Prisma.InventoryItemWhereInput = { organizationId };
 
     if (search) {
       where.OR = [
@@ -90,13 +94,13 @@ export class InventoryService {
     }
 
     return this.prisma.inventoryItem.update({
-      where: { id, organizationId },
+      where: { id },
       data: dto,
     });
   }
 
   async deleteItem(organizationId: string, id: string) {
-    const item = await this.findItemById(organizationId, id);
+    await this.findItemById(organizationId, id);
 
     // Check if item has active transactions
     const transactionCount = await this.prisma.inventoryTransaction.count({
@@ -108,7 +112,7 @@ export class InventoryService {
     }
 
     return this.prisma.inventoryItem.delete({
-      where: { id, organizationId },
+      where: { id },
     });
   }
 
@@ -116,8 +120,6 @@ export class InventoryService {
 
   async createTransaction(organizationId: string, dto: CreateTransactionDto, userId: string) {
     const { itemId, type, quantity, notes } = dto;
-    // Security: createdBy must come from the authenticated principal only.
-    // A client-supplied createdBy is never trusted.
     const createdBy = userId;
 
     if (quantity <= 0) {
@@ -125,8 +127,6 @@ export class InventoryService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // Read item inside transaction with row-level lock to prevent concurrent
-      // transactions from reading stale quantity values (fixes check-then-act race).
       const item = await tx.inventoryItem.findFirst({
         where: { id: itemId, organizationId },
       });
@@ -135,42 +135,32 @@ export class InventoryService {
         throw new NotFoundException('Item not found');
       }
 
-      // Atomic quantity validation and update for decrementing operations.
-      // P2002 unique constraint on itemId+type+createdAt is already handled by
-      // the service-level deduplication in the controller; the transaction
-      // ensures atomicity of the quantity update.
-      if (type === 'ISSUE' || type === 'DISPOSAL') {
+      // Outbound stock movements: ISSUE, DISPOSAL, and DAMAGE all leave
+      // available inventory (damaged goods are no longer usable stock).
+      if (type === 'ISSUE' || type === 'DISPOSAL' || type === 'DAMAGE') {
         if (quantity > item.quantity) {
           throw new BadRequestException(`Insufficient stock. Available: ${item.quantity}`);
         }
 
-        // Atomic decrement — only succeeds if quantity has not changed since read.
-        // Includes organizationId in WHERE to enforce tenant isolation.
         const result = await tx.inventoryItem.updateMany({
           where: {
             id: itemId,
-            organizationId,  // tenant isolation on the update target
+            organizationId,
             quantity: { gte: quantity },
           },
           data: { quantity: { decrement: quantity } },
         });
 
         if (result.count === 0) {
-          // Either quantity dropped below threshold or organizationId mismatch.
-          // Re-throw with a generic message to avoid leaking timing data.
           throw new BadRequestException('Insufficient stock or item not accessible');
         }
       } else {
-        // Increment operations (PURCHASE, RETURN) are inherently safe since
-        // quantity cannot go negative. Include organizationId in WHERE for
-        // consistency and defense-in-depth.
         await tx.inventoryItem.updateMany({
           where: { id: itemId, organizationId },
           data: { quantity: { increment: quantity } },
         });
       }
 
-      // Create transaction record after successful quantity update.
       const transaction = await tx.inventoryTransaction.create({
         data: {
           organizationId,
@@ -233,23 +223,16 @@ export class InventoryService {
       });
       if (!item) throw new NotFoundException('Item not found');
       return tx.inventoryItem.update({
-        where: { id: itemId, organizationId },
+        where: { id: itemId },
         data: { quantity },
       });
     });
   }
 
   async adjustStock(organizationId: string, itemId: string, adjustment: number) {
-    // Verify the item exists and belongs to the organization before adjusting.
-    // This gives a precise 404 if the item is missing, while the actual stock
-    // check + update is performed atomically in a single SQL statement to
-    // prevent the check-then-act race that exists when the read happens
-    // outside the update.
     await this.findItemById(organizationId, itemId);
 
     if (adjustment < 0) {
-      // Atomic decrement guarded by the current quantity. The update only
-      // succeeds if the current quantity is at least |adjustment|.
       const result = await this.prisma.inventoryItem.updateMany({
         where: {
           id: itemId,
@@ -263,13 +246,11 @@ export class InventoryService {
         throw new BadRequestException('Insufficient stock for adjustment');
       }
     } else if (adjustment > 0) {
-      // Increment is inherently safe (quantity cannot go negative).
       await this.prisma.inventoryItem.updateMany({
         where: { id: itemId, organizationId },
         data: { quantity: { increment: adjustment } },
       });
     } else {
-      // Zero adjustment is a no-op; return the current item unchanged.
       return this.findItemById(organizationId, itemId);
     }
 
@@ -282,7 +263,7 @@ export class InventoryService {
     const [
       totalItems,
       totalValue,
-      lowStockItems,
+      lowStockCandidates,
       categoryBreakdown,
       recentActivity,
     ] = await Promise.all([
@@ -296,10 +277,6 @@ export class InventoryService {
       this.prisma.inventoryItem.findMany({
         where: {
           organizationId,
-          // Pull a candidate set: items with quantity at or below the higher
-          // of (their minStock, 10). A precise per-row comparison is then
-          // applied in the post-filter below because Prisma cannot compare
-          // two columns in a where clause directly.
           quantity: { lte: 10000 },
         },
         select: {
@@ -320,7 +297,7 @@ export class InventoryService {
       this.prisma.inventoryTransaction.findMany({
         where: {
           organizationId,
-          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // Last 7 days
+          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
         },
         include: {
           item: {
@@ -345,9 +322,7 @@ export class InventoryService {
         totalItems,
         totalValue: totalValue._sum.purchasePrice || 0,
       },
-      // Post-filter: low stock means current quantity is at or below the
-      // per-item minStock (with a 10-unit baseline when minStock is unset).
-      lowStockItems: (lowStockItems as any[]).filter((i) => i.quantity <= Math.max(i.minStock || 0, 10)),
+      lowStockItems: lowStockCandidates.filter((i) => i.quantity <= Math.max(i.minStock || 0, 10)),
       categoryBreakdown,
       recentActivity,
     };

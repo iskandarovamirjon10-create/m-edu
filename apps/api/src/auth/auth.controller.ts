@@ -8,11 +8,15 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { BootstrapDto, ExchangeAuthCodeDto, ForgotPasswordDto, LoginDto, RegisterDto, ResetPasswordDto } from './dto';
 import { GoogleProfile, RequestUser } from './types';
+import { ParentPortalService } from '../parent-portal/parent-portal.service';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly parentPortalService: ParentPortalService,
+  ) {}
 
   @Post('login')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -138,6 +142,7 @@ export class AuthController {
 
   @Post('refresh')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Refresh access token' })
   async refresh(@Req() req: Request & { user: RequestUser }, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.refreshToken(req.user.sub, req.user.sid ?? undefined);
@@ -156,9 +161,9 @@ export class AuthController {
   async logout(@Req() req: Request & { user: RequestUser }, @Res({ passthrough: true }) res: Response) {
     const sessionId = req.user.sid;
     if (sessionId) {
-      await this.authService.logout(sessionId, req.user.sub);
+      await this.authService.logout(sessionId, req.user.sub, req.user.role);
     } else {
-      await this.authService.logoutAll(req.user.sub, 'logout_no_sid');
+      await this.authService.logoutAll(req.user.sub, 'logout_no_sid', req.user.role);
     }
     res.clearCookie('access_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
     return { message: 'Logged out successfully' };
@@ -184,5 +189,38 @@ export class AuthController {
   @ApiOperation({ summary: 'Reset password with token' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.token, dto.password);
+  }
+
+  @Post('parent-login')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Login for parents using email' })
+  async parentLogin(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+    const parent = await this.parentPortalService.authenticate(dto.email, dto.password);
+    
+    // Issue token specifically for parents using authService
+    const accessToken = await this.authService.issueParentToken({
+      parentId: parent.id,
+      organizationId: parent.organizationId,
+      email: parent.email,
+      firstName: parent.firstName,
+      lastName: parent.lastName,
+    });
+
+    res.cookie('access_token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
+    return {
+      user: {
+        id: parent.id,
+        email: parent.email,
+        firstName: parent.firstName,
+        lastName: parent.lastName,
+        role: 'PARENT',
+      }
+    };
   }
 }

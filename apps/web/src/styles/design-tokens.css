@@ -1,90 +1,337 @@
 /* ============================================================
-   M-EDU Liquid Glass Design System — Design Tokens
-   The LIGHT theme is the visual hero. Bright, calm, premium,
-   futuristic. Apple Liquid Glass inspired, not copied.
+   M-EDU Design System V2 — Design Tokens
+   Complete semantic token system covering:
+   - Color (brand, semantic, status, surface, text, border)
+   - Typography scale
+   - Spacing scale
+   - Radius system
+   - Elevation system
+   - Motion system
    ============================================================ */
 
+/* ── Brand Primitives (raw palette — use semantic tokens in components) ── */
 :root {
-  /* --- Brand / Primary Palette (M-EDU) --- */
-  --m-cyan:     #94EAEF;
-  --m-sky:      #8CDCF1;
-  --m-azure:    #7EC2F3;
-  --m-indigo:   #618CF9;
-  --m-vivid:    #5474FC;
-  --m-deep:     #4C65FD;
+  --_brand-50:  #EEF2FF;
+  --_brand-100: #E0E7FF;
+  --_brand-200: #C7D2FE;
+  --_brand-300: #A5B4FC;
+  --_brand-400: #818CF8;
+  --_brand-500: #6366F1;
+  --_brand-600: #4F46E5;
+  --_brand-700: #4338CA;
+  --_brand-800: #3730A3;
+  --_brand-900: #312E81;
 
-  /* --- Light Theme (Visual Hero) --- */
-  --bg-base:         #F4F8FB;     /* Soft sky-tinted white */
-  --bg-surface:      #FFFFFF;
-  --bg-elevated:     rgba(255,255,255,0.72);
-  --bg-glass:        rgba(255,255,255,0.55);
-  --bg-glass-hover:  rgba(255,255,255,0.75);
-  --bg-card:         rgba(255,255,255,0.78);
-  --bg-card-hover:   rgba(255,255,255,0.92);
+  --_cyan-400: #22D3EE;
+  --_cyan-500: #06B6D4;
 
-  --text-primary:     #1A2332;     /* Deep charcoal, not pure black */
-  --text-secondary:   #556677;     /* Cool slate gray */
-  --text-muted:       #8899A8;     /* Soft muted */
-  --text-inverse:     #FFFFFF;
+  --_green-400: #4ADE80;
+  --_green-500: #22C55E;
+  --_green-600: #16A34A;
+  --_green-700: #15803D;
 
-  --border-subtle:    rgba(20,30,45,0.08);
-  --border-medium:    rgba(20,30,45,0.15);
-  --border-strong:    rgba(20,30,45,0.22);
-  --border-glass:     rgba(255,255,255,0.45);
+  --_amber-400: #FBBF24;
+  --_amber-500: #F59E0B;
+  --_amber-600: #D97706;
 
-  --shadow-xs:   0 1px 2px rgba(20,30,45,0.04);
-  --shadow-sm:   0 4px 12px rgba(20,30,45,0.06);
-  --shadow-md:   0 12px 32px rgba(20,30,45,0.08);
-  --shadow-lg:   0 24px 56px rgba(20,30,45,0.10);
-  --shadow-glow-cyan: 0 0 40px rgba(148,234,239,0.22);
+  --_red-400: #F87171;
+  --_red-500: #EF4444;
+  --_red-600: #DC2626;
 
-  --radius-sm:  8px;
-  --radius-md:  14px;
-  --radius-lg:  22px;
-  --radius-xl:  32px;
-  --radius-pill: 9999px;
-
-  --font-heading: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-body:    'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-
-  /* States */
-  --state-hover:    rgba(148,234,239,0.08);
-  --state-active:   rgba(84,115,252,0.10);
-  --state-focus:    rgba(84,115,252,0.22);
-  --state-disabled: rgba(20,30,45,0.06);
-  --state-success:  #5EE6A8;
-  --state-error:    #F07070;
-  --state-warning:  #F5B86A;
-  --state-info:     #94EAEF;
+  --_slate-50:  #F8FAFC;
+  --_slate-100: #F1F5F9;
+  --_slate-200: #E2E8F0;
+  --_slate-300: #CBD5E1;
+  --_slate-400: #94A3B8;
+  --_slate-500: #64748B;
+  --_slate-600: #475569;
+  --_slate-700: #334155;
+  --_slate-800: #1E293B;
+  --_slate-900: #0F172A;
 }
 
 /* ============================================================
-   Night Theme — Luminous Midnight Glass
-   NOT generic black. A luminous blue-glass environment.
+   LIGHT THEME (default)
+   ============================================================ */
+:root,
+[data-theme="light"] {
+
+  /* ── Backgrounds ── */
+  --bg-page:           #F1F5F9;           /* Slate-100 tinted */
+  --bg-base:           #F1F5F9;
+  --bg-surface:        #FFFFFF;
+  --bg-elevated:       rgba(255,255,255,0.82);
+  --bg-overlay:        rgba(15,23,42,0.55);
+
+  /* ── Glass Surfaces ── */
+  --bg-glass:          rgba(255,255,255,0.62);
+  --bg-glass-hover:    rgba(255,255,255,0.82);
+  --bg-card:           rgba(255,255,255,0.75);
+  --bg-card-hover:     rgba(255,255,255,0.92);
+  --bg-input:          rgba(255,255,255,0.70);
+  --bg-input-focus:    rgba(255,255,255,0.95);
+
+  /* ── Text ── */
+  --text-primary:      #0F172A;           /* Slate-900 */
+  --text-secondary:    #475569;           /* Slate-600 */
+  --text-tertiary:     #94A3B8;           /* Slate-400 */
+  --text-disabled:     #CBD5E1;           /* Slate-300 */
+  --text-inverse:      #FFFFFF;
+  --text-on-brand:     #FFFFFF;
+
+  /* ── Brand / Primary ── */
+  --primary:           #4F46E5;           /* Indigo-600 */
+  --primary-hover:     #4338CA;           /* Indigo-700 */
+  --primary-pressed:   #3730A3;           /* Indigo-800 */
+  --primary-soft:      rgba(99,102,241,0.10);
+  --primary-soft-hover: rgba(99,102,241,0.16);
+
+  /* ── Borders ── */
+  --border:            rgba(15,23,42,0.10);
+  --border-subtle:     rgba(15,23,42,0.06);
+  --border-medium:     rgba(15,23,42,0.13);
+  --border-strong:     rgba(15,23,42,0.22);
+  --border-glass:      rgba(255,255,255,0.50);
+  --border-focus:      #4F46E5;
+
+  /* ── Status: Success ── */
+  --success:           #16A34A;
+  --success-soft:      rgba(34,197,94,0.10);
+  --success-soft-hover: rgba(34,197,94,0.16);
+  --success-text:      #15803D;
+  --success-border:    rgba(34,197,94,0.25);
+
+  /* ── Status: Warning ── */
+  --warning:           #D97706;
+  --warning-soft:      rgba(245,158,11,0.10);
+  --warning-soft-hover: rgba(245,158,11,0.16);
+  --warning-text:      #B45309;
+  --warning-border:    rgba(245,158,11,0.25);
+
+  /* ── Status: Danger ── */
+  --danger:            #DC2626;
+  --danger-soft:       rgba(239,68,68,0.10);
+  --danger-soft-hover: rgba(239,68,68,0.16);
+  --danger-text:       #B91C1C;
+  --danger-border:     rgba(239,68,68,0.25);
+
+  /* ── Status: Info ── */
+  --info:              #0284C7;
+  --info-soft:         rgba(14,165,233,0.10);
+  --info-soft-hover:   rgba(14,165,233,0.16);
+  --info-text:         #0369A1;
+  --info-border:       rgba(14,165,233,0.25);
+
+  /* ── Status: Neutral ── */
+  --neutral:           #475569;
+  --neutral-soft:      rgba(71,85,105,0.08);
+  --neutral-border:    rgba(71,85,105,0.20);
+
+  /* ── Interactive states ── */
+  --state-hover:       rgba(99,102,241,0.06);
+  --state-active:      rgba(99,102,241,0.12);
+  --state-disabled-bg: rgba(15,23,42,0.05);
+  --state-disabled-text: #CBD5E1;
+  --focus-ring:        rgba(99,102,241,0.22);
+  --focus-ring-danger: rgba(239,68,68,0.22);
+
+  /* ── Legacy compatibility aliases ── */
+  --m-vivid:           #4F46E5;
+  --state-success:     #16A34A;
+  --state-error:       #DC2626;
+  --state-warning:     #D97706;
+  --state-info:        #0284C7;
+
+  /* ── Shadows / Elevation ── */
+  --shadow-xs:  0 1px 2px rgba(15,23,42,0.04);
+  --shadow-sm:  0 2px 8px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+  --shadow-md:  0 8px 24px rgba(15,23,42,0.08), 0 2px 6px rgba(15,23,42,0.04);
+  --shadow-lg:  0 20px 48px rgba(15,23,42,0.10), 0 4px 12px rgba(15,23,42,0.05);
+  --shadow-xl:  0 32px 72px rgba(15,23,42,0.12), 0 8px 20px rgba(15,23,42,0.06);
+  /* Legacy */
+  --shadow-glow-cyan: 0 0 24px rgba(99,102,241,0.18);
+
+  /* ── Radius ── */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --radius-2xl:  28px;
+  --radius-pill: 9999px;
+  /* Legacy */
+  --radius-card: var(--radius-xl);
+
+  /* ── Typography ── */
+  --font-sans:    'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', ui-monospace, 'Cascadia Code', monospace;
+  --font-heading: var(--font-sans);
+  --font-body:    var(--font-sans);
+
+  /* Type scale */
+  --text-display:    clamp(2.25rem, 4vw, 3rem);
+  --text-h1:         clamp(1.75rem, 2.5vw, 2.25rem);
+  --text-h2:         clamp(1.375rem, 2vw, 1.625rem);
+  --text-h3:         1.25rem;
+  --text-h4:         1.0625rem;
+  --text-body-lg:    1.0625rem;
+  --text-body:       0.9375rem;
+  --text-body-sm:    0.875rem;
+  --text-caption:    0.8125rem;
+  --text-label:      0.8125rem;
+  --text-overline:   0.6875rem;
+  --text-numeric-lg: clamp(1.75rem, 2.5vw, 2.25rem);
+  --text-numeric-md: 1.5rem;
+  --text-numeric-sm: 1.125rem;
+
+  /* ── Spacing scale ── */
+  --space-px: 1px;
+  --space-0:  0px;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* ── Motion ── */
+  --duration-instant: 0ms;
+  --duration-fast:    120ms;
+  --duration-normal:  200ms;
+  --duration-slow:    320ms;
+  --duration-slower:  480ms;
+
+  --ease-standard:  cubic-bezier(0.4, 0, 0.2, 1);    /* Material standard */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);      /* Emphasized decel */
+  --ease-enter:     cubic-bezier(0, 0, 0.2, 1);       /* Decelerate */
+  --ease-exit:      cubic-bezier(0.4, 0, 1, 1);       /* Accelerate */
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1); /* Spring-like */
+
+  /* ── Z-index layers ── */
+  --z-dropdown:  50;
+  --z-sticky:    100;
+  --z-overlay:   200;
+  --z-modal:     300;
+  --z-popover:   400;
+  --z-toast:     500;
+  --z-tooltip:   600;
+}
+
+/* ============================================================
+   DARK THEME — Luminous Midnight Glass
+   NOT flat black. Deep blue-navy with luminous glass surfaces.
    ============================================================ */
 .dark,
 [data-theme="dark"] {
-  --bg-base:         linear-gradient(175deg, #0B1120 0%, #0F1B36 60%, #141E3A 100%);
-  --bg-surface:      rgba(18, 28, 50, 0.55);
-  --bg-elevated:     rgba(26, 38, 65, 0.65);
-  --bg-glass:        rgba(26, 38, 65, 0.45);
-  --bg-glass-hover:  rgba(26, 38, 65, 0.65);
-  --bg-card:         rgba(26, 38, 65, 0.55);
-  --bg-card-hover:   rgba(26, 38, 65, 0.75);
 
-  --text-primary:     #F0F6FA;
-  --text-secondary:   #A8BED0;
-  --text-muted:       #6A8496;
-  --text-inverse:     #FFFFFF;
+  /* ── Backgrounds ── */
+  --bg-page:           #0A0F1E;
+  --bg-base:           #0A0F1E;
+  --bg-surface:        rgba(17,27,52,0.85);
+  --bg-elevated:       rgba(24,36,70,0.80);
+  --bg-overlay:        rgba(2,6,23,0.72);
 
-  --border-subtle:    rgba(160,190,220,0.08);
-  --border-medium:    rgba(160,190,220,0.14);
-  --border-strong:    rgba(160,190,220,0.22);
-  --border-glass:     rgba(255,255,255,0.20);
+  /* ── Glass Surfaces ── */
+  --bg-glass:          rgba(17,27,52,0.60);
+  --bg-glass-hover:    rgba(24,36,70,0.75);
+  --bg-card:           rgba(17,27,52,0.65);
+  --bg-card-hover:     rgba(24,36,70,0.80);
+  --bg-input:          rgba(17,27,52,0.55);
+  --bg-input-focus:    rgba(24,36,70,0.70);
 
-  --shadow-xs:   0 1px 2px rgba(0,0,0,0.3);
-  --shadow-sm:   0 4px 16px rgba(0,0,0,0.35);
-  --shadow-md:   0 16px 40px rgba(0,0,0,0.4);
-  --shadow-lg:   0 32px 72px rgba(0,0,0,0.45);
-  --shadow-glow-cyan: 0 0 60px rgba(148,234,239,0.18);
+  /* ── Text ── */
+  --text-primary:      #F1F5F9;
+  --text-secondary:    #94A3B8;
+  --text-tertiary:     #64748B;
+  --text-disabled:     #334155;
+  --text-inverse:      #0F172A;
+  --text-on-brand:     #FFFFFF;
+
+  /* ── Brand / Primary ── */
+  --primary:           #818CF8;           /* Lighter indigo in dark */
+  --primary-hover:     #A5B4FC;
+  --primary-pressed:   #6366F1;
+  --primary-soft:      rgba(129,140,248,0.14);
+  --primary-soft-hover: rgba(129,140,248,0.22);
+
+  /* ── Borders ── */
+  --border:            rgba(148,163,184,0.12);
+  --border-subtle:     rgba(148,163,184,0.07);
+  --border-medium:     rgba(148,163,184,0.16);
+  --border-strong:     rgba(148,163,184,0.28);
+  --border-glass:      rgba(255,255,255,0.10);
+  --border-focus:      #818CF8;
+
+  /* ── Status: Success ── */
+  --success:           #4ADE80;
+  --success-soft:      rgba(74,222,128,0.12);
+  --success-soft-hover: rgba(74,222,128,0.18);
+  --success-text:      #86EFAC;
+  --success-border:    rgba(74,222,128,0.22);
+
+  /* ── Status: Warning ── */
+  --warning:           #FBBF24;
+  --warning-soft:      rgba(251,191,36,0.12);
+  --warning-soft-hover: rgba(251,191,36,0.18);
+  --warning-text:      #FDE68A;
+  --warning-border:    rgba(251,191,36,0.22);
+
+  /* ── Status: Danger ── */
+  --danger:            #F87171;
+  --danger-soft:       rgba(248,113,113,0.12);
+  --danger-soft-hover: rgba(248,113,113,0.18);
+  --danger-text:       #FCA5A5;
+  --danger-border:     rgba(248,113,113,0.22);
+
+  /* ── Status: Info ── */
+  --info:              #38BDF8;
+  --info-soft:         rgba(56,189,248,0.12);
+  --info-soft-hover:   rgba(56,189,248,0.18);
+  --info-text:         #7DD3FC;
+  --info-border:       rgba(56,189,248,0.22);
+
+  /* ── Status: Neutral ── */
+  --neutral:           #94A3B8;
+  --neutral-soft:      rgba(148,163,184,0.10);
+  --neutral-border:    rgba(148,163,184,0.20);
+
+  /* ── Interactive states ── */
+  --state-hover:       rgba(129,140,248,0.08);
+  --state-active:      rgba(129,140,248,0.16);
+  --state-disabled-bg: rgba(148,163,184,0.06);
+  --state-disabled-text: #334155;
+  --focus-ring:        rgba(129,140,248,0.30);
+  --focus-ring-danger: rgba(248,113,113,0.30);
+
+  /* ── Legacy ── */
+  --m-vivid:           #818CF8;
+  --state-success:     #4ADE80;
+  --state-error:       #F87171;
+  --state-warning:     #FBBF24;
+  --state-info:        #38BDF8;
+
+  /* ── Shadows / Elevation (deeper in dark) ── */
+  --shadow-xs:  0 1px 3px rgba(0,0,0,0.28);
+  --shadow-sm:  0 2px 10px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.20);
+  --shadow-md:  0 8px 28px rgba(0,0,0,0.42), 0 2px 8px rgba(0,0,0,0.22);
+  --shadow-lg:  0 20px 56px rgba(0,0,0,0.50), 0 4px 16px rgba(0,0,0,0.28);
+  --shadow-xl:  0 32px 80px rgba(0,0,0,0.58), 0 8px 24px rgba(0,0,0,0.32);
+  --shadow-glow-cyan: 0 0 32px rgba(129,140,248,0.24);
+}
+
+/* ── Respect prefers-reduced-motion ── */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast:   0ms;
+    --duration-normal: 0ms;
+    --duration-slow:   0ms;
+    --duration-slower: 0ms;
+    --ease-spring:     linear;
+  }
 }

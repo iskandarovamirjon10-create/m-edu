@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { PageHeader, Badge, PageLoader, EmptyState, StatCard, GlassCard } from '@/components/ui';
+import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, StatCard, GlassCard } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import request from '@/lib/api';
+import { getErrorMessage } from '@/lib/errorMessages';
+import { useI18n } from '@/i18n/I18nProvider';
 
 type ComponentStatus = 'ok' | 'warning' | 'error' | 'down' | 'unknown';
 
@@ -28,13 +30,13 @@ interface RecentError {
 }
 
 // Map component names to display info
-const COMPONENT_LABELS: Record<string, { label: string; description: string }> = {
-  api: { label: 'API', description: 'HTTP endpoints /health check' },
-  database: { label: 'Database', description: 'PostgreSQL / Prisma ORM' },
-  storage: { label: 'Storage', description: 'File storage (S3-compatible)' },
-  cache: { label: 'Cache', description: 'Redis in-memory cache' },
-  backgroundJobs: { label: 'Background Jobs', description: 'Queue workers / schedulers' },
-  notifications: { label: 'Notifications', description: 'Email / push delivery' },
+const COMPONENT_LABELS: Record<string, { labelKey: string; descriptionKey: string }> = {
+  api: { labelKey: 'systemHealth.component.api', descriptionKey: 'systemHealth.component.apiDesc' },
+  database: { labelKey: 'systemHealth.component.database', descriptionKey: 'systemHealth.component.databaseDesc' },
+  storage: { labelKey: 'systemHealth.component.storage', descriptionKey: 'systemHealth.component.storageDesc' },
+  cache: { labelKey: 'systemHealth.component.cache', descriptionKey: 'systemHealth.component.cacheDesc' },
+  backgroundJobs: { labelKey: 'systemHealth.component.backgroundJobs', descriptionKey: 'systemHealth.component.backgroundJobsDesc' },
+  notifications: { labelKey: 'systemHealth.component.notifications', descriptionKey: 'systemHealth.component.notificationsDesc' },
 };
 
 const STATUS_BADGE_COLOR: Record<ComponentStatus, 'success' | 'warning' | 'error' | 'muted'> = {
@@ -43,6 +45,14 @@ const STATUS_BADGE_COLOR: Record<ComponentStatus, 'success' | 'warning' | 'error
   error: 'error',
   down: 'error',
   unknown: 'muted',
+};
+
+const STATUS_LABEL_KEYS: Record<ComponentStatus, string> = {
+  ok: 'systemHealth.status.ok',
+  warning: 'systemHealth.status.warning',
+  error: 'systemHealth.status.error',
+  down: 'systemHealth.status.down',
+  unknown: 'common.unknown',
 };
 
 function formatUptime(seconds: number): string {
@@ -58,22 +68,23 @@ function formatResponseTime(ms: number): string {
 }
 
 function ComponentStatusCard({ name, status, responseTime }: { name: string; status: ComponentStatus; responseTime?: number }) {
-  const info = COMPONENT_LABELS[name] ?? { label: name, description: '' };
+  const { t } = useI18n();
+  const info = COMPONENT_LABELS[name] ?? { labelKey: '', descriptionKey: '' };
 
   return (
     <div className="glass-card p-4 flex flex-col gap-2">
       <div className="flex items-start justify-between">
         <div>
-          <h4 className="font-semibold text-sm text-[var(--text-primary)]">{info.label}</h4>
-          <p className="text-xs text-muted mt-0.5">{info.description}</p>
+          <h4 className="font-semibold text-sm text-[var(--text-primary)]">{info.labelKey ? t(info.labelKey) : name}</h4>
+          <p className="text-xs text-muted mt-0.5">{info.descriptionKey ? t(info.descriptionKey) : ''}</p>
         </div>
         <Badge color={STATUS_BADGE_COLOR[status]}>
-          {status === 'unknown' ? 'Unknown' : status.toUpperCase()}
+          {t(STATUS_LABEL_KEYS[status])}
         </Badge>
       </div>
       {responseTime !== undefined && (
         <div className="text-xs text-muted">
-          Response time: <span className="font-mono">{formatResponseTime(responseTime)}</span>
+          {t('systemHealth.responseTime')} <span className="font-mono">{formatResponseTime(responseTime)}</span>
         </div>
       )}
     </div>
@@ -81,7 +92,8 @@ function ComponentStatusCard({ name, status, responseTime }: { name: string; sta
 }
 
 export function SystemHealthPage() {
-  usePageTitle('System Health');
+  const { t } = useI18n();
+  usePageTitle(t('systemHealth.title'));
 
   const summaryQuery = useQuery({
     queryKey: ['system-health-summary'],
@@ -103,6 +115,12 @@ export function SystemHealthPage() {
   const { components = [], recentErrors = [] } = componentsQuery.data ?? {};
 
   const isLoading = summaryQuery.isLoading || componentsQuery.isLoading;
+  const isError = summaryQuery.isError || componentsQuery.isError;
+  const error = summaryQuery.error ?? componentsQuery.error;
+  const refetch = () => {
+    if (summaryQuery.isError) summaryQuery.refetch();
+    if (componentsQuery.isError) componentsQuery.refetch();
+  };
 
   // Ensure all required components are present with defaults
   const componentMap = new Map(components.map((c) => [c.name, c]));
@@ -116,46 +134,46 @@ export function SystemHealthPage() {
   ];
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <PageHeader
-          title="System Health"
-          subtitle="Operational health dashboard — deterministic, rule-based monitoring (no AI)"
+          title={t('systemHealth.title')}
+          subtitle={t('systemHealth.subtitle')}
         />
 
         {/* Summary stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard
-            label="Uptime"
+            label={t('systemHealth.uptime')}
             value={summary?.uptime ? formatUptime(summary.uptime) : '—'}
           />
           <StatCard
-            label="Avg response"
+            label={t('systemHealth.avgResponse')}
             value={summary?.avgResponseTime ? formatResponseTime(summary.avgResponseTime) : '—'}
           />
           <StatCard
-            label="Total errors"
+            label={t('systemHealth.totalErrors')}
             value={summary?.totalErrors ?? 0}
           />
           <StatCard
-            label="Last incident"
+            label={t('systemHealth.lastIncident')}
             value={summary?.lastIncidentAt
               ? new Date(summary.lastIncidentAt).toLocaleDateString()
-              : 'None'
+              : t('systemHealth.noIncident')
             }
           />
         </div>
 
         {/* Deterministic rules explanation */}
         <GlassCard className="p-4 space-y-2">
-          <h3 className="font-semibold text-sm text-[var(--text-primary)]">Monitoring approach</h3>
+          <h3 className="font-semibold text-sm text-[var(--text-primary)]">{t('systemHealth.approachTitle')}</h3>
           <ul className="text-xs space-y-1 text-muted">
-            <li>✓ <strong className="text-[var(--text-primary)]">Rule-based checks</strong> — health ping, disk/memory thresholds, job queue depth, delivery receipts</li>
-            <li>✓ <strong className="text-[var(--text-primary)]">No anomaly detection</strong> — no ML models, no trained classifiers, no behavioral baselines</li>
-            <li>✓ <strong className="text-[var(--text-primary)]">No AI/ML monitoring</strong> — purely deterministic thresholds and binary ok/warn/error states</li>
-            <li>✓ <strong className="text-[var(--text-primary)]">Transparent rules</strong> — every status is derived from a fixed condition you can audit</li>
+            <li>✓ <strong className="text-[var(--text-primary)]">{t('systemHealth.ruleBased')}</strong> — {t('systemHealth.ruleBasedDesc')}</li>
+            <li>✓ <strong className="text-[var(--text-primary)]">{t('systemHealth.noAnomaly')}</strong> — {t('systemHealth.noAnomalyDesc')}</li>
+            <li>✓ <strong className="text-[var(--text-primary)]">{t('systemHealth.noAiMl')}</strong> — {t('systemHealth.noAiMlDesc')}</li>
+            <li>✓ <strong className="text-[var(--text-primary)]">{t('systemHealth.transparentRules')}</strong> — {t('systemHealth.transparentRulesDesc')}</li>
           </ul>
         </GlassCard>
 
@@ -174,15 +192,22 @@ export function SystemHealthPage() {
         {/* Recent errors */}
         <div className="glass-card overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
-            <h3 className="font-semibold text-sm text-[var(--text-primary)]">Recent errors</h3>
+            <h3 className="font-semibold text-sm text-[var(--text-primary)]">{t('systemHealth.recentErrors')}</h3>
           </div>
           {isLoading ? (
-            <div className="p-8"><PageLoader label="Loading system status…" /></div>
+            <div className="p-8"><PageLoader label={t('systemHealth.loading')} /></div>
+          ) : isError ? (
+            <div className="p-8">
+              <ErrorState
+                message={getErrorMessage(error)}
+                onRetry={refetch}
+              />
+            </div>
           ) : recentErrors.length === 0 ? (
             <div className="p-8">
               <EmptyState
-                title="No recent errors"
-                message="No errors recorded in the recent window. All systems operating normally."
+                title={t('systemHealth.noErrors')}
+                message={t('systemHealth.noErrorsHint')}
               />
             </div>
           ) : (

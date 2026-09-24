@@ -17,15 +17,29 @@ import {
   TextInput,
   Select,
   Modal,
+  GlassButton,
+  ConfirmDialog,
   useToasts,
   statusColor,
+  GlassTabs,
 } from '@/components/ui';
 import { formatDateTime } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Camera, CameraProtocol } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
+import type { TranslateFn } from '@/i18n/I18nProvider';
 
 const CAMERA_PROTOCOLS: CameraProtocol[] = ['RTSP', 'ONVIF'];
+
+const CAMERA_STATUS_LABEL_KEYS: Record<string, string> = {
+  CONFIGURED: 'cameras.status.CONFIGURED',
+  CONNECTING: 'cameras.status.CONNECTING',
+  ONLINE: 'cameras.status.ONLINE',
+  ERROR: 'cameras.status.ERROR',
+  DISABLED: 'cameras.status.DISABLED',
+  RECONNECTING: 'cameras.status.RECONNECTING',
+};
 
 interface CameraFormState {
   name: string;
@@ -67,10 +81,10 @@ function getCameraStatusBadge(camera: Camera): { color: string; label: string } 
   };
 }
 
-function getRecognitionBadge(enabled: boolean): { color: string; label: string } {
+function getRecognitionBadge(enabled: boolean, t: TranslateFn): { color: string; label: string } {
   return enabled
-    ? { color: 'green', label: 'On' }
-    : { color: 'slate', label: 'Off' };
+    ? { color: 'green', label: t('common.on') }
+    : { color: 'slate', label: t('common.off') };
 }
 
 type TabKey = 'events' | 'health' | 'worker';
@@ -84,32 +98,27 @@ function CameraDetailTabs({
   health: ReturnType<typeof useQuery>;
   workerStatus: ReturnType<typeof useQuery>;
 }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<TabKey>('events');
-  const tabs: { key: TabKey; label: string }[] = [
-    { key: 'events', label: 'Events' },
-    { key: 'health', label: 'Health' },
-    { key: 'worker', label: 'Worker Status' },
+  const tabs: { key: TabKey; labelKey: string }[] = [
+    { key: 'events', labelKey: 'cameras.tabEvents' },
+    { key: 'health', labelKey: 'cameras.tabHealth' },
+    { key: 'worker', labelKey: 'cameras.tabWorker' },
   ];
 
   return (
     <div>
-      <div className="glass-tabs">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`glass-tab ${tab === t.key ? 'active' : ''}`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <GlassTabs
+        tabs={tabs.map(tItem => ({ id: tItem.key, label: t(tItem.labelKey) }))}
+        active={tab}
+        onChange={(id: string) => setTab(id as TabKey)}
+      />
 
       <div className="mt-4">
         {tab === 'events' && (
           <div>
             {events.isLoading ? (
-              <PageLoader label="Loading events…" />
+              <PageLoader label={t('cameras.loadingEvents')} />
             ) : events.isError ? (
               <ErrorState message={getErrorMessage(events.error as Error)} />
             ) : (
@@ -120,7 +129,7 @@ function CameraDetailTabs({
         {tab === 'health' && (
           <div>
             {health.isLoading ? (
-              <PageLoader label="Loading health…" />
+              <PageLoader label={t('cameras.loadingHealth')} />
             ) : health.isError ? (
               <ErrorState message={getErrorMessage(health.error as Error)} />
             ) : (
@@ -131,7 +140,7 @@ function CameraDetailTabs({
         {tab === 'worker' && (
           <div>
             {workerStatus.isLoading ? (
-              <PageLoader label="Loading worker status…" />
+              <PageLoader label={t('cameras.loadingWorker')} />
             ) : workerStatus.isError ? (
               <ErrorState message={getErrorMessage(workerStatus.error as Error)} />
             ) : (
@@ -145,18 +154,19 @@ function CameraDetailTabs({
 }
 
 function CameraEventsTable({ data }: { data: unknown }) {
+  const { t } = useI18n();
   const events = (data as { items?: Array<{ id: string; recognizedAt: string; student?: { user?: { firstName?: string; lastName?: string } }; decision: string; confidence?: string; similarityScore?: string }> })?.items ?? [];
-  if (events.length === 0) return <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No recognition events yet.</p>;
+  if (events.length === 0) return <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t('cameras.noEvents')}</p>;
   return (
     <div className="overflow-x-auto">
       <Table>
         <THead>
           <TR>
-            <TH>Time</TH>
-            <TH>Student</TH>
-            <TH>Decision</TH>
-            <TH>Confidence</TH>
-            <TH>Similarity</TH>
+            <TH>{t('cameras.colTime')}</TH>
+            <TH>{t('cameras.colStudent')}</TH>
+            <TH>{t('cameras.colDecision')}</TH>
+            <TH>{t('cameras.colConfidence')}</TH>
+            <TH>{t('cameras.colSimilarity')}</TH>
           </TR>
         </THead>
         <TBody>
@@ -176,8 +186,9 @@ function CameraEventsTable({ data }: { data: unknown }) {
 }
 
 function CameraHealthDisplay({ data }: { data: unknown }) {
+  const { t } = useI18n();
   const h = data as Record<string, unknown> | null;
-  if (!h) return <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No health data available.</p>;
+  if (!h) return <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t('cameras.noHealth')}</p>;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {Object.entries(h).map(([key, val]) => (
@@ -191,8 +202,9 @@ function CameraHealthDisplay({ data }: { data: unknown }) {
 }
 
 function CameraWorkerDisplay({ data }: { data: unknown }) {
+  const { t } = useI18n();
   const w = data as Record<string, unknown> | null;
-  if (!w) return <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No worker running.</p>;
+  if (!w) return <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t('cameras.noWorker')}</p>;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {Object.entries(w).map(([key, val]) => (
@@ -206,7 +218,8 @@ function CameraWorkerDisplay({ data }: { data: unknown }) {
 }
 
 export function CamerasPage() {
-  usePageTitle('Cameras');
+  const { t } = useI18n();
+  usePageTitle(t('cameras.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
@@ -215,6 +228,7 @@ export function CamerasPage() {
   const [discoverOpen, setDiscoverOpen] = useState(false);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
   const [configModalOpen, setConfigModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Camera | null>(null);
   const [configForm, setConfigForm] = useState({ fps: '10', recognitionEnabled: 'true', attendanceEnabled: 'true' });
 
   // Form states
@@ -246,7 +260,7 @@ export function CamerasPage() {
         password: form.password || undefined,
       }),
     onSuccess: () => {
-      push('success', 'Camera added successfully');
+      push('success', t('cameras.addedToast'));
       setModalOpen(false);
       setForm(INITIAL_FORM);
       setFormErrors({});
@@ -262,7 +276,7 @@ export function CamerasPage() {
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       enabled ? camerasApi.enable(id) : camerasApi.disable(id),
     onSuccess: () => {
-      push('success', 'Camera updated');
+      push('success', t('cameras.updatedToast'));
       qc.invalidateQueries({ queryKey: ['cameras'] });
     },
     onError: (e: Error) => {
@@ -274,7 +288,7 @@ export function CamerasPage() {
   const startWorker = useMutation({
     mutationFn: (id: string) => camerasApi.startWorker(id),
     onSuccess: () => {
-      push('success', 'Worker started');
+      push('success', t('cameras.workerStartedToast'));
       qc.invalidateQueries({ queryKey: ['cameras'] });
     },
     onError: (e: Error) => {
@@ -287,7 +301,7 @@ export function CamerasPage() {
     mutationFn: () =>
       camerasApi.discover(discoverSubnet ? { subnet: discoverSubnet } : {}),
     onSuccess: () => {
-      push('success', 'Discovery finished — found cameras below');
+      push('success', t('cameras.discoveryToast'));
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -304,18 +318,18 @@ export function CamerasPage() {
     const errors: Partial<Record<keyof CameraFormState, string>> = {};
 
     if (!form.name.trim()) {
-      errors.name = 'Camera name is required';
+      errors.name = t('cameras.validation.nameRequired');
     }
     if (!form.host.trim()) {
-      errors.host = 'Host is required';
+      errors.host = t('cameras.validation.hostRequired');
     }
     if (form.port && (parseInt(form.port, 10) < 1 || parseInt(form.port, 10) > 65535)) {
-      errors.port = 'Port must be between 1 and 65535';
+      errors.port = t('cameras.validation.portRange');
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form]);
+  }, [form, t]);
 
   // Form handlers
   const handleFormChange = useCallback(
@@ -408,31 +422,31 @@ export function CamerasPage() {
   // Stop/restart/delete mutations
   const stopWorker = useMutation({
     mutationFn: (id: string) => camerasApi.stopWorker(id),
-    onSuccess: () => { push('success', 'Worker stopped'); qc.invalidateQueries({ queryKey: ['cameras'] }); qc.invalidateQueries({ queryKey: ['camera-worker'] }); },
+    onSuccess: () => { push('success', t('cameras.workerStoppedToast')); qc.invalidateQueries({ queryKey: ['cameras'] }); qc.invalidateQueries({ queryKey: ['camera-worker'] }); },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
   const restartWorker = useMutation({
     mutationFn: (id: string) => camerasApi.restartWorker(id),
-    onSuccess: () => { push('success', 'Worker restarted'); qc.invalidateQueries({ queryKey: ['cameras'] }); qc.invalidateQueries({ queryKey: ['camera-worker'] }); },
+    onSuccess: () => { push('success', t('cameras.workerRestartedToast')); qc.invalidateQueries({ queryKey: ['cameras'] }); qc.invalidateQueries({ queryKey: ['camera-worker'] }); },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
   const deleteCamera = useMutation({
     mutationFn: (id: string) => camerasApi.remove(id),
-    onSuccess: () => { push('success', 'Camera deleted'); setSelectedCameraId(null); qc.invalidateQueries({ queryKey: ['cameras'] }); },
+    onSuccess: () => { push('success', t('cameras.deletedToast')); setSelectedCameraId(null); qc.invalidateQueries({ queryKey: ['cameras'] }); },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
   const testConnection = useMutation({
     mutationFn: (data: { host: string; port: number }) => camerasApi.testConnection(data),
-    onSuccess: () => push('success', 'Connection successful'),
+    onSuccess: () => push('success', t('cameras.connectionToast')),
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
   const updateConfig = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => camerasApi.config(id, data),
-    onSuccess: () => { push('success', 'Configuration updated'); setConfigModalOpen(false); qc.invalidateQueries({ queryKey: ['cameras'] }); },
+    onSuccess: () => { push('success', t('cameras.configUpdatedToast')); setConfigModalOpen(false); qc.invalidateQueries({ queryKey: ['cameras'] }); },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
@@ -440,18 +454,13 @@ export function CamerasPage() {
   if (cameras.isLoading && !data) {
     return (
       <div className="page-container space-y-4">
-        <div className="orb-container">
-          <div className="orb orb-cyan-1" />
-          <div className="orb orb-cyan-2" />
-          <div className="orb orb-indigo-1" />
-          <div className="orb orb-deep-1" />
-        </div>
+        
         <PageHeader
-          title="Cameras"
-          subtitle="IP camera management for automatic attendance"
+          title={t('cameras.title')}
+          subtitle={t('cameras.subtitle')}
         />
         <div className="glass-card p-8">
-          <PageLoader label="Loading cameras…" />
+          <PageLoader label={t('cameras.loading')} />
         </div>
       </div>
     );
@@ -461,19 +470,14 @@ export function CamerasPage() {
   if (cameras.isError) {
     return (
       <div className="page-container space-y-4">
-        <div className="orb-container">
-          <div className="orb orb-cyan-1" />
-          <div className="orb orb-cyan-2" />
-          <div className="orb orb-indigo-1" />
-          <div className="orb orb-deep-1" />
-        </div>
+        
         <PageHeader
-          title="Cameras"
-          subtitle="IP camera management for automatic attendance"
+          title={t('cameras.title')}
+          subtitle={t('cameras.subtitle')}
         />
         <div className="glass-card p-8">
           <ErrorState
-            title="Failed to load cameras"
+            title={t('cameras.loadError')}
             message={getErrorMessage(cameras.error as Error)}
             onRetry={handleRetry}
           />
@@ -484,31 +488,26 @@ export function CamerasPage() {
 
   return (
     <div className="page-container space-y-4">
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
-      </div>
+      
       <PageHeader
-        title="Cameras"
-        subtitle="IP camera management for automatic attendance"
+        title={t('cameras.title')}
+        subtitle={t('cameras.subtitle')}
         actions={
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-secondary"
+              variant="secondary"
               onClick={() => setDiscoverOpen(true)}
             >
-              Discover cameras
-            </button>
-            <button
+              {t('cameras.discover')}
+            </GlassButton>
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               onClick={() => setModalOpen(true)}
             >
-              Add camera
-            </button>
+              {t('cameras.add')}
+            </GlassButton>
           </div>
         }
       />
@@ -517,20 +516,20 @@ export function CamerasPage() {
       <div className="glass-card overflow-hidden">
         {list.length === 0 ? (
           <EmptyState
-            title="No cameras"
-            message="Add an RTSP camera to enable automatic recognition attendance."
+            title={t('cameras.empty')}
+            message={t('cameras.emptyHint')}
           />
         ) : (
           <div className="glass-table-wrap">
             <Table>
               <THead>
                 <TR>
-                  <TH>Name</TH>
-                  <TH>Endpoint</TH>
-                  <TH>Status</TH>
-                  <TH>Recognition</TH>
-                  <TH>Last seen</TH>
-                  <TH className="text-right">Actions</TH>
+                  <TH>{t('common.name')}</TH>
+                  <TH>{t('cameras.endpoint')}</TH>
+                  <TH>{t('common.status')}</TH>
+                  <TH>{t('cameras.recognition')}</TH>
+                  <TH>{t('cameras.lastSeen')}</TH>
+                  <TH className="text-right">{t('common.actions')}</TH>
                 </TR>
               </THead>
               <TBody>
@@ -538,6 +537,7 @@ export function CamerasPage() {
                   const statusBadge = getCameraStatusBadge(camera);
                   const recognitionBadge = getRecognitionBadge(
                     camera.recognitionEnabled,
+                    t,
                   );
                   const isTogglePending =
                     toggle.isPending && toggle.variables?.id === camera.id;
@@ -552,7 +552,7 @@ export function CamerasPage() {
                       onClick={() => setSelectedCameraId(selectedCameraId === camera.id ? null : camera.id)}
                       tabIndex={0}
                       role="link"
-                      aria-label={`View camera ${camera.name}`}
+                      aria-label={t('cameras.viewAria', { name: camera.name })}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
@@ -568,7 +568,7 @@ export function CamerasPage() {
                       </TD>
                       <TD>
                         <Badge color={statusBadge.color}>
-                          {statusBadge.label}
+                          {CAMERA_STATUS_LABEL_KEYS[camera.status] ? t(CAMERA_STATUS_LABEL_KEYS[camera.status]) : camera.status}
                         </Badge>
                       </TD>
                       <TD>
@@ -582,27 +582,29 @@ export function CamerasPage() {
                       <TD className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           {camera.status === 'CONFIGURED' && (
-                            <button
+                            <GlassButton
                               type="button"
-                              className="glass-btn glass-btn-ghost glass-btn-sm"
+                              variant="ghost"
+                              size="sm"
                               onClick={() => handleStartWorker(camera.id)}
                               disabled={isWorkerPending}
                             >
-                              {isWorkerPending ? 'Starting…' : 'Start worker'}
-                            </button>
+                              {isWorkerPending ? t('cameras.starting') : t('cameras.startWorker')}
+                            </GlassButton>
                           )}
-                          <button
+                          <GlassButton
                             type="button"
-                            className="glass-btn glass-btn-ghost glass-btn-sm"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleToggleCamera(camera)}
                             disabled={isTogglePending}
                           >
                             {isTogglePending
-                              ? 'Updating…'
+                              ? t('common.saving')
                               : camera.enabled
-                                ? 'Disable'
-                                : 'Enable'}
-                          </button>
+                                ? t('common.disable')
+                                : t('common.enable')}
+                          </GlassButton>
                         </div>
                       </TD>
                     </TR>
@@ -625,26 +627,26 @@ export function CamerasPage() {
             <div className="flex flex-wrap gap-2">
               {selectedCamera.status === 'ONLINE' && (
                 <>
-                   <button onClick={() => restartWorker.mutate(selectedCamera.id)} disabled={restartWorker.isPending}
-                    aria-label={`Restart worker for ${selectedCamera.name}`}
-                    className="glass-btn glass-btn-secondary glass-btn-sm">
-                    Restart Worker
-                  </button>
-                  <button onClick={() => stopWorker.mutate(selectedCamera.id)} disabled={stopWorker.isPending}
-                    aria-label={`Stop worker for ${selectedCamera.name}`}
-                    className="glass-btn glass-btn-danger glass-btn-sm">
-                    Stop Worker
-                  </button>
+                   <GlassButton onClick={() => restartWorker.mutate(selectedCamera.id)} disabled={restartWorker.isPending}
+                    aria-label={t('cameras.restartWorkerAria', { name: selectedCamera.name })}
+                    variant="secondary" size="sm">
+                    {t('cameras.restartWorker')}
+                  </GlassButton>
+                  <GlassButton onClick={() => stopWorker.mutate(selectedCamera.id)} disabled={stopWorker.isPending}
+                    aria-label={t('cameras.stopWorkerAria', { name: selectedCamera.name })}
+                    variant="danger" size="sm">
+                    {t('cameras.stopWorker')}
+                  </GlassButton>
                 </>
               )}
               {(selectedCamera.status === 'CONFIGURED' || selectedCamera.status === 'ERROR') && (
-                <button onClick={() => startWorker.mutate(selectedCamera.id)} disabled={startWorker.isPending}
-                  aria-label={`Start worker for ${selectedCamera.name}`}
-                  className="glass-btn glass-btn-primary glass-btn-sm">
-                  Start Worker
-                </button>
+                <GlassButton onClick={() => startWorker.mutate(selectedCamera.id)} disabled={startWorker.isPending}
+                  aria-label={t('cameras.startWorkerAria', { name: selectedCamera.name })}
+                  variant="primary" size="sm">
+                  {t('cameras.startWorkerTitle')}
+                </GlassButton>
               )}
-              <button onClick={() => {
+              <GlassButton onClick={() => {
                 setConfigForm({
                   fps: String((selectedCamera as Camera & { fps?: number }).fps || 10),
                   recognitionEnabled: String(selectedCamera.recognitionEnabled),
@@ -652,22 +654,22 @@ export function CamerasPage() {
                 });
                 setConfigModalOpen(true);
               }}
-                aria-label={`Configure ${selectedCamera.name}`}
-                className="glass-btn glass-btn-secondary glass-btn-sm">
-                Configure
-              </button>
-              <button onClick={() => testConnection.mutate({ host: selectedCamera.host, port: selectedCamera.port })}
+                aria-label={t('cameras.configureAria', { name: selectedCamera.name })}
+                variant="secondary" size="sm">
+                {t('cameras.configure')}
+              </GlassButton>
+              <GlassButton onClick={() => testConnection.mutate({ host: selectedCamera.host, port: selectedCamera.port })}
                 disabled={testConnection.isPending}
-                aria-label={`Test connection to ${selectedCamera.name}`}
-                className="glass-btn glass-btn-secondary glass-btn-sm">
-                Test Connection
-              </button>
-              <button onClick={() => { if (confirm(`Delete camera "${selectedCamera.name}"?`)) deleteCamera.mutate(selectedCamera.id); }}
+                aria-label={t('cameras.testConnectionAria', { name: selectedCamera.name })}
+                variant="secondary" size="sm">
+                {t('cameras.testConnection')}
+              </GlassButton>
+              <GlassButton onClick={() => setDeleteTarget(selectedCamera)}
                 disabled={deleteCamera.isPending}
-                aria-label={`Delete camera ${selectedCamera.name}`}
-                className="glass-btn glass-btn-danger glass-btn-sm">
-                Delete
-              </button>
+                aria-label={t('cameras.deleteAria', { name: selectedCamera.name })}
+                variant="danger" size="sm">
+                {t('common.delete')}
+              </GlassButton>
             </div>
           </div>
 
@@ -684,19 +686,19 @@ export function CamerasPage() {
       <Modal
         open={modalOpen}
         onClose={handleCloseModal}
-        title="Add camera"
+        title={t('cameras.add')}
         wide
       >
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Camera name" required error={formErrors.name}>
+            <Field label={t('cameras.form.name')} required error={formErrors.name}>
               <TextInput
                 value={form.name}
                 onChange={handleFormChange('name')}
                 required
                 aria-invalid={Boolean(formErrors.name)}
                 aria-describedby={formErrors.name ? 'name-error' : undefined}
-                placeholder="Front entrance camera"
+                placeholder={t('cameras.form.namePlaceholder')}
               />
               {formErrors.name && (
                 <span id="name-error" className="mt-1 text-sm text-red-600">
@@ -704,11 +706,11 @@ export function CamerasPage() {
                 </span>
               )}
             </Field>
-            <Field label="Protocol">
+            <Field label={t('cameras.form.protocol')}>
               <Select
                 value={form.protocol}
                 onChange={handleFormChange('protocol')}
-                aria-label="Camera protocol"
+                aria-label={t('cameras.form.protocol')}
               >
                 {CAMERA_PROTOCOLS.map((protocol) => (
                   <option key={protocol} value={protocol}>
@@ -717,7 +719,7 @@ export function CamerasPage() {
                 ))}
               </Select>
             </Field>
-            <Field label="Host" required error={formErrors.host}>
+            <Field label={t('cameras.form.host')} required error={formErrors.host}>
               <TextInput
                 value={form.host}
                 onChange={handleFormChange('host')}
@@ -732,7 +734,7 @@ export function CamerasPage() {
                 </span>
               )}
             </Field>
-            <Field label="Port" error={formErrors.port}>
+            <Field label={t('cameras.form.port')} error={formErrors.port}>
               <TextInput
                 type="number"
                 value={form.port}
@@ -748,23 +750,23 @@ export function CamerasPage() {
                 </span>
               )}
             </Field>
-            <Field label="Stream path">
+            <Field label={t('cameras.form.streamPath')}>
               <TextInput
                 value={form.streamPath}
                 onChange={handleFormChange('streamPath')}
                 placeholder="/Streaming/Channels/101"
               />
             </Field>
-            <Field label="Location">
+            <Field label={t('cameras.form.location')}>
               <TextInput
                 value={form.location}
                 onChange={handleFormChange('location')}
-                placeholder="Main entrance"
+                placeholder={t('cameras.form.locationPlaceholder')}
               />
             </Field>
             <Field
-              label="Username"
-              hint="Credentials are encrypted at rest."
+              label={t('common.username')}
+              hint={t('cameras.form.credentialsHint')}
             >
               <TextInput
                 value={form.username}
@@ -772,7 +774,7 @@ export function CamerasPage() {
                 autoComplete="off"
               />
             </Field>
-            <Field label="Password">
+            <Field label={t('common.password')}>
               <TextInput
                 type="password"
                 value={form.password}
@@ -782,21 +784,21 @@ export function CamerasPage() {
             </Field>
           </div>
           <div className="flex justify-end gap-2">
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-secondary"
+              variant="secondary"
               onClick={handleCloseModal}
               disabled={create.isPending}
             >
-              Cancel
-            </button>
-            <button
+              {t('common.cancel')}
+            </GlassButton>
+            <GlassButton
               type="submit"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               disabled={create.isPending}
             >
-              {create.isPending ? 'Saving…' : 'Add camera'}
-            </button>
+              {create.isPending ? t('common.saving') : t('cameras.add')}
+            </GlassButton>
           </div>
         </form>
       </Modal>
@@ -805,31 +807,29 @@ export function CamerasPage() {
       <Modal
         open={discoverOpen}
         onClose={handleCloseDiscover}
-        title="Discover cameras on the network"
+        title={t('cameras.discoverTitle')}
         wide
       >
         <div className="space-y-4">
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Scans the local network for ONVIF cameras. Enter an optional
-            subnet (e.g. 192.168.1.0/24) to narrow the scan. Discovery is
-            rate-limited per organization and may be disabled in production.
+            {t('cameras.discoverHint')}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <TextInput
               value={discoverSubnet}
               onChange={(e) => setDiscoverSubnet(e.target.value)}
-              placeholder="192.168.1.0/24 (optional)"
+              placeholder={t('cameras.subnetPlaceholder')}
               className="flex-1"
-              aria-label="Subnet to scan"
+              aria-label={t('cameras.subnetAria')}
             />
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               onClick={() => discover.mutate()}
               disabled={discover.isPending}
             >
-              {discover.isPending ? 'Scanning…' : 'Scan'}
-            </button>
+              {discover.isPending ? t('cameras.scanning') : t('cameras.scan')}
+            </GlassButton>
           </div>
 
           {discover.isError && (
@@ -847,10 +847,10 @@ export function CamerasPage() {
               <Table>
                 <THead>
                   <TR>
-                    <TH>Host</TH>
-                    <TH>Port</TH>
-                    <TH>Protocol</TH>
-                    <TH className="text-right">Action</TH>
+                    <TH>{t('cameras.form.host')}</TH>
+                    <TH>{t('cameras.form.port')}</TH>
+                    <TH>{t('cameras.form.protocol')}</TH>
+                    <TH className="text-right">{t('cameras.colAction')}</TH>
                   </TR>
                 </THead>
                 <TBody>
@@ -864,13 +864,14 @@ export function CamerasPage() {
                         <Badge color="slate">{camera.protocol}</Badge>
                       </TD>
                       <TD className="text-right">
-                        <button
+                        <GlassButton
                           type="button"
-                          className="glass-btn glass-btn-secondary glass-btn-sm"
+                          variant="secondary"
+                          size="sm"
                           onClick={() => handleUseDiscovered(camera)}
                         >
-                          Use
-                        </button>
+                          {t('cameras.use')}
+                        </GlassButton>
                       </TD>
                     </TR>
                   ))}
@@ -879,36 +880,36 @@ export function CamerasPage() {
             </div>
           ) : discover.isSuccess ? (
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              No cameras found on the scanned range.
+              {t('cameras.noCamerasFound')}
             </p>
           ) : null}
         </div>
       </Modal>
 
       {/* Config modal */}
-      <Modal open={configModalOpen} onClose={() => setConfigModalOpen(false)} title="Camera Configuration">
+      <Modal open={configModalOpen} onClose={() => setConfigModalOpen(false)} title={t('cameras.configTitle')}>
         <div className="space-y-4">
-          <Field label="Frames per second (FPS)">
+          <Field label={t('cameras.configFps')}>
             <TextInput type="number" min={1} max={30} value={configForm.fps}
               onChange={(e) => setConfigForm((f) => ({ ...f, fps: e.target.value }))} />
           </Field>
-          <Field label="Face recognition">
+          <Field label={t('cameras.configRecognition')}>
             <Select value={configForm.recognitionEnabled}
               onChange={(e) => setConfigForm((f) => ({ ...f, recognitionEnabled: e.target.value }))}>
-              <option value="true">Enabled</option>
-              <option value="false">Disabled</option>
+              <option value="true">{t('common.enable')}</option>
+              <option value="false">{t('common.disable')}</option>
             </Select>
           </Field>
-          <Field label="Auto-attendance">
+          <Field label={t('cameras.configAttendance')}>
             <Select value={configForm.attendanceEnabled}
               onChange={(e) => setConfigForm((f) => ({ ...f, attendanceEnabled: e.target.value }))}>
-              <option value="true">Enabled</option>
-              <option value="false">Disabled</option>
+              <option value="true">{t('common.enable')}</option>
+              <option value="false">{t('common.disable')}</option>
             </Select>
           </Field>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setConfigModalOpen(false)} className="glass-btn glass-btn-secondary">Cancel</button>
-            <button onClick={() => {
+            <GlassButton onClick={() => setConfigModalOpen(false)} variant="secondary">{t('common.cancel')}</GlassButton>
+            <GlassButton onClick={() => {
               if (selectedCameraId) {
                 updateConfig.mutate({
                   id: selectedCameraId,
@@ -920,12 +921,24 @@ export function CamerasPage() {
                 });
               }
             }} disabled={updateConfig.isPending}
-              className="glass-btn glass-btn-primary">
-              {updateConfig.isPending ? 'Saving…' : 'Save'}
-            </button>
+              variant="primary">
+              {updateConfig.isPending ? t('common.saving') : t('common.save')}
+            </GlassButton>
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteCamera.mutate(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        description={deleteTarget ? t('cameras.deleteConfirm', { name: deleteTarget.name }) : ''}
+        loading={deleteCamera.isPending}
+      />
 
       {toastNode}
     </div>

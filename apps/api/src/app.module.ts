@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+﻿import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
 import { authTracker } from './config/auth-tracker';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
@@ -24,6 +25,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { HealthModule } from './health/health.module';
 import { FaceModule } from './face/face.module';
 import { CameraModule } from './camera/camera.module';
+import { CsrfMiddleware } from './security/csrf.middleware';
 
 // ===================== v2 Modules =====================
 import { LibraryModule } from './library/library.module';
@@ -47,12 +49,42 @@ import { SecurityModule } from './security/security.module';
 import { SystemHealthModule } from './system-health/system-health.module';
 import { ImportExportModule } from './import-export/import-export.module';
 import { RelationshipsModule } from './relationships/relationships.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
+import { BranchesModule } from './branches/branches.module';
+import { ReportsModule } from './reports/reports.module';
+import { ParentPortalModule } from './parent-portal/parent-portal.module';
+import { GamificationModule } from './gamification/gamification.module';
+import { ChatModule } from './chat/chat.module';
+import { DataGovernanceModule } from './data-governance/data-governance.module';
+import { AutomationModule } from './automation/automation.module';
+import { CronModule } from './cron/cron.module';
+import { ObservabilityModule } from './observability/observability.module';
+import { PerformanceModule } from './performance/performance.module';
+
+import { ResilientRedisThrottlerStorage } from './common/guards/throttler-redis.storage';
+import { isRedisEnabled, redisQueueConnection } from './config/redis.config';
+
+// @ts-ignore – @nestjs/bullmq is ESM-only; resolved at runtime via monorepo hoisting
+const { BullModule } = require('@nestjs/bullmq');
+
+const redisEnabled = isRedisEnabled();
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    ThrottlerModule.forRoot({
-      throttlers: [
+    NestScheduleModule.forRoot(),
+    // Central BullMQ connection for every registerQueue() below.
+    // Without forRoot, workers get an unconfigured default connection and
+    // silently fail to consume jobs in any non-local environment.
+    ...(redisEnabled
+      ? [BullModule.forRoot({ connection: redisQueueConnection() })]
+      : []),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        storage: new ResilientRedisThrottlerStorage(config.get<string>('REDIS_URL') || 'redis://localhost:6379'),
+        throttlers: [
         {
           name: 'default',
           ttl: 60000,
@@ -64,7 +96,7 @@ import { RelationshipsModule } from './relationships/relationships.module';
       // This prevents one user behind a shared NAT from exhausting the
       // shared-IP bucket, and prevents anonymous abuse of auth endpoints.
       getTracker: authTracker,
-    }),
+    })}),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -111,6 +143,17 @@ import { RelationshipsModule } from './relationships/relationships.module';
     SystemHealthModule,
     ImportExportModule,
     RelationshipsModule,
+    ApiKeysModule,
+    BranchesModule,
+    ReportsModule,
+    ParentPortalModule,
+    GamificationModule,
+    ChatModule,
+    DataGovernanceModule,
+    AutomationModule,
+    CronModule,
+    ObservabilityModule,
+    PerformanceModule,
   ],
   providers: [
     // Apply rate limiting to every HTTP endpoint. Per-endpoint overrides use
@@ -120,4 +163,10 @@ import { RelationshipsModule } from './relationships/relationships.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
-export class AppModule {}
+export class AppModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(CsrfMiddleware)
+      .forRoutes({ path: '*', method: RequestMethod.ALL });
+  }
+}

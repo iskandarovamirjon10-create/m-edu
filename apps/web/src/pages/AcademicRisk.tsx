@@ -3,11 +3,14 @@ import {
   PageHeader,
   Badge,
   PageLoader,
+  ErrorState,
   EmptyState,
   GlassStatCard,
 } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import request from '@/lib/api';
+import { getErrorMessage } from '@/lib/errorMessages';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface RiskFactor {
   name: string;
@@ -31,12 +34,26 @@ const LEVEL_COLOR: Record<AcademicRisk['level'], 'success' | 'warning' | 'error'
   HIGH: 'error',
 };
 
+const LEVEL_LABEL_KEY: Record<AcademicRisk['level'], string> = {
+  LOW: 'anomaly.lowSeverity',
+  MEDIUM: 'anomaly.mediumSeverity',
+  HIGH: 'anomaly.highSeverity',
+};
+
+interface AcademicRiskSummary {
+  high: number;
+  medium: number;
+  low: number;
+  avgScore: number;
+}
+
 export function AcademicRiskPage() {
-  usePageTitle('Academic Risk');
+  const { t } = useI18n();
+  usePageTitle(t('academicRisk.title'));
 
   const summaryQuery = useQuery({
     queryKey: ['academic-risk-summary'],
-    queryFn: () => request('/academic-risk/summary') as Promise<Record<string, any>>,
+    queryFn: () => request('/academic-risk/summary') as Promise<AcademicRiskSummary>,
   });
 
   const studentsQuery = useQuery({
@@ -44,47 +61,54 @@ export function AcademicRiskPage() {
     queryFn: () => request('/academic-risk') as Promise<{ items: AcademicRisk[]; total: number }>,
   });
 
-  const students: AcademicRisk[] = (studentsQuery.data as any)?.items ?? [];
+  const students: AcademicRisk[] = studentsQuery.data?.items ?? [];
   const summary = summaryQuery.data;
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <PageHeader
-          title="Academic Risk"
-          subtitle="Rule-based risk score from grades, attendance, homework, behavior"
+          title={t('academicRisk.title')}
+          subtitle={t('academicRisk.subtitle')}
         />
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <GlassStatCard label="At risk" value={(summary?.high ?? 0) + (summary?.medium ?? 0)} />
-          <GlassStatCard label="High" value={summary?.high ?? 0} />
-          <GlassStatCard label="Medium" value={summary?.medium ?? 0} />
-          <GlassStatCard label="Low" value={summary?.low ?? 0} />
-          <GlassStatCard label="Avg score" value={summary?.avgScore ?? 0} />
+          <GlassStatCard label={t('academicRisk.atRisk')} value={(summary?.high ?? 0) + (summary?.medium ?? 0)} />
+          <GlassStatCard label={t('anomaly.highSeverity')} value={summary?.high ?? 0} />
+          <GlassStatCard label={t('anomaly.mediumSeverity')} value={summary?.medium ?? 0} />
+          <GlassStatCard label={t('anomaly.lowSeverity')} value={summary?.low ?? 0} />
+          <GlassStatCard label={t('academicRisk.avgScore')} value={summary?.avgScore ?? 0} />
         </div>
 
         <div className="glass-card p-4 space-y-2">
-          <h3 className="font-semibold text-[var(--text-primary)]">Risk factors (deterministic weights)</h3>
+          <h3 className="font-semibold text-[var(--text-primary)]">{t('academicRisk.factorsTitle')}</h3>
           <ul className="text-sm space-y-1.5 text-muted">
-            <li>• <strong className="text-[var(--text-primary)]">Grade trend</strong> — comparing last 3 grade entries to prior 3 (weight 30)</li>
-            <li>• <strong className="text-[var(--text-primary)]">Attendance rate</strong> — present/(present+absent) over last 30 days (weight 25)</li>
-            <li>• <strong className="text-[var(--text-primary)]">Homework completion</strong> — submitted/assigned in current month (weight 20)</li>
-            <li>• <strong className="text-[var(--text-primary)]">Consecutive absences</strong> — exact run-length (weight 15)</li>
-            <li>• <strong className="text-[var(--text-primary)]">Late submissions</strong> — count in last 30 days (weight 10)</li>
-            <li>• <strong className="text-[var(--text-primary)]">Score formula</strong> — Σ(factor.score × factor.weight) ÷ Σ(weight); rule-based, no AI</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('academicRisk.factor.gradeTrend')}</strong> — {t('academicRisk.factor.gradeTrendDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('academicRisk.factor.attendanceRate')}</strong> — {t('academicRisk.factor.attendanceRateDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('academicRisk.factor.homework')}</strong> — {t('academicRisk.factor.homeworkDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('academicRisk.factor.absences')}</strong> — {t('academicRisk.factor.absencesDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('academicRisk.factor.lateSubmissions')}</strong> — {t('academicRisk.factor.lateSubmissionsDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('academicRisk.factor.scoreFormula')}</strong> — {t('academicRisk.factor.scoreFormulaDesc')}</li>
           </ul>
         </div>
 
         <div className="glass-card overflow-hidden">
           {studentsQuery.isLoading ? (
-            <div className="p-8"><PageLoader label="Loading risk data…" /></div>
+            <div className="p-8"><PageLoader label={t('academicRisk.loading')} /></div>
+          ) : studentsQuery.isError ? (
+            <div className="p-8">
+              <ErrorState
+                message={getErrorMessage(studentsQuery.error)}
+                onRetry={() => studentsQuery.refetch()}
+              />
+            </div>
           ) : students.length === 0 ? (
             <div className="p-8">
               <EmptyState
-                title="No students at risk"
-                message="All students are within acceptable thresholds."
+                title={t('academicRisk.emptyTitle')}
+                message={t('academicRisk.emptyMessage')}
               />
             </div>
           ) : (
@@ -98,7 +122,7 @@ export function AcademicRiskPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-mono">{s.riskScore}</span>
-                      <Badge color={LEVEL_COLOR[s.level]}>{s.level}</Badge>
+                      <Badge color={LEVEL_COLOR[s.level]}>{t(LEVEL_LABEL_KEY[s.level])}</Badge>
                     </div>
                   </div>
                   <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">

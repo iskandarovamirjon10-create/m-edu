@@ -1,12 +1,67 @@
 import { useMemo } from 'react';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 interface GlassPaginationProps {
   page: number;
   totalPages: number;
   onPageChange: (p: number) => void;
+  /** Show total items count */
+  totalItems?: number;
 }
 
-export function GlassPagination({ page, totalPages, onPageChange }: GlassPaginationProps) {
+const NavBtn = ({
+  onClick,
+  disabled,
+  ariaLabel,
+  children,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  ariaLabel: string;
+  children: React.ReactNode;
+}) => (
+  <button
+    type="button"
+    className={[
+      'flex items-center gap-1.5 px-3.5 py-1.5',
+      'text-[var(--text-body-sm)] font-medium',
+      'bg-[var(--bg-glass)] border border-[var(--border-medium)]',
+      'rounded-[var(--radius-md)]',
+      'text-[var(--text-primary)]',
+      'transition-[background-color,border-color,opacity]',
+      'duration-[var(--duration-fast)] [transition-timing-function:var(--ease-standard)]',
+      'hover:bg-[var(--bg-glass-hover)] hover:border-[var(--border-strong)]',
+      'focus-visible:outline-2 focus-visible:outline-[var(--border-focus)]',
+      'disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none',
+    ].join(' ')}
+    onClick={onClick}
+    disabled={disabled}
+    aria-label={ariaLabel}
+  >
+    {children}
+  </button>
+);
+
+const ChevronLeft = () => (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="m15 18-6-6 6-6" />
+  </svg>
+);
+
+const ChevronRight = () => (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="m9 18 6-6-6-6" />
+  </svg>
+);
+
+export function GlassPagination({
+  page,
+  totalPages,
+  onPageChange,
+  totalItems,
+}: GlassPaginationProps) {
+  const { t } = useSafeI18n();
+
   const pageNumbers = useMemo(() => {
     const pages: (number | '...')[] = [];
     const maxVisible = 5;
@@ -15,7 +70,9 @@ export function GlassPagination({ page, totalPages, onPageChange }: GlassPaginat
     } else {
       pages.push(1);
       if (page > 3) pages.push('...');
-      for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i);
+      for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
+        pages.push(i);
+      }
       if (page < totalPages - 2) pages.push('...');
       pages.push(totalPages);
     }
@@ -25,45 +82,49 @@ export function GlassPagination({ page, totalPages, onPageChange }: GlassPaginat
   if (totalPages <= 1) return null;
 
   return (
-    <nav className="mt-6 flex items-center justify-between" aria-label="Pagination">
-      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-        Page {page} of {totalPages}
+    <nav
+      className="flex items-center justify-between gap-4 mt-6 flex-wrap"
+      aria-label={t('a11y.pagination')}
+    >
+      {/* Page info */}
+      <p className="text-[var(--text-caption)] text-[var(--text-tertiary)]">
+        {totalItems != null
+          ? `${totalItems} results — page ${page} of ${totalPages}`
+          : `${t('common.page')} ${page} ${t('common.of')} ${totalPages}`
+        }
       </p>
+
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-          style={{
-            background: 'var(--bg-glass)',
-            border: '1px solid var(--border-medium)',
-            color: 'var(--text-primary)',
-          }}
-          disabled={page <= 1}
+        <NavBtn
           onClick={() => onPageChange(page - 1)}
-          aria-label="Previous page"
+          disabled={page <= 1}
+          ariaLabel={t('a11y.prevPage')}
         >
-          Previous
-        </button>
+          <ChevronLeft />
+          <span>{t('common.previous')}</span>
+        </NavBtn>
+
         <div className="hidden sm:flex items-center gap-1">
           {pageNumbers.map((pageNum, index) =>
             pageNum === '...' ? (
-              <span key={`e-${index}`} className="px-2" style={{ color: 'var(--text-muted)' }}>…</span>
+              <span
+                key={`e-${index}`}
+                className="w-8 text-center text-[var(--text-tertiary)] text-[var(--text-body-sm)]"
+              >
+                …
+              </span>
             ) : (
               <button
                 key={pageNum}
                 type="button"
-                className="h-8 w-8 rounded-lg text-sm font-medium transition-all"
-                style={
+                className={[
+                  'h-8 w-8 rounded-[var(--radius-md)] text-[var(--text-body-sm)] font-medium',
+                  'transition-[background-color,color,box-shadow] duration-[var(--duration-fast)]',
+                  'focus-visible:outline-2 focus-visible:outline-[var(--border-focus)]',
                   pageNum === page
-                    ? {
-                        background: 'var(--m-vivid)',
-                        color: '#fff',
-                        boxShadow: '0 2px 8px rgba(84,115,252,0.35)',
-                      }
-                    : {
-                        color: 'var(--text-secondary)',
-                      }
-                }
+                    ? 'bg-[var(--primary)] text-white shadow-[0_2px_8px_rgba(79,70,229,0.30)]'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--state-hover)] hover:text-[var(--text-primary)]',
+                ].join(' ')}
                 onClick={() => onPageChange(pageNum)}
                 aria-label={`Page ${pageNum}`}
                 aria-current={pageNum === page ? 'page' : undefined}
@@ -73,21 +134,18 @@ export function GlassPagination({ page, totalPages, onPageChange }: GlassPaginat
             ),
           )}
         </div>
-        <button
-          type="button"
-          className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-          style={{
-            background: 'var(--bg-glass)',
-            border: '1px solid var(--border-medium)',
-            color: 'var(--text-primary)',
-          }}
-          disabled={page >= totalPages}
+
+        <NavBtn
           onClick={() => onPageChange(page + 1)}
-          aria-label="Next page"
+          disabled={page >= totalPages}
+          ariaLabel={t('a11y.nextPage')}
         >
-          Next
-        </button>
+          <span>{t('common.next')}</span>
+          <ChevronRight />
+        </NavBtn>
       </div>
     </nav>
   );
 }
+
+export default GlassPagination;

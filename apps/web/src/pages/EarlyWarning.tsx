@@ -12,6 +12,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
 import request from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface EarlyWarning {
   id: string;
@@ -32,14 +33,30 @@ const SEVERITY_COLOR: Record<EarlyWarning['severity'], 'muted' | 'primary' | 'wa
   CRITICAL: 'error',
 };
 
+const SEVERITY_LABEL_KEY: Record<EarlyWarning['severity'], string> = {
+  LOW: 'anomaly.lowSeverity',
+  MEDIUM: 'anomaly.mediumSeverity',
+  HIGH: 'anomaly.highSeverity',
+  CRITICAL: 'earlyWarning.critical',
+};
+
+interface EarlyWarningSummary {
+  open: number;
+  critical: number;
+  high: number;
+  resolvedThisWeek: number;
+  total: number;
+}
+
 export function EarlyWarningPage() {
-  usePageTitle('Early Warning System');
+  const { t } = useI18n();
+  usePageTitle(t('earlyWarning.title'));
   const queryClient = useQueryClient();
   const { push } = useToast();
 
   const summaryQuery = useQuery({
     queryKey: ['early-warning-summary'],
-    queryFn: () => request('/early-warning/summary') as Promise<Record<string, any>>,
+    queryFn: () => request('/early-warning/summary') as Promise<EarlyWarningSummary>,
   });
 
   const warningsQuery = useQuery({
@@ -50,7 +67,7 @@ export function EarlyWarningPage() {
   const resolveMutation = useMutation({
     mutationFn: (id: string) => request(`/early-warning/${id}/resolve`, { method: 'POST', body: JSON.stringify({}) }),
     onSuccess: () => {
-      push('success', 'Warning resolved');
+      push('success', t('earlyWarning.resolved'));
       queryClient.invalidateQueries({ queryKey: ['early-warnings'] });
       queryClient.invalidateQueries({ queryKey: ['early-warning-summary'] });
     },
@@ -60,43 +77,43 @@ export function EarlyWarningPage() {
   const scanMutation = useMutation({
     mutationFn: () => request('/early-warning/scan', { method: 'POST' }) as Promise<{ created?: number }>,
     onSuccess: (data) => {
-      push('success', `Scan complete: ${data?.created ?? 0} new warnings`);
+      push('success', t('earlyWarning.scanComplete', { n: data?.created ?? 0 }));
       queryClient.invalidateQueries({ queryKey: ['early-warnings'] });
       queryClient.invalidateQueries({ queryKey: ['early-warning-summary'] });
     },
     onError: (e) => push('error', getErrorMessage(e)),
   });
 
-  const warnings: EarlyWarning[] = (warningsQuery.data as any)?.items ?? [];
+  const warnings: EarlyWarning[] = warningsQuery.data?.items ?? [];
   const summary = summaryQuery.data;
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <PageHeader
-          title="Early Warning System"
-          subtitle="Rule-based, deterministic monitoring — no AI predictions"
+          title={t('earlyWarning.title')}
+          subtitle={t('earlyWarning.subtitle')}
         />
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <GlassStatCard label="Open" value={summary?.open ?? 0} />
-          <GlassStatCard label="Critical" value={summary?.critical ?? 0} />
-          <GlassStatCard label="High" value={summary?.high ?? 0} />
-          <GlassStatCard label="Resolved this week" value={summary?.resolvedThisWeek ?? 0} />
-          <GlassStatCard label="Total detected" value={summary?.total ?? 0} />
+          <GlassStatCard label={t('earlyWarning.open')} value={summary?.open ?? 0} />
+          <GlassStatCard label={t('earlyWarning.critical')} value={summary?.critical ?? 0} />
+          <GlassStatCard label={t('anomaly.highSeverity')} value={summary?.high ?? 0} />
+          <GlassStatCard label={t('earlyWarning.resolvedThisWeek')} value={summary?.resolvedThisWeek ?? 0} />
+          <GlassStatCard label={t('earlyWarning.totalDetected')} value={summary?.total ?? 0} />
         </div>
 
         <div className="glass-card p-4 space-y-2">
-          <h3 className="font-semibold text-[var(--text-primary)]">Monitored rules (deterministic)</h3>
+          <h3 className="font-semibold text-[var(--text-primary)]">{t('earlyWarning.rulesTitle')}</h3>
           <ul className="text-sm space-y-1.5 text-muted">
-            <li>• <strong className="text-[var(--text-primary)]">Payment overdue &gt; 7 days</strong> — student flagged on first unpaid invoice past grace</li>
-            <li>• <strong className="text-[var(--text-primary)]">Attendance &lt; 70%</strong> in last 14 days — threshold-based, no prediction</li>
-            <li>• <strong className="text-[var(--text-primary)]">3+ consecutive absences</strong> — exact run-length, not a model</li>
-            <li>• <strong className="text-[var(--text-primary)]">Lead stale &gt; 14 days</strong> — last activity outside the SLA window</li>
-            <li>• <strong className="text-[var(--text-primary)]">Grade average drop &gt; 15 points</strong> — comparing current vs. previous term, exact delta</li>
-            <li>• <strong className="text-[var(--text-primary)]">Schedule conflict</strong> — overlapping bookings on a resource</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('earlyWarning.rule.paymentOverdue')}</strong> — {t('earlyWarning.rule.paymentOverdueDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('earlyWarning.rule.attendance')}</strong> {t('earlyWarning.rule.attendanceDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('earlyWarning.rule.absences')}</strong> — {t('earlyWarning.rule.absencesDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('earlyWarning.rule.leadStale')}</strong> — {t('earlyWarning.rule.leadStaleDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('earlyWarning.rule.gradeDrop')}</strong> — {t('earlyWarning.rule.gradeDropDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('earlyWarning.rule.scheduleConflict')}</strong> — {t('earlyWarning.rule.scheduleConflictDesc')}</li>
           </ul>
         </div>
 
@@ -106,17 +123,17 @@ export function EarlyWarningPage() {
             onClick={() => scanMutation.mutate()}
             disabled={scanMutation.isPending}
           >
-            {scanMutation.isPending ? 'Scanning…' : 'Run scan now'}
+            {scanMutation.isPending ? t('anomaly.loading') : t('earlyWarning.runScan')}
           </GlassButton>
         </div>
 
         <div className="glass-card overflow-hidden">
           {warningsQuery.isLoading ? (
-            <div className="p-8"><PageLoader label="Loading warnings…" /></div>
+            <div className="p-8"><PageLoader label={t('earlyWarning.loading')} /></div>
           ) : warningsQuery.isError ? (
             <div className="p-8">
               <ErrorState
-                title="Failed to load warnings"
+                title={t('earlyWarning.loadFailed')}
                 message={getErrorMessage(warningsQuery.error)}
                 onRetry={() => warningsQuery.refetch()}
               />
@@ -124,15 +141,15 @@ export function EarlyWarningPage() {
           ) : warnings.length === 0 ? (
             <div className="p-8">
               <EmptyState
-                title="No active warnings"
-                message="All monitored rules are within their thresholds."
+                title={t('earlyWarning.emptyTitle')}
+                message={t('earlyWarning.emptyMessage')}
               />
             </div>
           ) : (
             <ul className="divide-y divide-[var(--border-subtle)]">
               {warnings.map((w) => (
                 <li key={w.id} className="px-4 py-3 flex items-start gap-3">
-                  <Badge color={SEVERITY_COLOR[w.severity]}>{w.severity}</Badge>
+                  <Badge color={SEVERITY_COLOR[w.severity]}>{t(SEVERITY_LABEL_KEY[w.severity])}</Badge>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium text-sm text-[var(--text-primary)]">{w.title}</h4>
                     <p className="text-xs text-muted mt-0.5">{w.description}</p>
@@ -150,7 +167,7 @@ export function EarlyWarningPage() {
                     onClick={() => resolveMutation.mutate(w.id)}
                     disabled={resolveMutation.isPending}
                   >
-                    Mark resolved
+                    {t('earlyWarning.markResolved')}
                   </GlassButton>
                 </li>
               ))}

@@ -46,15 +46,15 @@ export class ForecastingService {
 
   async findAll(
     orgId: string,
-    query: any,
+    query?: { metric?: ForecastMetric; method?: ForecastMethod },
   ): Promise<{ items: ForecastSeries[] }> {
     const summary = await this.getSummary(orgId);
     let items = summary.series;
 
-    if (query.metric) {
+    if (query?.metric) {
       items = items.filter(s => s.metric === query.metric);
     }
-    if (query.method) {
+    if (query?.method) {
       items = items.filter(s => s.method === query.method);
     }
 
@@ -105,7 +105,7 @@ export class ForecastingService {
           where: {
             organizationId: orgId,
             status: 'PAID',
-            createdAt: { gte: monthStart, lt: monthEnd },
+            paidAt: { gte: monthStart, lt: monthEnd },
           },
           _sum: { amount: true },
         });

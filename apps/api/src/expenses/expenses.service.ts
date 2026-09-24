@@ -1,13 +1,18 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { FinancialPeriodService } from '../analytics/financial-period.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { toDateToInclusive, startOfDay } from '../common/date-range';
 import { parsePagination } from '../lib/pagination';
 import { CreateExpenseDto, UpdateExpenseDto } from '../common/dto';
 import { ExpenseQuery } from '../common/dto/query';
 
 @Injectable()
 export class ExpensesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly financialPeriod: FinancialPeriodService,
+  ) {}
 
   async findAll(organizationId: string, query: ExpenseQuery) {
     const { page, limit, skip } = parsePagination(query);
@@ -16,8 +21,9 @@ export class ExpensesService {
     if (query.category) where.category = query.category as Prisma.ExpenseWhereInput['category'];
     if (query.dateFrom || query.dateTo) {
       where.date = {};
-      if (query.dateFrom) where.date.gte = new Date(query.dateFrom);
-      if (query.dateTo) where.date.lte = new Date(query.dateTo);
+      if (query.dateFrom) where.date.gte = startOfDay(query.dateFrom);
+      const dateTo = toDateToInclusive(query.dateTo);
+      if (dateTo) where.date.lte = dateTo;
     }
 
     const [items, total] = await Promise.all([
@@ -35,6 +41,8 @@ export class ExpensesService {
   }
 
   async create(organizationId: string, data: CreateExpenseDto) {
+    await this.financialPeriod.ensureNotClosed(organizationId, data.date ? new Date(data.date) : new Date());
+
     if (data.amount <= 0) throw new BadRequestException('Expense amount must be greater than zero');
 
     return this.prisma.expense.create({
@@ -50,7 +58,11 @@ export class ExpensesService {
   }
 
   async update(organizationId: string, id: string, data: UpdateExpenseDto) {
-    await this.findOne(organizationId, id);
+    const existing = await this.findOne(organizationId, id);
+    await this.financialPeriod.ensureNotClosed(organizationId, existing.date || existing.createdAt);
+    if (data.date !== undefined) {
+      await this.financialPeriod.ensureNotClosed(organizationId, new Date(data.date));
+    }
 
     const updateData: Prisma.ExpenseUpdateInput = {};
     if (data.category !== undefined) updateData.category = data.category;
@@ -62,22 +74,27 @@ export class ExpensesService {
     if (data.date !== undefined) updateData.date = new Date(data.date);
     if (data.receipt !== undefined) updateData.receipt = data.receipt;
 
-    if (Object.keys(updateData).length === 0) return this.findOne(organizationId, id);
+    if (Object.keys(updateData).length === 0) return existing;
 
-    return this.prisma.expense.update({ where: { id, organizationId }, data: updateData });
+    await this.prisma.expense.updateMany({ where: { id, organizationId }, data: updateData });
+    return this.findOne(organizationId, id);
   }
 
   async remove(organizationId: string, id: string) {
-    await this.findOne(organizationId, id);
-    return this.prisma.expense.delete({ where: { id, organizationId } });
+    const existing = await this.findOne(organizationId, id);
+    await this.financialPeriod.ensureNotClosed(organizationId, existing.date || existing.createdAt);
+
+    await this.prisma.expense.deleteMany({ where: { id, organizationId } });
+    return existing;
   }
 
   async getSummary(organizationId: string, query: ExpenseQuery) {
     const where: Prisma.ExpenseWhereInput = { organizationId };
     if (query.dateFrom || query.dateTo) {
       where.date = {};
-      if (query.dateFrom) where.date.gte = new Date(query.dateFrom);
-      if (query.dateTo) where.date.lte = new Date(query.dateTo);
+      if (query.dateFrom) where.date.gte = startOfDay(query.dateFrom);
+      const dateTo = toDateToInclusive(query.dateTo);
+      if (dateTo) where.date.lte = dateTo;
     }
 
     const [categoryStats, monthlyExpenses, totalResult] = await Promise.all([
@@ -87,16 +104,19 @@ export class ExpensesService {
         _sum: { amount: true },
         _count: true,
       }),
-      this.prisma.$queryRaw`
+      (async () => {
+        const dateTo = toDateToInclusive(query.dateTo);
+        return this.prisma.$queryRaw`
         SELECT DATE_TRUNC('month', date) as month, SUM(amount)::decimal as total, COUNT(*)::int as count
         FROM "Expense"
         WHERE "organizationId" = ${organizationId}::uuid
-        ${query.dateFrom ? Prisma.sql`AND date >= ${new Date(query.dateFrom)}` : Prisma.empty}
-        ${query.dateTo ? Prisma.sql`AND date <= ${new Date(query.dateTo)}` : Prisma.empty}
+        ${query.dateFrom ? Prisma.sql`AND date >= ${startOfDay(query.dateFrom)}` : Prisma.empty}
+        ${dateTo ? Prisma.sql`AND date <= ${dateTo}` : Prisma.empty}
         GROUP BY DATE_TRUNC('month', date)
         ORDER BY month DESC
         LIMIT 12
-      ` as unknown as { month: Date; total: string; count: number }[],
+      ` as unknown as { month: Date; total: string; count: number }[];
+      })(),
       this.prisma.expense.aggregate({ where, _sum: { amount: true } }),
     ]);
 

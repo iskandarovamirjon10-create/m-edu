@@ -66,6 +66,14 @@ const MIN_QUALITY_SCORE = 0.3;
 
 const DEFAULT_SIMILARITY_THRESHOLD = 0.6;
 
+/**
+ * Maximum age of a queued frame before it is discarded.
+ *
+ * FFmpeg can buffer during network stalls; recognizing a minutes-old frame
+ * would record attendance for an event that is no longer happening.
+ */
+const MAX_FRAME_AGE_MS = 10_000;
+
 // Maximum reconnection attempts before the worker transitions to ERROR state
 // and stops trying. Without this, a persistently failing camera (or an
 // attacker blocking a camera's IP) causes infinite reconnect loops, each
@@ -129,6 +137,15 @@ export class CameraWorkerSession extends EventEmitter {
 
   private reconnectInProgress = false;
 
+  /**
+   * True once the current stream failure has been recorded.
+   *
+   * FfmpegStreamIngester emits BOTH `error` (non-zero exit) and `close` for
+   * the same death — without this guard each crash double-counted against
+   * the reconnect budget and emitted duplicate offline alerts.
+   */
+  private streamFailureRecorded = false;
+
   private frameProcessing = false;
 
   private activeTemplatesCache:
@@ -181,6 +198,21 @@ export class CameraWorkerSession extends EventEmitter {
         this.cameraId,
         this.config.processingFps,
       );
+
+    // Default 'error' listener: Node throws if EventEmitter.emit('error')
+    // has no listeners. The manager wires additional handlers later, but a
+    // constructor-time default prevents an unhandled error event from
+    // crashing the process if the session emits before listeners attach.
+    this.on('error', (err: unknown) => {
+      this.logger.error(
+        'Camera worker error event',
+        {
+          cameraId: this.cameraId,
+          organizationId: this.organizationId,
+          error: getErrorMessage(err),
+        },
+      );
+    });
   }
 
   // ============================================================
@@ -335,6 +367,11 @@ export class CameraWorkerSession extends EventEmitter {
         'ONLINE',
       );
 
+      // Healthy again: clear the per-episode failure guard and give the
+      // worker a fresh reconnect budget (P1: attempts never reset before).
+      this.streamFailureRecorded = false;
+      this.healthTracker.resetReconnectAttempts();
+
       // FIX-4: emit recovered event (clear alert debounce)
       this.emit('camera-recovered', {
         cameraId: this.cameraId,
@@ -360,7 +397,7 @@ export class CameraWorkerSession extends EventEmitter {
 
       this.lifecycleState = 'ERROR';
 
-      this.healthTracker.recordError(
+      this.healthTracker.recordStreamFailure(
         getErrorMessage(err),
       );
 
@@ -476,6 +513,24 @@ export class CameraWorkerSession extends EventEmitter {
       this.queue.pop();
 
     if (!frame) {
+      return;
+    }
+
+    // P1: drop stale frames — a frame that sat in the queue through a
+    // network stall must not produce attendance for a past moment.
+    const frameAgeMs = Date.now() - frame.timestamp;
+    if (frameAgeMs > MAX_FRAME_AGE_MS) {
+      this.healthTracker.recordFrameDropped();
+      this.logger.warn('Stale frame discarded', {
+        cameraId: this.cameraId,
+        organizationId: this.organizationId,
+        ageMs: frameAgeMs,
+      });
+      if (this.queue.size > 0) {
+        setImmediate(() => {
+          void this.processQueue();
+        });
+      }
       return;
     }
 
@@ -975,13 +1030,6 @@ export class CameraWorkerSession extends EventEmitter {
         ? error
         : getErrorMessage(error);
 
-    this.healthTracker.recordError(
-      message,
-    );
-
-    this.lifecycleState =
-      'DEGRADED';
-
     this.logger.warn(
       'Camera stream error',
       {
@@ -992,13 +1040,26 @@ export class CameraWorkerSession extends EventEmitter {
       },
     );
 
-    // FIX-4: emit offline event for 15-minute debounce alerting
-    this.emit('camera-offline', {
-      cameraId: this.cameraId,
-      organizationId: this.organizationId,
-      error: message,
-      timestamp: Date.now(),
-    });
+    // Record at most once per failure episode: the ingester fires both
+    // `error` and `close` for the same process death.
+    if (!this.streamFailureRecorded) {
+      this.streamFailureRecorded = true;
+
+      this.healthTracker.recordStreamFailure(
+        message,
+      );
+
+      this.lifecycleState =
+        'DEGRADED';
+
+      // FIX-4: emit offline event for 15-minute debounce alerting
+      this.emit('camera-offline', {
+        cameraId: this.cameraId,
+        organizationId: this.organizationId,
+        error: message,
+        timestamp: Date.now(),
+      });
+    }
 
     this.scheduleReconnect();
   }
@@ -1010,12 +1071,8 @@ export class CameraWorkerSession extends EventEmitter {
       return;
     }
 
-    this.healthTracker.recordError(
-      `Stream process exited with code ${code ?? 'unknown'}`,
-    );
-
-    this.lifecycleState =
-      'DEGRADED';
+    const message =
+      `Stream process exited with code ${code ?? 'unknown'}`;
 
     this.logger.warn(
       'Camera stream closed',
@@ -1026,6 +1083,25 @@ export class CameraWorkerSession extends EventEmitter {
         code,
       },
     );
+
+    if (!this.streamFailureRecorded) {
+      this.streamFailureRecorded = true;
+
+      this.healthTracker.recordStreamFailure(
+        message,
+      );
+
+      this.lifecycleState =
+        'DEGRADED';
+
+      // FIX-4: emit offline event for 15-minute debounce alerting
+      this.emit('camera-offline', {
+        cameraId: this.cameraId,
+        organizationId: this.organizationId,
+        error: message,
+        timestamp: Date.now(),
+      });
+    }
 
     this.scheduleReconnect();
   }

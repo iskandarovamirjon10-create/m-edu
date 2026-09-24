@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { faceApi } from '@/lib/api';
+import { auditApi } from '@/lib/api';
 import {
   PageHeader,
   Badge,
@@ -16,54 +16,79 @@ import {
   Pagination,
   TextInput,
   Select,
-  statusColor,
 } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDateTime } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
-import type { Paginated, FaceAuditEvent, AuditEventType } from '@/lib/types';
+import type { Paginated, SystemAuditEvent, AuditAction } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
-const AUDIT_EVENT_TYPES: { value: AuditEventType; label: string }[] = [
-  { value: 'FACE_ENROLLMENT_CREATED', label: 'Enrollment created' },
-  { value: 'FACE_ENROLLMENT_REVOKED', label: 'Enrollment revoked' },
-  { value: 'FACE_RECOGNITION_ATTEMPTED', label: 'Recognition attempted' },
-  { value: 'FACE_RECOGNITION_CONFIRMED', label: 'Recognition confirmed' },
-  { value: 'FACE_RECOGNITION_REJECTED', label: 'Recognition rejected' },
-  { value: 'LIVENESS_FAILED', label: 'Liveness failed' },
-  { value: 'DEVICE_REGISTERED', label: 'Device registered' },
-  { value: 'DEVICE_ACTIVATED', label: 'Device activated' },
+// Reuse enum.action.* for the 6 exact-match actions; others use audit.action.*.
+const ENUM_ACTION_SET = new Set<AuditAction>([
+  'CREATE',
+  'UPDATE',
+  'DELETE',
+  'LOGIN',
+  'EXPORT',
+  'IMPORT',
+]);
+
+const AUDIT_ACTIONS: { value: AuditAction; label: string }[] = [
+  { value: 'CREATE', label: 'enum.action.CREATE' },
+  { value: 'UPDATE', label: 'enum.action.UPDATE' },
+  { value: 'DELETE', label: 'enum.action.DELETE' },
+  { value: 'RESTORE', label: 'audit.action.RESTORE' },
+  { value: 'LOGIN', label: 'enum.action.LOGIN' },
+  { value: 'LOGOUT', label: 'audit.action.LOGOUT' },
+  { value: 'LOGIN_FAILED', label: 'audit.action.LOGIN_FAILED' },
+  { value: 'EXPORT', label: 'enum.action.EXPORT' },
+  { value: 'IMPORT', label: 'enum.action.IMPORT' },
+  { value: 'BULK_UPDATE', label: 'audit.action.BULK_UPDATE' },
+  { value: 'PAYMENT_RECEIVED', label: 'audit.action.PAYMENT_RECEIVED' },
+  { value: 'ENROLLMENT_CREATED', label: 'audit.action.ENROLLMENT_CREATED' },
+  { value: 'ENROLLMENT_REVOKED', label: 'audit.action.ENROLLMENT_REVOKED' },
+  { value: 'ATTENDANCE_RECORDED', label: 'audit.action.ATTENDANCE_RECORDED' },
+  { value: 'GRADE_RECORDED', label: 'audit.action.GRADE_RECORDED' },
+  { value: 'DOCUMENT_UPLOADED', label: 'audit.action.DOCUMENT_UPLOADED' },
+  { value: 'DOCUMENT_DELETED', label: 'audit.action.DOCUMENT_DELETED' },
+  { value: 'WORKFLOW_TRIGGERED', label: 'audit.action.WORKFLOW_TRIGGERED' },
+  { value: 'WORKFLOW_COMPLETED', label: 'audit.action.WORKFLOW_COMPLETED' },
+  { value: 'CUSTOM', label: 'audit.action.CUSTOM' },
 ];
 
 interface AuditFilters {
   page: number;
   limit: number;
-  type?: AuditEventType;
+  action?: AuditAction;
   search?: string;
 }
 
-function formatEventType(type: string): string {
-  return type
-    .toLowerCase()
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+function actionKey(action: string): string {
+  return ENUM_ACTION_SET.has(action as AuditAction)
+    ? `enum.action.${action}`
+    : `audit.action.${action}`;
 }
 
-function truncateResourceId(id: string, maxLength = 8): string {
+function actionColor(action: string): 'success' | 'warning' | 'error' | 'primary' | 'slate' {
+  if (action === 'CREATE') return 'success';
+  if (action === 'UPDATE') return 'warning';
+  if (action === 'DELETE') return 'error';
+  if (action === 'LOGIN' || action === 'LOGOUT') return 'primary';
+  if (action === 'LOGIN_FAILED') return 'error';
+  return 'slate';
+}
+
+function truncateId(id: string | null | undefined, maxLength = 8): string {
+  if (!id) return '';
   return id.length > maxLength ? `${id.slice(0, maxLength)}…` : id;
 }
 
-function formatActorName(event: FaceAuditEvent): string {
-  if (!event.user) return '—';
-  const { firstName, lastName } = event.user;
-  return [firstName, lastName].filter(Boolean).join(' ') || '—';
-}
-
 export function AuditPage() {
-  usePageTitle('Audit Log');
+  const { t } = useI18n();
+  usePageTitle(t('nav.audit'));
   const [page, setPage] = useState(1);
-  const [type, setType] = useState('');
+  const [action, setAction] = useState('');
   const [search, setSearch] = useState('');
   const [limit] = useState(20);
   const debouncedSearch = useDebounce(search, 300);
@@ -72,19 +97,19 @@ export function AuditPage() {
     () => ({
       page,
       limit,
-      type: (type as AuditEventType) || undefined,
+      action: (action as AuditAction) || undefined,
       search: debouncedSearch || undefined,
     }),
-    [page, debouncedSearch, type, limit],
+    [page, debouncedSearch, action, limit],
   );
 
   const audit = useQuery({
     queryKey: ['audit', params],
-    queryFn: () => faceApi.auditLog(params),
+    queryFn: () => auditApi.list(params),
     placeholderData: (previousData) => previousData,
   });
 
-  const data = audit.data as Paginated<FaceAuditEvent> | undefined;
+  const data = audit.data as Paginated<SystemAuditEvent> | undefined;
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,9 +119,9 @@ export function AuditPage() {
     [],
   );
 
-  const handleTypeChange = useCallback(
+  const handleActionChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
-      setType(e.target.value);
+      setAction(e.target.value);
       setPage(1);
     },
     [],
@@ -107,20 +132,20 @@ export function AuditPage() {
     void refetchAudit();
   }, [refetchAudit]);
 
-  const hasActiveFilters = Boolean(search || type);
+  const hasActiveFilters = Boolean(search || action);
   const totalEvents = data?.total || 0;
 
   // Early return for loading state (only when no data is available)
   if (audit.isLoading && !data) {
     return (
-      <div className="orb-container">
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Audit Log"
-            subtitle="Security-sensitive operations across the platform"
+            title={t('nav.audit')}
+            subtitle={t('audit.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label="Loading audit events…" />
+            <PageLoader label={t('audit.loading')} />
           </div>
         </div>
       </div>
@@ -130,15 +155,15 @@ export function AuditPage() {
   // Early return for error state
   if (audit.isError) {
     return (
-      <div className="orb-container">
+      <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
           <PageHeader
-            title="Audit Log"
-            subtitle="Security-sensitive operations across the platform"
+            title={t('nav.audit')}
+            subtitle={t('audit.pageSubtitle')}
           />
           <div className="glass-card p-8">
             <ErrorState
-              title="Failed to load audit log"
+              title={t('audit.loadError')}
               message={getErrorMessage(audit.error as Error)}
               onRetry={handleRetry}
             />
@@ -149,15 +174,15 @@ export function AuditPage() {
   }
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1"></div>
       <div className="orb orb-cyan-2"></div>
       <div className="orb orb-indigo-1"></div>
       <div className="orb orb-deep-1"></div>
     <div className="page-container space-y-4">
       <PageHeader
-        title="Audit Log"
-        subtitle="Security-sensitive operations across the platform"
+        title={t('nav.audit')}
+        subtitle={t('audit.pageSubtitle')}
       />
 
       {/* Filters */}
@@ -165,27 +190,29 @@ export function AuditPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
             <TextInput
-              placeholder="Search by description, type or resource…"
-              aria-label="Search audit log"
+              placeholder={t('audit.searchPlaceholder')}
+              aria-label={t('audit.searchAria')}
               value={search}
               onChange={handleSearchChange}
               type="search"
             />
             <Select
-              value={type}
-              onChange={handleTypeChange}
-              aria-label="Filter by event type"
+              value={action}
+              onChange={handleActionChange}
+              aria-label={t('common.filterByAction')}
             >
-              <option value="">All event types</option>
-              {AUDIT_EVENT_TYPES.map((eventType) => (
-                <option key={eventType.value} value={eventType.value}>
-                  {eventType.label}
+              <option value="">{t('enum.allActions')}</option>
+              {AUDIT_ACTIONS.map((auditAction) => (
+                <option key={auditAction.value} value={auditAction.value}>
+                  {t(auditAction.label)}
                 </option>
               ))}
             </Select>
           </div>
           <div className="text-sm text-muted sm:ml-4 sm:shrink-0">
-            {totalEvents} {totalEvents === 1 ? 'event' : 'events'}
+            {totalEvents === 1
+              ? t('audit.countOne')
+              : t('audit.countMany', { count: totalEvents })}
           </div>
         </div>
       </div>
@@ -194,12 +221,12 @@ export function AuditPage() {
       <div className="glass-card overflow-hidden">
         {!data || data.items.length === 0 ? (
           <EmptyState
-            title={hasActiveFilters ? 'No matching events' : 'No audit events'}
-            message={
-              hasActiveFilters
-                ? 'Try adjusting your filters to see more results.'
-                : 'Security-sensitive operations will be recorded here.'
-            }
+              title={t('audit.emptyTitle')}
+              message={
+                hasActiveFilters
+                  ? t('common.adjustFilters')
+                  : t('audit.emptyMessage')
+              }
           />
         ) : (
           <>
@@ -207,11 +234,11 @@ export function AuditPage() {
               <Table>
                 <THead>
                   <TR>
-                    <TH>Time</TH>
-                    <TH>Event</TH>
-                    <TH>Resource</TH>
-                    <TH>Description</TH>
-                    <TH>Actor</TH>
+                    <TH>{t('audit.col.time')}</TH>
+                    <TH>{t('audit.col.action')}</TH>
+                    <TH>{t('audit.col.entity')}</TH>
+                    <TH>{t('common.description')}</TH>
+                    <TH>{t('audit.col.actor')}</TH>
                   </TR>
                 </THead>
                 <TBody>
@@ -223,14 +250,14 @@ export function AuditPage() {
                         {formatDateTime(event.createdAt)}
                       </TD>
                       <TD>
-                        <Badge color={statusColor(event.type)}>
-                          {formatEventType(event.type)}
+                        <Badge color={actionColor(event.action)}>
+                          {t(actionKey(event.action))}
                         </Badge>
                       </TD>
                       <TD className="text-xs text-muted">
-                        {event.resourceType}
-                        {event.resourceId
-                          ? ` · ${truncateResourceId(event.resourceId)}`
+                        {event.entityType}
+                        {event.entityId
+                          ? ` · ${truncateId(event.entityId)}`
                           : ''}
                       </TD>
                       <TD
@@ -240,7 +267,7 @@ export function AuditPage() {
                         {event.description}
                       </TD>
                       <TD className="whitespace-nowrap">
-                        {formatActorName(event)}
+                        {event.actorName || t('common.system')}
                       </TD>
                     </TR>
                   ))}

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { groupsApi, coursesApi, teachersApi } from '@/lib/api';
 import {
@@ -19,12 +19,15 @@ import {
   GlassField,
   GlassInput,
   GlassSelect,
+  GlassButton,
   useToasts,
+  ConfirmDialog,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { fullName } from '@/lib/format';
 import type { Paginated, Group, Course, Teacher } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface GroupFormState {
   name: string;
@@ -56,18 +59,20 @@ function formatCapacity(group: Group): string {
 
 function getGroupStatusBadge(isActive: boolean): { variant: 'success' | 'muted'; label: string } {
   return isActive
-    ? { variant: 'success', label: 'Active' }
-    : { variant: 'muted', label: 'Inactive' };
+    ? { variant: 'success', label: 'enum.status.ACTIVE' }
+    : { variant: 'muted', label: 'enum.status.INACTIVE' };
 }
 
 export function GroupsPage() {
-  usePageTitle('Groups');
+  const { t } = useI18n();
+  usePageTitle(t('groups.title'));
   const navigate = useNavigate();
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // Form state
   const [form, setForm] = useState<GroupFormState>(INITIAL_FORM);
@@ -119,10 +124,22 @@ export function GroupsPage() {
         startDate: form.startDate || undefined,
       }),
     onSuccess: () => {
-      push('success', 'Group created successfully');
+      push('success', t('groups.created'));
       setModalOpen(false);
       setForm(INITIAL_FORM);
       setFormErrors({});
+      qc.invalidateQueries({ queryKey: ['groups'] });
+    },
+    onError: (e: Error) => {
+      push('error', getErrorMessage(e));
+    },
+  });
+
+  // Delete group mutation
+  const remove = useMutation({
+    mutationFn: (id: string) => groupsApi.remove(id),
+    onSuccess: () => {
+      push('success', t('groups.deleted'));
       qc.invalidateQueries({ queryKey: ['groups'] });
     },
     onError: (e: Error) => {
@@ -135,18 +152,18 @@ export function GroupsPage() {
     const errors: Partial<Record<keyof GroupFormState, string>> = {};
 
     if (!form.name.trim()) {
-      errors.name = 'Group name is required';
+      errors.name = t('groups.form.nameRequired');
     }
     if (!form.courseId) {
-      errors.courseId = 'Please select a course';
+      errors.courseId = t('groups.form.courseRequired');
     }
     if (form.capacity && parseInt(form.capacity, 10) < 1) {
-      errors.capacity = 'Capacity must be at least 1';
+      errors.capacity = t('groups.form.capacityMin');
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [form]);
+  }, [form, t]);
 
   // Form handlers
   const handleFormChange = useCallback(
@@ -188,6 +205,16 @@ export function GroupsPage() {
     [navigate],
   );
 
+  const handleDelete = useCallback((id: string) => {
+    setDeleteTarget(id);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    remove.mutate(deleteTarget);
+    setDeleteTarget(null);
+  }, [deleteTarget, remove]);
+
   const { refetch: refetchGroups } = groups;
   const handleRetry = useCallback(() => {
     void refetchGroups();
@@ -196,18 +223,14 @@ export function GroupsPage() {
   // Early return for loading state
   if (groups.isLoading && !data) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
           <GlassPageHeader
-            title="Groups"
-            subtitle="Classes and study groups"
+            title={t('groups.title')}
+            subtitle={t('groups.pageSubtitle')}
           />
           <GlassCard className="p-8">
-            <GlassPageLoader label="Loading groups…" />
+            <GlassPageLoader label={t('groups.loading')} />
           </GlassCard>
         </div>
       </div>
@@ -217,19 +240,15 @@ export function GroupsPage() {
   // Early return for error state
   if (groups.isError) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container">
           <GlassPageHeader
-            title="Groups"
-            subtitle="Classes and study groups"
+            title={t('groups.title')}
+            subtitle={t('groups.pageSubtitle')}
           />
           <GlassCard className="p-8">
             <GlassErrorState
-              title="Failed to load groups"
+              title={t('groups.loadError')}
               message={getErrorMessage(groups.error as Error)}
               onRetry={handleRetry}
             />
@@ -240,23 +259,19 @@ export function GroupsPage() {
   }
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
       <div className="page-container">
         <GlassPageHeader
-          title="Groups"
-          subtitle="Classes and study groups"
+          title={t('groups.title')}
+          subtitle={t('groups.pageSubtitle')}
           actions={
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn glass-btn-primary"
+              variant="primary"
               onClick={handleOpenModal}
             >
-              Create group
-            </button>
+              {t('groups.create')}
+            </GlassButton>
           }
         />
 
@@ -264,20 +279,21 @@ export function GroupsPage() {
         <GlassCard className="overflow-hidden">
           {groupList.length === 0 ? (
             <GlassEmptyState
-              title="No groups yet"
-              message="Create your first group to organize students."
+              title={t('groups.empty')}
+              message={t('groups.emptyMessage')}
             />
           ) : (
             <div className="glass-table-wrap">
               <GlassTable>
                 <GlassTHead>
                   <GlassTR>
-                    <GlassTH>Name</GlassTH>
-                    <GlassTH>Course</GlassTH>
-                    <GlassTH>Teacher</GlassTH>
-                    <GlassTH>Room</GlassTH>
-                    <GlassTH>Capacity</GlassTH>
-                    <GlassTH>Status</GlassTH>
+                    <GlassTH>{t('common.name')}</GlassTH>
+                    <GlassTH>{t('groups.col.course')}</GlassTH>
+                    <GlassTH>{t('groups.col.teacher')}</GlassTH>
+                    <GlassTH>{t('groups.col.room')}</GlassTH>
+                    <GlassTH>{t('groups.col.capacity')}</GlassTH>
+                    <GlassTH>{t('groups.col.status')}</GlassTH>
+                    <GlassTH>{t('common.actions')}</GlassTH>
                   </GlassTR>
                 </GlassTHead>
                 <GlassTBody>
@@ -292,7 +308,7 @@ export function GroupsPage() {
                         className="cursor-pointer transition-colors"
                         tabIndex={0}
                         role="link"
-                        aria-label={`View group ${group.name}`}
+                        aria-label={t('groups.viewAria', { name: group.name })}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
@@ -309,8 +325,30 @@ export function GroupsPage() {
                         <GlassTD>{formatCapacity(group)}</GlassTD>
                         <GlassTD>
                           <GlassBadge variant={statusBadge.variant}>
-                            {statusBadge.label}
+                            {t(statusBadge.label)}
                           </GlassBadge>
+                        </GlassTD>
+                        <GlassTD>
+                          <div
+                            className="flex gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          >
+                            <GlassButton asChild variant="ghost" size="sm">
+                              <Link to={`/groups/${group.id}/edit`}>
+                                {t('common.edit')}
+                              </Link>
+                            </GlassButton>
+                            <GlassButton
+                              type="button"
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleDelete(group.id)}
+                              disabled={remove.isPending && remove.variables === group.id}
+                            >
+                              {t('common.delete')}
+                            </GlassButton>
+                          </div>
                         </GlassTD>
                       </GlassTR>
                     );
@@ -325,19 +363,23 @@ export function GroupsPage() {
         <GlassModal
           open={modalOpen}
           onClose={handleCloseModal}
-          title="Create group"
+          title={t('groups.create')}
           wide
         >
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <GlassField label="Group name" required error={formErrors.name}>
+              <GlassField
+                label={t('groups.form.name')}
+                required
+                error={formErrors.name}
+              >
                 <GlassInput
                   value={form.name}
                   onChange={handleFormChange('name')}
                   required
                   aria-invalid={Boolean(formErrors.name)}
                   aria-describedby={formErrors.name ? 'name-error' : undefined}
-                  placeholder="Morning class A"
+                  placeholder={t('groups.namePlaceholder')}
                 />
                 {formErrors.name && (
                   <span id="name-error" className="mt-1 text-sm" style={{ color: 'var(--state-error)' }}>
@@ -346,7 +388,11 @@ export function GroupsPage() {
                 )}
               </GlassField>
 
-              <GlassField label="Course" required error={formErrors.courseId}>
+              <GlassField
+                label={t('groups.form.course')}
+                required
+                error={formErrors.courseId}
+              >
                 <GlassSelect
                   value={form.courseId}
                   onChange={handleFormChange('courseId')}
@@ -356,7 +402,7 @@ export function GroupsPage() {
                     formErrors.courseId ? 'course-error' : undefined
                   }
                 >
-                  <option value="">Select course…</option>
+                  <option value="">{t('groups.selectCoursePlaceholder')}</option>
                   {courseList.map((course) => (
                     <option key={course.id} value={course.id}>
                       {course.name}
@@ -370,11 +416,11 @@ export function GroupsPage() {
                 )}
               </GlassField>
 
-              <GlassField label="Teacher">
+              <GlassField label={t('groups.form.teacher')}>
                 <GlassSelect
                   value={form.teacherId}
                   onChange={handleFormChange('teacherId')}
-                  aria-label="Select teacher"
+                  aria-label={t('groups.selectTeacherAria')}
                 >
                   <option value="">—</option>
                   {teacherList.map((teacher) => (
@@ -385,15 +431,15 @@ export function GroupsPage() {
                 </GlassSelect>
               </GlassField>
 
-              <GlassField label="Room">
+              <GlassField label={t('groups.form.room')}>
                 <GlassInput
                   value={form.room}
                   onChange={handleFormChange('room')}
-                  placeholder="Room 101"
+                  placeholder={t('groups.roomPlaceholder')}
                 />
               </GlassField>
 
-              <GlassField label="Capacity" error={formErrors.capacity}>
+              <GlassField label={t('groups.form.capacity')} error={formErrors.capacity}>
                 <GlassInput
                   type="number"
                   min="1"
@@ -416,7 +462,7 @@ export function GroupsPage() {
                 )}
               </GlassField>
 
-              <GlassField label="Start date">
+              <GlassField label={t('groups.form.startDate')}>
                 <GlassInput
                   type="date"
                   value={form.startDate}
@@ -426,24 +472,32 @@ export function GroupsPage() {
             </div>
 
             <div className="flex justify-end gap-2">
-              <button
+              <GlassButton
                 type="button"
-                className="glass-btn glass-btn-secondary"
+                variant="secondary"
                 onClick={handleCloseModal}
                 disabled={create.isPending}
               >
-                Cancel
-              </button>
-              <button
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton
                 type="submit"
-                className="glass-btn glass-btn-primary"
+                variant="primary"
                 disabled={create.isPending}
               >
-                {create.isPending ? 'Saving…' : 'Create group'}
-              </button>
+                {create.isPending ? t('common.saving') : t('groups.create')}
+              </GlassButton>
             </div>
           </form>
         </GlassModal>
+
+        <ConfirmDialog
+          open={deleteTarget !== null}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+          description={t('groups.confirmDelete')}
+          loading={remove.isPending}
+        />
 
         {toastNode}
       </div>

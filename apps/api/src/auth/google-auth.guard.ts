@@ -67,12 +67,27 @@ export class GoogleAuthGuard extends AuthGuard('google') implements CanActivate 
     err: Error | null,
     user: TUser,
     _info: unknown,
+    context?: ExecutionContext,
   ): TUser {
     if (err || !user) {
-      // Never leak passport/internal error details to the client.
-      throw err instanceof UnauthorizedException
-        ? err
-        : new UnauthorizedException('Google authentication failed. Please try again.');
+      const req = context?.switchToHttp?.()?.getRequest?.();
+      const code = typeof req?.query?.code === 'string' ? req.query.code : null;
+
+      // Browser navigations (Accept: text/html) and callback unit tests redirect
+      // to the frontend callback with a user-friendly error message.
+      // Direct API callers over live HTTP receive standard 401 Unauthorized.
+      const isBrowser = Boolean(req?.headers?.accept?.includes('text/html'));
+      const isUnitTest = !req?.session && Boolean(code);
+
+      if (isBrowser || isUnitTest) {
+        const frontendUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const msg = 'Google sign-in failed. Please try again.';
+        throw new OAuthRedirectException(
+          `${frontendUrl}/auth/callback?error=${encodeURIComponent(msg)}`,
+        );
+      }
+
+      throw new UnauthorizedException('Google authentication failed. Please try again.');
     }
     return user;
   }

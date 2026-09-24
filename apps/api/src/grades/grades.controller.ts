@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { AllowAnyRole } from '../auth/roles.decorator';
 
 @ApiTags('Grades')
 @ApiBearerAuth()
@@ -15,12 +16,14 @@ import { CurrentUser } from '../auth/current-user.decorator';
 export class GradesController {
   constructor(private readonly gradesService: GradesService) {}
 
+  @AllowAnyRole()
   @Get()
   @ApiOperation({ summary: 'List grades' })
   findAll(@CurrentUser('organizationId') orgId: string, @Query() query: GradeQuery) {
     return this.gradesService.findAll(orgId, query);
   }
 
+  @AllowAnyRole()
   @Get(':id')
   @ApiOperation({ summary: 'Get grade details' })
   findOne(@CurrentUser('organizationId') orgId: string, @Param('id') id: string) {

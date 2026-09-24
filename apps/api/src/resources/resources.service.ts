@@ -1,19 +1,25 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import {
+  CreateResourceDto,
+  ResourceQueryDto,
+  UpdateResourceDto,
+} from './dto/resource.dto';
 
 @Injectable()
 export class ResourcesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(orgId: string, query: any) {
-    const where: any = { organizationId: orgId };
+  async findAll(orgId: string, query: ResourceQueryDto) {
+    const where: Prisma.ResourceWhereInput = { organizationId: orgId };
     if (query.isActive !== undefined) where.isActive = query.isActive === 'true';
     if (query.type) where.type = query.type;
     const [items, total] = await Promise.all([
       this.prisma.resource.findMany({
         where,
-        skip: query.skip ? parseInt(query.skip, 10) : 0,
-        take: query.take ? parseInt(query.take, 10) : 20,
+        skip: query.skip ? Number(query.skip) : 0,
+        take: query.take ? Number(query.take) : 20,
       }),
       this.prisma.resource.count({ where }),
     ]);
@@ -26,7 +32,7 @@ export class ResourcesService {
     });
   }
 
-  async create(orgId: string, dto: any) {
+  async create(orgId: string, dto: CreateResourceDto) {
     return this.prisma.resource.create({
       data: {
         organizationId: orgId,
@@ -36,15 +42,23 @@ export class ResourcesService {
         location: dto.location,
         description: dto.description,
         isActive: dto.isActive !== undefined ? dto.isActive : true,
-        availability: dto.availability,
+        availability: dto.availability as Prisma.InputJsonValue,
       },
     });
   }
 
-  async update(orgId: string, id: string, dto: any) {
+  async update(orgId: string, id: string, dto: UpdateResourceDto) {
     return this.prisma.resource.updateMany({
       where: { organizationId: orgId, id },
-      data: dto,
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.type !== undefined && { type: dto.type }),
+        ...(dto.capacity !== undefined && { capacity: dto.capacity }),
+        ...(dto.location !== undefined && { location: dto.location }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+        ...(dto.availability !== undefined && { availability: dto.availability as Prisma.InputJsonValue }),
+      },
     });
   }
 

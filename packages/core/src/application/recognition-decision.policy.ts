@@ -63,7 +63,9 @@ export interface FaceRecognitionConfig {
 // ============================================================================
 
 export const DEFAULT_FACE_RECOGNITION_CONFIG: FaceRecognitionConfig = {
-  qualityThreshold: 0.3,
+  // Must match QualityAssessor.overallThreshold (0.4) — a single effective
+  // quality gate, not two divergent numbers.
+  qualityThreshold: 0.4,
   livenessPolicy: {
     required: true,
     threshold: 0.5,
@@ -92,6 +94,8 @@ export const DEFAULT_FACE_RECOGNITION_CONFIG: FaceRecognitionConfig = {
 export interface RecognitionInput {
   qualityScore: number;
   livenessDecision: 'PASS' | 'FAIL' | 'UNCERTAIN' | 'UNAVAILABLE';
+  /** Liveness confidence in 0..1 (present when the engine supplies it). */
+  livenessConfidence?: number;
   similarityScore: number | null;
   bestMatchFound: boolean;
 }
@@ -140,6 +144,21 @@ export class RecognitionDecisionPolicy {
         }
       }
 
+      // A PASS whose confidence is below the configured policy threshold is
+      // not good enough — the engine's own pass band and this threshold must
+      // both hold (previously livenessPolicy.threshold was never read).
+      if (
+        input.livenessDecision === 'PASS' &&
+        typeof input.livenessConfidence === 'number' &&
+        input.livenessConfidence < this.config.livenessPolicy.threshold
+      ) {
+        return {
+          outcome: 'REJECTED',
+          reason: 'LIVENESS_BELOW_THRESHOLD',
+          message: `Liveness confidence ${input.livenessConfidence.toFixed(3)} is below policy threshold ${this.config.livenessPolicy.threshold}`,
+        };
+      }
+
       if (input.livenessDecision === 'UNCERTAIN' && !this.config.livenessPolicy.acceptUncertain) {
         return {
           outcome: 'UNCERTAIN',
@@ -178,10 +197,12 @@ export class RecognitionDecisionPolicy {
     }
 
     // Step 6: Confidence categorization
+    // Bands must match SimilarityScore.getConfidence() in value-objects.ts
+    // (HIGH >= 0.8, MEDIUM >= 0.7) — one taxonomy, not two.
     let confidence: 'HIGH' | 'MEDIUM' | 'LOW';
     if (input.similarityScore >= 0.8) {
       confidence = 'HIGH';
-    } else if (input.similarityScore >= 0.6) {
+    } else if (input.similarityScore >= 0.7) {
       confidence = 'MEDIUM';
     } else {
       confidence = 'LOW';

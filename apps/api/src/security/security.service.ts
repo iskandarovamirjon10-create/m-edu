@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SecurityAlertQueryDto } from './dto/security.dto';
 
 type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -46,7 +47,6 @@ export class SecurityService {
   async getSummary(orgId: string): Promise<SecuritySummary> {
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-    const now = new Date();
 
     const weekAgoStart = new Date(weekAgo);
     weekAgoStart.setHours(0, 0, 0, 0);
@@ -68,7 +68,7 @@ export class SecurityService {
       byStatus.unresolved++;
       byType[a.type] = (byType[a.type] ?? 0) + 1;
     }
-    for (const a of alerts.filter(a => a.resolvedAt !== null)) {
+    for (const _ of alerts.filter(a => a.resolvedAt !== null)) {
       byStatus.resolved++;
     }
 
@@ -91,10 +91,7 @@ export class SecurityService {
     };
   }
 
-  async findAlerts(orgId: string, query: any): Promise<{ items: SecurityAlert[]; total: number }> {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-
+  async findAlerts(orgId: string, query: SecurityAlertQueryDto): Promise<{ items: SecurityAlert[]; total: number }> {
     const allAlerts = await this.buildAlertsFromAuditLog(orgId);
 
     let items = allAlerts;
@@ -112,8 +109,8 @@ export class SecurityService {
     }
 
     const total = items.length;
-    const skip = query.skip ? parseInt(query.skip, 10) : 0;
-    const take = query.take ? parseInt(query.take, 10) : 50;
+    const skip = query.skip ? Number(query.skip) : 0;
+    const take = query.take ? Number(query.take) : 50;
     items = items.slice(skip, skip + take);
 
     return { items, total };
@@ -125,9 +122,6 @@ export class SecurityService {
     userId: string,
     note?: string,
   ): Promise<{ ok: true }> {
-    // Alerts are derived from audit log — "resolving" is stored in DataQualityIssue
-    // (repurposed for security tracking) if a matching issue exists.
-    // We also look up the original audit log entry by id and update it.
     const now = new Date();
     await this.prisma.dataQualityIssue.updateMany({
       where: { id, organizationId: orgId },
@@ -153,7 +147,6 @@ export class SecurityService {
       orderBy: { timestamp: 'desc' },
     });
 
-    // Group consecutive LOGIN_FAILED from same IP as one alert
     const loginFailedByIp = new Map<string, typeof logs>();
     const otherAlerts: SecurityAlert[] = [];
 

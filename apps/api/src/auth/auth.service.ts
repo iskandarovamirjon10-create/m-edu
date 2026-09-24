@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
-import { errorMessage, GoogleProfile, TokenUser } from './types';
+import { errorMessage, GoogleProfile, TokenUser, GetMeResponse } from './types';
 import { SecureLogger } from '@medu/face-security';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes, createHash } from 'crypto';
@@ -26,18 +26,43 @@ export class AuthService {
   private readonly SESSION_RETENTION_HOURS = Number(process.env.SESSION_RETENTION_HOURS) || 0;
 
   private readonly logger = new SecureLogger('info');
+  private smtpTransporter: nodemailer.Transporter | null = null;
+
+  private getSmtpTransporter(): nodemailer.Transporter {
+    if (this.smtpTransporter) return this.smtpTransporter;
+    const host = process.env.SMTP_HOST;
+    const port = Number(process.env.SMTP_PORT) || 587;
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    const secure = port === 465;
+    if (!host) throw new Error('SMTP_HOST not configured');
+    this.smtpTransporter = nodemailer.createTransport({
+      host, port, secure,
+      auth: user && pass ? { user, pass } : undefined,
+    });
+    return this.smtpTransporter;
+  }
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
   ) {
-    setInterval(() => this.cleanupExpiredEntries(), this.CLEANUP_INTERVAL_MS);
+    const timer = setInterval(() => this.cleanupExpiredEntries(), this.CLEANUP_INTERVAL_MS);
+    timer.unref?.();
+  }
+
+  private getFrontendUrl(): string {
+    return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  }
+
+  private generateSecureToken(bytes = 32): string {
+    return randomBytes(bytes).toString('hex');
   }
 
   // ==================== Auth code exchange (CSRF-safe) ====================
 
   async generateAuthCode(accessToken: string, userId: string): Promise<string> {
-    const code = randomBytes(32).toString('hex');
+    const code = this.generateSecureToken();
     const expiresAt = new Date(Date.now() + this.AUTH_CODE_TTL_MS);
 
     await this.prisma.authorizationCode.create({
@@ -76,14 +101,15 @@ export class AuthService {
     return entry.accessToken;
   }
 
-  private async cleanupExpiredEntries() {
+  async cleanupExpiredEntries() {
     const now = Date.now();
 
     // Purge expired DB sessions, password reset tokens, and authorization codes
     try {
       const cutoff = new Date(now - this.SESSION_RETENTION_HOURS * 60 * 60 * 1000);
-      const [sessionResult, tokenResult, authCodeResult] = await Promise.all([
+      const [sessionResult, parentSessionResult, tokenResult, authCodeResult] = await Promise.all([
         this.prisma.session.deleteMany({ where: { expiresAt: { lt: cutoff } } }),
+        this.prisma.parentSession.deleteMany({ where: { expiresAt: { lt: cutoff } } }),
         this.prisma.passwordResetToken.deleteMany({
           where: {
             OR: [
@@ -119,18 +145,22 @@ export class AuthService {
 
   // ==================== Local auth ====================
 
-  async login(email: string, password: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { email, isActive: true },
+  /**
+   * Login with email and password
+   */
+  async login(email: string, password: string): Promise<{ accessToken: string; user: TokenUser }> {
+    // `User.email` is globally unique (see schema + the P2002 handling on
+    // registration), so resolve it with the unique index rather than a
+    // findFirst scan. Deactivation is checked explicitly to keep the same
+    // outward behaviour (uniform "Invalid credentials" for inactive accounts).
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
       include: { organization: true },
-      orderBy: { createdAt: 'desc' },
     });
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    if (!user.passwordHash) {
+    if (!user || !user.isActive || !user.passwordHash) {
+      // Anti-timing attack delay without blocking event loop (DoS protection)
+      await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 100));
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -148,21 +178,16 @@ export class AuthService {
     return await this.issueToken(user);
   }
 
-  async register(data: RegisterDto) {
-    const existingUser = await this.prisma.user.findFirst({
-      where: { email: data.email },
-    });
-    if (existingUser) {
-      throw new ConflictException('Email already registered');
-    }
+  async register(data: RegisterDto): Promise<{ accessToken: string; user: TokenUser }> {
+    
 
     const passwordHash = await bcrypt.hash(data.password, 10);
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    let result; try { result = await this.prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({
         data: {
           name: data.organizationName,
-          email: data.email,
+          email: data.email.toLowerCase().trim(),
           phone: data.phone,
         },
       });
@@ -170,18 +195,18 @@ export class AuthService {
       const user = await tx.user.create({
         data: {
           organizationId: organization.id,
-          email: data.email,
+          email: data.email.toLowerCase().trim(),
           passwordHash,
           firstName: data.firstName,
           lastName: data.lastName,
           phone: data.phone,
           role: 'ORG_ADMIN',
+          lastLoginAt: new Date(),
         },
         include: { organization: true },
       });
 
-      return { user, organization };
-    });
+      return { user, organization }; }); } catch (error: any) { if (error.code === 'P2002') { throw new ConflictException('Email already registered'); } throw error; }
 
     // Issue a tracked session (sid in JWT) so the token can be revoked on logout.
     return await this.issueToken(result.user);
@@ -198,13 +223,13 @@ export class AuthService {
    * reach admin control.
    *
    * Security model:
-   *  - Locked forever once ANY SUPER_ADMIN exists (active or not) — a
+   *  - Locked forever once ANY SUPER_ADMIN exists (active or not) Ã¢â‚¬â€ a
    *    deactivated platform admin must be restored via ops, not re-booted.
    *  - Serialized with a Postgres advisory lock so two concurrent bootstrap
    *    requests cannot both pass the zero-SUPER_ADMIN check.
    *  - Heavily throttled at the controller (3/min per IP).
    */
-  async bootstrap(data: BootstrapDto) {
+  async bootstrap(data: BootstrapDto): Promise<{ accessToken: string; user: TokenUser }> {
     const superAdminCount = await this.prisma.user.count({
       where: { role: 'SUPER_ADMIN' },
     });
@@ -212,16 +237,11 @@ export class AuthService {
       throw new ConflictException('Platform is already bootstrapped');
     }
 
-    const existingUser = await this.prisma.user.findFirst({
-      where: { email: data.email },
-    });
-    if (existingUser) {
-      throw new ConflictException('Email already registered');
-    }
+    
 
     const passwordHash = await bcrypt.hash(data.password, 10);
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    let result; try { result = await this.prisma.$transaction(async (tx) => {
       // Serialize concurrent first-bootstraps (advisory lock, per-connection).
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('medu_platform_bootstrap'))`;
       const recheck = await tx.user.count({ where: { role: 'SUPER_ADMIN' } });
@@ -232,7 +252,7 @@ export class AuthService {
       const organization = await tx.organization.create({
         data: {
           name: data.organizationName,
-          email: data.email,
+          email: data.email.toLowerCase().trim(),
           phone: data.phone,
         },
       });
@@ -240,18 +260,18 @@ export class AuthService {
       const user = await tx.user.create({
         data: {
           organizationId: organization.id,
-          email: data.email,
+          email: data.email.toLowerCase().trim(),
           passwordHash,
           firstName: data.firstName,
           lastName: data.lastName,
           phone: data.phone,
           role: 'SUPER_ADMIN',
+          lastLoginAt: new Date(),
         },
         include: { organization: true },
       });
 
-      return { user, organization };
-    });
+      return { user, organization }; }); } catch (error: any) { if (error.code === 'P2002') { throw new ConflictException('Email already registered'); } throw error; }
 
     return await this.issueToken(result.user);
   }
@@ -283,7 +303,7 @@ export class AuthService {
    *      and connect Google explicitly.
    *   4. No match                      -> create a new org + ORG_ADMIN.
    *
-   * Inactive accounts are rejected at this layer (fail closed — no token).
+   * Inactive accounts are rejected at this layer (fail closed Ã¢â‚¬â€ no token).
    */
   async googleLogin(googleUser: GoogleProfile) {
     if (!googleUser.googleSubject || typeof googleUser.googleSubject !== 'string') {
@@ -355,7 +375,7 @@ export class AuthService {
       'My Education Center';
     const orgName = `${displayName}'s Education Center`;
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    let result; try { result = await this.prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({
         data: {
           name: orgName,
@@ -382,11 +402,17 @@ export class AuthService {
 
       return newUser;
     });
+    } catch (e: any) {
+      if (e?.code === 'P2002') {
+        throw new ConflictException('An account with this email already exists.');
+      }
+      throw e;
+    }
 
     return await this.issueToken(result);
   }
 
-  private async issueToken(user: TokenUser) {
+  private async issueToken(user: TokenUser): Promise<{ accessToken: string; user: TokenUser }> {
     const session = await this.prisma.session.create({
       data: {
         userId: user.id,
@@ -395,21 +421,28 @@ export class AuthService {
       },
     });
 
-    const activeSessions = await this.prisma.session.count({
-      where: { userId: user.id, revokedAt: null },
+    // Cleanup excess active sessions in background
+    Promise.resolve().then(async () => {
+      try {
+        const activeSessions = await this.prisma.session.count({
+          where: { userId: user.id, revokedAt: null },
+        });
+        if (activeSessions > 10) {
+          const excessSessions = await this.prisma.session.findMany({
+            where: { userId: user.id, revokedAt: null },
+            orderBy: { createdAt: 'asc' },
+            take: activeSessions - 10,
+            select: { id: true },
+          });
+          await this.prisma.session.updateMany({
+            where: { id: { in: excessSessions.map(s => s.id) } },
+            data: { revokedAt: new Date(), revokedReason: 'excess_sessions' },
+          });
+        }
+      } catch (err) {
+        this.logger.error('Failed to cleanup excess sessions', { error: errorMessage(err) });
+      }
     });
-    if (activeSessions > 10) {
-      const excessSessions = await this.prisma.session.findMany({
-        where: { userId: user.id, revokedAt: null },
-        orderBy: { createdAt: 'asc' },
-        take: activeSessions - 10,
-        select: { id: true },
-      });
-      await this.prisma.session.updateMany({
-        where: { id: { in: excessSessions.map(s => s.id) } },
-        data: { revokedAt: new Date() },
-      });
-    }
 
     const payload = {
       sub: user.id,
@@ -431,6 +464,37 @@ export class AuthService {
         organization: user.organization,
       },
     };
+  }
+
+  /**
+   * Issue a JWT for a ParentAccount (not a User row).
+   * The token carries `role: 'PARENT'` and `accountType: 'parent'` so
+   * JwtStrategy can resolve it against the correct table.
+   */
+  async issueParentToken(parent: {
+    parentId: string;
+    organizationId: string;
+    firstName?: string;
+    lastName?: string;
+    email: string;
+  }): Promise<string> {
+    const session = await this.prisma.parentSession.create({
+      data: {
+        parentId: parent.parentId,
+        organizationId: parent.organizationId,
+        expiresAt: new Date(Date.now() + this.sessionTtlMs()),
+      },
+    });
+
+    const payload = {
+      sub: parent.parentId,
+      email: parent.email,
+      role: 'PARENT',
+      organizationId: parent.organizationId,
+      accountType: 'parent',
+      sid: session.id,
+    };
+    return this.jwtService.sign(payload);
   }
 
 
@@ -458,21 +522,35 @@ export class AuthService {
 
   // ==================== Sessions ====================
 
-  async logout(sessionId: string, userId: string) {
-    await this.prisma.session.updateMany({
-      where: { id: sessionId, userId, revokedAt: null },
-      data: { revokedAt: new Date(), revokedReason: 'user_logout' },
-    });
+  async logout(sessionId: string, userId: string, role?: string) {
+    if (role === 'PARENT') {
+      await this.prisma.parentSession.updateMany({
+        where: { id: sessionId, parentId: userId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'user_logout' },
+      });
+    } else {
+      await this.prisma.session.updateMany({
+        where: { id: sessionId, userId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'user_logout' },
+      });
+    }
   }
 
-  async logoutAll(userId: string, reason = 'security') {
-    await this.prisma.session.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date(), revokedReason: reason },
-    });
+  async logoutAll(userId: string, reason = 'security', role?: string) {
+    if (role === 'PARENT') {
+      await this.prisma.parentSession.updateMany({
+        where: { parentId: userId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: reason },
+      });
+    } else {
+      await this.prisma.session.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: reason },
+      });
+    }
   }
 
-  async refreshToken(userId: string, currentSessionId?: string) {
+  async refreshToken(userId: string, currentSessionId?: string): Promise<{ accessToken: string; user: TokenUser }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { organization: true },
@@ -492,10 +570,27 @@ export class AuthService {
     return await this.issueToken(user);
   }
 
-  async getMe(userId: string) {
+  async getMe(userId: string): Promise<GetMeResponse> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { organization: true, settings: true },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        avatar: true,
+        role: true,
+        organizationId: true,
+        lastLoginAt: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+        settings: true,
+      }
     });
 
     if (!user) {
@@ -521,15 +616,18 @@ export class AuthService {
 
   /**
    * Request a password reset. Always returns a generic success message
-   * regardless of whether the email exists — prevents user enumeration.
+   * regardless of whether the email exists Ã¢â‚¬â€ prevents user enumeration.
    */
-  async forgotPassword(email: string) {
+  async forgotPassword(email: string): Promise<{ message: string }> {
     const user = await this.prisma.user.findFirst({
       where: { email: email.toLowerCase().trim(), isActive: true },
+      select: { id: true, email: true, passwordHash: true }
     });
 
     // Always return success to prevent email enumeration
     if (!user || !user.passwordHash) {
+      // Anti-timing attack delay without blocking event loop (DoS protection)
+      await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 100));
       return { message: 'If an account with that email exists, a password reset link has been sent.' };
     }
 
@@ -539,7 +637,7 @@ export class AuthService {
       data: { usedAt: new Date() },
     });
 
-    const rawToken = randomBytes(32).toString('hex');
+    const rawToken = this.generateSecureToken();
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
@@ -552,7 +650,7 @@ export class AuthService {
     });
 
     // Send the reset link via email (production) or log it (dev).
-    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${rawToken}`;
+    const resetUrl = `${this.getFrontendUrl()}/reset-password?token=${rawToken}`;
     if (process.env.SMTP_HOST) {
       try {
         await this.sendPasswordResetEmail(user.email, resetUrl);
@@ -580,9 +678,11 @@ export class AuthService {
   async resetPassword(token: string, newPassword: string) {
     const tokenHash = createHash('sha256').update(token).digest('hex');
 
+    // Only the token fields are needed — never hydrate the linked user row
+    // (it would pull `passwordHash` into memory for no reason).
     const resetToken = await this.prisma.passwordResetToken.findUnique({
       where: { tokenHash },
-      include: { user: true },
+      select: { id: true, userId: true, usedAt: true, expiresAt: true },
     });
 
     if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
@@ -602,7 +702,7 @@ export class AuthService {
         data: { usedAt: new Date() },
       });
 
-      // Revoke all active sessions — the old password is compromised
+      // Revoke all active sessions Ã¢â‚¬â€ the old password is compromised
       await tx.session.updateMany({
         where: { userId: resetToken.userId, revokedAt: null },
         data: { revokedAt: new Date(), revokedReason: 'password_reset' },
@@ -615,21 +715,10 @@ export class AuthService {
   // ==================== Email transport ====================
 
   private async sendPasswordResetEmail(to: string, resetUrl: string) {
-    const host = process.env.SMTP_HOST;
-    const port = Number(process.env.SMTP_PORT) || 587;
     const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
     const from = process.env.SMTP_FROM || user || 'noreply@medu.app';
-    const secure = port === 465;
 
-    if (!host) throw new Error('SMTP_HOST not configured');
-
-    const transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure,
-      auth: user && pass ? { user, pass } : undefined,
-    });
+    const transporter = this.getSmtpTransporter();
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const orgName = process.env.ORGANIZATION_NAME || 'M-EDU';
@@ -655,7 +744,7 @@ export class AuthService {
           </p>
           <hr style="border:none;border-top:1px solid #e5e5e5;margin:24px 0" />
           <p style="color:#a1a1a6;font-size:12px">
-            ${orgName} · <a href="${appUrl}" style="color:#2f4d9b">${appUrl}</a>
+            ${orgName} Ã‚Â· <a href="${appUrl}" style="color:#2f4d9b">${appUrl}</a>
           </p>
         </div>
       `,
@@ -663,3 +752,6 @@ export class AuthService {
     });
   }
 }
+
+
+

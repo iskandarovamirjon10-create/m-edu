@@ -1,4 +1,4 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { 
   EnrollmentRepository, 
@@ -9,13 +9,27 @@ import type {
 import type { EnrollmentStatus, TemplateStatus } from '@medu/contracts';
 import type { FaceEnrollment, FaceTemplate, Student, User } from '@prisma/client';
 
+/**
+ * Only the identity fields this adapter maps into domain objects.
+ * Deliberately excludes `passwordHash` and any other auth material so a full
+ * User row is never loaded (F-008).
+ */
+const FACE_USER_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  isActive: true,
+} as const;
+
+type FaceUserProjection = Pick<User, 'id' | 'firstName' | 'lastName' | 'isActive'>;
+
 type EnrollmentWithRelations = FaceEnrollment & {
   faceTemplates: FaceTemplate[];
-  student: (Student & { user: User }) | null;
+  student: (Student & { user: FaceUserProjection }) | null;
 };
 
 type TemplateWithStudent = FaceTemplate & {
-  student: (Student & { user: User }) | null;
+  student: (Student & { user: FaceUserProjection }) | null;
 };
 
 interface EnrollmentListFilters {
@@ -108,7 +122,7 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
       where: { id, organizationId },
       include: {
         faceTemplates: true,
-        student: { include: { user: true } },
+        student: { include: { user: { select: FACE_USER_SELECT } } },
       },
     });
     return row ? this.mapEnrollmentWithTemplates(row) : null;
@@ -130,7 +144,7 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
           where: { status: 'ACTIVE' },
           orderBy: { version: 'desc' },
         },
-        student: { include: { user: true } },
+        student: { include: { user: { select: FACE_USER_SELECT } } },
       },
     });
     return row ? this.mapEnrollmentWithTemplates(row) : null;
@@ -167,7 +181,7 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
         where,
         include: {
           faceTemplates: true,
-          student: { include: { user: true } },
+          student: { include: { user: { select: FACE_USER_SELECT } } },
         },
         orderBy: { [sortBy]: sortOrder },
         take: limit,
@@ -183,8 +197,23 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
   }
 
   async create(data: { organizationId: string; studentId: string; enrolledBy?: string }): Promise<EnrollmentEntity> {
-    try {
-      const row = await this.prisma.faceEnrollment.create({
+    return await this.prisma.$transaction(async (tx) => {
+      // Lock the student row to serialize concurrent enrollment creations
+      await tx.$executeRaw`SELECT id FROM "Student" WHERE id = ${data.studentId}::uuid FOR UPDATE`;
+
+      const existing = await tx.faceEnrollment.findFirst({
+        where: {
+          organizationId: data.organizationId,
+          studentId: data.studentId,
+          status: { in: ['PENDING', 'ACTIVE'] },
+        },
+      });
+
+      if (existing) {
+        throw new ConflictException('An active or pending enrollment already exists for this student.');
+      }
+
+      const row = await tx.faceEnrollment.create({
         data: {
           organizationId: data.organizationId,
           studentId: data.studentId,
@@ -193,12 +222,7 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
         },
       });
       return this.mapEnrollmentEntity(row);
-    } catch (error: unknown) {
-      if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'P2002') {
-        throw new ConflictException('An active or pending enrollment already exists for this student.');
-      }
-      throw error;
-    }
+    });
   }
 
   async updateStatus(
@@ -253,6 +277,61 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
     return this.mapTemplateEntity(row);
   }
 
+  async addTemplateAndActivate(data: {
+    organizationId: string;
+    enrollmentId: string;
+    studentId: string;
+    templateData: string;
+    templateHash: string;
+    version: number;
+    modelVersion?: string;
+    qualityScore?: number;
+    expiresAt?: Date;
+    activatedAt?: Date;
+  }): Promise<{ template: TemplateEntity; enrollment: EnrollmentEntity }> {
+    return await this.prisma.$transaction(async (tx) => {
+      // Re-check status inside the transaction so a concurrent activate
+      // cannot race the service-level PENDING check.
+      const enrollment = await tx.faceEnrollment.findFirst({
+        where: { id: data.enrollmentId, organizationId: data.organizationId },
+      });
+      if (!enrollment) {
+        throw new NotFoundException('Enrollment not found');
+      }
+      if (enrollment.status !== 'PENDING') {
+        throw new ConflictException(`Enrollment is not PENDING (current: ${enrollment.status})`);
+      }
+
+      const templateRow = await tx.faceTemplate.create({
+        data: {
+          organizationId: data.organizationId,
+          enrollmentId: data.enrollmentId,
+          studentId: data.studentId,
+          templateData: data.templateData,
+          templateHash: data.templateHash,
+          version: data.version,
+          status: 'ACTIVE',
+          modelVersion: data.modelVersion,
+          qualityScore: data.qualityScore,
+          expiresAt: data.expiresAt ?? null,
+        },
+      });
+
+      const updated = await tx.faceEnrollment.update({
+        where: { id: data.enrollmentId },
+        data: {
+          status: 'ACTIVE',
+          activatedAt: data.activatedAt ?? new Date(),
+        },
+      });
+
+      return {
+        template: this.mapTemplateEntity(templateRow),
+        enrollment: this.mapEnrollmentEntity(updated),
+      };
+    });
+  }
+
   async findActiveTemplatesByStudentId(organizationId: string, studentId: string): Promise<TemplateEntity[]> {
     const rows = await this.prisma.faceTemplate.findMany({
       where: { organizationId, studentId, status: 'ACTIVE' },
@@ -282,7 +361,7 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
         take: batchSize,
         orderBy: { [cursorField]: 'asc' },
         include: {
-          student: { include: { user: true } },
+          student: { include: { user: { select: FACE_USER_SELECT } } },
         },
       });
 

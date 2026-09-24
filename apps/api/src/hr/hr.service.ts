@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Prisma, LeaveStatus, LeaveType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmployeeDto, UpdateEmployeeDto, CreateLeaveRequestDto } from './dto/employee.dto';
 import { GeneratePayrollDto } from './dto/payroll.dto';
 import { PaginationParams } from '../common/dto/pagination';
 import { parsePagination } from '../lib/pagination';
+import { userPublicSelect } from '../common/selects/user.select';
 
 @Injectable()
 export class HremployeeService {
@@ -12,9 +14,9 @@ export class HremployeeService {
   // ===================== Employee Management =====================
 
   async findAllEmployees(organizationId: string, params: PaginationParams) {
-    const { page, limit, search, department, isActive } = params;
+    const { search, department, isActive } = params;
 
-    const where: any = { organizationId };
+    const where: Prisma.EmployeeWhereInput = { organizationId };
 
     if (search) {
       where.user = {
@@ -31,7 +33,7 @@ export class HremployeeService {
     }
 
     if (isActive !== undefined) {
-      where.isActive = isActive;
+      where.isActive = isActive === 'true';
     }
 
     const { skip } = parsePagination(params);
@@ -43,17 +45,7 @@ export class HremployeeService {
         where,
         skip,
         take: limitVal,
-        include: {
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-              phone: true,
-              avatar: true,
-            },
-          },
-        },
+        include: { user: userPublicSelect },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.employee.count({ where }),
@@ -72,7 +64,7 @@ export class HremployeeService {
     const employee = await this.prisma.employee.findFirst({
       where: { id, organizationId },
       include: {
-        user: true,
+        user: userPublicSelect,
         salaryRecords: {
           orderBy: { month: 'desc' },
           take: 12,
@@ -128,7 +120,7 @@ export class HremployeeService {
   }
 
   async updateEmployee(organizationId: string, id: string, dto: UpdateEmployeeDto) {
-    const employee = await this.findEmployeeById(organizationId, id);
+    await this.findEmployeeById(organizationId, id);
 
     return this.prisma.employee.update({
       where: { id, organizationId },
@@ -146,7 +138,7 @@ export class HremployeeService {
   }
 
   async terminateEmployee(organizationId: string, id: string, reason: string) {
-    const employee = await this.findEmployeeById(organizationId, id);
+    await this.findEmployeeById(organizationId, id);
     if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
       throw new BadRequestException('Termination reason is required');
     }
@@ -162,16 +154,16 @@ export class HremployeeService {
   // ===================== Leave Management =====================
 
   async findAllLeaveRequests(organizationId: string, params: PaginationParams) {
-    const { page, limit, status, type, employeeId } = params;
+    const { status, type, employeeId } = params;
 
-    const where: any = { organizationId };
+    const where: Prisma.LeaveRequestWhereInput = { organizationId };
 
     if (status) {
-      where.status = status;
+      where.status = status as LeaveStatus;
     }
 
     if (type) {
-      where.type = type;
+      where.type = type as LeaveType;
     }
 
     if (employeeId) {
@@ -215,7 +207,7 @@ export class HremployeeService {
   }
 
   async createLeaveRequest(organizationId: string, dto: CreateLeaveRequestDto) {
-    const employee = await this.findEmployeeById(organizationId, dto.employeeId);
+    await this.findEmployeeById(organizationId, dto.employeeId);
 
     // Wrap check-and-create in a transaction so concurrent requests
     // can't both pass the overlap check and create duplicate leaves.
@@ -296,10 +288,14 @@ export class HremployeeService {
 
   // ===================== Payroll =====================
 
-  async getEmployeeSalaryHistory(organizationId: string, employeeId: string, year?: number) {
+  async getEmployeeSalaryHistory(organizationId: string, employeeId: string, userId: string, role: string, year?: number) {
     const employee = await this.findEmployeeById(organizationId, employeeId);
+    
+    if (role === 'TEACHER' && employee.userId !== userId) {
+      throw new ForbiddenException('You can only view your own salary history');
+    }
 
-    const where: any = { organizationId, employeeId };
+    const where: Prisma.SalaryRecordWhereInput = { organizationId, employeeId };
 
     if (year) {
       const startOfYear = new Date(year, 0, 1);
@@ -328,7 +324,7 @@ export class HremployeeService {
     const endOfMonth = new Date(payrollDate.getFullYear(), payrollDate.getMonth() + 1, 0);
 
     // Get employees to process
-    const where: any = { organizationId, isActive: true };
+    const where: Prisma.EmployeeWhereInput = { organizationId, isActive: true };
     if (employeeIds && employeeIds.length > 0) {
       where.id = { in: employeeIds };
     }
@@ -365,10 +361,11 @@ export class HremployeeService {
         employees.map(async (employee) => {
           const bonuses = dto.bonuses?.[employee.id] || 0;
           const deductions = dto.deductions?.[employee.id] || 0;
+          // Round tax/net to 2 decimal places to avoid float drift in money.
           const taxRate = 0.12;
           const taxableIncome = Number(employee.salary) + bonuses - deductions;
-          const tax = taxableIncome * taxRate;
-          const netSalary = taxableIncome - tax;
+          const tax = Math.round(taxableIncome * taxRate * 100) / 100;
+          const netSalary = Math.round((taxableIncome - tax) * 100) / 100;
           return tx.salaryRecord.create({
             data: {
               organizationId,
@@ -394,21 +391,21 @@ export class HremployeeService {
   }
 
   async processSalaryPayment(organizationId: string, recordId: string) {
-    const record = await this.prisma.salaryRecord.findFirst({
+    // Atomic conditional update: only one concurrent caller can flip
+    // PENDING → PAID; the rest see count === 0 (no TOCTOU race).
+    const result = await this.prisma.salaryRecord.updateMany({
       where: { id: recordId, organizationId, status: 'PENDING' },
-    });
-
-    if (!record) {
-      throw new NotFoundException('Salary record not found or already processed');
-    }
-
-    return this.prisma.salaryRecord.update({
-      where: { id: recordId },
       data: {
         status: 'PAID',
         paymentDate: new Date(),
       },
     });
+
+    if (result.count === 0) {
+      throw new NotFoundException('Salary record not found or already processed');
+    }
+
+    return this.prisma.salaryRecord.findUnique({ where: { id: recordId } });
   }
 
   async getPayrollSummary(organizationId: string, month: string) {

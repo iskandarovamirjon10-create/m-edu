@@ -5,6 +5,9 @@ import { Prisma } from '@prisma/client';
 import { CreateGradeDto, UpdateGradeDto } from '../common/dto';
 import { GradeQuery } from '../common/dto/query';
 
+/** Mirrors the Prisma default for `Grade.maxValue` (Float? @default(100)). */
+const DEFAULT_MAX_VALUE = 100;
+
 @Injectable()
 export class GradesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -46,7 +49,7 @@ export class GradesService {
   }
 
   async update(organizationId: string, id: string, data: UpdateGradeDto) {
-    await this.findOne(organizationId, id);
+    const existing = await this.findOne(organizationId, id);
 
     const updateData: Prisma.GradeUpdateInput = {};
     if (data.value !== undefined) updateData.value = data.value;
@@ -56,10 +59,25 @@ export class GradesService {
 
     if (Object.keys(updateData).length === 0) return this.findOne(organizationId, id);
 
+    // `maxValue` is nullable in the schema, so a legacy row may have no max —
+    // fall back to the database default instead of comparing against null.
+    const nextValue = data.value ?? existing.value;
+    const nextMax = data.maxValue ?? existing.maxValue ?? DEFAULT_MAX_VALUE;
+    if (nextMax <= 0) throw new BadRequestException('maxValue must be greater than zero');
+    if (nextValue > nextMax) {
+      throw new BadRequestException(`Grade value (${nextValue}) cannot exceed maxValue (${nextMax})`);
+    }
+
     return this.prisma.grade.update({ where: { id, organizationId }, data: updateData });
   }
 
   async create(organizationId: string, data: CreateGradeDto) {
+    const maxValue = data.maxValue ?? DEFAULT_MAX_VALUE;
+    if (maxValue <= 0) throw new BadRequestException('maxValue must be greater than zero');
+    if (data.value > maxValue) {
+      throw new BadRequestException(`Grade value (${data.value}) cannot exceed maxValue (${maxValue})`);
+    }
+
     const student = await this.prisma.student.findFirst({
       where: { id: data.studentId, organizationId },
     });
@@ -88,7 +106,7 @@ export class GradesService {
         studentId: data.studentId,
         groupId: data.groupId,
         value: data.value,
-        maxValue: data.maxValue,
+        maxValue,
         label: data.label,
         notes: data.notes,
       },

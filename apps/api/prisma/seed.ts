@@ -2,14 +2,26 @@
 // Run: npm run db:seed  (or: npx prisma db seed)
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 
 const prisma = new PrismaClient();
 
+// No hardcoded passwords: env override or a random per-run secret.
+function resolveSecret(envVar: string): string {
+  const fromEnv = process.env[envVar];
+  if (fromEnv && fromEnv.length >= 8) return fromEnv;
+  return randomBytes(12).toString('base64url');
+}
+
+const isProd = process.env.NODE_ENV === 'production';
+
 async function main() {
   const email = process.env.SEED_ADMIN_EMAIL || 'admin@medu.test';
-  const password = process.env.SEED_ADMIN_PASSWORD || 'admin123';
+  const password = resolveSecret('SEED_ADMIN_PASSWORD');
   const demoEmail = process.env.SEED_DEMO_EMAIL || 'demo@medu.test';
-  const demoPassword = process.env.SEED_DEMO_PASSWORD || 'demo123';
+  const demoPassword = resolveSecret('SEED_DEMO_PASSWORD');
+  const teacherPassword = resolveSecret('SEED_TEACHER_PASSWORD');
+  const studentPassword = resolveSecret('SEED_STUDENT_PASSWORD');
   const orgName = process.env.SEED_ORG_NAME || 'Demo Education Center';
 
   const existingOrg = await prisma.organization.findFirst({ where: { name: orgName } });
@@ -57,7 +69,7 @@ async function main() {
   // Courses
   const math = await tx.course.create({ data: { organizationId: org.id, name: 'Mathematics', price: 120, duration: 6, level: 'Intermediate', description: 'Algebra and geometry' } });
   const eng = await tx.course.create({ data: { organizationId: org.id, name: 'English', price: 100, duration: 4, level: 'Beginner', description: 'General English' } });
-  const phys = await tx.course.create({ data: { organizationId: org.id, name: 'Physics', price: 140, duration: 6, level: 'Advanced', description: 'Mechanics and electromagnetism' } });
+  await tx.course.create({ data: { organizationId: org.id, name: 'Physics', price: 140, duration: 6, level: 'Advanced', description: 'Mechanics and electromagnetism' } });
 
   // Teachers
   const teacher1 = await tx.teacher.create({
@@ -71,7 +83,7 @@ async function main() {
         create: {
           organization: { connect: { id: org.id } },
           email: 'teacher.math@demo.medu.test',
-          passwordHash: await bcrypt.hash('teacher123', 10),
+          passwordHash: await bcrypt.hash(teacherPassword, 10),
           firstName: 'Karim',
           lastName: 'Yusupov',
           role: 'TEACHER',
@@ -92,7 +104,7 @@ async function main() {
         create: {
           organization: { connect: { id: org.id } },
           email: 'teacher.eng@demo.medu.test',
-          passwordHash: await bcrypt.hash('teacher123', 10),
+          passwordHash: await bcrypt.hash(teacherPassword, 10),
           firstName: 'Nodira',
           lastName: 'Rahimova',
           role: 'TEACHER',
@@ -159,7 +171,7 @@ async function main() {
           create: {
             organization: { connect: { id: org.id } },
             email: mail,
-            passwordHash: await bcrypt.hash('student123', 10),
+            passwordHash: await bcrypt.hash(studentPassword, 10),
             firstName: first,
             lastName: last,
             role: 'STUDENT',
@@ -283,11 +295,19 @@ async function main() {
 
   });
   console.log('Seed complete:');
-  console.log(`  Admin:       ${email} / ${password}`);
-  console.log(`  Demo admin:  ${demoEmail} / ${demoPassword}`);
-  console.log(`  Teacher:     teacher.math@demo.medu.test / teacher123`);
-  console.log(`  Student:     aziz.demo@medu.test / student123`);
+  console.log(`  Admin:       ${email}`);
+  console.log(`  Demo admin:  ${demoEmail}`);
+  console.log(`  Teacher:     teacher.math@demo.medu.test`);
+  console.log(`  Students:    *.demo@medu.test`);
   console.log(`  Org:         ${orgName}`);
+  if (isProd) {
+    console.log('  Passwords:   set via SEED_*_PASSWORD env vars (not printed in production)');
+  } else {
+    console.log('  Passwords:   (dev only, printed once)');
+    console.log(`    admin=${password} demo=${demoPassword}`);
+    console.log(`    teacher=${teacherPassword} student=${studentPassword}`);
+    console.log('    Set SEED_ADMIN_PASSWORD / SEED_DEMO_PASSWORD / SEED_TEACHER_PASSWORD / SEED_STUDENT_PASSWORD to override.');
+  }
 }
 
 main()

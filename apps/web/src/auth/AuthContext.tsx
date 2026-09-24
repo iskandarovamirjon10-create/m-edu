@@ -191,8 +191,17 @@ function extractRoles(user: User | null): string[] {
 
 function safeReturnTo(raw: string | null | undefined, loginPath: string): string | null {
   // Internal paths only — never allow open redirects.
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith(loginPath)) return null;
-  return raw;
+  // Blocks: `//host`, `/\host` (browsers normalize `/\` → `//`), and absolute URLs.
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\') || raw.startsWith(loginPath)) {
+    return null;
+  }
+  try {
+    const u = new URL(raw, window.location.origin);
+    if (u.origin !== window.location.origin) return null;
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return null;
+  }
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -328,8 +337,7 @@ export function AuthProvider({
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      }, []);
 
   /* ── 401 interceptor ─────────────────────────────────────────────────── */
 
@@ -487,12 +495,21 @@ export function AuthProvider({
     (u) => {
       if (u) {
         userStore.set(u);
-        dispatch({ type: 'USER_PATCHED', user: u });
+        // OAuth callback sets the user while status is still 'booting' —
+        // USER_PATCHED alone would leave status unauthenticated and let a
+        // concurrent /auth/me 401 wipe the fresh session. Transition to
+        // SIGNED_IN whenever we are not already authenticated.
+        if (stateRef.current.status === 'authenticated') {
+          dispatch({ type: 'USER_PATCHED', user: u });
+        } else {
+          dispatch({ type: 'SIGNED_IN', user: u });
+          broadcast({ type: 'SIGNED_IN', user: u });
+        }
       } else {
         signOutLocally();
       }
     },
-    [signOutLocally],
+    [signOutLocally, broadcast],
   );
 
   const clearError = useCallback(() => dispatch({ type: 'ERROR_CLEARED' }), []);

@@ -17,10 +17,11 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import type { PrismaClient } from '@prisma/client';
 import { PrismaEnrollmentAdapter } from '../adapters/prisma-enrollment.adapter';
 
 function makePrisma() {
-  return {
+  const mock: any = {
     faceEnrollment: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -34,7 +35,11 @@ function makePrisma() {
       findMany: vi.fn(),
       updateMany: vi.fn(),
     },
-  } as any;
+
+    $executeRaw: vi.fn(),
+  };
+  mock.$transaction = vi.fn(async (fn: (tx: any) => Promise<unknown>) => fn(mock));
+  return mock as unknown as PrismaClient & typeof mock;
 }
 
 function enrollmentRow(overrides: Record<string, unknown> = {}) {
@@ -603,8 +608,9 @@ describe('PrismaEnrollmentAdapter.list', () => {
 
 describe('PrismaEnrollmentAdapter.create', () => {
   it('always creates a PENDING enrollment', async () => {
-    const prisma = makePrisma();
+    const prisma = makePrisma() as any;
 
+    prisma.faceEnrollment.findFirst.mockResolvedValue(null);
     prisma.faceEnrollment.create.mockResolvedValue(
       enrollmentRow({
         status: 'PENDING',
@@ -632,8 +638,9 @@ describe('PrismaEnrollmentAdapter.create', () => {
   });
 
   it('persists the trusted organizationId supplied by the adapter caller', async () => {
-    const prisma = makePrisma();
+    const prisma = makePrisma() as any;
 
+    prisma.faceEnrollment.findFirst.mockResolvedValue(null);
     prisma.faceEnrollment.create.mockResolvedValue(
       enrollmentRow({
         organizationId: 'org-security',
@@ -656,8 +663,9 @@ describe('PrismaEnrollmentAdapter.create', () => {
   });
 
   it('never starts a new enrollment as ACTIVE', async () => {
-    const prisma = makePrisma();
+    const prisma = makePrisma() as any;
 
+    prisma.faceEnrollment.findFirst.mockResolvedValue(null);
     prisma.faceEnrollment.create.mockResolvedValue(
       enrollmentRow({
         status: 'PENDING',
@@ -677,6 +685,26 @@ describe('PrismaEnrollmentAdapter.create', () => {
 
     expect(data.status).toBe('PENDING');
     expect(data.status).not.toBe('ACTIVE');
+  });
+
+  it('rejects a duplicate active or pending enrollment', async () => {
+    const prisma = makePrisma() as any;
+
+    prisma.faceEnrollment.findFirst.mockResolvedValue(
+      enrollmentRow({ status: 'ACTIVE' }),
+    );
+
+    const adapter = new PrismaEnrollmentAdapter(prisma);
+
+    await expect(
+      adapter.create({
+        organizationId: 'org-1',
+        studentId: 'stu-1',
+        enrolledBy: 'user-1',
+      }),
+    ).rejects.toThrow(/already exists/i);
+
+    expect(prisma.faceEnrollment.create).not.toHaveBeenCalled();
   });
 });
 
@@ -1447,8 +1475,9 @@ describe(
   'PrismaEnrollmentAdapter biometric lifecycle invariants',
   () => {
     it('new enrollment starts PENDING', async () => {
-      const prisma = makePrisma();
+      const prisma = makePrisma() as any;
 
+      prisma.faceEnrollment.findFirst.mockResolvedValue(null);
       prisma.faceEnrollment.create.mockResolvedValue(
         enrollmentRow({
           status: 'PENDING',

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { examsApi, coursesApi, groupsApi } from '@/lib/api';
+import { examsApi, groupsApi } from '@/lib/api';
 import {
   GlassPageHeader,
   GlassCard,
@@ -18,32 +18,34 @@ import {
   GlassInput,
   GlassBadge,
   GlassButton,
+  ConfirmDialog,
   useToast,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
-import type { Paginated, Exam, ExamType, Course, Group } from '@/lib/types';
+import type { Paginated, Exam, ExamType, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface ExamFormState {
   title: string;
-  courseId: string;
+  subject: string;
   groupId: string;
-  type: ExamType | '';
-  date: string;
+  examType: ExamType | '';
+  examDate: string;
   duration: string;
-  maxScore: string;
-  passingScore: string;
+  totalMarks: string;
+  passingMarks: string;
 }
 
 const INITIAL_FORM: ExamFormState = {
   title: '',
-  courseId: '',
+  subject: '',
   groupId: '',
-  type: '',
-  date: '',
+  examType: '',
+  examDate: '',
   duration: '60',
-  maxScore: '100',
-  passingScore: '60',
+  totalMarks: '100',
+  passingMarks: '60',
 };
 
 const EXAM_TYPES: ExamType[] = ['MIDTERM', 'FINAL', 'QUIZ', 'ASSIGNMENT'];
@@ -51,18 +53,22 @@ const EXAM_TYPES: ExamType[] = ['MIDTERM', 'FINAL', 'QUIZ', 'ASSIGNMENT'];
 function validateExamForm(form: ExamFormState): Partial<Record<keyof ExamFormState, string>> {
   const errors: Partial<Record<keyof ExamFormState, string>> = {};
 
-  if (!form.title.trim()) errors.title = 'Title is required';
-  if (!form.courseId) errors.courseId = 'Course is required';
-  if (!form.type) errors.type = 'Exam type is required';
-  if (!form.date) errors.date = 'Date is required';
-  if (!form.maxScore || isNaN(parseInt(form.maxScore)) || parseInt(form.maxScore) <= 0) {
-    errors.maxScore = 'Valid max score is required';
+  if (!form.title.trim()) errors.title = 'homework.titleRequired';
+  if (!form.subject.trim()) errors.subject = 'exams.subjectRequired';
+  if (!form.groupId) errors.groupId = 'exams.groupRequired';
+  if (!form.examType) errors.examType = 'exams.form.typeRequired';
+  if (!form.examDate) errors.examDate = 'exams.form.dateRequired';
+  if (!form.duration || isNaN(parseInt(form.duration)) || parseInt(form.duration) <= 0) {
+    errors.duration = 'exams.durationInvalid';
   }
-  if (!form.passingScore || isNaN(parseInt(form.passingScore)) || parseInt(form.passingScore) <= 0) {
-    errors.passingScore = 'Valid passing score is required';
+  if (!form.totalMarks || isNaN(parseInt(form.totalMarks)) || parseInt(form.totalMarks) <= 0) {
+    errors.totalMarks = 'exams.totalMarksInvalid';
   }
-  if (parseInt(form.passingScore) > parseInt(form.maxScore)) {
-    errors.passingScore = 'Passing score cannot exceed max score';
+  if (!form.passingMarks || isNaN(parseInt(form.passingMarks)) || parseInt(form.passingMarks) < 0) {
+    errors.passingMarks = 'exams.passingMarksInvalid';
+  }
+  if (parseInt(form.passingMarks) > parseInt(form.totalMarks)) {
+    errors.passingMarks = 'exams.passingMarksExceed';
   }
 
   return errors;
@@ -70,41 +76,34 @@ function validateExamForm(form: ExamFormState): Partial<Record<keyof ExamFormSta
 
 function getExamTypeBadge(type: ExamType): { variant: 'primary' | 'success' | 'warning' | 'azure'; label: string } {
   const badges: Record<ExamType, { variant: 'primary' | 'success' | 'warning' | 'azure'; label: string }> = {
-    MIDTERM: { variant: 'primary', label: 'Midterm' },
-    FINAL: { variant: 'warning', label: 'Final' },
-    QUIZ: { variant: 'success', label: 'Quiz' },
-    ASSIGNMENT: { variant: 'azure', label: 'Assignment' },
+    MIDTERM: { variant: 'primary', label: 'exams.type.MIDTERM' },
+    FINAL: { variant: 'warning', label: 'exams.type.FINAL' },
+    QUIZ: { variant: 'success', label: 'exams.type.QUIZ' },
+    ASSIGNMENT: { variant: 'azure', label: 'exams.type.ASSIGNMENT' },
   };
-  return badges[type];
+  return badges[type] ?? { variant: 'primary', label: type };
 }
 
 export function ExamsPage() {
-  usePageTitle('Exams');
+  const { t } = useI18n();
+  usePageTitle(t('exams.title'));
   const { push, toastNode } = useToast();
   const qc = useQueryClient();
 
-  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  // Form state
   const [form, setForm] = useState<ExamFormState>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof ExamFormState, string>>>({});
 
-  // Search and filter
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('');
 
-  // Data fetching
   const exams = useQuery({
     queryKey: ['exams'],
     queryFn: () => examsApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
-  });
-
-  const courses = useQuery({
-    queryKey: ['courses'],
-    queryFn: () => coursesApi.list({ limit: 100 }),
   });
 
   const groups = useQuery({
@@ -115,9 +114,6 @@ export function ExamsPage() {
   const data = exams.data as Paginated<Exam> | undefined;
   const examList = useMemo(() => data?.items || [], [data]);
 
-  const courseData = courses.data as Paginated<Course> | undefined;
-  const courseList = useMemo(() => courseData?.items || [], [courseData]);
-
   const groupData = groups.data as Paginated<Group> | undefined;
   const groupList = useMemo(() => groupData?.items || [], [groupData]);
 
@@ -126,39 +122,44 @@ export function ExamsPage() {
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter((exam) => exam.title.toLowerCase().includes(q));
+      filtered = filtered.filter(
+        (exam) =>
+          exam.title.toLowerCase().includes(q) ||
+          (exam.subject ?? '').toLowerCase().includes(q)
+      );
     }
 
     if (filterType) {
-      filtered = filtered.filter((exam) => exam.type === filterType);
+      filtered = filtered.filter((exam) => exam.examType === filterType);
     }
 
     return filtered;
   }, [examList, searchQuery, filterType]);
 
-  // Save exam mutation
+  // Payload must match CreateExamDto / UpdateExamDto exactly (forbidNonWhitelisted).
   const saveExam = useMutation({
     mutationFn: () => {
-      const payload: Record<string, unknown> = {
+      const common = {
         title: form.title.trim(),
-        courseId: form.courseId,
-        type: form.type,
-        date: form.date,
-        maxScore: parseInt(form.maxScore),
-        passingScore: parseInt(form.passingScore),
+        examDate: form.examDate,
+        duration: parseInt(form.duration, 10),
+        totalMarks: parseInt(form.totalMarks, 10),
+        passingMarks: parseInt(form.passingMarks, 10),
+        examType: form.examType as ExamType,
       };
 
-      if (form.groupId) payload.groupId = form.groupId;
-      if (form.duration) payload.duration = parseInt(form.duration);
-
       if (editingId) {
-        return examsApi.update(editingId, payload);
-      } else {
-        return examsApi.create(payload);
+        // UpdateExamDto does NOT allow groupId/subject.
+        return examsApi.update(editingId, common);
       }
+      return examsApi.create({
+        ...common,
+        groupId: form.groupId,
+        subject: form.subject.trim(),
+      });
     },
     onSuccess: () => {
-      push('success', editingId ? 'Exam updated' : 'Exam created');
+      push('success', editingId ? t('exams.updated') : t('exams.created'));
       qc.invalidateQueries({ queryKey: ['exams'] });
       closeModal();
     },
@@ -167,11 +168,11 @@ export function ExamsPage() {
     },
   });
 
-  // Publish exam mutation
+  // PublishExamDto requires { isPublished: true }. force is NOT sent (results required).
   const publishExam = useMutation({
     mutationFn: (id: string) => examsApi.publish(id),
     onSuccess: () => {
-      push('success', 'Exam published');
+      push('success', t('exams.published'));
       qc.invalidateQueries({ queryKey: ['exams'] });
     },
     onError: (error) => {
@@ -179,11 +180,10 @@ export function ExamsPage() {
     },
   });
 
-  // Delete exam mutation
   const deleteExam = useMutation({
     mutationFn: (id: string) => examsApi.remove(id),
     onSuccess: () => {
-      push('success', 'Exam deleted');
+      push('success', t('exams.deleted'));
       qc.invalidateQueries({ queryKey: ['exams'] });
     },
     onError: (error) => {
@@ -196,13 +196,13 @@ export function ExamsPage() {
       setEditingId(exam.id);
       setForm({
         title: exam.title,
-        courseId: exam.courseId,
+        subject: exam.subject || '',
         groupId: exam.groupId || '',
-        type: exam.type,
-        date: exam.date.split('T')[0],
+        examType: exam.examType,
+        examDate: (exam.examDate || '').split('T')[0],
         duration: exam.duration?.toString() || '60',
-        maxScore: exam.maxScore.toString(),
-        passingScore: exam.passingScore.toString(),
+        totalMarks: exam.totalMarks.toString(),
+        passingMarks: exam.passingMarks.toString(),
       });
     } else {
       setEditingId(null);
@@ -228,19 +228,26 @@ export function ExamsPage() {
     saveExam.mutate();
   }, [form, saveExam]);
 
-  const getCourseName = useCallback((courseId: string) => {
-    const course = courseList.find((c) => c.id === courseId);
-    return course?.name || 'Unknown';
-  }, [courseList]);
+  const getGroupName = useCallback(
+    (exam: Exam) => {
+      if (exam.group?.name) return exam.group.name;
+      if (exam.groupId) {
+        const group = groupList.find((g) => g.id === exam.groupId);
+        return group?.name || t('common.unknown');
+      }
+      return '—';
+    },
+    [groupList, t]
+  );
 
-  const getGroupName = useCallback((groupId?: string) => {
-    if (!groupId) return 'All Groups';
-    const group = groupList.find((g) => g.id === groupId);
-    return group?.name || 'Unknown';
-  }, [groupList]);
+  const getCourseName = useCallback((exam: Exam) => {
+    // List include is group.course — never exam.courseId.
+    if (exam.group?.course?.name) return exam.group.course.name;
+    return '—';
+  }, []);
 
-  if (exams.isLoading || courses.isLoading || groups.isLoading) {
-    return <GlassPageLoader label="Loading exams…" />;
+  if (exams.isLoading || groups.isLoading) {
+    return <GlassPageLoader label={t('exams.loading')} />;
   }
 
   if (exams.isError) {
@@ -254,20 +261,27 @@ export function ExamsPage() {
 
   return (
     <div className="page-container">
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
-      </div>
+
       {toastNode}
 
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteExam.mutate(deleteTarget);
+          setDeleteTarget(null);
+        }}
+        description={t('exams.deleteConfirm')}
+        loading={deleteExam.isPending}
+      />
+
       <GlassPageHeader
-        title="Exams"
-        description="Manage exams and assessments"
+        title={t('exams.title')}
+        description={t('exams.pageDescription')}
         actions={
           <GlassButton variant="primary" size="sm" onClick={() => openModal()}>
-            Create Exam
+            {t('exams.add')}
           </GlassButton>
         }
       />
@@ -277,7 +291,7 @@ export function ExamsPage() {
           <div className="flex gap-4 flex-wrap">
             <div className="flex-1 min-w-64">
               <GlassInput
-                placeholder="Search exams by title..."
+                placeholder={t('exams.searchInputPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -285,54 +299,63 @@ export function ExamsPage() {
             <GlassSelect
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              options={[{ value: '', label: 'All Types' }, ...EXAM_TYPES.map((type) => ({ value: type, label: type.replace(/_/g, ' ') }))]}
-              placeholder="All Types"
+              options={[
+                { value: '', label: t('enum.allTypes') },
+                ...EXAM_TYPES.map((type) => ({ value: type, label: t(`exams.type.${type}`) })),
+              ]}
+              placeholder={t('enum.allTypes')}
             />
           </div>
         </div>
 
         {filteredExams.length === 0 ? (
           <GlassEmptyState
-            title={searchQuery || filterType ? 'No exams found' : 'No exams yet'}
+            title={searchQuery || filterType ? t('exams.emptySearch') : t('exams.empty')}
             description={
               searchQuery || filterType
-                ? 'Try adjusting your search criteria'
-                : 'Create your first exam to get started'
+                ? t('certificates.emptySearchHint')
+                : t('exams.emptyMessage')
             }
-            action={!searchQuery && !filterType ? { label: 'Create Exam', onClick: () => openModal() } : undefined}
+            action={
+              !searchQuery && !filterType
+                ? { label: t('exams.add'), onClick: () => openModal() }
+                : undefined
+            }
           />
         ) : (
           <GlassTable className="overflow-x-auto">
             <GlassTHead>
               <GlassTR>
-                <GlassTH>Title</GlassTH>
-                <GlassTH>Course</GlassTH>
-                <GlassTH>Group</GlassTH>
-                <GlassTH>Type</GlassTH>
-                <GlassTH>Date</GlassTH>
-                <GlassTH>Duration</GlassTH>
-                <GlassTH>Score</GlassTH>
-                <GlassTH>Status</GlassTH>
-                <GlassTH>Actions</GlassTH>
+                <GlassTH>{t('exams.col.title')}</GlassTH>
+                <GlassTH>{t('exams.col.course')}</GlassTH>
+                <GlassTH>{t('exams.form.group')}</GlassTH>
+                <GlassTH>{t('exams.col.type')}</GlassTH>
+                <GlassTH>{t('common.date')}</GlassTH>
+                <GlassTH>{t('courses.col.duration')}</GlassTH>
+                <GlassTH>{t('grades.col.score')}</GlassTH>
+                <GlassTH>{t('common.status')}</GlassTH>
+                <GlassTH>{t('common.actions')}</GlassTH>
               </GlassTR>
             </GlassTHead>
             <GlassTBody>
               {filteredExams.map((exam) => {
-                const typeBadge = getExamTypeBadge(exam.type);
+                const typeBadge = getExamTypeBadge(exam.examType);
                 return (
                   <GlassTR key={exam.id}>
                     <GlassTD className="font-medium">{exam.title}</GlassTD>
-                    <GlassTD>{getCourseName(exam.courseId)}</GlassTD>
-                    <GlassTD>{getGroupName(exam.groupId)}</GlassTD>
+                    <GlassTD>{getCourseName(exam)}</GlassTD>
+                    <GlassTD>{getGroupName(exam)}</GlassTD>
                     <GlassTD>
-                      <GlassBadge variant={typeBadge.variant}>{typeBadge.label}</GlassBadge>
+                      <GlassBadge variant={typeBadge.variant}>{t(typeBadge.label)}</GlassBadge>
                     </GlassTD>
-                    <GlassTD>{new Date(exam.date).toLocaleDateString()}</GlassTD>
-                    <GlassTD>{exam.duration ? `${exam.duration} min` : '—'}</GlassTD>
-                    <GlassTD>{exam.passingScore}/{exam.maxScore}</GlassTD>
+                    <GlassTD>{new Date(exam.examDate).toLocaleDateString()}</GlassTD>
+                    <GlassTD>
+                      {exam.duration ? t('exams.durationMinutes', { n: exam.duration }) : '—'}
+                    </GlassTD>
+                    <GlassTD>{exam.passingMarks}/{exam.totalMarks}</GlassTD>
                     <GlassTD>
                       <GlassBadge variant={exam.isPublished ? 'success' : 'muted'}>
-                        {exam.isPublished ? 'Published' : 'Draft'}
+                        {exam.isPublished ? t('exams.status.published') : t('exams.status.draft')}
                       </GlassBadge>
                     </GlassTD>
                     <GlassTD>
@@ -343,22 +366,18 @@ export function ExamsPage() {
                             size="sm"
                             onClick={() => publishExam.mutate(exam.id)}
                           >
-                            Publish
+                            {t('exams.publish')}
                           </GlassButton>
                         )}
                         <GlassButton variant="ghost" size="sm" onClick={() => openModal(exam)}>
-                          Edit
+                          {t('common.edit')}
                         </GlassButton>
                         <GlassButton
                           variant="danger"
                           size="sm"
-                          onClick={() => {
-                            if (window.confirm('Delete this exam?')) {
-                              deleteExam.mutate(exam.id);
-                            }
-                          }}
+                          onClick={() => setDeleteTarget(exam.id)}
                         >
-                          Delete
+                          {t('common.delete')}
                         </GlassButton>
                       </div>
                     </GlassTD>
@@ -370,95 +389,109 @@ export function ExamsPage() {
         )}
       </GlassCard>
 
-      {/* Exam Form Modal */}
       <GlassModal
         open={modalOpen}
         onClose={closeModal}
-        title={editingId ? 'Edit Exam' : 'Create Exam'}
+        title={editingId ? t('exams.editTitle') : t('exams.add')}
         footer={
           <>
-            <GlassButton variant="secondary" size="sm" onClick={closeModal}>Cancel</GlassButton>
+            <GlassButton variant="secondary" size="sm" onClick={closeModal}>{t('common.cancel')}</GlassButton>
             <GlassButton variant="primary" size="sm" onClick={handleSubmit} disabled={saveExam.isPending}>
-              {saveExam.isPending ? 'Saving...' : 'Save'}
+              {saveExam.isPending ? t('common.saving') : t('common.save')}
             </GlassButton>
           </>
         }
       >
         <div className="space-y-4">
           <GlassInput
-            label="Title *"
+            label={t('exams.field.title')}
             value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
-            placeholder="Enter exam title"
-            error={formErrors.title}
+            placeholder={t('exams.titlePlaceholder')}
+            error={formErrors.title ? t(formErrors.title) : undefined}
           />
 
-          <GlassSelect
-            label="Course *"
-            value={form.courseId}
-            onChange={(e) => setForm({ ...form, courseId: e.target.value })}
-            options={[{ value: '', label: 'Select course' }, ...courseList.map((course) => ({ value: course.id, label: course.name }))]}
-            placeholder="Select course"
-            error={formErrors.courseId}
-          />
+          {!editingId && (
+            <>
+              <GlassInput
+                label={t('exams.field.subject')}
+                value={form.subject}
+                onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                placeholder={t('exams.subjectPlaceholder')}
+                error={formErrors.subject ? t(formErrors.subject) : undefined}
+              />
+
+              <GlassSelect
+                label={t('exams.field.group')}
+                value={form.groupId}
+                onChange={(e) => setForm({ ...form, groupId: e.target.value })}
+                options={[
+                  { value: '', label: t('exams.groupPlaceholder') },
+                  ...groupList.map((group) => ({ value: group.id, label: group.name })),
+                ]}
+                placeholder={t('exams.groupPlaceholder')}
+                error={formErrors.groupId ? t(formErrors.groupId) : undefined}
+              />
+            </>
+          )}
 
           <GlassSelect
-            label="Group"
-            value={form.groupId}
-            onChange={(e) => setForm({ ...form, groupId: e.target.value })}
-            options={[{ value: '', label: 'All Groups' }, ...groupList.map((group) => ({ value: group.id, label: group.name }))]}
-            placeholder="All Groups"
-            error={formErrors.groupId}
-          />
-
-          <GlassSelect
-            label="Exam Type *"
-            value={form.type}
-            onChange={(e) => setForm({ ...form, type: e.target.value as ExamType })}
-            options={[{ value: '', label: 'Select type' }, ...EXAM_TYPES.map((type) => ({ value: type, label: type.replace(/_/g, ' ') }))]}
-            placeholder="Select type"
-            error={formErrors.type}
+            label={t('exams.field.examType')}
+            value={form.examType}
+            onChange={(e) => setForm({ ...form, examType: e.target.value as ExamType })}
+            options={[
+              { value: '', label: t('exams.form.selectType') },
+              ...EXAM_TYPES.map((type) => ({ value: type, label: t(`exams.type.${type}`) })),
+            ]}
+            placeholder={t('exams.form.selectType')}
+            error={formErrors.examType ? t(formErrors.examType) : undefined}
           />
 
           <GlassInput
-            label="Date *"
+            label={t('exams.field.date')}
             type="date"
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-            error={formErrors.date}
+            value={form.examDate}
+            onChange={(e) => setForm({ ...form, examDate: e.target.value })}
+            error={formErrors.examDate ? t(formErrors.examDate) : undefined}
           />
 
           <div className="grid grid-cols-3 gap-4">
             <GlassInput
-              label="Duration (min)"
+              label={t('exams.field.duration')}
               type="number"
               value={form.duration}
               onChange={(e) => setForm({ ...form, duration: e.target.value })}
               placeholder="60"
               min="1"
-              error={formErrors.duration}
+              error={formErrors.duration ? t(formErrors.duration) : undefined}
             />
 
             <GlassInput
-              label="Max Score *"
+              label={t('exams.field.totalMarks')}
               type="number"
-              value={form.maxScore}
-              onChange={(e) => setForm({ ...form, maxScore: e.target.value })}
+              value={form.totalMarks}
+              onChange={(e) => setForm({ ...form, totalMarks: e.target.value })}
               placeholder="100"
-              min="1"
-              error={formErrors.maxScore}
+              min="0"
+              error={formErrors.totalMarks ? t(formErrors.totalMarks) : undefined}
             />
 
             <GlassInput
-              label="Passing Score *"
+              label={t('exams.field.passingMarks')}
               type="number"
-              value={form.passingScore}
-              onChange={(e) => setForm({ ...form, passingScore: e.target.value })}
+              value={form.passingMarks}
+              onChange={(e) => setForm({ ...form, passingMarks: e.target.value })}
               placeholder="60"
-              min="1"
-              error={formErrors.passingScore}
+              min="0"
+              error={formErrors.passingMarks ? t(formErrors.passingMarks) : undefined}
             />
           </div>
+
+          {editingId && (
+            <p className="text-xs text-[var(--text-muted)]">
+              {t('exams.editLockedHint')}
+            </p>
+          )}
         </div>
       </GlassModal>
     </div>

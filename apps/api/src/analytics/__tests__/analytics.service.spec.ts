@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { AnalyticsService } from '../analytics.service';
+import type { PrismaService } from '../../prisma/prisma.service';
 
 function makePrisma() {
   return {
@@ -16,7 +17,7 @@ function makePrisma() {
     attendance: { groupBy: vi.fn() },
     lead: { groupBy: vi.fn() },
     $queryRaw: vi.fn(),
-  } as any;
+  } as unknown as PrismaService;
 }
 
 describe('AnalyticsService.getOverview daily attendance', () => {
@@ -43,7 +44,7 @@ describe('AnalyticsService.getOverview daily attendance', () => {
 
     const daily = result.attendance.daily;
     expect(daily).toHaveLength(2);
-    const sep5 = daily.find((d: any) => d.date === '2026-09-05') as
+    const sep5 = daily.find((d: { date: string }) => d.date === '2026-09-05') as
       { date: string; present: number; absent: number; late: number } | undefined;
     expect(sep5).toBeDefined();
     expect(sep5!.present).toBe(5);

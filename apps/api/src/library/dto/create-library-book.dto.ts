@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, Min, IsNumber, IsUrl } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, IsUrl } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateLibraryBookDto {

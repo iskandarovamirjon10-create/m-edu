@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { DataQualityQueryDto } from './dto/data-quality.dto';
 
 export interface QualityRule {
   id: string;
@@ -238,31 +240,33 @@ export class DataQualityService {
         allIssues.push(...issues);
 
         // Upsert each issue into the DB (avoid duplicates)
-        for (const issue of issues) {
-          await this.prisma.dataQualityIssue.upsert({
-            where: {
-              id: `${issue.ruleId}-${issue.entityId}`,
-            },
-            create: {
-              id: `${issue.ruleId}-${issue.entityId}`,
-              organizationId,
-              entityType: issue.entityType,
-              entityId: issue.entityId,
-              category: 'OTHER',
-              severity: issue.severity,
-              field: issue.field ?? null,
-              message: issue.message,
-              ruleId: issue.ruleId,
-              detectedAt: new Date(),
-            },
-            update: {
-              message: issue.message,
-              severity: issue.severity,
-              resolvedAt: null,
-              resolvedBy: null,
-              resolutionNote: null,
-            },
-          });
+        // Bulk upsert using transaction to fix N+1 queries
+        if (issues.length > 0) {
+          const ops = issues.map((issue) => 
+            this.prisma.dataQualityIssue.upsert({
+              where: { id: `${issue.ruleId}-${issue.entityId}` },
+              create: {
+                id: `${issue.ruleId}-${issue.entityId}`,
+                organizationId,
+                entityType: issue.entityType,
+                entityId: issue.entityId,
+                category: 'OTHER',
+                severity: issue.severity,
+                field: issue.field ?? null,
+                message: issue.message,
+                ruleId: issue.ruleId,
+                detectedAt: new Date(),
+              },
+              update: {
+                message: issue.message,
+                severity: issue.severity,
+                resolvedAt: null,
+                resolvedBy: null,
+                resolutionNote: null,
+              },
+            })
+          );
+          await this.prisma.$transaction(ops);
         }
       } catch (error) {
         console.error(`Data quality check failed for rule ${rule.id}:`, error);
@@ -272,8 +276,8 @@ export class DataQualityService {
     return { issues: allIssues, total: allIssues.length };
   }
 
-  async getIssues(organizationId: string, query: any) {
-    const where: any = { organizationId };
+  async getIssues(organizationId: string, query: DataQualityQueryDto = {}) {
+    const where: Prisma.DataQualityIssueWhereInput = { organizationId };
     if (query.severity) where.severity = query.severity;
     if (query.entityType) where.entityType = query.entityType;
     if (query.resolved === 'true') where.resolvedAt = { not: null };

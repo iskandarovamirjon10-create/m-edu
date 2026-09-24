@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Card } from '@/components/ui';
+import { Card, GlassButton } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 /**
  * 404 page — shown for unknown routes inside the authenticated app shell.
@@ -8,16 +9,12 @@ import { usePageTitle } from '@/hooks/usePageTitle';
  * (current URL) so users never feel stranded.
  */
 export function NotFoundPage() {
-  usePageTitle('Page Not Found');
+  const { t } = useI18n();
+  usePageTitle(t('error.notFoundTitle'));
 
   return (
     <div className="page-container">
-      <div className="orb-container" aria-hidden="true">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
-      </div>
+      
 
       <div className="flex min-h-[70vh] items-center justify-center px-4" style={{ position: 'relative', zIndex: 1 }}>
         <Card className="w-full max-w-md p-10 text-center">
@@ -41,21 +38,22 @@ export function NotFoundPage() {
             404
           </p>
           <h1 className="mt-2 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Page not found
+            {t('notFound.heading')}
           </h1>
           <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            The page you're looking for doesn't exist or may have been moved.
-            Check the address, or head back to your dashboard to continue.
+            {t('notFound.description')}
           </p>
           <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link to="/" className="glass-btn glass-btn-primary">
-              Back to dashboard
-            </Link>
+            <GlassButton asChild variant="primary">
+              <Link to="/">
+                {t('notFound.backToDashboard')}
+              </Link>
+            </GlassButton>
             <Link
               to="/"
               className="text-sm font-medium" style={{ color: 'var(--m-vivid)' }}
             >
-              Go home
+              {t('notFound.goHome')}
             </Link>
           </div>
         </Card>

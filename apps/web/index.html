@@ -32,6 +32,15 @@
     <meta name="referrer" content="strict-origin-when-cross-origin" />
   </head>
   <body>
+    <script>
+      try {
+        var t = localStorage.getItem('medu-theme');
+        if (t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme:dark)').matches)) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) {}
+    </script>
     <div id="root"></div>
     <noscript>
       <div style="display:flex;min-height:100vh;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#334155">

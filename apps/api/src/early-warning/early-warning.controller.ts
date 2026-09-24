@@ -2,11 +2,15 @@ import { Controller, Get, Post, Param, Query, Body, UseGuards } from '@nestjs/co
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { EarlyWarningService } from './early-warning.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { STAFF_ROLES } from '../auth/authorization.policy';
 import { CurrentUser } from '../auth/current-user.decorator';
 
 @ApiTags('Early Warning')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(...STAFF_ROLES)
 @Controller('early-warning')
 export class EarlyWarningController {
   constructor(private readonly earlyWarningService: EarlyWarningService) {}
@@ -33,7 +37,7 @@ export class EarlyWarningController {
   @ApiOperation({ summary: 'Resolve an early warning' })
   async resolve(
     @CurrentUser('organizationId') orgId: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser('sub') userId: string,
     @Param('id') id: string,
     @Body() body: { note?: string },
   ) {

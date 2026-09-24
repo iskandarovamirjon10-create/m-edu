@@ -87,7 +87,8 @@ export class FaceEmbedding {
     const denominator = Math.sqrt(normA) * Math.sqrt(normB);
     if (denominator === 0) return 0;
 
-    return dotProduct / denominator;
+    const result = dotProduct / denominator;
+    return Math.min(1, Math.max(-1, result));
   }
 }
 

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExamDto, UpdateExamDto, CreateExamResultDto, PublishExamDto } from './dto/exam.dto';
 import { PaginationParams } from '../common/dto/pagination';
@@ -11,9 +12,9 @@ export class ExamsService {
   // ===================== Exam Management =====================
 
   async findAllExams(organizationId: string, params: PaginationParams) {
-    const { page, limit, search, examType, isPublished } = params;
+    const { search, examType, isPublished } = params;
 
-    const where: any = { organizationId };
+    const where: Prisma.ExamWhereInput = { organizationId };
 
     if (search) {
       where.OR = [
@@ -23,11 +24,12 @@ export class ExamsService {
     }
 
     if (examType) {
-      where.examType = examType;
+      where.examType = examType as Prisma.EnumExamTypeFilter['equals'];
     }
 
     if (isPublished !== undefined) {
-      where.isPublished = isPublished;
+      // Query params arrive as strings; Boolean('false') is true — parse explicitly.
+      where.isPublished = isPublished === 'true' || isPublished === '1';
     }
 
     const { skip } = parsePagination(params);
@@ -111,7 +113,7 @@ export class ExamsService {
 
   async createExam(organizationId: string, dto: CreateExamDto) {
     // Verify group exists and belongs to organization
-    const group = await this.prisma.group.findUnique({
+    const group = await this.prisma.group.findFirst({
       where: { id: dto.groupId, organizationId },
     });
 
@@ -145,7 +147,7 @@ export class ExamsService {
     }
 
     return this.prisma.exam.update({
-      where: { id, organizationId },
+      where: { id },
       data: dto,
     });
   }
@@ -168,12 +170,12 @@ export class ExamsService {
     }
 
     return this.prisma.exam.delete({
-      where: { id, organizationId },
+      where: { id },
     });
   }
 
   async publishExam(organizationId: string, id: string, dto: PublishExamDto) {
-    const exam = await this.findExamById(organizationId, id);
+    await this.findExamById(organizationId, id);
 
     // Validate results exist
     const results = await this.prisma.examResult.findMany({
@@ -185,7 +187,7 @@ export class ExamsService {
     }
 
     return this.prisma.exam.update({
-      where: { id, organizationId },
+      where: { id },
       data: {
         isPublished: dto.isPublished,
       },
@@ -197,7 +199,7 @@ export class ExamsService {
   async getExamResults(organizationId: string, examId: string, studentId?: string) {
     const exam = await this.findExamById(organizationId, examId);
 
-    const where: any = { examId, organizationId };
+    const where: Prisma.ExamResultWhereInput = { examId, organizationId };
 
     if (studentId) {
       where.studentId = studentId;
@@ -230,6 +232,31 @@ export class ExamsService {
   async createExamResult(organizationId: string, examId: string, dto: CreateExamResultDto) {
     const exam = await this.findExamById(organizationId, examId);
 
+    // Cross-tenant guard: the student must belong to this organization.
+    const student = await this.prisma.student.findFirst({
+      where: { id: dto.studentId, organizationId },
+      select: { id: true },
+    });
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    // The exam always targets a group, so the student must be an active member
+    // of that group — otherwise a caller could attach results to an unrelated
+    // roster. Membership lives in the StudentGroup join table.
+    const membership = await this.prisma.studentGroup.findFirst({
+      where: {
+        studentId: dto.studentId,
+        groupId: exam.groupId,
+        organizationId,
+        isActive: true,
+      },
+      select: { studentId: true },
+    });
+    if (!membership) {
+      throw new BadRequestException('Student is not enrolled in this exam group');
+    }
+
     // Check if result already exists
     const existingResult = await this.prisma.examResult.findFirst({
       where: { examId, studentId: dto.studentId },
@@ -241,8 +268,19 @@ export class ExamsService {
 
     // Calculate grade and pass/fail
     const marksObtained = Number(dto.marksObtained);
+    const totalMarks = Number(exam.totalMarks);
+
+    if (marksObtained < 0) {
+      throw new BadRequestException('Marks obtained cannot be negative');
+    }
+    if (marksObtained > totalMarks) {
+      throw new BadRequestException(
+        `Marks obtained (${marksObtained}) cannot exceed total marks (${totalMarks})`,
+      );
+    }
+
     const isPassed = marksObtained >= Number(exam.passingMarks);
-    const percentage = (marksObtained / Number(exam.totalMarks)) * 100;
+    const percentage = (marksObtained / totalMarks) * 100;
     let grade: string;
 
     if (percentage >= 90) grade = 'A+';
@@ -289,6 +327,7 @@ export class ExamsService {
       resultCountRow,
       highestScore,
       lowestScore,
+      passedCount,
     ] = await Promise.all([
       this.prisma.exam.count({ where: { organizationId } }),
       this.prisma.exam.count({ where: { organizationId, isPublished: true } }),
@@ -298,7 +337,7 @@ export class ExamsService {
       }),
       this.prisma.examResult.aggregate({
         where: { organizationId },
-        _count: { _all: true, isPassed: true },
+        _count: { _all: true },
       }),
       this.prisma.examResult.aggregate({
         where: { organizationId },
@@ -308,10 +347,12 @@ export class ExamsService {
         where: { organizationId },
         _min: { marksObtained: true },
       }),
+      this.prisma.examResult.count({
+        where: { organizationId, isPassed: true },
+      }),
     ]);
 
     const totalResults = resultCountRow._count._all ?? 0;
-    const passedCount = resultCountRow._count.isPassed ?? 0;
     const passRate = totalResults > 0 ? (passedCount / totalResults) * 100 : 0;
 
     return {
@@ -329,7 +370,7 @@ export class ExamsService {
   // ===================== Student View =====================
 
   async getStudentExamResults(organizationId: string, studentId: string) {
-    const student = await this.prisma.student.findUnique({
+    const student = await this.prisma.student.findFirst({
       where: { id: studentId, organizationId },
     });
 
@@ -360,7 +401,7 @@ export class ExamsService {
     // Calculate statistics
     const passed = results.filter((r) => r.isPassed).length;
     const total = results.length;
-    const average = results.reduce((sum, r) => sum + Number(r.marksObtained), 0) / total;
+    const average = results.reduce((sum, r) => sum + Number(r.marksObtained), 0) / (total || 1);
 
     return {
       student,
@@ -374,4 +415,4 @@ export class ExamsService {
       },
     };
   }
-}
+}

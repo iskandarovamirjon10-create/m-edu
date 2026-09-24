@@ -40,3 +40,34 @@ export class PayrollBonusDto {
   @IsString()
   reason: string;
 }
+
+export class CreatePayrollRunDto {
+  @IsUUID()
+  teacherId: string;
+
+  @IsNumber()
+  periodYear: number;
+
+  @IsNumber()
+  periodMonth: number;
+
+  @IsOptional() @IsString() salaryType?: string;
+  @IsOptional() @IsNumber() baseAmount?: number;
+  @IsOptional() @IsNumber() lessonsCount?: number;
+  @IsOptional() @IsNumber() hoursWorked?: number;
+  @IsOptional() @IsNumber() overtimeHours?: number;
+  @IsOptional() @IsNumber() bonus?: number;
+  @IsOptional() @IsNumber() absenceDays?: number;
+  @IsOptional() @IsNumber() lateCount?: number;
+  @IsOptional() @IsNumber() latePenaltyPerEvent?: number;
+  @IsOptional() @IsNumber() otherDeduction?: number;
+  @IsOptional() @IsNumber() taxBasisPoints?: number;
+  @IsOptional() @IsNumber() workdaysInMonth?: number;
+  @IsOptional() @IsNumber() overtimeMultiplier?: number;
+}
+
+export class AdjustPayrollRunDto {
+  @IsOptional() @IsNumber() bonus?: number;
+  @IsOptional() @IsNumber() otherDeduction?: number;
+  @IsOptional() @IsNumber() taxBasisPoints?: number;
+}

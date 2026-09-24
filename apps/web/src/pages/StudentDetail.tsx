@@ -14,26 +14,22 @@ import {
   TH,
   TD,
   Modal,
+  ConfirmDialog,
   Select,
   useToasts,
   statusColor,
   Field,
   Badge,
+  GlassButton,
 } from '@/components/ui';
 import { fullName, formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Student, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 function OrbBackdrop() {
-  return (
-    <div className="orb-container" aria-hidden="true">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
-    </div>
-  );
+  return null;
 }
 
 interface FaceEnrollmentItem {
@@ -44,18 +40,19 @@ interface FaceEnrollmentItem {
 
 function formatStudentStatus(isActive: boolean | undefined): { color: string; label: string } {
   return isActive === false
-    ? { color: 'red', label: 'Inactive' }
-    : { color: 'green', label: 'Active' };
+    ? { color: 'red', label: 'enum.status.INACTIVE' }
+    : { color: 'green', label: 'enum.status.ACTIVE' };
 }
 
 function formatGroupStatus(isActive: boolean): { color: string; label: string } {
   return isActive
-    ? { color: 'green', label: 'Active' }
-    : { color: 'slate', label: 'Inactive' };
+    ? { color: 'green', label: 'enum.status.ACTIVE' }
+    : { color: 'slate', label: 'enum.status.INACTIVE' };
 }
 
 export function StudentDetailPage() {
-  usePageTitle('Student Details');
+  const { t } = useI18n();
+  usePageTitle(t('students.detailsTitle'));
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { push, toastNode } = useToasts();
@@ -64,6 +61,7 @@ export function StudentDetailPage() {
   // Modal state
   const [assignOpen, setAssignOpen] = useState(false);
   const [groupId, setGroupId] = useState('');
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
 
   // Data fetching
   const student = useQuery({
@@ -125,7 +123,7 @@ export function StudentDetailPage() {
   const assign = useMutation({
     mutationFn: () => studentsApi.assignGroup(id!, groupId),
     onSuccess: () => {
-      push('success', 'Student assigned to group successfully');
+      push('success', t('studentDetail.assigned'));
       setAssignOpen(false);
       setGroupId('');
       qc.invalidateQueries({ queryKey: ['student', id] });
@@ -140,7 +138,7 @@ export function StudentDetailPage() {
     mutationFn: (groupIdToRemove: string) =>
       studentsApi.removeGroup(id!, groupIdToRemove),
     onSuccess: () => {
-      push('success', 'Student removed from group');
+      push('success', t('studentDetail.removed'));
       qc.invalidateQueries({ queryKey: ['student', id] });
     },
     onError: (e: Error) => {
@@ -169,18 +167,15 @@ export function StudentDetailPage() {
     assign.mutate();
   }, [groupId, assign]);
 
-  const handleRemoveFromGroup = useCallback(
-    (groupIdToRemove: string) => {
-      if (
-        window.confirm(
-          'Are you sure you want to remove this student from the group?',
-        )
-      ) {
-        removeFromGroup.mutate(groupIdToRemove);
-      }
-    },
-    [removeFromGroup],
-  );
+  const handleRemoveFromGroup = useCallback((groupIdToRemove: string) => {
+    setRemoveTarget(groupIdToRemove);
+  }, []);
+
+  const confirmRemoveFromGroup = useCallback(() => {
+    if (!removeTarget) return;
+    removeFromGroup.mutate(removeTarget);
+    setRemoveTarget(null);
+  }, [removeTarget, removeFromGroup]);
 
   const handleEdit = useCallback(() => {
     navigate(`/students/${id}/edit`);
@@ -196,9 +191,12 @@ export function StudentDetailPage() {
       <>
         <OrbBackdrop />
         <div className="page-container space-y-4">
-          <PageHeader title="Student" subtitle="Loading student details…" />
+          <PageHeader
+            title={t('enum.badge.STUDENT')}
+            subtitle={t('studentDetail.loadingSubtitle')}
+          />
           <div className="glass-card p-8">
-            <PageLoader label="Loading student…" />
+            <PageLoader label={t('studentForm.loading')} />
           </div>
         </div>
       </>
@@ -211,10 +209,13 @@ export function StudentDetailPage() {
       <>
         <OrbBackdrop />
         <div className="page-container space-y-4">
-          <PageHeader title="Student" subtitle="Student details" />
+          <PageHeader
+            title={t('enum.badge.STUDENT')}
+            subtitle={t('studentDetail.detailsSubtitle')}
+          />
           <div className="glass-card p-8">
             <ErrorState
-              title="Student not found"
+              title={t('studentDetail.notFound')}
               message={getErrorMessage(student.error as Error)}
               onRetry={handleRetry}
             />
@@ -239,20 +240,20 @@ export function StudentDetailPage() {
         subtitle={studentData.user?.email || ''}
         actions={
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button
+            <GlassButton
               type="button"
-              className="glass-btn-secondary"
+              variant="secondary"
               onClick={handleEdit}
             >
-              Edit
-            </button>
-            <button
+              {t('common.edit')}
+            </GlassButton>
+            <GlassButton
               type="button"
-              className="glass-btn-primary"
+              variant="primary"
               onClick={handleOpenAssign}
             >
-              Assign to group
-            </button>
+              {t('studentDetail.assignToGroup')}
+            </GlassButton>
           </div>
         }
       />
@@ -261,39 +262,51 @@ export function StudentDetailPage() {
         {/* Profile card */}
         <div className="glass-card overflow-hidden lg:col-span-1">
           <div className="border-b border-[var(--border-subtle)] px-5 py-4">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Profile</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+              {t('studentDetail.profile')}
+            </h2>
           </div>
           <div className="p-5">
             <dl className="space-y-4">
               <div className="flex items-start justify-between">
-                <dt className="text-sm text-[var(--text-primary)]">Date of birth</dt>
+                <dt className="text-sm text-[var(--text-primary)]">
+                  {t('studentForm.dateOfBirth')}
+                </dt>
                 <dd className="text-sm font-medium text-[var(--text-primary)]">
                   {formatDate(studentData.dateOfBirth)}
                 </dd>
               </div>
               <div className="flex items-start justify-between">
-                <dt className="text-sm text-[var(--text-primary)]">Gender</dt>
+                <dt className="text-sm text-[var(--text-primary)]">
+                  {t('studentForm.gender')}
+                </dt>
                 <dd className="text-sm font-medium text-[var(--text-primary)]">
                   {studentData.gender || '—'}
                 </dd>
               </div>
               <div className="flex items-start justify-between">
-                <dt className="text-sm text-[var(--text-primary)]">Address</dt>
+                <dt className="text-sm text-[var(--text-primary)]">
+                  {t('hr.form.address')}
+                </dt>
                 <dd className="text-sm font-medium text-[var(--text-primary)]">
                   {studentData.address || '—'}
                 </dd>
               </div>
               <div className="flex items-start justify-between">
-                <dt className="text-sm text-[var(--text-primary)]">Phone</dt>
+                <dt className="text-sm text-[var(--text-primary)]">
+                  {t('common.phone')}
+                </dt>
                 <dd className="text-sm font-medium text-[var(--text-primary)]">
                   {studentData.user?.phone || '—'}
                 </dd>
               </div>
               <div className="flex items-start justify-between">
-                <dt className="text-sm text-[var(--text-primary)]">Status</dt>
+                <dt className="text-sm text-[var(--text-primary)]">
+                  {t('common.status')}
+                </dt>
                 <dd>
                   <Badge color={studentStatus.color}>
-                    {studentStatus.label}
+                    {t(studentStatus.label)}
                   </Badge>
                 </dd>
               </div>
@@ -305,25 +318,31 @@ export function StudentDetailPage() {
         <div className="glass-card overflow-hidden lg:col-span-2">
           <div className="border-b border-[var(--border-subtle)] px-5 py-4">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-              Parent / Guardian
+              {t('studentForm.parentSection')}
             </h2>
           </div>
           <div className="p-5">
             <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
               <div>
-                <dt className="text-[var(--text-primary)]">Name</dt>
+                <dt className="text-[var(--text-primary)]">
+                  {t('common.name')}
+                </dt>
                 <dd className="mt-1 font-medium text-[var(--text-primary)]">
                   {studentData.parentName || '—'}
                 </dd>
               </div>
               <div>
-                <dt className="text-[var(--text-primary)]">Phone</dt>
+                <dt className="text-[var(--text-primary)]">
+                  {t('common.phone')}
+                </dt>
                 <dd className="mt-1 font-medium text-[var(--text-primary)]">
                   {studentData.parentPhone || '—'}
                 </dd>
               </div>
               <div>
-                <dt className="text-[var(--text-primary)]">Email</dt>
+                <dt className="text-[var(--text-primary)]">
+                  {t('common.email')}
+                </dt>
                 <dd className="mt-1 font-medium text-[var(--text-primary)]">
                   {studentData.parentEmail || '—'}
                 </dd>
@@ -331,7 +350,7 @@ export function StudentDetailPage() {
             </dl>
             {studentData.notes && (
               <div className="mt-4 rounded-lg glass-card p-4 text-sm text-[var(--text-primary)]">
-                <span className="font-medium">Notes: </span>
+                <span className="font-medium">{t('common.notes')}: </span>
                 {studentData.notes}
               </div>
             )}
@@ -343,19 +362,22 @@ export function StudentDetailPage() {
         {/* Groups card */}
         <div className="glass-card overflow-hidden">
           <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-4">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Groups</h2>
-            <button
-              type="button"
-              className="text-xs font-medium text-[#2f4d9b] hover:text-[#3a5ab0] dark:text-[#e7e7cd] dark:hover:text-white"
-              onClick={handleOpenAssign}
-            >
-              Assign
-            </button>
+ <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+ {t('groups.title')}
+ </h2>
+ <GlassButton
+ type="button"
+ variant="ghost"
+ size="sm"
+ onClick={handleOpenAssign}
+ >
+ {t('studentDetail.assign')}
+ </GlassButton>
           </div>
           {studentGroups.length === 0 ? (
             <EmptyState
-              title="Not assigned to any group"
-              message="Assign this student to a group to get started."
+              title={t('studentDetail.noGroups')}
+              message={t('studentDetail.noGroupsHint')}
             />
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
@@ -378,7 +400,7 @@ export function StudentDetailPage() {
                       </p>
                       {groupEnrollment.group.room && (
                         <p className="text-xs text-[var(--text-primary)]">
-                          Room {groupEnrollment.group.room}
+                          {t('groups.col.room')} {groupEnrollment.group.room}
                         </p>
                       )}
                     </div>
@@ -386,18 +408,23 @@ export function StudentDetailPage() {
                       <Badge color={groupStatus.color}>
                         {groupStatus.label}
                       </Badge>
-                      {groupEnrollment.isActive && (
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
-                          onClick={() =>
-                            handleRemoveFromGroup(groupEnrollment.group.id)
-                          }
-                          disabled={isRemoving}
-                        >
-                          {isRemoving ? 'Removing…' : 'Remove'}
-                        </button>
-                      )}
+ {groupEnrollment.isActive && (
+ <GlassButton
+ type="button"
+ variant="ghost"
+ size="sm"
+ className="text-red-600"
+ onClick={() =>
+ handleRemoveFromGroup(groupEnrollment.group.id)
+ }
+ disabled={isRemoving}
+ loading={isRemoving}
+ >
+ {isRemoving
+ ? t('studentDetail.removing')
+ : t('studentDetail.remove')}
+ </GlassButton>
+ )}
                     </div>
                   </div>
                 );
@@ -410,22 +437,22 @@ export function StudentDetailPage() {
         <div className="glass-card overflow-hidden">
           <div className="border-b border-[var(--border-subtle)] px-5 py-4">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-              Recent attendance
+              {t('studentDetail.recentAttendance')}
             </h2>
           </div>
           {studentAttendance.length === 0 ? (
             <EmptyState
-              title="No attendance records"
-              message="Attendance will appear here after it is recorded."
+              title={t('attendance.empty')}
+              message={t('studentDetail.attendanceEmptyHint')}
             />
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <THead>
                   <TR>
-                    <TH>Date</TH>
-                    <TH>Status</TH>
-                    <TH>Source</TH>
+                    <TH>{t('common.date')}</TH>
+                    <TH>{t('common.status')}</TH>
+                    <TH>{t('attendance.col.source')}</TH>
                   </TR>
                 </THead>
                 <TBody>
@@ -439,7 +466,7 @@ export function StudentDetailPage() {
                       </TD>
                       <TD>
                         <Badge color={statusColor(attendance.status)}>
-                          {attendance.status}
+                          {t(`attendance.${attendance.status.toLowerCase()}`)}
                         </Badge>
                       </TD>
                       <TD>{attendance.source}</TD>
@@ -456,21 +483,23 @@ export function StudentDetailPage() {
         {/* Payments card */}
         <div className="glass-card overflow-hidden">
           <div className="border-b border-[var(--border-subtle)] px-5 py-4">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Payments</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+              {t('payments.title')}
+            </h2>
           </div>
           {studentPayments.length === 0 ? (
             <EmptyState
-              title="No payments"
-              message="Payments for this student appear here."
+              title={t('payments.empty')}
+              message={t('studentDetail.paymentsEmptyHint')}
             />
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <THead>
                   <TR>
-                    <TH>Date</TH>
-                    <TH>Status</TH>
-                    <TH className="text-right">Amount</TH>
+                    <TH>{t('common.date')}</TH>
+                    <TH>{t('common.status')}</TH>
+                    <TH className="text-right">{t('payments.col.amount')}</TH>
                   </TR>
                 </THead>
                 <TBody>
@@ -484,7 +513,7 @@ export function StudentDetailPage() {
                       </TD>
                       <TD>
                         <Badge color={statusColor(payment.status)}>
-                          {payment.status}
+                          {t(`payments.status.${payment.status}`)}
                         </Badge>
                       </TD>
                       <TD className="text-right font-medium">
@@ -502,21 +531,21 @@ export function StudentDetailPage() {
         <div className="glass-card overflow-hidden">
           <div className="border-b border-[var(--border-subtle)] px-5 py-4">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-              Face enrollment
+              {t('studentDetail.faceEnrollment')}
             </h2>
           </div>
           {myEnrollments.length === 0 ? (
             <EmptyState
-              title="Not enrolled"
-              message="Enroll this student's face to enable automatic recognition attendance."
+              title={t('studentDetail.notEnrolled')}
+              message={t('studentDetail.enrollHint')}
               action={
-                <button
+                <GlassButton
                   type="button"
-                  className="glass-btn-primary"
+                  variant="primary"
                   onClick={handleEnrollFace}
                 >
-                  Enroll face
-                </button>
+                  {t('studentDetail.enrollFace')}
+                </GlassButton>
               }
             />
           ) : (
@@ -528,14 +557,14 @@ export function StudentDetailPage() {
                 >
                   <div>
                     <p className="text-sm font-medium text-[var(--text-primary)]">
-                      Enrollment
+                      {t('studentDetail.enrollment')}
                     </p>
                     <p className="text-xs text-[var(--text-primary)]">
                       {formatDate(enrollment.enrolledAt)}
                     </p>
                   </div>
                   <Badge color={statusColor(enrollment.status)}>
-                    {enrollment.status}
+                    {t(`enum.status.${enrollment.status}`)}
                   </Badge>
                 </div>
               ))}
@@ -548,15 +577,15 @@ export function StudentDetailPage() {
       <Modal
         open={assignOpen}
         onClose={handleCloseAssign}
-        title="Assign to group"
+        title={t('studentDetail.assignToGroup')}
       >
-        <Field label="Group" required>
+        <Field label={t('exams.form.group')} required>
           <Select
             value={groupId}
             onChange={(e) => setGroupId(e.target.value)}
-            aria-label="Select group to assign"
+            aria-label={t('studentDetail.selectGroupAria')}
           >
-            <option value="">Select a group…</option>
+            <option value="">{t('studentDetail.selectGroupPlaceholder')}</option>
             {activeGroups.map((group) => (
               <option key={group.id} value={group.id}>
                 {group.name}
@@ -565,24 +594,34 @@ export function StudentDetailPage() {
           </Select>
         </Field>
         <div className="mt-4 flex justify-end gap-2">
-          <button
+          <GlassButton
             type="button"
-            className="glass-btn-secondary"
+            variant="secondary"
             onClick={handleCloseAssign}
             disabled={assign.isPending}
           >
-            Cancel
-          </button>
-          <button
+            {t('common.cancel')}
+          </GlassButton>
+          <GlassButton
             type="button"
-            className="glass-btn-primary"
+            variant="primary"
             disabled={!groupId || assign.isPending}
             onClick={handleAssign}
           >
-            {assign.isPending ? 'Assigning…' : 'Assign'}
-          </button>
+            {assign.isPending
+              ? t('studentDetail.assigning')
+              : t('studentDetail.assign')}
+          </GlassButton>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={removeTarget !== null}
+        onClose={() => setRemoveTarget(null)}
+        onConfirm={confirmRemoveFromGroup}
+        description={t('studentDetail.removeConfirm')}
+        loading={removeFromGroup.isPending}
+      />
 
       {toastNode}
       </div>

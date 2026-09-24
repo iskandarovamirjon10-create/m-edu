@@ -1,0 +1,599 @@
+{
+  "pages": [
+    "Students.tsx",
+    "StudentForm.tsx",
+    "StudentDetail.tsx",
+    "Groups.tsx",
+    "GroupForm.tsx",
+    "GroupDetail.tsx",
+    "Teachers.tsx",
+    "Schedule.tsx"
+  ],
+  "keys": {
+    "enum.status.ACTIVE": {
+      "en": "Active",
+      "uz": "Faol",
+      "ru": "Активен"
+    },
+    "enum.status.INACTIVE": {
+      "en": "Inactive",
+      "uz": "Nofaol",
+      "ru": "Неактивен"
+    },
+    "enum.status.PENDING": {
+      "en": "Pending",
+      "uz": "Kutilmoqda",
+      "ru": "Ожидает"
+    },
+    "enum.status.REVOKED": {
+      "en": "Revoked",
+      "uz": "Bekor qilingan",
+      "ru": "Отозван"
+    },
+    "enum.status.EXPIRED": {
+      "en": "Expired",
+      "uz": "Muddati tugagan",
+      "ru": "Срок истёк"
+    },
+    "common.emailInvalid": {
+      "en": "Please enter a valid email address",
+      "uz": "Iltimos, toʻgʻri email manzil kiriting",
+      "ru": "Пожалуйста, введите корректный email"
+    },
+    "students.pageSubtitle": {
+      "en": "Manage students, enrollments and attendance",
+      "uz": "Oʻquvchilar, yozilmalar va davomatni boshqarish",
+      "ru": "Управление учениками, записями и посещаемостью"
+    },
+    "students.searchPlaceholderEmail": {
+      "en": "Search by name or email…",
+      "uz": "Ism yoki email boʻyicha qidirish…",
+      "ru": "Поиск по имени или email…"
+    },
+    "students.emptyFiltered": {
+      "en": "No matching students",
+      "uz": "Mos oʻquvchilar topilmadi",
+      "ru": "Подходящие ученики не найдены"
+    },
+    "students.emptyFilteredHint": {
+      "en": "Try adjusting your filters to see more results.",
+      "uz": "Natijalarni koʻrish uchun filtrlarni oʻzgartirib koʻring.",
+      "ru": "Попробуйте изменить фильтры, чтобы увидеть больше результатов."
+    },
+    "students.viewStudentAria": {
+      "en": "View student {name}",
+      "uz": "Oʻquvchini koʻrish: {name}",
+      "ru": "Просмотр ученика: {name}"
+    },
+    "students.col.parentName": {
+      "en": "Parent",
+      "uz": "Ota-ona",
+      "ru": "Родитель"
+    },
+    "studentForm.editTitle": {
+      "en": "Edit student",
+      "uz": "Oʻquvchini tahrirlash",
+      "ru": "Редактирование ученика"
+    },
+    "studentForm.addTitle": {
+      "en": "Add student",
+      "uz": "Oʻquvchi qoʻshish",
+      "ru": "Добавление ученика"
+    },
+    "studentForm.subtitle": {
+      "en": "Student profile information",
+      "uz": "Oʻquvchi profili maʼlumotlari",
+      "ru": "Информация профиля ученика"
+    },
+    "studentForm.loading": {
+      "en": "Loading student…",
+      "uz": "Oʻquvchi yuklanmoqda…",
+      "ru": "Загрузка ученика…"
+    },
+    "studentForm.loadFailed": {
+      "en": "Failed to load student",
+      "uz": "Oʻquvchini yuklab boʻlmadi",
+      "ru": "Не удалось загрузить ученика"
+    },
+    "studentForm.sectionInfo": {
+      "en": "Student information",
+      "uz": "Oʻquvchi haqida maʼlumot",
+      "ru": "Информация об ученике"
+    },
+    "studentForm.dateOfBirth": {
+      "en": "Date of birth",
+      "uz": "Tugʻilgan sana",
+      "ru": "Дата рождения"
+    },
+    "studentForm.gender": {
+      "en": "Gender",
+      "uz": "Jins",
+      "ru": "Пол"
+    },
+    "studentForm.selectGenderAria": {
+      "en": "Select gender",
+      "uz": "Jinsni tanlang",
+      "ru": "Выберите пол"
+    },
+    "studentForm.emailHint": {
+      "en": "Optional — used for login credentials.",
+      "uz": "Ixtiyoriy — tizimga kirish uchun ishlatiladi.",
+      "ru": "Необязательно — используется для входа в систему."
+    },
+    "studentForm.passwordHint": {
+      "en": "Optional — leave empty for no login.",
+      "uz": "Ixtiyoriy — kirish kerak boʻlmasa boʻsh qoldiring.",
+      "ru": "Необязательно — оставьте пустым, если вход не нужен."
+    },
+    "studentForm.addressPlaceholder": {
+      "en": "Street, city",
+      "uz": "Koʻcha, shahar",
+      "ru": "Улица, город"
+    },
+    "studentForm.notesPlaceholder": {
+      "en": "Additional notes…",
+      "uz": "Qoʻshimcha izohlar…",
+      "ru": "Дополнительные заметки…"
+    },
+    "studentForm.parentSection": {
+      "en": "Parent / Guardian",
+      "uz": "Ota-ona / Homiy",
+      "ru": "Родитель / Опекун"
+    },
+    "studentForm.parentName": {
+      "en": "Parent name",
+      "uz": "Ota-ona ismi",
+      "ru": "Имя родителя"
+    },
+    "studentForm.parentPhone": {
+      "en": "Parent phone",
+      "uz": "Ota-ona telefoni",
+      "ru": "Телефон родителя"
+    },
+    "studentForm.parentEmail": {
+      "en": "Parent email",
+      "uz": "Ota-ona emaili",
+      "ru": "Email родителя"
+    },
+    "studentForm.created": {
+      "en": "Student created successfully",
+      "uz": "Oʻquvchi muvaffaqiyatli qoʻshildi",
+      "ru": "Ученик успешно добавлен"
+    },
+    "studentForm.updated": {
+      "en": "Student updated successfully",
+      "uz": "Oʻquvchining maʼlumotlari yangilandi",
+      "ru": "Данные ученика успешно обновлены"
+    },
+    "studentForm.create": {
+      "en": "Create student",
+      "uz": "Oʻquvchini yaratish",
+      "ru": "Создать ученика"
+    },
+    "studentDetail.assigned": {
+      "en": "Student assigned to group successfully",
+      "uz": "Oʻquvchi guruhga muvaffaqiyatli biriktirildi",
+      "ru": "Ученик успешно добавлен в группу"
+    },
+    "studentDetail.removed": {
+      "en": "Student removed from group",
+      "uz": "Oʻquvchi guruhdan olib tashlandi",
+      "ru": "Ученик удалён из группы"
+    },
+    "studentDetail.removeConfirm": {
+      "en": "Are you sure you want to remove this student from the group?",
+      "uz": "Bu oʻquvchini guruhdan olib tashlashni xohlaysizmi?",
+      "ru": "Вы уверены, что хотите убрать этого ученика из группы?"
+    },
+    "studentDetail.loadingSubtitle": {
+      "en": "Loading student details…",
+      "uz": "Oʻquvchi tafsilotlari yuklanmoqda…",
+      "ru": "Загрузка данных ученика…"
+    },
+    "studentDetail.detailsSubtitle": {
+      "en": "Student details",
+      "uz": "Oʻquvchi tafsilotlari",
+      "ru": "Данные ученика"
+    },
+    "studentDetail.notFound": {
+      "en": "Student not found",
+      "uz": "Oʻquvchi topilmadi",
+      "ru": "Ученик не найден"
+    },
+    "studentDetail.assignToGroup": {
+      "en": "Assign to group",
+      "uz": "Guruhga biriktirish",
+      "ru": "Назначить в группу"
+    },
+    "studentDetail.profile": {
+      "en": "Profile",
+      "uz": "Profil",
+      "ru": "Профиль"
+    },
+    "studentDetail.assign": {
+      "en": "Assign",
+      "uz": "Biriktirish",
+      "ru": "Назначить"
+    },
+    "studentDetail.noGroups": {
+      "en": "Not assigned to any group",
+      "uz": "Hech qayerga biriktirilmagan",
+      "ru": "Не состоит ни в одной группе"
+    },
+    "studentDetail.noGroupsHint": {
+      "en": "Assign this student to a group to get started.",
+      "uz": "Boshlash uchun bu oʻquvchini guruhga biriktiring.",
+      "ru": "Добавьте этого ученика в группу, чтобы начать."
+    },
+    "studentDetail.removing": {
+      "en": "Removing…",
+      "uz": "Olib tashlanmoqda…",
+      "ru": "Удаление…"
+    },
+    "studentDetail.remove": {
+      "en": "Remove",
+      "uz": "Olib tashlash",
+      "ru": "Убрать"
+    },
+    "studentDetail.recentAttendance": {
+      "en": "Recent attendance",
+      "uz": "Soʻnggi davomat",
+      "ru": "Последняя посещаемость"
+    },
+    "studentDetail.attendanceEmptyHint": {
+      "en": "Attendance will appear here after it is recorded.",
+      "uz": "Davomat yozilgach, u shu yerda koʻrinadi.",
+      "ru": "Посещаемость появится здесь после отметки."
+    },
+    "studentDetail.paymentsEmptyHint": {
+      "en": "Payments for this student appear here.",
+      "uz": "Bu oʻquvchining toʻlovlari shu yerda koʻrinadi.",
+      "ru": "Платежи этого ученика появятся здесь."
+    },
+    "studentDetail.faceEnrollment": {
+      "en": "Face enrollment",
+      "uz": "Yuzni roʻyxatga olish",
+      "ru": "Регистрация лица"
+    },
+    "studentDetail.notEnrolled": {
+      "en": "Not enrolled",
+      "uz": "Roʻyxatga olinmagan",
+      "ru": "Не зарегистрирован"
+    },
+    "studentDetail.enrollHint": {
+      "en": "Enroll this student's face to enable automatic recognition attendance.",
+      "uz": "Avtomatik tanish davomatni yoqish uchun bu oʻquvchini yuz orqali roʻyxatga oling.",
+      "ru": "Зарегистрируйте лицо этого ученика, чтобы включить распознавание посещаемости."
+    },
+    "studentDetail.enrollFace": {
+      "en": "Enroll face",
+      "uz": "Yuzni roʻyxatga olish",
+      "ru": "Зарегистрировать лицо"
+    },
+    "studentDetail.enrollment": {
+      "en": "Enrollment",
+      "uz": "Roʻyxatga olish",
+      "ru": "Регистрация"
+    },
+    "studentDetail.selectGroupAria": {
+      "en": "Select group to assign",
+      "uz": "Biriktirish uchun guruhni tanlang",
+      "ru": "Выберите группу для назначения"
+    },
+    "studentDetail.selectGroupPlaceholder": {
+      "en": "Select a group…",
+      "uz": "Guruhni tanlang…",
+      "ru": "Выберите группу…"
+    },
+    "studentDetail.assigning": {
+      "en": "Assigning…",
+      "uz": "Biriktirilmoqda…",
+      "ru": "Назначение…"
+    },
+    "groups.pageSubtitle": {
+      "en": "Classes and study groups",
+      "uz": "Darslar va oʻquv guruhlari",
+      "ru": "Занятия и учебные группы"
+    },
+    "groups.emptyMessage": {
+      "en": "Create your first group to organize students.",
+      "uz": "Oʻquvchilarni guruhlash uchun birinchi guruhingizni yarating.",
+      "ru": "Создайте первую группу, чтобы организовать учеников."
+    },
+    "groups.viewAria": {
+      "en": "View group {name}",
+      "uz": "Guruhni koʻrish: {name}",
+      "ru": "Просмотр группы: {name}"
+    },
+    "groups.namePlaceholder": {
+      "en": "Morning class A",
+      "uz": "Ertalab guruhi A",
+      "ru": "Утренняя группа A"
+    },
+    "groups.selectTeacherAria": {
+      "en": "Select teacher",
+      "uz": "Oʻqituvchini tanlang",
+      "ru": "Выберите учителя"
+    },
+    "groups.roomPlaceholder": {
+      "en": "Room 101",
+      "uz": "101-xona",
+      "ru": "Кабинет 101"
+    },
+    "groups.loadingGroup": {
+      "en": "Loading group…",
+      "uz": "Guruh yuklanmoqda…",
+      "ru": "Загрузка группы…"
+    },
+    "groups.notFound": {
+      "en": "Group not found",
+      "uz": "Guruh topilmadi",
+      "ru": "Группа не найдена"
+    },
+    "groups.detailsSubtitle": {
+      "en": "Group details",
+      "uz": "Guruh tafsilotlari",
+      "ru": "Данные группы"
+    },
+    "groups.updated": {
+      "en": "Group updated",
+      "uz": "Guruh yangilandi",
+      "ru": "Группа обновлена"
+    },
+    "groupForm.editTitle": {
+      "en": "Edit group",
+      "uz": "Guruhni tahrirlash",
+      "ru": "Редактирование группы"
+    },
+    "groupForm.newTitle": {
+      "en": "New group",
+      "uz": "Yangi guruh",
+      "ru": "Новая группа"
+    },
+    "groupForm.editSubtitle": {
+      "en": "Update group details",
+      "uz": "Guruh tafsilotlarini yangilash",
+      "ru": "Обновить данные группы"
+    },
+    "groupForm.createSubtitle": {
+      "en": "Create a study group",
+      "uz": "Oʻquv guruhi yaratish",
+      "ru": "Создать учебную группу"
+    },
+    "groupForm.noTeacher": {
+      "en": "No teacher",
+      "uz": "Oʻqituvchisiz",
+      "ru": "Без учителя"
+    },
+    "groupForm.capacityRange": {
+      "en": "Capacity must be between 1 and 100",
+      "uz": "Sigʻim 1 dan 100 gacha boʻlishi kerak",
+      "ru": "Ёмкость должна быть от 1 до 100"
+    },
+    "groupForm.endDate": {
+      "en": "End date",
+      "uz": "Tugash sanasi",
+      "ru": "Дата окончания"
+    },
+    "groupDetail.loadingSubtitle": {
+      "en": "Loading group details…",
+      "uz": "Guruh tafsilotlari yuklanmoqda…",
+      "ru": "Загрузка данных группы…"
+    },
+    "groupDetail.noRoom": {
+      "en": "No room",
+      "uz": "Xona yoʻq",
+      "ru": "Без кабинета"
+    },
+    "groupDetail.details": {
+      "en": "Details",
+      "uz": "Tafsilotlar",
+      "ru": "Подробности"
+    },
+    "groupDetail.members": {
+      "en": "Members ({count})",
+      "uz": "Aʼzolar ({count})",
+      "ru": "Участники ({count})"
+    },
+    "groupDetail.noMembers": {
+      "en": "No members",
+      "uz": "Aʼzolar yoʻq",
+      "ru": "Нет участников"
+    },
+    "groupDetail.noMembersHint": {
+      "en": "Assign students to this group to see them here.",
+      "uz": "Shu yerda koʻrish uchun bu guruhga oʻquvchilar biriktiring.",
+      "ru": "Добавьте учеников в эту группу, чтобы они появились здесь."
+    },
+    "groupDetail.joined": {
+      "en": "Joined",
+      "uz": "Qoʻshilgan sana",
+      "ru": "Дата поступления"
+    },
+    "schedule.entriesCount": {
+      "en": "{count} entries",
+      "uz": "{count} ta yozuv",
+      "ru": "{count} записей"
+    },
+    "schedule.addEntry": {
+      "en": "Add Entry",
+      "uz": "Yozuv qoʻshish",
+      "ru": "Добавить запись"
+    },
+    "schedule.allDays": {
+      "en": "All Days",
+      "uz": "Barcha kunlar",
+      "ru": "Все дни"
+    },
+    "schedule.loading": {
+      "en": "Loading schedule…",
+      "uz": "Jadval yuklanmoqda…",
+      "ru": "Загрузка расписания…"
+    },
+    "schedule.empty": {
+      "en": "No schedule entries",
+      "uz": "Jadval yozuvlari yoʻq",
+      "ru": "Нет записей расписания"
+    },
+    "schedule.emptyHint": {
+      "en": "Create the first schedule entry to get started.",
+      "uz": "Boshlash uchun birinchi jadval yozuvini yarating.",
+      "ru": "Создайте первую запись расписания, чтобы начать."
+    },
+    "schedule.remove": {
+      "en": "Remove",
+      "uz": "Olib tashlash",
+      "ru": "Убрать"
+    },
+    "schedule.removeConfirm": {
+      "en": "Remove this schedule entry?",
+      "uz": "Bu jadval yozuvini olib tashlashni xohlaysizmi?",
+      "ru": "Убрать эту запись расписания?"
+    },
+    "schedule.editTitle": {
+      "en": "Edit Schedule",
+      "uz": "Jadvalni tahrirlash",
+      "ru": "Редактирование расписания"
+    },
+    "schedule.newTitle": {
+      "en": "New Schedule Entry",
+      "uz": "Yangi jadval yozuvi",
+      "ru": "Новая запись расписания"
+    },
+    "schedule.selectGroup": {
+      "en": "Select group",
+      "uz": "Guruhni tanlang",
+      "ru": "Выберите группу"
+    },
+    "schedule.dayOfWeek": {
+      "en": "Day of Week",
+      "uz": "Hafta kuni",
+      "ru": "День недели"
+    },
+    "schedule.startTime": {
+      "en": "Start Time",
+      "uz": "Boshlanish vaqti",
+      "ru": "Время начала"
+    },
+    "schedule.endTime": {
+      "en": "End Time",
+      "uz": "Tugash vaqti",
+      "ru": "Время окончания"
+    },
+    "schedule.roomPlaceholder": {
+      "en": "e.g. Room 101",
+      "uz": "masalan, 101-xona",
+      "ru": "напр., кабинет 101"
+    },
+    "schedule.col.day": {
+      "en": "Day",
+      "uz": "Kun",
+      "ru": "День"
+    },
+    "schedule.col.time": {
+      "en": "Time",
+      "uz": "Vaqt",
+      "ru": "Время"
+    },
+    "schedule.col.group": {
+      "en": "Group",
+      "uz": "Guruh",
+      "ru": "Группа"
+    },
+    "schedule.col.start": {
+      "en": "Start",
+      "uz": "Boshlanish",
+      "ru": "Начало"
+    },
+    "schedule.col.end": {
+      "en": "End",
+      "uz": "Tugash",
+      "ru": "Окончание"
+    },
+    "schedule.created": {
+      "en": "Schedule entry created",
+      "uz": "Jadval yozuvi yaratildi",
+      "ru": "Запись расписания создана"
+    },
+    "schedule.updated": {
+      "en": "Schedule entry updated",
+      "uz": "Jadval yozuvi yangilandi",
+      "ru": "Запись расписания обновлена"
+    },
+    "schedule.removed": {
+      "en": "Schedule entry removed",
+      "uz": "Jadval yozuvi olib tashlandi",
+      "ru": "Запись расписания удалена"
+    },
+    "schedule.day.MONDAY": {
+      "en": "Monday",
+      "uz": "Dushanba",
+      "ru": "Понедельник"
+    },
+    "schedule.day.TUESDAY": {
+      "en": "Tuesday",
+      "uz": "Seshanba",
+      "ru": "Вторник"
+    },
+    "schedule.day.WEDNESDAY": {
+      "en": "Wednesday",
+      "uz": "Chorshanba",
+      "ru": "Среда"
+    },
+    "schedule.day.THURSDAY": {
+      "en": "Thursday",
+      "uz": "Payshanba",
+      "ru": "Четверг"
+    },
+    "schedule.day.FRIDAY": {
+      "en": "Friday",
+      "uz": "Juma",
+      "ru": "Пятница"
+    },
+    "schedule.day.SATURDAY": {
+      "en": "Saturday",
+      "uz": "Shanba",
+      "ru": "Суббота"
+    },
+    "schedule.day.SUNDAY": {
+      "en": "Sunday",
+      "uz": "Yakshanba",
+      "ru": "Воскресенье"
+    },
+    "teachers.searchLabel": {
+      "en": "Search teachers",
+      "uz": "Oʻqituvchilarni qidirish",
+      "ru": "Поиск учителей"
+    },
+    "teachers.emptyFiltered": {
+      "en": "No matching teachers",
+      "uz": "Mos oʻqituvchilar topilmadi",
+      "ru": "Подходящие учителя не найдены"
+    },
+    "teachers.emptyFilteredHint": {
+      "en": "Try adjusting your search to see more results.",
+      "uz": "Natijalarni koʻrish uchun qidiruvni oʻzgartirib koʻring.",
+      "ru": "Попробуйте изменить поиск, чтобы увидеть больше результатов."
+    },
+    "teachers.specializationsPlaceholder": {
+      "en": "Math, Physics",
+      "uz": "Matematika, Fizika",
+      "ru": "Математика, Физика"
+    },
+    "teachers.bioPlaceholder": {
+      "en": "Brief description of teaching background…",
+      "uz": "Pedagogik tajriba haqida qisqacha maʼlumot…",
+      "ru": "Краткое описание педагогического опыта…"
+    },
+    "teachers.form.hourlyRateNumber": {
+      "en": "Hourly rate must be a positive number",
+      "uz": "Soatlik narx musbat son boʻlishi kerak",
+      "ru": "Часовая ставка должна быть положительным числом"
+    },
+    "teachers.form.experienceNumber": {
+      "en": "Experience must be a positive number",
+      "uz": "Tajriba musbat son boʻlishi kerak",
+      "ru": "Опыт должен быть положительным числом"
+    }
+  }
+}

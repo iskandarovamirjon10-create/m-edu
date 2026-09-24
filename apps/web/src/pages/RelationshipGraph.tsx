@@ -3,9 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import {
   PageHeader,
   PageLoader,
+  ErrorState,
   EmptyState,
+  GlassInput,
+  GlassSelect,
 } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { getErrorMessage } from '@/lib/errorMessages';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface GraphNode {
   id: string;
@@ -30,7 +35,8 @@ interface GraphData {
 }
 
 export function RelationshipGraphPage() {
-  usePageTitle('Relationship Graph');
+  const { t } = useI18n();
+  usePageTitle(t('relationshipGraph.title'));
 
   const [entityType, setEntityType] = useState('STUDENT');
   const [entityId, setEntityId] = useState('');
@@ -51,51 +57,48 @@ export function RelationshipGraphPage() {
   const graph = graphQuery.data;
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <PageHeader
-          title="Relationship Graph"
-          subtitle="Explore connections between students, teachers, groups, courses, and payments"
+          title={t('relationshipGraph.title')}
+          subtitle={t('relationshipGraph.subtitle')}
         />
 
-        <div className="glass-card p-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted">Entity type</label>
-              <select
-                value={entityType}
-                onChange={(e) => setEntityType(e.target.value)}
-                className="rounded-xl border border-[var(--border-medium)] bg-[var(--bg-glass)] px-3 py-2 text-sm"
-              >
-                {['STUDENT', 'TEACHER', 'GROUP', 'COURSE', 'LEAD', 'PAYMENT', 'EMPLOYEE'].map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-              <label className="text-xs text-muted">Entity ID</label>
-              <input
-                type="text"
-                value={entityId}
-                onChange={(e) => setEntityId(e.target.value)}
-                placeholder="Paste the entity UUID or ID"
-                className="rounded-xl border border-[var(--border-medium)] bg-[var(--bg-glass)] px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-        </div>
+ <div className="glass-card p-4">
+ <div className="flex flex-wrap items-end gap-3">
+ <GlassSelect
+ label={t('communication.entityType')}
+ value={entityType}
+ onChange={(e) => setEntityType(e.target.value)}
+ className="w-auto"
+ >
+ {['STUDENT', 'TEACHER', 'GROUP', 'COURSE', 'LEAD', 'PAYMENT', 'EMPLOYEE'].map((type) => (
+ <option key={type} value={type}>{t(`enum.badge.${type}`)}</option>
+ ))}
+ </GlassSelect>
+ <div className="flex-1 min-w-[200px]">
+ <GlassInput
+ label={t('dg.entityId')}
+ type="text"
+ value={entityId}
+ onChange={(e) => setEntityId(e.target.value)}
+ placeholder={t('relationshipGraph.idPlaceholder')}
+ />
+ </div>
+ </div>
+ </div>
 
         <div className="glass-card p-4 space-y-2">
-          <h3 className="font-semibold text-[var(--text-primary)]">Relationship types</h3>
+          <h3 className="font-semibold text-[var(--text-primary)]">{t('relationshipGraph.typesTitle')}</h3>
           <ul className="text-sm space-y-1.5 text-muted">
-            <li>• <strong className="text-[var(--text-primary)]">STUDENT</strong> → ENROLLED_IN (group) · ASSIGNED_TO (teacher) · MADE (payment)</li>
-            <li>• <strong className="text-[var(--text-primary)]">TEACHER</strong> → TEACHES (group) · CREATED (course) · ASSIGNED_TO (group)</li>
-            <li>• <strong className="text-[var(--text-primary)]">GROUP</strong> → BELONGS_TO (course) · HAS_STUDENT (student)</li>
-            <li>• <strong className="text-[var(--text-primary)]">COURSE</strong> → HAS_GROUP (group) · CREATED_BY (teacher)</li>
-            <li>• <strong className="text-[var(--text-primary)]">LEAD</strong> → CONVERTED_TO (student) · ASSIGNED_TO (user)</li>
-            <li>• <strong className="text-[var(--text-primary)]">PAYMENT</strong> → MADE_BY (student) · FOR (group)</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('enum.badge.STUDENT')}</strong> {t('relationshipGraph.rel.student')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('enum.badge.TEACHER')}</strong> {t('relationshipGraph.rel.teacher')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('enum.badge.GROUP')}</strong> {t('relationshipGraph.rel.group')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('enum.badge.COURSE')}</strong> {t('relationshipGraph.rel.course')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('enum.badge.LEAD')}</strong> {t('relationshipGraph.rel.lead')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('enum.badge.PAYMENT')}</strong> {t('relationshipGraph.rel.payment')}</li>
           </ul>
         </div>
 
@@ -103,17 +106,24 @@ export function RelationshipGraphPage() {
           {!entityId ? (
             <div className="p-8">
               <EmptyState
-                title="Enter an entity ID"
-                message="Select a type and paste an entity ID above to explore its relationships."
+                title={t('relationshipGraph.emptyTitle')}
+                message={t('relationshipGraph.emptyMessage')}
               />
             </div>
           ) : graphQuery.isLoading ? (
-            <div className="p-8"><PageLoader label="Loading graph…" /></div>
+            <div className="p-8"><PageLoader label={t('relationshipGraph.loading')} /></div>
+          ) : graphQuery.isError ? (
+            <div className="p-8">
+              <ErrorState
+                message={getErrorMessage(graphQuery.error)}
+                onRetry={() => graphQuery.refetch()}
+              />
+            </div>
           ) : !graph || graph.nodes.length === 0 ? (
             <div className="p-8">
               <EmptyState
-                title="No relationships found"
-                message="This entity has no connections in the system."
+                title={t('relationshipGraph.noResultsTitle')}
+                message={t('relationshipGraph.noResultsMessage')}
               />
             </div>
           ) : (
@@ -121,7 +131,7 @@ export function RelationshipGraphPage() {
               {/* Nodes list */}
               <div>
                 <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-2">
-                  Entities ({graph.nodes.length})
+                  {t('relationshipGraph.entities', { n: graph.nodes.length })}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {graph.nodes.map((n) => (
@@ -145,7 +155,7 @@ export function RelationshipGraphPage() {
               {/* Edges list */}
               <div>
                 <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-2">
-                  Connections ({graph.edges.length})
+                  {t('relationshipGraph.connections', { n: graph.edges.length })}
                 </h4>
                 <div className="space-y-1">
                   {graph.edges.map((e, i) => (

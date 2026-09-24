@@ -14,7 +14,7 @@ function createMockPrisma() {
 }
 
 describe('CoursesService', () => {
-  let prisma: any;
+  let prisma: ReturnType<typeof createMockPrisma>;
   let svc: CoursesService;
 
   beforeEach(() => {

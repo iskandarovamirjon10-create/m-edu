@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { AllowAnyRole } from '../auth/roles.decorator';
 
 @ApiTags('Schedule')
 @ApiBearerAuth()
@@ -14,13 +15,17 @@ import { CurrentUser } from '../auth/current-user.decorator';
 export class ScheduleController {
   constructor(private readonly scheduleService: ScheduleService) {}
 
+  @AllowAnyRole()
   @Get()
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER', 'ASSISTANT', 'STUDENT')
   @ApiOperation({ summary: 'List schedules' })
   findAll(@CurrentUser('organizationId') orgId: string, @Query() query: ScheduleQuery) {
     return this.scheduleService.findAll(orgId, query);
   }
 
+  @AllowAnyRole()
   @Get(':id')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER', 'ASSISTANT', 'STUDENT')
   @ApiOperation({ summary: 'Get schedule entry' })
   findOne(@CurrentUser('organizationId') orgId: string, @Param('id') id: string) {
     return this.scheduleService.findOne(orgId, id);

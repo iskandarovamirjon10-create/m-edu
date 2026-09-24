@@ -1,0 +1,781 @@
+diff --git a/apps/api/src/camera/attendance-decision.engine.ts b/apps/api/src/camera/attendance-decision.engine.ts
+index cff3123..ed06593 100644
+--- a/apps/api/src/camera/attendance-decision.engine.ts
++++ b/apps/api/src/camera/attendance-decision.engine.ts
+@@ -5,6 +5,7 @@ import { SecureLogger } from '@medu/face-security';
+ 
+ import { PrismaService } from '../prisma/prisma.service';
+ import { getErrorMessage } from '../lib/error';
++import { EventEmitter2 } from '@nestjs/event-emitter';
+ 
+ /**
+  * Input received from the camera/recognition worker.
+@@ -70,7 +71,8 @@ interface ScheduleCandidate {
+ 
+ interface ResolvedGroup {
+   groupId: string;
+-  status: 'MATCHED' | 'NO_MATCH' | 'AMBIGUOUS';
++  status: 'MATCHED' | 'NO_MATCH' | 'AMBIGUOUS' | 'MODE_B_FALLBACK';
++  isLate?: boolean;
+ }
+ 
+ /**
+@@ -102,12 +104,15 @@ export class AttendanceDecisionEngine {
+   /**
+    * Schedule grace period.
+    *
+-   * Recognition is accepted up to 30 minutes before/after the scheduled
++   * Recognition is accepted up to 45 minutes before/after the scheduled
+    * lesson. This should remain a business rule, not a UI rule.
+    */
+-  private readonly scheduleGraceMinutes = 30;
++  private readonly scheduleGraceMinutes = 45;
+ 
+-  constructor(private readonly prisma: PrismaService) {}
++  constructor(
++    private readonly prisma: PrismaService,
++    private readonly eventEmitter: EventEmitter2,
++  ) {}
+ 
+   /**
+    * Main recognition → attendance decision pipeline.
+@@ -172,6 +177,12 @@ export class AttendanceDecisionEngine {
+       select: {
+         id: true,
+         userId: true,
++        user: {
++          select: {
++            firstName: true,
++            lastName: true,
++          },
++        },
+       },
+     });
+ 
+@@ -267,35 +278,8 @@ export class AttendanceDecisionEngine {
+       cameraLocation,
+     );
+ 
+-    if (resolvedGroup.status === 'NO_MATCH') {
+-      return this.persistDecisionEvent({
+-        ...baseEvent,
+-        decision: 'NO_SCHEDULED_GROUP',
+-        idempotencyKey: this.buildIdempotencyKey({
+-          organizationId: organization.id,
+-          cameraId: camera.id,
+-          studentId: student.id,
+-          groupId: 'no-schedule',
+-          recognizedAt,
+-        }),
+-      });
+-    }
+-
+-    if (resolvedGroup.status === 'AMBIGUOUS') {
+-      return this.persistDecisionEvent({
+-        ...baseEvent,
+-        decision: 'AMBIGUOUS_SCHEDULE',
+-        idempotencyKey: this.buildIdempotencyKey({
+-          organizationId: organization.id,
+-          cameraId: camera.id,
+-          studentId: student.id,
+-          groupId: 'ambiguous-schedule',
+-          recognizedAt,
+-        }),
+-      });
+-    }
+-
+     const groupId = resolvedGroup.groupId;
++    const isLate = resolvedGroup.isLate ?? false;
+ 
+     /**
+      * IMPORTANT:
+@@ -391,13 +375,14 @@ export class AttendanceDecisionEngine {
+            *
+            * Database uniqueness remains the final concurrency guarantee.
+            */
++          const finalStatus = isLate ? 'LATE' : 'PRESENT';
+           const attendance = await tx.attendance.create({
+             data: {
+               organizationId: organization.id,
+               studentId: student.id,
+               groupId,
+               date: attendanceDate,
+-              status: 'PRESENT',
++              status: finalStatus,
+               source: 'FACE',
+ 
+               confidence: baseEvent.confidence,
+@@ -431,8 +416,23 @@ export class AttendanceDecisionEngine {
+               groupId,
+               attendanceId: attendance.id,
+               cameraId: camera.id,
++              status: finalStatus,
+             },
+           );
++          
++          const studentName = [student.user.firstName, student.user.lastName]
++            .filter(Boolean)
++            .join(' ');
++            
++          this.eventEmitter.emit('attendance:recorded', {
++             studentId: student.id,
++             groupId: groupId,
++             studentName: studentName,
++             status: finalStatus,
++             source: 'CAMERA',
++             confidence: baseEvent.confidence ?? 0,
++             timestamp: recognizedAt.toISOString(),
++          });
+ 
+           return {
+             decision: 'RECORDED' as const,
+@@ -526,7 +526,8 @@ export class AttendanceDecisionEngine {
+     const normalizedCameraLocation =
+       this.normalizeLocation(cameraLocation);
+ 
+-    const candidates: ScheduleCandidate[] = [];
++    const candidates: (ScheduleCandidate & { isLate: boolean })[] = [];
++    const todayUpcoming: ScheduleCandidate[] = [];
+ 
+     for (const enrollment of enrollments) {
+       for (const schedule of enrollment.group.schedules) {
+@@ -547,6 +548,22 @@ export class AttendanceDecisionEngine {
+           continue;
+         }
+ 
++        const isLate = currentMinutes > startMinutes + 15;
++
++        if (startMinutes > currentMinutes) {
++           todayUpcoming.push({
++             groupId: enrollment.groupId,
++             groupName: enrollment.group.name,
++             room: this.normalizeOptional(enrollment.group.room),
++             schedule: {
++               dayOfWeek: schedule.dayOfWeek,
++               startTime: schedule.startTime,
++               endTime: schedule.endTime,
++               room: this.normalizeOptional(schedule.room),
++             },
++           });
++        }
++
+         /**
+          * Normal schedule.
+          */
+@@ -594,15 +611,34 @@ export class AttendanceDecisionEngine {
+             endTime: schedule.endTime,
+             room: this.normalizeOptional(schedule.room),
+           },
++          isLate,
+         });
+       }
+     }
+ 
+-    if (candidates.length === 0) {
++    const handleModeBFallback = (): ResolvedGroup => {
++      if (todayUpcoming.length > 0) {
++        todayUpcoming.sort((a, b) => {
++          const aStart = this.parseTimeToMinutes(a.schedule.startTime) || 0;
++          const bStart = this.parseTimeToMinutes(b.schedule.startTime) || 0;
++          return aStart - bStart;
++        });
++        return {
++          status: 'MODE_B_FALLBACK',
++          groupId: todayUpcoming[0].groupId,
++          isLate: false,
++        };
++      }
++      
+       return {
+-        status: 'NO_MATCH',
+-        groupId: '',
++        status: 'MODE_B_FALLBACK',
++        groupId: enrollments[0].groupId,
++        isLate: false,
+       };
++    };
++
++    if (candidates.length === 0) {
++      return handleModeBFallback();
+     }
+ 
+     /**
+@@ -629,6 +665,7 @@ export class AttendanceDecisionEngine {
+         return {
+           status: 'MATCHED',
+           groupId: roomCandidates[0].groupId,
++          isLate: roomCandidates[0].isLate,
+         };
+       }
+ 
+@@ -641,28 +678,14 @@ export class AttendanceDecisionEngine {
+           return {
+             status: 'MATCHED',
+             groupId: roomCandidates[0].groupId,
++            isLate: roomCandidates[0].isLate,
+           };
+         }
+ 
+-        return {
+-          status: 'AMBIGUOUS',
+-          groupId: '',
+-        };
++        return handleModeBFallback();
+       }
+ 
+-      /**
+-       * Camera location was supplied but did not match a scheduled room.
+-       *
+-       * We deliberately do NOT use the first candidate because doing so
+-       * could assign attendance to the wrong classroom.
+-       *
+-       * If your business rule wants location to be only a preference,
+-       * change this branch explicitly and test it.
+-       */
+-      return {
+-        status: 'NO_MATCH',
+-        groupId: '',
+-      };
++      return handleModeBFallback();
+     }
+ 
+     /**
+@@ -678,13 +701,11 @@ export class AttendanceDecisionEngine {
+       return {
+         status: 'MATCHED',
+         groupId: candidates[0].groupId,
++        isLate: candidates[0].isLate,
+       };
+     }
+ 
+-    return {
+-      status: 'AMBIGUOUS',
+-      groupId: '',
+-    };
++    return handleModeBFallback();
+   }
+ 
+   /**
+@@ -1049,12 +1070,13 @@ export class AttendanceDecisionEngine {
+   ): string | null {
+     const normalized = this.normalizeOptional(value);
+ 
++    if (!normalized) return null;
++
+     return normalized
+-      ? normalized
+-          .normalize('NFKC')
+-          .replace(/\s+/g, ' ')
+-          .toLowerCase()
+-      : null;
++      .normalize('NFKC')
++      .replace(/\s+/g, ' ')
++      .replace(/^room\s+/i, '')
++      .toLowerCase();
+   }
+ 
+   private normalizeOptional(
+diff --git a/apps/api/src/camera/camera-worker-manager.service.ts b/apps/api/src/camera/camera-worker-manager.service.ts
+index 90b7a0d..2963c70 100644
+--- a/apps/api/src/camera/camera-worker-manager.service.ts
++++ b/apps/api/src/camera/camera-worker-manager.service.ts
+@@ -7,10 +7,11 @@ import {
+   OnModuleDestroy,
+   OnModuleInit,
+ } from '@nestjs/common';
++import { EventEmitter2 } from '@nestjs/event-emitter';
+ import type { Camera } from '@prisma/client';
+ 
+ import { SecureLogger } from '@medu/face-security';
+-import type { FaceEngine } from '@medu/core';
++import { FaceEmbedding, type FaceEngine } from '@medu/core';
+ import type {
+   CredentialVault,
+   VaultCredentials,
+@@ -19,7 +20,7 @@ import type {
+ import { getErrorMessage } from '../lib/error';
+ import { PrismaService } from '../prisma/prisma.service';
+ import { AttendanceDecisionEngine } from './attendance-decision.engine';
+-import { CameraWorkerSession } from './camera-worker-session';
++import { CameraWorkerSession, type EnrolledTemplate } from './camera-worker-session';
+ import { CameraAlertingService } from './camera-alerting.service';
+ 
+ interface CameraFaceEngine extends FaceEngine {
+@@ -105,9 +106,15 @@ export class CameraWorkerManagerService
+   private faceEngine!: CameraFaceEngine;
+   private attendanceEngine!: AttendanceDecisionEngine;
+ 
++  private readonly templateCaches = new Map<string, {
++    templates: EnrolledTemplate[];
++    lastUpdated: number;
++  }>();
++
+   constructor(
+     private readonly prisma: PrismaService,
+     private readonly alerting: CameraAlertingService,
++    private readonly eventEmitter: EventEmitter2,
+   ) {}
+ 
+   // ============================================================
+@@ -120,7 +127,7 @@ export class CameraWorkerManagerService
+     await this.initializeFaceEngine();
+ 
+     this.attendanceEngine =
+-      new AttendanceDecisionEngine(this.prisma);
++      new AttendanceDecisionEngine(this.prisma, this.eventEmitter);
+ 
+     await this.startEnabledCameras();
+   }
+@@ -242,6 +249,7 @@ export class CameraWorkerManagerService
+         throw new Error(
+           'Face engine initialization failed in production. ' +
+             `Camera recognition cannot start safely: ${message}`,
++          { cause: err },
+         );
+       }
+ 
+@@ -405,6 +413,7 @@ export class CameraWorkerManagerService
+           this.attendanceEngine,
+           this.prisma,
+           this.credentialVault.encryption,
++          async () => this.getOrganizationTemplates(organizationId),
+         );
+ 
+       const worker: WorkerRecord = {
+@@ -1060,6 +1069,7 @@ export class CameraWorkerManagerService
+     // embedded newlines or other non-printable characters could be interpreted
+     // as multiple arguments by FFmpeg's CLI parser (`-i` followed by a line
+     // break and another option), allowing option injection.
++    // eslint-disable-next-line no-control-regex
+     if (/[\r\n\x00-\x1F]/.test(normalized)) {
+       throw new Error(
+         'Stream path contains invalid control characters.',
+@@ -1213,4 +1223,66 @@ export class CameraWorkerManagerService
+         ),
+     );
+   }
++
++  // ============================================================
++  // SHARED TEMPLATE CACHE
++  // ============================================================
++
++  private async getOrganizationTemplates(
++    organizationId: string,
++  ): Promise<EnrolledTemplate[]> {
++    const now = Date.now();
++    const cache = this.templateCaches.get(organizationId);
++
++    if (cache && now - cache.lastUpdated < 30_000) {
++      return cache.templates;
++    }
++
++    const rawTemplates = await this.prisma.faceTemplate.findMany({
++      where: {
++        organizationId,
++        status: 'ACTIVE',
++      },
++      select: {
++        id: true,
++        studentId: true,
++        templateData: true,
++      },
++    });
++
++    const parsed: EnrolledTemplate[] = [];
++
++    for (const template of rawTemplates) {
++      try {
++        if (!template.templateData) {
++          continue;
++        }
++
++        const decrypted = await this.credentialVault.encryption.decrypt(
++          template.templateData,
++        );
++
++        const embedding = FaceEmbedding.deserialize(decrypted);
++
++        parsed.push({
++          id: template.id,
++          studentId: template.studentId,
++          embedding,
++        });
++      } catch (err: unknown) {
++        this.logger.warn('Invalid face template skipped in shared cache', {
++          organizationId,
++          templateId: template.id,
++          error: getErrorMessage(err),
++        });
++      }
++    }
++
++    this.templateCaches.set(organizationId, {
++      templates: parsed,
++      lastUpdated: now,
++    });
++
++    return parsed;
++  }
+ }
+\ No newline at end of file
+diff --git a/apps/api/src/camera/camera-worker-session.ts b/apps/api/src/camera/camera-worker-session.ts
+index 94d5367..0331298 100644
+--- a/apps/api/src/camera/camera-worker-session.ts
++++ b/apps/api/src/camera/camera-worker-session.ts
+@@ -41,7 +41,7 @@ export interface CameraWorkerConfig {
+   similarityThreshold: number;
+ }
+ 
+-interface EnrolledTemplate {
++export interface EnrolledTemplate {
+   id: string;
+   studentId: string;
+   embedding: FaceEmbedding;
+@@ -131,11 +131,8 @@ export class CameraWorkerSession extends EventEmitter {
+ 
+   private frameProcessing = false;
+ 
+-  private activeTemplatesCache:
+-    | EnrolledTemplate[]
+-    | null = null;
+-
+-  private lastTemplateCacheUpdate = 0;
++  private activeTimeouts: NodeJS.Timeout[] = [];
++  private disposed = false;
+ 
+   private stopped = false;
+ 
+@@ -143,8 +140,9 @@ export class CameraWorkerSession extends EventEmitter {
+     config: CameraWorkerConfig,
+     faceEngine: FaceEngine,
+     attendanceEngine: AttendanceDecisionEngine,
+-    prisma: Pick<PrismaService, 'faceTemplate'>,
++    prisma: PrismaService,
+     encryption: EncryptionPort,
++    private readonly getTemplates: () => Promise<EnrolledTemplate[]>,
+   ) {
+     super();
+ 
+@@ -230,10 +228,6 @@ export class CameraWorkerSession extends EventEmitter {
+ 
+     this.queue.clear();
+ 
+-    this.activeTemplatesCache = null;
+-
+-    this.lastTemplateCacheUpdate = 0;
+-
+     try {
+       await this.stopIngester();
+     } finally {
+@@ -594,27 +588,16 @@ export class CameraWorkerSession extends EventEmitter {
+     > = new Map();
+ 
+     const templates =
+-      await this.getEnrolledTemplates();
++      await this.getTemplates();
+ 
+     if (templates.length === 0) {
+       return;
+     }
+ 
+-    // ----------------------------------------------------------
+-    // PROCESS EACH FACE SEQUENTIALLY
+-    // Sequential: ONNX inference session is single-request-at-a-time.
+-    // ----------------------------------------------------------
+-
+-    for (
+-      let faceIndex = 0;
+-      faceIndex < faceCount;
+-      faceIndex++
+-    ) {
++    const promises = facesToProcess.map(async (face, faceIndex) => {
+       /**
+        * Deadline check: abandon the rest of this frame if we have
+-       * exceeded MAX_PROCESSING_TIME_MS. This prevents a "hard"
+-       * frame (heavy occlusion, extreme lighting) from consuming
+-       * all frame budget and cascading into the next frame's timing.
++       * exceeded MAX_PROCESSING_TIME_MS.
+        */
+       if (
+         Date.now() - processingStartedAt >
+@@ -624,119 +607,102 @@ export class CameraWorkerSession extends EventEmitter {
+           'Frame processing deadline exceeded — remaining faces skipped',
+           {
+             cameraId: this.cameraId,
+-            organizationId:
+-              this.organizationId,
++            organizationId: this.organizationId,
+             facesProcessed: faceIndex,
+-            facesRemaining:
+-              faceCount - faceIndex,
++            facesRemaining: faceCount - faceIndex,
+           },
+         );
+-        break;
++        return null;
+       }
+ 
+-      const face = facesToProcess[faceIndex];
+-
+       // ----------------------------------------------------------
+       // QUALITY GATE
+       // ----------------------------------------------------------
+-
+-      const quality =
+-        await this.faceEngine.assessQuality({
+-          imageBuffer: frame.buffer,
+-          face,
+-        });
++      const quality = await this.faceEngine.assessQuality({
++        imageBuffer: frame.buffer,
++        face,
++      });
+ 
+       if (
+         !quality.passesThreshold ||
+-        quality.overallScore <
+-          MIN_QUALITY_SCORE
++        quality.overallScore < MIN_QUALITY_SCORE
+       ) {
+-        continue;
++        return null;
+       }
+ 
+       // ----------------------------------------------------------
+       // LIVENESS GATE
+       // ----------------------------------------------------------
+-
+-      if (
+-        typeof this.faceEngine
+-          .checkLiveness !== 'function'
+-      ) {
++      if (typeof this.faceEngine.checkLiveness !== 'function') {
+         this.logger.error(
+           'Recognition rejected because liveness engine is unavailable',
+           {
+             cameraId: this.cameraId,
+-            organizationId:
+-              this.organizationId,
++            organizationId: this.organizationId,
+           },
+         );
+-        continue;
++        return null;
+       }
+ 
+-      const liveness =
+-        await this.faceEngine.checkLiveness({
+-          imageBuffer: frame.buffer,
+-          face,
+-        });
++      const liveness = await this.faceEngine.checkLiveness({
++        imageBuffer: frame.buffer,
++        face,
++      });
+ 
+-      if (
+-        liveness.decision !== 'PASS'
+-      ) {
+-        continue;
++      if (liveness.decision !== 'PASS') {
++        return null;
+       }
+ 
+       // ----------------------------------------------------------
+       // EMBEDDING
+       // ----------------------------------------------------------
+-
+-      const probeEmbedding =
+-        await this.faceEngine.generateEmbedding({
+-          imageBuffer: frame.buffer,
+-          face,
+-        });
++      const probeEmbedding = await this.faceEngine.generateEmbedding({
++        imageBuffer: frame.buffer,
++        face,
++      });
+ 
+       // ----------------------------------------------------------
+       // TEMPLATE MATCHING
+       // ----------------------------------------------------------
+-
+-      const match =
+-        await this.findBestMatch(
+-          probeEmbedding,
+-          templates,
+-        );
++      const match = await this.findBestMatch(
++        probeEmbedding,
++        templates,
++      );
+ 
+       if (!match) {
+-        continue;
++        return null;
+       }
+ 
+-      /**
+-       * Deduplication: if the same student appeared in a
+-       * previous face of this frame with equal-or-better
+-       * similarity, skip this result.
+-       */
+-      const existing =
+-        attendedStudents.get(
+-          match.studentId,
+-        );
++      return { match, qualityScore: quality.overallScore };
++    });
+ 
+-      if (
+-        existing &&
+-        existing.similarity >=
+-          match.similarity *
+-            FACE_SIMILARITY_DEDUP_THRESHOLD
+-      ) {
+-        continue;
+-      }
++    const results = await Promise.allSettled(promises);
+ 
+-      attendedStudents.set(
+-        match.studentId,
+-        {
++    for (const result of results) {
++      if (result.status === 'fulfilled' && result.value) {
++        const { match, qualityScore } = result.value;
++
++        /**
++         * Deduplication: if the same student appeared in a
++         * previous face of this frame with equal-or-better
++         * similarity, skip this result.
++         */
++        const existing = attendedStudents.get(match.studentId);
++
++        if (
++          existing &&
++          existing.similarity >=
++            match.similarity * FACE_SIMILARITY_DEDUP_THRESHOLD
++        ) {
++          continue;
++        }
++
++        attendedStudents.set(match.studentId, {
+           studentId: match.studentId,
+           similarity: match.similarity,
+-          qualityScore:
+-            quality.overallScore,
+-        },
+-      );
++          qualityScore,
++        });
++      }
+     }
+ 
+     /**
+@@ -857,106 +823,13 @@ export class CameraWorkerSession extends EventEmitter {
+   }
+ 
+   // ============================================================
+-  // TEMPLATE CACHE
+-  // ============================================================
+-
+-  private async getEnrolledTemplates(): Promise<
+-    EnrolledTemplate[]
+-  > {
+-    const now = Date.now();
+-
+-    if (
+-      this.activeTemplatesCache &&
+-      now -
+-        this.lastTemplateCacheUpdate <
+-        TEMPLATE_CACHE_TTL_MS
+-    ) {
+-      return this.activeTemplatesCache;
+-    }
+-
+-    const rawTemplates =
+-      await this.prisma.faceTemplate.findMany(
+-        {
+-          where: {
+-            organizationId:
+-              this.organizationId,
+-
+-            status: 'ACTIVE',
+-          },
+-
+-          select: {
+-            id: true,
+-            studentId: true,
+-            templateData: true,
+-          },
+-        },
+-      );
+-
+-    const parsed: EnrolledTemplate[] =
+-      [];
+-
+-    for (const template of rawTemplates) {
+-      try {
+-        if (
+-          !template.templateData
+-        ) {
+-          continue;
+-        }
+-
+-        const decrypted =
+-          await this.encryption.decrypt(
+-            template.templateData,
+-          );
+-
+-        const embedding =
+-          FaceEmbedding.deserialize(
+-            decrypted,
+-          );
+-
+-        parsed.push({
+-          id: template.id,
+-          studentId:
+-            template.studentId,
+-          embedding,
+-        });
+-      } catch (err: unknown) {
+-        /**
+-         * A corrupted biometric template must
+-         * never crash the entire camera worker.
+-         *
+-         * It is excluded from matching and logged
+-         * without exposing biometric contents.
+-         */
+-        this.logger.warn(
+-          'Invalid face template skipped',
+-          {
+-            cameraId:
+-              this.cameraId,
+-            templateId:
+-              template.id,
+-            error:
+-              getErrorMessage(err),
+-          },
+-        );
+-      }
+-    }
+-
+-    this.activeTemplatesCache =
+-      parsed;
+-
+-    this.lastTemplateCacheUpdate =
+-      now;
+-
+-    return parsed;
+-  }
+ 
+   /**
+    * Allows future external invalidation after
+    * enrollment/revoke operations.
+    */
+   invalidateTemplateCache(): void {
+-    this.activeTemplatesCache = null;
+-    this.lastTemplateCacheUpdate = 0;
++    this.activeTimeouts = [];
+   }
+ 
+   // ============================================================

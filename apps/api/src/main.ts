@@ -9,6 +9,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import * as express from 'express';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './filters/http-exception.filter';
 import { RequestLoggerMiddleware } from './config/request-logger.middleware';
@@ -37,6 +38,43 @@ async function bootstrap() {
   app.use(cookieParser());
   app.use(express.json({ limit: BODY_LIMIT }));
   app.use(express.urlencoded({ extended: true, limit: BODY_LIMIT }));
+  // CORS origins — computed before helmet so CSP connectSrc can reference them.
+  const corsOrigin = process.env.CORS_ORIGIN?.trim();
+  const corsOriginList = corsOrigin
+    ? corsOrigin.split(',').map((o) => o.trim())
+    : process.env.NODE_ENV === 'production'
+      ? []
+      : ['http://localhost:3000', 'http://localhost:5173'];
+
+  // Security headers. Swagger UI is served under /api/docs — allow its
+  // inline styles/scripts/eval only for that path so CSP does not break docs.
+  // The API itself serves no HTML (SPA is a separate origin/static host), so
+  // a strict default-src 'none' style policy is safe; connect-src must allow
+  // the SPA origin when CORS_ORIGIN is configured (browser applies CSP on
+  // navigation responses; fetch/XHR from the SPA are governed by CORS).
+  const cspDirectives: Record<string, string[] | null> = {
+    defaultSrc: ["'none'"],
+    frameAncestors: ["'none'"],
+    baseUri: ["'none'"],
+    formAction: ["'none'"],
+    // Swagger (dev only) needs inline styles/scripts; prod API returns JSON only.
+    scriptSrc: process.env.NODE_ENV === 'production' ? ["'none'"] : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+    styleSrc: process.env.NODE_ENV === 'production' ? ["'none'"] : ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", 'data:', 'blob:'],
+    connectSrc: ["'self'", ...corsOriginList],
+    fontSrc: ["'self'", 'data:'],
+    objectSrc: ["'none'"],
+    upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+  };
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: cspDirectives as never,
+      },
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
   // OAuth state session (PostgreSQL-backed, tiny + short-lived) — must be
   // registered BEFORE passport so the Google strategy's state:true can
   // persist/verify its CSRF nonce in req.session.
@@ -56,13 +94,8 @@ async function bootstrap() {
     expressApp.set('trust proxy', Number.isFinite(hops) && hops > 0 ? hops : true);
   }
 
-  const corsOrigin = process.env.CORS_ORIGIN?.trim();
   app.enableCors({
-    origin: corsOrigin
-      ? corsOrigin.split(',').map((o) => o.trim())
-      : (process.env.NODE_ENV === 'production'
-          ? false
-          : ['http://localhost:3000', 'http://192.168.0.6:3000']),
+    origin: corsOriginList.length > 0 ? corsOriginList : false,
     credentials: true,
   });
 

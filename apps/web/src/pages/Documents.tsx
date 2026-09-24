@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, GlassButton, TextInput, Select, TextArea, GlassModal, Field } from '@/components/ui';
+import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, GlassButton, TextInput, Select, TextArea, GlassModal, Field, ConfirmDialog } from '@/components/ui';
 import { useToast } from '@/components/ui/GlassToast';
 import { documentsApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface Document {
   id: string;
@@ -23,16 +24,16 @@ interface Document {
 }
 
 const CATEGORIES = [
-  { value: '', label: 'All categories' },
-  { value: 'CONTRACT', label: 'Contracts' },
-  { value: 'ID', label: 'ID Documents' },
-  { value: 'CERTIFICATE', label: 'Certificates' },
-  { value: 'REPORT', label: 'Reports' },
-  { value: 'INVOICE', label: 'Invoices' },
-  { value: 'POLICY', label: 'Policies' },
-  { value: 'CURRICULUM', label: 'Curriculum' },
-  { value: 'MEDIA', label: 'Media' },
-  { value: 'OTHER', label: 'Other' },
+  { value: '', labelKey: 'documents.category.all' },
+  { value: 'CONTRACT', labelKey: 'documents.category.CONTRACT' },
+  { value: 'ID', labelKey: 'documents.category.ID' },
+  { value: 'CERTIFICATE', labelKey: 'documents.category.CERTIFICATE' },
+  { value: 'REPORT', labelKey: 'documents.category.REPORT' },
+  { value: 'INVOICE', labelKey: 'documents.category.INVOICE' },
+  { value: 'POLICY', labelKey: 'documents.category.POLICY' },
+  { value: 'CURRICULUM', labelKey: 'documents.category.CURRICULUM' },
+  { value: 'MEDIA', labelKey: 'documents.category.MEDIA' },
+  { value: 'OTHER', labelKey: 'documents.category.OTHER' },
 ];
 
 // Categories available in the create modal (no "All")
@@ -65,12 +66,15 @@ const EMPTY_FORM: CreateForm = {
 };
 
 export function DocumentsPage() {
-  usePageTitle('Documents');
+  const { t } = useI18n();
+  usePageTitle(t('documents.title'));
   const queryClient = useQueryClient();
   const toast = useToast();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [form, setForm] = useState<CreateForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -87,17 +91,21 @@ export function DocumentsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => documentsApi.remove(id),
     onSuccess: () => {
-      toast.success('Document deleted');
+      toast.success(t('documents.deleted'));
       queryClient.invalidateQueries({ queryKey: ['documents'] });
     },
-    onError: (e) => toast.error('Could not delete document', getErrorMessage(e)),
+    onError: (e) => toast.error(t('documents.deleteFailed'), getErrorMessage(e)),
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: Omit<CreateForm, 'tags'> & { tags: string[] }) => documentsApi.create(data),
+    mutationFn: (data: Omit<CreateForm, 'tags'> & { tags: string[] }) =>
+      editingId
+        ? documentsApi.update(editingId, data)
+        : documentsApi.create(data),
     onSuccess: () => {
-      toast.success('Document added');
+      toast.success(editingId ? t('documents.updated') : t('documents.added'));
       setCreateOpen(false);
+      setEditingId(null);
       setForm(EMPTY_FORM);
       setFormError(null);
       queryClient.invalidateQueries({ queryKey: ['documents'] });
@@ -105,23 +113,23 @@ export function DocumentsPage() {
     onError: (e) => setFormError(getErrorMessage(e)),
   });
 
-  const items: Document[] = (docsQuery.data as any)?.items ?? [];
+  const items: Document[] = docsQuery.data?.items ?? [];
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) {
-      setFormError('Title is required.');
+      setFormError(t('homework.titleRequired'));
       return;
     }
     if (!form.fileUrl.trim()) {
-      setFormError('File URL is required — upload the file to your storage and paste its link.');
+      setFormError(t('documents.fileUrlRequired'));
       return;
     }
     // Basic URL sanity so we don't create records with garbage links
     try {
       new URL(form.fileUrl.trim());
     } catch {
-      setFormError('File URL must be a valid link starting with http:// or https://');
+      setFormError(t('documents.fileUrlInvalid'));
       return;
     }
     const tags = form.tags
@@ -140,20 +148,20 @@ export function DocumentsPage() {
   };
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <div className="flex items-start justify-between">
           <PageHeader
-            title="Documents"
-            subtitle="Centralised file management with versioning, tags, and entity links"
+            title={t('documents.title')}
+            subtitle={t('documents.pageSubtitle')}
           />
           <GlassButton
             variant="primary"
-            onClick={() => { setCreateOpen(true); setFormError(null); }}
+            onClick={() => { setCreateOpen(true); setEditingId(null); setFormError(null); }}
           >
-            Add document
+            {t('documents.add')}
           </GlassButton>
         </div>
 
@@ -162,8 +170,8 @@ export function DocumentsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
               <TextInput
-                placeholder="Search documents…"
-                aria-label="Search documents"
+                placeholder={t('documents.searchPlaceholder')}
+                aria-label={t('documents.searchPlaceholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="search"
@@ -171,15 +179,15 @@ export function DocumentsPage() {
               <Select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                aria-label="Filter by category"
+                aria-label={t('documents.filterByCategory')}
               >
                 {CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
+                  <option key={c.value} value={c.value}>{t(c.labelKey)}</option>
                 ))}
               </Select>
             </div>
             <div className="text-sm text-muted sm:ml-4 sm:shrink-0">
-              {docsQuery.data ? `${docsQuery.data.total} documents` : '—'}
+              {docsQuery.data ? t('documents.count', { n: docsQuery.data.total }) : '—'}
             </div>
           </div>
         </div>
@@ -187,11 +195,11 @@ export function DocumentsPage() {
         {/* List */}
         <div className="glass-card overflow-hidden">
           {docsQuery.isLoading ? (
-            <div className="p-8"><PageLoader label="Loading documents…" /></div>
+            <div className="p-8"><PageLoader label={t('documents.loading')} /></div>
           ) : docsQuery.isError ? (
             <div className="p-8">
               <ErrorState
-                title="Failed to load documents"
+                title={t('documents.loadFailed')}
                 message={getErrorMessage(docsQuery.error)}
                 onRetry={() => docsQuery.refetch()}
               />
@@ -199,11 +207,11 @@ export function DocumentsPage() {
           ) : items.length === 0 ? (
             <div className="p-8">
               <EmptyState
-                title={search || category ? 'No matching documents' : 'No documents yet'}
+                title={search || category ? t('documents.emptySearch') : t('documents.empty')}
                 message={
                   search || category
-                    ? 'Try a different search term or category filter.'
-                    : 'Add contracts, IDs, certificates, and any other files here.'
+                    ? t('documents.emptySearchMessage')
+                    : t('documents.emptyMessage')
                 }
               />
             </div>
@@ -212,7 +220,7 @@ export function DocumentsPage() {
               {items.map((doc) => (
                 <li key={doc.id} className="px-4 py-3 flex items-start gap-3">
                   <div className="shrink-0 mt-0.5">
-                    <Badge color="primary">{doc.category}</Badge>
+                    <Badge color="primary">{(() => { const k = `documents.category.${doc.category}`; const v = t(k); return v === k ? doc.category : v; })()}</Badge>
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-sm text-[var(--text-primary)] truncate">
@@ -241,21 +249,38 @@ export function DocumentsPage() {
                     <GlassButton
                       size="sm"
                       variant="ghost"
-                      onClick={() => window.open(doc.fileUrl, '_blank', 'noopener,noreferrer')}
+                      onClick={() => {
+                        setEditingId(doc.id);
+                        setForm({
+                          title: doc.title,
+                          description: doc.description || '',
+                          category: doc.category,
+                          fileUrl: doc.fileUrl,
+                          mimeType: doc.mimeType,
+                          fileSize: doc.fileSize,
+                          tags: (doc.tags || []).join(', '),
+                        });
+                        setFormError(null);
+                        setCreateOpen(true);
+                      }}
+                      disabled={createMutation.isPending}
                     >
-                      Open
+                      {t('common.edit')}
                     </GlassButton>
                     <GlassButton
                       size="sm"
                       variant="ghost"
-                      onClick={() => {
-                        if (window.confirm(`Delete "${doc.title}"? This cannot be undone.`)) {
-                          deleteMutation.mutate(doc.id);
-                        }
-                      }}
+                      onClick={() => window.open(doc.fileUrl, '_blank', 'noopener,noreferrer')}
+                    >
+                      {t('common.open')}
+                    </GlassButton>
+                    <GlassButton
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDeleteTarget({ id: doc.id, title: doc.title })}
                       disabled={deleteMutation.isPending}
                     >
-                      Delete
+                      {t('common.delete')}
                     </GlassButton>
                   </div>
                 </li>
@@ -265,43 +290,55 @@ export function DocumentsPage() {
         </div>
       </div>
 
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteMutation.mutate(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        description={deleteTarget ? t('documents.deleteConfirm', { title: deleteTarget.title }) : ''}
+        loading={deleteMutation.isPending}
+      />
+
       <GlassModal
         open={createOpen}
-        onClose={() => { setCreateOpen(false); setFormError(null); }}
-        title="Add document"
+        onClose={() => { setCreateOpen(false); setEditingId(null); setFormError(null); }}
+        title={editingId ? t('documents.editTitle') : t('documents.add')}
       >
         <form onSubmit={handleCreate} className="space-y-4" noValidate>
-          <Field label="Title" required>
+          <Field label={t('documents.field.title')} required>
             <TextInput
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              placeholder="e.g. Tuition contract — 2026"
+              placeholder={t('documents.titlePlaceholder')}
               disabled={createMutation.isPending}
               autoFocus
             />
           </Field>
-          <Field label="Description">
+          <Field label={t('documents.field.description')}>
             <TextArea
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Optional description"
+              placeholder={t('common.optional')}
               disabled={createMutation.isPending}
               rows={2}
             />
           </Field>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Category">
+            <Field label={t('documents.field.category')}>
               <Select
                 value={form.category}
                 onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                 disabled={createMutation.isPending}
               >
                 {CREATE_CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
+                  <option key={c.value} value={c.value}>{t(c.labelKey)}</option>
                 ))}
               </Select>
             </Field>
-            <Field label="MIME type">
+            <Field label={t('documents.field.mimeType')}>
               <TextInput
                 value={form.mimeType}
                 onChange={(e) => setForm((f) => ({ ...f, mimeType: e.target.value }))}
@@ -310,7 +347,7 @@ export function DocumentsPage() {
               />
             </Field>
           </div>
-          <Field label="File URL" required>
+          <Field label={t('documents.field.fileUrl')} required>
             <TextInput
               value={form.fileUrl}
               onChange={(e) => setForm((f) => ({ ...f, fileUrl: e.target.value }))}
@@ -319,7 +356,7 @@ export function DocumentsPage() {
             />
           </Field>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="File size (bytes)">
+            <Field label={t('documents.field.fileSize')}>
               <TextInput
                 type="number"
                 min={0}
@@ -329,7 +366,7 @@ export function DocumentsPage() {
                 disabled={createMutation.isPending}
               />
             </Field>
-            <Field label="Tags" hint="Comma-separated">
+            <Field label={t('documents.field.tags')} hint={t('documents.tagsHint')}>
               <TextInput
                 value={form.tags}
                 onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
@@ -345,13 +382,17 @@ export function DocumentsPage() {
             <GlassButton
               type="button"
               variant="ghost"
-              onClick={() => { setCreateOpen(false); setFormError(null); }}
+              onClick={() => { setCreateOpen(false); setEditingId(null); setFormError(null); }}
               disabled={createMutation.isPending}
             >
-              Cancel
+              {t('common.cancel')}
             </GlassButton>
             <GlassButton type="submit" variant="primary" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Adding…' : 'Add document'}
+              {createMutation.isPending
+                ? t('common.saving')
+                : editingId
+                  ? t('common.save')
+                  : t('documents.add')}
             </GlassButton>
           </div>
         </form>

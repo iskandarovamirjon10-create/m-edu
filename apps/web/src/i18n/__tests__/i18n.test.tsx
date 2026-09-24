@@ -10,8 +10,7 @@ function Probe({ onReady }: { onReady: (t: (k: string) => string, locale: string
   const { t, locale } = useI18n();
   useEffect(() => {
     onReady(t, locale);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, locale]);
+      }, [t, locale]);
   return null;
 }
 

@@ -8,23 +8,25 @@ import { JwtStrategy } from './jwt.strategy';
 import { GoogleStrategy } from './google.strategy';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { PrismaModule } from '../prisma/prisma.module';
+import { ParentPortalModule } from '../parent-portal/parent-portal.module';
 
 @Module({
   imports: [
     PrismaModule,
+    ParentPortalModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: (config: ConfigService) => ({
-        secret:
-          config.get('JWT_SECRET') ||
-          (process.env.NODE_ENV === 'production'
-            ? (() => {
-                throw new Error('JWT_SECRET must be set in production');
-              })()
-            : 'medu-dev-secret-do-not-use-in-production'),
-        signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '24h') },
-      }),
+      useFactory: (config: ConfigService) => {
+        const secret = config.get('JWT_SECRET');
+        if (!secret) {
+          throw new Error('JWT_SECRET must be set in environment variables');
+        }
+        return {
+          secret,
+          signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '24h') },
+        };
+      },
       inject: [ConfigService],
     }),
   ],

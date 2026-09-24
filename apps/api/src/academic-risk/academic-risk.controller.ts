@@ -2,11 +2,14 @@ import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AcademicRiskService } from './academic-risk.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 
 @ApiTags('Academic Risk')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER')
 @Controller('academic-risk')
 export class AcademicRiskController {
   constructor(private readonly academicRiskService: AcademicRiskService) {}

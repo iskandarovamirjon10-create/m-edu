@@ -3,6 +3,30 @@
 // (access_token). This file NEVER stores or sends tokens in headers
 // or browser storage. Credentials are included so cookies travel.
 
+import type { DashboardStats } from './types';
+import type {
+  Anomaly,
+  CashFlowData,
+  CRMAgingResponse,
+  CRMFunnelResponse,
+  CRMLostReasonsResponse,
+  CRMModeratorStats,
+  CRMSources,
+  CRMVelocityResponse,
+  FinancialAnomaly,
+  ForecastResult,
+  ReconciliationData,
+  WhatIfSimulationData,
+} from '../types/analytics';
+import type {
+  DataAccessLog,
+  DataGovernancePolicy,
+  ExportLog,
+  ExportStats,
+  Paginated,
+  RetentionCheckResult,
+} from '../types/governance';
+
 export class ApiError extends Error {
   status: number;
   details?: unknown;
@@ -54,6 +78,43 @@ export function friendlyHttpMessage(status: number, serverMessage: string | null
 const DEFAULT_TIMEOUT_MS = 60_000;
 export type RequestOptions = RequestInit & { timeout?: number };
 
+/**
+ * API base path. Production builds honour `VITE_API_URL` (set in the Dockerfile
+ * / CI) so the SPA can talk to a separately deployed API host; development
+ * falls back to the Vite dev-server proxy at `/api`.
+ */
+const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
+
+/** Read the double-submit CSRF cookie, if the browser holds one. */
+function readXsrfCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * Guarantee the `XSRF-TOKEN` cookie exists before a mutating request.
+ *
+ * The API seeds the cookie on any response; hitting the public
+ * `/csrf-token` route first removes the race where a brand-new browser
+ * session submitted a mutation before any GET had returned (which used to
+ * surface as a confusing 403 “Invalid CSRF token”).
+ * Concurrent callers share one in-flight request.
+ */
+let csrfSeed: Promise<void> | null = null;
+async function ensureCsrfCookie(): Promise<void> {
+  if (typeof document === 'undefined' || readXsrfCookie()) return;
+  if (!csrfSeed) {
+    csrfSeed = fetch(`${API_BASE}/csrf-token`, { credentials: 'include', headers: { Accept: 'application/json' } })
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        csrfSeed = null;
+      });
+  }
+  await csrfSeed;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   // NO Authorization: Bearer header. The browser sends the HttpOnly cookie (access_token)
   // automatically when credentials are included. No token is read from storage.
@@ -61,6 +122,15 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> | undefined),
   };
+
+  const method = options.method?.toUpperCase() || 'GET';
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+    await ensureCsrfCookie();
+    const token = readXsrfCookie();
+    if (token) {
+      headers['x-xsrf-token'] = token;
+    }
+  }
 
   const controller = new AbortController();
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
@@ -71,7 +141,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   let res: Response;
   try {
     // credentials: 'include' is REQUIRED for HttpOnly cookie transport (same-origin and cross-origin with CORS credentials: true).
-    res = await fetch(`/api${path}`, {
+    res = await fetch(`${API_BASE}${path}`, {
       ...options,
       signal: controller.signal,
       headers,
@@ -93,8 +163,26 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (res.status === 401) {
-    userStore.clear();
-    if (onUnauthorized) onUnauthorized();
+    // Do NOT force sign-out/redirect for auth-probe or public-page requests:
+    // - /auth/me 401 on boot is normal when logged out (public pages, OAuth, reset links)
+    // - /auth/login 401 = wrong password, not a dead session (would log out other tabs)
+    const isAuthProbe =
+      path.startsWith('/auth/me') ||
+      path.startsWith('/auth/login') ||
+      path.startsWith('/auth/register') ||
+      path.startsWith('/auth/oauth') ||
+      path.startsWith('/auth/forgot') ||
+      path.startsWith('/auth/reset') ||
+      path.startsWith('/auth/parent-login');
+    const onPublic =
+      typeof window !== 'undefined' &&
+      /^\/(login|register|forgot-password|reset-password|terms|privacy|auth\/callback)/.test(
+        window.location.pathname,
+      );
+    if (!isAuthProbe && !onPublic) {
+      userStore.clear();
+      if (onUnauthorized) onUnauthorized();
+    }
     throw new ApiError(401, 'Your session has expired. Please sign in again.');
   }
 
@@ -179,6 +267,14 @@ export const leadsApi = {
     request(`/leads/${id}/stage`, { method: 'PATCH', body: JSON.stringify({ stage }) }),
   convert: (id: string, data: unknown) => request(`/leads/${id}/convert`, { method: 'POST', body: JSON.stringify(data) }),
   addActivity: (id: string, data: unknown) => request(`/leads/${id}/activities`, { method: 'POST', body: JSON.stringify(data) }),
+  getFollowUpRules: (params?: object) => request(`/leads/follow-up-rules${buildQuery(params)}`),
+  getFollowUps: (params?: object) => request(`/leads/follow-ups${buildQuery(params)}`),
+  getFollowUpStats: () => request('/leads/follow-ups/stats'),
+  createFollowUpRule: (data: unknown) => request('/leads/follow-up-rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateFollowUpRule: (id: string, data: unknown) => request(`/leads/follow-up-rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteFollowUpRule: (id: string) => request(`/leads/follow-up-rules/${id}`, { method: 'DELETE' }),
+  evaluateFollowUpRules: () => request('/leads/follow-up-rules/evaluate', { method: 'POST' }),
+  completeFollowUp: (id: string, data?: unknown) => request(`/leads/follow-ups/${id}/complete`, { method: 'POST', body: JSON.stringify(data ?? {}) }),
 };
 export const usersApi = {
   ...crud('/users'),
@@ -201,9 +297,40 @@ export const attendanceApi = {
   create: (data: unknown) => request('/attendance', { method: 'POST', body: JSON.stringify(data) }),
   list: (params?: object) => request(`/attendance${buildQuery(params)}`),
   analytics: (params?: object) => request(`/attendance/analytics${buildQuery(params)}`),
+  update: (id: string, data: unknown) =>
+    request(`/attendance/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) => request(`/attendance/${id}`, { method: 'DELETE' }),
 };
-export const dashboardApi = { stats: () => request('/dashboard/stats') };
-export const analyticsApi = { overview: () => request('/analytics/overview') };
+export const dashboardApi = {
+  stats: () => request<DashboardStats>('/dashboard/stats'),
+};
+export const analyticsApi = {
+  overview: () => request('/analytics/overview'),
+  detectAllAnomalies: (params?: object) => request<Anomaly[]>(`/analytics/anomalies${buildQuery(params)}`),
+  crmFunnel: (params?: object) => request<CRMFunnelResponse>(`/analytics/crm/funnel${buildQuery(params)}`),
+  crmSources: (params?: object) => request<CRMSources[]>(`/analytics/crm/sources${buildQuery(params)}`),
+  crmVelocity: (params?: object) => request<CRMVelocityResponse>(`/analytics/crm/velocity${buildQuery(params)}`),
+  crmLostReasons: (params?: object) => request<CRMLostReasonsResponse>(`/analytics/crm/lost-reasons${buildQuery(params)}`),
+  crmAging: (params?: object) => request<CRMAgingResponse>(`/analytics/crm/aging${buildQuery(params)}`),
+  crmModerators: (params?: object) => request<CRMModeratorStats[]>(`/analytics/crm/moderators${buildQuery(params)}`),
+  executiveSummary: (params?: object) => request(`/analytics/executive-summary${buildQuery(params)}`),
+  payrollSummary: (params?: object) => request(`/analytics/payroll/summary${buildQuery(params)}`),
+  payrollByTeacher: (params?: object) => request(`/analytics/payroll/by-teacher${buildQuery(params)}`),
+  payrollTrend: (params?: object) => request(`/analytics/payroll/trend${buildQuery(params)}`),
+  payrollRatio: (params?: object) => request(`/analytics/payroll/ratio${buildQuery(params)}`),
+  payrollEfficiency: (params?: object) => request(`/analytics/payroll/efficiency${buildQuery(params)}`),
+  whatIf: (params?: object) => request<WhatIfSimulationData>(`/analytics/financial/what-if${buildQuery(params)}`),
+  forecast: (params?: object) => request<ForecastResult>(`/analytics/financial/forecast${buildQuery(params)}`),
+  reconciliationReport: (params?: object) => request(`/analytics/reconciliation/report${buildQuery(params)}`),
+  reconciliationDiscrepancies: (params?: object) => request(`/analytics/reconciliation/discrepancies${buildQuery(params)}`),
+  studentBalances: (params?: object) => request(`/analytics/reconciliation/student-balances${buildQuery(params)}`),
+  reconciliationHistory: (params?: object) => request(`/analytics/reconciliation/history${buildQuery(params)}`),
+  cashFlow: (params?: object) => request<CashFlowData>(`/analytics/financial/cash-flow${buildQuery(params)}`),
+  // /analytics/financial/anomalies returns the lean FinancialAnomaly shape,
+  // not the richer Anomaly shape used by /analytics/anomalies.
+  anomalies: (params?: object) => request<FinancialAnomaly[]>(`/analytics/financial/anomalies${buildQuery(params)}`),
+  reconciliation: (params?: object) => request<ReconciliationData>(`/analytics/financial/reconciliation${buildQuery(params)}`),
+};
 export const libraryApi = {
   listBooks: (params?: object) => request(`/library/books${buildQuery(params)}`),
   searchBooks: (q: string) => request(`/library/books/search${buildQuery({ q })}`),
@@ -218,11 +345,29 @@ export const libraryApi = {
   stats: () => request('/library/stats'),
 };
 export const hrApi = {
-  listEmployees: (params?: object) => request(`/hr/employees${buildQuery(params)}`),
+  // Backend returns { employees, total, page, limit, totalPages } — normalize to { items, ... }.
+  listEmployees: async (params?: object) => {
+    const data = await request<{
+      employees: unknown[];
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/hr/employees${buildQuery(params)}`);
+    return {
+      items: data.employees,
+      total: data.total,
+      page: data.page,
+      limit: data.limit,
+      totalPages: data.totalPages,
+    };
+  },
   getEmployee: (id: string) => request(`/hr/employees/${id}`),
   createEmployee: (data: unknown) => request('/hr/employees', { method: 'POST', body: JSON.stringify(data) }),
   updateEmployee: (id: string, data: unknown) => request(`/hr/employees/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  terminateEmployee: (id: string, data: unknown) => request(`/hr/employees/${id}/terminate`, { method: 'POST', body: JSON.stringify(data) }),
+  // Controller reads @Body('reason') and rejects empty reason.
+  terminateEmployee: (id: string, data: { reason: string }) =>
+    request(`/hr/employees/${id}/terminate`, { method: 'POST', body: JSON.stringify(data) }),
   listLeaveRequests: (params?: object) => request(`/hr/leave-requests${buildQuery(params)}`),
   createLeaveRequest: (data: unknown) => request('/hr/leave-requests', { method: 'POST', body: JSON.stringify(data) }),
   approveLeave: (id: string) => request(`/hr/leave-requests/${id}/approve`, { method: 'POST' }),
@@ -233,13 +378,34 @@ export const hrApi = {
   processPayroll: (recordId: string) => request(`/hr/payroll/${recordId}/process`, { method: 'POST' }),
   stats: () => request('/hr/stats'),
 };
+// Backend returns { exams, total, ... } — normalize to Paginated-shaped { items, ... } for pages.
 export const examsApi = {
-  list: (params?: object) => request(`/exams${buildQuery(params)}`),
+  list: async (params?: object) => {
+    const data = await request<{
+      exams: unknown[];
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/exams${buildQuery(params)}`);
+    return {
+      items: data.exams,
+      total: data.total,
+      page: data.page,
+      limit: data.limit,
+      totalPages: data.totalPages,
+    };
+  },
   get: (id: string) => request(`/exams/${id}`),
   create: (data: unknown) => request('/exams', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: unknown) => request(`/exams/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  remove: (id: string) => request(`/exams/${id}`, { method: 'DELETE' }),
-  publish: (id: string) => request(`/exams/${id}/publish`, { method: 'POST' }),
+  remove: (id: string) => request<unknown>(`/exams/${id}`, { method: 'DELETE' }),
+  // PublishExamDto requires { isPublished }; force is NOT sent (product rule: results required).
+  publish: (id: string) =>
+    request(`/exams/${id}/publish`, {
+      method: 'POST',
+      body: JSON.stringify({ isPublished: true }),
+    }),
   results: (examId: string) => request(`/exams/${examId}/results`),
   addResult: (examId: string, data: unknown) => request(`/exams/${examId}/results`, { method: 'POST', body: JSON.stringify(data) }),
   stats: () => request('/exams/stats'),
@@ -284,6 +450,8 @@ export const faceApi = {
     request(`/face/enrollments/${id}/reenroll`, { method: 'POST', body: JSON.stringify({ reason }) }),
   revoke: (id: string, reason: string) =>
     request(`/face/enrollments/${id}/revoke`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  cancelPending: (id: string) =>
+    request(`/face/enrollments/${id}/pending`, { method: 'DELETE' }),
   startSession: (data: unknown) => request('/face/sessions', { method: 'POST', body: JSON.stringify(data) }),
   submitAttempt: (sessionId: string, imageBase64: string) =>
     request(`/face/sessions/${sessionId}/attempts`, { method: 'POST', body: JSON.stringify({ imageBase64 }) }),
@@ -359,4 +527,229 @@ export const securityApi = {
     request(`/security/alerts/${id}/resolve`, { method: 'POST', body: JSON.stringify({ note }) }),
 };
 
+export const apiKeysApi = {
+  list: (params?: object) => request(`/api-keys${buildQuery(params)}`),
+  create: (data: unknown) => request('/api-keys', { method: 'POST', body: JSON.stringify(data) }),
+  rotate: (id: string, data?: unknown) =>
+    request(`/api-keys/${id}/rotate`, { method: 'PUT', body: JSON.stringify(data ?? {}) }),
+  remove: (id: string) => request(`/api-keys/${id}`, { method: 'DELETE' }),
+  revoke: (id: string) => request(`/api-keys/${id}`, { method: 'DELETE' }),
+  scopes: () => request('/api-keys/scopes'),
+  usage: (params?: object) => request(`/api-keys/usage${buildQuery(params)}`),
+  usageStats: (params?: object) => request(`/api-keys/usage${buildQuery(params)}`),
+};
+
+export const automationApi = {
+  listRules: (params?: object) => request(`/automation/rules${buildQuery(params)}`),
+  getRule: (id: string) => request(`/automation/rules/${id}`),
+  createRule: (data: unknown) => request('/automation/rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateRule: (id: string, data: unknown) => request(`/automation/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteRule: (id: string) => request(`/automation/rules/${id}`, { method: 'DELETE' }),
+  toggleRule: (id: string) => request(`/automation/rules/${id}/toggle`, { method: 'PATCH' }),
+  evaluateRule: (id: string) => request(`/automation/rules/${id}/evaluate`, { method: 'POST' }),
+  evaluateAll: () => request('/automation/evaluate-all', { method: 'POST' }),
+  executions: (params?: object) => request(`/automation/executions${buildQuery(params)}`),
+  ruleStats: (id: string) => request(`/automation/rules/${id}/stats`),
+  stats: () => request('/automation/stats'),
+};
+
+export const branchesApi = {
+  ...crud('/branches'),
+  activate: (id: string) => request(`/branches/${id}/activate`, { method: 'PATCH' }),
+  deactivate: (id: string) => request(`/branches/${id}/deactivate`, { method: 'PATCH' }),
+  assignManager: (id: string, managerId: string) =>
+    request(`/branches/${id}/manager`, { method: 'PATCH', body: JSON.stringify({ managerId }) }),
+};
+
+export const chatApi = {
+  listConversations: (params?: object) => request(`/chat/conversations${buildQuery(params)}`),
+  createConversation: (data: unknown) => request('/chat/conversations', { method: 'POST', body: JSON.stringify(data) }),
+  getMessages: (conversationId: string, params?: object) =>
+    request(`/chat/conversations/${conversationId}/messages${buildQuery(params)}`),
+  sendMessage: (data: unknown) => request('/chat/messages', { method: 'POST', body: JSON.stringify(data) }),
+  markRead: (conversationId: string) => request(`/chat/conversations/${conversationId}/read`, { method: 'POST' }),
+};
+
+export const communicationApi = {
+  list: (params?: object) => request(`/communication/history${buildQuery(params)}`),
+  getTimeline: (entityType: string, entityId: string) => request(`/communication/timeline${buildQuery({ entityType, entityId })}`),
+  getHistory: (params?: object) => request(`/communication/history${buildQuery(params)}`),
+  getStats: () => request('/communication/stats'),
+};
+
+export const dataGovernanceApi = {
+  listPolicies: (params?: object) => request<DataGovernancePolicy[]>(`/data-governance/policies${buildQuery(params)}`),
+  createPolicy: (data: unknown) => request('/data-governance/policies', { method: 'POST', body: JSON.stringify(data) }),
+  updatePolicy: (id: string, data: unknown) => request(`/data-governance/policies/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deletePolicy: (id: string) => request(`/data-governance/policies/${id}`, { method: 'DELETE' }),
+  exportLogs: (params?: object) => request<Paginated<ExportLog>>(`/data-governance/export-log${buildQuery(params)}`),
+  getRetentionPolicies: () => request<DataGovernancePolicy[]>('/data-governance/retention-policies'),
+  // Backend exposes this as PUT /data-governance/retention-policies (upsert).
+  upsertRetentionPolicy: (data: unknown) => request<DataGovernancePolicy>('/data-governance/retention-policies', { method: 'PUT', body: JSON.stringify(data) }),
+  getDataAccessAudit: (params?: object) => request<Paginated<DataAccessLog>>(`/data-governance/access-audit${buildQuery(params)}`),
+  getExportStats: () => request<ExportStats>('/data-governance/export-stats'),
+  runRetentionCheck: () => request<RetentionCheckResult>('/data-governance/retention-check', { method: 'POST' }),
+};
+
+export const invoicesApi = {
+  list: (params?: object) => request(`/invoices${buildQuery(params)}`),
+  get: (id: string) => request(`/invoices/${id}`),
+  create: (data: unknown) => request('/invoices', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: unknown) => request(`/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) => request(`/invoices/${id}`, { method: 'DELETE' }),
+  issue: (id: string) => request(`/invoices/${id}/issue`, { method: 'POST' }),
+  cancel: (id: string, reason?: string) =>
+    request(`/invoices/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  recordPayment: (id: string, data: unknown) =>
+    request(`/invoices/${id}/payments`, {
+      method: 'POST',
+      // invoiceId is set AFTER the spread so a caller-supplied invoiceId cannot
+      // overwrite the route ID (controller requires dto.invoiceId === URL id).
+      body: JSON.stringify({ ...(data as Record<string, unknown>), invoiceId: id }),
+    }),
+  requestRefund: (data: { paymentId: string; amount: number; reason?: string }) =>
+    request('/invoices/refunds', { method: 'POST', body: JSON.stringify(data) }),
+  processRefund: (id: string, gatewayExternalId?: string) =>
+    request(`/invoices/refunds/${id}/process`, {
+      method: 'POST',
+      body: JSON.stringify(gatewayExternalId ? { gatewayExternalId } : {}),
+    }),
+  rejectRefund: (id: string, reason?: string) =>
+    request(`/invoices/refunds/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  totals: (params?: object) => request(`/invoices/totals${buildQuery(params)}`),
+};
+
+export async function downloadFile(path: string, options: RequestOptions = {}): Promise<void> {
+  const method = options.method?.toUpperCase() || 'GET';
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
+  };
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+    await ensureCsrfCookie();
+    const token = readXsrfCookie();
+    if (token) headers['x-xsrf-token'] = token;
+  }
+  
+  const res = await fetch("$\{API_BASE\}", {
+    method,
+    headers,
+    credentials: 'include',
+    body: options.body,
+  });
+  
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null);
+    throw new ApiError(res.status, errorBody?.message || res.statusText, res.statusText, errorBody);
+  }
+  
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  
+  // Try to read filename from Content-Disposition header
+  const contentDisposition = res.headers.get('Content-Disposition');
+  let filename = 'download';
+  if (contentDisposition) {
+    const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+    if (filenameMatch && filenameMatch[1]) {
+      filename = filenameMatch[1];
+    }
+  }
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+export const reportsApi = {
+  designs: () => request('/reports/designs'),
+  getDesign: (type: string) => request(`/reports/designs/${type}`),
+  run: (params: { type: string; dateFrom?: string; dateTo?: string; status?: string; columns?: string[]; page?: number; pageSize?: number }) =>
+    request('/reports/run', { method: 'POST', body: JSON.stringify(params) }),
+  saveDefinition: (data: unknown) =>
+    request('/reports/definitions', { method: 'POST', body: JSON.stringify(data) }),
+  definitions: () => request('/reports/definitions'),
+  export: (type: string, format: 'csv' | 'json' | 'pdf', params?: object) =>
+    request(`/reports/export?type=${type}&format=${format}${buildQuery(params)}`),
+};
+
+export const observabilityApi = {
+  health: () => request('/observability/health'),
+  metrics: (params?: object) => request(`/observability/metrics${buildQuery(params)}`),
+  queues: () => request('/observability/queues'),
+  integrations: () => request('/observability/integrations'),
+  apiMetrics: (params?: object) => request(`/observability/api-metrics${buildQuery(params)}`),
+  database: () => request('/observability/database'),
+};
+
+export const parentPortalApi = {
+  children: () => request('/parent-portal/children'),
+  attendance: (studentId: string, params?: object) =>
+    request(`/parent-portal/children/${studentId}/attendance${buildQuery(params)}`),
+  attendanceSummary: (studentId: string) =>
+    request(`/parent-portal/children/${studentId}/attendance/summary`),
+  grades: (studentId: string, params?: object) =>
+    request(`/parent-portal/children/${studentId}/grades${buildQuery(params)}`),
+  invoices: (studentId: string, params?: object) =>
+    request(`/parent-portal/children/${studentId}/invoices${buildQuery(params)}`),
+};
+
+export const payrollApi = {
+  listRuns: (params?: object) => request(`/payroll/runs${buildQuery(params)}`),
+  getRun: (id: string) => request(`/payroll/runs/${id}`),
+  createRun: (data: unknown) => request('/payroll/runs', { method: 'POST', body: JSON.stringify(data) }),
+  calculate: (data: unknown) => request('/payroll/runs/calculate', { method: 'POST', body: JSON.stringify(data) }),
+  processRun: (id: string) => request(`/payroll/runs/${id}/process`, { method: 'POST' }),
+  review: (id: string) => request(`/payroll/runs/${id}/review`, { method: 'POST' }),
+  approve: (id: string) => request(`/payroll/runs/${id}/approve`, { method: 'POST' }),
+  approveRun: (id: string) => request(`/payroll/runs/${id}/approve`, { method: 'POST' }),
+  pay: (id: string) => request(`/payroll/runs/${id}/pay`, { method: 'POST' }),
+  cancel: (id: string, reason: string) => request(`/payroll/runs/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  periodSummary: (params?: object) => request(`/payroll/period-summary${buildQuery(params)}`),
+};
+
+export const performanceApi = {
+  audit: (params?: object) => request(`/performance/audit${buildQuery(params)}`),
+  slowEndpoints: (params?: object) => request(`/performance/slow-endpoints${buildQuery(params)}`),
+  cacheStats: () => request('/performance/cache-stats'),
+};
+
+export const systemHealthApi = {
+  summary: () => request('/system-health/summary'),
+  components: () => request('/system-health/components'),
+};
+
+export const gamificationApi = {
+  leaderboard: (params?: object) => request(`/gamification/leaderboard${buildQuery(params)}`),
+  me: () => request('/gamification/me'),
+  myEvents: (params?: object) => request(`/gamification/me/events${buildQuery(params)}`),
+  stats: () => request('/gamification/stats'),
+};
+
+export const importExportApi = {
+  listImports: (params?: object) => request(`/imports${buildQuery(params)}`),
+  createImport: (data: unknown) => request('/imports', { method: 'POST', body: JSON.stringify(data) }),
+  listExports: (params?: object) => request(`/exports${buildQuery(params)}`),
+  template: (entityType: string) => request(`/template${buildQuery({ entityType })}`),
+  exportData: (params?: object) => request(`/export${buildQuery(params)}`),
+};
+
+export const earlyWarningApi = {
+  summary: () => request('/early-warning/summary'),
+  list: (params?: object) => request(`/early-warning${buildQuery(params)}`),
+  resolve: (id: string, note?: string) =>
+    request(`/early-warning/${id}/resolve`, { method: 'POST', body: JSON.stringify({ note }) }),
+  scan: () => request('/early-warning/scan', { method: 'POST' }),
+};
+
+export const academicRiskApi = {
+  summary: () => request('/academic-risk/summary'),
+  list: (params?: object) => request(`/academic-risk${buildQuery(params)}`),
+};
+
 export default request;
+
+

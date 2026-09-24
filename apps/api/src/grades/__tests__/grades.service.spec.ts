@@ -18,13 +18,13 @@ function createMockPrisma() {
 }
 
 describe('GradesService', () => {
-  let prisma: any;
+  let prisma: ReturnType<typeof createMockPrisma>;
   let svc: GradesService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new GradesService(prisma);
+    svc = new GradesService(prisma as unknown as ConstructorParameters<typeof GradesService>[0]);
   });
 
   describe('create', () => {

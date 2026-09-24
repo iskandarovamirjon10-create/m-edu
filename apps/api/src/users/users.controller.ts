@@ -7,7 +7,7 @@ import { UserQuery } from '../common/dto/query';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequestUser } from '../auth/types';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+import { Roles, AllowSelfService } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 
 @ApiTags('Users')
@@ -17,13 +17,18 @@ import { CurrentUser } from '../auth/current-user.decorator';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  // RolesGuard denies by default when neither @Roles nor @AllowAnyRole is set,
+  // so this route returned 403 for EVERY role (including SUPER_ADMIN). Listing
+  // users must match the mutation routes below: admins only.
   @Get()
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN')
   @ApiOperation({ summary: 'List users' })
   findAll(@CurrentUser('organizationId') orgId: string, @Query() query: UserQuery) {
     return this.usersService.findAll(orgId, query);
   }
 
   @Get(':id')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN')
   @ApiOperation({ summary: 'Get user details' })
   findOne(@CurrentUser('organizationId') orgId: string, @Param('id') id: string) {
     return this.usersService.findOne(orgId, id);
@@ -66,9 +71,11 @@ export class UsersController {
   }
 
   @Post('change-password')
+  @AllowSelfService()
   @ApiOperation({ summary: 'Change own password' })
   changePassword(@Req() req: Request & { user: RequestUser }, @Body() dto: ChangePasswordDto) {
     return this.usersService.changePassword(
+      req.user.organizationId,
       req.user.sub,
       dto.currentPassword,
       dto.newPassword,
@@ -77,6 +84,7 @@ export class UsersController {
   }
 
   @Patch(':id/settings')
+  @AllowSelfService()
   @ApiOperation({ summary: 'Update user settings' })
   updateSettings(
     @CurrentUser('organizationId') orgId: string,

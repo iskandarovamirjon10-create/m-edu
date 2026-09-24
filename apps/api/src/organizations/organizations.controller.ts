@@ -6,6 +6,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
+import { AllowSelfService } from '../auth/roles.decorator';
 
 @ApiTags('Organizations')
 @ApiBearerAuth()
@@ -14,6 +15,7 @@ import { UpdateOrganizationDto } from './dto/update-organization.dto';
 export class OrganizationsController {
   constructor(private readonly organizationsService: OrganizationsService) {}
 
+  @AllowSelfService()
   @Get('me')
   @ApiOperation({ summary: 'Get current organization' })
   getOrganization(@CurrentUser('organizationId') orgId: string) {

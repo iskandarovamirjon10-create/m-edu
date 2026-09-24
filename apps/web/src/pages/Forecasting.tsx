@@ -3,10 +3,13 @@ import {
   PageHeader,
   Badge,
   PageLoader,
+  ErrorState,
   EmptyState,
   GlassStatCard,
 } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { getErrorMessage } from '@/lib/errorMessages';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface ForecastPoint {
   period: string; // YYYY-MM
@@ -24,6 +27,16 @@ interface ForecastSeries {
   confidence: number; // 0..1
 }
 
+interface ForecastSummary {
+  series: number;
+  projectedRevenue: number;
+  projectedEnrollments: number;
+}
+
+interface ForecastListResponse {
+  items: ForecastSeries[];
+}
+
 const METHOD_COLOR: Record<ForecastPoint['method'], 'muted' | 'primary' | 'success'> = {
   MOVING_AVG: 'muted',
   LINEAR: 'primary',
@@ -31,72 +44,80 @@ const METHOD_COLOR: Record<ForecastPoint['method'], 'muted' | 'primary' | 'succe
 };
 
 export function ForecastingPage() {
-  usePageTitle('Forecasting');
+  const { t } = useI18n();
+  usePageTitle(t('forecasting.pageTitle'));
 
   // NOTE: the backend controller is mounted at /api/forecasting (not /forecast).
   // The previous URLs hit a non-existent route, so this page always showed zeros.
   const summaryQuery = useQuery({
     queryKey: ['forecast-summary'],
-    queryFn: async () => {
+    queryFn: async (): Promise<ForecastSummary> => {
       const res = await fetch('/api/forecasting/summary');
       if (!res.ok) return { series: 0, projectedRevenue: 0, projectedEnrollments: 0 };
-      return res.json();
+      return res.json() as Promise<ForecastSummary>;
     },
   });
 
   const seriesQuery = useQuery({
     queryKey: ['forecast'],
-    queryFn: async () => {
+    queryFn: async (): Promise<ForecastListResponse> => {
       const res = await fetch('/api/forecasting');
       if (!res.ok) return { items: [] as ForecastSeries[] };
-      return res.json();
+      return res.json() as Promise<ForecastListResponse>;
     },
   });
 
-  const series: ForecastSeries[] = (seriesQuery.data as any)?.items ?? [];
+  const series: ForecastSeries[] = seriesQuery.data?.items ?? [];
   const summary = summaryQuery.data;
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <PageHeader
-          title="Forecasting"
-          subtitle="Deterministic statistical projections — moving average, linear trend, seasonal naive"
+          title={t('forecasting.pageTitle')}
+          subtitle={t('forecasting.subtitle')}
         />
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <GlassStatCard label="Series tracked" value={summary?.series ?? 0} />
+          <GlassStatCard label={t('forecasting.seriesTracked')} value={summary?.series ?? 0} />
           <GlassStatCard
-            label="Projected revenue (next period)"
+            label={t('forecasting.projectedRevenue')}
             value={`$${(summary?.projectedRevenue ?? 0).toLocaleString()}`}
           />
           <GlassStatCard
-            label="Projected enrollments (next period)"
+            label={t('forecasting.projectedEnrollments')}
             value={summary?.projectedEnrollments ?? 0}
           />
         </div>
 
         <div className="glass-card p-4 space-y-2">
-          <h3 className="font-semibold text-[var(--text-primary)]">Methods (no AI, no ML)</h3>
+          <h3 className="font-semibold text-[var(--text-primary)]">{t('forecasting.methodsTitle')}</h3>
           <ul className="text-sm space-y-1.5 text-muted">
-            <li>• <strong className="text-[var(--text-primary)]">Moving average</strong> — arithmetic mean of last N periods (N=3 default)</li>
-            <li>• <strong className="text-[var(--text-primary)]">Linear trend</strong> — least-squares fit over the full history, no extrapolation beyond ±25%</li>
-            <li>• <strong className="text-[var(--text-primary)]">Seasonal naive</strong> — repeat last year's same period (for monthly metrics with ≥12 months of history)</li>
-            <li>• <strong className="text-[var(--text-primary)]">Confidence bands</strong> — empirical std-dev of historical residuals (no neural network, no probabilistic model)</li>
-            <li>• <strong className="text-[var(--text-primary)]">Metrics</strong> — revenue, enrollments, attendance, lead conversion, churn</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('forecasting.method.movingAvg')}</strong> — {t('forecasting.method.movingAvgDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('forecasting.method.linearTrend')}</strong> — {t('forecasting.method.linearTrendDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('forecasting.method.seasonalNaive')}</strong> — {t('forecasting.method.seasonalNaiveDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('forecasting.method.confidenceBands')}</strong> — {t('forecasting.method.confidenceBandsDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('forecasting.method.metrics')}</strong> — {t('forecasting.method.metricsDesc')}</li>
           </ul>
         </div>
 
         <div className="space-y-3">
           {seriesQuery.isLoading ? (
-            <div className="glass-card p-8"><PageLoader label="Loading forecasts…" /></div>
+            <div className="glass-card p-8"><PageLoader label={t('forecasting.loading')} /></div>
+          ) : seriesQuery.isError ? (
+            <div className="glass-card p-8">
+              <ErrorState
+                message={getErrorMessage(seriesQuery.error)}
+                onRetry={() => seriesQuery.refetch()}
+              />
+            </div>
           ) : series.length === 0 ? (
             <div className="glass-card p-8">
               <EmptyState
-                title="No forecast data"
-                message="At least 3 months of history is required to project a metric."
+                title={t('forecasting.emptyTitle')}
+                message={t('forecasting.emptyMessage')}
               />
             </div>
           ) : (
@@ -108,7 +129,7 @@ export function ForecastingPage() {
                     <p className="text-xs text-muted">{s.description}</p>
                   </div>
                   <span className="text-xs text-muted">
-                    Confidence {Math.round(s.confidence * 100)}%
+                    {t('forecasting.confidence', { n: Math.round(s.confidence * 100) })}
                   </span>
                 </div>
                 <div className="flex items-end gap-1 h-32">

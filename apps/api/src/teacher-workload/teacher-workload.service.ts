@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TeacherWorkloadQueryDto } from './dto/teacher-workload-query.dto';
 
 export interface WorkloadSummary {
   total: number;
@@ -38,7 +39,7 @@ export class TeacherWorkloadService {
 
   async findAll(
     orgId: string,
-    query: any,
+    query: TeacherWorkloadQueryDto,
   ): Promise<{ items: TeacherWorkloadItem[]; total: number }> {
     const teachers = await this.prisma.teacher.findMany({
       where: { organizationId: orgId },

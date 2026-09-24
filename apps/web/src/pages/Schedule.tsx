@@ -18,16 +18,18 @@ import {
   GlassSelect,
   GlassInput,
   GlassButton,
+  ConfirmDialog,
   useToast,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Schedule, Group, DayOfWeek } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
 
 const DAYS: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
 function formatDay(d: DayOfWeek): string {
-  return d.charAt(0) + d.slice(1).toLowerCase();
+  return `schedule.day.${d}`;
 }
 
 interface ScheduleFilters {
@@ -54,7 +56,8 @@ const INITIAL_FORM: ScheduleFormState = {
 };
 
 export function SchedulePage() {
-  usePageTitle('Schedule');
+  const { t } = useI18n();
+  usePageTitle(t('nav.schedule'));
   const { push, toastNode } = useToast();
   const qc = useQueryClient();
 
@@ -63,6 +66,7 @@ export function SchedulePage() {
   const [dayFilter, setDayFilter] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<Schedule | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const [form, setForm] = useState<ScheduleFormState>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof ScheduleFormState, string>>>({});
@@ -103,7 +107,7 @@ export function SchedulePage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schedule'] });
-      push('success', 'Schedule entry created');
+      push('success', t('schedule.created'));
       closeModal();
     },
     onError: (e: unknown) => push('error', getErrorMessage(e)),
@@ -119,7 +123,7 @@ export function SchedulePage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schedule'] });
-      push('success', 'Schedule entry updated');
+      push('success', t('schedule.updated'));
       closeModal();
     },
     onError: (e: unknown) => push('error', getErrorMessage(e)),
@@ -129,7 +133,7 @@ export function SchedulePage() {
     mutationFn: (id: string) => scheduleApi.remove(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schedule'] });
-      push('success', 'Schedule entry removed');
+      push('success', t('schedule.removed'));
     },
     onError: (e: unknown) => push('error', getErrorMessage(e)),
   });
@@ -161,9 +165,9 @@ export function SchedulePage() {
 
   const validate = (): boolean => {
     const errs: Partial<Record<keyof ScheduleFormState, string>> = {};
-    if (!form.groupId) errs.groupId = 'Required';
-    if (!form.startTime) errs.startTime = 'Required';
-    if (!form.endTime) errs.endTime = 'Required';
+    if (!form.groupId) errs.groupId = t('common.required');
+    if (!form.startTime) errs.startTime = t('common.required');
+    if (!form.endTime) errs.endTime = t('common.required');
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -182,25 +186,20 @@ export function SchedulePage() {
   const groups = (groupsQ.data as { items: Group[] } | undefined)?.items ?? [];
 
   const tabs = [
-    { id: '', label: 'All Days' },
-    ...DAYS.map((d) => ({ id: d, label: formatDay(d) })),
+    { id: '', label: t('schedule.allDays') },
+    ...DAYS.map((d) => ({ id: d, label: t(formatDay(d)) })),
   ];
 
   return (
     <div className="page-container">
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
-      </div>
+      
       {toastNode}
       <GlassPageHeader
-        title="Schedule"
-        description={`${data?.total ?? 0} entries`}
+        title={t('nav.schedule')}
+        description={t('schedule.entriesCount', { count: data?.total ?? 0 })}
         actions={
           <GlassButton variant="primary" size="sm" onClick={openCreate}>
-            Add Entry
+            {t('schedule.addEntry')}
           </GlassButton>
         }
       />
@@ -215,52 +214,54 @@ export function SchedulePage() {
           <GlassSelect
             value={groupFilter}
             onChange={(e) => { setGroupFilter(e.target.value); setPage(1); }}
-            options={[{ value: '', label: 'All groups' }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
-            placeholder="All groups"
+            options={[{ value: '', label: t('students.allGroups') }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
+            placeholder={t('students.allGroups')}
           />
         </div>
       </div>
 
       {isLoading ? (
         <GlassCard>
-          <GlassPageLoader label="Loading schedule…" />
+          <GlassPageLoader label={t('schedule.loading')} />
         </GlassCard>
       ) : error ? (
         <GlassErrorState message={getErrorMessage(error)} />
       ) : items.length === 0 ? (
         <GlassEmptyState
-          title="No schedule entries"
-          description="Create the first schedule entry to get started."
-          action={{ label: 'Add Entry', onClick: openCreate }}
+          title={t('schedule.empty')}
+          description={t('schedule.emptyHint')}
+          action={{ label: t('schedule.addEntry'), onClick: openCreate }}
         />
       ) : (
         <GlassCard padding="none">
           <GlassTable className="overflow-x-auto">
             <GlassTHead>
               <GlassTR>
-                <GlassTH>Day</GlassTH>
-                <GlassTH>Time</GlassTH>
-                <GlassTH>Group</GlassTH>
-                <GlassTH>Room</GlassTH>
+                <GlassTH>{t('schedule.col.day')}</GlassTH>
+                <GlassTH>{t('schedule.col.time')}</GlassTH>
+                <GlassTH>{t('schedule.col.group')}</GlassTH>
+                <GlassTH>{t('groups.col.room')}</GlassTH>
                 <GlassTH className="w-20" />
               </GlassTR>
             </GlassTHead>
             <GlassTBody>
               {items.map((s) => (
                 <GlassTR key={s.id}>
-                  <GlassTD className="font-medium">{formatDay(s.dayOfWeek)}</GlassTD>
+                  <GlassTD className="font-medium">{t(formatDay(s.dayOfWeek))}</GlassTD>
                   <GlassTD>{s.startTime} — {s.endTime}</GlassTD>
                   <GlassTD>{(s as Schedule & { group?: { name?: string } }).group?.name ?? '—'}</GlassTD>
                   <GlassTD>{s.room ?? '—'}</GlassTD>
                   <GlassTD>
                     <div className="flex gap-2 justify-end">
-                      <GlassButton variant="ghost" size="sm" onClick={() => openEdit(s)}>Edit</GlassButton>
+                      <GlassButton variant="ghost" size="sm" onClick={() => openEdit(s)}>
+                        {t('common.edit')}
+                      </GlassButton>
                       <GlassButton
                         variant="danger"
                         size="sm"
-                        onClick={() => { if (confirm('Remove this schedule entry?')) deleteMut.mutate(s.id); }}
+                        onClick={() => setDeleteTarget(s.id)}
                       >
-                        Remove
+                        {t('schedule.remove')}
                       </GlassButton>
                     </div>
                   </GlassTD>
@@ -273,18 +274,15 @@ export function SchedulePage() {
               <div className="flex justify-center">
                 <div className="flex gap-1">
                   {Array.from({ length: data.totalPages }, (_, i) => i + 1).map((p) => (
-                    <button
+                    <GlassButton
                       key={p}
                       onClick={() => setPage(p)}
-                      className={[
-                        'w-9 h-9 text-sm font-medium rounded-xl transition-all duration-200',
-                        p === page
-                          ? 'glass-btn-primary glass-btn-sm'
-                          : 'glass-btn-ghost glass-btn-sm',
-                      ].join(' ')}
+                      variant={p === page ? 'primary' : 'ghost'}
+                      size="sm"
+                      className="w-9 h-9 text-sm font-medium rounded-xl transition-all duration-200"
                     >
                       {p}
-                    </button>
+                    </GlassButton>
                   ))}
                 </div>
               </div>
@@ -293,13 +291,27 @@ export function SchedulePage() {
         </GlassCard>
       )}
 
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteMut.mutate(deleteTarget);
+          setDeleteTarget(null);
+        }}
+        description={t('schedule.removeConfirm')}
+        loading={deleteMut.isPending}
+      />
+
       <GlassModal
         open={modalOpen}
         onClose={closeModal}
-        title={editEntry ? 'Edit Schedule' : 'New Schedule Entry'}
+        title={editEntry ? t('schedule.editTitle') : t('schedule.newTitle')}
         footer={
           <>
-            <GlassButton variant="secondary" size="sm" onClick={closeModal}>Cancel</GlassButton>
+            <GlassButton variant="secondary" size="sm" onClick={closeModal}>
+              {t('common.cancel')}
+            </GlassButton>
             <GlassButton
               variant="primary"
               size="sm"
@@ -307,37 +319,37 @@ export function SchedulePage() {
               form="schedule-form"
               disabled={createMut.isPending || updateMut.isPending}
             >
-              {editEntry ? 'Save' : 'Create'}
+              {editEntry ? t('common.save') : t('common.create')}
             </GlassButton>
           </>
         }
       >
         <form id="schedule-form" onSubmit={handleSubmit} className="space-y-4">
           <GlassSelect
-            label="Group"
+            label={t('exams.form.group')}
             value={form.groupId}
             onChange={(e) => setForm((f) => ({ ...f, groupId: e.target.value }))}
-            options={[{ value: '', label: 'Select group' }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
-            placeholder="Select group"
+            options={[{ value: '', label: t('schedule.selectGroup') }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
+            placeholder={t('schedule.selectGroup')}
             error={formErrors.groupId}
           />
           <GlassSelect
-            label="Day of Week"
+            label={t('schedule.dayOfWeek')}
             value={form.dayOfWeek}
             onChange={(e) => setForm((f) => ({ ...f, dayOfWeek: e.target.value as DayOfWeek }))}
-            options={DAYS.map((d) => ({ value: d, label: formatDay(d) }))}
+            options={DAYS.map((d) => ({ value: d, label: t(formatDay(d)) }))}
             error={formErrors.dayOfWeek}
           />
           <div className="grid grid-cols-2 gap-3">
             <GlassInput
-              label="Start Time"
+              label={t('schedule.startTime')}
               type="time"
               value={form.startTime}
               onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
               error={formErrors.startTime}
             />
             <GlassInput
-              label="End Time"
+              label={t('schedule.endTime')}
               type="time"
               value={form.endTime}
               onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
@@ -345,10 +357,10 @@ export function SchedulePage() {
             />
           </div>
           <GlassInput
-            label="Room"
+            label={t('groups.form.room')}
             value={form.room}
             onChange={(e) => setForm((f) => ({ ...f, room: e.target.value }))}
-            placeholder="e.g. Room 101"
+            placeholder={t('schedule.roomPlaceholder')}
             error={formErrors.room}
           />
         </form>

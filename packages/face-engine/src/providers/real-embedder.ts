@@ -122,27 +122,43 @@ export class RealEmbedder {
     const sharp = (await import('sharp')).default;
     const { boundingBox } = input.face;
 
+    // Oriented dimensions: the detector auto-applies EXIF rotation before
+    // producing this bbox, so clamp against the ROTATED size (metadata()
+    // itself reports pre-rotation width/height).
+    const rawMeta = await sharp(input.imageBuffer).metadata();
+    const orientation = rawMeta.orientation ?? 1;
+    const swapsAxes = orientation >= 5 && orientation <= 8;
+    const orientedW = (swapsAxes ? rawMeta.height : rawMeta.width) || 0;
+    const orientedH = (swapsAxes ? rawMeta.width : rawMeta.height) || 0;
+
     // Crop face region with some margin
     const margin = 0.2;
     const cropX = Math.max(0, Math.round(boundingBox.x - boundingBox.width * margin));
     const cropY = Math.max(0, Math.round(boundingBox.y - boundingBox.height * margin));
     const cropW = Math.round(boundingBox.width * (1 + 2 * margin));
     const cropH = Math.round(boundingBox.height * (1 + 2 * margin));
+    const clampedW = Math.max(1, Math.min(cropW, orientedW - cropX));
+    const clampedH = Math.max(1, Math.min(cropH, orientedH - cropY));
 
-    // Resize to model input size and convert to float32 tensor
+    // Resize to model input size and convert to float32 tensor.
+    // `.rotate()` applies EXIF auto-orientation FIRST so the bounding box
+    // (computed by the detector on the oriented image) stays valid.
     const { data, info } = await sharp(input.imageBuffer)
+      .rotate()
       .extract({
         left: cropX,
         top: cropY,
-        width: Math.min(cropW, (await sharp(input.imageBuffer).metadata()).width! - cropX),
-        height: Math.min(cropH, (await sharp(input.imageBuffer).metadata()).height! - cropY),
+        width: clampedW,
+        height: clampedH,
       })
       .resize(this.config.inputSize, this.config.inputSize, { fit: 'fill' })
       .removeAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
 
-    // Convert to NCHW float32 tensor with mean/std normalization
+    // Convert to NCHW float32 tensor with mean/std normalization.
+    // sharp raw output is RGB; SFace (OpenCV-zoo) expects BGR -> swap R/B,
+    // matching the detector and liveness preprocessing pipelines.
     const channels = 3;
     const height = info.height;
     const width = info.width;
@@ -152,7 +168,8 @@ export class RealEmbedder {
       for (let h = 0; h < height; h++) {
         for (let w = 0; w < width; w++) {
           const srcIdx = (h * width + w) * channels + c;
-          const pixel = data[srcIdx];
+          const bgrSrcIdx = c === 0 ? srcIdx + 2 : c === 2 ? srcIdx - 2 : srcIdx;
+          const pixel = data[bgrSrcIdx];
           tensorData[c * height * width + h * width + w] =
             (pixel - this.config.mean[c]) / this.config.std[c];
         }

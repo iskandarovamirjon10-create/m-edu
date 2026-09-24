@@ -11,6 +11,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
 import { notificationsApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface AppNotification {
   id: string;
@@ -22,6 +23,11 @@ interface AppNotification {
   createdAt: string;
 }
 
+interface NotificationsListResponse {
+  items: AppNotification[];
+  unread: number;
+}
+
 const KIND_COLOR: Record<AppNotification['kind'], 'muted' | 'success' | 'warning' | 'error'> = {
   INFO: 'muted',
   SUCCESS: 'success',
@@ -30,7 +36,8 @@ const KIND_COLOR: Record<AppNotification['kind'], 'muted' | 'success' | 'warning
 };
 
 export function NotificationsCenterPage() {
-  usePageTitle('Notifications');
+  const { t } = useI18n();
+  usePageTitle(t('notifications.title'));
   const queryClient = useQueryClient();
   const { push } = useToast();
 
@@ -42,7 +49,7 @@ export function NotificationsCenterPage() {
   const markAllMutation = useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => {
-      push('success', 'All notifications marked as read');
+      push('success', t('notifications.allReadToast'));
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
     onError: (e) => push('error', getErrorMessage(e)),
@@ -56,22 +63,22 @@ export function NotificationsCenterPage() {
     onError: (e) => push('error', getErrorMessage(e)),
   });
 
-  const items: AppNotification[] = (listQuery.data as any)?.items ?? [];
-  const unread = (listQuery.data as any)?.unread ?? 0;
+  const items: AppNotification[] = (listQuery.data as NotificationsListResponse | undefined)?.items ?? [];
+  const unread = (listQuery.data as NotificationsListResponse | undefined)?.unread ?? 0;
 
   return (
-    <div className="orb-container">
+    <div style={{ display: "contents" }}>
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <PageHeader
-          title="Notifications"
-          subtitle="System, workflow, and rule-based alerts"
+          title={t('notifications.title')}
+          subtitle={t('notifications.subtitle')}
         />
 
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted">
-            {unread > 0 ? `${unread} unread` : 'All caught up'}
+            {unread > 0 ? t('notifications.unreadCount', { n: unread }) : t('notifications.allCaughtUp')}
           </div>
           <GlassButton
             size="sm"
@@ -79,28 +86,28 @@ export function NotificationsCenterPage() {
             onClick={() => markAllMutation.mutate()}
             disabled={unread === 0 || markAllMutation.isPending}
           >
-            Mark all as read
+            {t('notifications.markAllRead')}
           </GlassButton>
         </div>
 
         <div className="glass-card p-4 space-y-2">
-          <h3 className="font-semibold text-[var(--text-primary)]">Notification sources</h3>
+          <h3 className="font-semibold text-[var(--text-primary)]">{t('notifications.sourcesTitle')}</h3>
           <ul className="text-sm space-y-1.5 text-muted">
-            <li>• <strong className="text-[var(--text-primary)]">Workflow engine</strong> — rule match triggers a notification</li>
-            <li>• <strong className="text-[var(--text-primary)]">Early warning</strong> — payment overdue, attendance threshold, etc.</li>
-            <li>• <strong className="text-[var(--text-primary)]">Data quality</strong> — new issue, issue resolved</li>
-            <li>• <strong className="text-[var(--text-primary)]">Audit anomalies</strong> — security center pushes critical events</li>
-            <li>• <strong className="text-[var(--text-primary)]">System</strong> — backup, version, scheduled job results</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('notifications.sourceWorkflow')}</strong> — {t('notifications.sourceWorkflowDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('notifications.sourceEarlyWarning')}</strong> — {t('notifications.sourceEarlyWarningDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('notifications.sourceDataQuality')}</strong> — {t('notifications.sourceDataQualityDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('notifications.sourceAudit')}</strong> — {t('notifications.sourceAuditDesc')}</li>
+            <li>• <strong className="text-[var(--text-primary)]">{t('notifications.sourceSystem')}</strong> — {t('notifications.sourceSystemDesc')}</li>
           </ul>
         </div>
 
         <div className="glass-card overflow-hidden">
           {listQuery.isLoading ? (
-            <div className="p-8"><PageLoader label="Loading notifications…" /></div>
+            <div className="p-8"><PageLoader label={t('notifications.loading')} /></div>
           ) : listQuery.isError ? (
             <div className="p-8">
               <ErrorState
-                title="Failed to load notifications"
+                title={t('notifications.loadError')}
                 message={getErrorMessage(listQuery.error)}
                 onRetry={() => listQuery.refetch()}
               />
@@ -108,8 +115,8 @@ export function NotificationsCenterPage() {
           ) : items.length === 0 ? (
             <div className="p-8">
               <EmptyState
-                title="No notifications"
-                message="You're all caught up. New events will appear here."
+                title={t('notifications.empty')}
+                message={t('notifications.emptyHint')}
               />
             </div>
           ) : (
@@ -134,7 +141,7 @@ export function NotificationsCenterPage() {
                       {n.link && (
                         <>
                           <span>·</span>
-                          <a href={n.link} className="text-brand-500 hover:underline">Open</a>
+                          <a href={n.link} className="text-brand-500 hover:underline">{t('notifications.open')}</a>
                         </>
                       )}
                     </div>
@@ -146,7 +153,7 @@ export function NotificationsCenterPage() {
                       onClick={() => markOneMutation.mutate(n.id)}
                       disabled={markOneMutation.isPending}
                     >
-                      Mark read
+                      {t('notifications.markRead')}
                     </GlassButton>
                   )}
                 </li>

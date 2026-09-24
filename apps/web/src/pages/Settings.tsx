@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { organizationsApi, usersApi, authApi } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
@@ -10,10 +10,12 @@ import {
   TextInput,
   Select,
   useToasts,
+  GlassButton,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Organization, User } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useTheme, type Theme } from '@/hooks/useTheme';
 import { useI18n, isLocale } from '@/i18n/I18nProvider';
 
 interface OrgFormState {
@@ -53,8 +55,6 @@ const LANGUAGES = [
   { value: 'uz', label: 'Oʻzbekcha' },
   { value: 'ru', label: 'Русский' },
 ];
-
-type Theme = 'light' | 'dark' | 'system';
 
 function validatePassword(password: string): string | undefined {
   if (password.length < 8) return 'Password must be at least 8 characters.';
@@ -141,40 +141,13 @@ function GlassPanel({
 /*  Theme Switcher                                                           */
 /* ────────────────────────────────────────────────────────────────────────── */
 function ThemeSwitcher() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return 'light';
-    return (localStorage.getItem('medu-theme') as Theme) || 'light';
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const root = document.documentElement;
-    const apply = (mode: Theme) => {
-      if (mode === 'dark') {
-        root.classList.add('dark');
-        root.setAttribute('data-theme', 'dark');
-      } else if (mode === 'light') {
-        root.classList.remove('dark');
-        root.setAttribute('data-theme', 'light');
-      } else {
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (prefersDark) {
-          root.classList.add('dark');
-          root.setAttribute('data-theme', 'dark');
-        } else {
-          root.classList.remove('dark');
-          root.setAttribute('data-theme', 'light');
-        }
-      }
-    };
-    apply(theme);
-    try { localStorage.setItem('medu-theme', theme); } catch { /* ignore */ }
-  }, [theme]);
+  const { t } = useI18n();
+  const { theme, setTheme } = useTheme();
 
   const options: { value: Theme; label: string; icon: ReactNode }[] = [
     {
       value: 'light',
-      label: 'Light',
+      label: t('settings.themeLight'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="4" />
@@ -184,7 +157,7 @@ function ThemeSwitcher() {
     },
     {
       value: 'dark',
-      label: 'Dark',
+      label: t('settings.themeDark'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
@@ -193,7 +166,7 @@ function ThemeSwitcher() {
     },
     {
       value: 'system',
-      label: 'System',
+      label: t('common.system'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="3" width="20" height="14" rx="2" />
@@ -211,7 +184,7 @@ function ThemeSwitcher() {
         border: '1px solid var(--border-subtle)',
       }}
       role="radiogroup"
-      aria-label="Theme selection"
+      aria-label={t('a11y.themeSelection')}
     >
       {options.map((opt) => {
         const active = theme === opt.value;
@@ -245,9 +218,11 @@ function ThemeSwitcher() {
 /*  Settings Page                                                           */
 /* ────────────────────────────────────────────────────────────────────────── */
 export function SettingsPage() {
-  usePageTitle('Settings');
+  const { setLocale, locale, t } = useI18n();
+  usePageTitle(t('settings.title'));
   const { push, toastNode } = useToasts();
-  const { user, setUser } = useAuth();
+  const { user, setUser, hasAnyRole } = useAuth();
+  const isAdmin = hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN');
   const qc = useQueryClient();
 
   const [orgForm, setOrgForm] = useState<OrgFormState | null>(null);
@@ -255,34 +230,52 @@ export function SettingsPage() {
   const [pwdForm, setPwdForm] = useState<PasswordFormState>(INITIAL_PASSWORD_FORM);
   const [pwdErrors, setPwdErrors] = useState<Partial<Record<keyof PasswordFormState, string>>>({});
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>({
-    language: user?.settings?.language || 'en',
+    language: locale,
     timezone: user?.settings?.timezone || 'UTC',
   });
 
-  // Keep the i18n provider in sync with the persisted per-user language so
-  // saving the settings form (or loading a user who chose uz/ru) switches
-  // the whole interface immediately.
-  const { setLocale } = useI18n();
+  // Adopt the server language only when the browser has no stored choice yet
+  // (fresh device). Local `medu-lang` always wins — never snap the UI back to
+  // the server default when the user (or navbar switcher) already picked one.
+  const adoptedServerLang = useRef(false);
   useEffect(() => {
+    if (adoptedServerLang.current) return;
     const lang = user?.settings?.language;
-    if (lang && isLocale(lang)) {
-      setLocale(lang);
+    if (!lang || !isLocale(lang)) return;
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem('medu-lang');
+    } catch {
+      stored = null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.settings?.language]);
+    if (stored) {
+      adoptedServerLang.current = true;
+      return;
+    }
+    adoptedServerLang.current = true;
+    setLocale(lang);
+    setSettingsForm((prev) => ({ ...prev, language: lang }));
+  }, [user?.settings?.language, setLocale]);
+
+  // Keep the language form field aligned with the live locale (navbar or
+  // Settings select) so the control never shows a stale value.
+  useEffect(() => {
+    setSettingsForm((prev) => (prev.language === locale ? prev : { ...prev, language: locale }));
+  }, [locale]);
 
   useEffect(() => {
     if (user?.settings) {
       setSettingsForm((prev) => ({
-        language: user.settings?.language || prev.language,
+        language: locale,
         timezone: user.settings?.timezone || prev.timezone,
       }));
     }
-  }, [user]);
+  }, [user, locale]);
 
   const org = useQuery({
     queryKey: ['org-me'],
     queryFn: organizationsApi.me,
+    enabled: isAdmin,
     placeholderData: (previousData) => previousData,
   });
 
@@ -303,7 +296,7 @@ export function SettingsPage() {
       return organizationsApi.update(orgForm);
     },
     onSuccess: async () => {
-      push('success', 'Organization updated successfully');
+      push('success', t('settings.orgUpdated'));
       qc.invalidateQueries({ queryKey: ['org-me'] });
       try {
         const me = (await authApi.me()) as User;
@@ -320,7 +313,7 @@ export function SettingsPage() {
         newPassword: pwdForm.newPassword,
       }),
     onSuccess: () => {
-      push('success', 'Password changed successfully');
+      push('success', t('settings.passwordChanged'));
       setPwdForm(INITIAL_PASSWORD_FORM);
       setPwdErrors({});
     },
@@ -333,7 +326,7 @@ export function SettingsPage() {
       return usersApi.updateSettings(user.id, settingsForm);
     },
     onSuccess: () => {
-      push('success', 'Settings saved successfully');
+      push('success', t('settings.saved'));
       qc.invalidateQueries({ queryKey: ['auth-me'] });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
@@ -381,9 +374,14 @@ export function SettingsPage() {
   const handleSettingsChange = useCallback(
     (field: keyof SettingsFormState) =>
       (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setSettingsForm((prev) => ({ ...prev, [field]: e.target.value }));
+        const value = e.target.value;
+        setSettingsForm((prev) => ({ ...prev, [field]: value }));
+        // Language applies to the live UI immediately; Save persists it.
+        if (field === 'language' && isLocale(value)) {
+          setLocale(value);
+        }
       },
-    [],
+    [setLocale],
   );
 
   const handleOrgSubmit = useCallback(
@@ -439,22 +437,17 @@ export function SettingsPage() {
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   );
-
   /* ── Loading ────────────────────────────────────────────────────────── */
-  if (org.isLoading && !org.data) {
+  if (isAdmin && org.isLoading && !org.data) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container mx-auto max-w-3xl space-y-4">
           <PageHeader
-            title="Settings"
-            subtitle="Organization and account configuration"
+            title={t('settings.title')}
+            subtitle={t('settings.subtitle')}
           />
-          <GlassPanel title="Loading">
-            <PageLoader label="Loading settings…" />
+          <GlassPanel title={t('common.loading')}>
+            <PageLoader label={t('settings.loading')} />
           </GlassPanel>
         </div>
       </div>
@@ -462,21 +455,17 @@ export function SettingsPage() {
   }
 
   /* ── Error ──────────────────────────────────────────────────────────── */
-  if (org.isError) {
+  if (isAdmin && org.isError) {
     return (
-      <div className="orb-container">
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
+      <div style={{ display: "contents" }}>
         <div className="page-container mx-auto max-w-3xl space-y-4">
           <PageHeader
-            title="Settings"
-            subtitle="Organization and account configuration"
+            title={t('settings.title')}
+            subtitle={t('settings.subtitle')}
           />
-          <GlassPanel title="Failed to load">
+          <GlassPanel title={t('settings.loadFailed')}>
             <ErrorState
-              title="Failed to load settings"
+              title={t('settings.loadFailed')}
               message={getErrorMessage(org.error as Error)}
               onRetry={handleRetry}
             />
@@ -487,114 +476,112 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="orb-container">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
+    <div style={{ display: "contents" }}>
 
       <div className="page-container mx-auto max-w-3xl space-y-6">
         <PageHeader
-          title="Settings"
-          subtitle="Organization and account configuration"
+          title={t('settings.title')}
+          subtitle={t('settings.subtitle')}
         />
 
         {/* ── Appearance (Theme Switcher) ────────────────────────────────── */}
         <GlassPanel
-          title="Appearance"
-          subtitle="Choose how M-EDU looks to you"
+          title={t('settings.appearance')}
+          subtitle={t('settings.appearanceHint')}
           icon={themeIcon}
         >
           <div className="space-y-3">
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Pick a theme — your selection is saved on this device.
+              {t('settings.themeHint')}
             </p>
             <ThemeSwitcher />
           </div>
         </GlassPanel>
 
         {/* ── Organization ──────────────────────────────────────────────── */}
-        <GlassPanel
-          title="Organization"
-          subtitle="Branding and contact details for your center"
-          icon={orgIcon}
-        >
-          {orgForm && (
-            <form className="space-y-4" onSubmit={handleOrgSubmit} noValidate>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field
-                  label="Organization name"
-                  required
-                  error={orgErrors.name}
-                >
-                  <TextInput
-                    value={orgForm.name}
-                    onChange={handleOrgChange('name')}
+        {isAdmin && (
+          <GlassPanel
+            title={t('settings.organization')}
+            subtitle={t('settings.organizationHint')}
+            icon={orgIcon}
+          >
+            {orgForm && (
+              <form className="space-y-4" onSubmit={handleOrgSubmit} noValidate>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field
+                    label={t('settings.orgName')}
                     required
-                    aria-invalid={Boolean(orgErrors.name)}
-                    aria-describedby={orgErrors.name ? 'org-name-error' : undefined}
-                    disabled={saveOrg.isPending}
-                  />
-                  {orgErrors.name && (
-                    <span id="org-name-error" className="mt-1 text-xs" style={{ color: 'var(--state-error)' }}>
-                      {orgErrors.name}
-                    </span>
-                  )}
-                </Field>
+                    error={orgErrors.name}
+                  >
+                    <TextInput
+                      value={orgForm.name}
+                      onChange={handleOrgChange('name')}
+                      required
+                      aria-invalid={Boolean(orgErrors.name)}
+                      aria-describedby={orgErrors.name ? 'org-name-error' : undefined}
+                      disabled={saveOrg.isPending}
+                    />
+                    {orgErrors.name && (
+                      <span id="org-name-error" className="mt-1 text-xs" style={{ color: 'var(--state-error)' }}>
+                        {orgErrors.name}
+                      </span>
+                    )}
+                  </Field>
 
-                <Field label="Contact email" required error={orgErrors.email}>
-                  <TextInput
-                    type="email"
-                    value={orgForm.email}
-                    onChange={handleOrgChange('email')}
-                    required
-                    aria-invalid={Boolean(orgErrors.email)}
-                    aria-describedby={orgErrors.email ? 'org-email-error' : undefined}
-                    disabled={saveOrg.isPending}
-                  />
-                  {orgErrors.email && (
-                    <span id="org-email-error" className="mt-1 text-xs" style={{ color: 'var(--state-error)' }}>
-                      {orgErrors.email}
-                    </span>
-                  )}
-                </Field>
+                  <Field label={t('settings.contactEmail')} required error={orgErrors.email}>
+                    <TextInput
+                      type="email"
+                      value={orgForm.email}
+                      onChange={handleOrgChange('email')}
+                      required
+                      aria-invalid={Boolean(orgErrors.email)}
+                      aria-describedby={orgErrors.email ? 'org-email-error' : undefined}
+                      disabled={saveOrg.isPending}
+                    />
+                    {orgErrors.email && (
+                      <span id="org-email-error" className="mt-1 text-xs" style={{ color: 'var(--state-error)' }}>
+                        {orgErrors.email}
+                      </span>
+                    )}
+                  </Field>
 
-                <Field label="Phone">
-                  <TextInput
-                    type="tel"
-                    value={orgForm.phone}
-                    onChange={handleOrgChange('phone')}
-                    disabled={saveOrg.isPending}
-                  />
-                </Field>
-              </div>
+                  <Field label={t('settings.phone')}>
+                    <TextInput
+                      type="tel"
+                      value={orgForm.phone}
+                      onChange={handleOrgChange('phone')}
+                      disabled={saveOrg.isPending}
+                    />
+                  </Field>
+                </div>
 
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  className="glass-btn glass-btn-primary"
-                  disabled={saveOrg.isPending}
-                >
-                  {saveOrg.isPending ? 'Saving…' : 'Save organization'}
-                </button>
-              </div>
-            </form>
-          )}
-        </GlassPanel>
+                <div className="flex justify-end pt-2">
+                  <GlassButton
+                    type="submit"
+                    variant="primary"
+                    disabled={saveOrg.isPending}
+                  >
+                    {saveOrg.isPending ? t('common.saving') : t('settings.saveOrg')}
+                  </GlassButton>
+                </div>
+              </form>
+            )}
+          </GlassPanel>
+        )}
 
         {/* ── Account settings ──────────────────────────────────────────── */}
         <GlassPanel
-          title="Account settings"
-          subtitle="Language and timezone preferences"
+          title={t('settings.account')}
+          subtitle={t('settings.accountHint')}
           icon={userIcon}
         >
           <form className="space-y-4" onSubmit={handleSettingsSubmit} noValidate>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Language">
+              <Field label={t('settings.language')}>
                 <Select
                   value={settingsForm.language}
                   onChange={handleSettingsChange('language')}
-                  aria-label="Select language"
+                  aria-label={t('settings.language')}
                   disabled={saveSettings.isPending}
                 >
                   {LANGUAGES.map((language) => (
@@ -605,11 +592,11 @@ export function SettingsPage() {
                 </Select>
               </Field>
 
-              <Field label="Timezone">
+              <Field label={t('settings.timezone')}>
                 <Select
                   value={settingsForm.timezone}
                   onChange={handleSettingsChange('timezone')}
-                  aria-label="Select timezone"
+                  aria-label={t('settings.timezone')}
                   disabled={saveSettings.isPending}
                 >
                   {TIMEZONES.map((timezone) => (
@@ -622,26 +609,26 @@ export function SettingsPage() {
             </div>
 
             <div className="flex justify-end pt-2">
-              <button
+              <GlassButton
                 type="submit"
-                className="glass-btn glass-btn-primary"
+                variant="primary"
                 disabled={saveSettings.isPending}
               >
-                {saveSettings.isPending ? 'Saving…' : 'Save settings'}
-              </button>
+                {saveSettings.isPending ? t('common.saving') : t('settings.save')}
+              </GlassButton>
             </div>
           </form>
         </GlassPanel>
 
         {/* ── Change password ───────────────────────────────────────────── */}
         <GlassPanel
-          title="Change password"
-          subtitle="Use a strong password you don't reuse elsewhere"
+          title={t('settings.changePassword')}
+          subtitle={t('settings.changePasswordHint')}
           icon={lockIcon}
         >
           <form className="space-y-4" onSubmit={handlePasswordSubmit} noValidate>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Current password" required error={pwdErrors.currentPassword}>
+              <Field label={t('settings.currentPassword')} required error={pwdErrors.currentPassword}>
                 <TextInput
                   type="password"
                   value={pwdForm.currentPassword}
@@ -659,7 +646,7 @@ export function SettingsPage() {
                 )}
               </Field>
 
-              <Field label="New password" required error={pwdErrors.newPassword}>
+              <Field label={t('settings.newPassword')} required error={pwdErrors.newPassword}>
                 <TextInput
                   type="password"
                   value={pwdForm.newPassword}
@@ -677,7 +664,7 @@ export function SettingsPage() {
                 )}
               </Field>
 
-              <Field label="Confirm new password" required error={pwdErrors.confirm}>
+              <Field label={t('settings.confirmPassword')} required error={pwdErrors.confirm}>
                 <TextInput
                   type="password"
                   value={pwdForm.confirm}
@@ -697,13 +684,13 @@ export function SettingsPage() {
             </div>
 
             <div className="flex justify-end pt-2">
-              <button
+              <GlassButton
                 type="submit"
-                className="glass-btn glass-btn-primary"
+                variant="primary"
                 disabled={changePassword.isPending}
               >
-                {changePassword.isPending ? 'Saving…' : 'Change password'}
-              </button>
+                {changePassword.isPending ? t('common.saving') : t('settings.changePasswordAction')}
+              </GlassButton>
             </div>
           </form>
         </GlassPanel>

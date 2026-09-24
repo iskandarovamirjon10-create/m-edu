@@ -8,7 +8,7 @@ import { NotificationQuery } from '../common/dto/query';
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(userId: string, query: NotificationQuery) {
+  async findAll(userId: string, query: NotificationQuery): Promise<{ items: any[]; total: number; page: number; limit: number; totalPages: number; unread: number }> {
     const { page, limit, skip } = parsePagination(query);
     const where: Prisma.NotificationWhereInput = { userId };
 
@@ -32,19 +32,19 @@ export class NotificationsService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit), unread };
   }
 
-  async markAsRead(userId: string, id: string) {
-    await this.prisma.notification.updateMany({
+  async markAsRead(userId: string, id: string): Promise<{ success: boolean; count: number }> {
+    const updateResult = await this.prisma.notification.updateMany({
       where: { id, userId },
       data: { isRead: true },
     });
-    return { success: true };
+    return { success: updateResult.count > 0, count: updateResult.count };
   }
 
-  async markAllAsRead(userId: string) {
-    await this.prisma.notification.updateMany({
+  async markAllAsRead(userId: string): Promise<{ success: boolean; count: number }> {
+    const updateResult = await this.prisma.notification.updateMany({
       where: { userId, isRead: false },
       data: { isRead: true },
     });
-    return { success: true };
+    return { success: updateResult.count > 0, count: updateResult.count };
   }
 }

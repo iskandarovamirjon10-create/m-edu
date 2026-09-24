@@ -114,10 +114,14 @@ export class RealDetector {
     const sharp = (await import('sharp')).default;
     const inputSize = this.config.inputSize;
 
-    // Get original image dimensions for coordinate scaling
+    // Get original image dimensions for coordinate scaling.
+    // Use ORIENTED dimensions: the tensor below is EXIF-rotated, so boxes
+    // decoded in rotated space must be scaled against the rotated size.
     const originalMeta = await sharp(input.imageBuffer).metadata();
-    const origWidth = originalMeta.width || 0;
-    const origHeight = originalMeta.height || 0;
+    const orientation = originalMeta.orientation ?? 1;
+    const swapsAxes = orientation >= 5 && orientation <= 8;
+    const origWidth = (swapsAxes ? originalMeta.height : originalMeta.width) || 0;
+    const origHeight = (swapsAxes ? originalMeta.width : originalMeta.height) || 0;
 
     if (origWidth === 0 || origHeight === 0) {
       throw new Error('Invalid image: could not read dimensions');

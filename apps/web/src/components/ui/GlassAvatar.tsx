@@ -1,5 +1,5 @@
 /**
- * GlassAvatar — User avatar with initials fallback and glass styling.
+ * GlassAvatar V2 — User avatar with V2 tokens.
  */
 export type GlassAvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -30,7 +30,13 @@ function getInitials(name?: string, initials?: string): string {
     .toUpperCase();
 }
 
-export function GlassAvatar({ src, name, initials, size = 'md', className = '' }: GlassAvatarProps) {
+export function GlassAvatar({
+  src,
+  name,
+  initials,
+  size = 'md',
+  className = '',
+}: GlassAvatarProps) {
   return (
     <span
       className={[
@@ -39,10 +45,10 @@ export function GlassAvatar({ src, name, initials, size = 'md', className = '' }
         'flex-shrink-0',
         'font-semibold font-sans',
         'select-none',
-        'bg-gradient-to-br from-brand-400 to-brand-700',
+        'bg-gradient-to-br from-[var(--_brand-400)] to-[var(--_brand-600)]',
         'text-white',
-        'ring-2 ring-white/50',
-        'shadow-[0_2px_8px_rgba(84,115,252,0.22)]',
+        'ring-2 ring-white/40',
+        'shadow-[0_2px_8px_rgba(79,70,229,0.22)]',
         'overflow-hidden',
         'relative',
         SIZE_CLASSES[size],
@@ -54,7 +60,7 @@ export function GlassAvatar({ src, name, initials, size = 'md', className = '' }
       {src ? (
         <img src={src} alt={name || ''} className="w-full h-full object-cover" />
       ) : (
-        <span>{getInitials(name, initials)}</span>
+        <span aria-hidden>{getInitials(name, initials)}</span>
       )}
     </span>
   );

@@ -4,6 +4,7 @@ import * as crypto from 'node:crypto';
 import { SecureLogger } from '@medu/face-security';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { getOrganizationDate, getLocalDateTime } from '../common/date-range';
 import { getErrorMessage } from '../lib/error';
 
 /**
@@ -499,7 +500,7 @@ export class AttendanceDecisionEngine {
    * 6. Multiple valid groups are ambiguous.
    * 7. Never randomly select the first enrollment.
    */
-  private resolveTargetGroup(
+  public resolveTargetGroup(
     enrollments: Array<{
       groupId: string;
       group: {

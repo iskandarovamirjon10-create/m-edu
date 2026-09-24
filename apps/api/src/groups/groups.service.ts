@@ -82,10 +82,11 @@ export class GroupsService {
         name: data.name,
         courseId: data.courseId,
         teacherId: data.teacherId ?? null,
-        capacity: data.capacity,
-        room: data.room,
+        capacity: data.capacity ?? 20,
+        room: data.room || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         endDate: data.endDate ? new Date(data.endDate) : null,
+        isActive: data.isActive ?? true,
       },
     });
   }

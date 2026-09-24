@@ -35,3 +35,70 @@ Thumbs.db
 
 # Turborepo
 .turbo/
+
+# Local embedded PostgreSQL data (never commit)
+pgdata/
+.pgtmp*/
+
+# Ad-hoc one-off scripts and scratch files
+/fix*.js
+/fix_*.js
+/fix-*.js
+/auto-fix.js
+/final-fix.js
+/crm-fix.js
+/find_*.js
+/refactor_*.js
+/remove-orbs.js
+/safe-remove-orbs.js
+/rewrite-*.js
+/backend_audit.js
+/analyzer.js
+*.log
+error.log
+
+# Scratch / audit output at repo root
+/analysis.txt
+/audit.json
+/backend_audit_report.json
+/build_errors_current.txt
+/eslint_report.json
+/route-sweep-report.json
+/current_schema.sql
+/new_migration.sql
+/diff.txt
+/missing-*.txt
+/correct-models.txt
+
+# Prisma schema pull/repair artifacts (keep schema.prisma only)
+schema.prisma.pulled
+schema.prisma.head
+schema.prisma.head.utf8
+
+# apps/api scratch scripts
+apps/api/fix*.js
+apps/api/fix_*.js
+apps/api/dedupe.js
+apps/api/add-missing-models.js
+apps/api/rebuild-schema.js
+apps/api/restore-schema.js
+apps/api/revert-btree.js
+apps/api/write_schema.js
+apps/api/diff.txt
+apps/api/correct-models.txt
+apps/api/missing-*.txt
+apps/api/current_schema.sql
+apps/api/new_migration.sql
+apps/api/error.log
+apps/api/eslint_report.json
+apps/api/get-admin.ts
+apps/api/get-user.ts
+apps/api/get-users.ts
+apps/api/set-pass.ts
+apps/api/start-db.ts
+
+# Temporary gate / parity tooling
+/.gate/
+
+# Local Postgres temp dirs under apps/api
+apps/api/.pgtmp*/

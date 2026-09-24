@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { studentsApi, groupsApi } from '@/lib/api';
 import {
   PageHeader,
@@ -17,12 +17,16 @@ import {
   TextInput,
   Select,
   Badge,
+  GlassButton,
+  ConfirmDialog,
 } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { fullName } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Student, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
+import { useToasts } from '@/components/ui';
 
 interface StudentFilters {
   page: number;
@@ -32,14 +36,7 @@ interface StudentFilters {
 }
 
 function OrbBackdrop() {
-  return (
-    <div className="orb-container" aria-hidden="true">
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
-    </div>
-  );
+  return null;
 }
 
 export function formatStudentName(student: Student): string {
@@ -48,18 +45,22 @@ export function formatStudentName(student: Student): string {
 
 export function getStudentStatusBadge(isActive: boolean | undefined): { color: string; label: string } {
   return isActive === false
-    ? { color: 'red', label: 'Inactive' }
-    : { color: 'green', label: 'Active' };
+    ? { color: 'red', label: 'enum.status.INACTIVE' }
+    : { color: 'green', label: 'enum.status.ACTIVE' };
 }
 
 export function StudentsPage() {
-  usePageTitle('Students');
+  const { t } = useI18n();
+  usePageTitle(t('students.title'));
   const navigate = useNavigate();
+  const { push, toastNode } = useToasts();
+  const qc = useQueryClient();
 
   // Filter state
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [groupId, setGroupId] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const debouncedSearch = useDebounce(search, 300);
 
   // Build query params
@@ -118,6 +119,27 @@ export function StudentsPage() {
     [navigate],
   );
 
+  const remove = useMutation({
+    mutationFn: (id: string) => studentsApi.remove(id),
+    onSuccess: () => {
+      push('success', t('students.deleted'));
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (e: Error) => {
+      push('error', getErrorMessage(e));
+    },
+  });
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteTarget(id);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    remove.mutate(deleteTarget);
+    setDeleteTarget(null);
+  }, [deleteTarget, remove]);
+
   const { refetch: refetchStudents } = students;
   const handleRetry = useCallback(() => {
     void refetchStudents();
@@ -133,24 +155,26 @@ export function StudentsPage() {
         <OrbBackdrop />
         <div className="page-container space-y-4">
           <PageHeader
-            title="Students"
-            subtitle="Manage students, enrollments and attendance"
+            title={t('students.title')}
+            subtitle={t('students.pageSubtitle')}
             actions={
-              <Link to="/students/new" className="glass-btn-primary">
-                <svg
-                  className="h-4 w-4"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                </svg>
-                Add student
-              </Link>
+              <GlassButton asChild variant="primary">
+                <Link to="/students/new">
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                  </svg>
+                  {t('students.add')}
+                </Link>
+              </GlassButton>
             }
           />
           <div className="glass-card p-8">
-            <PageLoader label="Loading students…" />
+            <PageLoader label={t('students.loading')} />
           </div>
         </div>
       </>
@@ -164,25 +188,27 @@ export function StudentsPage() {
         <OrbBackdrop />
         <div className="page-container space-y-4">
           <PageHeader
-            title="Students"
-            subtitle="Manage students, enrollments and attendance"
+            title={t('students.title')}
+            subtitle={t('students.pageSubtitle')}
             actions={
-              <Link to="/students/new" className="glass-btn-primary">
-                <svg
-                  className="h-4 w-4"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                </svg>
-                Add student
-              </Link>
+              <GlassButton asChild variant="primary">
+                <Link to="/students/new">
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                  </svg>
+                  {t('students.add')}
+                </Link>
+              </GlassButton>
             }
           />
           <div className="glass-card p-8">
             <ErrorState
-              title="Failed to load students"
+              title={t('students.loadFailed')}
               message={getErrorMessage(students.error as Error)}
               onRetry={handleRetry}
             />
@@ -197,21 +223,23 @@ export function StudentsPage() {
       <OrbBackdrop />
       <div className="page-container space-y-4">
         <PageHeader
-          title="Students"
-          subtitle="Manage students, enrollments and attendance"
+          title={t('students.title')}
+          subtitle={t('students.pageSubtitle')}
           actions={
-            <Link to="/students/new" className="glass-btn-primary">
-              <svg
-                className="h-4 w-4"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-              </svg>
-              Add student
-            </Link>
-          }
+              <GlassButton asChild variant="primary">
+                <Link to="/students/new">
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                  </svg>
+                  {t('students.add')}
+                </Link>
+              </GlassButton>
+            }
         />
 
         {/* Filters */}
@@ -219,18 +247,18 @@ export function StudentsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
               <TextInput
-                placeholder="Search by name or email…"
+                placeholder={t('students.searchPlaceholderEmail')}
                 value={search}
                 onChange={handleSearchChange}
-                aria-label="Search students"
+                aria-label={t('students.searchLabel')}
                 type="search"
               />
               <Select
                 value={groupId}
                 onChange={handleGroupFilterChange}
-                aria-label="Filter by group"
+                aria-label={t('students.filterGroupLabel')}
               >
-                <option value="">All groups</option>
+                <option value="">{t('students.allGroups')}</option>
                 {groupList.map((group) => (
                   <option key={group.id} value={group.id}>
                     {group.name}
@@ -239,7 +267,9 @@ export function StudentsPage() {
               </Select>
             </div>
             <div className="text-sm sm:ml-4 sm:shrink-0" style={{ color: 'var(--text-primary)' }}>
-              {totalStudents} {totalStudents === 1 ? 'student' : 'students'}
+              {totalStudents === 1
+                ? t('students.totalOne')
+                : t('students.totalMany', { count: totalStudents })}
             </div>
           </div>
         </div>
@@ -248,16 +278,16 @@ export function StudentsPage() {
         <div className="glass-card overflow-hidden">
           {studentList.length === 0 ? (
             <EmptyState
-              title={hasActiveFilters ? 'No matching students' : 'No students found'}
+              title={hasActiveFilters ? t('students.emptyFiltered') : t('students.emptySearch')}
               message={
                 hasActiveFilters
-                  ? 'Try adjusting your filters to see more results.'
-                  : 'Add your first student to get started.'
+                  ? t('students.emptyFilteredHint')
+                  : t('students.emptyHint')
               }
               action={
-                <Link to="/students/new" className="glass-btn-primary">
-                  Add student
-                </Link>
+                <GlassButton asChild variant="primary">
+                  <Link to="/students/new">{t('students.add')}</Link>
+                </GlassButton>
               }
             />
           ) : (
@@ -266,11 +296,12 @@ export function StudentsPage() {
                 <Table>
                   <THead>
                     <TR>
-                      <TH>Name</TH>
-                      <TH>Email</TH>
-                      <TH>Groups</TH>
-                      <TH>Parent</TH>
-                      <TH>Status</TH>
+                      <TH>{t('common.name')}</TH>
+                      <TH>{t('common.email')}</TH>
+                      <TH>{t('students.col.groups')}</TH>
+                      <TH>{t('students.col.parentName')}</TH>
+                      <TH>{t('students.col.status')}</TH>
+                      <TH>{t('common.actions')}</TH>
                     </TR>
                   </THead>
                   <TBody>
@@ -290,7 +321,9 @@ export function StudentsPage() {
                           style={{ background: 'transparent' }}
                           tabIndex={0}
                           role="link"
-                          aria-label={`View student ${formatStudentName(student)}`}
+                          aria-label={t('students.viewStudentAria', {
+                            name: formatStudentName(student),
+                          })}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
@@ -325,8 +358,34 @@ export function StudentsPage() {
                           <TD>{student.parentName || '—'}</TD>
                           <TD>
                             <Badge color={statusBadge.color}>
-                              {statusBadge.label}
+                              {t(statusBadge.label)}
                             </Badge>
+                          </TD>
+                          <TD>
+                            <div
+                              className="flex gap-2"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            >
+                              <GlassButton
+                                asChild
+                                variant="ghost"
+                                size="sm"
+                              >
+                                <Link to={`/students/${student.id}/edit`}>
+                                  {t('common.edit')}
+                                </Link>
+                              </GlassButton>
+                              <GlassButton
+                                type="button"
+                                variant="danger"
+                                size="sm"
+                                onClick={() => handleDelete(student.id)}
+                                disabled={remove.isPending && remove.variables === student.id}
+                              >
+                                {t('common.delete')}
+                              </GlassButton>
+                            </div>
                           </TD>
                         </TR>
                       );
@@ -344,6 +403,16 @@ export function StudentsPage() {
             </>
           )}
         </div>
+
+        <ConfirmDialog
+          open={deleteTarget !== null}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+          description={t('students.confirmDelete')}
+          loading={remove.isPending}
+        />
+
+        {toastNode}
       </div>
     </>
   );

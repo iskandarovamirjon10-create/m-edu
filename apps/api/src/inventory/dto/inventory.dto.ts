@@ -13,28 +13,35 @@ export class CreateInventoryItemDto {
   @IsString()
   name: string;
 
-  // NOTE: must mirror the Prisma `InventoryCategory` enum — there is no
-  // OTHER value in the database, so accepting it here would fail at insert.
+  // NOTE: must mirror the Prisma `InventoryCategory` enum
   @IsEnum(['BOOKS', 'EQUIPMENT', 'FURNITURE', 'SUPPLIES', 'ELECTRONICS'])
   category: 'BOOKS' | 'EQUIPMENT' | 'FURNITURE' | 'SUPPLIES' | 'ELECTRONICS';
 
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
   quantity?: number = 0;
 
   @IsString()
   unit: string;
 
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
   minStock?: number = 0;
 
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
   purchasePrice?: number;
 
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
   sellingPrice?: number;
 
   @IsOptional()
@@ -62,6 +69,7 @@ export class UpdateInventoryItemDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
   quantity?: number;
 
   @IsOptional()
@@ -71,16 +79,19 @@ export class UpdateInventoryItemDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
   minStock?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
   purchasePrice?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
   sellingPrice?: number;
 
   @IsOptional()
@@ -105,15 +116,14 @@ export class CreateTransactionDto {
 
   @Type(() => Number)
   @IsInt()
+  @Min(1)
   quantity: number;
 
   @IsOptional()
   @IsString()
   notes?: string;
 
-  // Optional: the controller always overrides this with the authenticated
-  // user id (userId comes from auth, never from the client), so clients are
-  // not required to send it.
+  // Optional: the controller always overrides this with the authenticated user id
   @IsOptional()
   @IsUUID()
   createdBy?: string;
@@ -127,4 +137,11 @@ export class StockAdjustmentDto {
   @IsOptional()
   @IsString()
   reason?: string;
+}
+
+export class UpdateStockDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  quantity: number;
 }

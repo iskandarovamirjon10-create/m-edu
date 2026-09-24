@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { AllowAnyRole } from '../auth/roles.decorator';
 
 @ApiTags('Homework')
 @ApiBearerAuth()
@@ -15,12 +16,14 @@ import { CurrentUser } from '../auth/current-user.decorator';
 export class HomeworkController {
   constructor(private readonly homeworkService: HomeworkService) {}
 
+  @AllowAnyRole()
   @Get()
   @ApiOperation({ summary: 'List homework' })
   findAll(@CurrentUser('organizationId') orgId: string, @Query() query: HomeworkQuery) {
     return this.homeworkService.findAll(orgId, query);
   }
 
+  @AllowAnyRole()
   @Get(':id')
   @ApiOperation({ summary: 'Get homework details' })
   findOne(@CurrentUser('organizationId') orgId: string, @Param('id') id: string) {

@@ -6,6 +6,7 @@ import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
 import { CreateTeacherDto, UpdateTeacherDto } from '../common/dto';
 import { TeacherQuery } from '../common/dto/query';
+import { userPublicSelect } from '../common/selects/user.select';
 
 @Injectable()
 export class TeachersService {
@@ -55,35 +56,47 @@ export class TeachersService {
 
   async create(organizationId: string, data: CreateTeacherDto) {
     if (data.email) {
-      const existing = await this.prisma.user.findFirst({ where: { email: data.email } });
+      const existing = await this.prisma.user.findFirst({ where: { email: data.email, organizationId } });
       if (existing) throw new BadRequestException('Email already registered');
     }
 
+    // Mirrors student/user provisioning: the password is optional in the DTO,
+    // and a passwordless account simply cannot sign in with a password (login
+    // rejects a null hash). It is activated later via invite/Google linking.
+    // Demanding a password here contradicted both the DTO contract and the
+    // placeholder-email fallback below.
     const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : null;
     const email = data.email || `teacher-${randomUUID()}@placeholder.local`;
 
-    return this.prisma.teacher.create({
-      data: {
-        organization: { connect: { id: organizationId } },
-        specializations: data.specializations || [],
-        hourlyRate: data.hourlyRate,
-        bio: data.bio,
-        experience: data.experience,
-        user: {
-          create: {
-            organization: { connect: { id: organizationId } },
-            email,
-            passwordHash,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            phone: data.phone,
-            role: 'TEACHER',
-            settings: { create: {} },
+    try {
+      return await this.prisma.teacher.create({
+        data: {
+          organization: { connect: { id: organizationId } },
+          specializations: data.specializations || [],
+          hourlyRate: data.hourlyRate,
+          bio: data.bio,
+          experience: data.experience,
+          user: {
+            create: {
+              organization: { connect: { id: organizationId } },
+              email,
+              passwordHash,
+              firstName: data.firstName,
+              lastName: data.lastName,
+              phone: data.phone,
+              role: 'TEACHER',
+              settings: { create: {} },
+            },
           },
         },
-      },
-      include: { user: true },
-    });
+        include: { user: userPublicSelect },
+      });
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        throw new BadRequestException('This email is unavailable');
+      }
+      throw error;
+    }
   }
 
   async update(organizationId: string, id: string, data: UpdateTeacherDto) {
@@ -110,7 +123,7 @@ export class TeachersService {
         ...teacherData,
         ...(Object.keys(userData).length > 0 ? { user: { update: userData } } : {}),
       },
-      include: { user: true },
+      include: { user: userPublicSelect },
     });
   }
 
@@ -125,7 +138,7 @@ export class TeachersService {
   async remove(organizationId: string, id: string) {
     const teacher = await this.findOne(organizationId, id);
 
-    const groupCount = await this.prisma.group.count({ where: { teacherId: id } });
+    const groupCount = await this.prisma.group.count({ where: { teacherId: id, organizationId } });
     if (groupCount > 0) {
       throw new BadRequestException(
         'This teacher is assigned to groups — deactivate the teacher instead of deleting them',
@@ -140,7 +153,7 @@ export class TeachersService {
         await tx.notification.deleteMany({ where: { userId: teacher.userId } });
         await tx.session.deleteMany({ where: { userId: teacher.userId } });
         await tx.userSettings.deleteMany({ where: { userId: teacher.userId } });
-        await tx.user.delete({ where: { id: teacher.userId } });
+        await tx.user.deleteMany({ where: { id: teacher.userId, organizationId } });
       }
     });
 

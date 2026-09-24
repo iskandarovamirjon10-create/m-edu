@@ -2,6 +2,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 
 import {
@@ -32,7 +33,12 @@ import {
 } from '@medu/face-security';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { AttendanceDecisionEngine } from '../camera/attendance-decision.engine';
 import { decodeValidatedImage } from './image.util';
+import {
+  computeInvoiceOutstanding,
+  NON_BILLABLE_INVOICE_STATUSES,
+} from '../payments/invoice-outstanding';
 
 import {
   PrismaAuditAdapter,
@@ -91,6 +97,7 @@ export class FaceService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly attendanceDecisionEngine: AttendanceDecisionEngine,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -215,6 +222,9 @@ export class FaceService {
       process.env.BIOMETRIC_ENCRYPTION_KEY;
 
     if (configuredKey) {
+      if (configuredKey.length !== 32) {
+        throw new Error('BIOMETRIC_ENCRYPTION_KEY must be exactly 32 bytes long for AES-256');
+      }
       return new AesEncryptionService(configuredKey);
     }
 
@@ -231,31 +241,9 @@ export class FaceService {
   // ---------------------------------------------------------------------------
 
   private async createFaceEngine(): Promise<FaceEngine> {
-    this.engineProvider =
-      process.env.FACE_ENGINE_PROVIDER || 'mock';
-
-    if (
-      process.env.NODE_ENV === 'production' &&
-      this.engineProvider === 'mock'
-    ) {
-      throw new Error(
-        'FACE_ENGINE_PROVIDER must be configured in production. ' +
-          'Mock engines are forbidden in production environments. ' +
-          'Set FACE_ENGINE_PROVIDER to "real-local".',
-      );
-    }
-
-    if (this.engineProvider !== 'real-local') {
-      this.nestLogger.log(
-        'Using MOCK face recognition engine (development only)',
-      );
-
-      return this.createMockEngine();
-    }
-
-    return this.createRealEngine();
+    const { getSharedFaceEngine } = await import('./face-engine.factory');
+    return getSharedFaceEngine();
   }
-
   private async createRealEngine(): Promise<FaceEngine> {
     const detectorPath =
       process.env.FACE_DETECTOR_MODEL_PATH || '';
@@ -453,6 +441,27 @@ export class FaceService {
       );
   }
 
+  async cancelPendingEnrollment(tenant: TenantContext, enrollmentId: string) {
+    // Atomic guard: status is part of the WHERE clause so a concurrent
+    // activation between read and delete cannot be cancelled after the fact.
+    const deleted = await this.prisma.faceEnrollment.deleteMany({
+      where: {
+        id: enrollmentId,
+        organizationId: tenant.organizationId,
+        status: 'PENDING',
+      },
+    });
+    if (deleted.count === 0) {
+      const existing = await this.prisma.faceEnrollment.findFirst({
+        where: { id: enrollmentId, organizationId: tenant.organizationId },
+        select: { status: true },
+      });
+      if (!existing) throw new NotFoundException('Enrollment not found');
+      throw new BadRequestException('Only PENDING enrollments can be cancelled');
+    }
+    return { success: true };
+  }
+
   async revokeEnrollment(
     tenant: TenantContext,
     enrollmentId: string,
@@ -547,13 +556,142 @@ export class FaceService {
         imageBase64,
       );
 
-    return this
+    const result = await this
       .getRecognitionService()
       .processAttempt(
         tenant,
         sessionId,
         imageBuffer,
       );
+
+    // Entry gate: an identified student with an OVERDUE invoice is refused
+    // entry, and the attendance that the recognition pipeline just created is
+    // rolled back.
+    //
+    // F-009: `Student.balance` is a prepayment credit ledger (incremented on
+    // PAID payments, decremented on refunds) — it is NOT the outstanding debt.
+    // A student who never paid can still have balance 0, so the old
+    // `balance < 0` test both denied the wrong students and let debtors in.
+    // The obligation is derived from open invoices with the canonical formula
+    // in PaymentsService/InvoicesService (computeInvoiceOutstanding).
+    if (result.status === 'IDENTIFIED' && result.student?.id) {
+      const studentId = result.student.id;
+
+      // Tenant-scoped read — never resolve a student outside the caller's org.
+            const student = await this.prisma.student.findFirst({
+        where: { id: studentId, organizationId: tenant.organizationId },
+        select: { balance: true },
+      });
+
+      // NEW: Validate session attempt against schedule +/-30min
+      if (result.attendanceRecorded && result.attendanceRecordId) {
+        const attendanceRecord = await this.prisma.attendance.findUnique({
+          where: { id: result.attendanceRecordId },
+          select: { groupId: true },
+        });
+        
+        if (attendanceRecord && attendanceRecord.groupId) {
+          const isScheduleValid = await this.attendanceDecisionEngine.validateSessionGroupTime(
+            tenant.organizationId,
+            studentId,
+            attendanceRecord.groupId,
+            'Asia/Tashkent'
+          );
+
+          if (!isScheduleValid) {
+            await this.rollbackAttemptAttendance(
+              tenant.organizationId,
+              studentId,
+              result.attemptId,
+              result.attendanceRecordId,
+            );
+            return {
+              ...result,
+              attendanceRecorded: false,
+              accessDenied: true,
+              accessReason: 'OUT_OF_SCHEDULE',
+            };
+          }
+        }
+      }
+
+      if (student) {
+        const openInvoices = await this.prisma.invoice.findMany({
+          where: {
+            organizationId: tenant.organizationId,
+            studentId,
+            status: { notIn: [...NON_BILLABLE_INVOICE_STATUSES] },
+          },
+          select: { status: true, total: true, paidAmount: true, refundedAmount: true, dueDate: true },
+        });
+        const { overdue, outstanding } = computeInvoiceOutstanding(openInvoices);
+
+        if (overdue > 0) {
+          // Roll back ONLY the rows this attempt created. The previous
+          // implementation deleted every attendance/event row for the student
+          // within a 5-second window, which wiped a teacher's manual entry (or
+          // a second, legitimate recognition) that happened to land in that
+          // window.
+          await this.rollbackAttemptAttendance(
+            tenant.organizationId,
+            studentId,
+            result.attemptId,
+            result.attendanceRecordId,
+          );
+
+          return {
+            ...result,
+            attendanceRecorded: false,
+            accessDenied: true,
+            accessReason: 'INSUFFICIENT_FUNDS',
+            balance: Number(student.balance),
+            outstanding,
+            overdue,
+          };
+        }
+      }
+    }
+
+    return {
+      ...result,
+      accessDenied: false,
+    };
+  }
+
+  /**
+   * Undo the attendance produced by one recognition attempt.
+   *
+   * Deletes by exact id / attempt id inside a transaction so it can never
+   * touch an unrelated row:
+   *  - the `CameraAttendanceEvent` rows linked to that attendance row
+   *  - the `Attendance` row itself, re-checked against org + student + attempt
+   *
+   * When the pipeline did not create an attendance row for this attempt
+   * (`attendanceRecordId === null`, e.g. the decision was DUPLICATE_PREVENTED)
+   * nothing is deleted — the pre-existing row belongs to someone else.
+   */
+  private async rollbackAttemptAttendance(
+    organizationId: string,
+    studentId: string,
+    attemptId: string,
+    attendanceRecordId: string | null,
+  ): Promise<void> {
+    if (!attendanceRecordId) return;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cameraAttendanceEvent.deleteMany({
+        where: { organizationId, studentId, attendanceId: attendanceRecordId },
+      });
+
+      await tx.attendance.deleteMany({
+        where: {
+          id: attendanceRecordId,
+          organizationId,
+          studentId,
+          recognitionAttemptId: attemptId,
+        },
+      });
+    });
   }
 
   async finishSession(
@@ -907,3 +1045,5 @@ export class FaceService {
     };
   }
 }
+
+

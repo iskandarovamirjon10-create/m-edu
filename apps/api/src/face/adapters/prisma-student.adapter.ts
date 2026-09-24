@@ -7,7 +7,18 @@ import type {
 } from '@medu/core/src/ports/student-directory.port';
 import type { Student, User } from '@prisma/client';
 
-type StudentWithUser = Student & { user: User };
+/** Identity fields only — never loads auth material such as passwordHash (F-008). */
+const FACE_USER_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  isActive: true,
+} as const;
+
+type FaceUserProjection = Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'isActive'>;
+
+type StudentWithUser = Student & { user: FaceUserProjection };
 
 @Injectable()
 export class PrismaStudentAdapter implements StudentDirectoryPort {
@@ -28,7 +39,7 @@ export class PrismaStudentAdapter implements StudentDirectoryPort {
   async getStudent(organizationId: string, studentId: string): Promise<StudentInfo | null> {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, user: { organizationId } },
-      include: { user: true },
+      include: { user: { select: FACE_USER_SELECT } },
     }) as StudentWithUser | null;
     
     if (!student || !student.user) return null;
@@ -40,6 +51,9 @@ export class PrismaStudentAdapter implements StudentDirectoryPort {
       where: {
         studentId,
         groupId,
+        // Membership must be ACTIVE — a deactivated enrollment must not
+        // qualify a student for face-recognition attendance.
+        isActive: true,
         group: { organizationId },
       },
     });
@@ -66,7 +80,7 @@ export class PrismaStudentAdapter implements StudentDirectoryPort {
   async isStudentActive(organizationId: string, studentId: string): Promise<boolean> {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, user: { organizationId } },
-      include: { user: true },
+      include: { user: { select: FACE_USER_SELECT } },
     });
     
     return !!(student && student.user && student.user.isActive);
@@ -75,7 +89,7 @@ export class PrismaStudentAdapter implements StudentDirectoryPort {
   async listStudentsInGroup(organizationId: string, groupId: string): Promise<StudentInfo[]> {
     const memberships = await this.prisma.studentGroup.findMany({
       where: { groupId, group: { organizationId } },
-      include: { student: { include: { user: true } } },
+      include: { student: { include: { user: { select: FACE_USER_SELECT } } } },
     });
     
     return memberships

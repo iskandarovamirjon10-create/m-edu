@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StudentsService } from '../students.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 function createMockPrisma() {
   const studentGroup = {
@@ -12,36 +13,37 @@ function createMockPrisma() {
     count: vi.fn(),
   };
   const obj = {
-    student: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn() },
-    user: { findFirst: vi.fn(), delete: vi.fn() },
+    student: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), deleteMany: vi.fn(), count: vi.fn() },
+    user: { findFirst: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
     group: { findFirst: vi.fn() },
     studentGroup,
     payment: { count: vi.fn() },
     attendance: { count: vi.fn() },
     grade: { count: vi.fn() },
+    invoice: { count: vi.fn() },
     faceEnrollment: { count: vi.fn() },
     recognitionAttempt: { count: vi.fn() },
     cameraAttendanceEvent: { count: vi.fn() },
     notification: { deleteMany: vi.fn() },
     session: { deleteMany: vi.fn() },
     userSettings: { deleteMany: vi.fn() },
+    $queryRaw: vi.fn(),
+    $transaction: vi.fn(),
   };
-  // $transaction must use the same mock instance, not a fresh clone,
-  // so that mocks set on prisma.studentGroup are visible inside the tx callback.
-  obj.$transaction = vi.fn((fn: any) => fn(obj));
+  obj.$transaction.mockImplementation((fn: (tx: typeof obj) => Promise<unknown>) => fn(obj));
   return obj;
 }
 
+type MockPrisma = ReturnType<typeof createMockPrisma>;
+
 describe('StudentsService delete semantics', () => {
-  let prisma: any;
+  let prisma: MockPrisma;
   let svc: StudentsService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    // $transaction must call the callback with the tx object
-    prisma.$transaction.mockImplementation((fn: any) => fn(prisma));
-    svc = new StudentsService(prisma);
+    svc = new StudentsService(prisma as unknown as PrismaService);
   });
 
   it('rejects deleting a student with historical records', async () => {
@@ -52,6 +54,7 @@ describe('StudentsService delete semantics', () => {
     prisma.faceEnrollment.count.mockResolvedValue(0);
     prisma.recognitionAttempt.count.mockResolvedValue(0);
     prisma.cameraAttendanceEvent.count.mockResolvedValue(0);
+    prisma.invoice.count.mockResolvedValue(0);
 
     await expect(svc.remove('org-1', 's1')).rejects.toThrow(
       'deactivate the student instead of deleting them',
@@ -67,28 +70,28 @@ describe('StudentsService delete semantics', () => {
     prisma.faceEnrollment.count.mockResolvedValue(0);
     prisma.recognitionAttempt.count.mockResolvedValue(0);
     prisma.cameraAttendanceEvent.count.mockResolvedValue(0);
+    prisma.invoice.count.mockResolvedValue(0);
 
     const result = await svc.remove('org-1', 's1');
 
-    expect(prisma.student.delete).toHaveBeenCalledWith({ where: { id: 's1', organizationId: 'org-1' } });
+    expect(prisma.student.deleteMany).toHaveBeenCalledWith({ where: { id: 's1', organizationId: 'org-1' } });
     expect(prisma.studentGroup.deleteMany).toHaveBeenCalledWith({ where: { studentId: 's1', organizationId: 'org-1' } });
     expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } });
     expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } });
     expect(prisma.userSettings.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } });
-    expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'u1' } });
+    expect(prisma.user.deleteMany).toHaveBeenCalledWith({ where: { id: 'u1', organizationId: 'org-1' } });
     expect(result.message).toContain('deleted');
   });
 });
 
 describe('StudentsService findAll tenant scoping', () => {
-  let prisma: any;
+  let prisma: MockPrisma;
   let svc: StudentsService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    prisma.$transaction.mockImplementation((fn: any) => fn(prisma));
-    svc = new StudentsService(prisma);
+    svc = new StudentsService(prisma as unknown as PrismaService);
   });
 
   it('scopes the groupId filter by organizationId (cross-tenant group refs cannot leak)', async () => {
@@ -119,14 +122,13 @@ describe('StudentsService findAll tenant scoping', () => {
 });
 
 describe('StudentsService assignToGroup capacity enforcement', () => {
-  let prisma: any;
+  let prisma: MockPrisma;
   let svc: StudentsService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    prisma.$transaction.mockImplementation((fn: any) => fn(prisma));
-    svc = new StudentsService(prisma);
+    svc = new StudentsService(prisma as unknown as PrismaService);
   });
 
   it('rejects adding a student when the group is at capacity (20/20)', async () => {

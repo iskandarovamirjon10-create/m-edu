@@ -1,3 +1,4 @@
+import { computeAttendanceRate } from '../common/attendance-rate';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -32,11 +33,13 @@ export class DashboardService {
         _sum: { amount: true },
         _count: true,
       }),
+      // Cash basis: revenue is grouped by when the payment was actually
+      // collected (paidAt), not when the Payment row was created.
       this.prisma.$queryRaw`
-        SELECT DATE_TRUNC('month', "createdAt") as month, SUM(amount)::decimal as total, COUNT(*)::int as count
+        SELECT DATE_TRUNC('month', "paidAt") as month, SUM(amount)::decimal as total, COUNT(*)::int as count
         FROM "Payment"
-        WHERE "organizationId" = ${organizationId}::uuid AND status = 'PAID'
-        GROUP BY DATE_TRUNC('month', "createdAt")
+        WHERE "organizationId" = ${organizationId}::uuid AND status = 'PAID' AND "paidAt" IS NOT NULL
+        GROUP BY DATE_TRUNC('month', "paidAt")
         ORDER BY month DESC
         LIMIT 12
       ` as unknown as Array<{ month: Date; total: string | number; count: number }>,
@@ -121,3 +124,4 @@ export class DashboardService {
     };
   }
 }
+

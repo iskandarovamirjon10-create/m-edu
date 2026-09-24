@@ -58,6 +58,22 @@ function makePrisma() {
     cameraAttendanceEvent: {
       count: vi.fn().mockResolvedValue(0),
     },
+
+    // Insufficient-funds entry gate (F-009): the gate reads the student's
+    // invoices, not `Student.balance`.
+    student: {
+      findFirst: vi.fn().mockResolvedValue({ balance: 0 }),
+    },
+
+    invoice: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+
+    attendance: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+
+    $transaction: vi.fn(),
   } as unknown as PrismaService;
 
   return prisma;
@@ -252,7 +268,7 @@ describe('FaceService', () => {
   /* ──────────────────────────────────────────────────────────────────── */
 
   describe('getRecognitionHistory', () => {
-    it('normalizes ISO date strings into Date instances', async () => {
+    it('normalizes ISO date strings into day-bounded Date ranges', async () => {
       const { service, prisma } = await makeService();
 
       const dateFrom = '2026-09-01T00:00:00.000Z';
@@ -273,10 +289,12 @@ describe('FaceService', () => {
 
       expect(args.where.organizationId).toBe('org-1');
 
+      // P1-05 date-range helpers: gte = start of day, lte = end-of-day
+      // inclusive (23:59:59.999) so a bare dateTo does not drop same-day rows.
       expect(args.where.occurredAt).toEqual(
         expect.objectContaining({
-          gte: new Date(dateFrom),
-          lte: new Date(dateTo),
+          gte: new Date(Date.UTC(2026, 8, 1)),
+          lte: new Date(Date.UTC(2026, 8, 30, 23, 59, 59, 999)),
         }),
       );
     });
@@ -498,6 +516,197 @@ describe('FaceService', () => {
       for (const call of aggregateCalls) {
         expect(call[0]?.where?.organizationId).toBe('org-1');
       }
+    });
+  });
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /* Insufficient-funds entry gate (F-009)                                */
+  /* ──────────────────────────────────────────────────────────────────── */
+
+  describe('insufficient-funds entry gate', () => {
+    /** Minimal payload that passes magic-byte validation (JPEG SOI + APP0). */
+    const JPEG_BASE64 = '/9j/4A==';
+
+    function overdueInvoice() {
+      return {
+        status: 'ISSUED',
+        total: 1_000,
+        paidAmount: 0,
+        refundedAmount: 0,
+        dueDate: new Date('2020-01-01T00:00:00.000Z'),
+      };
+    }
+
+    function attemptResult(overrides: Record<string, unknown> = {}) {
+      return {
+        attemptId: 'attempt-1',
+        identified: true,
+        status: 'IDENTIFIED',
+        student: { id: 'student-1', firstName: 'A', lastName: 'B' },
+        confidence: 'HIGH',
+        liveness: 'PASS',
+        qualityScore: 0.9,
+        attendanceRecorded: true,
+        attendanceDecision: 'RECORDED',
+        attendanceRecordId: 'attendance-1',
+        message: 'matched',
+        ...overrides,
+      };
+    }
+
+    function stubRecognition(service: FaceService, result: unknown) {
+      vi.spyOn(
+        service as unknown as { getRecognitionService: () => unknown },
+        'getRecognitionService',
+      ).mockReturnValue({
+        processAttempt: vi.fn().mockResolvedValue(result),
+      });
+    }
+
+    function makeTransactionClient() {
+      return {
+        cameraAttendanceEvent: {
+          deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        attendance: {
+          deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+      };
+    }
+
+    it('rolls back only the attendance created by the refused attempt', async () => {
+      const { service, prisma } = await makeService();
+
+      stubRecognition(service, attemptResult());
+
+      prisma.student.findFirst.mockResolvedValue({ balance: 0 });
+      prisma.invoice.findMany.mockResolvedValue([overdueInvoice()]);
+
+      const tx = makeTransactionClient();
+
+      prisma.$transaction.mockImplementation(
+        (fn: (client: typeof tx) => Promise<unknown>) => fn(tx),
+      );
+
+      const result = await service.processAttempt(
+        manager,
+        'session-1',
+        JPEG_BASE64,
+      );
+
+      expect(result).toMatchObject({
+        accessDenied: true,
+        accessReason: 'INSUFFICIENT_FUNDS',
+        attendanceRecorded: false,
+        overdue: 1_000,
+      });
+
+      // The Attendance row is deleted by exact id + tenant + attempt. A
+      // student-scoped time-window delete would also wipe a teacher's manual
+      // entry (or a second legitimate recognition) landing in that window.
+      expect(tx.attendance.deleteMany).toHaveBeenCalledWith({
+        where: {
+          id: 'attendance-1',
+          organizationId: 'org-1',
+          studentId: 'student-1',
+          recognitionAttemptId: 'attempt-1',
+        },
+      });
+
+      expect(tx.cameraAttendanceEvent.deleteMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: 'org-1',
+          studentId: 'student-1',
+          attendanceId: 'attendance-1',
+        },
+      });
+    });
+
+    it('deletes nothing when the attempt created no attendance row', async () => {
+      // DUPLICATE_PREVENTED → attendanceRecordId is null, so the pre-existing
+      // row belongs to an earlier recognition and must survive untouched.
+      const { service, prisma } = await makeService();
+
+      stubRecognition(
+        service,
+        attemptResult({
+          attendanceRecorded: false,
+          attendanceDecision: 'DUPLICATE_PREVENTED',
+          attendanceRecordId: null,
+        }),
+      );
+
+      prisma.student.findFirst.mockResolvedValue({ balance: 0 });
+      prisma.invoice.findMany.mockResolvedValue([overdueInvoice()]);
+
+      const tx = makeTransactionClient();
+
+      prisma.$transaction.mockImplementation(
+        (fn: (client: typeof tx) => Promise<unknown>) => fn(tx),
+      );
+
+      const result = await service.processAttempt(
+        manager,
+        'session-1',
+        JPEG_BASE64,
+      );
+
+      expect(result).toMatchObject({
+        accessDenied: true,
+        attendanceRecorded: false,
+      });
+
+      expect(tx.attendance.deleteMany).not.toHaveBeenCalled();
+      expect(tx.cameraAttendanceEvent.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('admits a student whose invoices are fully paid', async () => {
+      const { service, prisma } = await makeService();
+
+      stubRecognition(service, attemptResult());
+
+      prisma.student.findFirst.mockResolvedValue({ balance: 0 });
+      prisma.invoice.findMany.mockResolvedValue([
+        {
+          ...overdueInvoice(),
+          status: 'PAID',
+          paidAmount: 1_000,
+        },
+      ]);
+
+      const result = await service.processAttempt(
+        manager,
+        'session-1',
+        JPEG_BASE64,
+      );
+
+      expect(result).toMatchObject({ accessDenied: false });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('never resolves a student outside the caller\u2019s organization', async () => {
+      const { service, prisma } = await makeService();
+
+      stubRecognition(service, attemptResult());
+
+      // Tenant-scoped read returns nothing → the gate cannot deny (or touch)
+      // a student that does not belong to this organization.
+      prisma.student.findFirst.mockResolvedValue(null);
+
+      const result = await service.processAttempt(
+        manager,
+        'session-1',
+        JPEG_BASE64,
+      );
+
+      expect(prisma.student.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'student-1', organizationId: 'org-1' },
+        }),
+      );
+
+      expect(prisma.invoice.findMany).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ accessDenied: false });
     });
   });
 });

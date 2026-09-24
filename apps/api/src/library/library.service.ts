@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Prisma, BorrowStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLibraryBookDto, UpdateLibraryBookDto } from './dto/create-library-book.dto';
 import { BorrowBookDto, ReturnBookDto } from './dto/library-transaction.dto';
 import { PaginationParams } from '../common/dto/pagination';
 import { parsePagination } from '../lib/pagination';
-import { BorrowStatus } from '@prisma/client';
 
 @Injectable()
 export class LibraryService {
@@ -13,9 +13,9 @@ export class LibraryService {
   // ===================== Book Management =====================
 
   async findAllBooks(organizationId: string, params: PaginationParams) {
-    const { page, limit, search } = params;
+    const { search } = params;
 
-    const where: any = { organizationId };
+    const where: Prisma.LibraryBookWhereInput = { organizationId };
 
     if (search) {
       where.OR = [
@@ -56,7 +56,7 @@ export class LibraryService {
   }
 
   async findBookById(organizationId: string, id: string) {
-    const book = await this.prisma.libraryBook.findUnique({
+    const book = await this.prisma.libraryBook.findFirst({
       where: { id, organizationId },
       include: {
         borrowRecords: {
@@ -92,7 +92,7 @@ export class LibraryService {
         organizationId,
         OR: [
           { barcode: dto.barcode },
-          { isbn: dto.isbn },
+          ...(dto.isbn ? [{ isbn: dto.isbn }] : []),
         ],
       },
     });
@@ -105,15 +105,15 @@ export class LibraryService {
       data: {
         ...dto,
         organizationId,
-        available: dto.quantity,
+        available: dto.quantity ?? 1,
       },
     });
   }
 
   async updateBook(organizationId: string, id: string, dto: UpdateLibraryBookDto) {
-    const book = await this.findBookById(organizationId, id);
+    await this.findBookById(organizationId, id);
 
-    let updateData: any = { ...dto };
+    const updateData: Prisma.LibraryBookUpdateInput = { ...dto };
     if (dto.quantity !== undefined) {
       const borrowedCount = await this.prisma.libraryBorrow.count({
         where: {
@@ -130,13 +130,13 @@ export class LibraryService {
     }
 
     return this.prisma.libraryBook.update({
-      where: { id, organizationId },
+      where: { id },
       data: updateData,
     });
   }
 
   async deleteBook(organizationId: string, id: string) {
-    const book = await this.findBookById(organizationId, id);
+    await this.findBookById(organizationId, id);
 
     // Check if book is currently borrowed
     const activeBorrows = await this.prisma.libraryBorrow.count({
@@ -151,7 +151,7 @@ export class LibraryService {
     }
 
     return this.prisma.libraryBook.delete({
-      where: { id, organizationId },
+      where: { id },
     });
   }
 
@@ -160,8 +160,7 @@ export class LibraryService {
   async borrowBook(organizationId: string, dto: BorrowBookDto) {
     const { bookId, studentId, dueDate } = dto;
 
-    // Verify student belongs to this organization and is in valid state.
-    const student = await this.prisma.student.findUnique({
+    const student = await this.prisma.student.findFirst({
       where: { id: studentId, organizationId },
     });
 
@@ -169,42 +168,36 @@ export class LibraryService {
       throw new NotFoundException('Student not found');
     }
 
-    // Check overdue books (this read is safe because overdue is a property of
-    // existing borrow records, not a quantity that could change unexpectedly).
-    const overdueCount = await this.prisma.libraryBorrow.count({
-      where: {
-        studentId,
-        organizationId,
-        status: 'ACTIVE',
-        dueDate: { lt: new Date() },
-      },
-    });
-
-    if (overdueCount > 0) {
-      throw new BadRequestException('Student has overdue books');
-    }
-
-    // Check for existing active borrow (read inside logical flow, not critical
-    // for concurrency, but kept to prevent duplicate borrow attempts).
-    const existingBorrow = await this.prisma.libraryBorrow.findFirst({
-      where: {
-        bookId,
-        studentId,
-        organizationId,
-        status: 'ACTIVE',
-      },
-    });
-
-    if (existingBorrow) {
-      throw new BadRequestException('Student has already borrowed this book');
-    }
-
     return this.prisma.$transaction(async (tx) => {
-      // Atomic availability check with update. The WHERE clause enforces
-      // both the tenant (organizationId) and the availability constraint
-      // (available >= 1) in a single SQL statement — eliminates the
-      // check-then-act race that existed when the check was done outside
-      // the transaction.
+      // Pessimistic lock on the book row to serialize concurrent borrows
+      await tx.$queryRaw`SELECT id FROM "LibraryBook" WHERE id = ${bookId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+
+      const overdueCount = await tx.libraryBorrow.count({
+        where: {
+          studentId,
+          organizationId,
+          status: 'ACTIVE',
+          dueDate: { lt: new Date() },
+        },
+      });
+
+      if (overdueCount > 0) {
+        throw new BadRequestException('Student has overdue books');
+      }
+
+      const existingBorrow = await tx.libraryBorrow.findFirst({
+        where: {
+          bookId,
+          studentId,
+          organizationId,
+          status: 'ACTIVE',
+        },
+      });
+
+      if (existingBorrow) {
+        throw new BadRequestException('Student has already borrowed this book');
+      }
+
       const updateResult = await tx.libraryBook.updateMany({
         where: {
           id: bookId,
@@ -218,7 +211,6 @@ export class LibraryService {
         throw new BadRequestException('Book is not available');
       }
 
-      // Create borrow record only after the atomic availability decrement.
       const borrow = await tx.libraryBorrow.create({
         data: {
           organizationId,
@@ -253,12 +245,14 @@ export class LibraryService {
 
     const now = new Date();
     const isLate = now > borrow.dueDate;
-    const lateDays = isLate ? Math.ceil((now.getTime() - borrow.dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+    // Complete days late; any lateness bills at least 1 day.
+    // Math.ceil overbilled day boundaries (3d+1ms → 4 days).
+    const lateDays = isLate
+      ? Math.max(1, Math.floor((now.getTime() - borrow.dueDate.getTime()) / (1000 * 60 * 60 * 24)))
+      : 0;
     const lateFee = isLate ? lateDays * 5000 : null; // 5000 UZS per day
 
-    // Start transaction
     return this.prisma.$transaction(async (tx) => {
-      // Update borrow record
       const updatedBorrow = await tx.libraryBorrow.update({
         where: { id: borrowId },
         data: {
@@ -268,7 +262,6 @@ export class LibraryService {
         },
       });
 
-      // Update book availability
       await tx.libraryBook.update({
         where: { id: borrow.bookId },
         data: {
@@ -276,13 +269,11 @@ export class LibraryService {
         },
       });
 
-      // Update condition if book was damaged
       if (condition === 'damaged') {
-        // Only decrement quantity/available if the book actually exists and has sufficient quantity
-        const book = await tx.libraryBook.findUnique({ where: { id: borrow.bookId, organizationId } });
+        const book = await tx.libraryBook.findFirst({ where: { id: borrow.bookId, organizationId } });
         if (book && book.quantity > 0) {
           await tx.libraryBook.update({
-            where: { id: borrow.bookId, organizationId },
+            where: { id: borrow.bookId },
             data: {
               quantity: { decrement: 1 },
               available: Math.max(0, book.available - 1),
@@ -298,7 +289,7 @@ export class LibraryService {
   // ===================== Student & Reports =====================
 
   async getStudentBorrows(organizationId: string, studentId: string) {
-    const student = await this.prisma.student.findUnique({
+    const student = await this.prisma.student.findFirst({
       where: { id: studentId, organizationId },
     });
 

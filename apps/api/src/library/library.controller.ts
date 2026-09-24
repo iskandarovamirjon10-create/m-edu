@@ -19,6 +19,7 @@ import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
 import { PaginationParams } from '../common/dto/pagination';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { AllowAnyRole } from '../auth/roles.decorator';
 
 @Controller('library')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,6 +28,7 @@ export class LibraryController {
 
   // ===================== Books =====================
 
+  @AllowAnyRole()
   @Get('books')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async findAllBooks(
@@ -36,6 +38,7 @@ export class LibraryController {
     return this.libraryService.findAllBooks(user.organizationId, params);
   }
 
+  @AllowAnyRole()
   @Get('books/search')
   async searchBooks(
     @CurrentUser() user: any,
@@ -47,6 +50,7 @@ export class LibraryController {
     return this.libraryService.searchBooks(user.organizationId, query);
   }
 
+  @AllowAnyRole()
   @Get('books/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async findBookById(
@@ -105,6 +109,7 @@ export class LibraryController {
     return this.libraryService.returnBook(user.organizationId, id, dto);
   }
 
+  @AllowAnyRole()
   @Get('overdue')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async getOverdueBooks(
@@ -116,6 +121,7 @@ export class LibraryController {
 
   // ===================== Student View =====================
 
+  @AllowAnyRole()
   @Get('student/:studentId')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async getStudentBorrows(
@@ -127,6 +133,7 @@ export class LibraryController {
 
   // ===================== Statistics =====================
 
+  @AllowAnyRole()
   @Get('stats')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async getLibraryStats(@CurrentUser() user: any) {

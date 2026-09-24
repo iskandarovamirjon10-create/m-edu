@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OrganizationsService } from '../organizations.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 function createMockPrisma() {
   return {
@@ -11,13 +12,13 @@ function createMockPrisma() {
 }
 
 describe('OrganizationsService', () => {
-  let prisma: any;
+  let prisma: ReturnType<typeof createMockPrisma>;
   let svc: OrganizationsService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new OrganizationsService(prisma);
+    svc = new OrganizationsService(prisma as unknown as PrismaService);
   });
 
   describe('getOrganization', () => {
