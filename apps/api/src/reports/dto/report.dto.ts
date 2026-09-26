@@ -86,10 +86,34 @@ export class SaveReportDefinitionDto {
 }
 
 export class ExportReportDto {
+  @IsOptional()
   @ValidateNested()
   @Type(() => RunReportParamsDto)
-  params: RunReportParamsDto;
+  params?: RunReportParamsDto;
 
-  @IsOptional() @IsIn(['csv', 'xlsx', 'pdf'])
+  @IsOptional()
+  @IsIn(REPORT_DIMENSIONS)
+  type?: ReportDimension;
+
+  @IsOptional()
+  @IsString()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  dateTo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  status?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  columns?: string[];
+
+  @IsOptional()
+  @IsIn(['csv', 'xlsx', 'pdf'])
   format?: 'csv' | 'xlsx' | 'pdf';
 }

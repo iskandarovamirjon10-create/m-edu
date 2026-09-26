@@ -39,14 +39,14 @@ describe('StudentsService group membership semantics', () => {
       );
     });
 
-    it('sets isActive to false on studentGroup update', async () => {
+    it('sets isActive to false and stamps leftAt on studentGroup update', async () => {
       prisma.studentGroup.findFirst.mockResolvedValue({ studentId: 's1', groupId: 'g1' });
       prisma.studentGroup.update.mockResolvedValue({ studentId: 's1', groupId: 'g1', isActive: false });
 
       const result = await svc.removeFromGroup('org-1', 's1', 'g1');
       expect(prisma.studentGroup.update).toHaveBeenCalledWith({
         where: { studentId_groupId: { studentId: 's1', groupId: 'g1' } },
-        data: { isActive: false },
+        data: { isActive: false, leftAt: expect.any(Date) },
       });
       expect(result.isActive).toBe(false);
     });

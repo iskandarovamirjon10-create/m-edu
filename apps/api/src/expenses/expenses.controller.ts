@@ -8,6 +8,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ADMIN_ROLES } from '../auth/authorization.policy';
+import type { RequestUser } from '../auth/types';
 
 @ApiTags('Expenses')
 @ApiBearerAuth()
@@ -54,7 +55,10 @@ export class ExpensesController {
   @Delete(':id')
   @Roles('SUPER_ADMIN', 'ORG_ADMIN')
   @ApiOperation({ summary: 'Delete expense' })
-  remove(@CurrentUser('organizationId') orgId: string, @Param('id') id: string) {
-    return this.expensesService.remove(orgId, id);
+  remove(@CurrentUser() user: RequestUser, @Param('id') id: string) {
+    return this.expensesService.remove(user.organizationId, id, user.sub);
   }
 }
+
+
+

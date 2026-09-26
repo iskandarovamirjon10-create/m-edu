@@ -6,9 +6,11 @@ import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { BootstrapDto, ExchangeAuthCodeDto, ForgotPasswordDto, LoginDto, RegisterDto, ResetPasswordDto } from './dto';
+import { BootstrapDto, ExchangeAuthCodeDto, ForgotPasswordDto, LoginDto, ParentLoginDto, RegisterDto, ResetPasswordDto } from './dto';
 import { GoogleProfile, RequestUser } from './types';
 import { ParentPortalService } from '../parent-portal/parent-portal.service';
+import { authCookieMaxAgeMs } from './auth.ttl';
+import { resolveFrontendUrl } from './auth.utils';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -27,7 +29,7 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: authCookieMaxAgeMs(),
     });
     return { user: result.user };
   }
@@ -60,7 +62,7 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: authCookieMaxAgeMs(),
     });
     return { user: result.user };
   }
@@ -83,11 +85,11 @@ export class AuthController {
       const result = await this.authService.googleLogin(googleUser);
       const authCode = await this.authService.generateAuthCode(result.accessToken, result.user.id);
 
-      const frontendUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const frontendUrl = resolveFrontendUrl();
       const redirectUrl = `${frontendUrl}/auth/callback?code=${encodeURIComponent(authCode)}`;
       res.redirect(redirectUrl);
     } catch (error: unknown) {
-      const frontendUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const frontendUrl = resolveFrontendUrl();
       // Only client-safe messages reach the frontend: HttpException messages
       // are already sanitized (global filter contract); anything else becomes
       // a generic message (no stack traces, no internals).
@@ -107,7 +109,7 @@ export class AuthController {
 
   @Post('oauth/exchange')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
-  @ApiOperation({ summary: 'Exchange authorization code for JWT' })
+  @ApiOperation({ summary: 'Exchange authorization code for session cookie' })
   async exchangeAuthCode(@Body() body: ExchangeAuthCodeDto, @Res({ passthrough: true }) res: Response) {
     if (!body.code) {
       throw new BadRequestException('Authorization code is required');
@@ -117,9 +119,12 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: authCookieMaxAgeMs(),
     });
-    return { accessToken };
+    // Deliberately NOT echoed in the body: the session must stay unreadable to
+    // JavaScript (HttpOnly), and no client code consumes it — the SPA reads the
+    // identity back from `GET /auth/me`.
+    return { authenticated: true };
   }
 
   @Get('apple')
@@ -145,12 +150,18 @@ export class AuthController {
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Refresh access token' })
   async refresh(@Req() req: Request & { user: RequestUser }, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.refreshToken(req.user.sub, req.user.sid ?? undefined);
+    // `role` selects the session table: 'PARENT' -> ParentSession,
+    // anything else -> Session. Never resolve a sid against both.
+    const result = await this.authService.refreshToken(
+      req.user.sub,
+      req.user.sid ?? undefined,
+      req.user.role,
+    );
     res.cookie('access_token', result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: authCookieMaxAgeMs(),
     });
     return { user: result.user };
   }
@@ -174,7 +185,7 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user profile' })
   async getMe(@Req() req: Request & { user: RequestUser }) {
-    return this.authService.getMe(req.user.sub);
+    return this.authService.getMe(req.user.sub, req.user.role);
   }
 
   @Post('forgot-password')
@@ -194,8 +205,8 @@ export class AuthController {
   @Post('parent-login')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Login for parents using email' })
-  async parentLogin(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    const parent = await this.parentPortalService.authenticate(dto.email, dto.password);
+  async parentLogin(@Body() dto: ParentLoginDto, @Res({ passthrough: true }) res: Response) {
+    const parent = await this.parentPortalService.authenticate(dto.email, dto.password, dto.organizationId);
     
     // Issue token specifically for parents using authService
     const accessToken = await this.authService.issueParentToken({
@@ -210,7 +221,7 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: authCookieMaxAgeMs(),
     });
 
     return {

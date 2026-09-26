@@ -91,8 +91,8 @@ export class TeachersService {
         },
         include: { user: userPublicSelect },
       });
-    } catch (error: any) {
-      if (error.code === 'P2002') {
+    } catch (error: unknown) {
+      if ((error as { code?: string })?.code === 'P2002') {
         throw new BadRequestException('This email is unavailable');
       }
       throw error;

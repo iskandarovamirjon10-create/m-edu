@@ -109,7 +109,10 @@ export class FaceService {
       new PrismaEnrollmentAdapter(this.prisma);
 
     this.recognitionRepo =
-      new PrismaRecognitionAdapter(this.prisma);
+      new PrismaRecognitionAdapter(
+        this.prisma,
+        this.attendanceDecisionEngine,
+      );
 
     this.deviceRepo =
       new PrismaDeviceAdapter(this.prisma);
@@ -123,8 +126,32 @@ export class FaceService {
     const encryption =
       this.createEncryptionService();
 
-    const faceEngine =
-      await this.createFaceEngine();
+    let faceEngine: FaceEngine;
+
+    try {
+      faceEngine = await this.createFaceEngine();
+    } catch (error) {
+      /*
+       * The face engine is optional outside production. Production
+       * configuration is validated at boot (validateConfig) and fails fast on a
+       * misconfigured provider, but a developer machine without the ONNX models
+       * must still be able to boot the API. Leaving the domain services null
+       * makes every face endpoint answer "FaceService is not initialized"
+       * through the accessors above instead of killing the whole process with an
+       * unhandled rejection (main.ts exits on unhandledRejection).
+       */
+      if (process.env.NODE_ENV === 'production') {
+        throw error;
+      }
+
+      this.nestLogger.error(
+        `Face engine unavailable, face endpoints disabled: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+
+      return;
+    }
 
     const decisionPolicy =
       new RecognitionDecisionPolicy(
@@ -241,18 +268,14 @@ export class FaceService {
   // ---------------------------------------------------------------------------
 
   private async createFaceEngine(): Promise<FaceEngine> {
-    const { getSharedFaceEngine } = await import('./face-engine.factory');
+    const { getSharedFaceEngine } = await import('./face-engine.factory.js');
     return getSharedFaceEngine();
   }
   private async createRealEngine(): Promise<FaceEngine> {
-    const detectorPath =
-      process.env.FACE_DETECTOR_MODEL_PATH || '';
-
-    const embedderPath =
-      process.env.FACE_EMBEDDER_MODEL_PATH || '';
-
-    const livenessPath =
-      process.env.FACE_LIVENESS_MODEL_PATH || '';
+    const { resolveModelPath } = await import('./face-engine.factory.js');
+    const detectorPath = resolveModelPath(process.env.FACE_DETECTOR_MODEL_PATH || '');
+    const embedderPath = resolveModelPath(process.env.FACE_EMBEDDER_MODEL_PATH || '');
+    const livenessPath = resolveModelPath(process.env.FACE_LIVENESS_MODEL_PATH || '');
 
     const missingModels: string[] = [];
 
@@ -583,36 +606,22 @@ export class FaceService {
         select: { balance: true },
       });
 
-      // NEW: Validate session attempt against schedule +/-30min
-      if (result.attendanceRecorded && result.attendanceRecordId) {
-        const attendanceRecord = await this.prisma.attendance.findUnique({
-          where: { id: result.attendanceRecordId },
-          select: { groupId: true },
-        });
-        
-        if (attendanceRecord && attendanceRecord.groupId) {
-          const isScheduleValid = await this.attendanceDecisionEngine.validateSessionGroupTime(
-            tenant.organizationId,
-            studentId,
-            attendanceRecord.groupId,
-            'Asia/Tashkent'
-          );
-
-          if (!isScheduleValid) {
-            await this.rollbackAttemptAttendance(
-              tenant.organizationId,
-              studentId,
-              result.attemptId,
-              result.attendanceRecordId,
-            );
-            return {
-              ...result,
-              attendanceRecorded: false,
-              accessDenied: true,
-              accessReason: 'OUT_OF_SCHEDULE',
-            };
-          }
-        }
+      // Schedule gate (audit P0-1).
+      //
+      // The gate now runs INSIDE AttendancePolicy — BEFORE the attendance
+      // row is created — so an out-of-schedule recognition can never become
+      // authoritative. The previous implementation validated AFTER commit
+      // with a hardcoded 'Asia/Tashkent' timezone and deleted the row
+      // afterwards, making post-commit deletion the business/security gate.
+      // There is nothing to roll back: no attendance row was written.
+      if (result.attendanceDecision === 'OUT_OF_SCHEDULE') {
+        return {
+          ...result,
+          attendanceRecorded: false,
+          attendanceRecordId: null,
+          accessDenied: true,
+          accessReason: 'OUT_OF_SCHEDULE',
+        };
       }
 
       if (student) {

@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { ParentPortalService, ParentContext } from '../parent-portal.service';
@@ -9,6 +9,7 @@ function createMockPrisma() {
   return {
     parentAccount: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
     },
     parentStudent: {
@@ -84,6 +85,9 @@ describe('ParentPortalModule Unit Tests', () => {
         expect(result[0]).toEqual({
           studentId: 's-1',
           relationship: 'FATHER',
+          // Added so the Telegram bot can label its child picker without a
+          // second query; the field was already selected. See docs/TELEGRAM.md.
+          name: 'Ali Valiyev',
           permissions: {
             grades: true,
             payments: true,
@@ -183,6 +187,103 @@ describe('ParentPortalModule Unit Tests', () => {
         expect(result.overdue).toBe(600);
         expect(result.invoices).toHaveLength(1);
         expect(result.payments).toHaveLength(1);
+      });
+    });
+
+    describe('authenticate', () => {
+      const validHash = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+
+      it('authenticates single parent account successfully', async () => {
+        const bcrypt = await import('bcryptjs');
+        vi.spyOn(bcrypt.default ?? bcrypt, 'compare').mockImplementation(async () => true);
+
+        prisma.parentAccount.findMany.mockResolvedValue([
+          {
+            id: 'p-1',
+            organizationId: 'org-1',
+            email: 'parent@example.com',
+            firstName: 'Farhod',
+            lastName: 'Karimov',
+            passwordHash: validHash,
+            organization: { id: 'org-1', name: 'Center A' },
+          },
+        ]);
+        prisma.parentAccount.update.mockResolvedValue({});
+
+        const res = await service.authenticate('parent@example.com', 'password123');
+        expect(res.id).toBe('p-1');
+        expect(res.organizationId).toBe('org-1');
+        expect(prisma.parentAccount.update).toHaveBeenCalledWith({
+          where: { id: 'p-1' },
+          data: { lastLoginAt: expect.any(Date) },
+        });
+      });
+
+      it('authenticates with explicit organizationId', async () => {
+        const bcrypt = await import('bcryptjs');
+        vi.spyOn(bcrypt.default ?? bcrypt, 'compare').mockImplementation(async () => true);
+
+        prisma.parentAccount.findFirst.mockResolvedValue({
+          id: 'p-2',
+          organizationId: 'org-2',
+          email: 'parent@example.com',
+          firstName: 'Farhod',
+          lastName: 'Karimov',
+          passwordHash: validHash,
+        });
+        prisma.parentAccount.update.mockResolvedValue({});
+
+        const res = await service.authenticate('parent@example.com', 'password123', 'org-2');
+        expect(res.id).toBe('p-2');
+        expect(res.organizationId).toBe('org-2');
+        expect(prisma.parentAccount.findFirst).toHaveBeenCalledWith({
+          where: { email: 'parent@example.com', organizationId: 'org-2', isActive: true },
+          select: expect.any(Object),
+        });
+      });
+
+      it('rejects unknown parent email', async () => {
+        prisma.parentAccount.findMany.mockResolvedValue([]);
+        await expect(service.authenticate('nobody@example.com', 'password123')).rejects.toThrow(
+          'Invalid parent credentials',
+        );
+      });
+
+      it('requires organization selection when multiple accounts match password', async () => {
+        const bcrypt = await import('bcryptjs');
+        vi.spyOn(bcrypt.default ?? bcrypt, 'compare').mockImplementation(async () => true);
+
+        prisma.parentAccount.findMany.mockResolvedValue([
+          {
+            id: 'p-1',
+            organizationId: 'org-1',
+            email: 'parent@example.com',
+            firstName: 'Farhod',
+            lastName: 'Karimov',
+            passwordHash: validHash,
+            organization: { id: 'org-1', name: 'Center A' },
+          },
+          {
+            id: 'p-2',
+            organizationId: 'org-2',
+            email: 'parent@example.com',
+            firstName: 'Farhod',
+            lastName: 'Karimov',
+            passwordHash: validHash,
+            organization: { id: 'org-2', name: 'Center B' },
+          },
+        ]);
+
+        try {
+          await service.authenticate('parent@example.com', 'password123');
+          expect.fail('Should have thrown BadRequestException');
+        } catch (err: any) {
+          const resp = err.getResponse();
+          expect(resp.code).toBe('ORGANIZATION_REQUIRED');
+          expect(resp.organizations).toHaveLength(2);
+          expect(resp.organizations[0].name).toBe('Center A');
+          expect(resp.organizations[1].name).toBe('Center B');
+        }
       });
     });
   });

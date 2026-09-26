@@ -64,7 +64,7 @@ function AnomalyStatCard({ label, value, highlightColor}: { label: string; value
 
 export function AnomalyDetectionPage() {
  const { t} = useI18n();
- usePageTitle(t('anomaly.title') ||'Anomaly Detection');
+ usePageTitle(t('anomaly.title'));
 
  const anomaliesQuery = useQuery({
  queryKey: ['anomalies-detect-all'],
@@ -80,9 +80,9 @@ export function AnomalyDetectionPage() {
  if (anomaliesQuery.isLoading && !anomaliesQuery.data) {
  return (
  <div className="min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
- <GlassPageHeader title={t('anomaly.title') ||'Anomaly Detection'} subtitle="Scanning system patterns…"/>
+ <GlassPageHeader title={t('anomaly.title')} subtitle="Scanning system patterns…"/>
  <div className="mt-8 rounded-[2.5rem] p-16 flex items-center justify-center glass-card">
- <GlassPageLoader label={t('anomaly.loading') ||'Detecting anomalies…'} />
+ <GlassPageLoader label={t('anomaly.loading')} />
  </div>
  </div>
  );
@@ -91,7 +91,7 @@ export function AnomalyDetectionPage() {
  if (anomaliesQuery.isError) {
  return (
  <div className="min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
- <GlassPageHeader title={t('anomaly.title') ||'Anomaly Detection'} subtitle="Connection error"/>
+ <GlassPageHeader title={t('anomaly.title')} subtitle="Connection error"/>
  <div className="mt-8 rounded-[2.5rem] p-12 glass-card">
  <GlassErrorState message={getErrorMessage(anomaliesQuery.error)} onRetry={() => anomaliesQuery.refetch()} />
  </div>
@@ -112,17 +112,17 @@ export function AnomalyDetectionPage() {
  
  {/* ── Header ─────────────────────────────────────────────────────── */}
  <GlassPageHeader
- title={t('anomaly.title') ||'Anomaly Detection Radar'}
- subtitle={t('anomaly.subtitle') ||'Continuous scanning of financial, operational, and performance metrics.'}
+ title={t('anomaly.title')}
+ subtitle={t('anomaly.subtitle')}
  />
 
  {/* ── KPI Summary Cards ──────────────────────────────────────────── */}
  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
- <AnomalyStatCard label={t('anomaly.totalDetected') ||'Total Detected'} value={anomalies.length} highlightColor="bg-brand-500"/>
- <AnomalyStatCard label={t('anomaly.highSeverity') ||'High Severity'} value={highCount} highlightColor="bg-rose-500"/>
- <AnomalyStatCard label={t('anomaly.mediumSeverity') ||'Medium Severity'} value={mediumCount} highlightColor="bg-amber-500"/>
- <AnomalyStatCard label={t('anomaly.lowSeverity') ||'Low Severity'} value={lowCount} highlightColor="bg-blue-500"/>
- <AnomalyStatCard label={t('anomaly.insufficientData') ||'Insufficient Data'} value={insufficientDataCount} highlightColor="bg-[var(--bg-surface)]0"/>
+ <AnomalyStatCard label={t('anomaly.totalDetected')} value={anomalies.length} highlightColor="bg-brand-500"/>
+ <AnomalyStatCard label={t('anomaly.highSeverity')} value={highCount} highlightColor="bg-rose-500"/>
+ <AnomalyStatCard label={t('anomaly.mediumSeverity')} value={mediumCount} highlightColor="bg-amber-500"/>
+ <AnomalyStatCard label={t('anomaly.lowSeverity')} value={lowCount} highlightColor="bg-blue-500"/>
+ <AnomalyStatCard label={t('anomaly.insufficientData')} value={insufficientDataCount} highlightColor="bg-[var(--bg-surface)]0"/>
  </div>
 
  {/* ── Monitored Detectors Banner ─────────────────────────────────── */}
@@ -131,18 +131,18 @@ export function AnomalyDetectionPage() {
  <div className="w-8 h-8 rounded-full bg-indigo-500/10 text-indigo-600 flex items-center justify-center shrink-0">
  <svg className="w-4 h-4"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
  </div>
- {t('anomaly.detectorsTitle') ||'Active Operational Detectors'}
+ {t('anomaly.detectorsTitle')}
  </h3>
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
  {[
- { title: t('anomaly.detector.revenueDrop') ||'Revenue Drop', desc: t('anomaly.detector.revenueDropDesc') ||'Sudden decrease in collected revenue.'},
- { title: t('anomaly.detector.expenseSpike') ||'Expense Spike', desc: t('anomaly.detector.expenseSpikeDesc') ||'Unusual spikes in operational expenses.'},
- { title: t('anomaly.detector.refundAnomaly') ||'Refund Anomaly', desc: t('anomaly.detector.refundAnomalyDesc') ||'Higher than normal refund processing.'},
- { title: t('anomaly.detector.debtIncrease') ||'Debt Increase', desc: t('anomaly.detector.debtIncreaseDesc') ||'Accumulation of student debts.'},
- { title: t('anomaly.detector.cashFlowNegative') ||'Negative Cash Flow', desc: t('anomaly.detector.cashFlowNegativeDesc') ||'Outflows significantly exceed inflows.'},
- { title: t('anomaly.detector.payrollExceedsRevenue') ||'Payroll Risk', desc: t('anomaly.detector.payrollExceedsRevenueDesc') ||'Payroll approaching total revenue.'},
- { title: t('anomaly.detector.latePayment') ||'Late Payments', desc: t('anomaly.detector.latePaymentDesc') ||'Spike in missed payment deadlines.'},
- { title: t('anomaly.detector.enrollmentDrop') ||'Enrollment Drop', desc: t('anomaly.detector.enrollmentDropDesc') ||'Significant drop in active enrollments.'},
+ { title: t('anomaly.detector.revenueDrop'), desc: t('anomaly.detector.revenueDropDesc')},
+ { title: t('anomaly.detector.expenseSpike'), desc: t('anomaly.detector.expenseSpikeDesc')},
+ { title: t('anomaly.detector.refundAnomaly'), desc: t('anomaly.detector.refundAnomalyDesc')},
+ { title: t('anomaly.detector.debtIncrease'), desc: t('anomaly.detector.debtIncreaseDesc')},
+ { title: t('anomaly.detector.cashFlowNegative'), desc: t('anomaly.detector.cashFlowNegativeDesc')},
+ { title: t('anomaly.detector.payrollExceedsRevenue'), desc: t('anomaly.detector.payrollExceedsRevenueDesc')},
+ { title: t('anomaly.detector.latePayment'), desc: t('anomaly.detector.latePaymentDesc')},
+ { title: t('anomaly.detector.enrollmentDrop'), desc: t('anomaly.detector.enrollmentDropDesc')},
  ].map((detector, i) => (
  <div key={i} className="flex flex-col bg-[var(--bg-card)] rounded-xl px-4 py-3 border border-[var(--border-subtle)]/50 hover:border-indigo-500/30 transition-colors">
  <span className="text-[0.7rem] font-black text-[var(--text-primary)] mb-0.5 tracking-wider uppercase">{detector.title}</span>
@@ -172,8 +172,8 @@ export function AnomalyDetectionPage() {
  {anomalies.length === 0 ? (
  <div className="p-16 flex items-center justify-center">
  <GlassEmptyState 
- title={t('anomaly.noAnomalies') ||'System Healthy'} 
- message={t('anomaly.noAnomaliesDesc') ||'No significant operational or financial anomalies detected.'} 
+ title={t('anomaly.noAnomalies')} 
+ message={t('anomaly.noAnomaliesDesc')} 
  />
  </div>
  ) : (
@@ -215,7 +215,7 @@ export function AnomalyDetectionPage() {
  {a.insufficientData && (
  <span className="text-[0.7rem] font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1.5 ml-1">
  <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"/>
- {t('anomaly.insufficientDataBadge') ||'Not Enough Data'}
+ {t('anomaly.insufficientDataBadge')}
  </span>
  )}
  </div>
@@ -236,14 +236,14 @@ export function AnomalyDetectionPage() {
  {!a.insufficientData && (
  <div className="shrink-0 pl-16 md:pl-0 flex flex-col items-end gap-1 min-w-[120px]">
  <div className="flex flex-col items-end">
- <span className="text-[0.65rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('anomaly.observed') ||'Observed'}</span>
+ <span className="text-[0.65rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('anomaly.observed')}</span>
  <span className="text-[1.1rem] font-black font-mono text-[var(--text-primary)] leading-none mt-0.5">
  {a.observed.toLocaleString()}
  </span>
  </div>
  {a.baseline !== null && (
  <div className="flex flex-col items-end mt-2">
- <span className="text-[0.65rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('anomaly.baseline') ||'Baseline (Expected)'}</span>
+ <span className="text-[0.65rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('anomaly.baseline')}</span>
  <span className="text-[0.9rem] font-bold font-mono text-[var(--text-muted)] leading-none mt-0.5">
  {a.baseline.toLocaleString()}
  </span>

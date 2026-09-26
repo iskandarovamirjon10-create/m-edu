@@ -23,6 +23,7 @@ import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
 import { PaginationParams } from '../common/dto/pagination';
 import { CurrentUser } from '../auth/current-user.decorator';
+import type { RequestUser } from '../auth/types';
 import { AllowAnyRole } from '../auth/roles.decorator';
 
 @Controller('hr')
@@ -36,7 +37,7 @@ export class HremployeeController {
   @Get('employees')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findAllEmployees(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Query() params: PaginationParams,
   ) {
     return this.hrService.findAllEmployees(user.organizationId, params);
@@ -46,7 +47,7 @@ export class HremployeeController {
   @Get('employees/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findEmployeeById(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.hrService.findEmployeeById(user.organizationId, id);
@@ -55,7 +56,7 @@ export class HremployeeController {
   @Post('employees')
   @Roles(Role.ORG_ADMIN)
   async createEmployee(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Body() dto: CreateEmployeeDto,
   ) {
     return this.hrService.createEmployee(user.organizationId, dto);
@@ -64,7 +65,7 @@ export class HremployeeController {
   @Put('employees/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async updateEmployee(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateEmployeeDto,
   ) {
@@ -74,7 +75,7 @@ export class HremployeeController {
   @Post('employees/:id/terminate')
   @Roles(Role.ORG_ADMIN)
   async terminateEmployee(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body('reason') reason: string,
   ) {
@@ -87,7 +88,7 @@ export class HremployeeController {
   @Get('leave-requests')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findAllLeaveRequests(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Query() params: PaginationParams,
   ) {
     return this.hrService.findAllLeaveRequests(user.organizationId, params);
@@ -96,7 +97,7 @@ export class HremployeeController {
   @Post('leave-requests')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER, Role.ASSISTANT)
   async createLeaveRequest(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Body() dto: CreateLeaveRequestDto,
   ) {
     // If employeeId not provided, use current user's employee record
@@ -113,7 +114,7 @@ export class HremployeeController {
   @Post('leave-requests/:id/approve')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async approveLeaveRequest(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.hrService.approveLeaveRequest(user.organizationId, id, user.id);
@@ -122,7 +123,7 @@ export class HremployeeController {
   @Post('leave-requests/:id/reject')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async rejectLeaveRequest(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body('reason') reason: string,
   ) {
@@ -135,7 +136,7 @@ export class HremployeeController {
   @Get('employees/:employeeId/salary')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async getEmployeeSalaryHistory(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('employeeId', ParseUUIDPipe) employeeId: string,
     @Query('year') year?: number,
   ) {
@@ -149,7 +150,7 @@ export class HremployeeController {
   @Post('payroll/generate')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async generatePayroll(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Body() dto: GeneratePayrollDto,
   ) {
     return this.hrService.generatePayroll(user.organizationId, dto);
@@ -159,7 +160,7 @@ export class HremployeeController {
   @Get('payroll/summary')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async getPayrollSummary(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Query('month') month: string,
   ) {
     return this.hrService.getPayrollSummary(user.organizationId, month);
@@ -168,7 +169,7 @@ export class HremployeeController {
   @Post('payroll/:recordId/process')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async processSalaryPayment(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('recordId', ParseUUIDPipe) recordId: string,
   ) {
     return this.hrService.processSalaryPayment(user.organizationId, recordId);
@@ -179,7 +180,7 @@ export class HremployeeController {
   @AllowAnyRole()
   @Get('stats')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
-  async getHRStats(@CurrentUser() user: any) {
+  async getHRStats(@CurrentUser() user: RequestUser) {
     return this.hrService.getHRStats(user.organizationId);
   }
 }

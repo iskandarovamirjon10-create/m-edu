@@ -23,6 +23,7 @@ import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
 import { PaginationParams } from '../common/dto/pagination';
 import { CurrentUser } from '../auth/current-user.decorator';
+import type { RequestUser } from '../auth/types';
 import { AllowAnyRole } from '../auth/roles.decorator';
 
 @Controller('exams')
@@ -36,7 +37,7 @@ export class ExamsController {
   @Get()
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async findAllExams(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Query() params: PaginationParams,
   ) {
     return this.examsService.findAllExams(user.organizationId, params);
@@ -49,7 +50,7 @@ export class ExamsController {
   @AllowAnyRole()
   @Get('stats')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
-  async getExamStats(@CurrentUser() user: any) {
+  async getExamStats(@CurrentUser() user: RequestUser) {
     return this.examsService.getExamStats(user.organizationId);
   }
 
@@ -57,7 +58,7 @@ export class ExamsController {
   @Get('student/:studentId')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async getStudentExamResults(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('studentId', ParseUUIDPipe) studentId: string,
   ) {
     return this.examsService.getStudentExamResults(user.organizationId, studentId);
@@ -67,7 +68,7 @@ export class ExamsController {
   @Get(':id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async findExamById(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.examsService.findExamById(user.organizationId, id);
@@ -76,7 +77,7 @@ export class ExamsController {
   @Post()
   @Roles(Role.ORG_ADMIN, Role.TEACHER)
   async createExam(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Body() dto: CreateExamDto,
   ) {
     return this.examsService.createExam(user.organizationId, dto);
@@ -85,7 +86,7 @@ export class ExamsController {
   @Put(':id')
   @Roles(Role.ORG_ADMIN, Role.TEACHER)
   async updateExam(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateExamDto,
   ) {
@@ -95,7 +96,7 @@ export class ExamsController {
   @Delete(':id')
   @Roles(Role.ORG_ADMIN, Role.TEACHER)
   async deleteExam(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.examsService.deleteExam(user.organizationId, id);
@@ -104,7 +105,7 @@ export class ExamsController {
   @Post(':id/publish')
   @Roles(Role.ORG_ADMIN, Role.TEACHER)
   async publishExam(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: PublishExamDto,
   ) {
@@ -117,7 +118,7 @@ export class ExamsController {
   @Get(':examId/results')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async getExamResults(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('examId', ParseUUIDPipe) examId: string,
     @Query('studentId') studentId?: string,
   ) {
@@ -127,7 +128,7 @@ export class ExamsController {
   @Post(':examId/results')
   @Roles(Role.ORG_ADMIN, Role.TEACHER)
   async createExamResult(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('examId', ParseUUIDPipe) examId: string,
     @Body() dto: CreateExamResultDto,
   ) {

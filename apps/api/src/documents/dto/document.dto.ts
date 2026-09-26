@@ -8,16 +8,43 @@ import {
   IsString,
   MaxLength,
   Min, Max,
-  IsUrl,
+  IsIn,
 } from 'class-validator';
 
 /**
  * Document request DTOs (SF-4).
  *
- * Previously `@Body() body: any` — every field reached Prisma unvalidated.
- * These classes are enforced by the global ValidationPipe
- * (whitelist + forbidNonWhitelisted).
+ * Enforced by the global ValidationPipe (whitelist + forbidNonWhitelisted).
  */
+
+export const ALLOWED_DOCUMENT_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+  'text/csv',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+];
+
+export class GetUploadUrlDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  fileName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @IsIn(ALLOWED_DOCUMENT_MIME_TYPES, {
+    message: `mimeType must be one of allowed document types`,
+  })
+  mimeType: string;
+}
 
 export class CreateDocumentDto {
   @IsString() @IsNotEmpty() @MaxLength(300)
@@ -29,7 +56,7 @@ export class CreateDocumentDto {
   @IsOptional() @IsString() @MaxLength(100)
   category?: string;
 
-  @IsUrl({ protocols: ['http', 'https'], require_tld: false }) @IsString() @IsNotEmpty() @MaxLength(2000)
+  @IsString() @IsNotEmpty() @MaxLength(2000)
   fileUrl: string;
 
   @IsOptional() @IsString() @MaxLength(200)
@@ -58,7 +85,7 @@ export class UpdateDocumentDto {
   @IsOptional() @IsString() @MaxLength(100)
   category?: string;
 
-  @IsOptional() @IsUrl({ protocols: ['http', 'https'], require_tld: false }) @IsString() @MaxLength(2000)
+  @IsOptional() @IsString() @MaxLength(2000)
   fileUrl?: string;
 
   @IsOptional() @IsString() @MaxLength(200)
@@ -118,7 +145,7 @@ export class DocumentQueryDto {
 }
 
 export class UploadDocumentVersionDto {
-  @IsUrl({ protocols: ['http', 'https'], require_tld: false }) @IsString() @IsNotEmpty() @MaxLength(2000)
+  @IsString() @IsNotEmpty() @MaxLength(2000)
   fileUrl: string;
 
   @IsOptional() @IsString() @MaxLength(200)
@@ -130,4 +157,3 @@ export class UploadDocumentVersionDto {
   @IsOptional() @IsString() @MaxLength(1000)
   note?: string;
 }
-

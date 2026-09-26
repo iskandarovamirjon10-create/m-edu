@@ -30,7 +30,7 @@ describe('CredentialVault', () => {
 describe('NetworkSecurity — SSRF protection', () => {
   it('allows private IPs when allowPrivateIps is true', async () => {
     const sec = new NetworkSecurity({ allowPrivateIps: true, allowLoopback: true });
-    await expect(sec.validateHost('192.168.1.10')).resolves.toBeUndefined();
+    await expect(sec.validateHost('192.168.1.10')).resolves.toBe('192.168.1.10');
   });
 
   it('blocks private IPs when allowPrivateIps is false', async () => {
@@ -48,7 +48,7 @@ describe('NetworkSecurity — SSRF protection', () => {
 
   it('allows loopback when allowLoopback is true', async () => {
     const sec = new NetworkSecurity({ allowPrivateIps: true, allowLoopback: true });
-    await expect(sec.validateHost('127.0.0.1')).resolves.toBeUndefined();
+    await expect(sec.validateHost('127.0.0.1')).resolves.toBe('127.0.0.1');
   });
 
   it('rejects empty / invalid hosts', async () => {
@@ -62,9 +62,9 @@ describe('NetworkSecurity — CIDR matching regression', () => {
     // Regression: the old mask computation (128-prefix on 32-bit IPv4 values)
     // classified EVERY IPv4 as loopback, rejecting all real camera hosts.
     const sec = new NetworkSecurity({ allowPrivateIps: true, allowLoopback: false });
-    await expect(sec.validateHost('192.168.1.10')).resolves.toBeUndefined();
-    await expect(sec.validateHost('10.0.0.5')).resolves.toBeUndefined();
-    await expect(sec.validateHost('172.20.0.9')).resolves.toBeUndefined();
+    await expect(sec.validateHost('192.168.1.10')).resolves.toBe('192.168.1.10');
+    await expect(sec.validateHost('10.0.0.5')).resolves.toBe('10.0.0.5');
+    await expect(sec.validateHost('172.20.0.9')).resolves.toBe('172.20.0.9');
   });
 
   it('still blocks loopback IPv4 when allowLoopback=false', async () => {
@@ -75,8 +75,8 @@ describe('NetworkSecurity — CIDR matching regression', () => {
 
   it('allows public IPs when both loopback and private are forbidden', async () => {
     const sec = new NetworkSecurity({ allowPrivateIps: false, allowLoopback: false });
-    await expect(sec.validateHost('8.8.8.8')).resolves.toBeUndefined();
-    await expect(sec.validateHost('203.0.113.10')).resolves.toBeUndefined();
+    await expect(sec.validateHost('8.8.8.8')).resolves.toBe('8.8.8.8');
+    await expect(sec.validateHost('203.0.113.10')).resolves.toBe('203.0.113.10');
   });
 
   it('blocks link-local / cloud metadata IP when private is forbidden', async () => {
@@ -92,7 +92,7 @@ describe('NetworkSecurity — CIDR matching regression', () => {
 
   it('allows IPv6 loopback ::1 when allowLoopback=true', async () => {
     const sec = new NetworkSecurity({ allowPrivateIps: true, allowLoopback: true });
-    await expect(sec.validateHost('::1')).resolves.toBeUndefined();
+    await expect(sec.validateHost('::1')).resolves.toBe('::1');
   });
 
   it('blocks IPv6 ULA fc00::/7 when private is forbidden', async () => {

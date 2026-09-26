@@ -23,6 +23,7 @@ const mockRecogRepo: RecognitionRepository = {
   getSessionAttempts: vi.fn(),
   createAttendance: vi.fn(),
   findExistingAttendance: vi.fn(),
+  isWithinSchedule: vi.fn(),
   listAttendance: vi.fn(),
   getRecognitionStats: vi.fn(),
   getAttendanceStats: vi.fn(),
@@ -40,6 +41,7 @@ describe('AttendancePolicy', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(mockRecogRepo.isWithinSchedule).mockResolvedValue(true);
     policy = new AttendancePolicy(mockStudentDir, mockRecogRepo, 5);
   });
 
@@ -110,5 +112,54 @@ describe('AttendancePolicy', () => {
     const result = await policy.validate(tenant, 'student-1', 'group-1', 'lesson-1', 'session-1');
     expect(result.decision).toBe('DUPLICATE_PREVENTED');
     expect(result.existingAttendanceId).toBe('old-1');
+  });
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /* P0-1 — schedule gate runs BEFORE attendance is created              */
+  /* ──────────────────────────────────────────────────────────────────── */
+
+  it('refuses attendance when the schedule gate denies', async () => {
+    vi.mocked(mockStudentDir.isStudentActive).mockResolvedValue(true);
+    vi.mocked(mockStudentDir.isStudentInGroup).mockResolvedValue(true);
+    vi.mocked(mockRecogRepo.isWithinSchedule).mockResolvedValue(false);
+
+    const result = await policy.validate(tenant, 'student-1', 'group-1', 'lesson-1', 'session-1');
+
+    expect(result.decision).toBe('OUT_OF_SCHEDULE');
+    // Nothing must be written, and the duplicate probe is never reached.
+    expect(mockRecogRepo.createAttendance).not.toHaveBeenCalled();
+    expect(mockRecogRepo.findExistingAttendance).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the schedule gate throws', async () => {
+    vi.mocked(mockStudentDir.isStudentActive).mockResolvedValue(true);
+    vi.mocked(mockStudentDir.isStudentInGroup).mockResolvedValue(true);
+    vi.mocked(mockRecogRepo.isWithinSchedule).mockRejectedValue(
+      new Error('redis down'),
+    );
+
+    const result = await policy.validate(tenant, 'student-1', 'group-1', 'lesson-1', 'session-1');
+
+    expect(result.decision).toBe('OUT_OF_SCHEDULE');
+    expect(mockRecogRepo.createAttendance).not.toHaveBeenCalled();
+  });
+
+  it('evaluates the schedule gate before the duplicate probe', async () => {
+    const order: string[] = [];
+
+    vi.mocked(mockStudentDir.isStudentActive).mockResolvedValue(true);
+    vi.mocked(mockStudentDir.isStudentInGroup).mockResolvedValue(true);
+    vi.mocked(mockRecogRepo.isWithinSchedule).mockImplementation(async () => {
+      order.push('schedule');
+      return false;
+    });
+    vi.mocked(mockRecogRepo.findExistingAttendance).mockImplementation(async () => {
+      order.push('duplicate');
+      return null;
+    });
+
+    await policy.validate(tenant, 'student-1', 'group-1', 'lesson-1', 'session-1');
+
+    expect(order).toEqual(['schedule']);
   });
 });

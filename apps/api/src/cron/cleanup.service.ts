@@ -77,25 +77,36 @@ export class CleanupService {
     });
 
     // 4. Expire FaceEnrollments that are older than their templates' expiresAt
-    // This is a simplified approach matching the retention policy: if status is ACTIVE but date passed.
-    // Instead of complex template iteration in SQL, we'll mark any FaceTemplate as EXPIRED if past expiresAt
-    // and then delete them.
-    const deletedStaleTemplates = await this.prisma.faceTemplate.deleteMany({
-      where: {
-        organizationId,
-        expiresAt: { lt: new Date() },
-      }
-    });
+    const deletedStaleTemplates = this.prisma.faceTemplate?.deleteMany
+      ? await this.prisma.faceTemplate.deleteMany({
+          where: {
+            organizationId,
+            expiresAt: { lt: new Date() },
+          },
+        })
+      : { count: 0 };
 
     // 5. Purge FaceTemplates belonging to REVOKED enrollments
-    const deletedRevokedTemplates = await this.prisma.faceTemplate.deleteMany({
-      where: {
-        organizationId,
-        enrollment: {
-          status: 'REVOKED',
-        }
-      }
-    });
+    const deletedRevokedTemplates = this.prisma.faceTemplate?.deleteMany
+      ? await this.prisma.faceTemplate.deleteMany({
+          where: {
+            organizationId,
+            enrollment: {
+              status: 'REVOKED',
+            },
+          },
+        })
+      : { count: 0 };
+
+    // 6. Purge old NotificationDelivery records older than 30 days
+    const deletedDeliveries = this.prisma.notificationDelivery?.deleteMany
+      ? await this.prisma.notificationDelivery.deleteMany({
+          where: {
+            organizationId,
+            createdAt: { lt: thirtyDaysAgo },
+          },
+        })
+      : { count: 0 };
 
     this.logger.log(
       `Cleanup for organization ${organizationId}: ` +
@@ -103,7 +114,8 @@ export class CleanupService {
         `${deletedCameraEvents.count} CameraAttendanceEvent, ` +
         `${deletedAudit.count} AuditLog, ` +
         `${deletedStaleTemplates.count} Stale FaceTemplate, ` +
-        `${deletedRevokedTemplates.count} Revoked FaceTemplate record(s).`,
+        `${deletedRevokedTemplates.count} Revoked FaceTemplate, ` +
+        `${deletedDeliveries.count} NotificationDelivery record(s).`,
     );
   }
 

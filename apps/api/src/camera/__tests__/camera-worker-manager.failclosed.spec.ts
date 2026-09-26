@@ -20,6 +20,12 @@ vi.mock('@medu/camera-engine', () => ({
   CredentialVault: class {
     constructor(_key: string) {}
   },
+  NetworkSecurity: class {
+    constructor(_opts: unknown) {}
+    async validateHost(host: string): Promise<string> {
+      return host;
+    }
+  },
 }));
 
 import { CameraWorkerManagerService } from '../camera-worker-manager.service';
@@ -44,6 +50,22 @@ function createManager(): CameraWorkerManagerService {
   return new CameraWorkerManagerService(
     createPrismaMock(),
   );
+}
+
+/**
+ * Pin the `real-local` provider so the mocked `RealFaceEngine` above (whose
+ * `initialize()` throws) is the engine under test.
+ *
+ * Without this the development tests inherited whatever
+ * `FACE_ENGINE_PROVIDER` happened to sit in `.env`. They only passed while
+ * that value was the invalid `mock-dev`; they never exercised the fail-soft
+ * policy they are named after.
+ */
+function stubRealLocalEngine(): void {
+  vi.stubEnv('FACE_ENGINE_PROVIDER', 'real-local');
+  vi.stubEnv('FACE_DETECTOR_MODEL_PATH', '/models/detector.onnx');
+  vi.stubEnv('FACE_EMBEDDER_MODEL_PATH', '/models/embedder.onnx');
+  vi.stubEnv('FACE_LIVENESS_MODEL_PATH', '/models/liveness.onnx');
 }
 
 describe('CameraWorkerManagerService — fail-closed face engine policy', () => {
@@ -102,6 +124,7 @@ describe('CameraWorkerManagerService — fail-closed face engine policy', () => 
         'BIOMETRIC_ENCRYPTION_KEY',
         'x'.repeat(40),
       );
+      stubRealLocalEngine();
 
       const manager = createManager();
 
@@ -144,6 +167,7 @@ describe('CameraWorkerManagerService — fail-closed face engine policy', () => 
         'BIOMETRIC_ENCRYPTION_KEY',
         'x'.repeat(40),
       );
+      stubRealLocalEngine();
 
       const manager = createManager();
 

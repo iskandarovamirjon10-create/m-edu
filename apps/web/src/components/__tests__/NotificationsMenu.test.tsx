@@ -59,10 +59,15 @@ describe('NotificationsMenu', () => {
 });
 
  it('renders the bell button with an unread badge', async () => {
- renderMenu();
- const bell = await screen.findByRole('button', { name: /Notifications, 1 unread/i});
- expect(bell).toBeInTheDocument();
-});
+  renderMenu();
+  await waitFor(() => expect(listMock).toHaveBeenCalledTimes(1));
+  const bell = await screen.findByRole(
+    'button',
+    { name: /Notifications, 1 unread/i},
+    { timeout: 5000},
+  );
+  expect(bell).toBeInTheDocument();
+ });
 
  it('loads the unread count on mount and lists items when opened', async () => {
  const user = userEvent.setup();

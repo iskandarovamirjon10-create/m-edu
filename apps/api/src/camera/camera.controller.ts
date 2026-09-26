@@ -61,6 +61,50 @@ type AuthenticatedRequest =
 export class CameraController {
   private readonly auditLogger = new SecureLogger('info');
 
+  /**
+   * Bring a running camera worker back in line with its stored configuration.
+   *
+   * `updateCamera` and `updateCameraConfig` only write the database, but
+   * `CameraWorkerSession` captures its whole configuration once, at start:
+   * stream URI, decrypted credentials, processing fps, similarity threshold and
+   * the recognition/attendance flags. Without a resync a rotated camera
+   * password, a moved stream path or a lowered threshold silently keeps using
+   * the previous values until the API is restarted.
+   *
+   * Only an already-running worker is resynced. Starting one here would enable
+   * recognition for a disabled camera and could exceed the worker caps, which
+   * are enforced by `startWorker`.
+   */
+  private async resyncRunningWorker(
+    organizationId: string,
+    cameraId: string,
+  ): Promise<void> {
+    try {
+      const status = await this.workerManager.getWorkerStatus(
+        organizationId,
+        cameraId,
+      );
+
+      if (!status.running) {
+        return;
+      }
+
+      await this.workerManager.restartWorker(organizationId, cameraId);
+    } catch (err: unknown) {
+      // The camera change is already committed. A worker that cannot restart
+      // must not turn a successful update into a 500 — `/worker-status` and the
+      // camera alerting pipeline surface the failure to the operator.
+      this.auditLogger.warn(
+        'Camera worker resync failed after configuration update',
+        {
+          organizationId,
+          cameraId,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      );
+    }
+  }
+
   constructor(
     private readonly cameraService: CameraService,
     private readonly workerManager: CameraWorkerManagerService,
@@ -137,11 +181,15 @@ export class CameraController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCameraApiDto,
   ) {
-    return this.cameraService.updateCamera(
+    const camera = await this.cameraService.updateCamera(
       req.user.organizationId,
       id,
       this.toUpdateCameraInput(dto),
     );
+
+    await this.resyncRunningWorker(req.user.organizationId, id);
+
+    return camera;
   }
 
   @Delete(':id')
@@ -206,10 +254,37 @@ export class CameraController {
       resourceType: 'Camera',
       resourceId: id,
     });
-    return this.cameraService.enableCamera(
+    const camera = await this.cameraService.enableCamera(
       req.user.organizationId,
       id,
     );
+
+    /**
+     * `enableCamera` only flips the stored flag, while recognition is owned by
+     * a worker that is started in bulk by `startEnabledCameras()` at boot.
+     * Without this, an operator who disables and then re-enables a camera gets
+     * one that reports "enabled" and records no attendance at all until the API
+     * is restarted.
+     */
+    if (camera.recognitionEnabled) {
+      try {
+        await this.workerManager.startWorker(
+          req.user.organizationId,
+          id,
+        );
+      } catch (err: unknown) {
+        this.auditLogger.warn(
+          'Camera enabled but its recognition worker could not start',
+          {
+            organizationId: req.user.organizationId,
+            cameraId: id,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        );
+      }
+    }
+
+    return camera;
   }
 
   @Patch(':id/disable')
@@ -366,11 +441,15 @@ export class CameraController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCameraConfigDto,
   ) {
-    return this.cameraService.updateCameraConfig(
+    const camera = await this.cameraService.updateCameraConfig(
       req.user.organizationId,
       id,
       dto,
     );
+
+    await this.resyncRunningWorker(req.user.organizationId, id);
+
+    return camera;
   }
 
   // ============================================================

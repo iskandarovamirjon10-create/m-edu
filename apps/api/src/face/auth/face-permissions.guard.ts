@@ -14,7 +14,11 @@ export class FacePermissionsGuard implements CanActivate {
     );
 
     if (!requiredPermissions || requiredPermissions.length === 0) {
-      return true;
+      // Fail-closed: every face route must declare @FacePermissions(...)
+      // so a forgotten decorator cannot silently skip authorization.
+      throw new ForbiddenException(
+        'Endpoint does not declare face permissions (fail-closed).',
+      );
     }
 
     const request = context.switchToHttp().getRequest();

@@ -93,10 +93,10 @@ function FunnelTab({ data }: { data: CRMFunnelResponse }) {
  return (
  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
- <CRMStatCard label={t('crm.totalLeads') ||'Total Leads'} value={data.total} highlightColor="bg-blue-500"/>
- <CRMStatCard label={t('crm.activeLeads') ||'Active Leads'} value={activeLeads} highlightColor="bg-brand-500"/>
- <CRMStatCard label={t('crm.wonLeads') ||'Won Leads'} value={data.funnel.find((s) => s.stage ==='WON')?.count || 0} highlightColor="bg-emerald-500"/>
- <CRMStatCard label={t('crm.overallConversion') ||'Conversion Rate'} value={`${data.overallConversion}%`} highlightColor="bg-purple-500"/>
+ <CRMStatCard label={t('crm.totalLeads')} value={data.total} highlightColor="bg-blue-500"/>
+ <CRMStatCard label={t('crm.activeLeads')} value={activeLeads} highlightColor="bg-brand-500"/>
+ <CRMStatCard label={t('crm.wonLeads')} value={data.funnel.find((s) => s.stage ==='WON')?.count || 0} highlightColor="bg-emerald-500"/>
+ <CRMStatCard label={t('crm.overallConversion')} value={`${data.overallConversion}%`} highlightColor="bg-purple-500"/>
  </div>
 
  <div className="rounded-[2.5rem] glass-card p-6 sm:p-10 relative overflow-hidden">
@@ -149,7 +149,7 @@ function SourcesTab({ data }: { data: CRMSources[] }) {
  if (data.length === 0) {
  return (
  <div className="p-16 flex items-center justify-center rounded-[2.5rem] glass-card animate-in fade-in duration-500">
- <GlassEmptyState title={t('crm.noSources') ||'No Sources'} message={t('crm.noSourcesHint') ||'Lead sources will appear here.'} />
+ <GlassEmptyState title={t('crm.noSources')} message={t('crm.noSourcesHint')} />
  </div>
  );
 }
@@ -162,12 +162,12 @@ function SourcesTab({ data }: { data: CRMSources[] }) {
  <GlassTable>
  <GlassTHead>
  <GlassTR>
- <GlassTH>{t('crm.col.source') ||'Source'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.totalLeads') ||'Total Leads'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.won') ||'Won'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.lost') ||'Lost'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.conversionRate') ||'Conversion'}</GlassTH>
- <GlassTH className="text-right">{t('crm.col.avgDaysToConvert') ||'Avg Days'}</GlassTH>
+ <GlassTH>{t('crm.col.source')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.totalLeads')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.won')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.lost')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.conversionRate')}</GlassTH>
+ <GlassTH className="text-right">{t('crm.col.avgDaysToConvert')}</GlassTH>
  </GlassTR>
  </GlassTHead>
  <GlassTBody>
@@ -212,9 +212,9 @@ function VelocityTab({ data }: { data: CRMVelocityResponse }) {
  return (
  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
- <CRMStatCard label={t('crm.avgDaysInPipeline') ||'Avg Days in Pipeline'} value={data.avgDaysInPipeline} highlightColor="bg-cyan-500"/>
- <CRMStatCard label={t('crm.avgTimeToWin') ||'Avg Time to Win'} value={data.avgTimeToWin} highlightColor="bg-emerald-500"/>
- <CRMStatCard label={t('crm.activeLeads') ||'Total Active Leads'} value={data.totalActiveLeads} highlightColor="bg-brand-500"/>
+ <CRMStatCard label={t('crm.avgDaysInPipeline')} value={data.avgDaysInPipeline} highlightColor="bg-cyan-500"/>
+ <CRMStatCard label={t('crm.avgTimeToWin')} value={data.avgTimeToWin} highlightColor="bg-emerald-500"/>
+ <CRMStatCard label={t('crm.activeLeads')} value={data.totalActiveLeads} highlightColor="bg-brand-500"/>
  </div>
 
  <div className="rounded-[2.5rem] glass-card overflow-hidden relative">
@@ -224,10 +224,10 @@ function VelocityTab({ data }: { data: CRMVelocityResponse }) {
  <GlassTable>
  <GlassTHead>
  <GlassTR>
- <GlassTH>{t('crm.col.stage') ||'Pipeline Stage'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.leadCount') ||'Current Leads'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.avgDays') ||'Average Dwell'}</GlassTH>
- <GlassTH className="text-right">{t('crm.col.medianDays') ||'Median Dwell'}</GlassTH>
+ <GlassTH>{t('crm.col.stage')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.leadCount')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.avgDays')}</GlassTH>
+ <GlassTH className="text-right">{t('crm.col.medianDays')}</GlassTH>
  </GlassTR>
  </GlassTHead>
  <GlassTBody>
@@ -268,14 +268,14 @@ function LostReasonsTab({ data }: { data: CRMLostReasonsResponse }) {
  if (data.totalLost === 0) {
  return (
  <div className="p-16 flex items-center justify-center rounded-[2.5rem] glass-card animate-in fade-in duration-500">
- <GlassEmptyState title={t('crm.noLostLeads') ||'No Lost Leads'} message={t('crm.noLostLeadsHint') ||'No data to display yet.'} />
+ <GlassEmptyState title={t('crm.noLostLeads')} message={t('crm.noLostLeadsHint')} />
  </div>
  );
 }
 
  return (
  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
- <CRMStatCard label={t('crm.totalLostLeads') ||'Total Lost Leads'} value={data.totalLost} highlightColor="bg-rose-500"/>
+ <CRMStatCard label={t('crm.totalLostLeads')} value={data.totalLost} highlightColor="bg-rose-500"/>
 
  <div className="rounded-[2.5rem] glass-card p-6 sm:p-10 relative overflow-hidden">
  <div className="absolute inset-0 rounded-[2.5rem] pointer-events-none ring-1 ring-inset ring-black/5 dark:ring-white/5"aria-hidden />
@@ -317,7 +317,7 @@ function AgingTab({ data }: { data: CRMAgingResponse }) {
  if (data.total === 0) {
  return (
  <div className="p-16 flex items-center justify-center rounded-[2.5rem] glass-card animate-in fade-in duration-500">
- <GlassEmptyState title={t('crm.noActiveLeads') ||'No Active Leads'} message={t('crm.noActiveLeadsHint') ||'No aging data to display.'} />
+ <GlassEmptyState title={t('crm.noActiveLeads')} message={t('crm.noActiveLeadsHint')} />
  </div>
  );
 }
@@ -345,12 +345,12 @@ function AgingTab({ data }: { data: CRMAgingResponse }) {
  <GlassTable>
  <GlassTHead>
  <GlassTR>
- <GlassTH>{t('crm.col.name') ||'Lead Name'}</GlassTH>
- <GlassTH>{t('crm.col.stage') ||'Stage'}</GlassTH>
- <GlassTH>{t('crm.col.source') ||'Source'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.daysInPipeline') ||'Days in Pipeline'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.daysSinceUpdate') ||'Stagnation'}</GlassTH>
- <GlassTH className="text-right">{t('crm.col.status') ||'Health'}</GlassTH>
+ <GlassTH>{t('crm.col.name')}</GlassTH>
+ <GlassTH>{t('crm.col.stage')}</GlassTH>
+ <GlassTH>{t('crm.col.source')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.daysInPipeline')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.daysSinceUpdate')}</GlassTH>
+ <GlassTH className="text-right">{t('crm.col.status')}</GlassTH>
  </GlassTR>
  </GlassTHead>
  <GlassTBody>
@@ -404,7 +404,7 @@ function ModeratorsTab({ data }: { data: CRMModeratorStats[] }) {
  if (data.length === 0) {
  return (
  <div className="p-16 flex items-center justify-center rounded-[2.5rem] glass-card animate-in fade-in duration-500">
- <GlassEmptyState title={t('crm.noModerators') ||'No Moderators'} message={t('crm.noModeratorsHint') ||'No team data to display.'} />
+ <GlassEmptyState title={t('crm.noModerators')} message={t('crm.noModeratorsHint')} />
  </div>
  );
 }
@@ -417,12 +417,12 @@ function ModeratorsTab({ data }: { data: CRMModeratorStats[] }) {
  <GlassTable>
  <GlassTHead>
  <GlassTR>
- <GlassTH>{t('crm.col.moderator') ||'Team Member'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.totalLeads') ||'Total Assigned'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.active') ||'Active'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.won') ||'Won'}</GlassTH>
- <GlassTH className="text-center">{t('crm.col.lost') ||'Lost'}</GlassTH>
- <GlassTH className="text-right">{t('crm.col.conversionRate') ||'Conversion'}</GlassTH>
+ <GlassTH>{t('crm.col.moderator')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.totalLeads')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.active')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.won')}</GlassTH>
+ <GlassTH className="text-center">{t('crm.col.lost')}</GlassTH>
+ <GlassTH className="text-right">{t('crm.col.conversionRate')}</GlassTH>
  </GlassTR>
  </GlassTHead>
  <GlassTBody>
@@ -495,7 +495,7 @@ export function CRMAnalyticsPage() {
  const renderContent = () => {
  if (activeQuery.isLoading) return (
  <div className="h-64 flex items-center justify-center rounded-[2.5rem] glass-card">
- <GlassPageLoader label={t('common.loading') ||'Loading…'} />
+ <GlassPageLoader label={t('common.loading')} />
  </div>
  );
  if (activeQuery.isError) {
@@ -510,7 +510,7 @@ const data = activeQuery.data;
  if (!data || (typeof data ==='object' &&'total' in data && (data as { total?: number }).total === 0 && activeTab !=='funnel' && activeTab !=='velocity')) {
  return (
  <div className="p-16 rounded-[2.5rem] glass-card flex items-center justify-center">
- <GlassEmptyState title={t('crm.emptyTitle') ||'No Data'} message={t('crm.emptyHint') ||'No analytics data available for this view.'} />
+ <GlassEmptyState title={t('crm.emptyTitle')} message={t('crm.emptyHint')} />
  </div>
  );
 }
@@ -537,8 +537,8 @@ const data = activeQuery.data;
 
  <div className="relative z-10 w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500">
  <GlassPageHeader
- title={t('crm.title') ||'CRM Analytics'}
- subtitle={t('crm.subtitle') ||'Analyze lead conversion, pipeline velocity, and team performance.'}
+ title={t('crm.title')}
+ subtitle={t('crm.subtitle')}
  />
 
  <div className="overflow-x-auto pb-2">

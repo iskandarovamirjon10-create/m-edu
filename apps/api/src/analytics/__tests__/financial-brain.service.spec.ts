@@ -11,7 +11,10 @@ function createMockPrisma() {
     refund: { aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 } }) },
     expense: { aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 } }) },
     payrollRun: { aggregate: vi.fn().mockResolvedValue({ _sum: { netAmount: 0 } }) },
-    invoice: { aggregate: vi.fn().mockResolvedValue({ _sum: { total: 0, paidAmount: 0 } }) },
+    invoice: {
+      aggregate: vi.fn().mockResolvedValue({ _sum: { total: 0, paidAmount: 0 } }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     group: { findUnique: vi.fn(), findFirst: vi.fn() },
     lesson: { count: vi.fn().mockResolvedValue(0) },
     studentGroup: {
@@ -107,24 +110,28 @@ describe('FinancialBrainService', () => {
     });
   });
 
-  describe('getDebtAndReceivables (DB-side aggregation, bounded memory)', () => {
-    it('uses a single database-side aggregation without loading invoice/payment history', async () => {
-      prisma.$queryRaw.mockResolvedValue([
-        { bucket: 'current', totalBilled: '800', totalPaid: '300' },
+  describe('getDebtAndReceivables (canonical outstanding formula, bounded fields)', () => {
+    it('computes outstanding from open invoices without loading payment history', async () => {
+      prisma.invoice.findMany.mockResolvedValue([
+        { status: 'ISSUED', total: 800, paidAmount: 300, refundedAmount: 0, dueDate: null },
       ]);
 
       const result = await svc.getDebtAndReceivables('org-1');
 
-      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
-      expect(prisma.invoice.aggregate).not.toHaveBeenCalled();
+      expect(prisma.invoice.findMany).toHaveBeenCalledTimes(1);
+      const where = prisma.invoice.findMany.mock.calls[0][0].where;
+      expect(where.organizationId).toBe('org-1');
+      expect(where.status.notIn).toEqual(['DRAFT', 'CANCELLED']);
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
       expect(result.totalReceivables).toBe(500); // 800 billed - 300 paid
       expect(result.overdueDebt).toBe(0);
     });
 
-    it('computes overdue debt from the overdue bucket only', async () => {
-      prisma.$queryRaw.mockResolvedValue([
-        { bucket: 'overdue', totalBilled: '1000', totalPaid: '250' },
-        { bucket: 'current', totalBilled: '400', totalPaid: '0' },
+    it('counts overdue from past-due open invoices only', async () => {
+      const past = new Date(Date.now() - 86_400_000);
+      prisma.invoice.findMany.mockResolvedValue([
+        { status: 'OVERDUE', total: 1000, paidAmount: 250, refundedAmount: 0, dueDate: past },
+        { status: 'ISSUED', total: 400, paidAmount: 0, refundedAmount: 0, dueDate: null },
       ]);
 
       const result = await svc.getDebtAndReceivables('org-1');
@@ -133,37 +140,33 @@ describe('FinancialBrainService', () => {
     });
 
     it('returns zero for an organization with no outstanding invoices', async () => {
-      prisma.$queryRaw.mockResolvedValue([]);
+      prisma.invoice.findMany.mockResolvedValue([]);
       const result = await svc.getDebtAndReceivables('org-1');
       expect(result.totalReceivables).toBe(0);
       expect(result.overdueDebt).toBe(0);
     });
 
     it('never reports negative receivables for a fully paid or overpaid invoice', async () => {
-      prisma.$queryRaw.mockResolvedValue([
-        { bucket: 'current', totalBilled: '100', totalPaid: '150' },
+      prisma.invoice.findMany.mockResolvedValue([
+        { status: 'PAID', total: 100, paidAmount: 150, refundedAmount: 0, dueDate: null },
       ]);
       const result = await svc.getDebtAndReceivables('org-1');
       expect(result.totalReceivables).toBe(0);
     });
 
     it('aggregates multiple partial payments on one invoice without N+1 loads', async () => {
-      prisma.$queryRaw.mockResolvedValue([
-        { bucket: 'current', totalBilled: '300', totalPaid: '100' },
+      prisma.invoice.findMany.mockResolvedValue([
+        { status: 'PARTIALLY_PAID', total: 300, paidAmount: 100, refundedAmount: 0, dueDate: null },
       ]);
       const result = await svc.getDebtAndReceivables('org-1');
       expect(result.totalReceivables).toBe(200);
     });
 
-    it('excludes cancelled invoices via the status filter in the SQL', async () => {
-      prisma.$queryRaw.mockResolvedValue([]);
+    it('excludes cancelled/draft invoices via the status filter', async () => {
+      prisma.invoice.findMany.mockResolvedValue([]);
       await svc.getDebtAndReceivables('org-1');
-      const sql = prisma.$queryRaw.mock.calls[0][0];
-      const sqlText = sql instanceof Object ? (sql as { sql?: string }).sql ?? String(sql) : String(sql);
-      expect(sqlText).toContain('ISSUED');
-      expect(sqlText).toContain('PARTIALLY_PAID');
-      expect(sqlText).toContain('OVERDUE');
-      expect(sqlText).not.toContain('CANCELLED');
+      const where = prisma.invoice.findMany.mock.calls[0][0].where;
+      expect(where.status.notIn).toEqual(['DRAFT', 'CANCELLED']);
     });
   });
 

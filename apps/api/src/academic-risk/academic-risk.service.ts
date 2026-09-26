@@ -160,10 +160,10 @@ export class AcademicRiskService {
       },
     });
 
-    const attendanceMap = new Map<string, { total: number; present: number }>();
+    const attendanceMap = new Map<string, { total: number; present: number; absent: number; late: number }>();
     for (const r of attendanceRecords) {
       if (!attendanceMap.has(r.studentId)) {
-        attendanceMap.set(r.studentId, { total: 0, present: 0 });
+        attendanceMap.set(r.studentId, { total: 0, present: 0, absent: 0, late: 0 });
       }
       const g = attendanceMap.get(r.studentId)!;
       g.total++;
@@ -304,15 +304,15 @@ export class AcademicRiskService {
 
     let consecutive = 0;
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
 
     for (let i = 0; i < dates.length; i++) {
       const expected = new Date(today);
       expected.setDate(today.getDate() - i);
-      expected.setHours(0, 0, 0, 0);
+      expected.setUTCHours(0, 0, 0, 0);
 
       const recDate = new Date(dates[i]);
-      recDate.setHours(0, 0, 0, 0);
+      recDate.setUTCHours(0, 0, 0, 0);
 
       const diffDays = Math.abs(
         (expected.getTime() - recDate.getTime()) / (1000 * 60 * 60 * 24),
@@ -334,6 +334,8 @@ export class AcademicRiskService {
     return 'HIGH';
   }
 }
+
+
 
 
 

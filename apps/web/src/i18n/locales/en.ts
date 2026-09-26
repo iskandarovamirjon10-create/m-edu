@@ -190,6 +190,29 @@ const en = {
   'settings.confirmPassword': 'Confirm new password',
   'settings.changePasswordAction': 'Change password',
   'settings.passwordChanged': 'Password changed successfully',
+  'settings.telegram.title': 'Telegram integration',
+  'settings.telegram.subtitle': 'Receive M-EDU notifications in Telegram',
+  'settings.telegram.hint':
+    'Telegram is an optional notification channel. Your M-EDU account, roles and data stay on the M-EDU server — disconnecting never affects your account.',
+  'settings.telegram.stateActive': 'Connected',
+  'settings.telegram.stateNotLinked': 'Not connected',
+  'settings.telegram.stateDisconnected': 'Disconnected',
+  'settings.telegram.stateBlocked': 'Blocked',
+  'settings.telegram.stateSuspended': 'Suspended',
+  'settings.telegram.blockedHint':
+    'You blocked the bot or removed the chat. Press Connect and open the link again to restore notifications.',
+  'settings.telegram.lastSeen': 'Last activity',
+  'settings.telegram.never': 'never',
+  'settings.telegram.connect': 'Connect Telegram',
+  'settings.telegram.reconnect': 'Connect again',
+  'settings.telegram.disconnect': 'Disconnect',
+  'settings.telegram.test': 'Send test notification',
+  'settings.telegram.openLink': 'Open this link in Telegram to finish connecting:',
+  'settings.telegram.linkReady': 'Connection link created',
+  'settings.telegram.linkExpires': 'The link is single-use and expires {time}.',
+  'settings.telegram.disconnected': 'Telegram disconnected',
+  'settings.telegram.testSent': 'Test notification sent',
+  'settings.telegram.testFailed': 'Telegram is not available for this account',
 
   // Errors
   'error.network': 'Network error — check your connection and try again',
@@ -197,6 +220,22 @@ const en = {
   'error.forbidden': 'You do not have permission to perform this action',
   'error.notFound': 'The requested resource was not found',
   'error.server': 'Server error — please try again later',
+  'homework.titleRequired': 'Title is required',
+  'exams.subjectRequired': 'Subject is required',
+  'exams.groupRequired': 'Group is required',
+  'exams.form.typeRequired': 'Type is required',
+  'exams.form.dateRequired': 'Date is required',
+  'exams.durationInvalid': 'Duration must be > 0',
+  'exams.totalMarksInvalid': 'Total marks must be > 0',
+  'exams.passingMarksInvalid': 'Passing marks must be > 0',
+  'exams.passingMarksTooHigh': 'Passing marks cannot exceed total',
+  'hr.form.validation.userIdRequired': 'User is required',
+  'hr.form.validation.employeeNumberRequired': 'Employee number is required',
+  'hr.form.validation.hireDateRequired': 'Hire date is required',
+  'hr.form.validation.contractTypeRequired': 'Contract type is required',
+  'hr.form.validation.positionRequired': 'Position is required',
+  'hr.form.validation.departmentRequired': 'Department is required',
+  'hr.form.validation.salaryInvalid': 'Salary is invalid',
 };
 
 import { legacyEn } from './legacy-slices';
@@ -205,3 +244,4 @@ import { pagesEn } from './pages-slices';
 
 // Legacy fills gaps → analytics fills more → curated base wins for overrides.
 export default { ...legacyEn, ...analyticsEn, ...pagesEn, ...en };
+

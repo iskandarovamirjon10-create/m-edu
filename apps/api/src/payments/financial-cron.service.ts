@@ -103,8 +103,8 @@ export class FinancialCronService {
   async remindUpcomingPayments() {
     const now = new Date();
     const inThreeDays = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-    const startOfDay = new Date(inThreeDays.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(inThreeDays.setHours(23, 59, 59, 999));
+    const startOfDay = new Date(Date.UTC(inThreeDays.getUTCFullYear(), inThreeDays.getUTCMonth(), inThreeDays.getUTCDate(), 0, 0, 0, 0));
+    const endOfDay = new Date(Date.UTC(inThreeDays.getUTCFullYear(), inThreeDays.getUTCMonth(), inThreeDays.getUTCDate(), 23, 59, 59, 999));
 
     try {
       const upcomingInvoices = await this.prisma.invoice.findMany({
@@ -158,3 +158,4 @@ export class FinancialCronService {
     }
   }
 }
+

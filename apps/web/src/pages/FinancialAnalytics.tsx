@@ -3,6 +3,7 @@
  * Features fluid data visualizations, deep frosted glass modules,
  * interactive what-if sliders, and high-end semantic data grids.
  */
+import { toLocalISOString } from '../lib/format';
 import { useState} from'react';
 import { useQuery} from'@tanstack/react-query';
 import { analyticsApi} from'@/lib/api';
@@ -31,8 +32,8 @@ function getDefaultDateRange() {
  const start = new Date(now.getFullYear(), now.getMonth(), 1);
  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
  return {
- startDate: start.toISOString().split('T')[0],
- endDate: end.toISOString().split('T')[0],
+ startDate: toLocalISOString(start),
+ endDate: toLocalISOString(end),
  };
 }
 
@@ -123,10 +124,10 @@ function CashFlowTab({ data, t}: { data: CashFlowData | undefined; t: (key: stri
   if (!data) return null;
 
   const breakdownData = [
-    { category: t('analytics.cashCollected') || 'Cash Collected', amount: data.inflows?.cashCollected ?? 0, type: 'INFLOW' },
-    { category: t('analytics.refunds') || 'Refunds', amount: data.inflows?.refundsTotal ?? 0, type: 'OUTFLOW' },
-    { category: t('analytics.generalExpenses') || 'Expenses', amount: data.outflows?.expensesTotal ?? 0, type: 'OUTFLOW' },
-    { category: t('analytics.payroll') || 'Payroll', amount: data.outflows?.payrollTotal ?? 0, type: 'OUTFLOW' },
+    { category: t('analytics.cashCollected'), amount: data.inflows?.cashCollected ?? 0, type: 'INFLOW' },
+    { category: t('analytics.refunds'), amount: data.inflows?.refundsTotal ?? 0, type: 'OUTFLOW' },
+    { category: t('analytics.generalExpenses'), amount: data.outflows?.expensesTotal ?? 0, type: 'OUTFLOW' },
+    { category: t('analytics.payroll'), amount: data.outflows?.payrollTotal ?? 0, type: 'OUTFLOW' },
   ].filter((b) => b.amount !== 0).sort((a, b) => b.amount - a.amount);
 
   return (
@@ -346,12 +347,12 @@ export function FinancialAnalyticsPage() {
                     <div className="text-xs mt-2 text-emerald-500 font-medium">vs {new Intl.NumberFormat('uz-UZ').format(sim.baseRevenue)}</div>
                   </div>
                   <div>
-                    <div className="text-sm text-[var(--text-secondary)] mb-1">{t('analytics.projectedPayroll') || 'Projected Payroll'}</div>
+                    <div className="text-sm text-[var(--text-secondary)] mb-1">{t('analytics.projectedPayroll')}</div>
                     <div className="text-3xl font-light">{new Intl.NumberFormat('uz-UZ').format(sim.projectedPayroll)}</div>
                     <div className="text-xs mt-2 text-rose-500 font-medium">vs {new Intl.NumberFormat('uz-UZ').format(sim.basePayroll)}</div>
                   </div>
                   <div>
-                    <div className="text-sm text-[var(--text-secondary)] mb-1">{t('analytics.projectedNetCashFlow') || 'Projected Net Cash Flow'}</div>
+                    <div className="text-sm text-[var(--text-secondary)] mb-1">{t('analytics.projectedNetCashFlow')}</div>
                     <div className={`text-3xl font-light ${sim.projectedNetCashFlow > sim.baseNetCashFlow ? 'text-emerald-500' : 'text-rose-500'}`}>
                       {new Intl.NumberFormat('uz-UZ').format(sim.projectedNetCashFlow)}
                     </div>
@@ -423,11 +424,11 @@ function ForecastView({ forecastDays, setForecastDays, t }: { forecastDays: numb
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div className="p-6 bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] flex flex-col justify-center items-center text-center">
-          <div className="text-sm text-[var(--text-secondary)] mb-2">{t('analytics.projectedPayroll') || 'Projected Payroll'}</div>
+          <div className="text-sm text-[var(--text-secondary)] mb-2">{t('analytics.projectedPayroll')}</div>
           <div className="text-3xl font-light text-amber-500">{new Intl.NumberFormat('uz-UZ').format(forecast.status === 'CALCULATED' ? forecast.projectedPayroll : 0)}</div>
         </div>
         <div className="p-6 bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-color)] flex flex-col justify-center items-center text-center">
-          <div className="text-sm text-[var(--text-secondary)] mb-2">{t('analytics.projectedNetCashFlow') || 'Projected Net Cash Flow'}</div>
+          <div className="text-sm text-[var(--text-secondary)] mb-2">{t('analytics.projectedNetCashFlow')}</div>
           <div className={`text-3xl font-light ${(forecast.status === 'CALCULATED' ? forecast.projectedNetCashFlow : 0) >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
             {new Intl.NumberFormat('uz-UZ').format(forecast.status === 'CALCULATED' ? forecast.projectedNetCashFlow : 0)}
           </div>

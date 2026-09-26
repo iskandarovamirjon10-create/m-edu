@@ -146,11 +146,12 @@ describe('PayrollAnalyticsService', () => {
 
     it('computes ratio when both payroll and revenue exist', async () => {
       const now = new Date();
-      const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       prisma.payrollRun.findMany.mockResolvedValue([
         { periodYear: now.getFullYear(), periodMonth: now.getMonth() + 1, netAmount: 10000 },
       ]);
-      fb.getMonthlyRevenueSeries.mockResolvedValue([{ month: key, total: 50000 }]);
+      fb.getMonthlyRevenueSeries.mockResolvedValue([
+        { bucket: new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1)).toISOString(), total: 50000 },
+      ]);
 
       const result = await svc.getPayrollToRevenueRatio('org-1', 1);
       expect(result.months).toHaveLength(1);

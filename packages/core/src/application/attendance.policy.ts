@@ -57,7 +57,36 @@ export class AttendancePolicy {
       };
     }
 
-    // 3. Check for duplicate attendance for the day.
+    // 3. Schedule gate (audit P0-1).
+    //
+    // This runs BEFORE any attendance row is created, so an out-of-schedule
+    // recognition can never become authoritative. It replaces the previous
+    // post-commit "record then roll back" pattern.
+    //
+    // Fails CLOSED: if the gate cannot be evaluated, attendance is refused.
+    let withinSchedule = false;
+    let scheduleError: string | null = null;
+    try {
+      withinSchedule = await this.recognitionRepo.isWithinSchedule(
+        tenant.organizationId,
+        studentId,
+        groupId
+      );
+    } catch (err: unknown) {
+      withinSchedule = false;
+      scheduleError = err instanceof Error ? err.message : 'Unknown evaluation error';
+    }
+
+    if (!withinSchedule) {
+      return {
+        decision: 'OUT_OF_SCHEDULE',
+        message: scheduleError
+          ? `Schedule gate check failed (failed-closed): ${scheduleError}`
+          : 'No active schedule permits attendance for this group at this time',
+      };
+    }
+
+    // 4. Check for duplicate attendance for the day.
     // Attendance is day-scoped: the DB unique constraint is
     // (studentId, groupId, date) with a day-normalized date, and the camera
     // path (AttendanceDecisionEngine) treats ANY same-day row as a duplicate
@@ -81,7 +110,7 @@ export class AttendancePolicy {
       };
     }
 
-    // 4. All checks passed
+    // 5. All checks passed
     return {
       decision: 'RECORDED',
       message: 'Attendance validated and ready to record',

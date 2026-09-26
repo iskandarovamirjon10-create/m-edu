@@ -1,3 +1,4 @@
+import { formatDate } from '../lib/format';
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { examsApi, groupsApi } from '@/lib/api';
@@ -348,7 +349,7 @@ export function ExamsPage() {
                     <GlassTD>
                       <GlassBadge variant={typeBadge.variant}>{t(typeBadge.label)}</GlassBadge>
                     </GlassTD>
-                    <GlassTD>{new Date(exam.examDate).toLocaleDateString()}</GlassTD>
+                    <GlassTD>{formatDate(exam.examDate)}</GlassTD>
                     <GlassTD>
                       {exam.duration ? t('exams.durationMinutes', { n: exam.duration }) : '—'}
                     </GlassTD>

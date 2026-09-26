@@ -68,6 +68,8 @@ export class ResilientRedisThrottlerStorage implements ThrottlerStorage {
     return this.memoryIncrement(key, ttl, limit, blockDuration, throttlerName);
   }
 
+  static readonly MAX_MEMORY_ENTRIES = 10_000;
+
   private memoryIncrement(key: string, ttl: number, limit: number, blockDuration: number, throttlerName: string): ThrottlerStorageRecord {
     const fullKey = `throttler:${throttlerName}:${key}`;
     const now = Date.now();
@@ -78,9 +80,25 @@ export class ResilientRedisThrottlerStorage implements ThrottlerStorage {
     }
 
     record.totalHits += 1;
+    // Map in JS maintains insertion order: deleting and re-inserting promotes key to MRU
+    this.memoryStorage.delete(fullKey);
     this.memoryStorage.set(fullKey, record);
 
-    if (Math.random() < 0.01) {
+    // Bounded capacity check: prevent memory leaks/DoS if Redis is down
+    if (this.memoryStorage.size > ResilientRedisThrottlerStorage.MAX_MEMORY_ENTRIES) {
+      // 1. Purge expired entries
+      for (const [k, v] of this.memoryStorage.entries()) {
+        if (v.expiresAt <= now) {
+          this.memoryStorage.delete(k);
+        }
+      }
+      // 2. If still over capacity, evict oldest entries (LRU/FIFO)
+      while (this.memoryStorage.size > ResilientRedisThrottlerStorage.MAX_MEMORY_ENTRIES) {
+        const oldestKey = this.memoryStorage.keys().next().value;
+        if (!oldestKey) break;
+        this.memoryStorage.delete(oldestKey);
+      }
+    } else if (Math.random() < 0.01) {
       for (const [k, v] of this.memoryStorage.entries()) {
         if (v.expiresAt < now) {
           this.memoryStorage.delete(k);

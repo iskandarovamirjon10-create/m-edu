@@ -1,10 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
-import { CreateStudentDto, UpdateStudentDto } from '../common/dto';
+import { CreateStudentDto, UpdateStudentDto, CreateParentLinkDto, UpdateParentLinkDto } from '../common/dto';
 import { StudentQuery } from '../common/dto/query';
 import { userPublicSelect } from '../common/selects/user.select';
 
@@ -23,13 +23,20 @@ export class StudentsService {
         { user: { email: { contains: query.search, mode: 'insensitive' } } },
       ];
     }
-    if (query.groupId) {
-      // The groupId filter is scoped by tenant as well: a membership row is
+    if (query.groupId || query.teacherId) {
+      // The membership filter is scoped by tenant as well: a membership row is
       // only valid if the student, group and membership share one
-      // organization, so filtering on (groupId + organizationId) is both a
-      // correctness invariant and defense in depth against cross-tenant
+      // organization, so filtering on (groupId|teacherId + organizationId) is
+      // both a correctness invariant and defense in depth against cross-tenant
       // group references from a crafted query.
-      where.groups = { some: { groupId: query.groupId, isActive: true, organizationId } };
+      where.groups = {
+        some: {
+          isActive: true,
+          organizationId,
+          ...(query.groupId ? { groupId: query.groupId } : {}),
+          ...(query.teacherId ? { group: { teacherId: query.teacherId } } : {}),
+        },
+      };
     }
     if (query.isActive !== undefined) {
       where.user = { isActive: query.isActive === 'true' };
@@ -250,7 +257,7 @@ export class StudentsService {
       if (!alreadyActive || !alreadyActive.isActive) {
         if (group.capacity !== null && currentCount >= group.capacity) {
           throw new BadRequestException(
-            `Guruh sig'imiga yetildi: ${currentCount}/${group.capacity}. Yangi talaba qo'sha olmaysiz.`,
+            `Group capacity reached: ${currentCount}/${group.capacity}. Cannot add more students.`,
           );
         }
       }
@@ -275,6 +282,160 @@ export class StudentsService {
       where: { studentId_groupId: { studentId, groupId } },
       data: { isActive: false, leftAt: new Date() },
     });
+  }
+
+  // ==================== Parent Management ====================
+
+  async getStudentParents(organizationId: string, studentId: string) {
+    await this.findOne(organizationId, studentId);
+    return this.prisma.parentStudent.findMany({
+      where: {
+        studentId,
+        parent: { organizationId },
+      },
+      include: {
+        parent: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            isActive: true,
+            lastLoginAt: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createOrLinkParent(organizationId: string, studentId: string, data: CreateParentLinkDto) {
+    await this.findOne(organizationId, studentId);
+
+    const email = data.email.toLowerCase().trim();
+    let parent = await this.prisma.parentAccount.findFirst({
+      where: { email, organizationId },
+    });
+
+    if (!parent) {
+      const password = data.password || randomUUID().slice(0, 12) + '!Aa1';
+      const passwordHash = await bcrypt.hash(password, 10);
+      parent = await this.prisma.parentAccount.create({
+        data: {
+          organizationId,
+          email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          phone: data.phone,
+          passwordHash,
+          isActive: true,
+        },
+      });
+    }
+
+    const existingLink = await this.prisma.parentStudent.findUnique({
+      where: {
+        parentId_studentId: {
+          parentId: parent.id,
+          studentId,
+        },
+      },
+    });
+
+    if (existingLink) {
+      throw new ConflictException('Parent is already linked to this student');
+    }
+
+    return this.prisma.parentStudent.create({
+      data: {
+        parentId: parent.id,
+        studentId,
+        relationship: data.relationship || 'parent',
+        isPrimary: data.isPrimary ?? false,
+        canViewGrades: data.canViewGrades ?? true,
+        canViewPayments: data.canViewPayments ?? true,
+        canViewAttendance: data.canViewAttendance ?? true,
+      },
+      include: {
+        parent: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            isActive: true,
+            lastLoginAt: true,
+          },
+        },
+      },
+    });
+  }
+
+  async updateParentLink(
+    organizationId: string,
+    studentId: string,
+    parentId: string,
+    data: UpdateParentLinkDto,
+  ) {
+    await this.findOne(organizationId, studentId);
+
+    const link = await this.prisma.parentStudent.findFirst({
+      where: {
+        studentId,
+        parentId,
+        parent: { organizationId },
+      },
+    });
+    if (!link) {
+      throw new NotFoundException('Parent link not found for this student');
+    }
+
+    return this.prisma.parentStudent.update({
+      where: { id: link.id },
+      data: {
+        ...(data.relationship !== undefined ? { relationship: data.relationship } : {}),
+        ...(data.isPrimary !== undefined ? { isPrimary: data.isPrimary } : {}),
+        ...(data.canViewGrades !== undefined ? { canViewGrades: data.canViewGrades } : {}),
+        ...(data.canViewPayments !== undefined ? { canViewPayments: data.canViewPayments } : {}),
+        ...(data.canViewAttendance !== undefined ? { canViewAttendance: data.canViewAttendance } : {}),
+      },
+      include: {
+        parent: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+  }
+
+  async unlinkParent(organizationId: string, studentId: string, parentId: string) {
+    await this.findOne(organizationId, studentId);
+
+    const link = await this.prisma.parentStudent.findFirst({
+      where: {
+        studentId,
+        parentId,
+        parent: { organizationId },
+      },
+    });
+    if (!link) {
+      throw new NotFoundException('Parent link not found for this student');
+    }
+
+    await this.prisma.parentStudent.delete({
+      where: { id: link.id },
+    });
+
+    return { success: true };
   }
 }
 

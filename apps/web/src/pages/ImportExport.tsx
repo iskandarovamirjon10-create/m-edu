@@ -134,12 +134,12 @@ export function ImportExportPage() {
               className="hidden"
             />
             <GlassButton
-              variant="primary"
-              onClick={() => fileInput.current?.click()}
-              disabled={uploadMutation.isPending}
-            >
-              {uploadMutation.isPending ? t('importExport.uploading') : t('importExport.chooseFile')}
-            </GlassButton>
+                variant="primary"
+                onClick={() => {}}
+                disabled={true}
+              >
+                {t('common.comingSoon')}
+              </GlassButton>
             <GlassButton variant="ghost" onClick={() => downloadTemplate(entity)}>
               {t('importExport.downloadTemplate')}
             </GlassButton>

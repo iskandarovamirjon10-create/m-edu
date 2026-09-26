@@ -277,6 +277,7 @@ export class ReconciliationService {
         s.balance::decimal as balance,
         COALESCE(inv_agg."totalInvoiced", 0)::decimal as "totalInvoiced",
         COALESCE(pay_agg."totalPaid", 0)::decimal as "totalPaid",
+        COALESCE(inv_agg."totalOutstanding", 0)::decimal as "totalOutstanding",
         inv_agg."oldestDebtDate" as "oldestDebtDate",
         COALESCE(inv_agg."unpaidInvoiceCount", 0)::int as "unpaidInvoiceCount"
       FROM "Student" s
@@ -284,8 +285,9 @@ export class ReconciliationService {
       LEFT JOIN LATERAL (
         SELECT 
           SUM(i.total) as "totalInvoiced",
-          MIN(CASE WHEN i.total - i."paidAmount" > 0 THEN COALESCE(i."dueDate", i."issueDate") END) as "oldestDebtDate",
-          COUNT(CASE WHEN i.total - i."paidAmount" > 0 THEN 1 END) as "unpaidInvoiceCount"
+          SUM(GREATEST(i.total - i."paidAmount" + COALESCE(i."refundedAmount", 0), 0)) as "totalOutstanding",
+          MIN(CASE WHEN i.total - i."paidAmount" + COALESCE(i."refundedAmount", 0) > 0 THEN COALESCE(i."dueDate", i."issueDate") END) as "oldestDebtDate",
+          COUNT(CASE WHEN i.total - i."paidAmount" + COALESCE(i."refundedAmount", 0) > 0 THEN 1 END) as "unpaidInvoiceCount"
         FROM "Invoice" i 
         WHERE i."studentId" = s.id 
           AND i.status NOT IN ('DRAFT', 'CANCELLED')
@@ -304,6 +306,7 @@ export class ReconciliationService {
       balance: number;
       totalInvoiced: number;
       totalPaid: number;
+      totalOutstanding: number;
       oldestDebtDate: Date | null;
       unpaidInvoiceCount: number;
     }>;
@@ -317,7 +320,7 @@ export class ReconciliationService {
         balance: Number(r.balance),
         totalInvoiced,
         totalPaid,
-        outstandingAmount: Math.max(0, totalInvoiced - totalPaid),
+        outstandingAmount: Number(r.totalOutstanding),
         oldestDebtDate: r.oldestDebtDate,
         unpaidInvoiceCount: Number(r.unpaidInvoiceCount),
       };

@@ -6,7 +6,7 @@ import type { FinancialPeriodService } from '../../analytics/financial-period.se
 import { ExpenseCategory } from '@prisma/client';
 
 function makePrisma() {
-  return {
+  const obj: any = {
     expense: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -19,8 +19,13 @@ function makePrisma() {
       groupBy: vi.fn(),
       aggregate: vi.fn(),
     },
+    auditLog: {
+      create: vi.fn(),
+    },
     $queryRaw: vi.fn(),
   };
+  obj.$transaction = vi.fn().mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb(obj));
+  return obj;
 }
 
 function makeFinancialPeriod() {
@@ -162,7 +167,7 @@ describe('ExpensesService', () => {
       });
       prisma.expense.deleteMany.mockResolvedValue({ count: 1 });
 
-      const res = await svc.remove('org-1', 'exp-1');
+      const res = await svc.remove('org-1', 'exp-1', 'actor-1');
       expect(financialPeriod.ensureNotClosed).toHaveBeenCalled();
       expect(prisma.expense.deleteMany).toHaveBeenCalledWith({
         where: { id: 'exp-1', organizationId: 'org-1' },

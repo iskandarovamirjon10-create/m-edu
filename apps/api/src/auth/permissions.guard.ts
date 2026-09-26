@@ -13,8 +13,8 @@ import { Permission, RolePermissions } from '@medu/contracts';
  * `Permissions.CAMERA_MANAGE` ('camera.manage') — the generic RolesGuard
  * compares those strings against `user.role` and would deny every role.
  *
- * Mirrors the semantics of face/FacePermissionsGuard:
- *  - no required permissions → allow
+ * Mirrors FacePermissionsGuard's identity checks, but is fail-closed:
+ *  - no required permissions declared → 403 (endpoint must declare them)
  *  - missing/malformed identity → 401
  *  - role with no registered permissions → 403
  *  - missing permission → 403
@@ -30,7 +30,9 @@ export class PermissionsGuard implements CanActivate {
     );
 
     if (!requiredPermissions || requiredPermissions.length === 0) {
-      return true;
+      throw new ForbiddenException(
+        'Endpoint does not declare required permissions (fail-closed).',
+      );
     }
 
     const request = context.switchToHttp().getRequest();

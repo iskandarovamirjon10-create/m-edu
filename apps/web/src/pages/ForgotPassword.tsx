@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { authApi, friendlyHttpMessage, type ApiError } from '@/lib/api';
 import { GlassButton, GlassInput } from '@/components/ui';
+import { MeduLogo } from '@/components/brand/MeduLogo';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
 
@@ -55,27 +56,7 @@ function Arrow() {
 }
 
 function BrandMark() {
-  return (
-    <div
-      className="relative mx-auto mb-6 grid h-12 w-12 place-items-center rounded-2xl text-white"
-      style={{
-        background: 'linear-gradient(135deg, var(--m-vivid) 0%, var(--m-deep) 100%)',
-        boxShadow: '0 10px 30px -10px rgba(84,115,252,0.55), inset 0 1px 0 rgba(255,255,255,0.25)',
-        border: '1px solid rgba(255,255,255,0.25)',
-      }}
-    >
-      <span className="text-[20px] font-semibold tracking-tight">M</span>
-      <span
-        aria-hidden
-        className="absolute inset-0 rounded-2xl"
-        style={{
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, transparent 100%)',
-          opacity: 0.6,
-          pointerEvents: 'none',
-        }}
-      />
-    </div>
-  );
+  return <MeduLogo size="lg" className="mx-auto mb-6" />;
 }
 
 export function ForgotPasswordPage() {

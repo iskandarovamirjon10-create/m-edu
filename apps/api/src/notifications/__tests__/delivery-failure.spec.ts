@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TelegramService } from '../telegram.service';
+import { TelegramService } from '../../telegram/telegram.service';
 import { SmsService } from '../sms.service';
 
 function makeConfig(env: Record<string, string> = {}) {

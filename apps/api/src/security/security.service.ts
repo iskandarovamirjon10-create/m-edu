@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecurityAlertQueryDto } from './dto/security.dto';
 
@@ -49,7 +49,7 @@ export class SecurityService {
     weekAgo.setDate(weekAgo.getDate() - 7);
 
     const weekAgoStart = new Date(weekAgo);
-    weekAgoStart.setHours(0, 0, 0, 0);
+    weekAgoStart.setUTCHours(0, 0, 0, 0);
 
     const alerts = await this.buildAlertsFromAuditLog(orgId);
 
@@ -198,3 +198,4 @@ export class SecurityService {
     );
   }
 }
+

@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Role } from '@prisma/client';
 import { StudentsController } from '../students.controller';
 import { StudentsService } from '../students.service';
 import { CreateStudentDto, UpdateStudentDto } from '../../common/dto';
 import { StudentQuery } from '../../common/dto/query';
+import { RolesGuard } from '../../auth/roles.guard';
+import { ROLES_KEY } from '../../auth/roles.decorator';
 
 describe('StudentsController', () => {
   let controller: StudentsController;
@@ -96,4 +101,104 @@ describe('StudentsController', () => {
     expect(result).toBe(expected);
     expect(service.removeFromGroup).toHaveBeenCalledWith(orgId, 's1', 'g1');
   });
+
+  describe('Parent Associations', () => {
+    it('delegates getParents to service', async () => {
+      const expected = [{ id: 'p1', parent: { email: 'parent@example.com' } }];
+      (service as any).getStudentParents = vi.fn().mockResolvedValue(expected);
+
+      const result = await controller.getParents(orgId, 's1');
+      expect(result).toBe(expected);
+      expect((service as any).getStudentParents).toHaveBeenCalledWith(orgId, 's1');
+    });
+
+    it('delegates createParent to service', async () => {
+      const dto = { email: 'parent@example.com', firstName: 'John', lastName: 'Doe' };
+      const expected = { id: 'link-1' };
+      (service as any).createOrLinkParent = vi.fn().mockResolvedValue(expected);
+
+      const result = await controller.createParent(orgId, 's1', dto as any);
+      expect(result).toBe(expected);
+      expect((service as any).createOrLinkParent).toHaveBeenCalledWith(orgId, 's1', dto);
+    });
+
+    it('delegates updateParentLink to service', async () => {
+      const dto = { relationship: 'mother' };
+      const expected = { id: 'link-1', relationship: 'mother' };
+      (service as any).updateParentLink = vi.fn().mockResolvedValue(expected);
+
+      const result = await controller.updateParentLink(orgId, 's1', 'p1', dto as any);
+      expect(result).toBe(expected);
+      expect((service as any).updateParentLink).toHaveBeenCalledWith(orgId, 's1', 'p1', dto);
+    });
+
+    it('delegates unlinkParent to service', async () => {
+      const expected = { success: true };
+      (service as any).unlinkParent = vi.fn().mockResolvedValue(expected);
+
+      const result = await controller.unlinkParent(orgId, 's1', 'p1');
+      expect(result).toBe(expected);
+      expect((service as any).unlinkParent).toHaveBeenCalledWith(orgId, 's1', 'p1');
+    });
+  });
 });
+
+describe('StudentsController — Parent Routes RBAC Authorization', () => {
+  let guard: RolesGuard;
+  let reflector: Reflector;
+
+  beforeEach(() => {
+    reflector = new Reflector();
+    guard = new RolesGuard(reflector);
+  });
+
+  function makeContext(user?: { role?: string; organizationId?: string }): ExecutionContext {
+    return {
+      getHandler: () => StudentsController.prototype.getParents,
+      getClass: () => StudentsController,
+      switchToHttp: () => ({
+        getRequest: () => ({ user }),
+      }),
+    } as unknown as ExecutionContext;
+  }
+
+  it('declares STAFF_ROLES on getParents', () => {
+    const roles = reflector.get(ROLES_KEY, StudentsController.prototype.getParents);
+    expect(roles).toBeDefined();
+    expect(roles).toContain(Role.SUPER_ADMIN);
+    expect(roles).toContain(Role.ORG_ADMIN);
+    expect(roles).toContain(Role.TEACHER);
+    expect(roles).toContain(Role.MANAGER);
+    expect(roles).toContain(Role.ASSISTANT);
+  });
+
+  it('allows SUPER_ADMIN to access getParents', () => {
+    expect(guard.canActivate(makeContext({ role: Role.SUPER_ADMIN, organizationId: 'org-1' }))).toBe(true);
+  });
+
+  it('allows ORG_ADMIN to access getParents', () => {
+    expect(guard.canActivate(makeContext({ role: Role.ORG_ADMIN, organizationId: 'org-1' }))).toBe(true);
+  });
+
+  it('allows TEACHER to access getParents', () => {
+    expect(guard.canActivate(makeContext({ role: Role.TEACHER, organizationId: 'org-1' }))).toBe(true);
+  });
+
+  it('allows MANAGER to access getParents', () => {
+    expect(guard.canActivate(makeContext({ role: Role.MANAGER, organizationId: 'org-1' }))).toBe(true);
+  });
+
+  it('denies PARENT role from accessing getParents', () => {
+    expect(guard.canActivate(makeContext({ role: Role.PARENT, organizationId: 'org-1' }))).toBe(false);
+  });
+
+  it('denies STUDENT role from accessing getParents', () => {
+    expect(guard.canActivate(makeContext({ role: Role.STUDENT, organizationId: 'org-1' }))).toBe(false);
+  });
+
+  it('denies unauthenticated request with no token / no user', () => {
+    expect(guard.canActivate(makeContext(undefined))).toBe(false);
+  });
+});
+
+

@@ -52,6 +52,26 @@ describe('Config Module Suite', () => {
       expect(errorVars).toContain('FACE_DETECTOR_MODEL_PATH');
     });
 
+    it('rejects unsafe placeholder secrets in production mode', () => {
+      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/medu';
+      process.env.JWT_SECRET = 'your-jwt-secret-here-minimum-32-chars-long';
+      process.env.OAUTH_SESSION_SECRET = 'changeme-please-set-at-least-32-characters-long';
+      process.env.BIOMETRIC_ENCRYPTION_KEY = 'your-biometric-key-here-32-chars';
+      process.env.FACE_ENGINE_PROVIDER = 'real-local';
+      process.env.CORS_ORIGIN = 'https://app.medu.uz';
+      process.env.NEXT_PUBLIC_APP_URL = 'https://app.medu.uz';
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      process.env.FACE_DETECTOR_MODEL_PATH = '/path/to/detector.onnx';
+      process.env.FACE_EMBEDDER_MODEL_PATH = '/path/to/embedder.onnx';
+
+      const problems = validateConfig('production');
+      const errorVars = problems.filter((p) => p.severity === 'error').map((p) => p.variable);
+
+      expect(errorVars).toContain('JWT_SECRET');
+      expect(errorVars).toContain('OAUTH_SESSION_SECRET');
+      expect(errorVars).toContain('BIOMETRIC_ENCRYPTION_KEY');
+    });
+
     it('assertValidConfig throws aggregated error when errors exist', () => {
       delete process.env.DATABASE_URL;
       delete process.env.JWT_SECRET;

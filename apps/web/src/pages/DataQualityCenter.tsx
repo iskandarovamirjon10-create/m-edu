@@ -1,3 +1,4 @@
+import { formatDate } from '../lib/format';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, GlassButton } from '@/components/ui';
@@ -187,7 +188,7 @@ export function DataQualityCenterPage() {
                         </>
                       )}
                       <span>·</span>
-                      <span>{new Date(issue.detectedAt).toLocaleDateString()}</span>
+                      <span>{formatDate(issue.detectedAt)}</span>
                     </div>
                   </div>
                   <GlassButton

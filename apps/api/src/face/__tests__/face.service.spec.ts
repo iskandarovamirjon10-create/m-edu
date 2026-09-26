@@ -24,6 +24,7 @@ import {
 
 import { FaceService } from '../face.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { resetSharedFaceEngineCache } from '../face-engine.factory';
 
 /* ────────────────────────────────────────────────────────────────────── */
 /* Prisma mock                                                            */
@@ -71,6 +72,7 @@ function makePrisma() {
 
     attendance: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findUnique: vi.fn().mockResolvedValue({ groupId: 'g1' }),
     },
 
     $transaction: vi.fn(),
@@ -82,7 +84,9 @@ function makePrisma() {
 async function makeService() {
   const prisma = makePrisma();
 
-  const service = new FaceService(prisma);
+  const service = new FaceService(prisma, {
+    validateGroupTime: vi.fn().mockResolvedValue(true),
+  } as never);
 
   await service.onModuleInit();
 
@@ -107,6 +111,7 @@ describe('FaceService', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    resetSharedFaceEngineCache();
 
     process.env.NODE_ENV = 'test';
     process.env.FACE_ENGINE_PROVIDER = 'mock';
@@ -134,7 +139,10 @@ describe('FaceService', () => {
       process.env.NODE_ENV = 'production';
       process.env.FACE_ENGINE_PROVIDER = 'mock';
 
-      const service = new FaceService(makePrisma());
+      resetSharedFaceEngineCache();
+      const service = new FaceService(makePrisma(), {
+        validateGroupTime: vi.fn().mockResolvedValue(true),
+      } as never);
 
       await expect(service.onModuleInit()).rejects.toThrow(
         /Mock engines are forbidden/,
@@ -145,7 +153,10 @@ describe('FaceService', () => {
       process.env.NODE_ENV = 'production';
       delete process.env.FACE_ENGINE_PROVIDER;
 
-      const service = new FaceService(makePrisma());
+      resetSharedFaceEngineCache();
+      const service = new FaceService(makePrisma(), {
+        validateGroupTime: vi.fn().mockResolvedValue(true),
+      } as never);
 
       await expect(service.onModuleInit()).rejects.toThrow();
     });

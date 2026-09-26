@@ -16,7 +16,7 @@ import type { TenantContext } from '../ports/tenant-context.port';
 import { FaceEmbedding } from '../domain/value-objects';
 import { RecognitionDecisionPolicy } from './recognition-decision.policy';
 import { AttendancePolicy } from './attendance.policy';
-import { RecognitionAttemptStatus, RecognitionSessionStatus } from '@medu/contracts';
+import { RecognitionAttemptStatus, RecognitionSessionStatus, AuditEventType } from '@medu/contracts';
 import {
   SessionNotFoundError,
   SessionAlreadyFinishedError,
@@ -200,6 +200,7 @@ export class RecognitionService {
       let bestMatch:
         | Awaited<ReturnType<EnrollmentRepository['findAllActiveTemplates']>>[number]
         | null = null;
+      let secondBestSimilarity = -1;
 
       const stream = this.enrollmentRepo.streamActiveTemplates(
         tenant.organizationId,
@@ -251,16 +252,51 @@ export class RecognitionService {
               embeddingB: storedEmbedding.embedding,
             });
 
-            if (similarity > bestSimilarity) {
+            if (!bestMatch) {
               bestSimilarity = similarity;
               bestMatch = template;
+            } else if (template.studentId === bestMatch.studentId) {
+              if (similarity > bestSimilarity) {
+                bestSimilarity = similarity;
+                bestMatch = template;
+              }
+            } else {
+              // Different student from current bestMatch
+              if (similarity > bestSimilarity) {
+                if (bestSimilarity > secondBestSimilarity) {
+                  secondBestSimilarity = bestSimilarity;
+                }
+                bestSimilarity = similarity;
+                bestMatch = template;
+              } else if (similarity > secondBestSimilarity) {
+                secondBestSimilarity = similarity;
+              }
             }
-          } catch {
-            // Skip corrupted/unavailable templates
+          } catch (err: unknown) {
+            void this.audit.log({
+              organizationId: tenant.organizationId,
+              userId: tenant.userId,
+              type: AuditEventType.TEMPLATE_CORRUPTED,
+              resourceType: 'FaceTemplate',
+              resourceId: template.id,
+              description: `Face template decryption or comparison failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+              metadata: {
+                studentId: template.studentId,
+                templateHash: template.templateHash,
+              },
+            }).catch(() => {
+              // Audit logging failure must not crash the recognition pipeline
+            });
+            // Fail closed for this template, continue searching remaining valid templates
             continue;
           }
         }
       }
+
+      const ambiguityMargin =
+        bestMatch && secondBestSimilarity >= 0
+          ? bestSimilarity - secondBestSimilarity
+          : null;
 
       if (bestMatch && bestSimilarity >= 0) {
         similarityScore = bestSimilarity;
@@ -280,6 +316,7 @@ export class RecognitionService {
         livenessConfidence: liveness.confidence,
         similarityScore,
         bestMatchFound: bestMatch !== null,
+        ambiguityMargin,
       }, identifiedStudentId ?? undefined);
 
       // Final attempt status

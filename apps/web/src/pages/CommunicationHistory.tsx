@@ -97,7 +97,7 @@ function TimelineTab() {
  <div className="flex flex-col md:flex-row md:items-end gap-6">
  <div className="flex-1">
  <label className="block text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-3">
- {t('communication.entityType') ||'Target Profile'}
+ {t('communication.entityType')}
  </label>
  <div className="flex flex-wrap gap-2 p-1.5 rounded-[1.25rem] bg-[var(--state-hover)] border border-[var(--border-subtle)]/50 w-max">
  {ENTITY_TYPES.map((et) => (
@@ -116,7 +116,7 @@ function TimelineTab() {
  
  <div className="flex-1">
  <label className="block text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-3">
- {t('communication.entityId') ||'Profile ID'}
+ {t('communication.entityId')}
  </label>
   <div className="relative">
   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] z-10">
@@ -125,7 +125,7 @@ function TimelineTab() {
   <GlassInput
   value={entityId}
   onChange={(e) => setEntityId(e.target.value)}
-  placeholder={t('communication.entityIdPlaceholder') ||'Enter unique identifier...'}
+  placeholder={t('communication.entityIdPlaceholder')}
   className="w-full pl-11 h-[3.25rem] rounded-[1.25rem] font-semibold"
   />
   </div>
@@ -140,15 +140,15 @@ function TimelineTab() {
  <div className="relative z-10">
  {!entityId.trim() ? (
  <div className="py-12 flex items-center justify-center">
- <GlassEmptyState title={t('communication.selectEntity') ||'Ready for Analysis'} message={t('communication.selectEntityHint') ||'Enter an ID above to view the communication timeline.'} />
+ <GlassEmptyState title={t('communication.selectEntity')} message={t('communication.selectEntityHint')} />
  </div>
  ) : timelineQuery.isLoading ? (
- <div className="py-16 flex items-center justify-center"><GlassPageLoader label={t('common.loading') ||'Fetching records…'} /></div>
+ <div className="py-16 flex items-center justify-center"><GlassPageLoader label={t('common.loading')} /></div>
  ) : timelineQuery.isError ? (
  <div className="py-12"><GlassErrorState message={getErrorMessage(timelineQuery.error)} onRetry={() => timelineQuery.refetch()} /></div>
  ) : items.length === 0 ? (
  <div className="py-12 flex items-center justify-center">
- <GlassEmptyState title={t('communication.noTimeline') ||'No Communications Found'} message={t('communication.noTimelineHint') ||'There is no recorded history for this identifier.'} />
+ <GlassEmptyState title={t('communication.noTimeline')} message={t('communication.noTimelineHint')} />
  </div>
  ) : (
  <div className="relative pl-6 sm:pl-8">
@@ -281,11 +281,11 @@ function HistoryTab() {
  <GlassTable>
  <GlassTHead>
  <GlassTR>
- <GlassTH>{t('communication.col.channel') ||'Channel'}</GlassTH>
- <GlassTH>{t('communication.col.entity') ||'Target Profile'}</GlassTH>
- <GlassTH>{t('communication.col.subject') ||'Subject / Excerpt'}</GlassTH>
- <GlassTH>{t('communication.col.status') ||'Status'}</GlassTH>
- <GlassTH className="text-right">{t('communication.col.date') ||'Timestamp'}</GlassTH>
+ <GlassTH>{t('communication.col.channel')}</GlassTH>
+ <GlassTH>{t('communication.col.entity')}</GlassTH>
+ <GlassTH>{t('communication.col.subject')}</GlassTH>
+ <GlassTH>{t('communication.col.status')}</GlassTH>
+ <GlassTH className="text-right">{t('communication.col.date')}</GlassTH>
  </GlassTR>
  </GlassTHead>
  <GlassTBody>
@@ -340,7 +340,7 @@ function HistoryTab() {
  {totalPages > 1 && (
  <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-card)] relative z-10">
  <span className="text-[0.8rem] font-bold text-[var(--text-muted)] uppercase tracking-widest hidden sm:block">
- {t('common.showing') ||'Showing'} {items.length} {t('common.of') ||'of'} {total}
+ {t('common.showing')} {items.length} {t('common.of')} {total}
  </span>
  <div className="flex gap-2 ml-auto">
  <GlassButton
@@ -350,7 +350,7 @@ function HistoryTab() {
  disabled={page <= 1}
  onClick={() => setPage((p) => p - 1)}
  >
- {t('common.previous') ||'Prev'}
+ {t('common.previous')}
  </GlassButton>
  <div className="flex items-center px-4 font-mono text-[0.85rem] font-bold text-[var(--text-primary)]">
  {page} <span className="text-[var(--text-muted)] mx-1">/</span> {totalPages}
@@ -362,7 +362,7 @@ function HistoryTab() {
  disabled={page >= totalPages}
  onClick={() => setPage((p) => p + 1)}
  >
- {t('common.next') ||'Next'}
+ {t('common.next')}
  </GlassButton>
  </div>
  </div>
@@ -435,7 +435,7 @@ function StatsTab() {
  if (statsQuery.isLoading) {
  return (
  <div className="p-16 flex items-center justify-center rounded-[2.5rem] glass-card animate-in fade-in">
- <GlassPageLoader label={t('common.loading') ||'Calculating metrics…'} />
+ <GlassPageLoader label={t('common.loading')} />
  </div>
  );
 }
@@ -459,10 +459,10 @@ function StatsTab() {
  
  {/* KPI Cards */}
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
- <CommStatCard label={t('communication.totalSent') ||'Total Dispatched'} value={stats.total ?? 0} highlightColor="bg-blue-500"/>
- <CommStatCard label={t('communication.delivered') ||'Delivered'} value={stats.deliveredCount ?? 0} highlightColor="bg-emerald-500"/>
- <CommStatCard label={t('communication.failed') ||'Failed'} value={stats.failedCount ?? 0} highlightColor="bg-rose-500"/>
- <CommStatCard label={t('communication.deliveryRate') ||'Delivery Rate'} value={`${stats.deliveryRate ?? 0}%`} highlightColor="bg-brand-500"/>
+ <CommStatCard label={t('communication.totalSent')} value={stats.total ?? 0} highlightColor="bg-blue-500"/>
+ <CommStatCard label={t('communication.delivered')} value={stats.deliveredCount ?? 0} highlightColor="bg-emerald-500"/>
+ <CommStatCard label={t('communication.failed')} value={stats.failedCount ?? 0} highlightColor="bg-rose-500"/>
+ <CommStatCard label={t('communication.deliveryRate')} value={`${stats.deliveryRate ?? 0}%`} highlightColor="bg-brand-500"/>
  </div>
 
  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -474,12 +474,12 @@ function StatsTab() {
  <div className="w-8 h-8 rounded-full bg-cyan-500/10 text-cyan-600 flex items-center justify-center shrink-0">
  <svg className="w-4 h-4"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
  </div>
- {t('communication.byChannel') ||'Volume by Channel'}
+ {t('communication.byChannel')}
  </h3>
  
  <div className="relative z-10">
  {channelData.length === 0 ? (
- <p className="text-[0.85rem] font-medium text-[var(--text-muted)]">{t('communication.noData') ||'Insufficient data'}</p>
+ <p className="text-[0.85rem] font-medium text-[var(--text-muted)]">{t('communication.noData')}</p>
  ) : (
  <div className="flex items-end gap-3 sm:gap-6 h-[220px] pb-6 border-b border-[var(--border-subtle)]">
  {channelData.map((entry: any) => {
@@ -508,12 +508,12 @@ function StatsTab() {
  <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
  <svg className="w-4 h-4"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2.5"><circle cx="12"cy="12"r="10"/><line x1="12"y1="8"x2="12"y2="12"/><line x1="12"y1="16"x2="12.01"y2="16"/></svg>
  </div>
- {t('communication.byStatus') ||'Delivery Status Breakdown'}
+ {t('communication.byStatus')}
  </h3>
  
  <div className="relative z-10 flex flex-col sm:flex-row items-center justify-center gap-10 h-[220px]">
  {statusData.length === 0 ? (
- <p className="text-[0.85rem] font-medium text-[var(--text-muted)]">{t('communication.noData') ||'Insufficient data'}</p>
+ <p className="text-[0.85rem] font-medium text-[var(--text-muted)]">{t('communication.noData')}</p>
  ) : (
  <>
  <DonutChart data={statusData} />
@@ -562,8 +562,8 @@ export function CommunicationHistoryPage() {
 
  <div className="relative z-10 w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500">
  <GlassPageHeader
- title={t('communication.title') ||'Communication Logs'}
- subtitle={t('communication.subtitle') ||'Unified timeline, history, and delivery metrics.'}
+ title={t('communication.title')}
+ subtitle={t('communication.subtitle')}
  />
 
  <div className="overflow-x-auto pb-2">

@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthError, useAuthActions, useAuthState } from '@/auth/AuthContext';
+import { MeduLogo } from '@/components/brand/MeduLogo';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
 
@@ -53,27 +54,7 @@ function Backdrop() {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 function BrandMark() {
-  return (
-    <div
-      className="relative mx-auto mb-7 grid h-14 w-14 place-items-center rounded-2xl text-white"
-      style={{
-        background: 'linear-gradient(135deg, var(--m-vivid) 0%, var(--m-deep) 100%)',
-        boxShadow: '0 10px 30px -10px rgba(84,115,252,0.55), inset 0 1px 0 rgba(255,255,255,0.25)',
-        border: '1px solid rgba(255,255,255,0.25)',
-      }}
-    >
-      <span className="text-[22px] font-semibold tracking-tight">M</span>
-      <span
-        aria-hidden
-        className="absolute inset-0 rounded-2xl"
-        style={{
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, transparent 100%)',
-          opacity: 0.6,
-          pointerEvents: 'none',
-        }}
-      />
-    </div>
-  );
+  return <MeduLogo size="xl" className="mx-auto mb-7" />;
 }
 
 function Spinner() {
@@ -278,7 +259,7 @@ export const googleOAuthUrl = '/api/auth/google';
 export function LoginPage() {
   const { t } = useI18n();
   usePageTitle(t('nav.signIn'));
-  const { login, clearError } = useAuthActions();
+  const { login, parentLogin, clearError } = useAuthActions();
   const { pending } = useAuthState();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -288,6 +269,7 @@ export function LoginPage() {
     return r && r.startsWith('/') && !r.startsWith('//') ? r : '/';
   }, [params]);
 
+  const [isParent, setIsParent] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -316,9 +298,13 @@ export function LoginPage() {
     if (!canSubmit) return;
     setError(null);
     try {
-      await login(email, password);
+      if (isParent) {
+        await parentLogin(email, password, { returnTo: returnTo !== '/' ? returnTo : '/parent-portal' });
+      } else {
+        await login(email, password);
+      }
       setDone(true);
-      window.setTimeout(() => navigate(returnTo, { replace: true }), 480);
+      window.setTimeout(() => navigate(isParent && returnTo === '/' ? '/parent-portal' : returnTo, { replace: true }), 480);
     } catch (err) {
       setError(friendlyMessage(err, t));
       setShake((n) => n + 1);
@@ -364,9 +350,35 @@ export function LoginPage() {
               className="mt-2 text-[15px] leading-snug tracking-[-0.01em]"
               style={{ color: 'var(--text-secondary)' }}
             >
-              {t('login.subtitle')}
+              {isParent ? 'Sign in to access your child’s academic and attendance records' : t('login.subtitle')}
             </p>
           </header>
+
+          {/* Account type switcher */}
+          <div className="flex p-1 mb-6 rounded-[12px] bg-[var(--state-hover)] border border-[var(--border-subtle)] text-[13px] font-medium">
+            <button
+              type="button"
+              onClick={() => { setIsParent(false); setError(null); }}
+              className={`flex-1 py-1.5 rounded-[9px] transition-all duration-200 ${
+                !isParent
+                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+              }`}
+            >
+              Staff & Students
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsParent(true); setError(null); }}
+              className={`flex-1 py-1.5 rounded-[9px] transition-all duration-200 ${
+                isParent
+                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+              }`}
+            >
+              Parents
+            </button>
+          </div>
 
           <form onSubmit={onSubmit} noValidate className="space-y-5">
             {/* Grouped fields */}
@@ -485,7 +497,7 @@ export function LoginPage() {
                   </>
                 ) : (
                   <>
-                    {t('login.continue')}
+                    {isParent ? 'Sign In to Parent Portal' : t('login.continue')}
                     <Arrow />
                   </>
                 )}
@@ -493,64 +505,68 @@ export function LoginPage() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div
-            className="my-6 flex items-center gap-3"
-            role="separator"
-            aria-label={t('login.or')}
-          >
-            <span
-              aria-hidden
-              className="h-px flex-1"
-              style={{ background: 'var(--border-subtle)' }}
-            />
-            <span
-              className="text-[13px] tracking-[-0.01em]"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              {t('login.or')}
-            </span>
-            <span
-              aria-hidden
-              className="h-px flex-1"
-              style={{ background: 'var(--border-subtle)' }}
-            />
-          </div>
+          {!isParent && (
+            <>
+              {/* Divider */}
+              <div
+                className="my-6 flex items-center gap-3"
+                role="separator"
+                aria-label={t('login.or')}
+              >
+                <span
+                  aria-hidden
+                  className="h-px flex-1"
+                  style={{ background: 'var(--border-subtle)' }}
+                />
+                <span
+                  className="text-[13px] tracking-[-0.01em]"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  {t('login.or')}
+                </span>
+                <span
+                  aria-hidden
+                  className="h-px flex-1"
+                  style={{ background: 'var(--border-subtle)' }}
+                />
+              </div>
 
-          {/* Google OAuth — full redirect to the backend; never expose secrets client-side */}
-          <button
-            type="button"
-            onClick={startGoogle}
-            disabled={googleBusy || busy || done}
-            aria-busy={googleBusy}
-            className={[
-              'flex h-[50px] w-full items-center justify-center gap-3 rounded-[14px] text-[16px] font-medium tracking-[-0.01em]',
-              'transition-[transform,box-shadow,opacity] duration-200 ease-out',
-              'hover:-translate-y-px active:scale-[.985]',
-              'disabled:cursor-not-allowed disabled:opacity-50',
-              'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[rgba(84,115,252,0.40)]',
-            ].join(' ')}
-            style={{
-              background: 'var(--bg-glass)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border-medium)',
-              boxShadow: 'var(--shadow-xs)',
-            }}
-          >
-            {googleBusy ? (
-              <>
-                <Spinner />
-                <span>{t('login.redirectingGoogle')}</span>
-              </>
-            ) : (
-              <>
-                <GoogleMark />
-                <span>{t('login.continueWithGoogle')}</span>
-              </>
-            )}
-          </button>
+              {/* Google OAuth — full redirect to the backend; never expose secrets client-side */}
+              <button
+                type="button"
+                onClick={startGoogle}
+                disabled={googleBusy || busy || done}
+                aria-busy={googleBusy}
+                className={[
+                  'flex h-[50px] w-full items-center justify-center gap-3 rounded-[14px] text-[16px] font-medium tracking-[-0.01em]',
+                  'transition-[transform,box-shadow,opacity] duration-200 ease-out',
+                  'hover:-translate-y-px active:scale-[.985]',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                  'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[rgba(84,115,252,0.40)]',
+                ].join(' ')}
+                style={{
+                  background: 'var(--bg-glass)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-medium)',
+                  boxShadow: 'var(--shadow-xs)',
+                }}
+              >
+                {googleBusy ? (
+                  <>
+                    <Spinner />
+                    <span>{t('login.redirectingGoogle')}</span>
+                  </>
+                ) : (
+                  <>
+                    <GoogleMark />
+                    <span>{t('login.continueWithGoogle')}</span>
+                  </>
+                )}
+              </button>
+            </>
+          )}
 
           <div className="mt-6 flex items-center justify-center text-[13px] tracking-[-0.01em]">
             <Link

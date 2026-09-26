@@ -89,6 +89,7 @@ export interface AuthStateValue extends AuthState {
 
 export interface AuthActionsValue {
   login: (email: string, password: string, opts?: LoginOptions) => Promise<User>;
+  parentLogin: (email: string, password: string, opts?: LoginOptions) => Promise<User>;
   register: (data: RegisterPayload, opts?: LoginOptions) => Promise<User>;
   logout: (opts?: { redirect?: boolean }) => Promise<void>;
   /** Re-verify the session with the server (deduped — N calls share one request). */
@@ -436,6 +437,26 @@ export function AuthProvider({
     [persist, broadcast, navigateAfterAuth],
   );
 
+  const parentLogin = useCallback<AuthActionsValue['parentLogin']>(
+    async (email, password, opts) => {
+      dispatch({ type: 'PENDING', pending: 'login' });
+      try {
+        const res = await authApi.parentLogin(email.trim(), password);
+        const user = res.user as User;
+        persist(user);
+        dispatch({ type: 'SIGNED_IN', user });
+        broadcast({ type: 'SIGNED_IN', user });
+        navigateAfterAuth(opts?.returnTo ? opts : { returnTo: '/parent-portal' });
+        return user;
+      } catch (err) {
+        const e = toAuthError(err, 'INVALID_CREDENTIALS');
+        dispatch({ type: 'FAILED', error: e });
+        throw e;
+      }
+    },
+    [persist, broadcast, navigateAfterAuth],
+  );
+
   const register = useCallback<AuthActionsValue['register']>(
     async (data, opts) => {
       dispatch({ type: 'PENDING', pending: 'register' });
@@ -532,8 +553,8 @@ export function AuthProvider({
   );
 
   const actionsValue = useMemo<AuthActionsValue>(
-    () => ({ login, register, logout, refresh, updateUser, setUser, clearError }),
-    [login, register, logout, refresh, updateUser, setUser, clearError],
+    () => ({ login, parentLogin, register, logout, refresh, updateUser, setUser, clearError }),
+    [login, parentLogin, register, logout, refresh, updateUser, setUser, clearError],
   );
 
   return (

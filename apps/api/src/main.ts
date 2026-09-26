@@ -15,6 +15,10 @@ import { GlobalExceptionFilter } from './filters/http-exception.filter';
 import { RequestLoggerMiddleware } from './config/request-logger.middleware';
 import { assertValidConfig, configWarnings } from './config/config.validate';
 import { createOAuthSessionMiddleware } from './auth/oauth-session';
+import {
+  TELEGRAM_WEBHOOK_MAX_BODY_BYTES,
+  TELEGRAM_WEBHOOK_PATH,
+} from './telegram/telegram.constants';
 
 // Maximum accepted JSON body. Face endpoints accept base64 images up to
 // 8 MB decoded (~10.7 MB base64) — see face/image.util.ts MAX_IMAGE_BYTES —
@@ -23,6 +27,24 @@ import { createOAuthSessionMiddleware } from './auth/oauth-session';
 // licence to send huge payloads: the DTO/image guards reject oversized
 // images with a clear 4xx before any decoding happens.
 const BODY_LIMIT = '12mb';
+
+// Module-level logger so process-level error handlers (registered below)
+// can report before/outside NestJS bootstrap.
+const processLogger = new Logger('Process');
+
+// Unhandled async rejections otherwise kill the process silently in
+// production with a default Node abort (exit code 1, no NestJS stack).
+process.on('unhandledRejection', (reason) => {
+  processLogger.error(
+    `Unhandled promise rejection: ${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`,
+  );
+  process.exit(1);
+});
+
+process.on('uncaughtException', (error) => {
+  processLogger.error(`Uncaught exception: ${error.stack ?? error.message}`);
+  process.exit(1);
+});
 
 async function bootstrap() {
   const bootstrapLogger = new Logger('Bootstrap');
@@ -36,6 +58,17 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   app.use(cookieParser());
+  // Tight, route-scoped parser for the Telegram webhook.
+  //
+  // The controller enforces the same cap from `Content-Length`, but a client
+  // that omits or lies about that header (e.g. chunked transfer) would
+  // otherwise fall through to the 12 MB global limit. body-parser skips any
+  // request whose body it has already consumed, so this route gets the strict
+  // cap and every other route keeps BODY_LIMIT.
+  app.use(
+    TELEGRAM_WEBHOOK_PATH,
+    express.json({ limit: TELEGRAM_WEBHOOK_MAX_BODY_BYTES }),
+  );
   app.use(express.json({ limit: BODY_LIMIT }));
   app.use(express.urlencoded({ extended: true, limit: BODY_LIMIT }));
   // CORS origins — computed before helmet so CSP connectSrc can reference them.

@@ -4,6 +4,7 @@ import { Strategy, Profile } from 'passport-google-oauth20';
 import type { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { GoogleProfile } from './types';
+import { normalizeEmail } from './auth.utils';
 
 /**
  * Google OAuth 2.0 strategy.
@@ -88,7 +89,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 
     done(null, {
       googleSubject: id,
-      email: email.toLowerCase().trim(),
+      email: normalizeEmail(email),
       emailVerified: true,
       firstName: name?.givenName || '',
       lastName: name?.familyName || '',

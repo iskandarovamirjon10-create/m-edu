@@ -36,6 +36,7 @@ describe('ChatGateway', () => {
     email: 'user1@example.com',
     organizationId: 'org-1',
     role: 'STUDENT',
+    isActive: true,
   };
 
   beforeEach(() => {

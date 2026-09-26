@@ -226,7 +226,10 @@ export class PayrollAnalyticsService {
 
     const revenueByMonth = new Map<string, number>();
     for (const r of revenueData) {
-      revenueByMonth.set(r.month, r.total);
+      if (!r.bucket) continue;
+      const d = new Date(r.bucket);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      revenueByMonth.set(key, Number(r.total));
     }
 
     const months_result: Array<{ month: string; payroll: number; revenue: number; ratio: number | null }> = [];

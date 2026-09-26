@@ -1,9 +1,5 @@
-import { ApiPropertyOptional   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100)
-  timezone?: string;
-} from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, MaxLength   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100)
-  timezone?: string;
-} from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpdateOrganizationDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200)
@@ -14,7 +10,7 @@ export class UpdateOrganizationDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(20)
   phone?: string;
+
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100)
   timezone?: string;
 }
-

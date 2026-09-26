@@ -14,6 +14,7 @@
  */
 
 import type { QualityAssessmentInput, QualityMetrics } from '@medu/core';
+import { estimateHeadPose } from '../lib/pose-estimator';
 
 export interface QualityConfig {
   /** Minimum face size ratio (face area / image area) */
@@ -35,8 +36,8 @@ const DEFAULT_CONFIG: QualityConfig = {
   minSharpness: 50,
   brightnessRange: [40, 220],
   maxPoseYaw: 30,
-  maxPosePitch: 20,
-  maxPoseRoll: 15,
+  maxPosePitch: 30,
+  maxPoseRoll: 25,
   overallThreshold: 0.4,
 };
 
@@ -79,7 +80,16 @@ export class QualityAssessor {
     );
 
     if (cropW <= 0 || cropH <= 0) {
-      return this.createMetrics(0, 0, 0, faceSizeRatio, { yaw: 0, pitch: 0, roll: 0 });
+      return this.createMetrics(
+        0,
+        0,
+        0,
+        faceSizeRatio,
+        { yaw: 0, pitch: 0, roll: 0 },
+        false,
+        'INVALID_CROP',
+        ['Invalid face crop region']
+      );
     }
 
     const faceBuffer = await sharp(imageBuffer)
@@ -95,10 +105,13 @@ export class QualityAssessor {
     // 4. Brightness (average pixel value)
     const brightness = this.computeBrightness(faceBuffer);
 
-    // 5. Pose estimation (simplified — based on face position in image)
-    const pose = this.estimatePose(face.boundingBox, imageWidth, imageHeight);
+    // 5. Pose estimation: prefer landmark-based 3D pose, fall back to bbox position
+    const pose =
+      face.landmarks && face.landmarks.length >= 5
+        ? estimateHeadPose(face.landmarks)
+        : this.estimatePoseFallback(face.boundingBox, imageWidth, imageHeight);
 
-    // 6. Compute overall score
+    // 6. Compute scores
     const sharpnessScore = Math.min(1, sharpness / 200);
     const brightnessScore = this.brightnessScore(brightness);
     const poseScore = this.poseScore(pose);
@@ -110,7 +123,49 @@ export class QualityAssessor {
       0.20 * brightnessScore +
       0.25 * poseScore;
 
-    return this.createMetrics(overallScore, sharpnessScore, brightnessScore, faceSizeRatio, pose);
+    // 7. Check specific issues and constraints
+    const issues: string[] = [];
+    const yawExceeded = Math.abs(pose.yaw) > this.config.maxPoseYaw;
+    const pitchExceeded = Math.abs(pose.pitch) > this.config.maxPosePitch;
+    const rollExceeded = Math.abs(pose.roll) > this.config.maxPoseRoll;
+
+    if (yawExceeded) {
+      issues.push(`Yaw ${pose.yaw.toFixed(1)}° exceeds limit ±${this.config.maxPoseYaw}°`);
+    }
+    if (pitchExceeded) {
+      issues.push(`Pitch ${pose.pitch.toFixed(1)}° exceeds limit ±${this.config.maxPosePitch}°`);
+    }
+    if (rollExceeded) {
+      issues.push(`Roll ${pose.roll.toFixed(1)}° exceeds limit ±${this.config.maxPoseRoll}°`);
+    }
+    if (sharpness < this.config.minSharpness) {
+      issues.push(`Sharpness ${sharpness.toFixed(1)} below minimum ${this.config.minSharpness}`);
+    }
+    if (brightness < this.config.brightnessRange[0] || brightness > this.config.brightnessRange[1]) {
+      issues.push(`Brightness ${brightness.toFixed(1)} outside range [${this.config.brightnessRange.join(', ')}]`);
+    }
+    if (faceSizeRatio < this.config.minFaceSizeRatio) {
+      issues.push(`Face size ratio ${(faceSizeRatio * 100).toFixed(1)}% below minimum ${(this.config.minFaceSizeRatio * 100).toFixed(1)}%`);
+    }
+
+    const poseExceeded = yawExceeded || pitchExceeded || rollExceeded;
+    const passesQuality = overallScore >= this.config.overallThreshold && !poseExceeded;
+    const rejectionReason = poseExceeded
+      ? 'HEAD_POSE_EXCEEDED'
+      : !passesQuality
+        ? 'QUALITY_BELOW_THRESHOLD'
+        : undefined;
+
+    return this.createMetrics(
+      overallScore,
+      sharpnessScore,
+      brightnessScore,
+      faceSizeRatio,
+      pose,
+      passesQuality,
+      rejectionReason,
+      issues
+    );
   }
 
   /**
@@ -152,9 +207,9 @@ export class QualityAssessor {
   }
 
   /**
-   * Estimate pose from face bounding box position.
+   * Fallback pose estimation from face bounding box position (when landmarks are absent).
    */
-  private estimatePose(
+  private estimatePoseFallback(
     box: { x: number; y: number; width: number; height: number },
     imageWidth: number,
     imageHeight: number
@@ -199,7 +254,10 @@ export class QualityAssessor {
     sharpness: number,
     brightness: number,
     faceSizeRatio: number,
-    pose: { yaw: number; pitch: number; roll: number }
+    pose: { yaw: number; pitch: number; roll: number },
+    passesThreshold: boolean = overallScore >= this.config.overallThreshold,
+    rejectionReason?: string,
+    issues: string[] = []
   ): QualityMetrics {
     return {
       overallScore,
@@ -207,7 +265,9 @@ export class QualityAssessor {
       brightness,
       faceSizeRatio,
       pose,
-      passesThreshold: overallScore >= this.config.overallThreshold,
+      passesThreshold,
+      rejectionReason,
+      issues,
     };
   }
 }

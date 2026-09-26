@@ -76,7 +76,7 @@ export function friendlyHttpMessage(status: number, serverMessage: string | null
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
-export type RequestOptions = RequestInit & { timeout?: number };
+export type RequestOptions = RequestInit & { timeout?: number; defaultFilename?: string };
 
 /**
  * API base path. Production builds honour `VITE_API_URL` (set in the Dockerfile
@@ -220,6 +220,8 @@ export function buildQuery(params: object | undefined): string {
 export const authApi = {
   login: (email: string, password: string) =>
     request<{ user: unknown }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  parentLogin: (email: string, password: string) =>
+    request<{ user: unknown }>('/auth/parent-login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   register: (data: {
     email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string;
   }) =>
@@ -228,7 +230,9 @@ export const authApi = {
   logout: () => request<{ message: string }>('/auth/logout', { method: 'POST' }),
   refresh: () => request<{ user: unknown }>('/auth/refresh', { method: 'POST' }),
   exchangeCode: (code: string) =>
-    request<{ accessToken: string }>('/auth/oauth/exchange', { method: 'POST', body: JSON.stringify({ code }) }),
+    // The session is set as an HttpOnly cookie by the API; no credential is
+    // returned to JavaScript by design.
+    request<{ authenticated: boolean }>('/auth/oauth/exchange', { method: 'POST', body: JSON.stringify({ code }) }),
   forgotPassword: (email: string) =>
     request<{ message: string }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
   resetPassword: (token: string, newPassword: string) =>
@@ -251,6 +255,14 @@ export const studentsApi = {
     request(`/students/${studentId}/groups/${groupId}`, { method: 'POST' }),
   removeGroup: (studentId: string, groupId: string) =>
     request(`/students/${studentId}/groups/${groupId}`, { method: 'DELETE' }),
+  getParents: (studentId: string) =>
+    request<any[]>(`/students/${studentId}/parents`),
+  addParent: (studentId: string, data: any) =>
+    request<any>(`/students/${studentId}/parents`, { method: 'POST', body: JSON.stringify(data) }),
+  updateParent: (studentId: string, parentId: string, data: any) =>
+    request<any>(`/students/${studentId}/parents/${parentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  unlinkParent: (studentId: string, parentId: string) =>
+    request<{ success: boolean }>(`/students/${studentId}/parents/${parentId}`, { method: 'DELETE' }),
 };
 export const teachersApi = crud('/teachers');
 export const coursesApi = crud('/courses');
@@ -290,6 +302,36 @@ export const notificationsApi = {
   list: (params?: object) => request(`/notifications${buildQuery(params)}`),
   markRead: (id: string) => request(`/notifications/${id}/read`, { method: 'PATCH' }),
   markAllRead: () => request('/notifications/read-all', { method: 'PATCH' }),
+};
+
+/**
+ * Telegram integration (self-service).
+ *
+ * The server never returns the bot token, webhook secret, callback secret or
+ * the raw chat id — the client only ever sees a coarse lifecycle status and a
+ * one-time deep link that belongs to the caller.
+ */
+export type TelegramAccountState = 'ACTIVE' | 'DISCONNECTED' | 'BLOCKED' | 'SUSPENDED';
+export interface TelegramStatusResponse {
+  linked: boolean;
+  status: TelegramAccountState | null;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  languageCode: string | null;
+  linkedAt: string | null;
+  lastSeenAt: string | null;
+  pendingLinkExpiresAt: string | null;
+}
+export const telegramApi = {
+  status: () => request<TelegramStatusResponse>('/telegram/status'),
+  createLink: () =>
+    request<{ token: string; deepLink: string; expiresAt: string }>('/telegram/link', {
+      method: 'POST',
+    }),
+  unlink: () => request<{ disconnected: boolean }>('/telegram/link', { method: 'DELETE' }),
+  testNotification: () =>
+    request<{ sent: boolean }>('/telegram/test-notification', { method: 'POST' }),
 };
 export const gradesApi = crud('/grades');
 export const homeworkApi = crud('/homework');
@@ -631,7 +673,7 @@ export async function downloadFile(path: string, options: RequestOptions = {}): 
     if (token) headers['x-xsrf-token'] = token;
   }
   
-  const res = await fetch("$\{API_BASE\}", {
+  const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers,
     credentials: 'include',
@@ -640,7 +682,7 @@ export async function downloadFile(path: string, options: RequestOptions = {}): 
   
   if (!res.ok) {
     const errorBody = await res.json().catch(() => null);
-    throw new ApiError(res.status, errorBody?.message || res.statusText, res.statusText, errorBody);
+    throw new ApiError(res.status, errorBody?.message || res.statusText, errorBody);
   }
   
   const blob = await res.blob();
@@ -648,7 +690,7 @@ export async function downloadFile(path: string, options: RequestOptions = {}): 
   
   // Try to read filename from Content-Disposition header
   const contentDisposition = res.headers.get('Content-Disposition');
-  let filename = 'download';
+  let filename = options.defaultFilename || 'download';
   if (contentDisposition) {
     const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
     if (filenameMatch && filenameMatch[1]) {
@@ -672,8 +714,24 @@ export const reportsApi = {
   saveDefinition: (data: unknown) =>
     request('/reports/definitions', { method: 'POST', body: JSON.stringify(data) }),
   definitions: () => request('/reports/definitions'),
-  export: (type: string, format: 'csv' | 'json' | 'pdf', params?: object) =>
-    request(`/reports/export?type=${type}&format=${format}${buildQuery(params)}`),
+  export: (
+    type: string,
+    format: 'csv' | 'xlsx' | 'pdf',
+    params?: { dateFrom?: string; dateTo?: string; status?: string; columns?: string[] },
+  ) =>
+    downloadFile('/reports/export', {
+      method: 'POST',
+      body: JSON.stringify({
+        type,
+        format,
+        params: {
+          type,
+          ...params,
+        },
+        ...params,
+      }),
+      defaultFilename: `report_${type}.${format}`,
+    }),
 };
 
 export const observabilityApi = {

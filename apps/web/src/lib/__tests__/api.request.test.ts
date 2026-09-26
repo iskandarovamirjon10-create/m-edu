@@ -6,7 +6,7 @@
  *  - buildQuery contract (empty values are dropped, URL-safe encoding)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import request, { setUnauthorizedHandler, buildQuery } from '../api';
+import request, { setUnauthorizedHandler, buildQuery, reportsApi } from '../api';
 
 function jsonResponse(status: number, body: unknown, headers: Record<string, string> = {}) {
   return {
@@ -137,5 +137,105 @@ describe('buildQuery', () => {
   it('works with interface-typed filter objects at runtime', () => {
     const filters = { search: 'Ali', isActive: true, groupId: undefined };
     expect(buildQuery(filters)).toBe('?search=Ali&isActive=true');
+  });
+});
+
+describe('reportsApi.export and downloadFile', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    document.cookie = 'XSRF-TOKEN=fake-csrf-token; path=/';
+    vi.stubGlobal('fetch', fetchMock);
+    if (!window.URL.createObjectURL) {
+      window.URL.createObjectURL = vi.fn().mockReturnValue('blob:test');
+      window.URL.revokeObjectURL = vi.fn();
+    } else {
+      vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:test');
+      vi.spyOn(window.URL, 'revokeObjectURL').mockReturnValue();
+    }
+  });
+
+  afterEach(() => {
+    document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('exports report via POST /reports/export with correct body and triggers download', async () => {
+    const blob = new Blob(['col1,col2\nval1,val2'], { type: 'text/csv' });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({
+        'content-type': 'text/csv',
+        'content-disposition': 'attachment; filename="report_STUDENTS.csv"',
+      }),
+      blob: async () => blob,
+    });
+
+    await reportsApi.export('STUDENTS', 'csv', { dateFrom: '2026-09-01', dateTo: '2026-09-24' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/reports/export');
+    expect(init.method).toBe('POST');
+    expect(init.headers['x-xsrf-token']).toBe('fake-csrf-token');
+    expect(JSON.parse(init.body)).toEqual({
+      type: 'STUDENTS',
+      format: 'csv',
+      params: {
+        type: 'STUDENTS',
+        dateFrom: '2026-09-01',
+        dateTo: '2026-09-24',
+      },
+      dateFrom: '2026-09-01',
+      dateTo: '2026-09-24',
+    });
+  });
+
+  it('exports report in xlsx and pdf formats', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({
+        'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'content-disposition': 'attachment; filename="report_FINANCE.xlsx"',
+      }),
+      blob: async () => new Blob(['xlsx-binary']),
+    });
+
+    await reportsApi.export('FINANCE', 'xlsx');
+
+    const [urlXlsx, initXlsx] = fetchMock.mock.calls[0];
+    expect(urlXlsx).toBe('/api/reports/export');
+    expect(JSON.parse(initXlsx.body).format).toBe('xlsx');
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({
+        'content-type': 'application/pdf',
+        'content-disposition': 'attachment; filename="report_FINANCE.pdf"',
+      }),
+      blob: async () => new Blob(['pdf-binary']),
+    });
+
+    await reportsApi.export('FINANCE', 'pdf');
+    const [urlPdf, initPdf] = fetchMock.mock.calls[1];
+    expect(urlPdf).toBe('/api/reports/export');
+    expect(JSON.parse(initPdf.body).format).toBe('pdf');
+  });
+
+  it('throws ApiError when export endpoint returns an error status', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ statusCode: 400, message: 'Unsupported format' }),
+    });
+
+    await expect(reportsApi.export('STUDENTS', 'csv')).rejects.toThrow('Unsupported format');
   });
 });

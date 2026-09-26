@@ -67,6 +67,7 @@ describe('WsJwtGuard', () => {
       email: 'user@example.com',
       organizationId: 'org-1',
       role: 'STUDENT',
+      isActive: true,
     });
 
     const result = await guard.canActivate(context);
@@ -80,6 +81,7 @@ describe('WsJwtGuard', () => {
       email: 'user@example.com',
       organizationId: 'org-1',
       role: 'STUDENT',
+      isActive: true,
     });
   });
 
@@ -94,6 +96,7 @@ describe('WsJwtGuard', () => {
       email: 'admin@example.com',
       organizationId: 'org-2',
       role: 'ORG_ADMIN',
+      isActive: true,
     });
 
     const result = await guard.canActivate(context);
@@ -116,6 +119,7 @@ describe('WsJwtGuard', () => {
       email: 'teacher@example.com',
       organizationId: 'org-1',
       role: 'TEACHER',
+      isActive: true,
     });
 
     const result = await guard.canActivate(context);

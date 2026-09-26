@@ -79,8 +79,9 @@ describe('ExpensesController', () => {
   describe('remove', () => {
     it('calls service.remove', async () => {
       service.remove.mockResolvedValue({ id: 'exp-1' });
-      const res = await controller.remove('org-1', 'exp-1');
-      expect(service.remove).toHaveBeenCalledWith('org-1', 'exp-1');
+      const user = { sub: 'actor-1', organizationId: 'org-1' };
+      const res = await controller.remove(user as any, 'exp-1');
+      expect(service.remove).toHaveBeenCalledWith('org-1', 'exp-1', 'actor-1');
       expect(res.id).toBe('exp-1');
     });
   });

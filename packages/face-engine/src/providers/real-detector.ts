@@ -15,8 +15,7 @@
  * License: MIT (YuNet model from OpenCV Zoo)
  */
 
-import type { FaceDetectionInput, DetectedFace } from '@medu/core';
-import type { BoundingBox } from '@medu/core';
+import type { FaceDetectionInput, DetectedFace, BoundingBox, Point2D } from '@medu/core';
 import { createLogger } from '../lib/logger';
 
 const logger = createLogger('RealDetector');
@@ -183,7 +182,18 @@ export class RealDetector {
         height: Math.max(1, Math.round(raw.h * scaleY)),
       };
 
-      faces.push({ boundingBox: box, confidence: raw.score });
+      let landmarks: Point2D[] | undefined;
+      if (raw.landmarks && raw.landmarks.length === 10) {
+        landmarks = [
+          { x: Math.round(raw.landmarks[0] * scaleX), y: Math.round(raw.landmarks[1] * scaleY) },
+          { x: Math.round(raw.landmarks[2] * scaleX), y: Math.round(raw.landmarks[3] * scaleY) },
+          { x: Math.round(raw.landmarks[4] * scaleX), y: Math.round(raw.landmarks[5] * scaleY) },
+          { x: Math.round(raw.landmarks[6] * scaleX), y: Math.round(raw.landmarks[7] * scaleY) },
+          { x: Math.round(raw.landmarks[8] * scaleX), y: Math.round(raw.landmarks[9] * scaleY) },
+        ];
+      }
+
+      faces.push({ boundingBox: box, confidence: raw.score, landmarks });
     }
 
     return faces;

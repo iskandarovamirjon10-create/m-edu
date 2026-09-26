@@ -44,6 +44,12 @@ describe('Cron Module Suite', () => {
         auditLog: {
           deleteMany: vi.fn().mockResolvedValue({ count: 20 }),
         },
+        faceTemplate: {
+          deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
+        },
+        notificationDelivery: {
+          deleteMany: vi.fn().mockResolvedValue({ count: 3 }),
+        },
       };
 
       service = new CleanupService(prisma as unknown as PrismaService);

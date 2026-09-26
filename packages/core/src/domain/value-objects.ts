@@ -140,6 +140,10 @@ export interface QualityMetrics {
   pose: { yaw: number; pitch: number; roll: number };
   /** Whether the face passes minimum quality threshold */
   passesThreshold: boolean;
+  /** Rejection reason if face fails quality or pose */
+  rejectionReason?: string;
+  /** List of quality issues identified */
+  issues?: string[];
 }
 
 // ============================================================================

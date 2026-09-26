@@ -24,6 +24,7 @@ import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
 import { PaginationParams } from '../common/dto/pagination';
 import { CurrentUser } from '../auth/current-user.decorator';
+import type { RequestUser } from '../auth/types';
 import { AllowAnyRole } from '../auth/roles.decorator';
 
 @Controller('inventory')
@@ -37,7 +38,7 @@ export class InventoryController {
   @Get('items')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findAllItems(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Query() params: PaginationParams,
   ) {
     return this.inventoryService.findAllItems(user.organizationId, params);
@@ -47,7 +48,7 @@ export class InventoryController {
   @Get('items/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findItemById(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.inventoryService.findItemById(user.organizationId, id);
@@ -56,7 +57,7 @@ export class InventoryController {
   @Post('items')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async createItem(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Body() dto: CreateInventoryItemDto,
   ) {
     return this.inventoryService.createItem(user.organizationId, dto);
@@ -65,7 +66,7 @@ export class InventoryController {
   @Put('items/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async updateItem(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateInventoryItemDto,
   ) {
@@ -75,7 +76,7 @@ export class InventoryController {
   @Delete('items/:id')
   @Roles(Role.ORG_ADMIN)
   async deleteItem(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.inventoryService.deleteItem(user.organizationId, id);
@@ -87,7 +88,7 @@ export class InventoryController {
   @Get('items/:itemId/transactions')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async getTransactionHistory(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @Query() params: PaginationParams,
   ) {
@@ -97,7 +98,7 @@ export class InventoryController {
   @Post('transactions')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async createTransaction(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Body() dto: CreateTransactionDto,
   ) {
     // Security: userId comes from auth, not from DTO.
@@ -109,7 +110,7 @@ export class InventoryController {
   @Put('items/:id/stock')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async updateStock(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body('quantity') quantity: number,
   ) {
@@ -119,7 +120,7 @@ export class InventoryController {
   @Patch('items/:id/adjust')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async adjustStock(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: StockAdjustmentDto,
   ) {
@@ -131,14 +132,14 @@ export class InventoryController {
   @AllowAnyRole()
   @Get('stock-report')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
-  async getStockReport(@CurrentUser() user: any) {
+  async getStockReport(@CurrentUser() user: RequestUser) {
     return this.inventoryService.getStockReport(user.organizationId);
   }
 
   @AllowAnyRole()
   @Get('categories')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
-  async getCategoryStats(@CurrentUser() user: any) {
+  async getCategoryStats(@CurrentUser() user: RequestUser) {
     return this.inventoryService.getCategoryStats(user.organizationId);
   }
 }

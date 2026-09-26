@@ -55,14 +55,14 @@ const navigateMock = vi.fn();
 
 /** The Register inputs use unassociated <label>s — query by placeholder. */
 const field = (placeholder: string) => screen.getByPlaceholderText(placeholder);
-/** Password and Confirm share the same placeholder; source order = [password, confirm]. */
+/** Labels may append " *" for required fields — anchor to avoid Confirm password. */
 const F = {
- firstName: () => field('John'),
- lastName: () => field('Doe'),
- email: () => field('john@example.com'),
- org: () => field('Bright Future Academy'),
- password: () => screen.getByLabelText('Password'),
- confirm: () => screen.getByLabelText('Confirm password'),
+  firstName: () => field('John'),
+  lastName: () => field('Doe'),
+  email: () => field('john@example.com'),
+  org: () => field('Bright Future Academy'),
+  password: () => screen.getByLabelText(/^password/i),
+  confirm: () => screen.getByLabelText(/^confirm password/i),
 };
 
 function renderRegister() {

@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SearchService, SearchQuery, SearchResponse } from './search.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -23,6 +23,10 @@ export class SearchController {
     @Query('types') types?: string,
     @Query('limit') limit?: string,
   ): Promise<SearchResponse> {
+    if (q && q.length > 200) {
+      throw new BadRequestException('Search query is too long');
+    }
+
     const query: SearchQuery = {
       q: q || '',
       types: types ? types.split(',').map(t => t.trim().toUpperCase()) : undefined,

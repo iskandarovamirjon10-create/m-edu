@@ -27,6 +27,9 @@ type PrismaMock = {
   cameraAttendanceEvent: {
     upsert: ReturnType<typeof vi.fn>;
   };
+  organizationHoliday: {
+    findFirst: ReturnType<typeof vi.fn>;
+  };
 };
 
 function makePrisma(): PrismaMock {
@@ -61,6 +64,10 @@ function makePrisma(): PrismaMock {
 
     cameraAttendanceEvent: {
       upsert: vi.fn(),
+    },
+
+    organizationHoliday: {
+      findFirst: vi.fn().mockResolvedValue(null),
     },
   };
   return prisma;

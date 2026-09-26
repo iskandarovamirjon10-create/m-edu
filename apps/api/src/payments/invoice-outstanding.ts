@@ -43,6 +43,10 @@ export function computeInvoiceOutstanding(
   let overdueMinor = 0;
 
   for (const invoice of rows) {
+    if (invoice.status && (NON_BILLABLE_INVOICE_STATUSES as readonly string[]).includes(invoice.status)) {
+      continue;
+    }
+
     const remaining =
       toMinor(invoice.total as never) -
       toMinor(invoice.paidAmount as never) +

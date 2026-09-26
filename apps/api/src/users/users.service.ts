@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { parsePagination } from '../lib/pagination';
 import { Prisma, Role } from '@prisma/client';
 import { CreateUserDto, UpdateUserDto, UpdateUserSettingsDto } from '../common/dto';
+import { CLOCK_PATTERN } from '../notifications/quiet-hours';
 import { UserQuery } from '../common/dto/query';
 
 /**
@@ -116,6 +117,9 @@ export class UsersService {
           lastName: data.lastName,
           phone: data.phone,
           role: data.role,
+          // Account-model opt-in for passwordless Google sign-in (P0-2).
+          // Defaults to false: an administrator must opt in explicitly.
+          googleLinkAllowed: data.googleLinkAllowed ?? false,
           settings: { create: {} },
         },
       select: {
@@ -129,8 +133,8 @@ export class UsersService {
     });
       this.logger.log(`User created: ${user.id} with role ${user.role}`);
       return user;
-    } catch (error: any) {
-      if (error.code === 'P2002') {
+    } catch (error: unknown) {
+      if ((error as { code?: string })?.code === 'P2002') {
         throw new BadRequestException('This email is unavailable');
       }
       throw error;
@@ -191,10 +195,25 @@ export class UsersService {
     if (data.phone !== undefined) updateData.phone = data.phone;
     if (data.role !== undefined) updateData.role = data.role;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.googleLinkAllowed !== undefined) updateData.googleLinkAllowed = data.googleLinkAllowed;
 
     if (Object.keys(updateData).length === 0) return this.findOne(organizationId, id);
 
-    const updated = await this.prisma.user.update({ where: { id, organizationId }, data: updateData });
+    const updated = await this.prisma.user.update({ 
+      where: { id, organizationId }, 
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      }
+    });
     this.logger.log(`User ${id} updated by ${actorUserId}`);
     return updated;
   }
@@ -252,6 +271,17 @@ export class UsersService {
       throw new ForbiddenException('You can only update your own settings');
     }
     
+    if (data.quietHoursStart !== undefined && data.quietHoursStart !== null) {
+      if (!CLOCK_PATTERN.test(data.quietHoursStart.trim())) {
+        throw new BadRequestException('quietHoursStart must be in valid 24-hour HH:mm format (00:00 to 23:59)');
+      }
+    }
+    if (data.quietHoursEnd !== undefined && data.quietHoursEnd !== null) {
+      if (!CLOCK_PATTERN.test(data.quietHoursEnd.trim())) {
+        throw new BadRequestException('quietHoursEnd must be in valid 24-hour HH:mm format (00:00 to 23:59)');
+      }
+    }
+
     // FIX: EXPLICIT organization check to prevent IDOR!
     const target = await this.findOne(organizationId, id);
 
@@ -299,8 +329,8 @@ export class UsersService {
       });
       this.logger.log(`User ${id} deleted by ${actorUserId}`);
       return { message: 'User deleted successfully' };
-    } catch (e: any) {
-      this.logger.error(`Failed to delete user ${id}`, e.stack);
+    } catch (e: unknown) {
+      this.logger.error(`Failed to delete user ${id}`, e instanceof Error ? e.stack : String(e));
       throw new BadRequestException('Cannot delete user due to system constraints.');
     }
   }

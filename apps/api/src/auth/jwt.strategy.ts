@@ -70,6 +70,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
       return {
         sub: parent.id,
+        id: parent.id,
         email: parent.email,
         role: 'PARENT',
         organizationId: parent.organizationId,

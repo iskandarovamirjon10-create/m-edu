@@ -99,8 +99,18 @@ export class ReportsController {
     if (!['csv', 'xlsx', 'pdf'].includes(format)) {
       return res.status(400).json({ statusCode: 400, message: `Unsupported format: ${format}` });
     }
-    const { buffer, contentType, extension } = await this.reports.exportResult(orgId, body.params, format);
-    res.setHeader('Content-Disposition', `attachment; filename="report_${body.params.type}.${extension}"`);
+    const params = body.params ?? {
+      type: body.type!,
+      dateFrom: body.dateFrom,
+      dateTo: body.dateTo,
+      status: body.status,
+      columns: body.columns,
+    };
+    if (!params || !params.type) {
+      return res.status(400).json({ statusCode: 400, message: 'Report type is required' });
+    }
+    const { buffer, contentType, extension } = await this.reports.exportResult(orgId, params, format);
+    res.setHeader('Content-Disposition', `attachment; filename="report_${params.type}.${extension}"`);
     res.setHeader('Content-Type', contentType);
     res.send(buffer);
   }

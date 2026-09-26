@@ -2,9 +2,20 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { toDateToInclusive, startOfDay, getOrganizationDate } from '../common/date-range';
 import { parsePagination } from '../lib/pagination';
-import { Prisma } from '@prisma/client';
+import { DayOfWeek, LessonStatus, Prisma } from '@prisma/client';
 import { MarkAttendanceDto, UpdateAttendanceDto } from '../common/dto';
 import { AttendanceQuery } from '../common/dto/query';
+import type { RequestUser } from '../auth/types';
+
+const INDEX_TO_DAY: Record<number, DayOfWeek> = {
+  0: DayOfWeek.SUNDAY,
+  1: DayOfWeek.MONDAY,
+  2: DayOfWeek.TUESDAY,
+  3: DayOfWeek.WEDNESDAY,
+  4: DayOfWeek.THURSDAY,
+  5: DayOfWeek.FRIDAY,
+  6: DayOfWeek.SATURDAY,
+};
 
 @Injectable()
 export class AttendanceService {
@@ -31,8 +42,9 @@ export class AttendanceService {
     // The group is already verified to belong to `organizationId`, and
     // memberships are created org-scoped, so this is provably equivalent —
     // but it makes the tenant invariant explicit and self-documenting.
+    const _startOfDay = date;
     const enrollments = await this.prisma.studentGroup.findMany({
-      where: { groupId: data.groupId, organizationId, joinedAt: { lte: startOfDay }, OR: [{ leftAt: null }, { leftAt: { gte: startOfDay } }], student: { status: { notIn: ['PAUSED', 'DROPPED'] } } },
+      where: { groupId: data.groupId, organizationId, joinedAt: { lte: date }, OR: [{ leftAt: null }, { leftAt: { gte: date } }], student: { status: { notIn: ['PAUSED', 'DROPPED'] } } },
       select: { studentId: true },
     });
     const enrolledStudentIds = new Set(enrollments.map((e) => e.studentId));
@@ -59,14 +71,76 @@ export class AttendanceService {
         organizationId,
         date: { gte: startOfDay, lt: endOfDay },
       },
-      orderBy: [{ date: 'asc' }, { id: 'asc' }],
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { id: 'asc' }],
     });
-    const lesson =
+    let lesson =
       dayLessons.find((candidate) => candidate.status !== 'CANCELLED') ??
       dayLessons[0];
 
     if (!lesson) {
-      throw new BadRequestException(`Siz davomat yozmoqchi bo'lgan kunda ushbu guruh uchun dars (Lesson) rejalashtirilmagan.`);
+      // P0-2: On-demand lesson materialization from group schedule.
+      // If a group has an active schedule for this day-of-week, materialize the
+      // required Lesson row(s) idempotently so manual attendance succeeds immediately
+      // on newly created groups without requiring batch background generation.
+      const dayOfWeek = INDEX_TO_DAY[date.getUTCDay()];
+      const schedules = await this.prisma.schedule.findMany({
+        where: {
+          groupId: data.groupId,
+          dayOfWeek,
+          isActive: true,
+        },
+        orderBy: [{ startTime: 'asc' }, { id: 'asc' }],
+      });
+
+      if (schedules.length === 0) {
+        throw new BadRequestException(
+          `Bu sana uchun guruh jadvali mavjud emas. Avval guruh jadvalini belgilang.`,
+        );
+      }
+
+      for (const s of schedules) {
+        try {
+          await this.prisma.lesson.create({
+            data: {
+              organizationId,
+              scheduleId: s.id,
+              groupId: data.groupId,
+              teacherId: group.teacherId ?? null,
+              date,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              room: s.room ?? group.room ?? null,
+              status: LessonStatus.PLANNED,
+              updatedAt: new Date(),
+            },
+          });
+        } catch (err: unknown) {
+          // Concurrency safety: if another worker created this lesson concurrently,
+          // ignore the P2002 unique constraint violation on (groupId, date, startTime).
+          if ((err as { code?: string })?.code !== 'P2002') {
+            throw err;
+          }
+        }
+      }
+
+      const refreshedLessons = await this.prisma.lesson.findMany({
+        where: {
+          groupId: data.groupId,
+          organizationId,
+          date: { gte: startOfDay, lt: endOfDay },
+        },
+        orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { id: 'asc' }],
+      });
+
+      lesson =
+        refreshedLessons.find((candidate) => candidate.status !== 'CANCELLED') ??
+        refreshedLessons[0];
+
+      if (!lesson) {
+        throw new BadRequestException(
+          `Siz davomat yozmoqchi bo'lgan kunda ushbu guruh uchun dars (Lesson) rejalashtirilmagan.`,
+        );
+      }
     }
 
     if (lesson.status === 'CANCELLED') {
@@ -187,7 +261,7 @@ export class AttendanceService {
     }
   }
 
-  async update(user: any, id: string, dto: UpdateAttendanceDto) {
+  async update(user: RequestUser | { organizationId: string; sub?: string; id?: string }, id: string, dto: UpdateAttendanceDto) {
     const organizationId = user.organizationId;
     const existing = await this.prisma.attendance.findFirst({
       where: { id, organizationId },
@@ -204,22 +278,22 @@ export class AttendanceService {
     data.source = 'MANUAL';
 
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.attendance.update({ where: { id }, data });
+      const updated = await tx.attendance.updateMany({ where: { id, organizationId }, data }); if (updated.count === 0) throw new NotFoundException(); const latest = await tx.attendance.findFirst({ where: { id, organizationId } });
       await tx.auditLog.create({
         data: {
           organizationId,
-          userId: user.sub || user.id,
+          userId: (user as { sub?: string }).sub || (user as { id?: string }).id,
           action: 'UPDATE',
           resource: 'Attendance',
           resourceId: id,
-          changes: { from: existing.status, to: updated.status, note: updated.note },
+          changes: { from: existing.status, to: latest!.status, note: latest!.note },
         },
       });
-      return updated;
+      return latest!;
     });
   }
 
-  async remove(user: any, id: string) {
+  async remove(user: RequestUser | { organizationId: string; sub?: string; id?: string }, id: string) {
     const organizationId = user.organizationId;
     const existing = await this.prisma.attendance.findFirst({
       where: { id, organizationId },
@@ -227,11 +301,11 @@ export class AttendanceService {
     if (!existing) throw new NotFoundException('Attendance record not found');
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.attendance.delete({ where: { id } });
+      const deleted = await tx.attendance.deleteMany({ where: { id, organizationId } }); if (deleted.count === 0) return;
       await tx.auditLog.create({
         data: {
           organizationId,
-          userId: user.sub || user.id,
+          userId: (user as { sub?: string }).sub || (user as { id?: string }).id,
           action: 'DELETE',
           resource: 'Attendance',
           resourceId: id,
@@ -248,6 +322,12 @@ export class AttendanceService {
     const where: Prisma.AttendanceWhereInput = { organizationId };
 
     if (query.groupId) where.groupId = query.groupId;
+    // Self-service scoping: the caller (controller) only passes ids it has
+    // already authorized; the filter itself is tenant-scoped by organizationId
+    // above, so a foreign id can never widen the result set.
+    if (query.studentId) where.studentId = query.studentId;
+    // Teacher scoping: attendance rows of the groups this teacher owns.
+    if (query.teacherId) where.group = { teacherId: query.teacherId };
     if (query.status) where.status = query.status as Prisma.AttendanceWhereInput['status'];
     if (query.dateFrom || query.dateTo) {
       where.date = {};

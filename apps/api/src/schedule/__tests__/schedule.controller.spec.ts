@@ -46,9 +46,10 @@ describe('ScheduleController', () => {
   describe('findAll', () => {
     it('delegates to scheduleService.findAll', async () => {
       service.findAll.mockResolvedValue({ items: [], total: 0 });
-      const result = await controller.findAll(orgId, { page: 1, limit: 10 });
+      const user = { id: 'u-1', role: 'ORG_ADMIN', organizationId: 'org-1' };
+      const result = await controller.findAll(orgId, { page: 1, limit: 10 }, user);
       expect(result).toEqual({ items: [], total: 0 });
-      expect(service.findAll).toHaveBeenCalledWith(orgId, { page: 1, limit: 10 });
+      expect(service.findAll).toHaveBeenCalledWith(orgId, { page: 1, limit: 10 }, user);
     });
   });
 
@@ -56,9 +57,10 @@ describe('ScheduleController', () => {
     it('delegates to scheduleService.findOne', async () => {
       const mockSchedule = { id: 'sch-1', dayOfWeek: 'MONDAY' };
       service.findOne.mockResolvedValue(mockSchedule);
-      const result = await controller.findOne(orgId, 'sch-1');
+      const user = { id: 'u-1', role: 'ORG_ADMIN', organizationId: 'org-1' };
+      const result = await controller.findOne(orgId, 'sch-1', user);
       expect(result).toEqual(mockSchedule);
-      expect(service.findOne).toHaveBeenCalledWith(orgId, 'sch-1');
+      expect(service.findOne).toHaveBeenCalledWith(orgId, 'sch-1', user);
     });
   });
 

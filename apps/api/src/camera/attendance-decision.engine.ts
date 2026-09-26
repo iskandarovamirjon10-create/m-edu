@@ -32,6 +32,15 @@ export interface RecognitionParams {
 }
 
 interface DurableEventParams {
+  /**
+   * Organization-local timezone used to resolve this event's calendar date.
+   *
+   * It must be the same timezone that produced the Attendance row this event
+   * refers to. Without it the event date fell back to UTC, so every
+   * recognition between local midnight and the UTC offset (05:00 for
+   * Asia/Tashkent) was dated one day earlier than its attendance row.
+   */
+  timezone?: string | null;
   organizationId: string;
   cameraId: string;
   studentId: string;
@@ -55,7 +64,25 @@ type AttendanceDecision =
   | 'NO_SCHEDULED_GROUP'
   | 'AMBIGUOUS_SCHEDULE'
   | 'MANUAL_PRESERVED'
-  | 'DUPLICATE_PREVENTED';
+  | 'DUPLICATE_PREVENTED'
+  | 'HOLIDAY';
+
+/**
+ * Options accepted by {@link AttendanceDecisionEngine.validateGroupTime}.
+ *
+ * SECURITY (audit P0-1):
+ * The timezone is resolved from the Organization row. A caller-supplied
+ * timezone is only a fallback for organizations with no timezone set —
+ * never an override of the tenant's real timezone.
+ */
+export interface ValidateGroupTimeOptions {
+  /** Camera/room location used for room matching. */
+  cameraLocation?: string | null;
+  /** Recognition instant. Defaults to now. */
+  at?: Date;
+  /** Fallback timezone when the organization has none configured. */
+  timezone?: string | null;
+}
 
 interface ScheduleCandidate {
   groupId: string;
@@ -184,6 +211,7 @@ export class AttendanceDecisionEngine {
       faceQuality: this.normalizeScore(params.qualityScore),
       confidence: this.normalizeScore(params.confidence),
       similarityScore: this.normalizeScore(params.similarityScore),
+      timezone: organization.timezone,
       cameraLocation,
       cameraName,
     };
@@ -267,6 +295,27 @@ export class AttendanceDecisionEngine {
       organization.timezone ?? 'UTC',
       cameraLocation,
     );
+
+    /**
+     * Organization holiday.
+     *
+     * Audit P0-1: holiday handling must be respected. A holiday is resolved
+     * against the ORGANIZATION-LOCAL calendar date, not the UTC date, so an
+     * organization whose holiday falls on a UTC-adjacent day is still denied.
+     */
+    if (await this.isOrganizationHoliday(organization.id, recognizedAt, organization.timezone)) {
+      return this.persistDecisionEvent({
+        ...baseEvent,
+        decision: 'HOLIDAY',
+        idempotencyKey: this.buildIdempotencyKey({
+          organizationId: organization.id,
+          cameraId: camera.id,
+          studentId: student.id,
+          groupId: 'holiday',
+          recognizedAt,
+        }),
+      });
+    }
 
     if (resolvedGroup.status === 'NO_MATCH') {
       return this.persistDecisionEvent({
@@ -470,6 +519,7 @@ export class AttendanceDecisionEngine {
           groupId,
           recognizedAt,
           attendanceDate,
+          timezone: organization.timezone,
           baseEvent,
           idempotencyKey,
         });
@@ -700,6 +750,7 @@ export class AttendanceDecisionEngine {
    * These do not create Attendance rows.
    */
   private async persistDecisionEvent(params: {
+    timezone?: string | null;
     organizationId: string;
     cameraId: string;
     studentId: string;
@@ -725,6 +776,7 @@ export class AttendanceDecisionEngine {
       confidence: params.confidence,
       similarityScore: params.similarityScore,
       faceQuality: params.faceQuality,
+      timezone: params.timezone,
     });
 
     const messages: Record<AttendanceDecision, string> = {
@@ -741,6 +793,8 @@ export class AttendanceDecisionEngine {
         'Authoritative manual attendance preserved',
       DUPLICATE_PREVENTED:
         'Duplicate attendance prevented',
+      HOLIDAY:
+        'Organization holiday: no scheduled classes, attendance not recorded',
     };
 
     return {
@@ -755,6 +809,7 @@ export class AttendanceDecisionEngine {
    * between our existence check and create().
    */
   private async resolveConcurrentDuplicate(params: {
+    timezone?: string | null;
     organizationId: string;
     cameraId: string;
     studentId: string;
@@ -763,6 +818,7 @@ export class AttendanceDecisionEngine {
     attendanceDate: Date;
 
     baseEvent: {
+      timezone?: string | null;
       organizationId: string;
       cameraId: string;
       studentId: string;
@@ -829,7 +885,7 @@ export class AttendanceDecisionEngine {
   ): Promise<string> {
     const eventDate = this.getOrganizationDate(
       params.recognizedAt,
-      undefined,
+      params.timezone,
     );
 
     try {
@@ -1175,5 +1231,219 @@ export class AttendanceDecisionEngine {
     }
 
     return value;
+  }
+
+  /**
+   * Schedule gate (audit P0-1).
+   *
+   * Returns true ONLY when attendance may legitimately be recorded for this
+   * student/group at this instant. Every failure mode fails CLOSED:
+   *
+   * - organization not found            → deny
+   * - student not active in tenant      → deny
+   * - student not enrolled in group     → deny
+   * - no active schedule for the group  → deny
+   * - outside start-30min..end+30min    → deny
+   * - multiple distinct groups match    → deny (ambiguous)
+   * - camera room does not match        → deny (when room matching required)
+   * - organization holiday              → deny
+   *
+   * The organization timezone is resolved from the Organization row. A
+   * caller-supplied timezone is only a fallback and NEVER an override of the
+   * tenant's configured timezone — this is what audit P0-1 calls out as the
+   * hardcoded 'Asia/Tashkent' defect.
+   */
+  async validateGroupTime(
+    organizationId: string,
+    studentId: string,
+    groupId: string,
+    options: ValidateGroupTimeOptions | string = {},
+  ): Promise<boolean> {
+    const opts: ValidateGroupTimeOptions =
+      typeof options === 'string'
+        ? { timezone: options }
+        : options ?? {};
+
+    if (!organizationId?.trim() || !studentId?.trim() || !groupId?.trim()) {
+      return false;
+    }
+
+    const at = opts.at instanceof Date && !Number.isNaN(opts.at.getTime())
+      ? opts.at
+      : new Date();
+
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, timezone: true },
+    });
+
+    if (!organization) {
+      this.logger.warn('Schedule gate denied: unknown organization', {
+        organizationId,
+      });
+      return false;
+    }
+
+    /**
+     * Organization timezone is authoritative.
+     */
+    const timezone =
+      organization.timezone?.trim() ||
+      opts.timezone?.trim() ||
+      'UTC';
+
+    const student = await this.prisma.student.findFirst({
+      where: {
+        id: studentId,
+        organizationId: organization.id,
+        user: { isActive: true },
+      },
+      select: { id: true },
+    });
+
+    if (!student) {
+      this.logger.warn('Schedule gate denied: student inactive or foreign', {
+        organizationId: organization.id,
+        studentId,
+      });
+      return false;
+    }
+
+    /**
+     * Only ACTIVE memberships in the TARGET group are considered.
+     */
+    const enrollments = await this.prisma.studentGroup.findMany({
+      where: {
+        organizationId: organization.id,
+        studentId: student.id,
+        groupId,
+        isActive: true,
+      },
+      select: {
+        groupId: true,
+        group: {
+          select: {
+            id: true,
+            name: true,
+            room: true,
+            schedules: {
+              where: { isActive: true },
+              select: {
+                dayOfWeek: true,
+                startTime: true,
+                endTime: true,
+                room: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (enrollments.length === 0) {
+      this.logger.warn(
+        'Schedule gate denied: student not actively enrolled in group',
+        { organizationId: organization.id, studentId, groupId },
+      );
+      return false;
+    }
+
+    /**
+     * No active schedule at all → deny (business rule: no schedule = deny).
+     */
+    const hasAnySchedule = enrollments.some(
+      (enrollment) => enrollment.group.schedules.length > 0,
+    );
+
+    if (!hasAnySchedule) {
+      this.logger.warn('Schedule gate denied: group has no active schedule', {
+        organizationId: organization.id,
+        groupId,
+      });
+      return false;
+    }
+
+    /**
+     * Holiday gate — organization-local calendar date.
+     */
+    if (await this.isOrganizationHoliday(organization.id, at, timezone)) {
+      this.logger.warn('Schedule gate denied: organization holiday', {
+        organizationId: organization.id,
+        groupId,
+      });
+      return false;
+    }
+
+    /**
+     * Reuse the exact same resolution logic used by the camera pipeline so
+     * the two gates can never drift apart (window, weekday, room, ambiguity).
+     */
+    const resolved = this.resolveTargetGroup(
+      enrollments,
+      at,
+      timezone,
+      opts.cameraLocation,
+    );
+
+    if (resolved.status !== 'MATCHED') {
+      this.logger.warn('Schedule gate denied: no unambiguous schedule window', {
+        organizationId: organization.id,
+        studentId,
+        groupId,
+        status: resolved.status,
+      });
+      return false;
+    }
+
+    /**
+     * The resolved group must be the group that attendance is about to be
+     * written for. Anything else means attendance would be attributed to the
+     * wrong lesson.
+     */
+    if (resolved.groupId !== groupId) {
+      this.logger.warn('Schedule gate denied: resolved a different group', {
+        organizationId: organization.id,
+        studentId,
+        groupId,
+        resolvedGroupId: resolved.groupId,
+      });
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * True when the ORGANIZATION-LOCAL calendar date of `at` is a configured
+   * OrganizationHoliday.
+   *
+   * Fails CLOSED on error: a holiday lookup failure must not silently
+   * authorize attendance on a day the organization declared a holiday.
+   */
+  private async isOrganizationHoliday(
+    organizationId: string,
+    at: Date,
+    timezone?: string | null,
+  ): Promise<boolean> {
+    try {
+      const holidayDate = this.getOrganizationDate(at, timezone);
+
+      const holiday = await this.prisma.organizationHoliday.findFirst({
+        where: {
+          organizationId,
+          date: holidayDate,
+        },
+        select: { id: true },
+      });
+
+      return holiday !== null;
+    } catch (err: unknown) {
+      this.logger.error('Holiday lookup failed; failing closed', {
+        organizationId,
+        error: getErrorMessage(err),
+      });
+
+      return true;
+    }
   }
 }

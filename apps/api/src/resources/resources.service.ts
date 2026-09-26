@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import {
@@ -18,8 +18,8 @@ export class ResourcesService {
     const [items, total] = await Promise.all([
       this.prisma.resource.findMany({
         where,
-        skip: query.skip ? Number(query.skip) : 0,
-        take: query.take ? Number(query.take) : 20,
+        skip: query.skip ? Math.max(0, Number(query.skip)) : 0,
+        take: query.take ? Math.min(100, Math.max(1, Number(query.take))) : 20,
       }),
       this.prisma.resource.count({ where }),
     ]);

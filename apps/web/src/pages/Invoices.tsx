@@ -3,6 +3,7 @@
  * Features fluid typography, deep frosted glass modules, macOS-style
  * segmented controls, and high-end squircle data grids for billing.
  */
+import { formatDate } from '../lib/format';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invoicesApi, studentsApi } from '@/lib/api';
@@ -119,7 +120,7 @@ export function InvoicesPage() {
   const createInvoice = useMutation({
     mutationFn: (data: any) => invoicesApi.create(data),
     onSuccess: () => {
-      push('success', t('invoices.createSuccess') || 'Success');
+      push('success', t('invoices.createSuccess'));
       setCreateOpen(false);
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
@@ -168,9 +169,11 @@ export function InvoicesPage() {
   });
 
   const remaining = (inv: Invoice) => {
+    if (typeof (inv as any).remaining === 'number') return (inv as any).remaining;
     const total = Number(inv.total) || 0;
     const paid = Number((inv as any).paidAmount) || 0;
-    return Math.max(0, total - paid);
+    const refunded = Number((inv as any).refundedAmount) || 0;
+    return Math.max(0, total - paid + refunded);
   };
 
   const recordPayment = useMutation({
@@ -201,7 +204,7 @@ export function InvoicesPage() {
         title={t('nav.invoices')}
         description={t('invoices.subtitle')}
         action={{
-          label: t('invoices.createDraft') || 'Create Invoice',
+          label: t('invoices.createDraft'),
           onClick: () => setCreateOpen(true),
         }}
       />
@@ -280,7 +283,7 @@ export function InvoicesPage() {
             <GlassEmptyState
               title={t('invoices.emptyTitle')}
               message={statusFilter ? t('invoices.emptyFiltered') : t('invoices.emptyHint')}
-              action={{ label: t('invoices.createDraft') || 'Create Invoice', onClick: () => setCreateOpen(true) }}
+              action={{ label: t('invoices.createDraft'), onClick: () => setCreateOpen(true) }}
             />
           </div>
         )}
@@ -466,8 +469,8 @@ export function InvoicesPage() {
                       </div>
                       {r.reason && <p className="text-[0.8rem] text-[var(--text-muted)] mt-1 truncate">{r.reason}</p>}
                       <p className="text-[0.7rem] text-[var(--text-muted)] mt-0.5">
-                        {t('invoices.requested', { date: r.requestedAt ? new Date(r.requestedAt).toLocaleDateString() : '' })}
-                        {r.processedAt ? t('invoices.processed', { date: new Date(r.processedAt).toLocaleDateString() }) : ''}
+                        {t('invoices.requested', { date: r.requestedAt ? formatDate(r.requestedAt) : '' })}
+                        {r.processedAt ? t('invoices.processed', { date: formatDate(r.processedAt) }) : ''}
                       </p>
                     </div>
                     {r.status === 'REQUESTED' && (

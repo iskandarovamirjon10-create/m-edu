@@ -1,5 +1,5 @@
-import { computeAttendanceRate } from '../common/attendance-rate';
 import { Injectable } from '@nestjs/common';
+import { computeAttendanceRate } from '../common/attendance-rate.js';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -48,10 +48,10 @@ export class AnalyticsService {
         _sum: { amount: true },
       }),
       this.prisma.$queryRaw`
-        SELECT DATE_TRUNC('month', COALESCE("paidAt", "createdAt")) as month, SUM(amount)::decimal as total
+        SELECT DATE_TRUNC('month', "paidAt") as month, SUM(amount)::decimal as total
         FROM "Payment"
         WHERE "organizationId" = ${organizationId}::uuid AND status = 'PAID'
-        GROUP BY DATE_TRUNC('month', COALESCE("paidAt", "createdAt"))
+        GROUP BY DATE_TRUNC('month', "paidAt")
         ORDER BY month DESC
         LIMIT 12
       ` as unknown as { month: Date; total: string }[],

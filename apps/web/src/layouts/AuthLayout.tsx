@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { MeduLogo } from '@/components/brand/MeduLogo';
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -23,25 +24,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
       <div className="relative w-full max-w-md z-10">
         {/* Logo and title */}
         <div className="mb-8 text-center animate-slide-up">
-          <div
-            className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-2xl font-bold text-white"
-            style={{
-              background: 'linear-gradient(135deg, var(--m-vivid) 0%, var(--m-deep) 100%)',
-              boxShadow: '0 10px 30px -10px rgba(84,115,252,0.5), inset 0 1px 0 rgba(255,255,255,0.2)',
-              border: '1px solid rgba(255,255,255,0.25)',
-            }}
-          >
-            M
-            <span
-              aria-hidden
-              className="absolute inset-0 rounded-2xl"
-              style={{
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, transparent 100%)',
-                opacity: 0.6,
-                pointerEvents: 'none',
-              }}
-            />
-          </div>
+          <MeduLogo size="xl" className="mx-auto" />
           <h1
             className="mt-4 text-2xl font-semibold tracking-[-0.02em]"
             style={{ color: 'var(--text-primary)' }}

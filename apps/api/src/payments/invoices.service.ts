@@ -3,11 +3,12 @@ import { InvoiceStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateInvoiceDto, AddInvoiceItemDto, RecordPaymentDto, CreateRefundDto } from './dto/invoice.dto';
-import { toMinor, fromMinor } from '@medu/financial-engine';
+import { toMinor, fromMinor, DecimalLike } from '@medu/financial-engine';
 import { computeInvoiceOutstanding } from './invoice-outstanding';
 import { NotificationEventService } from '../notifications/events/notification-event.service';
 import { FinancialPeriodService } from '../analytics/financial-period.service';
 import { withPrismaRetry } from '../lib/prisma-retry.util';
+import { refundBalanceReverseMinor } from './balance-contribution';
 
 /**
  * Student billing: invoices -> payments -> receipts -> refunds.
@@ -541,7 +542,7 @@ export class InvoicesService {
         where: { id: invoice.id },
         data: {
           status: newStatus,
-          paidAt: newStatus === 'PAID' ? new Date() : null,
+          paidAt: ['PAID', 'PARTIALLY_PAID'].includes(newStatus) ? new Date() : null,
         },
       });
 
@@ -717,6 +718,30 @@ export class InvoicesService {
         throw new ConflictException(`Refund in status ${existing.status} cannot be processed`);
       }
 
+      // Pessimistic lock on Payment serializes with PaymentsService.update
+      // status transitions so refund + status-leave cannot both reverse balance.
+      const lockedPayments = await tx.$queryRaw<
+        Array<{ id: string; amount: DecimalLike; status: PaymentStatus; studentId: string | null }>
+      >`
+        SELECT id, amount, status, "studentId"
+        FROM "Payment"
+        WHERE id = ${existing.paymentId}::uuid
+        FOR UPDATE
+      `;
+      if (!lockedPayments.length) throw new NotFoundException('Payment not found during lock');
+      const paymentRow = lockedPayments[0];
+
+      // Prior PROCESSSED refunds (this one is still REQUESTED/APPROVED).
+      const priorAgg = await tx.refund.aggregate({
+        where: {
+          paymentId: existing.paymentId,
+          status: 'PROCESSED',
+          NOT: { id: existing.id },
+        },
+        _sum: { amount: true },
+      });
+      const priorProcessedRefundMinor = toMinor(priorAgg._sum.amount ?? 0);
+
       const updated = await tx.refund.updateMany({
         where: { id: refundId, organizationId, status: existing.status },
         data: {
@@ -743,11 +768,11 @@ export class InvoicesService {
             where: { id: invoice.id },
             data: { refundedAmount: { increment: existing.amount } },
           });
-          
+
           const fresh = await tx.invoice.findUniqueOrThrow({ where: { id: invoice.id } });
           const netPaidMinor = toMinor(fresh.paidAmount) - toMinor(fresh.refundedAmount ?? 0);
           const totalMinor = toMinor(fresh.total);
-          
+
           let newStatus = fresh.status;
           if (netPaidMinor < totalMinor) {
             newStatus = (fresh.dueDate && fresh.dueDate < new Date()) ? 'OVERDUE' : 'PARTIALLY_PAID';
@@ -755,24 +780,32 @@ export class InvoicesService {
               newStatus = (fresh.dueDate && fresh.dueDate < new Date()) ? 'OVERDUE' : 'ISSUED';
             }
           }
-          
+
           if (newStatus !== fresh.status) {
             await tx.invoice.update({
               where: { id: invoice.id },
               data: {
                 status: newStatus,
-                paidAt: newStatus === 'PAID' ? fresh.paidAt : null,
+                paidAt: ['PAID', 'PARTIALLY_PAID'].includes(newStatus) ? fresh.paidAt : null,
               },
             });
           }
         }
       }
 
-      // Balance cache: money OUT for the student unconditionally.
-      if (existing.studentId) {
+      // Balance cache: reverse ONLY the still-applied share of this refund.
+      // If the payment already left PAID (status-leave already reversed
+      // money-in), or the share was already reversed, reverse 0.
+      const reverseMinor = refundBalanceReverseMinor({
+        paymentIsPaid: paymentRow.status === 'PAID',
+        paymentAmountMinor: toMinor(paymentRow.amount),
+        refundAmountMinor: toMinor(existing.amount),
+        priorProcessedRefundMinor,
+      });
+      if (reverseMinor !== 0 && paymentRow.studentId) {
         await tx.student.update({
-          where: { id: existing.studentId },
-          data: { balance: { decrement: existing.amount } },
+          where: { id: paymentRow.studentId },
+          data: { balance: { decrement: fromMinor(reverseMinor) } },
         });
       }
 
@@ -817,3 +850,6 @@ export class InvoicesService {
     return this.prisma.refund.findFirst({ where: { id: refundId, organizationId } });
   }
 }
+
+
+

@@ -74,7 +74,7 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
   }, []);
 
   const t = useCallback(
-    (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars),
+    (key: string, vars?: Record<string, string | number>, fallback?: string) => translate(locale, key, vars, fallback),
     [locale],
   );
 

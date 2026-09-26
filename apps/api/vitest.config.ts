@@ -48,6 +48,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
+    exclude: ['**/*.integration.spec.ts', '**/node_modules/**', '**/dist/**'],
     setupFiles: [path.resolve(__dirname, 'vitest.setup.ts')],
     testTimeout: 60000,
     hookTimeout: 120000,

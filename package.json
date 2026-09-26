@@ -10,6 +10,9 @@
     "build": "turbo build",
     "lint": "cross-env NODE_OPTIONS=--max-old-space-size=4096 turbo lint --concurrency=2",
     "test": "turbo test --concurrency=1",
+    "test:integration": "npm run test:integration -w @medu/api",
+    "typecheck": "turbo typecheck",
+    "test:e2e": "npm run test:e2e -w @medu/api",
     "db:generate": "cd apps/api && npx prisma generate",
     "db:push": "cd apps/api && npx prisma db push",
     "db:migrate": "cd apps/api && npx prisma migrate dev",
@@ -22,6 +25,7 @@
     "cross-env": "^10.1.0",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "turbo": "^2.1.0",
@@ -30,10 +34,26 @@
   },
   "packageManager": "npm@10.2.0",
   "overrides": {
-    "vite": "~5.4.3"
+    "multer": "^2.4.0",
+    "lodash": "^4.18.1",
+    "js-yaml": "^4.3.2",
+    "qs": "^6.16.0",
+    "uuid": "^11.1.1",
+    "tmp": "^0.2.7",
+    "picomatch": "^4.0.7",
+    "file-type": "^21.3.4",
+    "glob": "^10.5.0",
+    "body-parser": "^1.20.8",
+    "@nestjs/platform-express": {
+      "multer": "^2.4.0",
+      "body-parser": "^1.20.8"
+    },
+    "express": {
+      "qs": "^6.16.0",
+      "body-parser": "^1.20.8"
+    }
   },
   "dependencies": {
-    "chart.js": "^4.5.1",
-    "glob": "^13.0.6"
+    "chart.js": "^4.5.1"
   }
 }

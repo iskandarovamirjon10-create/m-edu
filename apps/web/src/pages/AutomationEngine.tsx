@@ -108,7 +108,7 @@ export function AutomationEnginePage() {
  setShowModal(false);
  setForm(INITIAL_FORM);
 },
- onError: () => toast('error','Failed to create rule'),
+ onError: () => toast('error'),
 });
 
  const updateMutation = useMutation({
@@ -120,7 +120,7 @@ export function AutomationEnginePage() {
  setEditingRule(null);
  setForm(INITIAL_FORM);
 },
- onError: () => toast('error','Failed to update rule'),
+ onError: () => toast('error'),
 });
 
  const deleteMutation = useMutation({
@@ -129,7 +129,7 @@ export function AutomationEnginePage() {
  queryClient.invalidateQueries({ queryKey: ['automation-rules']});
  toast('success', t('automation.rule.deleted'));
 },
- onError: () => toast('error','Failed to delete rule'),
+ onError: () => toast('error'),
 });
 
  const toggleMutation = useMutation({
@@ -137,7 +137,7 @@ export function AutomationEnginePage() {
  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['automation-rules']}),
  // A failed enable/disable previously produced no feedback at all — the
  // switch looked like it worked until the next refetch reverted it.
- onError: () => toast('error','Failed to update rule status'),
+ onError: () => toast('error'),
 });
 
  const evaluateAllMutation = useMutation({
@@ -148,7 +148,7 @@ export function AutomationEnginePage() {
     queryClient.invalidateQueries({ queryKey: ['automation-stats'] });
     toast('success', `Evaluated ${data?.evaluated ?? 0} rules. Triggered ${data?.triggered ?? 0}.`);
   },
- onError: () => toast('error','Failed to evaluate engine'),
+ onError: () => toast('error'),
 });
 
  const handleOpenCreate = () => {

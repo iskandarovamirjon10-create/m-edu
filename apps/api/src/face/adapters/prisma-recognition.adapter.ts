@@ -63,9 +63,53 @@ interface AttendanceListFilters {
   limit?: number;
 }
 
+/**
+ * Minimal structural view of the schedule gate so this adapter does not have
+ * to import the camera module (audit P0-1).
+ */
+export interface ScheduleGate {
+  validateGroupTime(
+    organizationId: string,
+    studentId: string,
+    groupId: string,
+    options?: { cameraLocation?: string | null; at?: Date }
+  ): Promise<boolean>;
+}
+
 @Injectable()
 export class PrismaRecognitionAdapter implements RecognitionRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scheduleGate?: ScheduleGate,
+  ) {}
+
+  /**
+   * Schedule gate (audit P0-1).
+   *
+   * Delegates to the single AttendanceDecisionEngine implementation so the
+   * face-session path and the camera path can never diverge.
+   *
+   * FAILS CLOSED when no gate was injected: an adapter without a schedule
+   * gate must never authorize attendance.
+   */
+  async isWithinSchedule(
+    organizationId: string,
+    studentId: string,
+    groupId: string,
+    options?: { cameraLocation?: string | null; at?: Date }
+  ): Promise<boolean> {
+    if (!this.scheduleGate) {
+      return false;
+    }
+
+    return this.scheduleGate.validateGroupTime(
+      organizationId,
+      studentId,
+      groupId,
+      options
+    );
+  }
+
 
   /**
    * Organization-local calendar date (stored as UTC midnight of the local

@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SecurityService } from './security.service';
+import { SecurityAlertQueryDto } from './dto/security.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -25,7 +26,7 @@ export class SecurityController {
   @ApiOperation({ summary: 'Find security alerts' })
   async findAlerts(
     @CurrentUser('organizationId') orgId: string,
-    @Query() query: any,
+    @Query() query: SecurityAlertQueryDto,
   ) {
     return this.securityService.findAlerts(orgId, query);
   }

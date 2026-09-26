@@ -260,7 +260,7 @@ describe('ReportsController', () => {
       const res = createMockResponse();
       const body: ExportReportDto = {
         params: { type: 'STUDENTS' },
-        format: 'xml' as any,
+        format: 'xml' as unknown as ExportReportDto['format'],
       };
 
       await controller.exportReport(orgId, body, res);
@@ -358,6 +358,126 @@ describe('ReportsController', () => {
       await expect(controller.exportReport(orgId, body, res)).rejects.toThrow(
         'Export service failure',
       );
+    });
+
+    it('exports report with flat payload (csv)', async () => {
+      const res = createMockResponse();
+      const body: ExportReportDto = {
+        type: 'STUDENTS',
+        format: 'csv',
+        dateFrom: '2026-09-01',
+        dateTo: '2026-09-24',
+      };
+      const mockExport = {
+        buffer: Buffer.from('student-csv-data'),
+        contentType: 'text/csv',
+        extension: 'csv',
+      };
+      service.exportResult.mockResolvedValue(mockExport);
+
+      await controller.exportReport(orgId, body, res);
+
+      expect(service.exportResult).toHaveBeenCalledWith(
+        orgId,
+        expect.objectContaining({ type: 'STUDENTS', dateFrom: '2026-09-01', dateTo: '2026-09-24' }),
+        'csv',
+      );
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        'attachment; filename="report_STUDENTS.csv"',
+      );
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
+      expect(res.send).toHaveBeenCalledWith(mockExport.buffer);
+    });
+
+    it('exports report with flat payload (xlsx)', async () => {
+      const res = createMockResponse();
+      const body: ExportReportDto = {
+        type: 'FINANCE',
+        format: 'xlsx',
+      };
+      const mockExport = {
+        buffer: Buffer.from('finance-xlsx-data'),
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        extension: 'xlsx',
+      };
+      service.exportResult.mockResolvedValue(mockExport);
+
+      await controller.exportReport(orgId, body, res);
+
+      expect(service.exportResult).toHaveBeenCalledWith(
+        orgId,
+        expect.objectContaining({ type: 'FINANCE' }),
+        'xlsx',
+      );
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        'attachment; filename="report_FINANCE.xlsx"',
+      );
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      expect(res.send).toHaveBeenCalledWith(mockExport.buffer);
+    });
+
+    it('exports report with flat payload (pdf)', async () => {
+      const res = createMockResponse();
+      const body: ExportReportDto = {
+        type: 'PAYROLL',
+        format: 'pdf',
+      };
+      const mockExport = {
+        buffer: Buffer.from('payroll-pdf-data'),
+        contentType: 'application/pdf',
+        extension: 'pdf',
+      };
+      service.exportResult.mockResolvedValue(mockExport);
+
+      await controller.exportReport(orgId, body, res);
+
+      expect(service.exportResult).toHaveBeenCalledWith(
+        orgId,
+        expect.objectContaining({ type: 'PAYROLL' }),
+        'pdf',
+      );
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        'attachment; filename="report_PAYROLL.pdf"',
+      );
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+      expect(res.send).toHaveBeenCalledWith(mockExport.buffer);
+    });
+
+    it('returns 400 when format is unsupported', async () => {
+      const res = createMockResponse();
+      const body = {
+        type: 'STUDENTS' as const,
+        format: 'unsupported' as unknown as 'csv',
+      };
+
+      await controller.exportReport(orgId, body, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ statusCode: 400, message: expect.stringContaining('Unsupported format') }),
+      );
+      expect(service.exportResult).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 when report type is missing', async () => {
+      const res = createMockResponse();
+      const body: ExportReportDto = {
+        format: 'csv',
+      };
+
+      await controller.exportReport(orgId, body, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ statusCode: 400, message: 'Report type is required' }),
+      );
+      expect(service.exportResult).not.toHaveBeenCalled();
     });
   });
 

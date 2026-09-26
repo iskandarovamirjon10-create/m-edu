@@ -82,7 +82,7 @@ const MISSING_KEY = (key: string, locale: Locale) =>
  * In development a missing non-English key is logged once per key so the
  * translation gap is discoverable without breaking the UI.
  */
-export function translate(locale: Locale, key: string, vars?: Record<string, string | number>): string {
+export function translate(locale: Locale, key: string, vars?: Record<string, string | number>, fallback?: string): string {
   const dict = DICTIONARIES[locale];
   let template: string | undefined = dict?.[key];
 
@@ -96,7 +96,7 @@ export function translate(locale: Locale, key: string, vars?: Record<string, str
 
   if (template === undefined) {
     if (import.meta.env.DEV) console.warn(MISSING_KEY(key, locale));
-    return key;
+    return fallback ?? key;
   }
 
   return interpolate(template, vars);

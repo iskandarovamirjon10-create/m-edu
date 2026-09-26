@@ -57,6 +57,11 @@ export const AttendanceDecision = {
   LESSON_INVALID: 'LESSON_INVALID',
   STUDENT_INACTIVE: 'STUDENT_INACTIVE',
   REJECTED: 'REJECTED',
+  /**
+   * Audit P0-1 — the recognition identified a student, but the organization
+   * schedule gate refused attendance. Attendance is never written.
+   */
+  OUT_OF_SCHEDULE: 'OUT_OF_SCHEDULE',
 } as const;
 export type AttendanceDecision = (typeof AttendanceDecision)[keyof typeof AttendanceDecision];
 

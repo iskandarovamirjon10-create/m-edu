@@ -2,9 +2,14 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { PrismaService } from '../prisma/prisma.service';
 import { FinancialPeriodService } from '../analytics/financial-period.service';
 import { parsePagination } from '../lib/pagination';
-import { Prisma } from '@prisma/client';
+import { PaymentStatus, Prisma } from '@prisma/client';
 import { CreatePaymentDto, UpdatePaymentDto } from '../common/dto';
 import { PaymentQuery } from '../common/dto/query';
+import { toMinor, fromMinor, DecimalLike } from '@medu/financial-engine';
+import {
+  isLegalPaymentTransition,
+  paymentStatusBalanceDeltaMinor,
+} from './balance-contribution';
 
 @Injectable()
 export class PaymentsService {
@@ -109,6 +114,17 @@ export class PaymentsService {
     }
     const newStatus = data.status;
 
+    // Reject illegal status transitions before any balance math.
+    // PAID → PENDING is not a valid reverse path (use refund / CANCELLED);
+    // this is the confirmed P0 transition that double-decremented after refund.
+    if (newStatus !== undefined && newStatus !== existing.status) {
+      if (!isLegalPaymentTransition(existing.status, newStatus)) {
+        throw new ConflictException(
+          `Illegal payment status transition ${existing.status} → ${newStatus}`,
+        );
+      }
+    }
+
     // Check the period of the existing booking AND any new dueDate the
     // caller is moving the payment into.
     await this.financialPeriod.ensureNotClosed(
@@ -143,25 +159,10 @@ export class PaymentsService {
 
     if (Object.keys(updateData).length === 0) return existing;
 
-    // Dual-ledger cache (Student.balance): only Payment rows in status PAID
-    // count as money-in. Adjust the cache when this write changes PAID-ness
-    // or the amount of an already-PAID row. Invoice-linked payments already
-    // maintain the cache in InvoicesService.recordPayment/processRefund —
-    // those rows never pass through this standalone CRUD path with a status
-    // flip from/to PAID after creation, so there is no double-count.
-    const wasPaid = existing.status === 'PAID';
-    const willBePaid = newStatus === 'PAID' || (newStatus === undefined && wasPaid);
-    const nextAmount = data.amount !== undefined ? data.amount : Number(existing.amount);
-    let balanceDelta = 0;
-    if (!wasPaid && willBePaid) balanceDelta = nextAmount;
-    else if (wasPaid && !willBePaid) balanceDelta = -Number(existing.amount);
-    else if (wasPaid && willBePaid && data.amount !== undefined) {
-      balanceDelta = nextAmount - Number(existing.amount);
-    }
-
-    // CAS on status (and amount when present): a concurrent writer that
-    // already moved this payment out of `snapshot.status` makes count=0, so
-    // we re-read and retry with the fresh snapshot instead of clobbering.
+    // Dual-ledger cache (Student.balance): contribution = PAID ? amount -
+    // processedRefunds : 0. Deltas come from that single formula so a
+    // refund already applied is never reversed again by a status leave.
+    // FOR UPDATE on Payment serializes with InvoicesService.processRefund.
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const snapshot =
@@ -169,25 +170,72 @@ export class PaymentsService {
           ? existing
           : await this.findOne(organizationId, id);
 
-      const guardWhere: Prisma.PaymentWhereInput = {
-        id,
-        organizationId,
-        status: snapshot.status,
-      };
-      if (data.amount !== undefined) guardWhere.amount = snapshot.amount;
-
       try {
         const result = await this.prisma.$transaction(async (tx) => {
+          const locked = await tx.$queryRaw<
+            Array<{ id: string; status: PaymentStatus; amount: DecimalLike; studentId: string | null }>
+          >`
+            SELECT id, status, amount, "studentId"
+            FROM "Payment"
+            WHERE id = ${id}::uuid AND "organizationId" = ${organizationId}::uuid
+            FOR UPDATE
+          `;
+          if (locked.length !== 1) return { count: 0, updated: null };
+          const row = locked[0];
+
+          // Re-validate transition against the locked row (not the pre-tx snapshot).
+          if (newStatus !== undefined && newStatus !== row.status) {
+            if (!isLegalPaymentTransition(row.status, newStatus)) {
+              throw new ConflictException(
+                `Illegal payment status transition ${row.status} → ${newStatus}`,
+              );
+            }
+          }
+
+          const refundAgg = await tx.refund.aggregate({
+            where: { paymentId: id, status: 'PROCESSED' },
+            _sum: { amount: true },
+          });
+          const processedRefundMinor = toMinor(refundAgg._sum.amount ?? 0);
+
+          const wasPaid = row.status === 'PAID';
+          const willBePaid = newStatus === 'PAID' || (newStatus === undefined && wasPaid);
+          const oldAmountMinor = toMinor(row.amount);
+          const newAmountMinor =
+            data.amount !== undefined ? toMinor(data.amount) : oldAmountMinor;
+
+          const balanceDeltaMinor = paymentStatusBalanceDeltaMinor({
+            wasPaid,
+            willBePaid,
+            oldAmountMinor,
+            newAmountMinor,
+            processedRefundMinor,
+          });
+
+          const guardWhere: Prisma.PaymentWhereInput = {
+            id,
+            organizationId,
+            status: row.status,
+          };
+          if (data.amount !== undefined) {
+            const lockedAmount = row.amount;
+            if (typeof lockedAmount === 'number') guardWhere.amount = lockedAmount;
+            else if (typeof lockedAmount === 'string') guardWhere.amount = lockedAmount;
+            else if (lockedAmount && typeof (lockedAmount as { toNumber?: unknown }).toNumber === 'function') {
+              guardWhere.amount = (lockedAmount as { toNumber(): number }).toNumber();
+            }
+          }
+
           const { count } = await tx.payment.updateMany({
             where: guardWhere,
             data: updateData,
           });
           if (count !== 1) return { count, updated: null };
 
-          if (balanceDelta !== 0 && snapshot.studentId) {
+          if (balanceDeltaMinor !== 0 && row.studentId) {
             await tx.student.update({
-              where: { id: snapshot.studentId },
-              data: { balance: { increment: balanceDelta } },
+              where: { id: row.studentId },
+              data: { balance: { increment: fromMinor(balanceDeltaMinor) } },
             });
           }
 
@@ -206,8 +254,11 @@ export class PaymentsService {
         if (error.code === 'P2002') {
           throw new ConflictException('A payment with this reference already exists');
         }
-        if (error instanceof ConflictException && attempt < maxAttempts) {
-          continue;
+        // Illegal transition / concurrent conflict: do not retry a rejected transition.
+        if (error instanceof ConflictException) {
+          const msg = String(error.message ?? '');
+          if (msg.startsWith('Illegal payment status transition')) throw error;
+          if (attempt < maxAttempts) continue;
         }
         throw error;
       }
@@ -215,3 +266,4 @@ export class PaymentsService {
     throw new ConflictException('Payment was modified concurrently, retry');
   }
 }
+

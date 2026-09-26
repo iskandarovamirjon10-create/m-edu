@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { StudentsService } from './students.service';
-import { CreateStudentDto, UpdateStudentDto } from '../common/dto';
+import { CreateStudentDto, UpdateStudentDto, CreateParentLinkDto, UpdateParentLinkDto } from '../common/dto';
 import { StudentQuery } from '../common/dto/query';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -71,5 +71,51 @@ export class StudentsController {
     @Param('groupId') groupId: string,
   ) {
     return this.studentsService.removeFromGroup(orgId, studentId, groupId);
+  }
+
+  // ==================== Parent Associations ====================
+
+  @Get(':id/parents')
+  @Roles(...STAFF_ROLES)
+  @ApiOperation({ summary: 'Get parents linked to student' })
+  getParents(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') studentId: string,
+  ) {
+    return this.studentsService.getStudentParents(orgId, studentId);
+  }
+
+  @Post(':id/parents')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Create or link parent to student' })
+  createParent(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') studentId: string,
+    @Body() dto: CreateParentLinkDto,
+  ) {
+    return this.studentsService.createOrLinkParent(orgId, studentId, dto);
+  }
+
+  @Patch(':id/parents/:parentId')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Update parent-student link permissions' })
+  updateParentLink(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') studentId: string,
+    @Param('parentId') parentId: string,
+    @Body() dto: UpdateParentLinkDto,
+  ) {
+    return this.studentsService.updateParentLink(orgId, studentId, parentId, dto);
+  }
+
+  @Delete(':id/parents/:parentId')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Unlink parent from student' })
+  unlinkParent(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') studentId: string,
+    @Param('parentId') parentId: string,
+  ) {
+    return this.studentsService.unlinkParent(orgId, studentId, parentId);
   }
 }

@@ -189,6 +189,29 @@ const uz = {
   'settings.confirmPassword': 'Yangi parolni tasdiqlang',
   'settings.changePasswordAction': 'Parolni oʻzgartirish',
   'settings.passwordChanged': 'Parol muvaffaqiyatli oʻzgartirildi',
+  'settings.telegram.title': 'Telegram integratsiyasi',
+  'settings.telegram.subtitle': 'M-EDU bildirishnomalarini Telegramda oling',
+  'settings.telegram.hint':
+    'Telegram — qoʻshimcha bildirishnoma kanali. Hisobingiz, rollaringiz va maʼlumotlaringiz M-EDU serverida qoladi: uzish hisobingizga taʼsir qilmaydi.',
+  'settings.telegram.stateActive': 'Ulangan',
+  'settings.telegram.stateNotLinked': 'Ulanmagan',
+  'settings.telegram.stateDisconnected': 'Uzilgan',
+  'settings.telegram.stateBlocked': 'Bloklangan',
+  'settings.telegram.stateSuspended': "To'xtatilgan",
+  'settings.telegram.blockedHint':
+    "Siz botni bloklagan yoki chatni o'chirgansiz. Qayta ulash uchun «Ulash» tugmasini bosing va havolani qayta oching.",
+  'settings.telegram.lastSeen': 'Oxirgi faollik',
+  'settings.telegram.never': 'hech qachon',
+  'settings.telegram.connect': 'Telegramni ulash',
+  'settings.telegram.reconnect': 'Qayta ulash',
+  'settings.telegram.disconnect': 'Uzish',
+  'settings.telegram.test': 'Sinov bildirishnomasini yuborish',
+  'settings.telegram.openLink': 'Ulashni yakunlash uchun bu havolani Telegramda oching:',
+  'settings.telegram.linkReady': 'Ulash havolasi yaratildi',
+  'settings.telegram.linkExpires': "Havola bir martalik va {time} da muddati tugaydi.",
+  'settings.telegram.disconnected': 'Telegram uzildi',
+  'settings.telegram.testSent': 'Sinov bildirishnomasi yuborildi',
+  'settings.telegram.testFailed': 'Bu hisob uchun Telegram mavjud emas',
 
   // Errors
   'error.network': 'Tarmoq xatosi — ulanishni tekshirib qayta urinib koʻring',
@@ -196,6 +219,22 @@ const uz = {
   'error.forbidden': 'Bu amalni bajarish uchun ruxsatingiz yoʻq',
   'error.notFound': 'Soʻralgan resurs topilmadi',
   'error.server': 'Server xatosi — keyinroq qayta urinib koʻring',
+  'homework.titleRequired': 'Title is required',
+  'exams.subjectRequired': 'Subject is required',
+  'exams.groupRequired': 'Group is required',
+  'exams.form.typeRequired': 'Type is required',
+  'exams.form.dateRequired': 'Date is required',
+  'exams.durationInvalid': 'Duration must be > 0',
+  'exams.totalMarksInvalid': 'Total marks must be > 0',
+  'exams.passingMarksInvalid': 'Passing marks must be > 0',
+  'exams.passingMarksTooHigh': 'Passing marks cannot exceed total',
+  'hr.form.validation.userIdRequired': 'User is required',
+  'hr.form.validation.employeeNumberRequired': 'Employee number is required',
+  'hr.form.validation.hireDateRequired': 'Hire date is required',
+  'hr.form.validation.contractTypeRequired': 'Contract type is required',
+  'hr.form.validation.positionRequired': 'Position is required',
+  'hr.form.validation.departmentRequired': 'Department is required',
+  'hr.form.validation.salaryInvalid': 'Salary is invalid',
 };
 
 import { legacyUz } from './legacy-slices.uz';
@@ -204,3 +243,4 @@ import { pagesUz } from './pages-slices.uz';
 
 // Legacy fills gaps → analytics fills more → curated base wins for overrides.
 export default { ...legacyUz, ...analyticsUz, ...pagesUz, ...uz };
+

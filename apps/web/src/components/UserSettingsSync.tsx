@@ -1,97 +1,117 @@
-import { useEffect, useRef} from'react';
-import { useAuthState} from'@/auth/AuthContext';
-import { useI18n, isLocale} from'@/i18n/I18nProvider';
+import { useEffect, useRef } from 'react';
+import { useAuthState } from '@/auth/AuthContext';
+import { useI18n, isLocale } from '@/i18n/I18nProvider';
+import { useTheme } from '@/hooks/useTheme';
+import { usePersistSettings } from '@/hooks/usePersistSettings';
 
-type Theme ='light' |'dark' |'system';
+type Theme = 'light' | 'dark' | 'system';
 
 function isTheme(value: unknown): value is Theme {
- return value ==='light' || value ==='dark' || value ==='system';
-}
-
-/** Apply a theme to <html> (class + data-theme), matching Settings' logic. */
-function applyTheme(theme: Theme) {
- const root = document.documentElement;
- if (theme ==='dark') {
- root.classList.add('dark');
- root.setAttribute('data-theme','dark');
-} else if (theme ==='light') {
- root.classList.remove('dark');
- root.setAttribute('data-theme','light');
-} else {
- const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
- if (prefersDark) {
- root.classList.add('dark');
- root.setAttribute('data-theme','dark');
-} else {
- root.classList.remove('dark');
- root.setAttribute('data-theme','light');
-}
-}
+  return value === 'light' || value === 'dark' || value === 'system';
 }
 
 function readStorage(key: string): string | null {
- try {
- return localStorage.getItem(key);
-} catch {
- return null;
-}
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Syncs the authenticated user's persisted preferences (theme + language)
- * into the browser.
+ * Reconciles the authenticated user's server-side preferences
+ * (`UserSettings.theme` / `.language`) with this browser.
  *
- * IMPORTANT — "local preference wins"rule:
- * The server row always contains a value (the column defaults are
- * `theme ='light'`, `language ='en'`), so a default cannot be distinguished
- * from a deliberate choice. Applying it unconditionally overwrote the
- * browser-persisted preference on every login/mount and made the interface
- * snap back to English / light. We therefore only adopt the server value when
- * the browser has no explicit preference yet (fresh device / cleared storage).
- * Once the user picks a value locally, local storage is authoritative for this
- * browser and is never clobbered by the server default.
+ * Source of truth: the SERVER. `localStorage` is only a device cache so the
+ * first paint does not flash the wrong language.
+ *
+ * Rules
+ * -----
+ *  1. First time this user is seen on this device:
+ *       - no local choice yet  -> adopt the server value,
+ *       - a local choice exists-> keep it and PUBLISH it to the server, so the
+ *                                  server (and every other device) converges on
+ *                                  what the user actually picked here.
+ *  2. Afterwards: whenever the server value changes (the user changed it from
+ *     another browser/device, or an admin changed it), adopt it here.
+ *  3. Changes made in THIS browser are pushed by the control that made them
+ *     (`usePersistSettings`), never by an effect watching `locale` — that
+ *     avoids mount-order races where an effect pushes a stale default.
+ *
+ * The component must be mounted once, inside `AuthProvider` (which itself sits
+ * inside `ThemeProvider` + `I18nProvider`).
  */
 export function UserSettingsSync() {
- const { user} = useAuthState();
- const { setLocale, locale} = useI18n();
- const prevUserTheme = useRef<string | null>(null);
- const prevUserLanguage = useRef<string | null>(null);
+  const { user } = useAuthState();
+  const { setLocale, locale } = useI18n();
+  const { setTheme, theme } = useTheme();
+  const persist = usePersistSettings();
 
- useEffect(() => {
- if (!user?.settings) return;
+  const userId = user?.id ?? null;
+  const serverLanguage = user?.settings?.language ?? null;
+  const serverTheme = user?.settings?.theme ?? null;
 
- // ── Theme ────────────────────────────────────────────────────────────
- const userTheme = user.settings.theme;
- const storedTheme = readStorage('medu-theme');
- if (
- userTheme &&
- userTheme !== prevUserTheme.current &&
- !storedTheme &&
- isTheme(userTheme)
- ) {
- prevUserTheme.current = userTheme;
- try {
- localStorage.setItem('medu-theme', userTheme);
-} catch {
- /* storage unavailable — in-memory only */
-}
- applyTheme(userTheme);
-}
+  const hydratedFor = useRef<string | null>(null);
+  const lastServer = useRef<{ language: string | null; theme: string | null }>({
+    language: null,
+    theme: null,
+  });
 
- // ── Language ─────────────────────────────────────────────────────────
- const userLanguage = user.settings.language;
- const storedLocale = readStorage('medu-lang');
- if (
- userLanguage &&
- userLanguage !== prevUserLanguage.current &&
- !storedLocale &&
- userLanguage !== locale &&
- isLocale(userLanguage)
- ) {
- prevUserLanguage.current = userLanguage;
- setLocale(userLanguage);
-}
-}, [user?.settings, setLocale, locale]);
+  useEffect(() => {
+    if (!userId) {
+      // Signed out (or another user is about to sign in): reset so the next
+      // account goes through rule 1 again instead of inheriting this state.
+      hydratedFor.current = null;
+      lastServer.current = { language: null, theme: null };
+      return;
+    }
 
- return null;
+    const first = hydratedFor.current !== userId;
+    const previous = lastServer.current;
+    const changed = previous.language !== serverLanguage || previous.theme !== serverTheme;
+    lastServer.current = { language: serverLanguage, theme: serverTheme };
+    if (!first && !changed) return;
+    hydratedFor.current = userId;
+
+    const localLanguage = readStorage('medu-lang');
+    const localTheme = readStorage('medu-theme');
+
+    if (first) {
+      const publish: { language?: string; theme?: string } = {};
+
+      if (localLanguage) {
+        if (localLanguage !== serverLanguage) publish.language = localLanguage;
+      } else if (serverLanguage && isLocale(serverLanguage) && serverLanguage !== locale) {
+        setLocale(serverLanguage);
+      }
+
+      if (localTheme) {
+        if (localTheme !== serverTheme) publish.theme = localTheme;
+      } else if (serverTheme && isTheme(serverTheme) && serverTheme !== theme) {
+        setTheme(serverTheme);
+      }
+
+      if (publish.language !== undefined || publish.theme !== undefined) {
+        lastServer.current = {
+          language: publish.language ?? serverLanguage,
+          theme: publish.theme ?? serverTheme,
+        };
+        persist(publish);
+      }
+      return;
+    }
+
+    // The server value moved (another device, or an explicit save): adopt it.
+    if (serverLanguage && isLocale(serverLanguage) && serverLanguage !== locale) {
+      setLocale(serverLanguage);
+    }
+    if (serverTheme && isTheme(serverTheme) && serverTheme !== theme) {
+      setTheme(serverTheme);
+    }
+    // `locale`, `theme` and `persist` are deliberately NOT dependencies: this
+    // effect must only react to the user/server values, never to the local
+    // state it itself writes (that would re-enter and loop).
+  }, [userId, serverLanguage, serverTheme]);
+
+  return null;
 }

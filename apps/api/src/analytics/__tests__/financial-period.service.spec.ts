@@ -22,10 +22,27 @@ function createMockPrisma() {
     update: vi.fn(),
   };
 
-  // `getPeriodWithLock` uses the tagged-template form `tx.$queryRaw`...`, so the
+  // `getPeriodWithLock` uses the tagged-template form tx.$queryRaw`...`, so the
   // mock receives (strings, ...values) and resolves the same row the test
   // configured on `financialPeriod.findUnique`.
-  const $queryRaw = vi.fn().mockImplementation(async (_strings: unknown, organizationId: string, year: number, month: number) => {
+  // processRefund / PaymentsService.update also use tx.$queryRaw for
+  // `SELECT ... FROM "Payment" ... FOR UPDATE` — detect that form separately.
+  const $queryRaw = vi.fn().mockImplementation(async (strings: unknown, ...values: unknown[]) => {
+    const sql = Array.isArray(strings)
+      ? (strings as string[]).join('?')
+      : String(strings ?? '');
+    if (sql.includes('"Payment"')) {
+      const paymentId = values[0] as string;
+      return [
+        {
+          id: paymentId,
+          amount: 40,
+          status: 'PAID',
+          studentId: 's-1',
+        },
+      ];
+    }
+    const [organizationId, year, month] = values as [string, number, number];
     const row = await financialPeriod.findUnique({
       where: PERIOD_KEY(organizationId, year, month),
     });
@@ -39,7 +56,13 @@ function createMockPrisma() {
     $queryRaw,
     invoice: { findFirst: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     payment: { create: vi.fn(), update: vi.fn(), findFirst: vi.fn() },
-    refund: { create: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
+    refund: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      updateMany: vi.fn(),
+      aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 } }),
+    },
+    student: { update: vi.fn().mockResolvedValue({}) },
     receiptCounter: { upsert: vi.fn() },
   };
 

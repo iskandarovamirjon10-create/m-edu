@@ -41,6 +41,8 @@ export interface FaceRecognitionConfig {
     maxCandidates: number;
     /** Margin around threshold to consider a match uncertain */
     uncertainMargin: number;
+    /** Minimum margin between top-1 and top-2 candidate similarity to avoid ambiguous match */
+    minAmbiguityMargin: number;
   };
 
   /** Duplicate prevention */
@@ -77,6 +79,7 @@ export const DEFAULT_FACE_RECOGNITION_CONFIG: FaceRecognitionConfig = {
     minConfidence: 0.5,
     maxCandidates: 5,
     uncertainMargin: 0.05,
+    minAmbiguityMargin: 0.05,
   },
   duplicatePrevention: {
     windowMinutes: 5,
@@ -98,6 +101,8 @@ export interface RecognitionInput {
   livenessConfidence?: number;
   similarityScore: number | null;
   bestMatchFound: boolean;
+  /** Margin between top-1 and top-2 candidate similarity (top1 - top2) */
+  ambiguityMargin?: number | null;
 }
 
 export type RecognitionDecision =
@@ -193,6 +198,19 @@ export class RecognitionDecisionPolicy {
         outcome: 'UNCERTAIN',
         reason: 'SIMILARITY_UNCERTAIN',
         message: `Similarity score ${input.similarityScore.toFixed(3)} is near the threshold`,
+      };
+    }
+
+    // Step 5b: Top-1 vs Top-2 Ambiguity check
+    const minMargin = this.config.matching.minAmbiguityMargin ?? 0.05;
+    if (
+      typeof input.ambiguityMargin === 'number' &&
+      input.ambiguityMargin < minMargin
+    ) {
+      return {
+        outcome: 'UNCERTAIN',
+        reason: 'AMBIGUOUS_MATCH',
+        message: `Match is ambiguous: margin between top candidates (${input.ambiguityMargin.toFixed(3)}) is below required ${minMargin.toFixed(3)}`,
       };
     }
 

@@ -9,7 +9,7 @@ vi.mock('fs', async () => {
     existsSync: vi.fn().mockReturnValue(true),
     readFileSync: vi.fn((path) => {
       if (typeof path === 'string' && path.includes('test-rgb.png')) {
-        return actual.readFileSync(path);
+        return (actual as any).readFileSync(path);
       }
       return Buffer.from([]);
     }),

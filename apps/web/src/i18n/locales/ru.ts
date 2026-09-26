@@ -189,6 +189,29 @@ const ru = {
   'settings.confirmPassword': 'Подтвердите новый пароль',
   'settings.changePasswordAction': 'Сменить пароль',
   'settings.passwordChanged': 'Пароль успешно изменён',
+  'settings.telegram.title': 'Интеграция с Telegram',
+  'settings.telegram.subtitle': 'Получайте уведомления M-EDU в Telegram',
+  'settings.telegram.hint':
+    'Telegram — дополнительный канал уведомлений. Ваш аккаунт, роли и данные остаются на сервере M-EDU: отключение не влияет на аккаунт.',
+  'settings.telegram.stateActive': 'Подключён',
+  'settings.telegram.stateNotLinked': 'Не подключён',
+  'settings.telegram.stateDisconnected': 'Отключён',
+  'settings.telegram.stateBlocked': 'Заблокирован',
+  'settings.telegram.stateSuspended': 'Приостановлен',
+  'settings.telegram.blockedHint':
+    'Вы заблокировали бота или удалили чат. Нажмите «Подключить» и откройте ссылку снова.',
+  'settings.telegram.lastSeen': 'Последняя активность',
+  'settings.telegram.never': 'никогда',
+  'settings.telegram.connect': 'Подключить Telegram',
+  'settings.telegram.reconnect': 'Подключить снова',
+  'settings.telegram.disconnect': 'Отключить',
+  'settings.telegram.test': 'Отправить тестовое уведомление',
+  'settings.telegram.openLink': 'Откройте эту ссылку в Telegram, чтобы завершить подключение:',
+  'settings.telegram.linkReady': 'Ссылка для подключения создана',
+  'settings.telegram.linkExpires': 'Ссылка одноразовая и истекает {time}.',
+  'settings.telegram.disconnected': 'Telegram отключён',
+  'settings.telegram.testSent': 'Тестовое уведомление отправлено',
+  'settings.telegram.testFailed': 'Telegram недоступен для этого аккаунта',
 
   // Errors
   'error.network': 'Ошибка сети — проверьте подключение и попробуйте снова',
@@ -196,6 +219,22 @@ const ru = {
   'error.forbidden': 'У вас нет прав для этого действия',
   'error.notFound': 'Запрошенный ресурс не найден',
   'error.server': 'Ошибка сервера — попробуйте позже',
+  'homework.titleRequired': 'Title is required',
+  'exams.subjectRequired': 'Subject is required',
+  'exams.groupRequired': 'Group is required',
+  'exams.form.typeRequired': 'Type is required',
+  'exams.form.dateRequired': 'Date is required',
+  'exams.durationInvalid': 'Duration must be > 0',
+  'exams.totalMarksInvalid': 'Total marks must be > 0',
+  'exams.passingMarksInvalid': 'Passing marks must be > 0',
+  'exams.passingMarksTooHigh': 'Passing marks cannot exceed total',
+  'hr.form.validation.userIdRequired': 'User is required',
+  'hr.form.validation.employeeNumberRequired': 'Employee number is required',
+  'hr.form.validation.hireDateRequired': 'Hire date is required',
+  'hr.form.validation.contractTypeRequired': 'Contract type is required',
+  'hr.form.validation.positionRequired': 'Position is required',
+  'hr.form.validation.departmentRequired': 'Department is required',
+  'hr.form.validation.salaryInvalid': 'Salary is invalid',
 };
 
 import { legacyRu } from './legacy-slices.ru';
@@ -204,3 +243,4 @@ import { pagesRu } from './pages-slices.ru';
 
 // Legacy fills gaps → analytics fills more → curated base wins for overrides.
 export default { ...legacyRu, ...analyticsRu, ...pagesRu, ...ru };
+

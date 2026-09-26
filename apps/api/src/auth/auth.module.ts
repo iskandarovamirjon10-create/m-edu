@@ -9,6 +9,7 @@ import { GoogleStrategy } from './google.strategy';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ParentPortalModule } from '../parent-portal/parent-portal.module';
+import { authTtlSeconds } from './auth.ttl';
 
 @Module({
   imports: [
@@ -24,7 +25,10 @@ import { ParentPortalModule } from '../parent-portal/parent-portal.module';
         }
         return {
           secret,
-          signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '24h') },
+          // ONE duration source: authTtlMs() parses JWT_EXPIRES_IN in exactly
+          // one place and this converts it to the seconds jsonwebtoken wants.
+          // Session expiresAt and the cookie maxAge use the same parse.
+          signOptions: { expiresIn: authTtlSeconds() },
         };
       },
       inject: [ConfigService],

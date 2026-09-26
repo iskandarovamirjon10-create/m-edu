@@ -405,7 +405,7 @@ export class HremployeeService {
       throw new NotFoundException('Salary record not found or already processed');
     }
 
-    return this.prisma.salaryRecord.findUnique({ where: { id: recordId } });
+    return this.prisma.salaryRecord.findFirst({ where: { id: recordId, organizationId } });
   }
 
   async getPayrollSummary(organizationId: string, month: string) {

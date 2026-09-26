@@ -51,6 +51,10 @@ export class StudentQuery extends SearchQuery {
   @ApiPropertyOptional() @IsOptional() @IsString()
   groupId?: string;
 
+  /** Restrict to students taught by this teacher (Teaching roles). */
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  teacherId?: string;
+
   @ApiPropertyOptional() @IsOptional() @IsString()
   override isActive?: string;
 }
@@ -139,6 +143,10 @@ export class ScheduleQuery extends PaginationQuery {
   @ApiPropertyOptional() @IsOptional() @IsString()
   groupId?: string;
 
+  /** Restrict to lessons of the groups taught by this teacher. */
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  teacherId?: string;
+
   @ApiPropertyOptional() @IsOptional() @IsString()
   dayOfWeek?: string;
 }
@@ -146,6 +154,14 @@ export class ScheduleQuery extends PaginationQuery {
 export class AttendanceQuery extends PaginationQuery {
   @ApiPropertyOptional() @IsOptional() @IsString()
   groupId?: string;
+
+  /** Restrict to one student's records (used for self-service reads). */
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  studentId?: string;
+
+  /** Restrict to the groups taught by this teacher. */
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  teacherId?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsString()
   override status?: string;

@@ -22,8 +22,11 @@
 import * as net from 'net';
 import * as crypto from 'node:crypto';
 
+import { SecureLogger } from '@medu/face-security';
 import type { NetworkSecurity } from './network-security';
 import type { ConnectionTestResult, DiscoveredDevice } from './types';
+
+const logger = new SecureLogger('info');
 
 export interface ProviderConnectionParams {
   host: string;
@@ -428,8 +431,9 @@ export class RtspProvider {
   async testConnection(
     params: ProviderConnectionParams,
   ): Promise<ConnectionTestResult> {
+    let resolvedIp = params.host;
     try {
-      await this.networkSecurity.validateHost(params.host);
+      resolvedIp = await this.networkSecurity.validateHost(params.host);
     } catch (err) {
       return {
         success: false,
@@ -442,7 +446,7 @@ export class RtspProvider {
     const timeoutMs = params.timeoutMs ?? RTSP_TIMEOUT_MS_DEFAULT;
 
     // 1. TCP reachability
-    const tcp = await tcpProbe(params.host, params.port, timeoutMs);
+    const tcp = await tcpProbe(resolvedIp, params.port, timeoutMs);
     if (!tcp.ok) {
       return {
         success: false,
@@ -461,7 +465,7 @@ export class RtspProvider {
       params.streamPath ?? HIKVISION_FALLBACK_PATHS[0];
 
     const primary = await rtspDescribe(
-      params.host,
+      resolvedIp,
       params.port,
       primaryPath,
       timeoutMs,
@@ -578,7 +582,7 @@ export class RtspProvider {
       tried.add(candidate);
 
       const probe = await rtspDescribe(
-        params.host,
+      resolvedIp,
         params.port,
         candidate,
         timeoutMs,
@@ -658,8 +662,9 @@ export class OnvifProvider {
   async testConnection(
     params: ProviderConnectionParams,
   ): Promise<ConnectionTestResult> {
+    let resolvedIp = params.host;
     try {
-      await this.networkSecurity.validateHost(params.host);
+      resolvedIp = await this.networkSecurity.validateHost(params.host);
     } catch (err) {
       return {
         success: false,
@@ -669,7 +674,7 @@ export class OnvifProvider {
       };
     }
     const result = await tcpProbe(
-      params.host,
+      resolvedIp,
       params.port,
       params.timeoutMs ?? 5000,
     );
@@ -740,8 +745,12 @@ export class OnvifProvider {
             const url = new URL(xAddr.trim().split(/\s+/)[0]);
             host = url.hostname;
             port = Number(url.port) || 80;
-          } catch {
-            // fall back to rinfo
+          } catch (err: unknown) {
+            // Fall back to packet remote info; log safely without leaking unredacted URLs
+            logger.debug('ONVIF XAddr URL parsing failed; falling back to remote IP', {
+              remoteAddress: rinfo.address,
+              error: err instanceof Error ? err.message : 'Unknown error',
+            });
           }
           const key = `${host}:${port}`;
           if (!devices.has(key)) {
@@ -779,8 +788,12 @@ export class OnvifProvider {
               3702,
               subnet,
             );
-          } catch {
-            // ignore broadcast failures
+          } catch (err: unknown) {
+            // Directed subnet broadcast failure — log safely for diagnosis
+            logger.debug('ONVIF directed subnet broadcast failed', {
+              subnet,
+              error: err instanceof Error ? err.message : 'Unknown error',
+            });
           }
         }
       });

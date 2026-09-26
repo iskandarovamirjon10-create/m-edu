@@ -93,89 +93,17 @@ export class ImportExportService {
     return Buffer.from(csv, 'utf-8');
   }
 
-  async exportData(orgId: string, entityType: string, format: string): Promise<Buffer> {
-    const upper = entityType.toUpperCase();
-    const headers = TEMPLATES[upper];
-    if (!headers) throw new Error(`Unknown entity type: ${entityType}`);
-
-    const rows = await this.queryEntityForExport(orgId, upper);
-
-    if (format === 'xlsx' || format === 'excel') {
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet(upper);
-      
-      sheet.addRow(headers);
-      for (const row of rows) {
-        sheet.addRow(headers.map(h => row[h] || ''));
-      }
-      
-      const buffer = await workbook.xlsx.writeBuffer();
-      return Buffer.from(buffer);
-    }
-
-    if (format === 'pdf') {
-            const fonts = {
-        Roboto: {
-          normal: require.resolve('pdfmake/fonts/Roboto/Roboto-Regular.ttf'),
-          bold: require.resolve('pdfmake/fonts/Roboto/Roboto-Medium.ttf'),
-          italics: require.resolve('pdfmake/fonts/Roboto/Roboto-Italic.ttf'),
-          bolditalics: require.resolve('pdfmake/fonts/Roboto/Roboto-MediumItalic.ttf'),
-        },
-      };
-      // Case-sensitive package path: the installed file is js/Printer.js
-      // (capital P). Windows is case-insensitive; Linux/Docker is not.
-      const PdfPrinterReq = require('pdfmake/js/Printer');
-      const PdfPrinterClass = PdfPrinterReq.default || PdfPrinterReq;
-      const URLResolverReq = require('pdfmake/js/URLResolver');
-      const URLResolverClass = URLResolverReq.default || URLResolverReq;
-      const printer = new PdfPrinterClass(fonts, null, new URLResolverClass());
-      
-      const body = [headers];
-      for (const row of rows) {
-        body.push(headers.map(h => row[h] || ''));
-      }
-
-      const docDefinition = {
-        defaultStyle: { font: 'Roboto' },
-        content: [
-          { text: `${upper} Export`, style: 'header' },
-          {
-            table: {
-              headerRows: 1,
-              body,
-            }
-          }
-        ],
-        styles: {
-          header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] }
-        }
-      };
-
-      const pdfDoc = await printer.createPdfKitDocument(docDefinition as unknown as Record<string, unknown>);
-      return new Promise<Buffer>((resolve, reject) => {
-        const chunks: Buffer[] = [];
-        pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk));
-        pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
-        pdfDoc.on('error', reject);
-        pdfDoc.end();
-      });
-    }
-
-    return Buffer.from(toCsv(headers, rows), 'utf-8');
-  }
-
-  private async queryEntityForExport(orgId: string, entityType: string): Promise<CsvRow[]> {
-    const MAX_EXPORT_LIMIT = 50000;
+  async *streamEntityForExport(orgId: string, entityType: string): AsyncGenerator<CsvRow[]> {
     const CHUNK_SIZE = 5000;
-    const allRows: CsvRow[] = [];
-
+    const s = (val: any) => (val === null || val === undefined ? "" : String(val));
     const fetchChunk = async (skip: number) => {
       switch (entityType) {
-        case 'STUDENT': {
+        case "STUDENT": {
           const students = await this.prisma.student.findMany({
             where: { organizationId: orgId },
             include: { user: { select: { firstName: true, lastName: true, email: true, phone: true } } },
             take: CHUNK_SIZE,
+            orderBy: { id: 'asc' },
             skip,
           });
           return students.map(stu => ({
@@ -189,14 +117,15 @@ export class ImportExportService {
             parentName: s(stu.parentName),
             parentPhone: s(stu.parentPhone),
             enrollmentDate: s(stu.createdAt),
-            isActive: 'true',
+            isActive: "true",
           }));
         }
-        case 'TEACHER': {
+        case "TEACHER": {
           const teachers = await this.prisma.teacher.findMany({
             where: { organizationId: orgId },
             include: { user: { select: { firstName: true, lastName: true, email: true, phone: true } } },
             take: CHUNK_SIZE,
+            orderBy: { id: 'asc' },
             skip,
           });
           return teachers.map(t => ({
@@ -204,16 +133,17 @@ export class ImportExportService {
             lastName: s(t.user?.lastName),
             email: s(t.user?.email),
             phone: s(t.user?.phone),
-            specializations: s(t.specializations?.join('; ')),
+            specializations: s(t.specializations?.join("; ")),
             experience: s(t.experience),
             hourlyRate: s(t.hourlyRate),
             bio: s(t.bio),
           }));
         }
-        case 'GROUP': {
+        case "GROUP": {
           const groups = await this.prisma.group.findMany({ 
             where: { organizationId: orgId },
             take: CHUNK_SIZE,
+            orderBy: { id: 'asc' },
             skip,
           });
           return groups.map(g => ({
@@ -224,13 +154,14 @@ export class ImportExportService {
             room: s(g.room),
             startDate: s(g.startDate),
             endDate: s(g.endDate),
-            isActive: g.isActive ? 'true' : 'false',
+            isActive: g.isActive ? "true" : "false",
           }));
         }
-        case 'COURSE': {
+        case "COURSE": {
           const courses = await this.prisma.course.findMany({ 
             where: { organizationId: orgId },
             take: CHUNK_SIZE,
+            orderBy: { id: 'asc' },
             skip,
           });
           return courses.map(c => ({
@@ -239,14 +170,15 @@ export class ImportExportService {
             duration: s(c.duration),
             price: s(c.price),
             level: s(c.level),
-            isActive: c.isActive ? 'true' : 'false',
+            isActive: c.isActive ? "true" : "false",
           }));
         }
-        case 'PAYMENT': {
+        case "PAYMENT": {
           const payments = await this.prisma.payment.findMany({
             where: { organizationId: orgId },
             include: { student: { include: { user: { select: { firstName: true, lastName: true } } } } },
             take: CHUNK_SIZE,
+            orderBy: { id: 'asc' },
             skip,
           });
           return payments.map(p => ({
@@ -258,10 +190,11 @@ export class ImportExportService {
             description: s(p.description),
           }));
         }
-        case 'EMPLOYEE': {
+        case "EMPLOYEE": {
           const employees = await this.prisma.employee.findMany({ 
             where: { organizationId: orgId },
             take: CHUNK_SIZE,
+            orderBy: { id: 'asc' },
             skip,
           });
           return employees.map(e => ({
@@ -271,13 +204,14 @@ export class ImportExportService {
             hireDate: s(e.hireDate),
             salary: s(e.salary),
             contractType: s(e.contractType),
-            isActive: e.isActive ? 'true' : 'false',
+            isActive: e.isActive ? "true" : "false",
           }));
         }
-        case 'BOOK': {
+        case "BOOK": {
           const books = await this.prisma.libraryBook.findMany({ 
             where: { organizationId: orgId },
             take: CHUNK_SIZE,
+            orderBy: { id: 'asc' },
             skip,
           });
           return books.map(b => ({
@@ -290,10 +224,11 @@ export class ImportExportService {
             description: s(b.description),
           }));
         }
-        case 'LEAD': {
+        case "LEAD": {
           const leads = await this.prisma.lead.findMany({ 
             where: { organizationId: orgId },
             take: CHUNK_SIZE,
+            orderBy: { id: 'asc' },
             skip,
           });
           return leads.map(l => ({
@@ -314,25 +249,115 @@ export class ImportExportService {
     let skip = 0;
     while (true) {
       const chunk = await fetchChunk(skip);
-      // A short chunk means the source is exhausted; an empty one is the
-      // degenerate case of that. Both end the loop, so a page that returns
-      // fewer rows than requested can never spin the exporter forever.
-      if (chunk.length < CHUNK_SIZE) {
-        allRows.push(...chunk);
-        break;
-      }
-
-      allRows.push(...chunk);
+      if (chunk.length === 0) break;
+      yield chunk;
+      if (chunk.length < CHUNK_SIZE) break;
       skip += CHUNK_SIZE;
+    }
+  }
 
-      // Prevent OOM by capping maximum export rows
-      if (allRows.length >= MAX_EXPORT_LIMIT) {
-        break;
-      }
+  async exportDataStream(orgId: string, entityType: string, format: string, res: any): Promise<void> {
+    const upper = entityType.toUpperCase();
+    const headers = TEMPLATES[upper];
+    if (!headers) {
+      res.status(400).send("Unknown entity type: " + entityType);
+      return;
     }
 
-    return allRows;
-  }
-}
+    if (format === "xlsx" || format === "excel") {
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", "attachment; filename=\"" + entityType.toLowerCase() + "_export.xlsx\"");
+      
+      const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
+      const sheet = workbook.addWorksheet(upper);
+      
+      sheet.addRow(headers);
+      for await (const chunk of this.streamEntityForExport(orgId, upper)) {
+        for (const row of chunk) {
+          sheet.addRow(headers.map(h => row[h] || ""));
+        }
+        sheet.commit(); // Optional: clears memory for written rows
+      }
+      
+      await workbook.commit();
+      return;
+    }
 
+    if (format === "pdf") {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", "attachment; filename=\"" + entityType.toLowerCase() + "_export.pdf\"");
+
+      const fonts = {
+        NotoSans: {
+            normal: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf'),
+            bold: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf'),
+            italics: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf'),
+            bolditalics: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf'),
+          },
+      };
+
+      // pdfmake 0.3.x main export is the client API instance (createPdf),
+      // not the legacy PdfPrinter constructor.
+      const pdfmakeRaw = require("pdfmake");
+      const pdfmake = pdfmakeRaw.default ?? pdfmakeRaw;
+      pdfmake.setLocalAccessPolicy(() => true);
+      pdfmake.setUrlAccessPolicy(() => false);
+      pdfmake.setFonts(fonts);
+
+      const allRows: any[] = [];
+      for await (const chunk of this.streamEntityForExport(orgId, upper)) {
+        allRows.push(...chunk);
+        if (allRows.length > 5000) break; // Hard limit for PDF to avoid OOM
+      }
+
+      const tableBody: any[] = [];
+      tableBody.push(headers.map(h => ({ text: h, style: "tableHeader" })));
+      for (const row of allRows) {
+        tableBody.push(headers.map(h => row[h] || ""));
+      }
+
+      const docDefinition = {
+        pageOrientation: "landscape",
+        content: [
+          { text: entityType + " Export", style: "header" },
+          {
+            table: {
+              headerRows: 1,
+              body: tableBody,
+            },
+            layout: "lightHorizontalLines",
+          },
+        ],
+        styles: {
+          header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
+          tableHeader: { bold: true, fontSize: 13, color: "black" },
+        },
+        defaultStyle: { font: "NotoSans", fontSize: 8 },
+      };
+
+      const doc = pdfmake.createPdf(docDefinition);
+      const buffer: Buffer = await doc.getBuffer();
+      res.end(buffer);
+      return;
+    }
+
+    // Default to CSV stream
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=\"" + entityType.toLowerCase() + "_export.csv\"");
+    
+    // Write CSV header
+    res.write(headers.map(h => "\"" + h + "\"").join(",") + "\n");
+    
+    // Write chunks
+    for await (const chunk of this.streamEntityForExport(orgId, upper)) {
+      let csvData = "";
+      for (const row of chunk) {
+        csvData += headers.map(h => "\"" + String(row[h] || "").replace(/"/g, '""') + "\"").join(",") + "\n";
+      }
+      res.write(csvData);
+    }
+    res.end();
+  }
+
+}
 

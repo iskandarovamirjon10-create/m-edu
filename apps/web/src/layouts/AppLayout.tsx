@@ -7,10 +7,12 @@ import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { NotificationsMenu } from '@/components/NotificationsMenu';
+import { MeduLogo } from '@/components/brand/MeduLogo';
 import { CommandPalette } from '@/components/CommandPalette';
 import { AIAssistant } from '@/components/AIAssistant';
 import { LanguageSwitcher } from '@/i18n/LanguageSwitcher';
 import { useI18n } from '@/i18n/I18nProvider';
+import { usePersistSettings } from '@/hooks/usePersistSettings';
 import { initials, fullName } from '@/lib/format';
 import { useTheme } from '../hooks/useTheme';
 
@@ -132,17 +134,11 @@ const HIDDEN_FOR_STUDENT = new Set([
 function Brand({ size = 'md' }: { size?: 'sm' | 'md' }) {
   return (
     <Link to="/" className="flex items-center gap-2.5 no-underline group">
-      <span
-        className={[
-          'flex items-center justify-center rounded-xl font-bold text-white',
-          'bg-gradient-to-br from-brand-500 via-brand-700 to-brand-800',
-          'shadow-[0_4px_14px_rgba(84,115,252,0.30)]',
-          'transition-transform duration-300 group-hover:scale-105',
-          size === 'sm' ? 'h-8 w-8 text-sm' : 'h-9 w-9 text-base',
-        ].join(' ')}
-      >
-        M
-      </span>
+      <MeduLogo
+        size={size === 'sm' ? 'sm' : 'md'}
+        alt=""
+        className="transition-transform duration-300 group-hover:scale-105"
+      />
       <span
         className={[
           'font-bold tracking-tight text-[var(--text-primary)]',
@@ -218,11 +214,16 @@ function NavItems({ role, onNavigate }: { role: string; onNavigate?: () => void 
 function ThemeToggle() {
   const { setTheme, isDark } = useTheme();
   const { t } = useI18n();
+  const persist = usePersistSettings();
 
   const themeLabel = isDark ? t('a11y.switchToLight') : t('a11y.switchToDark');
 
   const toggle = () => {
-    setTheme(isDark ? 'light' : 'dark');
+    const next = isDark ? 'light' : 'dark';
+    setTheme(next);
+    // Theme is server-backed user data (`UserSettings.theme`), not device
+    // cache — publish it so the choice follows the account to other devices.
+    persist({ theme: next });
   };
 
   return (

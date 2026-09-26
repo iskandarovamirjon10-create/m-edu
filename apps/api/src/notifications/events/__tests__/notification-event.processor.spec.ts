@@ -19,7 +19,11 @@ describe('NotificationEventProcessor Idempotency', () => {
         upsert: vi.fn(),
       },
       notification: { create: vi.fn() },
-      student: { findUnique: vi.fn().mockResolvedValue({ userId: 'u-1', parentPhone: '+998901234567' }) },
+      user: { findFirst: vi.fn().mockResolvedValue(null) },
+      student: {
+        findUnique: vi.fn().mockResolvedValue({ userId: 'u-1', parentPhone: '+998901234567' }),
+        findFirst: vi.fn().mockResolvedValue({ userId: 'u-1', parentPhone: '+998901234567' }),
+      },
       parentStudent: { findMany: vi.fn().mockResolvedValue([]) },
     };
 
@@ -52,11 +56,36 @@ describe('NotificationEventProcessor Idempotency', () => {
       }),
     };
 
+    const mockTelegramDelivery = {
+      resolveActiveTargetsForPrincipals: vi.fn().mockResolvedValue(new Map()),
+      applyFailure: vi.fn().mockResolvedValue('PERMANENT'),
+    };
+    const mockDeliveries = {
+      ensureTracked: vi.fn().mockResolvedValue({ id: 'nd-1', alreadySent: false, attempts: 1 }),
+      markSent: vi.fn(),
+      markFailed: vi.fn(),
+      markSkipped: vi.fn(),
+      markDeferred: vi.fn(),
+    };
+    const mockPolicy = {
+      evaluate: vi.fn().mockResolvedValue({
+        enabled: true,
+        quietHoursActive: false,
+        deferredUntil: null,
+        reason: 'OK',
+        settingsAvailable: false,
+        timeZone: 'UTC',
+      }),
+    };
+
     processor = new NotificationEventProcessor(
       mockPrisma,
       mockSms,
       mockTelegram,
       mockDeadLetterQueue as unknown as Queue,
+      mockTelegramDelivery as never,
+      mockDeliveries as never,
+      mockPolicy as never,
     );
 
     // Override the getRedis method directly for testing
@@ -145,6 +174,26 @@ describe('NotificationEventProcessor Idempotency', () => {
 
     expect(mockSms.sendSms).toHaveBeenCalledWith(expect.any(String), expect.any(String), 'org-1');
     expect(mockSms.sendSms).toHaveBeenCalledWith(expect.any(String), expect.any(String), 'org-2');
+  });
+
+  it('7. resolves students and parents ONLY inside the event tenant', async () => {
+    const job = createJob('job-7', {});
+    await processor.process(job);
+
+    expect(mockPrisma.student.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 's-1', organizationId: 'org-1' }),
+      }),
+    );
+    expect(mockPrisma.parentStudent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          studentId: 's-1',
+          student: { organizationId: 'org-1' },
+          parent: expect.objectContaining({ organizationId: 'org-1' }),
+        }),
+      }),
+    );
   });
 
   it('DLQ uses a distinct queue name from the source queue (no retry loop)', async () => {

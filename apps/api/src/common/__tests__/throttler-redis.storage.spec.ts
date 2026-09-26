@@ -80,4 +80,24 @@ describe('ResilientRedisThrottlerStorage', () => {
     expect(record.totalHits).toBe(1);
     expect((storage as unknown as { isRedisConnected: boolean }).isRedisConnected).toBe(false);
   });
+
+  it('bounds memory storage capacity and evicts oldest entries', async () => {
+    const origMax = ResilientRedisThrottlerStorage.MAX_MEMORY_ENTRIES;
+    (ResilientRedisThrottlerStorage as any).MAX_MEMORY_ENTRIES = 5;
+
+    try {
+      for (let i = 1; i <= 6; i++) {
+        await storage.increment(`key-${i}`, 60000, 10, 60000, 'default');
+      }
+
+      const map = (storage as any).memoryStorage as Map<string, unknown>;
+      expect(map.size).toBeLessThanOrEqual(5);
+      // key-1 should have been evicted
+      expect(map.has('throttler:default:key-1')).toBe(false);
+      // key-6 must be present
+      expect(map.has('throttler:default:key-6')).toBe(true);
+    } finally {
+      (ResilientRedisThrottlerStorage as any).MAX_MEMORY_ENTRIES = origMax;
+    }
+  });
 });

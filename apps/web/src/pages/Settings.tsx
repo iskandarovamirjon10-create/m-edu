@@ -13,9 +13,11 @@ import {
   GlassButton,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { TelegramIntegration } from '@/components/TelegramIntegration';
 import type { Organization, User } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useTheme, type Theme } from '@/hooks/useTheme';
+import { usePersistSettings } from '@/hooks/usePersistSettings';
 import { useI18n, isLocale } from '@/i18n/I18nProvider';
 
 interface OrgFormState {
@@ -143,6 +145,14 @@ function GlassPanel({
 function ThemeSwitcher() {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
+  const persist = usePersistSettings();
+
+  const choose = (next: Theme) => {
+    setTheme(next);
+    // Theme is server-backed user data, not device cache: publish it so the
+    // same account comes back in the same theme on another browser/device.
+    persist({ theme: next });
+  };
 
   const options: { value: Theme; label: string; icon: ReactNode }[] = [
     {
@@ -194,7 +204,7 @@ function ThemeSwitcher() {
             type="button"
             role="radio"
             aria-checked={active}
-            onClick={() => setTheme(opt.value)}
+            onClick={() => choose(opt.value)}
             className="flex flex-col items-center gap-1.5 py-3 px-3 rounded-xl transition-all duration-200"
             style={{
               background: active
@@ -437,6 +447,12 @@ export function SettingsPage() {
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   );
+  const telegramIcon = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.5 3.5 2.8 10.6l5.2 1.6 1.6 5.2 3-3.6 4.9 3.4z" />
+      <path d="M8 12.2 16.9 6.4l-5 8.2" />
+    </svg>
+  );
   /* ── Loading ────────────────────────────────────────────────────────── */
   if (isAdmin && org.isLoading && !org.data) {
     return (
@@ -496,6 +512,15 @@ export function SettingsPage() {
             </p>
             <ThemeSwitcher />
           </div>
+        </GlassPanel>
+
+        {/* ── Integrations: Telegram (self-service for every role) ──────── */}
+        <GlassPanel
+          title={t('settings.telegram.title')}
+          subtitle={t('settings.telegram.subtitle')}
+          icon={telegramIcon}
+        >
+          <TelegramIntegration />
         </GlassPanel>
 
         {/* ── Organization ──────────────────────────────────────────────── */}

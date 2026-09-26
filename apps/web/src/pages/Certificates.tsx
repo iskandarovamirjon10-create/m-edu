@@ -1,3 +1,4 @@
+import { formatDate } from '../lib/format';
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { certificatesApi, coursesApi, studentsApi } from '@/lib/api';
@@ -464,7 +465,7 @@ export function CertificatesPage() {
                           {cert.verificationCode}
                         </code>
                       </TD>
-                      <TD>{cert.issueDate ? new Date(cert.issueDate).toLocaleDateString() : '—'}</TD>
+                      <TD>{cert.issueDate ? formatDate(cert.issueDate) : '—'}</TD>
                       <TD>
                         <GlassButton
                           onClick={() => downloadCertificate.mutate(cert.id)}
@@ -531,7 +532,7 @@ export function CertificatesPage() {
                           </GlassButton>
                         )}
                       </TD>
-                      <TD>{tpl.createdAt ? new Date(tpl.createdAt).toLocaleDateString() : '—'}</TD>
+                      <TD>{tpl.createdAt ? formatDate(tpl.createdAt) : '—'}</TD>
                       <TD>
                         <div className="flex gap-2">
                           <GlassButton

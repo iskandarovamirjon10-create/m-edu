@@ -1,4 +1,4 @@
-﻿import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
+import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
@@ -18,6 +18,7 @@ import { ExpensesModule } from './expenses/expenses.module';
 import { LeadsModule } from './leads/leads.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { TelegramModule } from './telegram/telegram.module';
 import { GradesModule } from './grades/grades.module';
 import { HomeworkModule } from './homework/homework.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -38,6 +39,7 @@ import { SearchModule } from './search/search.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { DocumentsModule } from './documents/documents.module';
 import { DataQualityModule } from './data-quality/data-quality.module';
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { EarlyWarningModule } from './early-warning/early-warning.module';
 import { AcademicRiskModule } from './academic-risk/academic-risk.module';
 import { TeacherWorkloadModule } from './teacher-workload/teacher-workload.module';
@@ -64,13 +66,14 @@ import { PerformanceModule } from './performance/performance.module';
 import { ResilientRedisThrottlerStorage } from './common/guards/throttler-redis.storage';
 import { isRedisEnabled, redisQueueConnection } from './config/redis.config';
 
-// @ts-ignore – @nestjs/bullmq is ESM-only; resolved at runtime via monorepo hoisting
+// @ts-ignore � @nestjs/bullmq is ESM-only; resolved at runtime via monorepo hoisting
 const { BullModule } = require('@nestjs/bullmq');
 
 const redisEnabled = isRedisEnabled();
 
 @Module({
   imports: [
+    PrometheusModule.register(),
     ConfigModule.forRoot({ isGlobal: true }),
     NestScheduleModule.forRoot(),
     // Central BullMQ connection for every registerQueue() below.
@@ -111,6 +114,7 @@ const redisEnabled = isRedisEnabled();
     LeadsModule,
     OrganizationsModule,
     NotificationsModule,
+    TelegramModule,
     GradesModule,
     HomeworkModule,
     DashboardModule,
@@ -157,7 +161,7 @@ const redisEnabled = isRedisEnabled();
   ],
   providers: [
     // Apply rate limiting to every HTTP endpoint. Per-endpoint overrides use
-    // @Throttle({ default: { limit, ttl } }) — e.g. auth (login/register) and
+    // @Throttle({ default: { limit, ttl } }) � e.g. auth (login/register) and
     // face capture/attempt endpoints are tightened well below the 100/min
     // default (see auth.controller.ts and face.controller.ts).
     { provide: APP_GUARD, useClass: ThrottlerGuard },
@@ -170,3 +174,4 @@ export class AppModule {
       .forRoutes({ path: '*', method: RequestMethod.ALL });
   }
 }
+

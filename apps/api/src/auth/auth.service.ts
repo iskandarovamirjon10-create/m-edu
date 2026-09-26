@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -12,11 +14,34 @@ import * as bcrypt from 'bcryptjs';
 import { randomBytes, createHash } from 'crypto';
 import * as nodemailer from 'nodemailer';
 import { BootstrapDto, RegisterDto } from './dto';
+import { isPrivilegedRole } from './authorization.policy';
+import { escapeHtml, isPrismaUniqueError, normalizeEmail, resolveFrontendUrl } from './auth.utils';
+import { authTtlMs } from './auth.ttl';
+import { resolveBcryptRounds, PASSWORD_RESET_GENERIC_MESSAGE, PASSWORD_RESET_TTL_MS } from './auth.config';
+
+/**
+ * May a passwordless M-EDU account be linked to a Google identity purely on
+ * the strength of a Google-verified email match? (Account-linking policy
+ * P0-2 — see `authorization.policy.ts` and the `User.googleLinkAllowed`
+ * column.)
+ *
+ *  - Privileged roles (staff/admin) are NEVER auto-linked: a shared or
+ *    mistyped mailbox must not silently become a teacher/admin login.
+ *  - Every other role requires the account model's explicit opt-in flag.
+ *
+ * Accounts that already carry a password are refused earlier — this helper
+ * only decides the passwordless case. Returning `false` never merges
+ * identities; the caller answers with an actionable 409.
+ */
+export function canAutoLink(role: string | null | undefined, googleLinkAllowed: boolean): boolean {
+  if (isPrivilegedRole(role)) return false;
+  return googleLinkAllowed === true;
+}
 
 
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit, OnModuleDestroy {
 
   private readonly AUTH_CODE_TTL_MS = 5 * 60 * 1000;
   private readonly CLEANUP_INTERVAL_MS = Number(process.env.SESSION_PURGE_INTERVAL_MS) || 60 * 1000;
@@ -24,9 +49,18 @@ export class AuthService {
   // on the next cleanup tick. Operators can keep a short audit trail with
   // SESSION_RETENTION_HOURS (e.g. "24").
   private readonly SESSION_RETENTION_HOURS = Number(process.env.SESSION_RETENTION_HOURS) || 0;
+  // Validated at construction: an out-of-range value fails boot loudly rather
+  // than silently minting weak hashes.
+  private readonly BCRYPT_ROUNDS = resolveBcryptRounds();
 
   private readonly logger = new SecureLogger('info');
   private smtpTransporter: nodemailer.Transporter | null = null;
+
+  /**
+   * The single purge timer. Held as a field (not a constructor local) so it
+   * can be released deterministically on shutdown — see `onModuleDestroy`.
+   */
+  private cleanupTimer: NodeJS.Timeout | undefined;
 
   private getSmtpTransporter(): nodemailer.Transporter {
     if (this.smtpTransporter) return this.smtpTransporter;
@@ -46,13 +80,35 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-  ) {
-    const timer = setInterval(() => this.cleanupExpiredEntries(), this.CLEANUP_INTERVAL_MS);
+  ) {}
+
+  /**
+   * Start exactly one background purge timer.
+   *
+   * Deliberately NOT done in the constructor: unit tests construct
+   * `new AuthService(...)` directly and never run the Nest lifecycle, so a
+   * constructor timer would leak an open handle in every spec file.
+   */
+  onModuleInit(): void {
+    if (this.cleanupTimer) return; // idempotent — never a second timer
+    const timer = setInterval(() => {
+      void this.cleanupExpiredEntries();
+    }, this.CLEANUP_INTERVAL_MS);
+    // Do not hold the event loop open; a pending purge must not block shutdown.
     timer.unref?.();
+    this.cleanupTimer = timer;
+  }
+
+  /** Release the purge timer so no handle survives application shutdown. */
+  onModuleDestroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
   }
 
   private getFrontendUrl(): string {
-    return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    return resolveFrontendUrl();
   }
 
   private generateSecureToken(bytes = 32): string {
@@ -61,20 +117,42 @@ export class AuthService {
 
   // ==================== Auth code exchange (CSRF-safe) ====================
 
+  /**
+   * Create the single-use code that hands the OAuth result to the SPA.
+   *
+   * The code itself is 256-bit random and carries no claim. What is persisted
+   * is the SESSION id of the session `issueToken` just created — never the
+   * signed JWT. A token stored in a table is a usable credential for its whole
+   * lifetime regardless of when the row is purged; a session id is not: it is
+   * useless without the signing key, and it stays revocable through the normal
+   * `Session` lifecycle.
+   */
   async generateAuthCode(accessToken: string, userId: string): Promise<string> {
     const code = this.generateSecureToken();
     const expiresAt = new Date(Date.now() + this.AUTH_CODE_TTL_MS);
+    const sessionId = this.extractSessionId(accessToken);
 
     await this.prisma.authorizationCode.create({
       data: {
         code,
-        accessToken,
+        sessionId,
         userId,
         expiresAt,
       },
     });
 
     return code;
+  }
+
+  /** `sid` claim of an M-EDU JWT, or null when the token is not ours. */
+  private extractSessionId(accessToken: string): string | null {
+    try {
+      const payload = this.jwtService.decode(accessToken) as { sid?: unknown } | null;
+      const sid = payload && typeof payload === 'object' ? payload.sid : null;
+      return typeof sid === 'string' && sid.length > 0 ? sid : null;
+    } catch {
+      return null;
+    }
   }
 
   async exchangeAuthCode(code: string): Promise<string> {
@@ -93,12 +171,60 @@ export class AuthService {
       throw new BadRequestException('Authorization code has expired');
     }
 
-    await this.prisma.authorizationCode.update({
-      where: { id: entry.id },
+    // A code must be redeemable exactly ONCE. A separate read-then-write would
+    // let two concurrent exchanges both observe `usedAt = null` and both walk
+    // away with a session; the guarded update makes the loser fail closed.
+    const claimed = await this.prisma.authorizationCode.updateMany({
+      where: { id: entry.id, usedAt: null },
       data: { usedAt: new Date() },
     });
+    if (claimed.count !== 1) {
+      throw new BadRequestException('Authorization code has already been used');
+    }
 
-    return entry.accessToken;
+    // Never mint a session for an account that was deactivated or deleted
+    // between the OAuth callback and the exchange.
+    const user = await this.prisma.user.findUnique({
+      where: { id: entry.userId },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        organizationId: true,
+        isActive: true,
+      },
+    });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Account is deactivated');
+    }
+
+    // Preferred path: re-sign a token for the session pre-created at callback.
+    if (entry.sessionId) {
+      const session = await this.prisma.session.findUnique({
+        where: { id: entry.sessionId },
+        select: { id: true, revokedAt: true, expiresAt: true, userId: true },
+      });
+      if (
+        session &&
+        session.userId === user.id &&
+        !session.revokedAt &&
+        session.expiresAt > new Date()
+      ) {
+        return this.jwtService.sign({
+          sub: user.id,
+          email: user.email,
+          role: user.role,
+          organizationId: user.organizationId,
+          sid: session.id,
+        });
+      }
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    // Legacy rows created before session binding still carry their token.
+    if (entry.accessToken) return entry.accessToken;
+
+    throw new BadRequestException('Invalid or expired authorization code');
   }
 
   async cleanupExpiredEntries() {
@@ -154,7 +280,7 @@ export class AuthService {
     // findFirst scan. Deactivation is checked explicitly to keep the same
     // outward behaviour (uniform "Invalid credentials" for inactive accounts).
     const user = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: normalizeEmail(email) },
       include: { organization: true },
     });
 
@@ -179,34 +305,42 @@ export class AuthService {
   }
 
   async register(data: RegisterDto): Promise<{ accessToken: string; user: TokenUser }> {
-    
+    const email = normalizeEmail(data.email);
+    const passwordHash = await bcrypt.hash(data.password, this.BCRYPT_ROUNDS);
 
-    const passwordHash = await bcrypt.hash(data.password, 10);
+    let result;
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+        const organization = await tx.organization.create({
+          data: {
+            name: data.organizationName,
+            email,
+            phone: data.phone,
+          },
+        });
 
-    let result; try { result = await this.prisma.$transaction(async (tx) => {
-      const organization = await tx.organization.create({
-        data: {
-          name: data.organizationName,
-          email: data.email.toLowerCase().trim(),
-          phone: data.phone,
-        },
+        const user = await tx.user.create({
+          data: {
+            organizationId: organization.id,
+            email,
+            passwordHash,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            phone: data.phone,
+            role: 'ORG_ADMIN',
+            lastLoginAt: new Date(),
+          },
+          include: { organization: true },
+        });
+
+        return { user, organization };
       });
-
-      const user = await tx.user.create({
-        data: {
-          organizationId: organization.id,
-          email: data.email.toLowerCase().trim(),
-          passwordHash,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          phone: data.phone,
-          role: 'ORG_ADMIN',
-          lastLoginAt: new Date(),
-        },
-        include: { organization: true },
-      });
-
-      return { user, organization }; }); } catch (error: any) { if (error.code === 'P2002') { throw new ConflictException('Email already registered'); } throw error; }
+    } catch (error: unknown) {
+      if (isPrismaUniqueError(error)) {
+        throw new ConflictException('Email already registered');
+      }
+      throw error;
+    }
 
     // Issue a tracked session (sid in JWT) so the token can be revoked on logout.
     return await this.issueToken(result.user);
@@ -223,7 +357,7 @@ export class AuthService {
    * reach admin control.
    *
    * Security model:
-   *  - Locked forever once ANY SUPER_ADMIN exists (active or not) Ã¢â‚¬â€ a
+   *  - Locked forever once ANY SUPER_ADMIN exists (active or not) — a
    *    deactivated platform admin must be restored via ops, not re-booted.
    *  - Serialized with a Postgres advisory lock so two concurrent bootstrap
    *    requests cannot both pass the zero-SUPER_ADMIN check.
@@ -239,39 +373,49 @@ export class AuthService {
 
     
 
-    const passwordHash = await bcrypt.hash(data.password, 10);
+    const email = normalizeEmail(data.email);
+    const passwordHash = await bcrypt.hash(data.password, this.BCRYPT_ROUNDS);
 
-    let result; try { result = await this.prisma.$transaction(async (tx) => {
-      // Serialize concurrent first-bootstraps (advisory lock, per-connection).
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('medu_platform_bootstrap'))`;
-      const recheck = await tx.user.count({ where: { role: 'SUPER_ADMIN' } });
-      if (recheck > 0) {
-        throw new ConflictException('Platform is already bootstrapped');
+    let result;
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+        // Serialize concurrent first-bootstraps (advisory lock, per-connection).
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('medu_platform_bootstrap'))`;
+        const recheck = await tx.user.count({ where: { role: 'SUPER_ADMIN' } });
+        if (recheck > 0) {
+          throw new ConflictException('Platform is already bootstrapped');
+        }
+
+        const organization = await tx.organization.create({
+          data: {
+            name: data.organizationName,
+            email,
+            phone: data.phone,
+          },
+        });
+
+        const user = await tx.user.create({
+          data: {
+            organizationId: organization.id,
+            email,
+            passwordHash,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            phone: data.phone,
+            role: 'SUPER_ADMIN',
+            lastLoginAt: new Date(),
+          },
+          include: { organization: true },
+        });
+
+        return { user, organization };
+      });
+    } catch (error: unknown) {
+      if (isPrismaUniqueError(error)) {
+        throw new ConflictException('Email already registered');
       }
-
-      const organization = await tx.organization.create({
-        data: {
-          name: data.organizationName,
-          email: data.email.toLowerCase().trim(),
-          phone: data.phone,
-        },
-      });
-
-      const user = await tx.user.create({
-        data: {
-          organizationId: organization.id,
-          email: data.email.toLowerCase().trim(),
-          passwordHash,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          phone: data.phone,
-          role: 'SUPER_ADMIN',
-          lastLoginAt: new Date(),
-        },
-        include: { organization: true },
-      });
-
-      return { user, organization }; }); } catch (error: any) { if (error.code === 'P2002') { throw new ConflictException('Email already registered'); } throw error; }
+      throw error;
+    }
 
     return await this.issueToken(result.user);
   }
@@ -292,20 +436,25 @@ export class AuthService {
    *
    * Account linking rules (never merge on email string match alone):
    *   1. Same googleSubject            -> login (established link).
-   *   2. Same verified email, existing
-   *      account has NO passwordHash   -> link Google identity to it. Such
-   *      accounts were themselves created via Google or are passwordless,
-   *      and Google verified email ownership.
+   *   2. Same verified email           -> link ONLY when the account model
+   *      explicitly permits auto-linking (`canAutoLink`); otherwise 409 with
+   *      an actionable message.
    *   3. Same verified email, existing
    *      account HAS a passwordHash    -> 409, NO auto-merge. An attacker
    *      could register an unverified local row with the victim's email;
-   *      auto-linking would confuse identities. User must sign in locally
-   *      and connect Google explicitly.
+   *      auto-linking would confuse identities.
    *   4. No match                      -> create a new org + ORG_ADMIN.
    *
-   * Inactive accounts are rejected at this layer (fail closed Ã¢â‚¬â€ no token).
+   * Duplicate protection: steps 2-4 race with a concurrent first login for
+   * the SAME Google identity from another device. `User.googleSubject` and
+   * `User.email` are unique, so exactly one transaction can win; the loser
+   * gets a P2002 and is re-resolved onto the winner's row instead of
+   * erroring out. One Google identity therefore always converges on exactly
+   * one M-EDU User (see the retry loop in `googleLogin`).
+   *
+   * Inactive accounts are rejected at this layer (fail closed — no token).
    */
-  async googleLogin(googleUser: GoogleProfile) {
+  async googleLogin(googleUser: GoogleProfile): Promise<{ accessToken: string; user: TokenUser }> {
     if (!googleUser.googleSubject || typeof googleUser.googleSubject !== 'string') {
       throw new BadRequestException('Invalid Google identity: missing subject ID');
     }
@@ -315,8 +464,27 @@ export class AuthService {
     if (googleUser.emailVerified !== true) {
       throw new UnauthorizedException('Google email must be verified');
     }
-    const email = googleUser.email.toLowerCase().trim();
+    const email = normalizeEmail(googleUser.email);
 
+    // A first-time login can lose the unique-index race to a concurrent
+    // first login of the SAME Google identity on another device. Retry: once
+    // the winner's row exists, the retry resolves onto it (rule 1) instead of
+    // failing — one Google identity always converges on one M-EDU User.
+    const MAX_RACE_RETRIES = 3;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.googleLoginOnce(googleUser, email);
+      } catch (error: unknown) {
+        if (!isPrismaUniqueError(error) || attempt >= MAX_RACE_RETRIES) throw error;
+      }
+    }
+  }
+
+  /** Single attempt at the Google login policy documented above. */
+  private async googleLoginOnce(
+    googleUser: GoogleProfile,
+    email: string,
+  ): Promise<{ accessToken: string; user: TokenUser }> {
     // 1) Established identity: same Google subject -> login.
     const bySubject = await this.prisma.user.findUnique({
       where: { googleSubject: googleUser.googleSubject },
@@ -339,10 +507,10 @@ export class AuthService {
     }
 
     // 2) Email match -> account-linking policy (rules 2 and 3 above).
-    const byEmail = await this.prisma.user.findFirst({
+    //    `User.email` is globally unique, so there is exactly one candidate.
+    const byEmail = await this.prisma.user.findUnique({
       where: { email },
       include: { organization: true },
-      orderBy: { createdAt: 'desc' },
     });
 
     if (byEmail) {
@@ -351,10 +519,15 @@ export class AuthService {
       }
       if (byEmail.passwordHash) {
         throw new ConflictException(
-          'An account with this email already exists. Please sign in with your email and password, then connect your Google account in Settings.',
+          'An account with this email already exists. Please sign in with your email and password.',
         );
       }
-      // Passwordless account -> safe to link (Google verified the email).
+      if (!canAutoLink(byEmail.role, byEmail.googleLinkAllowed)) {
+        throw new ConflictException(
+          'Google sign-in is not enabled for this account. Ask your administrator to enable Google sign-in or to set a password for this account.',
+        );
+      }
+
       const linked = await this.prisma.user.update({
         where: { id: byEmail.id },
         data: {
@@ -375,7 +548,12 @@ export class AuthService {
       'My Education Center';
     const orgName = `${displayName}'s Education Center`;
 
-    let result; try { result = await this.prisma.$transaction(async (tx) => {
+    // A P2002 here means a concurrent first login for the same Google
+    // identity (or a concurrent local registration for the same email) won
+    // the unique-index race. It is deliberately NOT translated into a 409:
+    // the caller retries `googleLoginOnce`, which now resolves onto the
+    // winner's row. Only an unrelated unique violation may surface.
+    const result = await this.prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({
         data: {
           name: orgName,
@@ -383,7 +561,7 @@ export class AuthService {
         },
       });
 
-      const newUser = await tx.user.create({
+      return await tx.user.create({
         data: {
           organizationId: organization.id,
           email,
@@ -399,15 +577,7 @@ export class AuthService {
         },
         include: { organization: true },
       });
-
-      return newUser;
     });
-    } catch (e: any) {
-      if (e?.code === 'P2002') {
-        throw new ConflictException('An account with this email already exists.');
-      }
-      throw e;
-    }
 
     return await this.issueToken(result);
   }
@@ -417,7 +587,7 @@ export class AuthService {
       data: {
         userId: user.id,
         organizationId: user.organizationId,
-        expiresAt: new Date(Date.now() + this.sessionTtlMs()),
+        expiresAt: new Date(Date.now() + authTtlMs()),
       },
     });
 
@@ -482,7 +652,7 @@ export class AuthService {
       data: {
         parentId: parent.parentId,
         organizationId: parent.organizationId,
-        expiresAt: new Date(Date.now() + this.sessionTtlMs()),
+        expiresAt: new Date(Date.now() + authTtlMs()),
       },
     });
 
@@ -497,28 +667,8 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
-
-  /**
-   * Session lifetime in ms, derived from JWT_EXPIRES_IN so the DB session
-   * row and the JWT always expire together. Supports plain milliseconds
-   * ("86400000") or unit suffixes ("24h", "30m", "7d", "900s"). Falls back
-   * to 24h when unset or unparseable (matches the historical default).
-   */
-  private sessionTtlMs(): number {
-    const raw = process.env.JWT_EXPIRES_IN;
-    if (!raw) return 24 * 60 * 60 * 1000;
-    const m = /^(\d+)\s*(ms|s|m|h|d)?$/i.exec(raw.trim());
-    if (!m) return 24 * 60 * 60 * 1000;
-    const value = parseInt(m[1], 10);
-    const unit = (m[2] || 'ms').toLowerCase();
-    const mult: Record<string, number> = { ms: 1, s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
-    const ttl = value * mult[unit];
-    // Guard against absurd values (negative / zero / > 365 days).
-    if (!Number.isFinite(ttl) || ttl <= 0 || ttl > 365 * 86_400_000) {
-      return 24 * 60 * 60 * 1000;
-    }
-    return ttl;
-  }
+  // Session lifetime lives in `auth.ttl.ts` (authTtlMs) so the JWT, the
+  // session row and the cookie can never drift apart.
 
   // ==================== Sessions ====================
 
@@ -550,7 +700,44 @@ export class AuthService {
     }
   }
 
-  async refreshToken(userId: string, currentSessionId?: string): Promise<{ accessToken: string; user: TokenUser }> {
+  /**
+   * Rotate a presented session into a freshly minted one.
+   *
+   * SESSION-TYPE DISPATCH is explicit — the table is chosen by the token's
+   * role claim, never by guessing which table might contain the id:
+   *
+   *   USER   (role !== 'PARENT'):
+   *     sid -> Session        -> User         -> organization/role -> issue token
+   *   PARENT (role === 'PARENT'):
+   *     sid -> ParentSession  -> ParentAccount -> organization     -> issue parent token
+   *
+   * Each branch queries exactly ONE table and binds the session on its owning
+   * id (userId / parentId) AND organizationId. A parent session id can
+   * therefore never resolve through `Session`, a user session id can never
+   * resolve through `ParentSession`, and a row owned by another principal or
+   * another tenant fails closed with 401.
+   *
+   * ROTATION / REPLAY: the presented session is revoked (`token_refresh`)
+   * before the replacement is issued, so refreshing once invalidates the JWT
+   * that performed the refresh. Replaying that JWT afterwards is rejected
+   * twice over — by JwtStrategy (revoked row) and here (no live session).
+   */
+  async refreshToken(
+    userId: string,
+    currentSessionId?: string,
+    role?: string,
+  ): Promise<{ accessToken: string; user: TokenUser }> {
+    if (role === 'PARENT') {
+      return this.refreshParentToken(userId, currentSessionId);
+    }
+    return this.refreshUserToken(userId, currentSessionId);
+  }
+
+  /** USER branch: sid -> Session -> User -> new Session + JWT. */
+  private async refreshUserToken(
+    userId: string,
+    currentSessionId?: string,
+  ): Promise<{ accessToken: string; user: TokenUser }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { organization: true },
@@ -561,16 +748,123 @@ export class AuthService {
     }
 
     if (currentSessionId) {
+      const live = await this.prisma.session.findFirst({
+        where: {
+          id: currentSessionId,
+          userId: user.id,
+          organizationId: user.organizationId,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true },
+      });
+      if (!live) {
+        throw new UnauthorizedException('Session is invalid or expired');
+      }
+
+      // Rotate: revoke exactly the session that presented this token.
       await this.prisma.session.updateMany({
-        where: { id: currentSessionId, revokedAt: null },
-        data: { revokedAt: new Date() },
+        where: { id: live.id, userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'token_refresh' },
       });
     }
 
-    return await this.issueToken(user);
+    return this.issueToken(user);
   }
 
-  async getMe(userId: string): Promise<GetMeResponse> {
+  /** PARENT branch: sid -> ParentSession -> ParentAccount -> new session + JWT. */
+  private async refreshParentToken(
+    parentId: string,
+    currentSessionId?: string,
+  ): Promise<{ accessToken: string; user: TokenUser }> {
+    const parent = await this.prisma.parentAccount.findUnique({
+      where: { id: parentId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        organizationId: true,
+        isActive: true,
+      },
+    });
+
+    if (!parent || !parent.isActive) {
+      throw new UnauthorizedException('Parent account not found or inactive');
+    }
+
+    if (currentSessionId) {
+      const live = await this.prisma.parentSession.findFirst({
+        where: {
+          id: currentSessionId,
+          parentId: parent.id,
+          organizationId: parent.organizationId,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true },
+      });
+      if (!live) {
+        throw new UnauthorizedException('Session is invalid or expired');
+      }
+
+      await this.prisma.parentSession.updateMany({
+        where: { id: live.id, parentId: parent.id, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'token_refresh' },
+      });
+    }
+
+    const accessToken = await this.issueParentToken({
+      parentId: parent.id,
+      organizationId: parent.organizationId,
+      email: parent.email,
+      firstName: parent.firstName,
+      lastName: parent.lastName,
+    });
+
+    return {
+      accessToken,
+      user: {
+        id: parent.id,
+        email: parent.email,
+        firstName: parent.firstName,
+        lastName: parent.lastName,
+        role: 'PARENT',
+        organizationId: parent.organizationId,
+      },
+    };
+  }
+
+  async getMe(userId: string, role?: string): Promise<GetMeResponse> {
+    if (role === 'PARENT') {
+      const parent = await this.prisma.parentAccount.findUnique({
+        where: { id: userId },
+        include: {
+          organization: {
+            select: { id: true, name: true },
+          },
+        },
+      });
+
+      if (!parent || !parent.isActive) {
+        throw new UnauthorizedException('Parent account not found or deactivated');
+      }
+
+      return {
+        id: parent.id,
+        email: parent.email,
+        firstName: parent.firstName,
+        lastName: parent.lastName,
+        phone: parent.phone,
+        avatar: null,
+        role: 'PARENT',
+        organizationId: parent.organizationId,
+        lastLoginAt: parent.lastLoginAt,
+        organization: parent.organization,
+        settings: null,
+      };
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -594,6 +888,32 @@ export class AuthService {
     });
 
     if (!user) {
+      // Defensive fallback check for ParentAccount if role was omitted
+      const parent = await this.prisma.parentAccount.findUnique({
+        where: { id: userId },
+        include: {
+          organization: {
+            select: { id: true, name: true },
+          },
+        },
+      });
+
+      if (parent && parent.isActive) {
+        return {
+          id: parent.id,
+          email: parent.email,
+          firstName: parent.firstName,
+          lastName: parent.lastName,
+          phone: parent.phone,
+          avatar: null,
+          role: 'PARENT',
+          organizationId: parent.organizationId,
+          lastLoginAt: parent.lastLoginAt,
+          organization: parent.organization,
+          settings: null,
+        };
+      }
+
       throw new UnauthorizedException('User not found');
     }
 
@@ -606,9 +926,9 @@ export class AuthService {
       avatar: user.avatar,
       role: user.role,
       organizationId: user.organizationId,
+      lastLoginAt: user.lastLoginAt,
       organization: user.organization,
       settings: user.settings,
-      lastLoginAt: user.lastLoginAt,
     };
   }
 
@@ -616,100 +936,256 @@ export class AuthService {
 
   /**
    * Request a password reset. Always returns a generic success message
-   * regardless of whether the email exists Ã¢â‚¬â€ prevents user enumeration.
+   * regardless of whether the email exists — prevents user enumeration.
+   * Supports both staff Users and ParentAccounts.
    */
   async forgotPassword(email: string): Promise<{ message: string }> {
+    const normalizedEmail = normalizeEmail(email);
+
+    // 1. Try finding a User
     const user = await this.prisma.user.findFirst({
-      where: { email: email.toLowerCase().trim(), isActive: true },
-      select: { id: true, email: true, passwordHash: true }
+      where: { email: normalizedEmail, isActive: true },
+      select: { id: true, email: true, passwordHash: true },
     });
 
-    // Always return success to prevent email enumeration
-    if (!user || !user.passwordHash) {
-      // Anti-timing attack delay without blocking event loop (DoS protection)
-      await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 100));
-      return { message: 'If an account with that email exists, a password reset link has been sent.' };
-    }
+    if (user && user.passwordHash) {
+      // Invalidate any previous unused reset tokens for this user
+      await this.prisma.passwordResetToken.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
 
-    // Invalidate any previous unused reset tokens for this user
-    await this.prisma.passwordResetToken.updateMany({
-      where: { userId: user.id, usedAt: null },
-      data: { usedAt: new Date() },
-    });
+      const rawToken = this.generateSecureToken();
+      const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+      const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
 
-    const rawToken = this.generateSecureToken();
-    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await this.prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash,
+          expiresAt,
+        },
+      });
 
-    await this.prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        tokenHash,
-        expiresAt,
-      },
-    });
+      const resetUrl = `${this.getFrontendUrl()}/reset-password?token=${encodeURIComponent(rawToken)}`;
 
-    // Send the reset link via email (production) or log it (dev).
-    const resetUrl = `${this.getFrontendUrl()}/reset-password?token=${rawToken}`;
-    if (process.env.SMTP_HOST) {
-      try {
-        await this.sendPasswordResetEmail(user.email, resetUrl);
-        this.logger.info('Password reset email sent', { email: user.email });
-      } catch (err: unknown) {
-        // Log the failure but do NOT reveal it to the caller (anti-enumeration).
-        this.logger.error('Failed to send password reset email', {
+      if (process.env.SMTP_HOST) {
+        try {
+          await this.sendPasswordResetEmail(user.email, resetUrl);
+          this.logger.info('Password reset email sent', { email: user.email });
+        } catch (err: unknown) {
+          await this.invalidateResetToken(tokenHash);
+          this.logger.error('Failed to send password reset email', {
+            email: user.email,
+            error: errorMessage(err),
+          });
+        }
+      } else {
+        await this.invalidateResetToken(tokenHash);
+        this.logger.warn('Password reset token invalidated (no SMTP configured)', {
           email: user.email,
-          error: errorMessage(err),
         });
       }
-    } else {
-      this.logger.warn('Password reset link generated (no SMTP configured)', {
-        email: user.email,
-      });
+
+      return { message: PASSWORD_RESET_GENERIC_MESSAGE };
     }
 
-    return { message: 'If an account with that email exists, a password reset link has been sent.' };
+    // 2. Try finding ParentAccount(s)
+    if (this.prisma.parentAccount) {
+      const parents = await this.prisma.parentAccount.findMany({
+        where: { email: normalizedEmail, isActive: true },
+        select: { id: true, email: true, passwordHash: true },
+      });
+
+      const activeParentsWithPassword = parents.filter((p) => Boolean(p.passwordHash));
+
+      if (activeParentsWithPassword.length > 0) {
+        const parentIds = activeParentsWithPassword.map((p) => p.id);
+
+        // Invalidate previous tokens
+        if (this.prisma.parentPasswordResetToken) {
+          await this.prisma.parentPasswordResetToken.updateMany({
+            where: { parentId: { in: parentIds }, usedAt: null },
+            data: { usedAt: new Date() },
+          });
+
+          const rawToken = this.generateSecureToken();
+          const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+          const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+
+          await this.prisma.parentPasswordResetToken.create({
+            data: {
+              parentId: parentIds[0],
+              tokenHash,
+              expiresAt,
+            },
+          });
+
+          const resetUrl = `${this.getFrontendUrl()}/reset-password?token=${encodeURIComponent(rawToken)}`;
+
+          if (process.env.SMTP_HOST) {
+            try {
+              await this.sendPasswordResetEmail(activeParentsWithPassword[0].email, resetUrl);
+              this.logger.info('Password reset email sent to parent', { email: activeParentsWithPassword[0].email });
+            } catch (err: unknown) {
+              await this.invalidateResetToken(tokenHash);
+              this.logger.error('Failed to send parent password reset email', {
+                email: activeParentsWithPassword[0].email,
+                error: errorMessage(err),
+              });
+            }
+          } else {
+            await this.invalidateResetToken(tokenHash);
+            this.logger.warn('Parent password reset token invalidated (no SMTP configured)', {
+              email: activeParentsWithPassword[0].email,
+            });
+          }
+
+          return { message: PASSWORD_RESET_GENERIC_MESSAGE };
+        }
+      }
+    }
+
+    // Always return success to prevent email enumeration
+    await new Promise((resolve) => setTimeout(resolve, 150 + Math.random() * 100));
+    return { message: PASSWORD_RESET_GENERIC_MESSAGE };
+  }
+
+  /** Atomically burn an undelivered reset token so it can never be redeemed. */
+  private async invalidateResetToken(tokenHash: string): Promise<void> {
+    await this.prisma.passwordResetToken.updateMany({
+      where: { tokenHash, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    if (this.prisma.parentPasswordResetToken) {
+      await this.prisma.parentPasswordResetToken.updateMany({
+        where: { tokenHash, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+    }
   }
 
   /**
    * Reset password using a valid, unexpired, unused token.
-   * Revokes all existing sessions for the user after reset.
+   *
+   * Consume-once guarantee: the token is claimed with a single guarded write
+   * (`usedAt: null AND expiresAt > now`) whose `count` MUST be exactly 1.
+   * Supports both User and ParentAccount reset tokens.
    */
   async resetPassword(token: string, newPassword: string) {
     const tokenHash = createHash('sha256').update(token).digest('hex');
+    const now = new Date();
 
-    // Only the token fields are needed — never hydrate the linked user row
-    // (it would pull `passwordHash` into memory for no reason).
-    const resetToken = await this.prisma.passwordResetToken.findUnique({
+    // 1. Check if token exists in User reset tokens
+    const userResetToken = await this.prisma.passwordResetToken.findUnique({
       where: { tokenHash },
       select: { id: true, userId: true, usedAt: true, expiresAt: true },
     });
 
-    if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
-      throw new BadRequestException('Invalid or expired password reset token');
+    if (userResetToken) {
+      if (userResetToken.usedAt || userResetToken.expiresAt <= now) {
+        throw new BadRequestException('Invalid or expired password reset token');
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, this.BCRYPT_ROUNDS);
+
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.passwordResetToken.updateMany({
+          where: {
+            id: userResetToken.id,
+            tokenHash,
+            usedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: { usedAt: now },
+        });
+        if (claimed.count !== 1) {
+          throw new BadRequestException('Invalid or expired password reset token');
+        }
+
+        const owner = await tx.user.findUnique({
+          where: { id: userResetToken.userId },
+          select: { id: true, isActive: true },
+        });
+        if (!owner || !owner.isActive) {
+          throw new BadRequestException('Invalid or expired password reset token');
+        }
+
+        await tx.user.update({
+          where: { id: owner.id },
+          data: { passwordHash },
+        });
+
+        // Revoke all active sessions — the old password is compromised
+        await tx.session.updateMany({
+          where: { userId: owner.id, revokedAt: null },
+          data: { revokedAt: now, revokedReason: 'password_reset' },
+        });
+      });
+
+      return { message: 'Password has been reset successfully. Please log in with your new password.' };
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    // 2. Check if token exists in Parent reset tokens
+    const parentResetToken = this.prisma.parentPasswordResetToken
+      ? await this.prisma.parentPasswordResetToken.findUnique({
+          where: { tokenHash },
+          select: { id: true, parentId: true, usedAt: true, expiresAt: true },
+        })
+      : null;
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: resetToken.userId },
-        data: { passwordHash },
+    if (parentResetToken) {
+      if (parentResetToken.usedAt || parentResetToken.expiresAt <= now) {
+        throw new BadRequestException('Invalid or expired password reset token');
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, this.BCRYPT_ROUNDS);
+
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.parentPasswordResetToken.updateMany({
+          where: {
+            id: parentResetToken.id,
+            tokenHash,
+            usedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: { usedAt: now },
+        });
+        if (claimed.count !== 1) {
+          throw new BadRequestException('Invalid or expired password reset token');
+        }
+
+        const owner = await tx.parentAccount.findUnique({
+          where: { id: parentResetToken.parentId },
+          select: { id: true, email: true, isActive: true },
+        });
+        if (!owner || !owner.isActive) {
+          throw new BadRequestException('Invalid or expired password reset token');
+        }
+
+        // Find all active parent accounts matching this email across organizations
+        const matchingParents = await tx.parentAccount.findMany({
+          where: { email: owner.email, isActive: true },
+          select: { id: true },
+        });
+        const parentIds = matchingParents.map((p) => p.id);
+
+        await tx.parentAccount.updateMany({
+          where: { id: { in: parentIds } },
+          data: { passwordHash },
+        });
+
+        // Revoke all active parent sessions
+        await tx.parentSession.updateMany({
+          where: { parentId: { in: parentIds }, revokedAt: null },
+          data: { revokedAt: now, revokedReason: 'password_reset' },
+        });
       });
 
-      await tx.passwordResetToken.update({
-        where: { id: resetToken.id },
-        data: { usedAt: new Date() },
-      });
+      return { message: 'Password has been reset successfully. Please log in with your new password.' };
+    }
 
-      // Revoke all active sessions Ã¢â‚¬â€ the old password is compromised
-      await tx.session.updateMany({
-        where: { userId: resetToken.userId, revokedAt: null },
-        data: { revokedAt: new Date(), revokedReason: 'password_reset' },
-      });
-    });
-
-    return { message: 'Password has been reset successfully. Please log in with your new password.' };
+    throw new BadRequestException('Invalid or expired password reset token');
   }
 
   // ==================== Email transport ====================
@@ -720,13 +1196,17 @@ export class AuthService {
 
     const transporter = this.getSmtpTransporter();
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const orgName = process.env.ORGANIZATION_NAME || 'M-EDU';
+    // Dynamic values only: every interpolation below is escaped for its HTML
+    // context. Static markup/text is intentionally NOT escaped (double-escaping
+    // would corrupt it).
+    const appUrl = escapeHtml(resolveFrontendUrl());
+    const orgName = escapeHtml(process.env.ORGANIZATION_NAME || 'M-EDU');
+    const safeResetUrl = escapeHtml(resetUrl);
 
     await transporter.sendMail({
       from,
       to,
-      subject: `Reset your ${orgName} password`,
+      subject: `Reset your ${process.env.ORGANIZATION_NAME || 'M-EDU'} password`,
       html: `
         <div style="font-family:system-ui,-apple-system,sans-serif;max-width:480px;margin:0 auto;padding:32px">
           <h2 style="color:#1d1d1f;margin-bottom:16px">Reset your password</h2>
@@ -734,7 +1214,7 @@ export class AuthService {
             You requested a password reset for your ${orgName} account.
             Click the button below to set a new password. This link expires in 1 hour.
           </p>
-          <a href="${resetUrl}"
+          <a href="${safeResetUrl}"
              style="display:inline-block;background:#2f4d9b;color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:500;margin:16px 0">
             Reset Password
           </a>
@@ -744,11 +1224,11 @@ export class AuthService {
           </p>
           <hr style="border:none;border-top:1px solid #e5e5e5;margin:24px 0" />
           <p style="color:#a1a1a6;font-size:12px">
-            ${orgName} Ã‚Â· <a href="${appUrl}" style="color:#2f4d9b">${appUrl}</a>
+            ${orgName} · <a href="${appUrl}" style="color:#2f4d9b">${appUrl}</a>
           </p>
         </div>
       `,
-      text: `Reset your ${orgName} password\n\nClick the link to reset your password (expires in 1 hour):\n\n${resetUrl}\n\nIf you didn't request this, ignore this email.`,
+      text: `Reset your ${process.env.ORGANIZATION_NAME || 'M-EDU'} password\n\nClick the link to reset your password (expires in 1 hour):\n\n${resetUrl}\n\nIf you didn't request this, ignore this email.`,
     });
   }
 }

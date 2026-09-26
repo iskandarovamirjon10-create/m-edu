@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PeriodStatus, type Prisma } from '@prisma/client';
 import { withPrismaRetry } from '../lib/prisma-retry.util';
 
-export type TxLike = Pick<Prisma.TransactionClient, 'financialPeriod' | 'auditLog' | '$queryRaw'>;
+export type TxLike = Pick<Prisma.TransactionClient, 'financialPeriod' | 'auditLog' | '$queryRaw' | '$executeRaw'>;
 
 @Injectable()
 export class FinancialPeriodService {
@@ -160,3 +160,4 @@ export class FinancialPeriodService {
     }
   }
 }
+

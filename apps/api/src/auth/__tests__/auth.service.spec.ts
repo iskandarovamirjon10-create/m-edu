@@ -22,6 +22,7 @@ function createMockPrisma(overrides: Record<string, unknown> = {}) {
         organizationId: 'org-1',
         expiresAt: new Date(),
       }),
+      findUnique: vi.fn().mockResolvedValue(null),
       updateMany: vi.fn(),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       count: vi.fn().mockResolvedValue(1),
@@ -40,6 +41,7 @@ function createMockPrisma(overrides: Record<string, unknown> = {}) {
       create: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       delete: vi.fn(),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
@@ -52,6 +54,14 @@ function createMockPrisma(overrides: Record<string, unknown> = {}) {
 
 const mockJwt = {
   sign: vi.fn((payload: Record<string, unknown>) => `signed.${payload.sub}.token`),
+  decode: vi.fn((token: string) => {
+    // Test tokens are written as `jwt:<sid>` so the spec can assert the
+    // session binding without a real signing key.
+    if (typeof token === 'string' && token.startsWith('jwt:')) {
+      return { sid: token.slice(4) };
+    }
+    return null;
+  }),
 } as unknown as JwtService;
 
 describe('AuthService', () => {
@@ -276,21 +286,112 @@ describe('AuthService', () => {
       svc = new AuthService(prisma, mockJwt);
     });
 
-    it('auth code exchange is single-use', async () => {
-      prisma.authorizationCode.create.mockResolvedValue({ id: 'ac-1', code: 'test-code', accessToken: 'jwt-token', userId: 'u1', expiresAt: new Date(Date.now() + 300000), usedAt: null, createdAt: new Date() });
-      prisma.authorizationCode.findUnique.mockResolvedValue({ id: 'ac-1', code: 'test-code', accessToken: 'jwt-token', userId: 'u1', expiresAt: new Date(Date.now() + 300000), usedAt: null, createdAt: new Date() });
-      prisma.authorizationCode.update.mockResolvedValue({});
+    const activeUser = {
+      id: 'u1',
+      email: 'u1@medu.dev',
+      role: 'ORG_ADMIN',
+      organizationId: 'org-1',
+      isActive: true,
+    };
 
-      const code = await svc.generateAuthCode('jwt-token', 'u1');
-      const token = await svc.exchangeAuthCode(code);
-      expect(token).toBe('jwt-token');
+    function codeRow(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'ac-1',
+        code: 'test-code',
+        accessToken: null,
+        sessionId: null,
+        userId: 'u1',
+        expiresAt: new Date(Date.now() + 300000),
+        usedAt: null,
+        createdAt: new Date(),
+        ...overrides,
+      };
+    }
 
-      prisma.authorizationCode.findUnique.mockResolvedValue({ id: 'ac-1', code: 'test-code', accessToken: 'jwt-token', userId: 'u1', expiresAt: new Date(Date.now() + 300000), usedAt: new Date(), createdAt: new Date() });
-      await expect(svc.exchangeAuthCode(code)).rejects.toThrow(/already been used/);
+    it('binds the code to the session id instead of storing the JWT', async () => {
+      prisma.authorizationCode.create.mockResolvedValue(codeRow());
+      await svc.generateAuthCode('jwt:sess-1', 'u1');
+      expect(prisma.authorizationCode.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ userId: 'u1', sessionId: 'sess-1' }),
+      });
+      const data = prisma.authorizationCode.create.mock.calls[0][0].data;
+      expect(data).not.toHaveProperty('accessToken');
+    });
+
+    it('re-signs a live session on exchange', async () => {
+      prisma.authorizationCode.findUnique.mockResolvedValue(codeRow({ sessionId: 'sess-1' }));
+      prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+      prisma.user.findUnique.mockResolvedValue(activeUser);
+      prisma.session.findUnique.mockResolvedValue({
+        id: 'sess-1',
+        userId: 'u1',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 600000),
+      });
+
+      const token = await svc.exchangeAuthCode('test-code');
+      expect(token).toBe('signed.u1.token');
+      expect(mockJwt.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ sub: 'u1', sid: 'sess-1' }),
+      );
+      expect(prisma.authorizationCode.updateMany).toHaveBeenCalledWith({
+        where: { id: 'ac-1', usedAt: null },
+        data: { usedAt: expect.any(Date) },
+      });
+    });
+
+    it('auth code exchange is single-use (second redeem loses the atomic claim)', async () => {
+      prisma.authorizationCode.findUnique.mockResolvedValue(codeRow({ accessToken: 'jwt-token' }));
+      prisma.authorizationCode.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(svc.exchangeAuthCode('test-code')).rejects.toThrow(/already been used/);
+    });
+
+    it('rejects an already-redeemed code before it can claim it again', async () => {
+      prisma.authorizationCode.findUnique.mockResolvedValue(
+        codeRow({ usedAt: new Date(Date.now() - 1000) }),
+      );
+      await expect(svc.exchangeAuthCode('test-code')).rejects.toThrow(/already been used/);
+      expect(prisma.authorizationCode.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses to mint a session for a deactivated account', async () => {
+      prisma.authorizationCode.findUnique.mockResolvedValue(codeRow({ sessionId: 'sess-1' }));
+      prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+      prisma.user.findUnique.mockResolvedValue({ ...activeUser, isActive: false });
+
+      await expect(svc.exchangeAuthCode('test-code')).rejects.toThrow(/deactivated/);
+      expect(mockJwt.sign).not.toHaveBeenCalled();
+    });
+
+    it('refuses when the bound session was revoked or expired', async () => {
+      prisma.authorizationCode.findUnique.mockResolvedValue(codeRow({ sessionId: 'sess-1' }));
+      prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+      prisma.user.findUnique.mockResolvedValue(activeUser);
+      prisma.session.findUnique.mockResolvedValue({
+        id: 'sess-1',
+        userId: 'u1',
+        revokedAt: new Date(),
+        expiresAt: new Date(Date.now() + 600000),
+      });
+
+      await expect(svc.exchangeAuthCode('test-code')).rejects.toThrow(/no longer valid/);
+      expect(mockJwt.sign).not.toHaveBeenCalled();
+    });
+
+    it('still redeems legacy rows that carry their pre-session token', async () => {
+      prisma.authorizationCode.findUnique.mockResolvedValue(
+        codeRow({ accessToken: 'legacy-jwt' }),
+      );
+      prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+      prisma.user.findUnique.mockResolvedValue(activeUser);
+
+      await expect(svc.exchangeAuthCode('test-code')).resolves.toBe('legacy-jwt');
+      expect(mockJwt.sign).not.toHaveBeenCalled();
     });
 
     it('auth code does not contain the JWT', async () => {
-      prisma.authorizationCode.create.mockResolvedValue({ id: 'ac-2', code: 'super-secret-code', accessToken: 'super-secret-jwt', userId: 'u1', expiresAt: new Date(Date.now() + 300000), usedAt: null, createdAt: new Date() });
+      prisma.authorizationCode.create.mockResolvedValue(codeRow({ code: 'super-secret-code' }));
       const code = await svc.generateAuthCode('super-secret-jwt', 'u1');
       expect(code).not.toContain('secret');
       expect(code).not.toContain('jwt');
@@ -452,5 +553,69 @@ describe('AuthService', () => {
       ).rejects.toThrow('Platform is already bootstrapped');
       expect(txExecuteRaw).toHaveBeenCalled();
       expect(txCount).toHaveBeenCalled();
+    });
+  });
+
+  describe('getMe', () => {
+    let prisma: ReturnType<typeof createMockPrisma>;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      prisma = createMockPrisma();
+    });
+
+    it('returns parent profile when role is PARENT', async () => {
+      (prisma as any).parentAccount = {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'p-1',
+          email: 'parent@example.com',
+          firstName: 'Dilshod',
+          lastName: 'Rahimov',
+          phone: '+998901234567',
+          isActive: true,
+          organizationId: 'org-1',
+          lastLoginAt: new Date(),
+          organization: { id: 'org-1', name: 'Center A' },
+        }),
+      };
+
+      const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
+      const profile = await svc.getMe('p-1', 'PARENT');
+      expect(profile.role).toBe('PARENT');
+      expect(profile.id).toBe('p-1');
+      expect(profile.email).toBe('parent@example.com');
+      expect(profile.organization?.name).toBe('Center A');
+    });
+
+    it('falls back to parentAccount when user is not found and returns parent profile', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      (prisma as any).parentAccount = {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'p-1',
+          email: 'parent@example.com',
+          firstName: 'Dilshod',
+          lastName: 'Rahimov',
+          phone: '+998901234567',
+          isActive: true,
+          organizationId: 'org-1',
+          lastLoginAt: new Date(),
+          organization: { id: 'org-1', name: 'Center A' },
+        }),
+      };
+
+      const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
+      const profile = await svc.getMe('p-1');
+      expect(profile.role).toBe('PARENT');
+      expect(profile.id).toBe('p-1');
+    });
+
+    it('throws UnauthorizedException when neither user nor parent is found', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      (prisma as any).parentAccount = {
+        findUnique: vi.fn().mockResolvedValue(null),
+      };
+
+      const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
+      await expect(svc.getMe('nonexistent')).rejects.toThrow('User not found');
     });
   });

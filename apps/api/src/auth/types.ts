@@ -25,7 +25,7 @@ export interface JwtPayload {
  * to `string`, so callers are forced to handle the no-session case
  * (tokens issued without a session row, e.g. pre-session legacy tokens).
  */
-export type RequestUser = Omit<JwtPayload, 'sid'> & { sid: string | null };
+export type RequestUser = Omit<JwtPayload, 'sid'> & { sid: string | null; id: string; };
 
 /** Tenant context attached to face/camera requests by the TenantInterceptor. */
 export interface TenantContext {

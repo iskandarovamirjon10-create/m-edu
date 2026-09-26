@@ -34,6 +34,7 @@ describe('NotificationPreferenceService', () => {
         smsEnabled: false,
         pushEnabled: true,
         inAppEnabled: true,
+        telegramEnabled: true,
       });
     });
 
@@ -50,6 +51,7 @@ describe('NotificationPreferenceService', () => {
         smsEnabled: true,
         pushEnabled: false,
         inAppEnabled: true,
+        telegramEnabled: true,
       });
     });
   });

@@ -113,6 +113,24 @@ export interface RecognitionRepository {
     lessonId: string | null
   ): Promise<AttendanceRecordEntity | null>;
 
+  /**
+   * Schedule gate (audit P0-1).
+   *
+   * Must return true ONLY when the organization schedule permits attendance
+   * for this student/group at this instant, and fail closed (false) on any
+   * error, missing schedule, out-of-window time, ambiguous resolution or
+   * organization holiday.
+   *
+   * Implementations resolve the timezone from the Organization row — the
+   * caller must never pass a hardcoded timezone.
+   */
+  isWithinSchedule(
+    organizationId: string,
+    studentId: string,
+    groupId: string,
+    options?: { cameraLocation?: string | null; at?: Date }
+  ): Promise<boolean>;
+
   listAttendance(organizationId: string, filters: {
     studentId?: string;
     groupId?: string;

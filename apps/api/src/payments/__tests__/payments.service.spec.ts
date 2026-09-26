@@ -17,6 +17,9 @@ function createMockPrisma() {
       delete: vi.fn(),
       count: vi.fn(),
     },
+    refund: { aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 } }) },
+    // FOR UPDATE lock row for PaymentsService.update
+    $queryRaw: vi.fn().mockResolvedValue([]),
   };
   mock.$transaction = vi.fn(async (fn: (tx: typeof mock) => Promise<unknown>) => fn(mock));
   return mock;
@@ -112,6 +115,10 @@ describe('findAll', () => {
         reference: null,
       };
       prisma.payment.findFirst.mockResolvedValue(existing);
+      prisma.$queryRaw.mockResolvedValue([
+        { id: 'p1', status: 'PENDING', amount: 100, studentId: 's1' },
+      ]);
+      prisma.refund.aggregate.mockResolvedValue({ _sum: { amount: 0 } });
       prisma.payment.updateMany.mockResolvedValue({ count: 1 });
       prisma.student.update.mockResolvedValue({});
       prisma.payment.findUnique.mockResolvedValue({ ...existing, status: 'PAID', paidAt: new Date() });
@@ -148,6 +155,10 @@ describe('findAll', () => {
         reference: null,
       };
       prisma.payment.findFirst.mockResolvedValue(existing);
+      prisma.$queryRaw.mockResolvedValue([
+        { id: 'p1', status: 'PAID', amount: 100, studentId: 's1' },
+      ]);
+      prisma.refund.aggregate.mockResolvedValue({ _sum: { amount: 0 } });
       prisma.payment.updateMany.mockResolvedValue({ count: 1 });
       prisma.student.update.mockResolvedValue({});
       prisma.payment.findUnique.mockResolvedValue({ ...existing, status: 'CANCELLED', paidAt: null });

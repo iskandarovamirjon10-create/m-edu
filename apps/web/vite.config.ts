@@ -20,6 +20,12 @@ export default defineConfig({
         // Enable sending cookies/credentials for cross-origin OAuth callback
         cookieDomainRewrite: 'localhost',
       },
+      // Socket.IO (chat) handshake + websocket upgrade must reach the API in dev
+      '/socket.io': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
   build: {

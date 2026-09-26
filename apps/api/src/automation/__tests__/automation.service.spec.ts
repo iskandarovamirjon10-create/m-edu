@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import { AutomationService, DisabledActionException } from '../automation.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationEventService } from '../../notifications/events/notification-event.service';
-import { TelegramService } from '../../notifications/telegram.service';
+import { TelegramService } from '../../telegram/telegram.service';
 import { SmsService } from '../../notifications/sms.service';
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundException } from '@nestjs/common';
@@ -35,6 +35,9 @@ const mockPrisma = {
   notification: { create: vi.fn() },
   user: { findMany: vi.fn() },
   parentStudent: { findFirst: vi.fn() },
+  // Tenant binding for TELEGRAM actions: a chat is only addressable while it
+  // is linked to the rule's own organization.
+  telegramAccount: { findFirst: vi.fn().mockResolvedValue({ id: 'tg-1' }) },
   followUp: { create: vi.fn() },
   $queryRaw: vi.fn(),
 };
@@ -354,6 +357,33 @@ describe('AutomationService', () => {
       mockTelegram.sendMessage.mockResolvedValue(false);
 
       await expect(service.executeActions(telegramRule, entity)).rejects.toThrow(/delivery failed/i);
+    });
+
+    it('binds the Telegram chat to the rule tenant before sending', async () => {
+      mockTelegram.isConfigured.mockReturnValue(true);
+      mockTelegram.sendMessage.mockResolvedValue(true);
+      mockPrisma.telegramAccount.findFirst.mockResolvedValue({ id: 'tg-1' });
+
+      await service.executeActions(telegramRule, entity);
+
+      expect(mockPrisma.telegramAccount.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ organizationId: orgId, status: 'ACTIVE' }),
+        }),
+      );
+      expect(mockTelegram.sendMessage).toHaveBeenCalledWith('12345', expect.any(String));
+    });
+
+    it('refuses to send to a chat that is not linked to this organization', async () => {
+      mockTelegram.isConfigured.mockReturnValue(true);
+      mockTelegram.sendMessage.mockResolvedValue(true);
+      // chatId 12345 belongs to another tenant (or to nobody).
+      mockPrisma.telegramAccount.findFirst.mockResolvedValue(null);
+
+      await expect(service.executeActions(telegramRule, entity)).rejects.toThrow(
+        /not linked to this organization/,
+      );
+      expect(mockTelegram.sendMessage).not.toHaveBeenCalled();
     });
 
     it('throws when no chat id can be resolved', async () => {

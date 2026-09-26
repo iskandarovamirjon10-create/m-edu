@@ -64,7 +64,7 @@ function getStatusConfig(isActive: boolean) {
 
 export function BranchesPage() {
  const { t} = useI18n();
- usePageTitle(t('branches.title') ||'Branches');
+ usePageTitle(t('branches.title'));
  const { push, toastNode} = useToasts();
  const qc = useQueryClient();
  const { hasAnyRole} = useAuthState();
@@ -95,7 +95,7 @@ export function BranchesPage() {
  qc.invalidateQueries({ queryKey: ['branches']});
  setModalOpen(false);
  setForm(INITIAL_FORM);
- push({ type:'success', message: t('branches.created') ||'Branch created'});
+ push({ type:'success', message: t('branches.created')});
 },
  onError: (err: unknown) => push({ type:'error', message: getErrorMessage(err)}),
 });
@@ -107,7 +107,7 @@ export function BranchesPage() {
  setModalOpen(false);
  setEditingId(null);
  setForm(INITIAL_FORM);
- push({ type:'success', message: t('branches.updated') ||'Branch updated'});
+ push({ type:'success', message: t('branches.updated')});
 },
  onError: (err: unknown) => push({ type:'error', message: getErrorMessage(err)}),
 });
@@ -116,7 +116,7 @@ export function BranchesPage() {
  mutationFn: (id: string) => branchesApi.deactivate(id),
  onSuccess: () => {
  qc.invalidateQueries({ queryKey: ['branches']});
- push({ type:'success', message: t('branches.deactivated') ||'Branch deactivated'});
+ push({ type:'success', message: t('branches.deactivated')});
 },
  onError: (err: unknown) => push({ type:'error', message: getErrorMessage(err)}),
 });
@@ -125,7 +125,7 @@ export function BranchesPage() {
  mutationFn: (id: string) => branchesApi.activate(id),
  onSuccess: () => {
  qc.invalidateQueries({ queryKey: ['branches']});
- push({ type:'success', message: t('branches.activated') ||'Branch activated'});
+ push({ type:'success', message: t('branches.activated')});
 },
  onError: (err: unknown) => push({ type:'error', message: getErrorMessage(err)}),
 });
@@ -137,7 +137,7 @@ export function BranchesPage() {
  qc.invalidateQueries({ queryKey: ['branches']});
  setManagerModal(null);
  setManagerId('');
- push({ type:'success', message: t('branches.managerAssigned') ||'Manager assigned'});
+ push({ type:'success', message: t('branches.managerAssigned')});
 },
  onError: (err: unknown) => push({ type:'error', message: getErrorMessage(err)}),
 });
@@ -191,24 +191,24 @@ export function BranchesPage() {
   loading={deactivateMutation.isPending}
  />
  <GlassPageHeader
- title={t('branches.title') ||'Branches'}
- subtitle={t('branches.subtitle') ||'Manage your organization branches'}
- action={canManage ? { label: t('branches.add') ||'Add Branch', onClick: openCreate} : undefined}
+ title={t('branches.title')}
+ subtitle={t('branches.subtitle')}
+ action={canManage ? { label: t('branches.add'), onClick: openCreate} : undefined}
  />
 
  {branches.length === 0 ? (
- <GlassEmptyState title={t('branches.empty') ||'No branches yet'} message={t('branches.emptyHint') ||'Create your first branch to get started'} />
+ <GlassEmptyState title={t('branches.empty')} message={t('branches.emptyHint')} />
  ) : (
  <GlassTable>
  <GlassTHead>
  <GlassTR>
- <GlassTH>{t('common.name') ||'Name'}</GlassTH>
- <GlassTH>{t('branches.code') ||'Code'}</GlassTH>
- <GlassTH>{t('branches.address') ||'Address'}</GlassTH>
- <GlassTH>{t('branches.manager') ||'Manager'}</GlassTH>
- <GlassTH>{t('branches.students') ||'Students'}</GlassTH>
- <GlassTH>{t('common.status') ||'Status'}</GlassTH>
- {canManage && <GlassTH>{t('common.actions') ||'Actions'}</GlassTH>}
+ <GlassTH>{t('common.name')}</GlassTH>
+ <GlassTH>{t('branches.code')}</GlassTH>
+ <GlassTH>{t('branches.address')}</GlassTH>
+ <GlassTH>{t('branches.manager')}</GlassTH>
+ <GlassTH>{t('branches.students')}</GlassTH>
+ <GlassTH>{t('common.status')}</GlassTH>
+ {canManage && <GlassTH>{t('common.actions')}</GlassTH>}
  </GlassTR>
  </GlassTHead>
  <GlassTBody>
@@ -245,14 +245,14 @@ export function BranchesPage() {
  variant="ghost"
  onClick={() => setManagerModal(b.id)}
  >
- {t('branches.assignManager') ||'Manager'}
+ {t('branches.assignManager')}
  </GlassButton>
  <GlassButton
  size="sm"
  variant="ghost"
  onClick={() => setStatsModal(b)}
  >
- {t('branches.stats') ||'Stats'}
+ {t('branches.stats')}
  </GlassButton>
  {b.isActive ? (
  <GlassButton
@@ -261,7 +261,7 @@ export function BranchesPage() {
  className="text-red-600"
  onClick={() => setDeactivateTarget(b)}
  >
- {t('branches.deactivate') ||'Deactivate'}
+ {t('branches.deactivate')}
  </GlassButton>
  ) : (
  <GlassButton
@@ -270,7 +270,7 @@ export function BranchesPage() {
  className="text-emerald-600"
  onClick={() => activateMutation.mutate(b.id)}
  >
- {t('branches.activate') ||'Activate'}
+ {t('branches.activate')}
  </GlassButton>
  )}
  </div>
@@ -286,7 +286,7 @@ export function BranchesPage() {
  <GlassModal
  open={modalOpen}
  onClose={() => { setModalOpen(false); setEditingId(null);}}
- title={editingId ? (t('branches.edit') ||'Edit Branch') : (t('branches.create') ||'Create Branch')}
+ title={editingId ? (t('branches.edit')) : (t('branches.create'))}
  footer={
  <div className="flex justify-end gap-3">
  <GlassButton variant="secondary"onClick={() => { setModalOpen(false); setEditingId(null);}}>
@@ -299,32 +299,32 @@ export function BranchesPage() {
 }
  >
  <div className="space-y-4">
- <GlassField label={t('common.name') ||'Name'} required>
+ <GlassField label={t('common.name')} required>
  <GlassInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value})} />
  </GlassField>
- <GlassField label={t('branches.code') ||'Code'}>
+ <GlassField label={t('branches.code')}>
  <GlassInput value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value})} placeholder="e.g. MAIN"/>
  </GlassField>
- <GlassField label={t('branches.address') ||'Address'}>
+ <GlassField label={t('branches.address')}>
  <GlassInput value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value})} />
  </GlassField>
  <div className="grid grid-cols-2 gap-4">
- <GlassField label={t('branches.phone') ||'Phone'}>
+ <GlassField label={t('branches.phone')}>
  <GlassInput value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value})} />
  </GlassField>
- <GlassField label={t('branches.email') ||'Email'}>
+ <GlassField label={t('branches.email')}>
  <GlassInput value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value})} />
  </GlassField>
  </div>
  <div className="grid grid-cols-2 gap-4">
- <GlassField label={t('branches.timezone') ||'Timezone'}>
+ <GlassField label={t('branches.timezone')}>
  <GlassSelect
  value={form.timezone}
  onChange={(e) => setForm({ ...form, timezone: e.target.value})}
  options={TIMEZONES.map((tz) => ({ value: tz, label: tz}))}
  />
  </GlassField>
- <GlassField label={t('branches.currency') ||'Currency'}>
+ <GlassField label={t('branches.currency')}>
  <GlassSelect
  value={form.currency}
  onChange={(e) => setForm({ ...form, currency: e.target.value})}
@@ -338,7 +338,7 @@ export function BranchesPage() {
  <GlassModal
  open={managerModal !== null}
  onClose={() => { setManagerModal(null); setManagerId('');}}
- title={t('branches.assignManager') ||'Assign Manager'}
+ title={t('branches.assignManager')}
  footer={
  <div className="flex justify-end gap-3">
  <GlassButton variant="secondary"onClick={() => { setManagerModal(null); setManagerId('');}}>
@@ -357,7 +357,7 @@ export function BranchesPage() {
  </div>
 }
  >
- <GlassField label={t('branches.selectManager') ||'Select Manager'}>
+ <GlassField label={t('branches.selectManager')}>
  <GlassSelect
  value={managerId}
  onChange={(e) => setManagerId(e.target.value)}
@@ -375,26 +375,26 @@ export function BranchesPage() {
  <GlassModal
  open={statsModal !== null}
  onClose={() => setStatsModal(null)}
- title={t('branches.statsTitle') ||'Branch Statistics'}
+ title={t('branches.statsTitle')}
  footer={null}
  >
  {statsModal && (
  <div className="grid grid-cols-2 gap-4">
  <div className="rounded-xl bg-[var(--bg-card)] p-4 text-center">
  <div className="text-2xl font-bold text-brand-600">{statsModal._count?.users ?? 0}</div>
- <div className="text-sm text-[var(--text-muted)]">{t('branches.users') ||'Users'}</div>
+ <div className="text-sm text-[var(--text-muted)]">{t('branches.users')}</div>
  </div>
  <div className="rounded-xl bg-[var(--bg-card)] p-4 text-center">
  <div className="text-2xl font-bold text-emerald-600">{statsModal._count?.students ?? 0}</div>
- <div className="text-sm text-[var(--text-muted)]">{t('branches.students') ||'Students'}</div>
+ <div className="text-sm text-[var(--text-muted)]">{t('branches.students')}</div>
  </div>
  <div className="rounded-xl bg-[var(--bg-card)] p-4 text-center">
  <div className="text-2xl font-bold text-indigo-600">{statsModal._count?.teachers ?? 0}</div>
- <div className="text-sm text-[var(--text-muted)]">{t('branches.teachers') ||'Teachers'}</div>
+ <div className="text-sm text-[var(--text-muted)]">{t('branches.teachers')}</div>
  </div>
  <div className="rounded-xl bg-[var(--bg-card)] p-4 text-center">
  <div className="text-2xl font-bold text-orange-600">{statsModal._count?.groups ?? 0}</div>
- <div className="text-sm text-[var(--text-muted)]">{t('branches.groups') ||'Groups'}</div>
+ <div className="text-sm text-[var(--text-muted)]">{t('branches.groups')}</div>
  </div>
  </div>
  )}

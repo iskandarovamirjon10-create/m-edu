@@ -127,7 +127,7 @@ export class DataQualityService {
       severity: 'CRITICAL',
       check: async (prisma, orgId) => {
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        today.setUTCHours(0, 0, 0, 0);
         const payments = await prisma.payment.findMany({
           where: {
             organizationId: orgId,
@@ -286,7 +286,7 @@ export class DataQualityService {
     return this.prisma.dataQualityIssue.findMany({
       where,
       orderBy: { detectedAt: 'desc' },
-      take: query.limit ?? 50,
+      take: Math.min(100, Math.max(1, Number(query.limit) || 50)),
     });
   }
 
@@ -329,9 +329,10 @@ export class DataQualityService {
 
   private async getDetectedToday(orgId: string) {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
     return this.prisma.dataQualityIssue.count({
       where: { organizationId: orgId, detectedAt: { gte: today } },
     });
   }
 }
+

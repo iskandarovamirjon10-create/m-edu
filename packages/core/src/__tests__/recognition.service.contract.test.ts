@@ -195,4 +195,67 @@ describe('RecognitionService matching beyond maxCandidates', () => {
     expect(result.student?.id).toBe('student-5');
     expect(enrollmentRepo.streamActiveTemplates).toHaveBeenCalledWith('org-1', 500);
   });
+
+  it('logs TEMPLATE_CORRUPTED audit event and safely continues when a template fails decryption', async () => {
+    const corruptedTemplate = makeTemplate('t-corrupt', 'student-bad', 999);
+    const validTemplate = makeTemplate('t-valid', 'student-good', 1);
+
+    const faceEngine = makeFaceEngine({ 1: 0.95 });
+    const auditLogMock = vi.fn().mockResolvedValue(undefined);
+
+    const recogRepo = {
+      findSession: vi.fn().mockResolvedValue({
+        id: 'sess-1', organizationId: 'org-1', deviceId: null, actorId: 'user-1',
+        groupId: 'group-1', lessonId: null, status: 'STARTED', startedAt: new Date(),
+        endedAt: null, metadata: null, createdAt: new Date(), updatedAt: new Date(),
+      }),
+      updateSessionStatus: vi.fn().mockResolvedValue(undefined),
+      createAttempt: vi.fn().mockImplementation((data: any) =>
+        Promise.resolve({ id: 'attempt-1', ...data, occurredAt: new Date(), createdAt: new Date() })),
+      createAttendance: vi.fn().mockResolvedValue({
+        id: 'att-1', organizationId: 'org-1', studentId: 'student-good', groupId: 'group-1',
+        lessonId: null, sessionId: 'sess-1', decision: 'RECORDED', recordedAt: new Date(),
+        metadata: null, createdAt: new Date(),
+      }),
+    } as any;
+
+    const enrollmentRepo = {
+      streamActiveTemplates: vi.fn(async function* () {
+        yield [corruptedTemplate, validTemplate];
+      }),
+    } as any;
+
+    const svc = new RecognitionService(
+      faceEngine,
+      {
+        decrypt: vi.fn(async (ciphertext: string) => {
+          if (ciphertext === corruptedTemplate.templateData) {
+            throw new Error('Decryption integrity check failed');
+          }
+          return ciphertext;
+        }),
+        verifyHash: vi.fn().mockResolvedValue(true),
+      } as any,
+      recogRepo,
+      enrollmentRepo,
+      { requirePermission: vi.fn().mockResolvedValue(undefined) } as any,
+      { log: auditLogMock } as any,
+      new RecognitionDecisionPolicy(DEFAULT_FACE_RECOGNITION_CONFIG),
+      { validate: vi.fn().mockResolvedValue({ decision: 'RECORDED', message: 'ok' }) } as any,
+    );
+
+    const result = await svc.processAttempt(tenant, 'sess-1', Buffer.from('img'));
+
+    // Corrupted template was logged as TEMPLATE_CORRUPTED
+    expect(auditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'TEMPLATE_CORRUPTED',
+        resourceId: 't-corrupt',
+      })
+    );
+
+    // Valid template was still matched successfully
+    expect(result.identified).toBe(true);
+    expect(result.student?.id).toBe('student-good');
+  });
 });

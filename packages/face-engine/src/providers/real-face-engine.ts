@@ -163,6 +163,25 @@ export class RealFaceEngine implements FaceEngine {
     }
 
     if (!status.liveness) {
+      /*
+       * A configured liveness model that failed to load is a misconfiguration,
+       * not a graceful degradation worth continuing through.
+       *
+       * `status.overall` above only requires detector and embedder, so without
+       * this the engine reports itself ready while every recognition answers
+       * UNAVAILABLE. The camera worker treats anything != PASS as "not live"
+       * and skips the student, so the centre would keep running healthy-looking
+       * workers and record ZERO attendance, with no error surfaced anywhere.
+       *
+       * Absent path (optional liveness in development) still just warns.
+       */
+      if (this.config.livenessModelPath) {
+        throw new Error(
+          `Liveness model is configured (${this.config.livenessModelPath}) but failed to load. ` +
+            `Refusing to start with a non-functional anti-spoofing gate.`,
+        );
+      }
+
       logger.warn('Liveness model not loaded — liveness checks will return UNAVAILABLE');
     }
 

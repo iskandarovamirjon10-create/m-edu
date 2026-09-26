@@ -1,8 +1,7 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:15-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-medu}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medu_pass}
@@ -19,6 +18,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
@@ -29,10 +29,23 @@ services:
       timeout: 5s
       retries: 5
 
+  migration:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: "no"
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-medu}:${POSTGRES_PASSWORD:-medu_pass}@db:5432/${POSTGRES_DB:-medu}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
     ports:
       - "${API_PORT:-3000}:3000"
     environment:
@@ -41,12 +54,27 @@ services:
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET}
       - CORS_ORIGIN=${CORS_ORIGIN}
-      # other env vars defined in .env
+      - BIOMETRIC_ENCRYPTION_KEY=${BIOMETRIC_ENCRYPTION_KEY}
+      - FACE_ENGINE_PROVIDER=${FACE_ENGINE_PROVIDER:-real-local}
+      # The ONNX models ship in the repository under packages/face-engine/models
+      # and the api image copies /app/packages, so these paths must be the real
+      # files. The previous defaults (/models/face_detector.onnx) pointed at
+      # nothing, and the blank liveness default made production refuse to boot
+      # (validateConfig + the real-local engine both require all three paths).
+      - FACE_DETECTOR_MODEL_PATH=${FACE_DETECTOR_MODEL_PATH:-/app/packages/face-engine/models/face_detection_yunet_2023mar.onnx}
+      - FACE_EMBEDDER_MODEL_PATH=${FACE_EMBEDDER_MODEL_PATH:-/app/packages/face-engine/models/face_recognition_sface_2021dec.onnx}
+      - FACE_LIVENESS_MODEL_PATH=${FACE_LIVENESS_MODEL_PATH:-/app/packages/face-engine/models/minifasnet_v2.onnx}
+      - OAUTH_SESSION_SECRET=${OAUTH_SESSION_SECRET}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migration:
+        condition: service_completed_successfully
 
   web:
     build:
@@ -54,6 +82,7 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         - VITE_API_URL=${VITE_API_URL:-http://localhost:3000}
+    restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:80"
     depends_on:

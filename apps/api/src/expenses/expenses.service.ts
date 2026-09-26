@@ -80,11 +80,23 @@ export class ExpensesService {
     return this.findOne(organizationId, id);
   }
 
-  async remove(organizationId: string, id: string) {
+  async remove(organizationId: string, id: string, actorId: string) {
     const existing = await this.findOne(organizationId, id);
     await this.financialPeriod.ensureNotClosed(organizationId, existing.date || existing.createdAt);
 
-    await this.prisma.expense.deleteMany({ where: { id, organizationId } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.expense.deleteMany({ where: { id, organizationId } });
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          userId: actorId,
+          action: 'DELETE',
+          resource: 'Expense',
+          resourceId: id,
+          changes: { deletedRecord: existing }
+        }
+      });
+    });
     return existing;
   }
 
@@ -127,3 +139,5 @@ export class ExpensesService {
     };
   }
 }
+
+

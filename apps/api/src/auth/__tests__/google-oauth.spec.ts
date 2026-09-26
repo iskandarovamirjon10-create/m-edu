@@ -111,9 +111,22 @@ describe('AuthService.googleLogin — account-linking policy', () => {
     expect(prisma.session.create).not.toHaveBeenCalled();
   });
 
+  /**
+   * `googleLogin` resolves BOTH the provider subject and the email through
+   * unique indexes (`findUnique`), so the mock has to answer per argument.
+   */
+  function mockUserLookups(subjectRow: unknown, emailRow: unknown) {
+    prisma.user.findUnique.mockImplementation(
+      (args: { where: Record<string, unknown> }) => {
+        if ('googleSubject' in args.where) return Promise.resolve(subjectRow);
+        if ('email' in args.where) return Promise.resolve(emailRow);
+        return Promise.resolve(null);
+      },
+    );
+  }
+
   it('6) does NOT auto-merge a password-protected account on email match (409)', async () => {
-    prisma.user.findUnique.mockResolvedValue(null); // no subject match
-    prisma.user.findFirst.mockResolvedValue({
+    mockUserLookups(null, {
       id: 'u2', email: 'user@gmail.com', isActive: true, role: 'ORG_ADMIN',
       organizationId: 'o2', passwordHash: '$2a$10$hashed', organization: orgRow,
     });
@@ -122,14 +135,14 @@ describe('AuthService.googleLogin — account-linking policy', () => {
     expect(prisma.session.create).not.toHaveBeenCalled();
   });
 
-  it('7) links a passwordless existing account on verified-email match', async () => {
-    prisma.user.findUnique.mockResolvedValue(null);
-    prisma.user.findFirst.mockResolvedValue({
-      id: 'u3', email: 'user@gmail.com', isActive: true, role: 'ORG_ADMIN',
-      organizationId: 'o3', passwordHash: null, organization: orgRow,
+  it('7) links a passwordless account on verified-email match when the account model allows it', async () => {
+    mockUserLookups(null, {
+      id: 'u3', email: 'user@gmail.com', isActive: true, role: 'STUDENT',
+      organizationId: 'o3', passwordHash: null, googleLinkAllowed: true,
+      organization: orgRow,
     });
     prisma.user.update.mockResolvedValue({
-      id: 'u3', email: 'user@gmail.com', isActive: true, role: 'ORG_ADMIN',
+      id: 'u3', email: 'user@gmail.com', isActive: true, role: 'STUDENT',
       organizationId: 'o3', organization: orgRow,
     });
     const res = await svc.googleLogin(googleProfile());
@@ -142,11 +155,36 @@ describe('AuthService.googleLogin — account-linking policy', () => {
     );
   });
 
+  it('7b) NEVER auto-links a privileged role, even passwordless (409)', async () => {
+    // Audit P0-2: a verified Google email is not proof that the holder of a
+    // teacher/admin account controls that mailbox (shared or mistyped
+    // addresses are common in schools).
+    mockUserLookups(null, {
+      id: 'u5', email: 'user@gmail.com', isActive: true, role: 'ORG_ADMIN',
+      organizationId: 'o5', passwordHash: null, googleLinkAllowed: true,
+      organization: orgRow,
+    });
+    await expect(svc.googleLogin(googleProfile())).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  it('7c) refuses to link a passwordless account that has not opted in (409)', async () => {
+    mockUserLookups(null, {
+      id: 'u6', email: 'user@gmail.com', isActive: true, role: 'STUDENT',
+      organizationId: 'o6', passwordHash: null, googleLinkAllowed: false,
+      organization: orgRow,
+    });
+    await expect(svc.googleLogin(googleProfile())).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
   it('8) rejects an INACTIVE passwordless account on email match (401)', async () => {
-    prisma.user.findUnique.mockResolvedValue(null);
-    prisma.user.findFirst.mockResolvedValue({
-      id: 'u4', email: 'user@gmail.com', isActive: false, role: 'ORG_ADMIN',
-      organizationId: 'o4', passwordHash: null, organization: orgRow,
+    mockUserLookups(null, {
+      id: 'u4', email: 'user@gmail.com', isActive: false, role: 'STUDENT',
+      organizationId: 'o4', passwordHash: null, googleLinkAllowed: true,
+      organization: orgRow,
     });
     await expect(svc.googleLogin(googleProfile())).rejects.toBeInstanceOf(UnauthorizedException);
   });

@@ -21,12 +21,21 @@ function createMockPrisma() {
     attendance: { count: vi.fn() },
     grade: { count: vi.fn() },
     invoice: { count: vi.fn() },
-    faceEnrollment: { count: vi.fn() },
+    faceEnrollment: { count: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     recognitionAttempt: { count: vi.fn() },
     cameraAttendanceEvent: { count: vi.fn() },
     notification: { deleteMany: vi.fn() },
     session: { deleteMany: vi.fn() },
     userSettings: { deleteMany: vi.fn() },
+    parentAccount: { findFirst: vi.fn(), create: vi.fn() },
+    parentStudent: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
     $queryRaw: vi.fn(),
     $transaction: vi.fn(),
   };
@@ -142,7 +151,7 @@ describe('StudentsService assignToGroup capacity enforcement', () => {
     // findUnique must return null = not a current member
     prisma.studentGroup.findUnique.mockResolvedValue(null);
 
-    await expect(svc.assignToGroup('org-1', 's1', 'g1')).rejects.toThrow(/sig.imiga/);
+    await expect(svc.assignToGroup('org-1', 's1', 'g1')).rejects.toThrow(/capacity/i);
     expect(prisma.studentGroup.upsert).not.toHaveBeenCalled();
   });
 
@@ -181,5 +190,88 @@ describe('StudentsService assignToGroup capacity enforcement', () => {
     const result = await svc.assignToGroup('org-1', 's1', 'g1');
     expect(result).toEqual({ id: 'm1' });
     expect(prisma.studentGroup.upsert).toHaveBeenCalled();
+  });
+});
+
+describe('StudentsService parent management', () => {
+  let prisma: MockPrisma;
+  let svc: StudentsService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma = createMockPrisma();
+    svc = new StudentsService(prisma as unknown as PrismaService);
+  });
+
+  it('creates a new parent account and links it to the student', async () => {
+    prisma.student.findFirst.mockResolvedValue({ id: 's1', organizationId: 'org-1' });
+    prisma.parentAccount.findFirst.mockResolvedValue(null);
+    prisma.parentAccount.create.mockResolvedValue({
+      id: 'p1',
+      organizationId: 'org-1',
+      email: 'parent@example.com',
+      firstName: 'Farhod',
+      lastName: 'Karimov',
+    });
+    prisma.parentStudent.findUnique.mockResolvedValue(null);
+    prisma.parentStudent.create.mockResolvedValue({
+      id: 'link1',
+      parentId: 'p1',
+      studentId: 's1',
+      relationship: 'father',
+    });
+
+    const result = await svc.createOrLinkParent('org-1', 's1', {
+      email: 'parent@example.com',
+      firstName: 'Farhod',
+      lastName: 'Karimov',
+      relationship: 'father',
+    });
+
+    expect(prisma.parentAccount.create).toHaveBeenCalled();
+    expect(prisma.parentStudent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          parentId: 'p1',
+          studentId: 's1',
+          relationship: 'father',
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      id: 'link1',
+      parentId: 'p1',
+      studentId: 's1',
+      relationship: 'father',
+    });
+  });
+
+  it('reuses existing parent account and prevents duplicate linking', async () => {
+    prisma.student.findFirst.mockResolvedValue({ id: 's1', organizationId: 'org-1' });
+    prisma.parentAccount.findFirst.mockResolvedValue({
+      id: 'p1',
+      organizationId: 'org-1',
+      email: 'parent@example.com',
+    });
+    prisma.parentStudent.findUnique.mockResolvedValue({ id: 'existing-link' });
+
+    await expect(
+      svc.createOrLinkParent('org-1', 's1', {
+        email: 'parent@example.com',
+        firstName: 'Farhod',
+        lastName: 'Karimov',
+      }),
+    ).rejects.toThrow('Parent is already linked to this student');
+    expect(prisma.parentAccount.create).not.toHaveBeenCalled();
+  });
+
+  it('unlinks parent from student', async () => {
+    prisma.student.findFirst.mockResolvedValue({ id: 's1', organizationId: 'org-1' });
+    prisma.parentStudent.findFirst.mockResolvedValue({ id: 'link1' });
+    prisma.parentStudent.delete.mockResolvedValue({ id: 'link1' });
+
+    const result = await svc.unlinkParent('org-1', 's1', 'p1');
+    expect(prisma.parentStudent.delete).toHaveBeenCalledWith({ where: { id: 'link1' } });
+    expect(result).toEqual({ success: true });
   });
 });

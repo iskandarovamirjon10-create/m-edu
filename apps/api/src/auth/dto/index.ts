@@ -1,11 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { normalizeEmail } from '../auth.utils';
 
 export class LoginDto {
   @ApiProperty()
   @IsEmail()
-  @Transform(({ value }) => value?.toLowerCase().trim())
+  @Transform(({ value }) => (typeof value === 'string' ? normalizeEmail(value) : value))
   email: string;
 
   @ApiProperty()
@@ -14,10 +15,28 @@ export class LoginDto {
   password: string;
 }
 
+export class ParentLoginDto {
+  @ApiProperty()
+  @IsEmail()
+  @Transform(({ value }) => (typeof value === 'string' ? normalizeEmail(value) : value))
+  email: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  password: string;
+
+  @ApiPropertyOptional({ description: 'Optional center / organization ID for parents enrolled across multiple centers' })
+  @IsOptional()
+  @IsString()
+  organizationId?: string;
+}
+
+
 export class RegisterDto {
   @ApiProperty()
   @IsEmail()
-  @Transform(({ value }) => value?.toLowerCase().trim())
+  @Transform(({ value }) => (typeof value === 'string' ? normalizeEmail(value) : value))
   email: string;
 
   @ApiProperty()
@@ -54,7 +73,7 @@ export class RegisterDto {
 export class BootstrapDto {
   @ApiProperty()
   @IsEmail()
-  @Transform(({ value }) => value?.toLowerCase().trim())
+  @Transform(({ value }) => (typeof value === 'string' ? normalizeEmail(value) : value))
   email: string;
 
   @ApiProperty()
@@ -98,7 +117,7 @@ export class ExchangeAuthCodeDto {
 export class ForgotPasswordDto {
   @ApiProperty()
   @IsEmail()
-  @Transform(({ value }) => value?.toLowerCase().trim())
+  @Transform(({ value }) => (typeof value === 'string' ? normalizeEmail(value) : value))
   @MaxLength(254)
   email: string;
 }

@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
+import type { RequestUser } from '../auth/types';
 import { AllowAnyRole } from '../auth/roles.decorator';
 
 @ApiTags('Schedule')
@@ -19,16 +20,16 @@ export class ScheduleController {
   @Get()
   @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER', 'ASSISTANT', 'STUDENT')
   @ApiOperation({ summary: 'List schedules' })
-  findAll(@CurrentUser('organizationId') orgId: string, @Query() query: ScheduleQuery) {
-    return this.scheduleService.findAll(orgId, query);
+  findAll(@CurrentUser('organizationId') orgId: string, @Query() query: ScheduleQuery, @CurrentUser() user: RequestUser) {
+    return this.scheduleService.findAll(orgId, query, user);
   }
 
   @AllowAnyRole()
   @Get(':id')
   @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER', 'ASSISTANT', 'STUDENT')
   @ApiOperation({ summary: 'Get schedule entry' })
-  findOne(@CurrentUser('organizationId') orgId: string, @Param('id') id: string) {
-    return this.scheduleService.findOne(orgId, id);
+  findOne(@CurrentUser('organizationId') orgId: string, @Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.scheduleService.findOne(orgId, id, user);
   }
 
   @Post()

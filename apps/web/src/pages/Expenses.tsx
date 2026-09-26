@@ -1,3 +1,4 @@
+import { toLocalISOString } from '../lib/format';
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { expensesApi } from '@/lib/api';
@@ -56,7 +57,7 @@ const INITIAL_FORM: ExpenseFormState = {
   category: 'OTHER',
   amount: '',
   description: '',
-  date: new Date().toISOString().slice(0, 10),
+  date: toLocalISOString(),
 };
 
 function calculateTotal(expenses: Expense[]): number {
@@ -209,7 +210,7 @@ export function ExpensesPage() {
       category: expense.category,
       amount: String(expense.amount),
       description: expense.description || '',
-      date: new Date(expense.date).toISOString().slice(0, 10),
+      date: toLocalISOString(new Date(expense.date)),
     });
     setFormErrors({});
     setModalOpen(true);

@@ -18,6 +18,10 @@ import {
   MinLength,
 } from 'class-validator';
 
+/** Currency amount: non-negative, at most 2 decimal places (avoids float dust in reports). */
+const IsMoneyAmount = () =>
+  IsNumber({ maxDecimalPlaces: 2 }, { message: 'amount must be a number with at most 2 decimal places' });
+
 /** Strip HTML tags from a string value (server-side XSS prevention). */
 const stripHtmlTags = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.replace(/<[^>]*>/g, '').trim() : value;
@@ -92,6 +96,57 @@ export class UpdateStudentDto {
 
   @ApiPropertyOptional() @IsOptional() @IsEmail()
   parentEmail?: string;
+}
+
+// ==================== Parent Links ====================
+
+export class CreateParentLinkDto {
+  @ApiProperty() @IsEmail()
+  email: string;
+
+  @ApiProperty() @Transform(stripHtmlTags) @IsString() @IsNotEmpty() @MaxLength(100)
+  firstName: string;
+
+  @ApiProperty() @Transform(stripHtmlTags) @IsString() @IsNotEmpty() @MaxLength(100)
+  lastName: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(20)
+  phone?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(6)
+  password?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(50)
+  relationship?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  isPrimary?: boolean;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  canViewGrades?: boolean;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  canViewPayments?: boolean;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  canViewAttendance?: boolean;
+}
+
+export class UpdateParentLinkDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(50)
+  relationship?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  isPrimary?: boolean;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  canViewGrades?: boolean;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  canViewPayments?: boolean;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  canViewAttendance?: boolean;
 }
 
 // ==================== Teachers ====================
@@ -328,7 +383,7 @@ export class CreatePaymentDto {
   @ApiProperty() @IsUUID()
   studentId: string;
 
-  @ApiProperty() @IsNumber() @Min(0.01)
+  @ApiProperty() @IsMoneyAmount() @Min(0.01)
   amount: number;
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500)
@@ -348,7 +403,7 @@ export class UpdatePaymentDto {
   @ApiPropertyOptional() @IsOptional() @IsEnum(['PAID', 'PENDING', 'OVERDUE', 'CANCELLED'])
   status?: 'PAID' | 'PENDING' | 'OVERDUE' | 'CANCELLED';
 
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0.01)
+  @ApiPropertyOptional() @IsOptional() @IsMoneyAmount() @Min(0.01)
   amount?: number;
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500)
@@ -370,7 +425,7 @@ export class CreateExpenseDto {
   @ApiProperty() @IsEnum(['SALARY', 'RENT', 'UTILITIES', 'MARKETING', 'SUPPLIES', 'MAINTENANCE', 'SOFTWARE', 'TRAINING', 'OTHER'])
   category: 'SALARY' | 'RENT' | 'UTILITIES' | 'MARKETING' | 'SUPPLIES' | 'MAINTENANCE' | 'SOFTWARE' | 'TRAINING' | 'OTHER';
 
-  @ApiProperty() @IsNumber() @Min(0.01)
+  @ApiProperty() @IsMoneyAmount() @Min(0.01)
   amount: number;
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500)
@@ -387,7 +442,7 @@ export class UpdateExpenseDto {
   @ApiPropertyOptional() @IsOptional() @IsEnum(['SALARY', 'RENT', 'UTILITIES', 'MARKETING', 'SUPPLIES', 'MAINTENANCE', 'SOFTWARE', 'TRAINING', 'OTHER'])
   category?: 'SALARY' | 'RENT' | 'UTILITIES' | 'MARKETING' | 'SUPPLIES' | 'MAINTENANCE' | 'SOFTWARE' | 'TRAINING' | 'OTHER';
 
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0.01)
+  @ApiPropertyOptional() @IsOptional() @IsMoneyAmount() @Min(0.01)
   amount?: number;
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500)
@@ -560,6 +615,17 @@ export class CreateUserDto {
 
   @ApiProperty() @IsEnum(['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER', 'ASSISTANT', 'STUDENT'])
   role: 'SUPER_ADMIN' | 'ORG_ADMIN' | 'MANAGER' | 'TEACHER' | 'ASSISTANT' | 'STUDENT';
+
+  // Account-model opt-in for passwordless Google sign-in (audit P0-2).
+  // Required before a passwordless account may be linked to a Google identity
+  // on a verified-email match; privileged roles are never auto-linked no
+  // matter what this flag says (see `canAutoLink` in AuthService).
+  @ApiPropertyOptional({
+    description:
+      'Allow this passwordless account to be linked to Google on a verified-email match.',
+  })
+  @IsOptional() @IsBoolean()
+  googleLinkAllowed?: boolean;
 }
 
 export class UpdateUserDto {
@@ -577,6 +643,13 @@ export class UpdateUserDto {
 
   @ApiPropertyOptional() @IsOptional() @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Allow this passwordless account to be linked to Google on a verified-email match. Ignored for privileged roles.',
+  })
+  @IsOptional() @IsBoolean()
+  googleLinkAllowed?: boolean;
 }
 
 export class UpdateUserSettingsDto {
@@ -597,6 +670,29 @@ export class UpdateUserSettingsDto {
 
   @ApiPropertyOptional() @IsOptional() @IsBoolean()
   smsNotifications?: boolean;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  telegramNotifications?: boolean;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  quietHoursEnabled?: boolean;
+
+  /** Wall-clock HH:mm in 24-hour format (00:00 to 23:59). */
+  @ApiPropertyOptional({ example: '22:00' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^([01]\d|2[0-3]):([0-5]\d)$/, {
+    message: 'quietHoursStart must be in 24-hour HH:mm format (00:00 to 23:59)',
+  })
+  quietHoursStart?: string;
+
+  @ApiPropertyOptional({ example: '07:00' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^([01]\d|2[0-3]):([0-5]\d)$/, {
+    message: 'quietHoursEnd must be in 24-hour HH:mm format (00:00 to 23:59)',
+  })
+  quietHoursEnd?: string;
 }
 
 export class ChangePasswordDto {

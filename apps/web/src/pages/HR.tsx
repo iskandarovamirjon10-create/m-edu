@@ -1,3 +1,4 @@
+import { toLocalISOString } from '../lib/format';
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { hrApi, usersApi } from '@/lib/api';
@@ -45,7 +46,7 @@ const INITIAL_FORM: EmployeeFormState = {
   department: '',
   contractType: '',
   salary: '',
-  hireDate: new Date().toISOString().split('T')[0],
+  hireDate: toLocalISOString(),
   bankAccount: '',
   taxId: '',
 };

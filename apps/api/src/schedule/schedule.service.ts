@@ -9,6 +9,8 @@ export interface ScheduleQuery {
   page?: string | number;
   limit?: string | number;
   groupId?: string;
+  /** Restrict to lessons of the groups taught by this teacher. */
+  teacherId?: string;
   dayOfWeek?: string;
 }
 
@@ -16,6 +18,7 @@ const DAY_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SA
 type DayOfWeek = (typeof DAY_OF_WEEK)[number];
 
 import { LessonGeneratorService } from './lesson-generator.service';
+import type { RequestUser } from '../auth/types';
 
 @Injectable()
 export class ScheduleService {
@@ -24,12 +27,20 @@ export class ScheduleService {
     private readonly lessonGenerator: LessonGeneratorService,
   ) {}
 
-  async findAll(organizationId: string, query: ScheduleQuery) {
+  async findAll(organizationId: string, query: ScheduleQuery, user?: RequestUser | { id: string; role?: string }) {
     const { page, limit, skip } = parsePagination(query);
 
+    const groupFilter: Prisma.GroupWhereInput =
+      user?.role === 'STUDENT'
+        ? { organizationId, enrollments: { some: { student: { userId: (user as any)?.id || (user as any)?.sub } } } }
+        : { organizationId };
+    // Teacher scoping: lessons for the groups this teacher owns. Combined with
+    // the organization scope above, a foreign teacherId from another tenant
+    // can never match.
+    if (query.teacherId) groupFilter.teacherId = query.teacherId;
     const where: Prisma.ScheduleWhereInput = {
-      group: { organizationId },
       isActive: true,
+      group: groupFilter,
       ...(query.groupId ? { groupId: query.groupId } : {}),
       ...(query.dayOfWeek && DAY_OF_WEEK.includes(query.dayOfWeek as DayOfWeek)
         ? { dayOfWeek: query.dayOfWeek as DayOfWeek }
@@ -50,9 +61,9 @@ export class ScheduleService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async findOne(organizationId: string, id: string) {
+  async findOne(organizationId: string, id: string, user?: RequestUser | { id: string; role?: string }) {
     const schedule = await this.prisma.schedule.findFirst({
-      where: { id, group: { organizationId } },
+      where: { id, ...(user?.role === 'STUDENT' ? { group: { organizationId, enrollments: { some: { student: { userId: (user as any)?.id || (user as any)?.sub } } } } } : { group: { organizationId } }) },
       include: { group: { select: { id: true, name: true, room: true } } },
     });
     if (!schedule) throw new NotFoundException('Schedule not found');
@@ -168,7 +179,7 @@ export class ScheduleService {
    * client so that the read is serialized within the advisory-lock transaction.
    */
   private async checkForConflictsTx(
-    client: { schedule: { findMany: (...args: any[]) => any } },
+    client: PrismaService | Prisma.TransactionClient,
     organizationId: string,
     dayOfWeek: DayOfWeek,
     startTime: string,
@@ -196,16 +207,12 @@ export class ScheduleService {
     for (const overlap of overlappingSchedules) {
       // 1. Room Conflict
       if (room && overlap.room === room) {
-        throw new BadRequestException(
-          `Xona to'qnashuvi (Room Conflict): ${dayOfWeek} kuni soat ${overlap.startTime}-${overlap.endTime} oralig'ida ${room} xonasida "${overlap.group.name}" guruhining darsi bor. Boshqa xona yoki vaqt tanlang.`,
-        );
+        throw new BadRequestException('SCHEDULE_ROOM_CONFLICT');
       }
       
       // 2. Teacher Conflict
       if (teacherId && overlap.group.teacherId === teacherId) {
-        throw new BadRequestException(
-          `O'qituvchi to'qnashuvi (Teacher Conflict): Ushbu o'qituvchining ${dayOfWeek} kuni soat ${overlap.startTime}-${overlap.endTime} oralig'ida "${overlap.group.name}" guruhida darsi bor.`,
-        );
+        throw new BadRequestException('SCHEDULE_TEACHER_CONFLICT');
       }
     }
   }

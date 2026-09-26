@@ -258,6 +258,7 @@ describe('AuthController', () => {
     } as any;
 
     it('logs in with Google profile, generates auth code, and redirects to frontend callback with code', async () => {
+      process.env.FRONTEND_URL = 'http://localhost:3000';
       process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
       const res = createMockResponse();
       const loginResult = {
@@ -277,6 +278,7 @@ describe('AuthController', () => {
     });
 
     it('falls back to http://localhost:3000 when NEXT_PUBLIC_APP_URL is not set', async () => {
+      delete process.env.FRONTEND_URL;
       delete process.env.NEXT_PUBLIC_APP_URL;
       const res = createMockResponse();
       authService.googleLogin.mockResolvedValue({
@@ -293,6 +295,7 @@ describe('AuthController', () => {
     });
 
     it('redirects with string error from HttpException response', async () => {
+      process.env.FRONTEND_URL = 'https://app.medu.uz';
       process.env.NEXT_PUBLIC_APP_URL = 'https://app.medu.uz';
       const res = createMockResponse();
       authService.googleLogin.mockRejectedValue(new HttpException('Account deactivated', HttpStatus.FORBIDDEN));
@@ -305,6 +308,7 @@ describe('AuthController', () => {
     });
 
     it('redirects with object error message from HttpException response', async () => {
+      process.env.FRONTEND_URL = 'https://app.medu.uz';
       process.env.NEXT_PUBLIC_APP_URL = 'https://app.medu.uz';
       const res = createMockResponse();
       authService.googleLogin.mockRejectedValue(
@@ -319,6 +323,7 @@ describe('AuthController', () => {
     });
 
     it('redirects with JSON stringified message if HttpException message is an object or array', async () => {
+      process.env.FRONTEND_URL = 'https://app.medu.uz';
       process.env.NEXT_PUBLIC_APP_URL = 'https://app.medu.uz';
       const res = createMockResponse();
       const detailedMessages = ['validation error 1', 'validation error 2'];
@@ -334,6 +339,7 @@ describe('AuthController', () => {
     });
 
     it('redirects with safe generic message on unexpected non-HttpException error', async () => {
+      process.env.FRONTEND_URL = 'https://app.medu.uz';
       process.env.NEXT_PUBLIC_APP_URL = 'https://app.medu.uz';
       const res = createMockResponse();
       authService.googleLogin.mockRejectedValue(new Error('Internal database timeout'));
@@ -355,7 +361,7 @@ describe('AuthController', () => {
       expect(authService.exchangeAuthCode).not.toHaveBeenCalled();
     });
 
-    it('delegates to authService.exchangeAuthCode, sets cookie, and returns accessToken', async () => {
+    it('delegates to authService.exchangeAuthCode, sets cookie, and never returns the JWT in the body', async () => {
       const res = createMockResponse();
       const body: ExchangeAuthCodeDto = { code: 'valid-code-789' };
       authService.exchangeAuthCode.mockResolvedValue('jwt-exchanged-token');
@@ -369,7 +375,10 @@ describe('AuthController', () => {
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000,
       });
-      expect(result).toEqual({ accessToken: 'jwt-exchanged-token' });
+      // The cookie is the only carrier: a token in the response body would be
+      // readable by any script on the page and would end up in logs/proxies.
+      expect(result).toEqual({ authenticated: true });
+      expect(JSON.stringify(result)).not.toContain('jwt-exchanged-token');
     });
 
     it('sets secure cookie flag in production environment', async () => {
@@ -440,7 +449,7 @@ describe('AuthController', () => {
 
       const result = await controller.refresh(req, res);
 
-      expect(authService.refreshToken).toHaveBeenCalledWith('u-user-1', 'sess-abc');
+      expect(authService.refreshToken).toHaveBeenCalledWith('u-user-1', 'sess-abc', 'STUDENT');
       expect(res.cookie).toHaveBeenCalledWith('access_token', 'new-refreshed-jwt', {
         httpOnly: true,
         secure: false,
@@ -457,7 +466,26 @@ describe('AuthController', () => {
 
       await controller.refresh(req, res);
 
-      expect(authService.refreshToken).toHaveBeenCalledWith('u-user-1', undefined);
+      expect(authService.refreshToken).toHaveBeenCalledWith('u-user-1', undefined, 'STUDENT');
+    });
+
+    it('forwards the PARENT role so refreshToken selects the ParentSession table', async () => {
+      authService.refreshToken.mockResolvedValue(mockRefreshResult);
+      const res = createMockResponse();
+      const req = {
+        user: {
+          sub: 'parent-1',
+          sid: 'psess-1',
+          email: 'parent@example.com',
+          role: 'PARENT',
+          organizationId: 'org-1',
+        },
+      } as any;
+
+      await controller.refresh(req, res);
+
+      // Never: (sub, sid) alone — the role decides which table owns the sid.
+      expect(authService.refreshToken).toHaveBeenCalledWith('parent-1', 'psess-1', 'PARENT');
     });
 
     it('sets secure cookie flag in production environment on refresh', async () => {
@@ -570,7 +598,7 @@ describe('AuthController', () => {
 
       const result = await controller.getMe(req);
 
-      expect(authService.getMe).toHaveBeenCalledWith('u-1');
+      expect(authService.getMe).toHaveBeenCalledWith('u-1', 'SUPER_ADMIN');
       expect(result).toEqual(mockProfile);
     });
 

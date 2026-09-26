@@ -19,6 +19,23 @@ export interface ConfigProblem {
 
 const MIN_SECRET_LENGTH = 32;
 
+const INSECURE_PLACEHOLDER_SUBSTRINGS = [
+  'changeme',
+  'your-jwt-secret',
+  'your-biometric-key',
+  'your-camera-key',
+  'your-telegram',
+  'this-is-a-very-long-secret',
+  'placeholder',
+  'secret-here',
+];
+
+function isUnsafePlaceholder(val: string | undefined): boolean {
+  if (!val) return false;
+  const lower = val.toLowerCase();
+  return INSECURE_PLACEHOLDER_SUBSTRINGS.some((s) => lower.includes(s));
+}
+
 export function validateConfig(nodeEnv: string = process.env.NODE_ENV || 'development'): ConfigProblem[] {
   const problems: ConfigProblem[] = [];
   const env = process.env;
@@ -40,12 +57,18 @@ export function validateConfig(nodeEnv: string = process.env.NODE_ENV || 'develo
     error('JWT_SECRET', 'Required to sign and verify session tokens.');
   } else if (env.JWT_SECRET.length < MIN_SECRET_LENGTH) {
     error('JWT_SECRET', `Must be at least ${MIN_SECRET_LENGTH} characters.`);
+  } else if (nodeEnv === 'production' && isUnsafePlaceholder(env.JWT_SECRET)) {
+    error('JWT_SECRET', 'Unsafe placeholder secret detected. Production must use a cryptographically random secret.');
   }
 
   // --- OAuth state session (express-session signing secret) ---
   const googleConfigured = Boolean(env.GOOGLE_CLIENT_ID || env.GOOGLE_CLIENT_SECRET);
-  if (nodeEnv === 'production' && (!env.OAUTH_SESSION_SECRET || env.OAUTH_SESSION_SECRET.length < MIN_SECRET_LENGTH)) {
-    error('OAUTH_SESSION_SECRET', `Required (>= ${MIN_SECRET_LENGTH} chars) in production.`);
+  if (nodeEnv === 'production') {
+    if (!env.OAUTH_SESSION_SECRET || env.OAUTH_SESSION_SECRET.length < MIN_SECRET_LENGTH) {
+      error('OAUTH_SESSION_SECRET', `Required (>= ${MIN_SECRET_LENGTH} chars) in production.`);
+    } else if (isUnsafePlaceholder(env.OAUTH_SESSION_SECRET)) {
+      error('OAUTH_SESSION_SECRET', 'Unsafe placeholder secret detected. Production must use a cryptographically random secret.');
+    }
   } else if (googleConfigured && (!env.OAUTH_SESSION_SECRET || env.OAUTH_SESSION_SECRET.length < MIN_SECRET_LENGTH)) {
     error('OAUTH_SESSION_SECRET', `Required (>= ${MIN_SECRET_LENGTH} chars) when Google OAuth is configured.`);
   }
@@ -56,6 +79,8 @@ export function validateConfig(nodeEnv: string = process.env.NODE_ENV || 'develo
     error('BIOMETRIC_ENCRYPTION_KEY', 'Required (AES-256-GCM) — also used as fallback for camera credentials.');
   } else if (encKey.length < MIN_SECRET_LENGTH) {
     error('BIOMETRIC_ENCRYPTION_KEY', `Must be at least ${MIN_SECRET_LENGTH} characters.`);
+  } else if (nodeEnv === 'production' && isUnsafePlaceholder(encKey)) {
+    error('BIOMETRIC_ENCRYPTION_KEY', 'Unsafe placeholder encryption key detected. Production must use a cryptographically random 256-bit key.');
   }
 
   // --- Face recognition ---
@@ -93,9 +118,66 @@ export function validateConfig(nodeEnv: string = process.env.NODE_ENV || 'develo
     error('PORT', 'Must be a numeric port.');
   }
 
+  // --- Redis (notification pipeline + scheduled jobs) ---
+  if (nodeEnv === 'production') {
+    if (env.REDIS_ENABLED === 'false') {
+      error('REDIS_ENABLED', 'Must not be "false" in production (notifications and cron jobs require Redis).');
+    }
+    if (!env.REDIS_URL && !env.REDIS_HOST) {
+      error('REDIS_URL', 'REDIS_URL or REDIS_HOST is required in production.');
+    }
+  }
+
+  // --- Telegram integration ---
+  //
+  // Telegram is optional, but when it is switched on in production the webhook
+  // MUST be authenticatable and deep links MUST be buildable — an enabled bot
+  // without a webhook secret would accept unauthenticated updates.
+  if (env.TELEGRAM_ENABLED === 'true') {
+    const missing: string[] = [];
+    if (!env.TELEGRAM_BOT_TOKEN) missing.push('TELEGRAM_BOT_TOKEN');
+    if (!env.TELEGRAM_BOT_USERNAME) missing.push('TELEGRAM_BOT_USERNAME');
+    if (!env.TELEGRAM_WEBHOOK_SECRET) {
+      missing.push('TELEGRAM_WEBHOOK_SECRET');
+    } else if (env.TELEGRAM_WEBHOOK_SECRET.length < MIN_SECRET_LENGTH) {
+      error(
+        'TELEGRAM_WEBHOOK_SECRET',
+        `Must be at least ${MIN_SECRET_LENGTH} characters when TELEGRAM_ENABLED=true.`,
+      );
+    } else if (nodeEnv === 'production' && isUnsafePlaceholder(env.TELEGRAM_WEBHOOK_SECRET)) {
+      error('TELEGRAM_WEBHOOK_SECRET', 'Unsafe placeholder secret detected. Production must use a cryptographically random secret.');
+    }
+
+    if (missing.length > 0) {
+      const message = `Required when TELEGRAM_ENABLED=true (missing: ${missing.join(', ')}).`;
+      if (nodeEnv === 'production') {
+        for (const variable of missing) error(variable, message);
+      } else {
+        for (const variable of missing) warn(variable, message);
+      }
+    }
+
+    // Inline-keyboard callbacks are HMAC-signed. A dedicated secret is
+    // recommended (key separation from session tokens); JWT_SECRET is used as
+    // a fallback so the feature cannot silently break.
+    if (!env.TELEGRAM_CALLBACK_SECRET) {
+      warn(
+        'TELEGRAM_CALLBACK_SECRET',
+        'Not set — Telegram callback signing falls back to JWT_SECRET. Set a dedicated value for key separation.',
+      );
+    }
+  } else if (env.TELEGRAM_BOT_TOKEN || env.TELEGRAM_WEBHOOK_SECRET) {
+    // Credentials present but the integration is not switched on: this is the
+    // configuration an operator almost never wants (silent half-enabled bot).
+    warn(
+      'TELEGRAM_ENABLED',
+      'Telegram credentials are set but TELEGRAM_ENABLED is not "true". The webhook route still requires TELEGRAM_WEBHOOK_SECRET.',
+    );
+  }
+
   // --- Camera network policy ---
   if (nodeEnv === 'production' && env.ALLOW_LOCAL_CAMERAS === 'true') {
-    warn('ALLOW_LOCAL_CAMERAS', 'Allowing local/private camera addresses in production is risky; verify network boundaries.');
+    error('ALLOW_LOCAL_CAMERAS', 'Allowing local/private camera addresses in production is forbidden (SSRF risk).');
   }
   if (nodeEnv === 'production' && env.ALLOW_CAMERA_DISCOVERY === 'true') {
     warn('ALLOW_CAMERA_DISCOVERY', 'ONVIF discovery in production should only be enabled inside trusted networks.');

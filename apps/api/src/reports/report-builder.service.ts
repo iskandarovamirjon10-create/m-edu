@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FinancialBrainService } from '../analytics/financial-brain.service';
-import { startOfDay, endOfDayInclusive } from '../common/date-range';
+import { startOfDay, endOfDayInclusive } from '../common/date-range.js';
 
 /**
  * Report Builder — generates reports exclusively from real database data and
@@ -379,7 +379,7 @@ export class ReportBuilderService {
     dateFrom?: Date,
     dateTo?: Date,
   ): Promise<{ status: 'READY' | 'INSUFFICIENT_DATA'; reason?: string; rows: Array<Record<string, unknown>> }> {
-    const { startOfDay, endOfDayInclusive } = await import('../common/date-range');
+    const { startOfDay, endOfDayInclusive } = await import('../common/date-range.js');
     const end = endOfDayInclusive(dateTo ?? new Date());
     const start = startOfDay(dateFrom ?? new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000));    if (start > end) {
       throw new BadRequestException('dateFrom must be before dateTo');
@@ -505,7 +505,7 @@ export class ReportBuilderService {
           orderBy: { createdAt: 'desc' },
           take: MAX_REPORT_ROWS,
         });
-        const { computeInvoiceOutstanding } = await import('../payments/invoice-outstanding');
+        const { computeInvoiceOutstanding } = await import('../payments/invoice-outstanding.js');
         
         return rows.map((i) => {
           const { outstanding } = computeInvoiceOutstanding([i as any]);
@@ -654,7 +654,7 @@ export class ReportBuilderService {
     params: RunReportParams,
     format: 'csv' | 'xlsx' | 'pdf',
   ): Promise<{ buffer: Buffer; contentType: string; extension: string }> {
-    const result = await this.run(orgId, { ...params, page: params.page ?? 1, pageSize: params.pageSize ?? 200 });
+    const result = await this.run(orgId, { ...params, page: params.page ?? 1, pageSize: params.pageSize ?? 10000 });
     const headers = result.selectedColumns.map(
       (k) => result.columns.find((c) => c.key === k)?.label ?? k,
     );
@@ -704,12 +704,12 @@ export class ReportBuilderService {
       pdfmake.setLocalAccessPolicy(() => true);
       pdfmake.setUrlAccessPolicy(() => false);
             pdfmake.setFonts({
-        Roboto: {
-          normal: require.resolve('pdfmake/fonts/Roboto/Roboto-Regular.ttf'),
-          bold: require.resolve('pdfmake/fonts/Roboto/Roboto-Medium.ttf'),
-          italics: require.resolve('pdfmake/fonts/Roboto/Roboto-Italic.ttf'),
-          bolditalics: require.resolve('pdfmake/fonts/Roboto/Roboto-MediumItalic.ttf'),
-        },
+        NotoSans: {
+            normal: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf'),
+            bold: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf'),
+            italics: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf'),
+            bolditalics: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf'),
+          },
       });
       const doc = pdfmake.createPdf({
         content: [
@@ -723,7 +723,7 @@ export class ReportBuilderService {
           },
         ],
         styles: { header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] } },
-        defaultStyle: { font: 'Roboto', fontSize: 8 },
+        defaultStyle: { font: 'NotoSans', fontSize: 8 },
       });
       return { buffer: Buffer.from(await doc.getBuffer()), contentType: 'application/pdf', extension: 'pdf' };
     } catch (error) {

@@ -19,6 +19,8 @@ export interface NotificationPreferenceResponse {
   smsEnabled: boolean;
   pushEnabled: boolean;
   inAppEnabled: boolean;
+  /** Per-category Telegram opt-in (server-side source of truth). */
+  telegramEnabled: boolean;
 }
 
 export interface UpdatePreferenceDto {
@@ -26,6 +28,7 @@ export interface UpdatePreferenceDto {
   smsEnabled?: boolean;
   pushEnabled?: boolean;
   inAppEnabled?: boolean;
+  telegramEnabled?: boolean;
 }
 
 export interface BulkUpdatePreferenceDto extends UpdatePreferenceDto {
@@ -50,6 +53,7 @@ export class NotificationPreferenceService {
         smsEnabled: pref?.smsEnabled ?? false,
         pushEnabled: pref?.pushEnabled ?? true,
         inAppEnabled: pref?.inAppEnabled ?? true,
+        telegramEnabled: pref?.telegramEnabled ?? true,
       };
     });
   }

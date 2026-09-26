@@ -127,7 +127,7 @@ describe('AuthService.register — password hashing contract', () => {
 
     await svc.register({ ...VALID, email: 'hash@b.com' });
 
-    expect(hashSpy).toHaveBeenCalledWith('Str0ngPass!x', 10);
+    expect(hashSpy).toHaveBeenCalledWith('Str0ngPass!x', 12);
     expect(storedArgs).toHaveLength(1);
     const data = storedArgs[0].data;
     // Never plaintext:

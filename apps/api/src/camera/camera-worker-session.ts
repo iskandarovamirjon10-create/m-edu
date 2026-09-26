@@ -39,6 +39,7 @@ export interface CameraWorkerConfig {
   attendanceEnabled: boolean;
 
   similarityThreshold: number;
+  minAmbiguityMargin?: number;
 }
 
 interface EnrolledTemplate {
@@ -105,6 +106,8 @@ const MAX_PROCESSING_TIME_MS = 5_000;
  * multiple attendance events from a single frame.
  */
 const FACE_SIMILARITY_DEDUP_THRESHOLD = 0.95;
+
+const SHARED_TEMPLATE_CACHE = new Map<string, { templates: any[], lastUpdated: number }>();
 
 export class CameraWorkerSession extends EventEmitter {
   private readonly logger = new SecureLogger('info');
@@ -219,31 +222,39 @@ export class CameraWorkerSession extends EventEmitter {
   // PUBLIC LIFECYCLE
   // ============================================================
 
+  private _isStarting = false;
+
   async start(): Promise<void> {
-    if (
-      this.lifecycleState === 'ONLINE' ||
-      this.lifecycleState === 'CONNECTING'
-    ) {
-      return;
-    }
+    if (this._isStarting) return;
+    this._isStarting = true;
+    try {
+      if (
+        this.lifecycleState === 'ONLINE' ||
+        this.lifecycleState === 'CONNECTING'
+      ) {
+        return;
+      }
 
-    if (
-      this.lifecycleState === 'STOPPING'
-    ) {
-      throw new Error(
-        'Camera worker is currently stopping',
+      if (
+        this.lifecycleState === 'STOPPING'
+      ) {
+        throw new Error(
+          'Camera worker is currently stopping',
+        );
+      }
+
+      this.stopped = false;
+
+      this.lifecycleState = 'CONNECTING';
+
+      this.healthTracker.setStatus(
+        'CONNECTING',
       );
+
+      await this.connect();
+    } finally {
+      this._isStarting = false;
     }
-
-    this.stopped = false;
-
-    this.lifecycleState = 'CONNECTING';
-
-    this.healthTracker.setStatus(
-      'CONNECTING',
-    );
-
-    await this.connect();
   }
 
   async stop(): Promise<void> {
@@ -592,6 +603,28 @@ export class CameraWorkerSession extends EventEmitter {
     /**
      * Fail closed if the real engine is unavailable.
      */
+    /**
+     * Fail closed when there is no engine at all.
+     *
+     * `CameraWorkerManagerService.initializeFaceEngine()` only warns outside
+     * production, so `faceEngine` can be undefined while an enabled camera
+     * still starts a worker. The availability probe below cannot catch that:
+     * reading `.isAvailable` off an undefined engine throws before `typeof` is
+     * evaluated, so the intended fail-closed path became an exception.
+     */
+    if (!this.faceEngine) {
+      this.logger.error(
+        'Recognition rejected because face engine is unavailable',
+        {
+          cameraId: this.cameraId,
+          organizationId:
+            this.organizationId,
+        },
+      );
+
+      return;
+    }
+
     if (
       typeof this.faceEngine
         .isAvailable === 'function'
@@ -714,6 +747,7 @@ export class CameraWorkerSession extends EventEmitter {
       // ----------------------------------------------------------
 
       if (
+        !this.faceEngine ||
         typeof this.faceEngine
           .checkLiveness !== 'function'
       ) {
@@ -851,7 +885,12 @@ export class CameraWorkerSession extends EventEmitter {
     studentId: string;
     similarity: number;
   } | null> {
-    let bestMatch: {
+    let top1: {
+      studentId: string;
+      similarity: number;
+    } | null = null;
+
+    let top2: {
       studentId: string;
       similarity: number;
     } | null = null;
@@ -882,16 +921,34 @@ export class CameraWorkerSession extends EventEmitter {
           continue;
         }
 
-        if (
-          !bestMatch ||
-          similarity >
-            bestMatch.similarity
-        ) {
-          bestMatch = {
-            studentId:
-              template.studentId,
+        if (!top1) {
+          top1 = {
+            studentId: template.studentId,
             similarity,
           };
+        } else if (template.studentId === top1.studentId) {
+          if (similarity > top1.similarity) {
+            top1.similarity = similarity;
+          }
+        } else {
+          // Different student from current top1
+          if (similarity > top1.similarity) {
+            if (!top2 || top1.similarity > top2.similarity) {
+              top2 = {
+                studentId: top1.studentId,
+                similarity: top1.similarity,
+              };
+            }
+            top1 = {
+              studentId: template.studentId,
+              similarity,
+            };
+          } else if (!top2 || similarity > top2.similarity) {
+            top2 = {
+              studentId: template.studentId,
+              similarity,
+            };
+          }
         }
       } catch (err: unknown) {
         this.logger.warn(
@@ -908,7 +965,25 @@ export class CameraWorkerSession extends EventEmitter {
       }
     }
 
-    return bestMatch;
+    if (!top1) {
+      return null;
+    }
+
+    const minMargin = this.config.minAmbiguityMargin ?? 0.05;
+    if (top2 && (top1.similarity - top2.similarity) < minMargin) {
+      this.logger.warn('Ambiguous face match detected — rejected to prevent false positive', {
+        cameraId: this.cameraId,
+        top1StudentId: top1.studentId,
+        top1Similarity: top1.similarity,
+        top2StudentId: top2.studentId,
+        top2Similarity: top2.similarity,
+        margin: top1.similarity - top2.similarity,
+        requiredMargin: minMargin,
+      });
+      return null;
+    }
+
+    return top1;
   }
 
   // ============================================================

@@ -3,7 +3,16 @@ export function formatDate(value?: string | null, locale?: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
   const loc = locale || (typeof navigator !== 'undefined' ? navigator.language : undefined) || 'en-US';
-  return d.toLocaleDateString(loc, { year: 'numeric', month: 'short', day: 'numeric' });
+  
+  // [Fix #62] Prevent timezone shift for dates that are midnight UTC
+  const isMidnightUTC = typeof value === 'string' && value.endsWith('T00:00:00.000Z');
+  
+  return d.toLocaleDateString(loc, { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric',
+    timeZone: isMidnightUTC ? 'UTC' : undefined 
+  });
 }
 
 export function formatDateTime(value?: string | null, locale?: string): string {
@@ -94,4 +103,9 @@ export function formatMonth(value: string | Date | null | undefined): string {
   if (Number.isNaN(d.getTime())) return String(value);
   const loc = (typeof navigator !== 'undefined' ? navigator.language : undefined) || 'en-US';
   return d.toLocaleDateString(loc, { month: 'short', year: 'numeric' });
+}
+
+export function toLocalISOString(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

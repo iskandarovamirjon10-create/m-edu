@@ -15,6 +15,7 @@
 import type { EmbeddingInput, FaceEmbedding } from '@medu/core';
 import { FaceEmbedding as FaceEmbeddingVO } from '@medu/core';
 import { createLogger } from '../lib/logger';
+import { CANONICAL_112_LANDMARKS, computeSimilarityTransform, warpAffineBilinear } from '../lib/alignment';
 
 const logger = createLogger('RealEmbedder');
 import type { InferenceSession } from 'onnxruntime-node';
@@ -111,7 +112,8 @@ export class RealEmbedder {
 
   /**
    * Generate a face embedding from an image and detected face.
-   * The face bounding box is used to crop and align the face.
+   * Uses 5-point facial landmark alignment (canonical 112x112 similarity transform)
+   * if landmarks are present; otherwise falls back to bounding-box expansion crop.
    */
   async generateEmbedding(input: EmbeddingInput): Promise<FaceEmbedding> {
     if (!this.available || !this.session) {
@@ -120,48 +122,77 @@ export class RealEmbedder {
     const session = this.session;
 
     const sharp = (await import('sharp')).default;
-    const { boundingBox } = input.face;
+    const inputSize = this.config.inputSize;
+    let alignedData: Uint8Array | Buffer;
 
-    // Oriented dimensions: the detector auto-applies EXIF rotation before
-    // producing this bbox, so clamp against the ROTATED size (metadata()
-    // itself reports pre-rotation width/height).
-    const rawMeta = await sharp(input.imageBuffer).metadata();
-    const orientation = rawMeta.orientation ?? 1;
-    const swapsAxes = orientation >= 5 && orientation <= 8;
-    const orientedW = (swapsAxes ? rawMeta.height : rawMeta.width) || 0;
-    const orientedH = (swapsAxes ? rawMeta.width : rawMeta.height) || 0;
+    if (input.face.landmarks && input.face.landmarks.length >= 3) {
+      // 5-point facial landmark similarity transform alignment
+      const { data: rawImgData, info: rawImgInfo } = await sharp(input.imageBuffer)
+        .rotate()
+        .removeAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
 
-    // Crop face region with some margin
-    const margin = 0.2;
-    const cropX = Math.max(0, Math.round(boundingBox.x - boundingBox.width * margin));
-    const cropY = Math.max(0, Math.round(boundingBox.y - boundingBox.height * margin));
-    const cropW = Math.round(boundingBox.width * (1 + 2 * margin));
-    const cropH = Math.round(boundingBox.height * (1 + 2 * margin));
-    const clampedW = Math.max(1, Math.min(cropW, orientedW - cropX));
-    const clampedH = Math.max(1, Math.min(cropH, orientedH - cropY));
+      const scale = inputSize / 112;
+      const dstPts =
+        scale === 1
+          ? CANONICAL_112_LANDMARKS
+          : CANONICAL_112_LANDMARKS.map(([x, y]) => [x * scale, y * scale] as [number, number]);
 
-    // Resize to model input size and convert to float32 tensor.
-    // `.rotate()` applies EXIF auto-orientation FIRST so the bounding box
-    // (computed by the detector on the oriented image) stays valid.
-    const { data, info } = await sharp(input.imageBuffer)
-      .rotate()
-      .extract({
-        left: cropX,
-        top: cropY,
-        width: clampedW,
-        height: clampedH,
-      })
-      .resize(this.config.inputSize, this.config.inputSize, { fit: 'fill' })
-      .removeAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
+      const transform = computeSimilarityTransform(input.face.landmarks, dstPts);
+      alignedData = warpAffineBilinear(
+        rawImgData,
+        rawImgInfo.width,
+        rawImgInfo.height,
+        transform.invMatrix,
+        inputSize
+      );
+    } else {
+      const { boundingBox } = input.face;
+
+      // Oriented dimensions: the detector auto-applies EXIF rotation before
+      // producing this bbox, so clamp against the ROTATED size (metadata()
+      // itself reports pre-rotation width/height).
+      const rawMeta = await sharp(input.imageBuffer).metadata();
+      const orientation = rawMeta.orientation ?? 1;
+      const swapsAxes = orientation >= 5 && orientation <= 8;
+      const orientedW = (swapsAxes ? rawMeta.height : rawMeta.width) || 0;
+      const orientedH = (swapsAxes ? rawMeta.width : rawMeta.height) || 0;
+
+      // Crop face region with some margin
+      const margin = 0.2;
+      const cropX = Math.max(0, Math.round(boundingBox.x - boundingBox.width * margin));
+      const cropY = Math.max(0, Math.round(boundingBox.y - boundingBox.height * margin));
+      const cropW = Math.round(boundingBox.width * (1 + 2 * margin));
+      const cropH = Math.round(boundingBox.height * (1 + 2 * margin));
+      const clampedW = Math.max(1, Math.min(cropW, orientedW - cropX));
+      const clampedH = Math.max(1, Math.min(cropH, orientedH - cropY));
+
+      // Resize to model input size and convert to float32 tensor.
+      // `.rotate()` applies EXIF auto-orientation FIRST so the bounding box
+      // (computed by the detector on the oriented image) stays valid.
+      const { data } = await sharp(input.imageBuffer)
+        .rotate()
+        .extract({
+          left: cropX,
+          top: cropY,
+          width: clampedW,
+          height: clampedH,
+        })
+        .resize(inputSize, inputSize, { fit: 'fill' })
+        .removeAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      alignedData = data;
+    }
 
     // Convert to NCHW float32 tensor with mean/std normalization.
     // sharp raw output is RGB; SFace (OpenCV-zoo) expects BGR -> swap R/B,
     // matching the detector and liveness preprocessing pipelines.
     const channels = 3;
-    const height = info.height;
-    const width = info.width;
+    const height = inputSize;
+    const width = inputSize;
     const tensorData = new Float32Array(channels * height * width);
 
     for (let c = 0; c < channels; c++) {
@@ -169,7 +200,7 @@ export class RealEmbedder {
         for (let w = 0; w < width; w++) {
           const srcIdx = (h * width + w) * channels + c;
           const bgrSrcIdx = c === 0 ? srcIdx + 2 : c === 2 ? srcIdx - 2 : srcIdx;
-          const pixel = data[bgrSrcIdx];
+          const pixel = alignedData[bgrSrcIdx];
           tensorData[c * height * width + h * width + w] =
             (pixel - this.config.mean[c]) / this.config.std[c];
         }

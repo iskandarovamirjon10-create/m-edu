@@ -26,10 +26,10 @@ describe('PermissionsGuard', () => {
     } as unknown as ExecutionContext;
   }
 
-  it('allows access when no permissions are required', () => {
+  it('throws ForbiddenException when no permissions are declared (fail-closed)', () => {
     reflector.getAllAndOverride.mockReturnValue(null);
-    const ctx = makeContext();
-    expect(guard.canActivate(ctx)).toBe(true);
+    const ctx = makeContext({ role: 'ORG_ADMIN' });
+    expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
   });
 
   it('throws UnauthorizedException when user is missing or has no role', () => {

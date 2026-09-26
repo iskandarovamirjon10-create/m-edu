@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, Logger, ServiceUnavailableException } fr
 import { Prisma, PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationEventService } from '../notifications/events/notification-event.service';
-import { TelegramService } from '../notifications/telegram.service';
+import { TelegramService } from '../telegram/telegram.service';
 import { SmsService } from '../notifications/sms.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateAutomationRuleDto, UpdateAutomationRuleDto } from './dto/automation.dto';
@@ -541,8 +541,27 @@ export class AutomationService {
       );
     }
 
+    // Tenant binding. The chat id is configuration, not identity: without this
+    // check an administrator of one organization could point a rule at another
+    // organization's Telegram chat (or at any arbitrary user who has ever
+    // started the shared bot) and push messages through it. A chat is only
+    // addressable while it is linked to THIS rule's organization.
+    const linked = await this.prisma.telegramAccount.findFirst({
+      where: {
+        chatId: String(chatId),
+        organizationId: rule.organizationId,
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+    });
+    if (!linked) {
+      throw new ServiceUnavailableException(
+        `TELEGRAM action for rule ${rule.id}: the target chat is not linked to this organization`,
+      );
+    }
+
     const message = this.interpolate(action.message ?? `Automation: ${rule.name}`, entity);
-    const ok = await this.telegram.sendMessage(chatId, message);
+    const ok = await this.telegram.sendMessage(String(chatId), message);
     if (!ok) {
       throw new ServiceUnavailableException(`Telegram delivery failed for rule ${rule.id}, entity ${entity.id}`);
     }

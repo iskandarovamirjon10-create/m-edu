@@ -1,3 +1,4 @@
+import { toLocalISOString } from '../lib/format';
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { attendanceApi, studentsApi, groupsApi } from '@/lib/api';
@@ -51,7 +52,7 @@ interface AttendanceFormState {
 const INITIAL_FORM: AttendanceFormState = {
   studentId: '',
   groupId: '',
-  date: new Date().toISOString().slice(0, 10),
+  date: toLocalISOString(),
   status: 'PRESENT',
   note: '',
 };
@@ -193,7 +194,17 @@ export function AttendancePage() {
       qc.invalidateQueries({ queryKey: ['attendance'] });
     },
     onError: (e: Error) => {
-      push('error', getErrorMessage(e));
+      const msg = getErrorMessage(e);
+      if (
+        msg.includes('jadval') ||
+        msg.includes('schedule') ||
+        msg.includes('rejalashtirilmagan') ||
+        msg.includes('расписан')
+      ) {
+        push('error', t('attendance.noSchedule'));
+      } else {
+        push('error', msg);
+      }
     },
   });
 
@@ -219,7 +230,17 @@ export function AttendancePage() {
       qc.invalidateQueries({ queryKey: ['attendance-analytics'] });
     },
     onError: (e: Error) => {
-      push('error', getErrorMessage(e));
+      const msg = getErrorMessage(e);
+      if (
+        msg.includes('jadval') ||
+        msg.includes('schedule') ||
+        msg.includes('rejalashtirilmagan') ||
+        msg.includes('расписан')
+      ) {
+        push('error', t('attendance.noSchedule'));
+      } else {
+        push('error', msg);
+      }
     },
   });
 
@@ -233,7 +254,17 @@ export function AttendancePage() {
       qc.invalidateQueries({ queryKey: ['attendance-analytics'] });
     },
     onError: (e: Error) => {
-      push('error', getErrorMessage(e));
+      const msg = getErrorMessage(e);
+      if (
+        msg.includes('jadval') ||
+        msg.includes('schedule') ||
+        msg.includes('rejalashtirilmagan') ||
+        msg.includes('расписан')
+      ) {
+        push('error', t('attendance.noSchedule'));
+      } else {
+        push('error', msg);
+      }
     },
   });
 

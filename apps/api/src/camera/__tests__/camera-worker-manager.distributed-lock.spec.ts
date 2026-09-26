@@ -22,6 +22,12 @@ vi.mock('@medu/camera-engine', () => ({
   CredentialVault: class {
     constructor(_key: string) {}
   },
+  NetworkSecurity: class {
+    constructor(_opts: unknown) {}
+    async validateHost(host: string): Promise<string> {
+      return host;
+    }
+  },
 }));
 
 vi.mock('../camera-worker-session', () => ({

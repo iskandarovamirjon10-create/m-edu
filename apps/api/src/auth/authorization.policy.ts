@@ -52,3 +52,22 @@ const FAMILY_ROLE_SET: ReadonlySet<string> = new Set<string>(FAMILY_ROLES);
 export function isFamilyRole(role: string | undefined | null): boolean {
   return typeof role === 'string' && FAMILY_ROLE_SET.has(role);
 }
+
+/**
+ * Privileged roles (audit P0-2).
+ *
+ * Every staff / administrative role. A verified Google email is NOT proof
+ * that the holder of a teacher, manager or admin account is the person who
+ * controls that Google mailbox, so these roles are NEVER linked to an
+ * external identity provider on an email match alone.
+ */
+export const PRIVILEGED_ROLES: readonly Role[] = STAFF_ROLES;
+
+const PRIVILEGED_ROLE_SET: ReadonlySet<string> = new Set<string>(
+  PRIVILEGED_ROLES,
+);
+
+/** True when the role must never be auto-linked on an email match. */
+export function isPrivilegedRole(role: string | undefined | null): boolean {
+  return typeof role === 'string' && PRIVILEGED_ROLE_SET.has(role);
+}

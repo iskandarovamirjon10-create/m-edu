@@ -13,10 +13,8 @@ import type { Camera } from '@prisma/client';
 
 import { SecureLogger } from '@medu/face-security';
 import type { FaceEngine } from '@medu/core';
-import type {
-  CredentialVault, NetworkSecurity,
-  VaultCredentials,
-} from '@medu/camera-engine';
+import type { VaultCredentials } from '@medu/camera-engine';
+import { CredentialVault, NetworkSecurity } from '@medu/camera-engine';
 
 import { getErrorMessage } from '../lib/error';
 import { PrismaService } from '../prisma/prisma.service';
@@ -56,6 +54,7 @@ interface CameraWorkerConfig {
   recognitionEnabled: boolean;
   attendanceEnabled: boolean;
   similarityThreshold: number;
+  minAmbiguityMargin?: number;
 }
 
 const DEFAULT_MAX_CONCURRENT_WORKERS = 10;
@@ -465,22 +464,25 @@ export class CameraWorkerManagerService
       );
     }
 
-    // Dynamic import is intentionally performed during lifecycle
-    // initialization elsewhere in this project.
-    //
-    // This method is synchronous because the constructor is not async.
-    //
-    // The actual vault instance is created in initializeCredentialVaultAsync.
+    this.credentialVault = new CredentialVault(encryptionKey);
   }
 
   private async initializeFaceEngine(): Promise<void> {
     try {
-      const { getSharedFaceEngine } = await import('../face/face-engine.factory');
+      const { getSharedFaceEngine } = await import('../face/face-engine.factory.js');
       this.faceEngine = await getSharedFaceEngine() as any;
       this.logger.info('Face engine initialized via shared factory for camera workers');
     } catch (err: unknown) {
       const message = getErrorMessage(err);
       this.logger.error('Face engine initialization failed: ' + message, { error: message });
+      // Fail-closed in production: a broken face engine must abort startup
+      // rather than silently continuing without biometric recognition.
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+          `Face engine initialization failed in production: ${message}`,
+        );
+      }
+      this.logger.warn('Face engine initialization failed in development', { error: message });
     }
   }
   private async startEnabledCameras(): Promise<void> {
@@ -1190,6 +1192,7 @@ export class CameraWorkerManagerService
         camera.attendanceEnabled,
       similarityThreshold:
         DEFAULT_SIMILARITY_THRESHOLD,
+      minAmbiguityMargin: 0.05,
     };
   }
 
@@ -1475,5 +1478,6 @@ export class CameraWorkerManagerService
     );
   }
 }
+
 
 

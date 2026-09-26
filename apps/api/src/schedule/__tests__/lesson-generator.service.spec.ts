@@ -18,6 +18,9 @@ function createMockPrisma() {
       updateMany: vi.fn(),
       findFirst: vi.fn(),
     },
+    organizationHoliday: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     $executeRaw: vi.fn().mockResolvedValue(0),
   };
 }

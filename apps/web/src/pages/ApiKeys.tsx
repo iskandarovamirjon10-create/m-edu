@@ -94,7 +94,7 @@ export function ApiKeysPage() {
  setGeneratedKey(data.key);
  setShowCreate(false);
  setForm({ name:'', scopes: [], expiresAt:'', rateLimit: 1000});
- toast('success', t('apiKeys.created') ||'API key created');
+ toast('success', t('apiKeys.created'));
 },
  onError: (err: Error) => {
  toast('error', getErrorMessage(err));
@@ -106,7 +106,7 @@ export function ApiKeysPage() {
  onSuccess: () => {
  queryClient.invalidateQueries({ queryKey: ['api-keys']});
  queryClient.invalidateQueries({ queryKey: ['api-keys-usage']});
- toast('success', t('apiKeys.revoked') ||'API key revoked');
+ toast('success', t('apiKeys.revoked'));
 },
  onError: (err: Error) => {
  toast('error', getErrorMessage(err));
@@ -119,7 +119,7 @@ export function ApiKeysPage() {
  queryClient.invalidateQueries({ queryKey: ['api-keys']});
  queryClient.invalidateQueries({ queryKey: ['api-keys-usage']});
  setGeneratedKey(data.key);
- toast('success', t('apiKeys.rotated') ||'API key rotated');
+ toast('success', t('apiKeys.rotated'));
 },
  onError: (err: Error) => {
  toast('error', getErrorMessage(err));
@@ -148,20 +148,20 @@ export function ApiKeysPage() {
  return new Date(d).toLocaleDateString();
 };
 
- if (isLoading) return <GlassPageLoader label={t('common.loading') ||'Loading…'} />;
+ if (isLoading) return <GlassPageLoader label={t('common.loading')} />;
  if (error) return <GlassErrorState message={getErrorMessage(error)} />;
 
  return (
  <div className="space-y-6">
  <GlassPageHeader
- title={t('apiKeys.title') ||'API Keys'}
- subtitle={t('apiKeys.subtitle') ||'Manage programmatic access keys for external integrations'}
+ title={t('apiKeys.title')}
+ subtitle={t('apiKeys.subtitle')}
  action={
  <GlassButton
  onClick={() => setShowCreate(true)}
  variant="primary"
  >
- {t('apiKeys.generate') ||'Generate Key'}
+ {t('apiKeys.generate')}
  </GlassButton>
 }
  />
@@ -169,15 +169,15 @@ export function ApiKeysPage() {
  {stats && (
  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
  <div className="glass-card p-4 rounded-xl">
- <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.totalKeys') ||'Total Keys'}</p>
+ <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.totalKeys')}</p>
  <p className="text-2xl font-black text-[var(--text-primary)] mt-1">{stats.totalCount}</p>
  </div>
  <div className="glass-card p-4 rounded-xl">
- <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.activeKeys') ||'Active'}</p>
+ <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.activeKeys')}</p>
  <p className="text-2xl font-black text-emerald-600 mt-1">{stats.activeCount}</p>
  </div>
  <div className="glass-card p-4 rounded-xl">
- <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.totalUsage') ||'Total Usage'}</p>
+ <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.totalUsage')}</p>
  <p className="text-2xl font-black text-[var(--text-primary)] mt-1">{stats.totalUsage.toLocaleString()}</p>
  </div>
  </div>
@@ -185,8 +185,8 @@ export function ApiKeysPage() {
 
  {!keys || keys.length === 0 ? (
  <GlassEmptyState
- title={t('apiKeys.emptyTitle') ||'No API Keys'}
- message={t('apiKeys.emptyMessage') ||'Generate your first API key to start integrating with external systems.'}
+ title={t('apiKeys.emptyTitle')}
+ message={t('apiKeys.emptyMessage')}
  />
  ) : (
  <div className="glass-card rounded-2xl overflow-hidden border border-black/5 ">
@@ -194,13 +194,13 @@ export function ApiKeysPage() {
  <table className="w-full text-sm">
  <thead>
  <tr className="border-b border-black/5 ">
- <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.name') ||'Name'}</th>
- <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.prefix') ||'Prefix'}</th>
- <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.scopes') ||'Scopes'}</th>
- <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.status') ||'Status'}</th>
- <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.lastUsed') ||'Last Used'}</th>
- <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.usage') ||'Usage'}</th>
- <th className="px-6 py-4 text-right text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('common.actions') ||'Actions'}</th>
+ <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.name')}</th>
+ <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.prefix')}</th>
+ <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.scopes')}</th>
+ <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.status')}</th>
+ <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.lastUsed')}</th>
+ <th className="px-6 py-4 text-left text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('apiKeys.usage')}</th>
+ <th className="px-6 py-4 text-right text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('common.actions')}</th>
  </tr>
  </thead>
  <tbody>
@@ -229,7 +229,7 @@ export function ApiKeysPage() {
  <td className="px-6 py-4">
  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[0.65rem] font-black uppercase tracking-wider ${key.isActive ?'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' :'bg-red-500/10 text-red-600 border border-red-500/20'}`}>
  <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${key.isActive ?'bg-emerald-500' :'bg-red-500'}`} />
- {key.isActive ? (t('apiKeys.active') ||'Active') : (t('apiKeys.revoked') ||'Revoked')}
+ {key.isActive ? (t('apiKeys.active')) : (t('apiKeys.revoked'))}
  </span>
  </td>
  <td className="px-6 py-4 text-[var(--text-muted)] text-xs">{formatDate(key.lastUsedAt)}</td>
@@ -246,7 +246,7 @@ export function ApiKeysPage() {
  loading={rotateMutation.isPending}
  className="border border-amber-500/20 text-amber-600"
  >
- {t('apiKeys.rotate') ||'Rotate'}
+ {t('apiKeys.rotate')}
  </GlassButton>
  <GlassButton
  size="sm"
@@ -255,7 +255,7 @@ export function ApiKeysPage() {
  disabled={revokeMutation.isPending}
  className="border border-red-500/20 text-red-600"
  >
- {t('apiKeys.revoke') ||'Revoke'}
+ {t('apiKeys.revoke')}
  </GlassButton>
  </>
  )}
@@ -270,17 +270,17 @@ export function ApiKeysPage() {
  )}
 
  {showCreate && (
- <GlassModal open={showCreate} title={t('apiKeys.generateTitle') ||'Generate API Key'} onClose={() => setShowCreate(false)}>
+ <GlassModal open={showCreate} title={t('apiKeys.generateTitle')} onClose={() => setShowCreate(false)}>
  <div className="space-y-4">
- <GlassField label={t('apiKeys.nameLabel') ||'Name'}>
+ <GlassField label={t('apiKeys.nameLabel')}>
  <GlassInput
  value={form.name}
  onChange={e => setForm(prev => ({ ...prev, name: e.target.value}))}
- placeholder={t('apiKeys.namePlaceholder') ||'e.g. Integration Partner'}
+ placeholder={t('apiKeys.namePlaceholder')}
  />
  </GlassField>
 
- <GlassField label={t('apiKeys.rateLimitLabel') ||'Rate Limit (req/hr)'}>
+ <GlassField label={t('apiKeys.rateLimitLabel')}>
  <GlassInput
  type="number"
  value={form.rateLimit}
@@ -288,7 +288,7 @@ export function ApiKeysPage() {
  />
  </GlassField>
 
- <GlassField label={t('apiKeys.expiryLabel') ||'Expiry Date (optional)'}>
+ <GlassField label={t('apiKeys.expiryLabel')}>
  <GlassInput
  type="date"
  value={form.expiresAt}
@@ -297,7 +297,7 @@ export function ApiKeysPage() {
  </GlassField>
 
  <div>
- <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">{t('apiKeys.scopesLabel') ||'Scopes'}</label>
+ <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">{t('apiKeys.scopesLabel')}</label>
  <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto p-2 rounded-xl bg-[var(--bg-card)] border border-black/5 ">
  {ALL_SCOPES.map(scope => (
  <GlassButton
@@ -319,7 +319,7 @@ export function ApiKeysPage() {
  variant="secondary"
  onClick={() => setShowCreate(false)}
  >
- {t('common.cancel') ||'Cancel'}
+ {t('common.cancel')}
  </GlassButton>
  <GlassButton
  variant="primary"
@@ -327,7 +327,7 @@ export function ApiKeysPage() {
  disabled={!form.name || form.scopes.length === 0 || createMutation.isPending}
  loading={createMutation.isPending}
  >
- {createMutation.isPending ? (t('common.saving') ||'Saving…') : (t('apiKeys.generate') ||'Generate Key')}
+ {createMutation.isPending ? (t('common.saving')) : (t('apiKeys.generate'))}
  </GlassButton>
  </div>
  </div>
@@ -335,10 +335,10 @@ export function ApiKeysPage() {
  )}
 
  {generatedKey && (
- <GlassModal open={!!generatedKey} title={t('apiKeys.keyGenerated') ||'API Key Generated'} onClose={() => setGeneratedKey(null)}>
+ <GlassModal open={!!generatedKey} title={t('apiKeys.keyGenerated')} onClose={() => setGeneratedKey(null)}>
  <div className="space-y-4">
  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 ">
- <p className="text-sm font-bold text-amber-800 mb-2">{t('apiKeys.copyWarning') ||'Copy this key now. It will not be shown again.'}</p>
+ <p className="text-sm font-bold text-amber-800 mb-2">{t('apiKeys.copyWarning')}</p>
  </div>
  <div className="flex items-center gap-2 p-3 rounded-xl bg-[var(--bg-surface)] border border-black/5 font-mono text-sm break-all">
  <span className="flex-1 text-[var(--text-primary)]">{generatedKey}</span>
@@ -347,7 +347,7 @@ export function ApiKeysPage() {
  variant="primary"
  onClick={copyKey}
  >
- {copied ? (t('apiKeys.copied') ||'Copied!') : (t('apiKeys.copy') ||'Copy')}
+ {copied ? (t('apiKeys.copied')) : (t('apiKeys.copy'))}
  </GlassButton>
  </div>
  <GlassButton
@@ -355,7 +355,7 @@ export function ApiKeysPage() {
  className="w-full"
  onClick={() => setGeneratedKey(null)}
  >
- {t('common.close') ||'Close'}
+ {t('common.close')}
  </GlassButton>
  </div>
  </GlassModal>

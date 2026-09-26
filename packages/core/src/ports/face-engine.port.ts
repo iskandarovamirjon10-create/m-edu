@@ -21,11 +21,18 @@ export interface FaceDetectionInput {
   format: 'jpeg' | 'png';
 }
 
+export interface Point2D {
+  x: number;
+  y: number;
+}
+
 export interface DetectedFace {
   /** Bounding box of the detected face */
   boundingBox: BoundingBox;
   /** Detection confidence (0-1) */
   confidence: number;
+  /** 5 facial landmarks: [rightEye, leftEye, nose, rightMouth, leftMouth] */
+  landmarks?: Point2D[];
 }
 
 export interface QualityAssessmentInput {

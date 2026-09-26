@@ -24,6 +24,7 @@ function createMockPrisma() {
       update: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(async () => []),
+      findUnique: vi.fn(),
       count: vi.fn(async () => 0),
     },
     refund: { create: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn(), aggregate: vi.fn() },
@@ -284,6 +285,17 @@ describe('InvoicesService — refunds', () => {
     });
     prisma.refund.updateMany.mockResolvedValue({ count: 1 });
     prisma.invoice.findFirst.mockResolvedValue({ id: 'inv-1', refundedAmount: 0 });
+    prisma.invoice.findUniqueOrThrow.mockResolvedValue({
+      ...draftInvoice({ status: 'PAID' }),
+      paidAmount: 40,
+      refundedAmount: 40,
+      dueDate: null,
+    });
+    prisma.payment.findUnique.mockResolvedValue({ studentId: 'stu-1' });
+    prisma.tx.$queryRaw.mockResolvedValue([
+      { id: 'pay-1', amount: 100, status: 'PAID', studentId: 'stu-1' },
+    ]);
+    prisma.refund.aggregate.mockResolvedValue({ _sum: { amount: 0 } });
     prisma.refund.findUnique.mockResolvedValue({ id: 'r1', status: 'PROCESSED' });
 
     const svc = new InvoicesService(prisma as never, audit as never, { emit: vi.fn().mockResolvedValue(undefined) } as never, { ensureNotClosedTx: vi.fn(), ensureNotClosed: vi.fn().mockResolvedValue(undefined) } as never);
@@ -297,6 +309,11 @@ describe('InvoicesService — refunds', () => {
     expect(prisma.tx.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ action: 'REFUND_PROCESSED' }),
+      }),
+    );
+    expect(prisma.student.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { balance: { decrement: 40 } },
       }),
     );
   });

@@ -1,3 +1,4 @@
+import { formatDate } from '../lib/format';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, GlassButton, TextInput, Select, TextArea, GlassModal, Field, ConfirmDialog } from '@/components/ui';
@@ -234,7 +235,7 @@ export function DocumentsPage() {
                       <span>·</span>
                       <span>{formatSize(doc.fileSize)}</span>
                       <span>·</span>
-                      <span>{new Date(doc.uploadedAt).toLocaleDateString()}</span>
+                      <span>{formatDate(doc.uploadedAt)}</span>
                       {doc.tags && doc.tags.length > 0 && (
                         <>
                           <span>·</span>

@@ -3,6 +3,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
+import { StorageService } from '../storage/storage.service';
+
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles, AllowSelfService } from '../auth/roles.decorator';
@@ -14,6 +16,7 @@ import {
   UpdateDocumentDto,
   DocumentQueryDto,
   UploadDocumentVersionDto,
+  GetUploadUrlDto,
 } from './dto/document.dto';
 
 @ApiTags('Documents')
@@ -21,7 +24,10 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('documents')
 export class DocumentsController {
-  constructor(private readonly documentsService: DocumentsService) {}
+  constructor(
+    private readonly documentsService: DocumentsService,
+    private readonly storageService: StorageService,
+  ) {}
 
   @Get()
   @AllowSelfService()
@@ -103,5 +109,46 @@ export class DocumentsController {
     });
     if (!version) throw new NotFoundException('Document not found');
     return version;
+  }
+
+  @Post('upload-url')
+  @Roles(...STAFF_ROLES)
+  @ApiOperation({ summary: 'Generate a presigned URL for secure file upload' })
+  async getUploadUrl(
+    @CurrentUser('organizationId') orgId: string,
+    @Body() body: GetUploadUrlDto,
+  ) {
+    return this.storageService.getUploadUrl(orgId, body.fileName, body.mimeType);
+  }
+
+  @Get(':id/download')
+  @AllowSelfService()
+  @ApiOperation({ summary: 'Generate a presigned URL for secure file download' })
+  async getDownloadUrl(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Query('version') version?: string,
+  ) {
+    // 1. Authorize access to the document metadata and verify tenant ownership
+    const doc = await this.documentsService.findOne(user, id);
+    if (!doc) throw new NotFoundException('Document not found or access denied');
+
+    let targetFileUrl = doc.fileUrl;
+    
+    // 2. If a specific version is requested, authorize and find it
+    if (version) {
+      const v = parseInt(version, 10);
+      const docVersion = doc.versions?.find((dv: any) => dv.version === v);
+      if (!docVersion) throw new NotFoundException('Document version not found');
+      targetFileUrl = docVersion.fileUrl;
+    }
+
+    if (!targetFileUrl) {
+      throw new NotFoundException('No file URL associated with this document');
+    }
+
+    // 3. Generate a short-lived presigned URL
+    const url = await this.storageService.getDownloadUrl(targetFileUrl);
+    return { url };
   }
 }

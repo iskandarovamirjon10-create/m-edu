@@ -14,6 +14,7 @@ describe('ImportExportController', () => {
       listExports: vi.fn().mockResolvedValue({ items: [], total: 0 }),
       downloadTemplate: vi.fn().mockResolvedValue(Buffer.from('col1,col2')),
       exportData: vi.fn().mockResolvedValue(Buffer.from('data1,data2')),
+      exportDataStream: vi.fn().mockResolvedValue(undefined),
     } as unknown as ImportExportService;
 
     controller = new ImportExportController(service);
@@ -49,15 +50,16 @@ describe('ImportExportController', () => {
     expect(res.send).toHaveBeenCalled();
   });
 
-  it('should export data', async () => {
+  it('should export data via exportDataStream', async () => {
     const res = {
       setHeader: vi.fn(),
       send: vi.fn(),
+      write: vi.fn(),
+      end: vi.fn(),
+      on: vi.fn(),
     } as unknown as Response;
 
     await controller.exportData('org-1', 'STUDENT', 'csv', res);
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="student_export.csv"');
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
-    expect(res.send).toHaveBeenCalled();
+    expect(service.exportDataStream).toHaveBeenCalledWith('org-1', 'STUDENT', 'csv', res);
   });
 });

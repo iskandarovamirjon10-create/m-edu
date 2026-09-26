@@ -117,9 +117,7 @@ export class GroupsService {
           where: { groupId: id, isActive: true },
         });
         if (data.capacity < activeCount) {
-          throw new BadRequestException(
-            `Yangi sig'im (${data.capacity}) joriy talabalar sonidan (${activeCount}) kam — oldin talablarni boshqa guruhga ko'chiring.`,
-          );
+          throw new BadRequestException('CAPACITY_LESS_THAN_ACTIVE_STUDENTS');
         }
       }
       updateData.capacity = data.capacity;

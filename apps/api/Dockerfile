@@ -1,4 +1,5 @@
 FROM node:20-alpine AS alpine
+RUN apk add --no-cache libc6-compat ffmpeg
 
 FROM alpine AS builder
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
@@ -51,10 +52,13 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV NODE_ENV=production
+ENV FACE_DETECTOR_MODEL_PATH=/app/packages/face-engine/models/face_detection_yunet_2023mar.onnx
+ENV FACE_EMBEDDER_MODEL_PATH=/app/packages/face-engine/models/face_recognition_sface_2021dec.onnx
+ENV FACE_LIVENESS_MODEL_PATH=/app/packages/face-engine/models/minifasnet_v2.onnx
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
 
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/main"]
 

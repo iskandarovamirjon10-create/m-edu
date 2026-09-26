@@ -260,6 +260,21 @@ export class FfmpegStreamIngester {
     this.transport = config.transport ?? 'tcp';
   }
 
+  /**
+   * Check whether ffmpeg is available in the current environment PATH.
+   */
+  static async checkAvailability(): Promise<boolean> {
+    return new Promise((resolve) => {
+      try {
+        const proc = spawn('ffmpeg', ['-version'], { stdio: 'ignore', shell: false });
+        proc.on('error', () => resolve(false));
+        proc.on('close', (code) => resolve(code === 0));
+      } catch {
+        resolve(false);
+      }
+    });
+  }
+
   onFrame(cb: (frame: VideoFrame) => void): void {
     this.frameCb = cb;
   }
@@ -315,8 +330,12 @@ export class FfmpegStreamIngester {
     this.proc.stderr?.on('data', () => {
       // ffmpeg logs are noisy; ignore unless we need diagnostics
     });
-    this.proc.on('error', (err) => {
-      this.emitError(err);
+    this.proc.on('error', (err: any) => {
+      if (err?.code === 'ENOENT') {
+        this.emitError(new Error('ffmpeg executable not found in system PATH. Camera streaming requires ffmpeg.'));
+      } else {
+        this.emitError(err instanceof Error ? err : new Error(String(err)));
+      }
     });
     this.proc.on('close', (code) => {
       const proc = this.proc;

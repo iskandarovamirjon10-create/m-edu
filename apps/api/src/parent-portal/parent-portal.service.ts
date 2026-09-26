@@ -1,5 +1,5 @@
-import { computeAttendanceRate } from '../common/attendance-rate';
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { computeAttendanceRate } from '../common/attendance-rate.js';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -40,15 +40,20 @@ export class ParentPortalService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Authenticate a parent by email + password.
+   * Authenticate a parent by email + password, with optional organizationId.
    *
-   * The email is unique per organization (no global uniqueness), so this is a
-   * findFirst by email. An unknown email still performs a bcrypt comparison
-   * against a throwaway hash so the response time does not reveal whether the
-   * account exists (F-033). The returned object is a narrow projection — the
-   * `passwordHash` never leaves this method.
+   * If organizationId is provided, authenticate against that specific center.
+   * If organizationId is omitted:
+   *  - If 1 account exists, authenticate against it.
+   *  - If multiple accounts exist for this email across centers: verify the password
+   *    against all accounts. If exactly 1 matches, log into that center.
+   *    If multiple match, prompt tenant disambiguation with code: 'ORGANIZATION_REQUIRED'.
    */
-  async authenticate(email: string, password: string): Promise<{
+  async authenticate(
+    email: string,
+    password: string,
+    organizationId?: string,
+  ): Promise<{
     id: string;
     organizationId: string;
     email: string;
@@ -57,9 +62,44 @@ export class ParentPortalService {
   }> {
     const bcrypt = (await import('bcryptjs')).default ?? (await import('bcryptjs'));
     const normalizedEmail = email.toLowerCase().trim();
-    const parent = await this.prisma.parentAccount.findFirst({
+
+    if (organizationId) {
+      const parent = await this.prisma.parentAccount.findFirst({
+        where: { email: normalizedEmail, organizationId, isActive: true },
+        select: {
+          id: true,
+          organizationId: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          passwordHash: true,
+        },
+      });
+
+      if (!parent) {
+        await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+        throw new UnauthorizedException('Invalid parent credentials');
+      }
+      if (!(await bcrypt.compare(password, parent.passwordHash))) {
+        throw new UnauthorizedException('Invalid parent credentials');
+      }
+
+      await this.prisma.parentAccount.update({
+        where: { id: parent.id },
+        data: { lastLoginAt: new Date() },
+      });
+
+      return {
+        id: parent.id,
+        organizationId: parent.organizationId,
+        email: parent.email,
+        firstName: parent.firstName,
+        lastName: parent.lastName,
+      };
+    }
+
+    const accounts = await this.prisma.parentAccount.findMany({
       where: { email: normalizedEmail, isActive: true },
-      orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         organizationId: true,
@@ -67,36 +107,89 @@ export class ParentPortalService {
         firstName: true,
         lastName: true,
         passwordHash: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
 
-    // Constant-cost rejection for missing/disabled accounts.
-    if (!parent) {
+    if (accounts.length === 0) {
       await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
       throw new UnauthorizedException('Invalid parent credentials');
     }
-    if (!(await bcrypt.compare(password, parent.passwordHash))) {
+
+    if (accounts.length === 1) {
+      const parent = accounts[0];
+      if (!(await bcrypt.compare(password, parent.passwordHash))) {
+        throw new UnauthorizedException('Invalid parent credentials');
+      }
+
+      await this.prisma.parentAccount.update({
+        where: { id: parent.id },
+        data: { lastLoginAt: new Date() },
+      });
+
+      return {
+        id: parent.id,
+        organizationId: parent.organizationId,
+        email: parent.email,
+        firstName: parent.firstName,
+        lastName: parent.lastName,
+      };
+    }
+
+    // Multiple accounts found for this email across different organizations.
+    // Check which accounts match the password.
+    const matchingAccounts: typeof accounts = [];
+    for (const acc of accounts) {
+      if (await bcrypt.compare(password, acc.passwordHash)) {
+        matchingAccounts.push(acc);
+      }
+    }
+
+    if (matchingAccounts.length === 0) {
       throw new UnauthorizedException('Invalid parent credentials');
     }
 
-    await this.prisma.parentAccount.update({
-      where: { id: parent.id },
-      data: { lastLoginAt: new Date() },
-    });
+    if (matchingAccounts.length === 1) {
+      const parent = matchingAccounts[0];
+      await this.prisma.parentAccount.update({
+        where: { id: parent.id },
+        data: { lastLoginAt: new Date() },
+      });
 
-    return {
-      id: parent.id,
-      organizationId: parent.organizationId,
-      email: parent.email,
-      firstName: parent.firstName,
-      lastName: parent.lastName,
-    };
+      return {
+        id: parent.id,
+        organizationId: parent.organizationId,
+        email: parent.email,
+        firstName: parent.firstName,
+        lastName: parent.lastName,
+      };
+    }
+
+    // Multiple accounts matched the password -> require organization selection
+    throw new BadRequestException({
+      statusCode: 400,
+      error: 'Bad Request',
+      code: 'ORGANIZATION_REQUIRED',
+      message: 'Multiple organizations found for this account. Please specify your organization ID.',
+      organizations: matchingAccounts.map((a) => ({
+        id: a.organizationId,
+        name: a.organization.name,
+      })),
+    });
   }
 
   /** List all verified children with per-domain visibility flags. */
   async listChildren(ctx: ParentContext) {
     const links = await this.prisma.parentStudent.findMany({
       where: { parent: { id: ctx.parentId, organizationId: ctx.organizationId } },
+      // Deterministic order: consumers (the Telegram bot) address a child by
+      // its position in this list, so the order must be stable across calls.
+      orderBy: { studentId: 'asc' },
       select: {
         studentId: true,
         relationship: true,
@@ -119,12 +212,47 @@ export class ParentPortalService {
     return links.map((link) => ({
       studentId: link.studentId,
       relationship: link.relationship,
+      name:
+        `${link.student.user.firstName ?? ''} ${link.student.user.lastName ?? ''}`.trim() ||
+        '—',
       permissions: {
         grades: link.canViewGrades,
         payments: link.canViewPayments,
         attendance: link.canViewAttendance,
       },
     }));
+  }
+
+  /**
+   * Weekly schedule for a verified child.
+   *
+   * Schedule is not a separately-flagged domain, so it is gated by the
+   * child's attendance visibility flag (academic data the parent already
+   * sees) — never by anything the caller supplies.
+   */
+  async getChildSchedule(ctx: ParentContext, studentId: string) {
+    await this.requireLink(ctx, studentId, 'canViewAttendance');
+
+    const enrollments = await this.prisma.studentGroup.findMany({
+      where: { studentId, isActive: true, organizationId: ctx.organizationId },
+      select: { groupId: true },
+    });
+    const groupIds = enrollments.map((e) => e.groupId);
+    if (groupIds.length === 0) return [];
+
+    return this.prisma.schedule.findMany({
+      where: { groupId: { in: groupIds }, isActive: true },
+      orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+      take: 50,
+      select: {
+        id: true,
+        dayOfWeek: true,
+        startTime: true,
+        endTime: true,
+        room: true,
+        group: { select: { id: true, name: true } },
+      },
+    });
   }
 
   /**

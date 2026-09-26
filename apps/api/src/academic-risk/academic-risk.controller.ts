@@ -1,5 +1,6 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { AcademicRiskQueryDto } from './dto/academic-risk-query.dto';
 import { AcademicRiskService } from './academic-risk.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -24,7 +25,7 @@ export class AcademicRiskController {
   @ApiOperation({ summary: 'List academic risk assessments' })
   async findAll(
     @CurrentUser('organizationId') orgId: string,
-    @Query() query: any,
+    @Query() query: AcademicRiskQueryDto,
   ) {
     return this.academicRiskService.findAll(orgId, query);
   }

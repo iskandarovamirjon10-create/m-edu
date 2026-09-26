@@ -1,11 +1,18 @@
+import * as path from 'path';
 import {
   Controller, Get, Post, Query, Body, UseGuards, UseInterceptors,
-  UploadedFile, Res, Header,
+  UploadedFile, Res, Header, BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ImportExportService, StartImportDto, ImportListQuery, ExportListQuery } from './import-export.service';
+import {
+  ALLOWED_IMPORT_MIMES,
+  ALLOWED_IMPORT_EXTENSIONS,
+  MAX_IMPORT_FILE_SIZE,
+  validateImportUpload,
+} from './upload-validation';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -32,13 +39,28 @@ export class ImportExportController {
   }
 
   @Post('imports')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', {
+    limits: { fileSize: MAX_IMPORT_FILE_SIZE },
+    fileFilter: (req, file, cb) => {
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      if (!ALLOWED_IMPORT_MIMES.includes(file.mimetype) || !ALLOWED_IMPORT_EXTENSIONS.includes(ext)) {
+        return cb(
+          new BadRequestException(`Only CSV and Excel files (${ALLOWED_IMPORT_EXTENSIONS.join(', ')}) are allowed`),
+          false,
+        );
+      }
+      cb(null, true);
+    },
+  }))
   @ApiOperation({ summary: 'Start a new import job' })
   async startImport(
     @CurrentUser('organizationId') orgId: string,
     @Body() dto: StartImportDto,
-    @UploadedFile() file?: any,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
+    if (file) {
+      validateImportUpload(file);
+    }
     return this.importExportService.startImport(orgId, dto, file);
   }
 
@@ -74,9 +96,6 @@ export class ImportExportController {
     @Query('format') format: string = 'csv',
     @Res() res: Response,
   ) {
-    const buffer = await this.importExportService.exportData(orgId, entityType, format);
-    res.setHeader('Content-Disposition', `attachment; filename="${entityType.toLowerCase()}_export.csv"`);
-    res.setHeader('Content-Type', 'text/csv');
-    res.send(buffer);
+    await this.importExportService.exportDataStream(orgId, entityType, format, res);
   }
 }

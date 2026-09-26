@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
 
 // jsdom does not implement matchMedia, which useTheme reads to resolve the
 // "prefers-color-scheme" default. Provide a benign stub for all tests.

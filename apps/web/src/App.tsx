@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/auth/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { UserSettingsSync } from '@/components/UserSettingsSync';
 import { PageLoader, ToastHost } from '@/components/ui';
 import { AppRoutes } from './routes';
 import { DocumentTitleManager } from './routes/DocumentTitle';
@@ -51,8 +52,8 @@ export function ErrorBoundaryWrapper({ children, label }: { children: ReactNode;
 }
 
 // Protected route component
-export function Protected({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+export function Protected({ children, roles }: { children: ReactNode; roles?: string[] }) {
+  const { user, loading, hasAnyRole } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -66,6 +67,10 @@ export function Protected({ children }: { children: ReactNode }) {
   if (!user) {
     const returnTo = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?returnTo=${returnTo}`} replace />;
+  }
+
+  if (roles?.length && !hasAnyRole(...roles)) {
+    return <Navigate to="/unavailable" replace />;
   }
 
   return <>{children}</>;
@@ -110,15 +115,19 @@ export default function App() {
   const routes = useMemo(() => <AppRoutes />, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <ErrorBoundary label="Root">
+      <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <DocumentTitleManager />
+          {/* Server -> browser preference rehydration (language, theme). */}
+          <UserSettingsSync />
           <RouteTransition>{routes}</RouteTransition>
           {/* Global toast host — every useToast() call in the app renders here */}
           <ToastHost />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

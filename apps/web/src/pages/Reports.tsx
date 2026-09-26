@@ -2,6 +2,7 @@
  * ReportsPage — Production-Grade Analytics & Dynamic Report Generator
  * Real-time querying over live educational & financial dimensions.
  */
+import { toLocalISOString } from '../lib/format';
 import { useState} from'react';
 import { useQuery} from'@tanstack/react-query';
 import {
@@ -76,33 +77,39 @@ export function ReportsPage() {
  const [dateFrom, setDateFrom] = useState(() => {
  const d = new Date();
  d.setMonth(d.getMonth() - 1);
- return d.toISOString().split('T')[0];
+ return toLocalISOString(d);
 });
- const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0]);
+ const [dateTo, setDateTo] = useState(() => toLocalISOString());
+  const [page, setPage] = useState(1);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx' | 'pdf'>('csv');
+  const [isExporting, setIsExporting] = useState(false);
 
  const reportQuery = useQuery({
- queryKey: ['reports', dimension, dateFrom, dateTo],
+ queryKey: ['reports', dimension, dateFrom, dateTo, page],
  queryFn: async () => {
  const res = await reportsApi.run({
  type: dimension,
  dateFrom: dateFrom || undefined,
  dateTo: dateTo || undefined,
- page: 1,
+ page,
  pageSize: 50,
 });
  return res as RunReportResponse;
 },
 });
 
- const exportData = async (format:'csv' | 'json' | 'pdf' | 'xlsx') => {
+ const exportData = async (format: 'csv' | 'xlsx' | 'pdf') => {
+   setIsExporting(true);
    try {
      await reportsApi.export(dimension, format, {
        dateFrom: dateFrom || undefined,
        dateTo: dateTo || undefined,
      });
-     toast.push({ message: t('reports.exported', { filename: format }), type: 'success' });
-   } catch (err: any) {
+     toast.push({ message: t('reports.exported', { filename: format.toUpperCase() }), type: 'success' });
+   } catch (err: unknown) {
      toast.push({ message: getErrorMessage(err) || t('reports.exportFailed'), type: 'error' });
+   } finally {
+     setIsExporting(false);
    }
  };
 
@@ -118,14 +125,14 @@ export function ReportsPage() {
  {/* Filter and Configuration Bar */}
  <GlassCard className="p-4 sm:p-6">
  <div className="flex flex-col md:flex-row md:items-end gap-4 justify-between">
- <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-1">
  <div>
  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
  {t('reports.dimensionLabel')}
  </label>
  <GlassSelect
  value={dimension}
- onChange={(e) => setDimension(e.target.value)}
+ onChange={(e) => { setDimension(e.target.value); setPage(1); }}
  className="w-full"
  >
  {REPORT_DIMENSIONS.map((dim) => (
@@ -143,7 +150,7 @@ export function ReportsPage() {
   <GlassInput
   type="date"
   value={dateFrom}
-  onChange={(e) => setDateFrom(e.target.value)}
+  onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
   className="w-full"
   />
   </div>
@@ -155,9 +162,24 @@ export function ReportsPage() {
   <GlassInput
   type="date"
   value={dateTo}
-  onChange={(e) => setDateTo(e.target.value)}
+  onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
   className="w-full"
   />
+  </div>
+
+  <div>
+  <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+  {t('reports.exportFormat')}
+  </label>
+  <GlassSelect
+  value={exportFormat}
+  onChange={(e) => setExportFormat(e.target.value as 'csv' | 'xlsx' | 'pdf')}
+  className="w-full"
+  >
+  <option value="csv">CSV</option>
+  <option value="xlsx">Excel (XLSX)</option>
+  <option value="pdf">PDF</option>
+  </GlassSelect>
   </div>
  </div>
 
@@ -170,18 +192,11 @@ export function ReportsPage() {
  {t('reports.refresh')}
  </GlassButton>
  <GlassButton
- variant="secondary"
- onClick={() => exportData('csv')}
- disabled={!reportData?.rows?.length}
- >
- {t('reports.exportCsv')}
- </GlassButton>
- <GlassButton
  variant="primary"
- onClick={() => exportData('xlsx')}
- disabled={!reportData?.rows?.length}
+ onClick={() => exportData(exportFormat)}
+ disabled={isExporting || !reportData?.rows?.length}
  >
- {t('reports.exportXlsx', 'Export XLSX')}
+ {isExporting ? t('reports.exporting') : t('reports.export')}
  </GlassButton>
  </div>
  </div>

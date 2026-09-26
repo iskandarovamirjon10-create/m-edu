@@ -19,6 +19,7 @@ import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
 import { PaginationParams } from '../common/dto/pagination';
 import { CurrentUser } from '../auth/current-user.decorator';
+import type { RequestUser } from '../auth/types';
 import { AllowAnyRole } from '../auth/roles.decorator';
 
 @Controller('library')
@@ -32,7 +33,7 @@ export class LibraryController {
   @Get('books')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async findAllBooks(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Query() params: PaginationParams,
   ) {
     return this.libraryService.findAllBooks(user.organizationId, params);
@@ -41,7 +42,7 @@ export class LibraryController {
   @AllowAnyRole()
   @Get('books/search')
   async searchBooks(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Query('q') query: string,
   ) {
     if (!query || query.length < 2) {
@@ -54,7 +55,7 @@ export class LibraryController {
   @Get('books/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async findBookById(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.libraryService.findBookById(user.organizationId, id);
@@ -63,7 +64,7 @@ export class LibraryController {
   @Post('books')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async createBook(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Body() dto: CreateLibraryBookDto,
   ) {
     return this.libraryService.createBook(user.organizationId, dto);
@@ -72,7 +73,7 @@ export class LibraryController {
   @Put('books/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async updateBook(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateLibraryBookDto,
   ) {
@@ -82,7 +83,7 @@ export class LibraryController {
   @Delete('books/:id')
   @Roles(Role.ORG_ADMIN)
   async deleteBook(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.libraryService.deleteBook(user.organizationId, id);
@@ -93,7 +94,7 @@ export class LibraryController {
   @Post('borrow')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER, Role.ASSISTANT)
   async borrowBook(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Body() dto: BorrowBookDto,
   ) {
     return this.libraryService.borrowBook(user.organizationId, dto);
@@ -102,7 +103,7 @@ export class LibraryController {
   @Post('return/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER, Role.ASSISTANT)
   async returnBook(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ReturnBookDto,
   ) {
@@ -113,7 +114,7 @@ export class LibraryController {
   @Get('overdue')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async getOverdueBooks(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Query() params: PaginationParams,
   ) {
     return this.libraryService.getOverdueBooks(user.organizationId, params);
@@ -125,7 +126,7 @@ export class LibraryController {
   @Get('student/:studentId')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async getStudentBorrows(
-    @CurrentUser() user: any,
+    @CurrentUser() user: RequestUser,
     @Param('studentId', ParseUUIDPipe) studentId: string,
   ) {
     return this.libraryService.getStudentBorrows(user.organizationId, studentId);
@@ -136,7 +137,7 @@ export class LibraryController {
   @AllowAnyRole()
   @Get('stats')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
-  async getLibraryStats(@CurrentUser() user: any) {
+  async getLibraryStats(@CurrentUser() user: RequestUser) {
     return this.libraryService.getLibraryStats(user.organizationId);
   }
 }

@@ -18,7 +18,7 @@ model Organization {
   phone                  String?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
-  timezone               String?                 @default("UTC")
+  timezone               String?                 @default("Asia/Tashkent")
   language               String?                 @default("en")
   currency               String?                 @default("UZS")
   logoUrl                String?
@@ -83,6 +83,11 @@ model Organization {
   StudentGamification    StudentGamification[]
   ParentSession          ParentSession[]
   HomeworkSubmission     HomeworkSubmission[]
+  telegramAccounts       TelegramAccount[]
+  telegramLinkTokens     TelegramLinkToken[]
+  notificationDeliveries NotificationDelivery[]
+
+  @@index([email])
 }
 
 model User {
@@ -99,11 +104,25 @@ model User {
   provider               String?                  @default("local")
   googleSubject          String?                  @unique
   googleEmail            String?
+  /// Audit P0-2 — account-model opt-in for Google sign-in.
+  ///
+  /// Automatic Google linking on a verified-email match is disabled for every
+  /// privileged role regardless of this flag. For non-privileged accounts
+  /// (STUDENT / PARENT) linking only happens when this flag is explicitly
+  /// true, i.e. "explicitly allowed by the account model".
+  googleLinkAllowed      Boolean                  @default(false)
   lastLoginAt            DateTime?
   createdAt              DateTime                 @default(now())
   updatedAt              DateTime                 @updatedAt
+  /// @deprecated Delivery-pointer mirror of `TelegramAccount.chatId`, kept in
+  /// sync by TelegramLinkService so the existing notification worker keeps
+  /// delivering during the migration. `TelegramAccount` is the source of
+  /// truth for Telegram identity/lifecycle; read that model in new code.
   telegramChatId         String?                  @unique
+  /// @deprecated Superseded by `TelegramLinkToken` (hash-stored, single-use).
+  /// Retained for backwards compatibility; no longer written by the linking flow.
   telegramLinkToken      String?                  @unique
+  /// @deprecated See `telegramLinkToken`.
   telegramLinkExpiresAt  DateTime?
   authorizationCodes     AuthorizationCode[]
   ChatMessage            ChatMessage[]
@@ -127,6 +146,7 @@ model User {
   automationRulesCreated AutomationRule[]
   financialPeriodsClosed FinancialPeriod[]
   apiKeysCreated         ApiKey[]
+  telegramAccounts       TelegramAccount[]
 
   @@index([organizationId])
   @@index([email(ops: raw("gin_trgm_ops"))], type: Gin, map: "user_email_trgm_idx")
@@ -152,7 +172,17 @@ model PasswordResetToken {
 model AuthorizationCode {
   id          String    @id @default(uuid()) @db.Uuid
   code        String    @unique
-  accessToken String
+  /// @deprecated Legacy column that used to persist the issued JWT verbatim.
+  /// Kept readable for rows created before the session-binding migration, but
+  /// no longer written: a bearer token at rest is a usable credential for its
+  /// whole JWT lifetime even after this row is purged. The session id below is
+  /// what identifies the pre-created session; the JWT is re-signed from it at
+  /// redemption time.
+  accessToken String?
+  /// Session pre-created by `issueToken` during the OAuth callback. Binding the
+  /// code to a session means the exchange mints a token for an existing,
+  /// revocable session row instead of trusting stored credential material.
+  sessionId   String?   @db.Uuid
   expiresAt   DateTime
   usedAt      DateTime?
   createdAt   DateTime  @default(now())
@@ -173,6 +203,16 @@ model UserSettings {
   emailNotifications Boolean? @default(true)
   pushNotifications  Boolean? @default(true)
   smsNotifications   Boolean? @default(false)
+  /// Telegram channel opt-in (self-service). Server is the source of truth:
+  /// the notification worker reads this flag, never a Telegram-side value.
+  telegramNotifications Boolean? @default(true)
+  /// Quiet hours: while inside the window Telegram delivery is DEFERRED (never
+  /// dropped). `quietHoursStart`/`End` are wall-clock `HH:mm` in `timezone`
+  /// (falling back to the organization timezone, then UTC). Equal start/end
+  /// means "no quiet window".
+  quietHoursEnabled  Boolean  @default(false)
+  quietHoursStart    String?
+  quietHoursEnd      String?
   user               User     @relation(fields: [userId], references: [id])
 }
 
@@ -235,6 +275,7 @@ model Student {
 
   @@index([organizationId])
   @@index([organizationId, status])
+  @@index([branchId])
 }
 
 model Teacher {
@@ -345,6 +386,8 @@ model Schedule {
   @@index([groupId])
 }
 
+/// Note: Attendance is currently granular to the (student, group, date) level.
+/// If a group has multiple lessons per day, attendance will only be recorded once per day.
 model Attendance {
   id                   String           @id @default(uuid()) @db.Uuid
   organizationId       String           @db.Uuid
@@ -372,6 +415,7 @@ model Attendance {
   @@index([organizationId, date])
   @@index([studentId])
   @@index([groupId])
+  @@index([groupId, date])
   @@index([date])
   @@index([lessonId])
 }
@@ -796,6 +840,7 @@ model LibraryBook {
 
   @@index([organizationId])
   @@index([category])
+  @@index([isbn])
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "library_book_title_trgm_idx")
   @@index([author(ops: raw("gin_trgm_ops"))], type: Gin, map: "library_book_author_trgm_idx")
   @@index([isbn(ops: raw("gin_trgm_ops"))], type: Gin, map: "library_book_isbn_trgm_idx")
@@ -1153,16 +1198,36 @@ model ParentAccount {
   lastLoginAt           DateTime?
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
+  /// @deprecated Delivery-pointer mirror of `TelegramAccount.chatId` (see User).
   telegramChatId        String?         @unique
+  /// @deprecated Superseded by `TelegramLinkToken`; no longer written.
   telegramLinkToken     String?         @unique
+  /// @deprecated See `telegramLinkToken`.
   telegramLinkExpiresAt DateTime?
   organization          Organization    @relation(fields: [organizationId], references: [id])
   students              ParentStudent[]
   ParentSession         ParentSession[]
+  telegramAccounts      TelegramAccount[]
+  passwordResetTokens   ParentPasswordResetToken[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
 }
+
+model ParentPasswordResetToken {
+  id        String        @id @default(uuid()) @db.Uuid
+  parentId  String        @db.Uuid
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+  parent    ParentAccount @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
 
 model ParentStudent {
   id                String        @id @default(uuid()) @db.Uuid
@@ -1342,14 +1407,16 @@ model DeviceToken {
 }
 
 model NotificationPreference {
-  id           String  @id @default(uuid()) @db.Uuid
-  userId       String  @db.Uuid
-  category     String
-  emailEnabled Boolean @default(true)
-  smsEnabled   Boolean @default(false)
-  pushEnabled  Boolean @default(true)
-  inAppEnabled Boolean @default(true)
-  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String  @id @default(uuid()) @db.Uuid
+  userId          String  @db.Uuid
+  category        String
+  emailEnabled    Boolean @default(true)
+  smsEnabled      Boolean @default(false)
+  pushEnabled     Boolean @default(true)
+  inAppEnabled    Boolean @default(true)
+  /// Per-category Telegram opt-in (default on, matching the channel default).
+  telegramEnabled Boolean @default(true)
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, category])
 }
@@ -1378,6 +1445,7 @@ model Document {
   @@index([relatedEntityType, relatedEntityId])
   @@index([tags])
   @@index([updatedAt])
+  @@index([title])
 }
 
 model DocumentVersion {
@@ -2150,6 +2218,103 @@ model TelegramLinkLog {
   @@index([organizationId])
 }
 
+/// Lifecycle of a linked Telegram identity.
+///
+/// Telegram is an external/untrusted channel: `BLOCKED` (the user blocked the
+/// bot) and `SUSPENDED` only affect Telegram delivery. They NEVER change the
+/// linked M-EDU account's `isActive`, role or permissions.
+enum TelegramAccountStatus {
+  ACTIVE
+  DISCONNECTED
+  BLOCKED
+  SUSPENDED
+}
+
+/// Durable M-EDU <-> Telegram identity link (external, untrusted channel).
+///
+/// This is a mapping of an EXTERNAL identity onto an existing M-EDU principal,
+/// not a source of business truth and not an authorization grant. Every
+/// request that arrives from Telegram re-resolves `organizationId` / role /
+/// permissions from the M-EDU tables — the Telegram side is never trusted.
+///
+/// Bot secrets and message payloads are never stored here. `telegramUserId`
+/// and `chatId` are Telegram int64 values persisted as strings (they overflow
+/// a 32-bit integer and are not safe as JS `number`). A single central M-EDU
+/// bot is assumed, so both are globally unique: one Telegram identity maps to
+/// at most one M-EDU principal.
+model TelegramAccount {
+  id              String                @id @default(uuid()) @db.Uuid
+  organizationId  String                @db.Uuid
+  /// Telegram numeric user id (int64), stored as a string for safety.
+  telegramUserId  String
+  /// Private chat id with the M-EDU bot (equals telegramUserId for DMs).
+  chatId          String
+  username        String?
+  firstName       String?
+  lastName        String?
+  languageCode    String?
+  status          TelegramAccountStatus @default(ACTIVE)
+  userId          String?               @db.Uuid
+  parentAccountId String?               @db.Uuid
+  linkedAt        DateTime              @default(now())
+  lastSeenAt      DateTime?
+  disconnectedAt  DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  user          User?          @relation(fields: [userId], references: [id])
+  parentAccount ParentAccount? @relation(fields: [parentAccountId], references: [id])
+
+  @@unique([telegramUserId])
+  @@unique([chatId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([parentAccountId])
+  @@index([status])
+}
+
+/// Short-lived, single-use, hash-stored account-linking token.
+///
+/// Only the SHA-256 hash is persisted (mirrors `PasswordResetToken`) so a
+/// database dump can never be replayed to hijack a link. Consumption is
+/// atomic: a conditional `updateMany` on `usedAt IS NULL` guarantees exactly
+/// one of several concurrent webhook deliveries (possibly on different API
+/// instances) succeeds.
+model TelegramLinkToken {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @db.Uuid
+  /// SHA-256 hex of the opaque token handed to the user. Never the raw value.
+  tokenHash       String    @unique
+  /// 'USER' | 'PARENT_ACCOUNT' — which principal table the link targets.
+  targetType      String
+  userId          String?   @db.Uuid
+  parentAccountId String?   @db.Uuid
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([expiresAt])
+  @@index([organizationId])
+  @@index([usedAt])
+}
+
+/// Webhook update deduplication ledger.
+///
+/// Telegram retries webhook deliveries and may deliver the same `update_id` to
+/// several API instances. The primary key makes "process exactly once" a
+/// database guarantee instead of a process-local one. Rows are metadata only
+/// (no payloads) and are subject to the retention policy in docs/TELEGRAM.md.
+model TelegramUpdate {
+  updateId   BigInt   @id
+  receivedAt DateTime @default(now())
+  status     String   @default("PROCESSED")
+
+  @@index([receivedAt])
+}
+
 enum GamificationEventType {
   ATTENDANCE_ON_TIME
   HOMEWORK_ON_TIME_GOOD_GRADE
@@ -2185,6 +2350,8 @@ model Branch {
   students Student[]
 
   @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([managerId])
 }
 
 model ApiKey {
@@ -2226,6 +2393,8 @@ model ParentSession {
   organizationId String?       @db.Uuid
   organization   Organization? @relation(fields: [organizationId], references: [id])
   revokedReason  String?
+
+  @@index([parentId])
 }
 
 model StudentGamification {
@@ -2257,6 +2426,71 @@ model NotificationDedup {
   eventType      String?
   entityId       String
   createdAt      DateTime @default(now())
+}
+
+/// Delivery tracking for the Telegram channel of a notification event.
+///
+/// One row per (event instance, principal, channel): it records WHAT was
+/// attempted, WHEN, and how the provider classified the outcome. It exists so
+/// the pipeline can distinguish a transient Telegram outage (retry) from a
+/// permanent user/bot relationship failure (stop retrying, mark the account).
+///
+/// Deliberately never stores secrets (bot token, webhook/callback secret) or
+/// raw Telegram API payloads. `telegramAccountId` is a soft reference (no FK):
+/// an audit/delivery record must survive account-row lifecycle changes and is
+/// removed only by the retention job.
+model NotificationDelivery {
+  id                String                     @id @default(uuid()) @db.Uuid
+  organizationId    String                     @db.Uuid
+  /// BullMQ job id of the originating notification event (never a Telegram id).
+  eventId           String
+  eventType         String
+  entityType        String
+  entityId          String
+  channel           String                     @default("TELEGRAM")
+  /// 'USER' | 'PARENT_ACCOUNT' — which principal table owns the delivery.
+  principalType     String
+  principalId       String                     @db.Uuid
+  telegramAccountId String?                    @db.Uuid
+  status            NotificationDeliveryStatus @default(PENDING)
+  /// Categorized provider failure (NETWORK_ERROR, TIMEOUT, RATE_LIMITED,
+  /// TELEGRAM_SERVER_ERROR, BLOCKED_USER, INVALID_CHAT, NOT_CONFIGURED, ...).
+  failureCategory   String?
+  attempts          Int                        @default(0)
+  /// Idempotency key: one delivery record per (event, principal, channel).
+  dedupKey          String                     @unique
+  /// Rendered content, kept ONLY so a quiet-hours deferral can be re-delivered.
+  title             String?
+  body              String?
+  deferredUntil     DateTime?
+  attemptedAt       DateTime                   @default(now())
+  sentAt            DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([telegramAccountId])
+  @@index([status, deferredUntil])
+  @@index([createdAt])
+}
+
+/// Lifecycle of ONE channel delivery attempt for a notification event.
+///
+/// `DEFERRED` is the quiet-hours state: the notification was NOT dropped, it is
+/// waiting for `deferredUntil` and is re-delivered by the sweep job.
+/// `SKIPPED` records a deliberate policy decision (channel disabled, no active
+/// Telegram account) and is never retried.
+enum NotificationDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED
+  DEFERRED
 }
 
 model HomeworkSubmission {
