@@ -1034,6 +1034,7 @@ export class CameraWorkerManagerService
           port: true,
           protocol: true,
           streamPath: true,
+          metadata: true,
           rtspTransport: true,
           encryptedCredentials: true,
           processingFps: true,
@@ -1229,10 +1230,11 @@ export class CameraWorkerManagerService
   private async buildStreamUri(
     camera: Pick<
       Camera,
-      'host' |
-      'port' |
-      'protocol' |
-      'streamPath'
+      | 'host'
+      | 'port'
+      | 'protocol'
+      | 'streamPath'
+      | 'metadata'
     >,
     credentials: VaultCredentials,
   ): Promise<string> {
@@ -1244,10 +1246,27 @@ export class CameraWorkerManagerService
         'Camera host is missing',
       );
     }
-    
-    // PREVENT DNS REBINDING (TOCTOU): Resolve to the final IP address directly here,
-    // and inject the IP instead of the hostname into the stream URI.
-    const host = await this.networkSecurity.validateHost(rawHost);
+
+    /**
+     * DNS REBINDING (TOCTOU): FFmpeg must never be given a host NAME — it
+     * would resolve it again at connect time and could be pointed at an
+     * internal address after the check passed. `resolveStreamHost()` always
+     * returns the IP literal that passed validation, so the address written
+     * into the URI is the address that was validated.
+     */
+    const host = await this.resolveStreamHost(
+      rawHost,
+      camera.metadata,
+    );
+
+    /**
+     * IPv6 literals must be bracketed inside a URI authority, otherwise the
+     * port would be parsed as extra hextets (`rtsp://2001:db8::1:554/...`).
+     */
+    const hostInUri =
+      host.includes(':') && !host.startsWith('[')
+        ? `[${host}]`
+        : host;
 
     /**
      * The worker currently consumes RTSP.
@@ -1308,7 +1327,93 @@ export class CameraWorkerManagerService
      * The protocol field identifies camera capability;
      * the actual worker transport remains RTSP.
      */
-    return `rtsp://${auth}${host}:${port}${path}`;
+    return `rtsp://${auth}${hostInUri}:${port}${path}`;
+  }
+
+  /**
+   * Read the SSRF destination pin written by `CameraService`.
+   *
+   * Returns `null` for legacy rows (no pin) or for a pin whose `validatedIp`
+   * is not an IP literal — in both cases the caller must fall back to a fresh
+   * resolve-and-validate.
+   */
+  private readAddressPin(
+    metadata: unknown,
+  ): { validatedIp: string; validatedHost: string } | null {
+    if (
+      !metadata ||
+      typeof metadata !== 'object' ||
+      Array.isArray(metadata)
+    ) {
+      return null;
+    }
+
+    const record = metadata as Record<string, unknown>;
+
+    const validatedIp =
+      typeof record.validatedIp === 'string'
+        ? record.validatedIp.trim()
+        : '';
+
+    if (!validatedIp) {
+      return null;
+    }
+
+    return {
+      validatedIp,
+      validatedHost:
+        typeof record.validatedHost === 'string'
+          ? record.validatedHost.trim()
+          : '',
+    };
+  }
+
+  /**
+   * Resolve the single destination this worker is allowed to connect to.
+   *
+   * 1. Preferred: the pin (`metadata.validatedIp`) recorded when the camera
+   *    host passed SSRF validation. It is re-checked with `validateIp()`,
+   *    which performs **no DNS lookup**, so nothing here can be poisoned by a
+   *    rebinding DNS record. The pin is only honoured when it was recorded for
+   *    the host currently configured on the camera.
+   * 2. Fallback (legacy rows, tampered/unusable pin): `validateHost(rawHost)`
+   *    resolves the name, validates EVERY returned address and hands back the
+   *    first validated IP.
+   *
+   * Both paths return an IP literal. The FFmpeg URI is built from that literal,
+   * so the address that passed validation is exactly the address used at
+   * connect time.
+   */
+  private async resolveStreamHost(
+    rawHost: string,
+    metadata: unknown,
+  ): Promise<string> {
+    const pin = this.readAddressPin(metadata);
+
+    if (
+      pin &&
+      (pin.validatedHost === '' ||
+        pin.validatedHost === rawHost)
+    ) {
+      try {
+        return this.networkSecurity.validateIp(
+          pin.validatedIp,
+        );
+      } catch (err: unknown) {
+        this.logger.warn(
+          'Pinned camera destination failed re-validation; falling back to resolving the host',
+          {
+            host: rawHost,
+            error: getErrorMessage(err),
+          },
+        );
+      }
+    }
+
+    // Throws (fail-closed) when the host resolves to a forbidden range.
+    return this.networkSecurity.validateHost(
+      rawHost,
+    );
   }
 
   private normalizeStreamPath(

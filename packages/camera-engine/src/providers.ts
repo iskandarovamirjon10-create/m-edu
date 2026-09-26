@@ -29,6 +29,7 @@ import type { ConnectionTestResult, DiscoveredDevice } from './types';
 const logger = new SecureLogger('info');
 
 export interface ProviderConnectionParams {
+  validatedIp?: string;
   host: string;
   port: number;
   protocol: 'RTSP' | 'ONVIF';
@@ -63,6 +64,46 @@ const HIKVISION_FALLBACK_PATHS = [
 ];
 
 const RTSP_TIMEOUT_MS_DEFAULT = 5_000;
+
+// ---------------------------------------------------------------------------
+// Destination resolution (SSRF / DNS rebinding)
+// ---------------------------------------------------------------------------
+
+/**
+ * Decide which address a connection test may open a socket to.
+ *
+ * - `params.validatedIp` (set by the API after `validateHost()` already ran)
+ *   is re-checked with `validateIp()`, which performs **no DNS lookup**. The
+ *   literal that passed validation is the literal we connect to, so a rebinding
+ *   answer cannot move the destination between check and use.
+ * - Otherwise `params.host` is resolved here and every resolved address is
+ *   validated; the first validated IP (never the name) is returned.
+ *
+ * Throws when the destination is forbidden — callers map that to
+ * `HOST_FORBIDDEN`.
+ */
+async function resolveDestination(
+  networkSecurity: NetworkSecurity,
+  params: ProviderConnectionParams,
+): Promise<string> {
+  if (params.validatedIp) {
+    return networkSecurity.validateIp(params.validatedIp);
+  }
+  return networkSecurity.validateHost(params.host);
+}
+
+/**
+ * Format the authority component of an RTSP URL. IPv6 literals must be
+ * bracketed (`rtsp://[2001:db8::1]:554/...`) or the port would be parsed as
+ * additional address groups.
+ */
+function formatAuthority(host: string, port: number): string {
+  const authority =
+    host.includes(':') && !host.startsWith('[')
+      ? `[${host}]`
+      : host;
+  return `${authority}:${port}`;
+}
 
 // ---------------------------------------------------------------------------
 // Low-level TCP probe
@@ -131,7 +172,7 @@ function buildDescribeRequest(
   credentials: { username?: string; password?: string } | undefined,
   authChallenge: RtspAuthChallenge | null,
 ): string {
-  const url = `rtsp://${host}:${port}${streamPath}`;
+  const url = `rtsp://${formatAuthority(host, port)}${streamPath}`;
   const lines: string[] = [
     `DESCRIBE ${url} RTSP/1.0`,
     `CSeq: ${cseq}`,
@@ -431,9 +472,12 @@ export class RtspProvider {
   async testConnection(
     params: ProviderConnectionParams,
   ): Promise<ConnectionTestResult> {
-    let resolvedIp = params.host;
+    let resolvedIp: string;
     try {
-      resolvedIp = await this.networkSecurity.validateHost(params.host);
+      resolvedIp = await resolveDestination(
+        this.networkSecurity,
+        params,
+      );
     } catch (err) {
       return {
         success: false,
@@ -444,6 +488,25 @@ export class RtspProvider {
     }
 
     const timeoutMs = params.timeoutMs ?? RTSP_TIMEOUT_MS_DEFAULT;
+
+    /**
+     * The stream path is interpolated verbatim into the RTSP request line
+     * (`DESCRIBE rtsp://<ip>:<port><path> RTSP/1.0`). Control characters would
+     * let a caller inject additional RTSP headers, so they are rejected before
+     * any socket is opened.
+     */
+    if (
+      params.streamPath &&
+      /[\r\n\x00-\x1F]/.test(params.streamPath)
+    ) {
+      return {
+        success: false,
+        latencyMs: 0,
+        message:
+          'RTSP stream path contains invalid control characters.',
+        errorCode: 'INVALID_STREAM_PATH',
+      };
+    }
 
     // 1. TCP reachability
     const tcp = await tcpProbe(resolvedIp, params.port, timeoutMs);
@@ -582,7 +645,7 @@ export class RtspProvider {
       tried.add(candidate);
 
       const probe = await rtspDescribe(
-      resolvedIp,
+        resolvedIp,
         params.port,
         candidate,
         timeoutMs,
@@ -662,9 +725,12 @@ export class OnvifProvider {
   async testConnection(
     params: ProviderConnectionParams,
   ): Promise<ConnectionTestResult> {
-    let resolvedIp = params.host;
+    let resolvedIp: string;
     try {
-      resolvedIp = await this.networkSecurity.validateHost(params.host);
+      resolvedIp = await resolveDestination(
+        this.networkSecurity,
+        params,
+      );
     } catch (err) {
       return {
         success: false,
@@ -673,6 +739,7 @@ export class OnvifProvider {
         errorCode: 'HOST_FORBIDDEN',
       };
     }
+
     const result = await tcpProbe(
       resolvedIp,
       params.port,

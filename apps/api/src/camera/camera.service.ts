@@ -54,6 +54,7 @@ type CameraEventWithRelations = Prisma.CameraAttendanceEventGetPayload<{
 }>;
 
 type CameraConnectionParams = {
+  validatedIp?: string;
   host: string;
   port: number;
   protocol: 'RTSP' | 'ONVIF';
@@ -99,7 +100,7 @@ export class CameraService {
   ) {
     this.assertOrganizationId(organizationId);
 
-    await this.validateCameraHost(data.host);
+    const validatedIp = await this.validateCameraHost(data.host);
 
     const protocol = data.protocol ?? 'RTSP';
     const port = this.resolvePort(protocol, data.port);
@@ -144,10 +145,12 @@ export class CameraService {
 
         status: 'CONFIGURED',
 
-        metadata:
-          data.metadata !== undefined
-            ? (data.metadata as Prisma.InputJsonValue)
-            : undefined,
+        metadata: this.buildCameraMetadata({
+          client: data.metadata,
+          previous: null,
+          host: data.host,
+          validatedIp,
+        }),
       },
     });
 
@@ -233,14 +236,20 @@ export class CameraService {
     this.assertOrganizationId(organizationId);
     this.assertCameraId(cameraId);
 
-    await this.findCamera(
+    const existing = await this.findCamera(
       organizationId,
       cameraId,
     );
 
-    if (data.host !== undefined) {
-      await this.validateCameraHost(data.host);
-    }
+    /**
+     * The host is validated BEFORE anything is written. The returned IP is the
+     * only destination the runtime is ever allowed to use for this camera, so it
+     * has to be re-pinned whenever the host changes.
+     */
+    const validatedIp =
+      data.host !== undefined
+        ? await this.validateCameraHost(data.host)
+        : undefined;
 
     const updateData: Prisma.CameraUpdateInput = {};
 
@@ -301,9 +310,23 @@ export class CameraService {
         data.attendanceEnabled;
     }
 
-    if (data.metadata !== undefined) {
+    /**
+     * `metadata` is a shared JSON blob: clients may write their own keys, but
+     * the validated destination pin is server-owned and must never be supplied
+     * (or removed) by the client — otherwise a tenant could point the worker at
+     * an address that never went through SSRF validation.
+     */
+    if (
+      data.metadata !== undefined ||
+      data.host !== undefined
+    ) {
       updateData.metadata =
-        data.metadata as Prisma.InputJsonValue;
+        this.buildCameraMetadata({
+          client: data.metadata,
+          previous: existing.metadata,
+          host: data.host,
+          validatedIp,
+        });
     }
 
     await this.applyCredentialUpdate(
@@ -501,12 +524,13 @@ export class CameraService {
       60_000,
     );
 
-    await this.validateCameraHost(data.host);
+    const validatedIp = await this.validateCameraHost(data.host);
 
     const protocol = (data.protocol ?? 'RTSP') as 'RTSP' | 'ONVIF';
 
     const params: CameraConnectionParams = {
       host: data.host,
+      validatedIp,
       port: this.resolvePort(
         protocol,
         data.port,
@@ -996,9 +1020,9 @@ export class CameraService {
 
   private async validateCameraHost(
     host: string,
-  ): Promise<void> {
+  ): Promise<string> {
     try {
-      await this.networkSecurity.validateHost(
+      return await this.networkSecurity.validateHost(
         host,
       );
     } catch (error: unknown) {
@@ -1022,6 +1046,121 @@ export class CameraService {
           'Discovery subnet is not allowed',
       );
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // PRIVATE — METADATA (SSRF destination pin)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Server-owned `Camera.metadata` keys. They hold the destination the SSRF
+   * check approved, and they are the ONLY thing the streaming worker is allowed
+   * to connect to, so clients can never write them.
+   */
+  private static readonly SERVER_METADATA_KEYS = [
+    'validatedIp',
+    'validatedHost',
+  ] as const;
+
+  private sanitizeClientMetadata(
+    input: unknown,
+  ): Record<string, unknown> {
+    if (
+      !input ||
+      typeof input !== 'object' ||
+      Array.isArray(input)
+    ) {
+      return {};
+    }
+
+    const result: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(
+      input as Record<string, unknown>,
+    )) {
+      if (
+        (CameraService.SERVER_METADATA_KEYS as readonly string[]).includes(
+          key,
+        )
+      ) {
+        continue;
+      }
+      result[key] = value;
+    }
+
+    return result;
+  }
+
+  private readAddressPin(
+    metadata: unknown,
+  ): { validatedIp: string; validatedHost: string } | null {
+    if (
+      !metadata ||
+      typeof metadata !== 'object' ||
+      Array.isArray(metadata)
+    ) {
+      return null;
+    }
+
+    const record = metadata as Record<string, unknown>;
+    const validatedIp =
+      typeof record.validatedIp === 'string'
+        ? record.validatedIp.trim()
+        : '';
+
+    if (!validatedIp) {
+      return null;
+    }
+
+    return {
+      validatedIp,
+      validatedHost:
+        typeof record.validatedHost === 'string'
+          ? record.validatedHost.trim()
+          : '',
+    };
+  }
+
+  /**
+   * Build the `metadata` JSON to persist.
+   *
+   * - Client keys are preserved (minus the server-owned ones).
+   * - When a host is written in this call, the pin is replaced with the IP that
+   *   `validateHost()` just approved for that exact host. If validation did not
+   *   produce an IP, any stale pin is dropped so the worker re-resolves at start
+   *   time instead of trusting an address that belongs to the old host.
+   * - When the host is untouched, the existing pin is carried over untouched.
+   */
+  private buildCameraMetadata(args: {
+    client: unknown;
+    previous: unknown;
+    host?: string;
+    validatedIp?: string;
+  }): Prisma.InputJsonValue {
+    const merged = {
+      ...this.sanitizeClientMetadata(args.previous),
+      ...this.sanitizeClientMetadata(args.client),
+    };
+
+    const pin =
+      args.host !== undefined
+        ? args.validatedIp
+          ? {
+              validatedIp: args.validatedIp,
+              validatedHost: args.host.trim(),
+            }
+          : null
+        : this.readAddressPin(args.previous);
+
+    if (pin) {
+      merged.validatedIp = pin.validatedIp;
+      merged.validatedHost = pin.validatedHost;
+    } else {
+      delete merged.validatedIp;
+      delete merged.validatedHost;
+    }
+
+    return merged as Prisma.InputJsonValue;
   }
 
   private normalizeProcessingFps(

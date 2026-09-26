@@ -147,8 +147,38 @@ export class NetworkSecurity {
   }
 
   /**
+   * Validate an already-resolved IP literal.
+   *
+   * This method NEVER performs a DNS lookup: it either accepts the literal
+   * (after the loopback / private / link-local checks) or throws. It is the
+   * entry point for values that were resolved and validated exactly once at
+   * write time (e.g. `Camera.metadata.validatedIp`), because resolving a name
+   * at connect time would re-open the DNS-rebinding (TOCTOU) window this
+   * class exists to close.
+   *
+   * Returns the normalized literal so the caller can put it straight into a
+   * connection string / FFmpeg input URI.
+   */
+  validateIp(ip: string): string {
+    if (!ip || typeof ip !== 'string') {
+      throw new Error('Camera IP address is required');
+    }
+    const trimmed = ip.trim();
+    if (!net.isIP(trimmed)) {
+      throw new Error(
+        `Expected a pre-validated IP address, got host name: ${trimmed}`,
+      );
+    }
+    this.assertAllowedIp(trimmed);
+    return trimmed;
+  }
+
+  /**
    * Validate a camera host. Throws if the host resolves to a forbidden
    * network range.
+   *
+   * Returns the first resolved and validated address — never the hostname —
+   * so the caller connects to the exact destination that was checked.
    */
   async validateHost(host: string): Promise<string> {
     if (!host || typeof host !== 'string') {
@@ -156,8 +186,8 @@ export class NetworkSecurity {
     }
     const trimmed = host.trim();
     if (net.isIP(trimmed)) {
-      this.assertAllowedIp(trimmed);
-      return trimmed;
+      // Literal — no DNS involved.
+      return this.validateIp(trimmed);
     }
     // Hostname — resolve and validate every address
     let addresses: string[] = [];
@@ -173,7 +203,7 @@ export class NetworkSecurity {
     for (const addr of addresses) {
       this.assertAllowedIp(addr);
     }
-    
+
     // Return the first resolved and validated IP to prevent DNS rebinding TOCTOU
     return addresses[0];
   }
