@@ -1,28 +1,8 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { camerasApi } from '@/lib/api';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Table,
-  THead,
-  TBody,
-  TR,
-  TH,
-  TD,
-  Field,
-  TextInput,
-  Select,
-  Modal,
-  GlassButton,
-  ConfirmDialog,
-  useToasts,
-  statusColor,
-  GlassTabs,
-} from '@/components/ui';
+import { queryKeys } from '@/lib/query-keys.factory';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassField, GlassInput, GlassSelect, GlassModal, GlassButton, ConfirmDialog, useToasts, statusColor, GlassTabs } from '@/components/ui';
 import { formatDateTime } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Camera, CameraProtocol } from '@/lib/types';
@@ -118,9 +98,9 @@ function CameraDetailTabs({
         {tab === 'events' && (
           <div>
             {events.isLoading ? (
-              <PageLoader label={t('cameras.loadingEvents')} />
+              <GlassPageLoader label={t('cameras.loadingEvents')} />
             ) : events.isError ? (
-              <ErrorState message={getErrorMessage(events.error as Error)} />
+              <GlassErrorState message={getErrorMessage(events.error as Error)} />
             ) : (
               <CameraEventsTable data={events.data} />
             )}
@@ -129,9 +109,9 @@ function CameraDetailTabs({
         {tab === 'health' && (
           <div>
             {health.isLoading ? (
-              <PageLoader label={t('cameras.loadingHealth')} />
+              <GlassPageLoader label={t('cameras.loadingHealth')} />
             ) : health.isError ? (
-              <ErrorState message={getErrorMessage(health.error as Error)} />
+              <GlassErrorState message={getErrorMessage(health.error as Error)} />
             ) : (
               <CameraHealthDisplay data={health.data} />
             )}
@@ -140,9 +120,9 @@ function CameraDetailTabs({
         {tab === 'worker' && (
           <div>
             {workerStatus.isLoading ? (
-              <PageLoader label={t('cameras.loadingWorker')} />
+              <GlassPageLoader label={t('cameras.loadingWorker')} />
             ) : workerStatus.isError ? (
-              <ErrorState message={getErrorMessage(workerStatus.error as Error)} />
+              <GlassErrorState message={getErrorMessage(workerStatus.error as Error)} />
             ) : (
               <CameraWorkerDisplay data={workerStatus.data} />
             )}
@@ -159,28 +139,28 @@ function CameraEventsTable({ data }: { data: unknown }) {
   if (events.length === 0) return <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t('cameras.noEvents')}</p>;
   return (
     <div className="overflow-x-auto">
-      <Table>
-        <THead>
-          <TR>
-            <TH>{t('cameras.colTime')}</TH>
-            <TH>{t('cameras.colStudent')}</TH>
-            <TH>{t('cameras.colDecision')}</TH>
-            <TH>{t('cameras.colConfidence')}</TH>
-            <TH>{t('cameras.colSimilarity')}</TH>
-          </TR>
-        </THead>
-        <TBody>
+      <GlassTable>
+        <GlassTHead>
+          <GlassTR>
+            <GlassTH>{t('cameras.colTime')}</GlassTH>
+            <GlassTH>{t('cameras.colStudent')}</GlassTH>
+            <GlassTH>{t('cameras.colDecision')}</GlassTH>
+            <GlassTH>{t('cameras.colConfidence')}</GlassTH>
+            <GlassTH>{t('cameras.colSimilarity')}</GlassTH>
+          </GlassTR>
+        </GlassTHead>
+        <GlassTBody>
           {events.map((e) => (
-            <TR key={e.id}>
-              <TD className="whitespace-nowrap text-xs">{formatDateTime(e.recognizedAt)}</TD>
-              <TD>{[e.student?.user?.firstName, e.student?.user?.lastName].filter(Boolean).join(' ') || '—'}</TD>
-              <TD><Badge color={e.decision === 'ATTENDANCE_RECORDED' ? 'green' : e.decision === 'BLOCKED' ? 'red' : 'slate'}>{e.decision}</Badge></TD>
-              <TD>{e.confidence ?? '—'}</TD>
-              <TD>{e.similarityScore ?? '—'}</TD>
-            </TR>
+            <GlassTR key={e.id}>
+              <GlassTD className="whitespace-nowrap text-xs">{formatDateTime(e.recognizedAt)}</GlassTD>
+              <GlassTD>{[e.student?.user?.firstName, e.student?.user?.lastName].filter(Boolean).join(' ') || '—'}</GlassTD>
+              <GlassTD><GlassBadge color={e.decision === 'ATTENDANCE_RECORDED' ? 'green' : e.decision === 'BLOCKED' ? 'red' : 'slate'}>{e.decision}</GlassBadge></GlassTD>
+              <GlassTD>{e.confidence ?? '—'}</GlassTD>
+              <GlassTD>{e.similarityScore ?? '—'}</GlassTD>
+            </GlassTR>
           ))}
-        </TBody>
-      </Table>
+        </GlassTBody>
+      </GlassTable>
     </div>
   );
 }
@@ -238,7 +218,7 @@ export function CamerasPage() {
 
   // Data fetching
   const cameras = useQuery({
-    queryKey: ['cameras'],
+    queryKey: queryKeys.cameras.all(),
     queryFn: () => camerasApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
   });
@@ -401,19 +381,19 @@ export function CamerasPage() {
   );
 
   const cameraEvents = useQuery({
-    queryKey: ['camera-events', selectedCameraId],
+    queryKey: queryKeys.cameras.events(selectedCameraId),
     queryFn: () => camerasApi.events(selectedCameraId!, { limit: 50 }),
     enabled: !!selectedCameraId,
   });
 
   const cameraHealth = useQuery({
-    queryKey: ['camera-health', selectedCameraId],
+    queryKey: queryKeys.cameras.health(selectedCameraId),
     queryFn: () => camerasApi.health(selectedCameraId!),
     enabled: !!selectedCameraId,
   });
 
   const cameraWorkerStatus = useQuery({
-    queryKey: ['camera-worker', selectedCameraId],
+    queryKey: queryKeys.cameras.worker(selectedCameraId),
     queryFn: () => camerasApi.workerStatus(selectedCameraId!),
     enabled: !!selectedCameraId,
     refetchInterval: 5000,
@@ -455,12 +435,12 @@ export function CamerasPage() {
     return (
       <div className="page-container space-y-4">
         
-        <PageHeader
+        <GlassPageHeader
           title={t('cameras.title')}
           subtitle={t('cameras.subtitle')}
         />
         <div className="glass-card p-8">
-          <PageLoader label={t('cameras.loading')} />
+          <GlassPageLoader label={t('cameras.loading')} />
         </div>
       </div>
     );
@@ -471,12 +451,12 @@ export function CamerasPage() {
     return (
       <div className="page-container space-y-4">
         
-        <PageHeader
+        <GlassPageHeader
           title={t('cameras.title')}
           subtitle={t('cameras.subtitle')}
         />
         <div className="glass-card p-8">
-          <ErrorState
+          <GlassErrorState
             title={t('cameras.loadError')}
             message={getErrorMessage(cameras.error as Error)}
             onRetry={handleRetry}
@@ -489,7 +469,7 @@ export function CamerasPage() {
   return (
     <div className="page-container space-y-4">
       
-      <PageHeader
+      <GlassPageHeader
         title={t('cameras.title')}
         subtitle={t('cameras.subtitle')}
         actions={
@@ -515,24 +495,24 @@ export function CamerasPage() {
       {/* Cameras table */}
       <div className="glass-card overflow-hidden">
         {list.length === 0 ? (
-          <EmptyState
+          <GlassEmptyState
             title={t('cameras.empty')}
             message={t('cameras.emptyHint')}
           />
         ) : (
           <div className="glass-table-wrap">
-            <Table>
-              <THead>
-                <TR>
-                  <TH>{t('common.name')}</TH>
-                  <TH>{t('cameras.endpoint')}</TH>
-                  <TH>{t('common.status')}</TH>
-                  <TH>{t('cameras.recognition')}</TH>
-                  <TH>{t('cameras.lastSeen')}</TH>
-                  <TH className="text-right">{t('common.actions')}</TH>
-                </TR>
-              </THead>
-              <TBody>
+            <GlassTable>
+              <GlassTHead>
+                <GlassTR>
+                  <GlassTH>{t('common.name')}</GlassTH>
+                  <GlassTH>{t('cameras.endpoint')}</GlassTH>
+                  <GlassTH>{t('common.status')}</GlassTH>
+                  <GlassTH>{t('cameras.recognition')}</GlassTH>
+                  <GlassTH>{t('cameras.lastSeen')}</GlassTH>
+                  <GlassTH className="text-right">{t('common.actions')}</GlassTH>
+                </GlassTR>
+              </GlassTHead>
+              <GlassTBody>
                 {list.map((camera) => {
                   const statusBadge = getCameraStatusBadge(camera);
                   const recognitionBadge = getRecognitionBadge(
@@ -546,7 +526,7 @@ export function CamerasPage() {
                     startWorker.variables === camera.id;
 
                   return (
-                    <TR
+                    <GlassTR
                       key={camera.id}
                       className={`clickable ${selectedCameraId === camera.id ? 'bg-[rgba(148,234,239,0.10)]' : ''}`}
                       onClick={() => setSelectedCameraId(selectedCameraId === camera.id ? null : camera.id)}
@@ -560,26 +540,26 @@ export function CamerasPage() {
                         }
                       }}
                     >
-                      <TD className="font-medium">
+                      <GlassTD className="font-medium">
                         {camera.name}
-                      </TD>
-                      <TD className="font-mono text-xs">
+                      </GlassTD>
+                      <GlassTD className="font-mono text-xs">
                         {formatEndpoint(camera)}
-                      </TD>
-                      <TD>
-                        <Badge color={statusBadge.color}>
+                      </GlassTD>
+                      <GlassTD>
+                        <GlassBadge color={statusBadge.color}>
                           {CAMERA_STATUS_LABEL_KEYS[camera.status] ? t(CAMERA_STATUS_LABEL_KEYS[camera.status]) : camera.status}
-                        </Badge>
-                      </TD>
-                      <TD>
-                        <Badge color={recognitionBadge.color}>
+                        </GlassBadge>
+                      </GlassTD>
+                      <GlassTD>
+                        <GlassBadge color={recognitionBadge.color}>
                           {recognitionBadge.label}
-                        </Badge>
-                      </TD>
-                      <TD className="whitespace-nowrap">
+                        </GlassBadge>
+                      </GlassTD>
+                      <GlassTD className="whitespace-nowrap">
                         {formatDateTime(camera.lastSeenAt)}
-                      </TD>
-                      <TD className="text-right">
+                      </GlassTD>
+                      <GlassTD className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           {camera.status === 'CONFIGURED' && (
                             <GlassButton
@@ -606,12 +586,12 @@ export function CamerasPage() {
                                 : t('common.enable')}
                           </GlassButton>
                         </div>
-                      </TD>
-                    </TR>
+                      </GlassTD>
+                    </GlassTR>
                   );
                 })}
-              </TBody>
-            </Table>
+              </GlassTBody>
+            </GlassTable>
           </div>
         )}
       </div>
@@ -683,7 +663,7 @@ export function CamerasPage() {
       )}
 
       {/* Config modal */}
-      <Modal
+      <GlassModal
         open={modalOpen}
         onClose={handleCloseModal}
         title={t('cameras.add')}
@@ -691,8 +671,8 @@ export function CamerasPage() {
       >
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label={t('cameras.form.name')} required error={formErrors.name}>
-              <TextInput
+            <GlassField label={t('cameras.form.name')} required error={formErrors.name}>
+              <GlassInput
                 value={form.name}
                 onChange={handleFormChange('name')}
                 required
@@ -705,9 +685,9 @@ export function CamerasPage() {
                   {formErrors.name}
                 </span>
               )}
-            </Field>
-            <Field label={t('cameras.form.protocol')}>
-              <Select
+            </GlassField>
+            <GlassField label={t('cameras.form.protocol')}>
+              <GlassSelect
                 value={form.protocol}
                 onChange={handleFormChange('protocol')}
                 aria-label={t('cameras.form.protocol')}
@@ -717,10 +697,10 @@ export function CamerasPage() {
                     {protocol}
                   </option>
                 ))}
-              </Select>
-            </Field>
-            <Field label={t('cameras.form.host')} required error={formErrors.host}>
-              <TextInput
+              </GlassSelect>
+            </GlassField>
+            <GlassField label={t('cameras.form.host')} required error={formErrors.host}>
+              <GlassInput
                 value={form.host}
                 onChange={handleFormChange('host')}
                 placeholder="192.168.1.100"
@@ -733,9 +713,9 @@ export function CamerasPage() {
                   {formErrors.host}
                 </span>
               )}
-            </Field>
-            <Field label={t('cameras.form.port')} error={formErrors.port}>
-              <TextInput
+            </GlassField>
+            <GlassField label={t('cameras.form.port')} error={formErrors.port}>
+              <GlassInput
                 type="number"
                 value={form.port}
                 onChange={handleFormChange('port')}
@@ -749,39 +729,39 @@ export function CamerasPage() {
                   {formErrors.port}
                 </span>
               )}
-            </Field>
-            <Field label={t('cameras.form.streamPath')}>
-              <TextInput
+            </GlassField>
+            <GlassField label={t('cameras.form.streamPath')}>
+              <GlassInput
                 value={form.streamPath}
                 onChange={handleFormChange('streamPath')}
                 placeholder="/Streaming/Channels/101"
               />
-            </Field>
-            <Field label={t('cameras.form.location')}>
-              <TextInput
+            </GlassField>
+            <GlassField label={t('cameras.form.location')}>
+              <GlassInput
                 value={form.location}
                 onChange={handleFormChange('location')}
                 placeholder={t('cameras.form.locationPlaceholder')}
               />
-            </Field>
-            <Field
+            </GlassField>
+            <GlassField
               label={t('common.username')}
               hint={t('cameras.form.credentialsHint')}
             >
-              <TextInput
+              <GlassInput
                 value={form.username}
                 onChange={handleFormChange('username')}
                 autoComplete="off"
               />
-            </Field>
-            <Field label={t('common.password')}>
-              <TextInput
+            </GlassField>
+            <GlassField label={t('common.password')}>
+              <GlassInput
                 type="password"
                 value={form.password}
                 onChange={handleFormChange('password')}
                 autoComplete="new-password"
               />
-            </Field>
+            </GlassField>
           </div>
           <div className="flex justify-end gap-2">
             <GlassButton
@@ -801,10 +781,10 @@ export function CamerasPage() {
             </GlassButton>
           </div>
         </form>
-      </Modal>
+      </GlassModal>
 
       {/* Discover cameras modal */}
-      <Modal
+      <GlassModal
         open={discoverOpen}
         onClose={handleCloseDiscover}
         title={t('cameras.discoverTitle')}
@@ -815,7 +795,7 @@ export function CamerasPage() {
             {t('cameras.discoverHint')}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <TextInput
+            <GlassInput
               value={discoverSubnet}
               onChange={(e) => setDiscoverSubnet(e.target.value)}
               placeholder={t('cameras.subnetPlaceholder')}
@@ -844,26 +824,26 @@ export function CamerasPage() {
 
           {discovered.length > 0 ? (
             <div className="glass-table-wrap">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>{t('cameras.form.host')}</TH>
-                    <TH>{t('cameras.form.port')}</TH>
-                    <TH>{t('cameras.form.protocol')}</TH>
-                    <TH className="text-right">{t('cameras.colAction')}</TH>
-                  </TR>
-                </THead>
-                <TBody>
+              <GlassTable>
+                <GlassTHead>
+                  <GlassTR>
+                    <GlassTH>{t('cameras.form.host')}</GlassTH>
+                    <GlassTH>{t('cameras.form.port')}</GlassTH>
+                    <GlassTH>{t('cameras.form.protocol')}</GlassTH>
+                    <GlassTH className="text-right">{t('cameras.colAction')}</GlassTH>
+                  </GlassTR>
+                </GlassTHead>
+                <GlassTBody>
                   {discovered.map((camera, index) => (
-                    <TR
+                    <GlassTR
                       key={`${camera.host}-${camera.port}-${index}`}
                     >
-                      <TD className="font-mono text-xs">{camera.host}</TD>
-                      <TD>{camera.port}</TD>
-                      <TD>
-                        <Badge color="slate">{camera.protocol}</Badge>
-                      </TD>
-                      <TD className="text-right">
+                      <GlassTD className="font-mono text-xs">{camera.host}</GlassTD>
+                      <GlassTD>{camera.port}</GlassTD>
+                      <GlassTD>
+                        <GlassBadge color="slate">{camera.protocol}</GlassBadge>
+                      </GlassTD>
+                      <GlassTD className="text-right">
                         <GlassButton
                           type="button"
                           variant="secondary"
@@ -872,11 +852,11 @@ export function CamerasPage() {
                         >
                           {t('cameras.use')}
                         </GlassButton>
-                      </TD>
-                    </TR>
+                      </GlassTD>
+                    </GlassTR>
                   ))}
-                </TBody>
-              </Table>
+                </GlassTBody>
+              </GlassTable>
             </div>
           ) : discover.isSuccess ? (
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -884,29 +864,29 @@ export function CamerasPage() {
             </p>
           ) : null}
         </div>
-      </Modal>
+      </GlassModal>
 
       {/* Config modal */}
-      <Modal open={configModalOpen} onClose={() => setConfigModalOpen(false)} title={t('cameras.configTitle')}>
+      <GlassModal open={configModalOpen} onClose={() => setConfigModalOpen(false)} title={t('cameras.configTitle')}>
         <div className="space-y-4">
-          <Field label={t('cameras.configFps')}>
-            <TextInput type="number" min={1} max={30} value={configForm.fps}
+          <GlassField label={t('cameras.configFps')}>
+            <GlassInput type="number" min={1} max={30} value={configForm.fps}
               onChange={(e) => setConfigForm((f) => ({ ...f, fps: e.target.value }))} />
-          </Field>
-          <Field label={t('cameras.configRecognition')}>
-            <Select value={configForm.recognitionEnabled}
+          </GlassField>
+          <GlassField label={t('cameras.configRecognition')}>
+            <GlassSelect value={configForm.recognitionEnabled}
               onChange={(e) => setConfigForm((f) => ({ ...f, recognitionEnabled: e.target.value }))}>
               <option value="true">{t('common.enable')}</option>
               <option value="false">{t('common.disable')}</option>
-            </Select>
-          </Field>
-          <Field label={t('cameras.configAttendance')}>
-            <Select value={configForm.attendanceEnabled}
+            </GlassSelect>
+          </GlassField>
+          <GlassField label={t('cameras.configAttendance')}>
+            <GlassSelect value={configForm.attendanceEnabled}
               onChange={(e) => setConfigForm((f) => ({ ...f, attendanceEnabled: e.target.value }))}>
               <option value="true">{t('common.enable')}</option>
               <option value="false">{t('common.disable')}</option>
-            </Select>
-          </Field>
+            </GlassSelect>
+          </GlassField>
           <div className="flex justify-end gap-2">
             <GlassButton onClick={() => setConfigModalOpen(false)} variant="secondary">{t('common.cancel')}</GlassButton>
             <GlassButton onClick={() => {
@@ -926,7 +906,7 @@ export function CamerasPage() {
             </GlassButton>
           </div>
         </div>
-      </Modal>
+      </GlassModal>
 
       <ConfirmDialog
         open={deleteTarget !== null}

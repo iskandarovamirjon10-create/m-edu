@@ -2,21 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { studentsApi } from '@/lib/api';
-import {
-  PageHeader,
-  PageLoader,
-  ErrorState,
-  Field,
-  TextInput,
-  Select,
-  TextArea,
-  useToasts,
-  GlassButton,
-} from '@/components/ui';
+import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassField, GlassInput, GlassSelect, GlassTextArea, useToasts, GlassButton } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Student } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { queryKeys } from '@/lib/query-keys.factory';
 
 interface StudentFormState {
   firstName: string;
@@ -73,7 +64,7 @@ export function StudentFormPage() {
   >({});
 
   const existing = useQuery({
-    queryKey: ['student', id],
+    queryKey: queryKeys.students.detail(id || ''),
     queryFn: () => studentsApi.get(id!),
     enabled: isEdit,
     placeholderData: (previousData) => previousData,
@@ -157,8 +148,9 @@ export function StudentFormPage() {
         'success',
         isEdit ? t('studentForm.updated') : t('studentForm.created'),
       );
-      qc.invalidateQueries({ queryKey: ['students'] });
-      qc.invalidateQueries({ queryKey: ['student', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.students.selectors() });
+      qc.invalidateQueries({ queryKey: queryKeys.students.details() });
       navigate(`/students/${(res as Student).id}`, { replace: true });
     },
     onError: (e: Error) => {
@@ -192,12 +184,12 @@ export function StudentFormPage() {
       <>
         
         <div className="page-container mx-auto max-w-3xl space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('studentForm.editTitle')}
             subtitle={t('studentForm.subtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label={t('studentForm.loading')} />
+            <GlassPageLoader label={t('studentForm.loading')} />
           </div>
         </div>
       </>
@@ -210,12 +202,12 @@ export function StudentFormPage() {
       <>
         
         <div className="page-container mx-auto max-w-3xl space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('studentForm.editTitle')}
             subtitle={t('studentForm.subtitle')}
           />
           <div className="glass-card p-8">
-            <ErrorState
+            <GlassErrorState
               title={t('studentForm.loadFailed')}
               message={getErrorMessage(existing.error as Error)}
               onRetry={handleRetry}
@@ -230,7 +222,7 @@ export function StudentFormPage() {
     <>
       
       <div className="page-container mx-auto max-w-3xl space-y-4">
-      <PageHeader
+      <GlassPageHeader
         title={
           isEdit ? t('studentForm.editTitle') : t('studentForm.addTitle')
         }
@@ -250,12 +242,12 @@ export function StudentFormPage() {
             noValidate
           >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field
+              <GlassField
                 label={t('teachers.form.firstName')}
                 required
                 error={formErrors.firstName}
               >
-                <TextInput
+                <GlassInput
                   value={form.firstName}
                   onChange={(e) => set('firstName', e.target.value)}
                   required
@@ -274,14 +266,14 @@ export function StudentFormPage() {
                     {formErrors.firstName}
                   </span>
                 )}
-              </Field>
+              </GlassField>
 
-              <Field
+              <GlassField
                 label={t('teachers.form.lastName')}
                 required
                 error={formErrors.lastName}
               >
-                <TextInput
+                <GlassInput
                   value={form.lastName}
                   onChange={(e) => set('lastName', e.target.value)}
                   required
@@ -300,16 +292,16 @@ export function StudentFormPage() {
                     {formErrors.lastName}
                   </span>
                 )}
-              </Field>
+              </GlassField>
 
               {!isEdit && (
                 <>
-                  <Field
+                  <GlassField
                     label={t('common.email')}
                     hint={t('studentForm.emailHint')}
                     error={formErrors.email}
                   >
-                    <TextInput
+                    <GlassInput
                       type="email"
                       value={form.email}
                       onChange={(e) => set('email', e.target.value)}
@@ -328,44 +320,44 @@ export function StudentFormPage() {
                         {formErrors.email}
                       </span>
                     )}
-                  </Field>
+                  </GlassField>
 
-                  <Field
+                  <GlassField
                     label={t('auth.password')}
                     hint={t('studentForm.passwordHint')}
                   >
-                    <TextInput
+                    <GlassInput
                       type="password"
                       value={form.password}
                       onChange={(e) => set('password', e.target.value)}
                       autoComplete="new-password"
                       disabled={save.isPending}
                     />
-                  </Field>
+                  </GlassField>
                 </>
               )}
 
-              <Field label={t('common.phone')}>
-                <TextInput
+              <GlassField label={t('common.phone')}>
+                <GlassInput
                   type="tel"
                   value={form.phone}
                   onChange={(e) => set('phone', e.target.value)}
                   placeholder="+998 90 123 4567"
                   disabled={save.isPending}
                 />
-              </Field>
+              </GlassField>
 
-              <Field label={t('studentForm.dateOfBirth')}>
-                <TextInput
+              <GlassField label={t('studentForm.dateOfBirth')}>
+                <GlassInput
                   type="date"
                   value={form.dateOfBirth}
                   onChange={(e) => set('dateOfBirth', e.target.value)}
                   disabled={save.isPending}
                 />
-              </Field>
+              </GlassField>
 
-              <Field label={t('studentForm.gender')}>
-                <Select
+              <GlassField label={t('studentForm.gender')}>
+                <GlassSelect
                   value={form.gender}
                   onChange={(e) => set('gender', e.target.value)}
                   aria-label={t('studentForm.selectGenderAria')}
@@ -377,28 +369,28 @@ export function StudentFormPage() {
                       {t(gender.label)}
                     </option>
                   ))}
-                </Select>
-              </Field>
+                </GlassSelect>
+              </GlassField>
 
-              <Field label={t('hr.form.address')}>
-                <TextInput
+              <GlassField label={t('hr.form.address')}>
+                <GlassInput
                   value={form.address}
                   onChange={(e) => set('address', e.target.value)}
                   placeholder={t('studentForm.addressPlaceholder')}
                   disabled={save.isPending}
                 />
-              </Field>
+              </GlassField>
             </div>
 
-            <Field label={t('common.notes')}>
-              <TextArea
+            <GlassField label={t('common.notes')}>
+              <GlassTextArea
                 rows={3}
                 value={form.notes}
                 onChange={(e) => set('notes', e.target.value)}
                 placeholder={t('studentForm.notesPlaceholder')}
                 disabled={save.isPending}
               />
-            </Field>
+            </GlassField>
 
             {/* Parent/Guardian section */}
             <div className="border-t border-[var(--border-subtle)] pt-5">
@@ -406,30 +398,30 @@ export function StudentFormPage() {
                 {t('studentForm.parentSection')}
               </h3>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <Field label={t('studentForm.parentName')}>
-                  <TextInput
+                <GlassField label={t('studentForm.parentName')}>
+                  <GlassInput
                     value={form.parentName}
                     onChange={(e) => set('parentName', e.target.value)}
                     placeholder="Jane Doe"
                     disabled={save.isPending}
                   />
-                </Field>
+                </GlassField>
 
-                <Field label={t('studentForm.parentPhone')}>
-                  <TextInput
+                <GlassField label={t('studentForm.parentPhone')}>
+                  <GlassInput
                     type="tel"
                     value={form.parentPhone}
                     onChange={(e) => set('parentPhone', e.target.value)}
                     placeholder="+998 90 123 4567"
                     disabled={save.isPending}
                   />
-                </Field>
+                </GlassField>
 
-                <Field
+                <GlassField
                   label={t('studentForm.parentEmail')}
                   error={formErrors.parentEmail}
                 >
-                  <TextInput
+                  <GlassInput
                     type="email"
                     value={form.parentEmail}
                     onChange={(e) => set('parentEmail', e.target.value)}
@@ -448,7 +440,7 @@ export function StudentFormPage() {
                       {formErrors.parentEmail}
                     </span>
                   )}
-                </Field>
+                </GlassField>
               </div>
             </div>
 

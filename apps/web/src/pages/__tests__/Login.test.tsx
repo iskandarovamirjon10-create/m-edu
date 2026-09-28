@@ -37,6 +37,7 @@ vi.mock('@/lib/api', () => ({
     clear: vi.fn(() => localStorage.removeItem('medu_user')),
   },
   setUnauthorizedHandler: vi.fn(),
+  apiUrl: (path: string) => `/api${path}`,
   authApi: {
     login: (...args: unknown[]) => loginMock(...args),
     me: vi.fn(),

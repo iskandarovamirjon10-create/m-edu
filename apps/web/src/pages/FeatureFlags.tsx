@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, GlassButton, GlassSwitch, GlassModal, Field, TextInput, Select } from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassButton, GlassSwitch, GlassModal, GlassField, GlassInput, GlassSelect } from '@/components/ui';
 import { useToast } from '@/components/ui/GlassToast';
 import { featureFlagsApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -42,7 +42,7 @@ function FeatureFlagRow({ flag, onToggle, onEdit, isUpdating }: { flag: FeatureF
           <span className="text-[10px] text-muted">{flag.rolloutPercentage ? t('featureFlags.rolloutPercent', { n: flag.rolloutPercentage }) : t('featureFlags.fullRollout')}</span>
         </div>
       </div>
-      <Badge color={flag.enabled ? 'success' : 'muted'}>{flag.enabled ? t('common.on') : t('common.off')}</Badge>
+      <GlassBadge color={flag.enabled ? 'success' : 'muted'}>{flag.enabled ? t('common.on') : t('common.off')}</GlassBadge>
       <GlassButton size="sm" variant="ghost" onClick={onEdit} disabled={isUpdating}>
         {t('common.edit')}
       </GlassButton>
@@ -150,7 +150,7 @@ export function FeatureFlagsPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('featureFlags.title')}
           subtitle={t('featureFlags.subtitle')}
         />
@@ -164,10 +164,10 @@ export function FeatureFlagsPage() {
           </div>
           <div className="divide-y divide-[var(--border-subtle)]">
             {flagsQuery.isLoading ? (
-              <div className="p-8"><PageLoader label={t('featureFlags.loading')} /></div>
+              <div className="p-8"><GlassPageLoader label={t('featureFlags.loading')} /></div>
             ) : flagsQuery.isError ? (
               <div className="p-8">
-                <ErrorState
+                <GlassErrorState
                   title={t('featureFlags.loadError')}
                   message={getErrorMessage(flagsQuery.error)}
                   onRetry={() => flagsQuery.refetch()}
@@ -175,7 +175,7 @@ export function FeatureFlagsPage() {
               </div>
             ) : flags.length === 0 ? (
               <div className="p-8">
-                <EmptyState
+                <GlassEmptyState
                   title={t('featureFlags.empty')}
                   message={t('featureFlags.emptyHint')}
                 />
@@ -201,8 +201,8 @@ export function FeatureFlagsPage() {
         title={editingKey ? t('featureFlags.editTitle') : t('featureFlags.createTitle')}
       >
         <form onSubmit={handleCreate} className="space-y-4" noValidate>
-          <Field label={t('featureFlags.form.key')} required={!editingKey}>
-            <TextInput
+          <GlassField label={t('featureFlags.form.key')} required={!editingKey}>
+            <GlassInput
               value={form.key}
               onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
               placeholder={t('featureFlags.form.keyPlaceholder')}
@@ -210,25 +210,25 @@ export function FeatureFlagsPage() {
               readOnly={Boolean(editingKey)}
               autoFocus={!editingKey}
             />
-          </Field>
-          <Field label={t('featureFlags.form.name')} required>
-            <TextInput
+          </GlassField>
+          <GlassField label={t('featureFlags.form.name')} required>
+            <GlassInput
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder={t('featureFlags.form.namePlaceholder')}
               disabled={createMutation.isPending}
             />
-          </Field>
-          <Field label={t('featureFlags.form.description')}>
-            <TextInput
+          </GlassField>
+          <GlassField label={t('featureFlags.form.description')}>
+            <GlassInput
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               placeholder={t('featureFlags.form.descriptionPlaceholder')}
               disabled={createMutation.isPending}
             />
-          </Field>
-          <Field label={t('featureFlags.form.type')}>
-            <Select
+          </GlassField>
+          <GlassField label={t('featureFlags.form.type')}>
+            <GlassSelect
               value={form.type}
               onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
               disabled={createMutation.isPending}
@@ -236,8 +236,8 @@ export function FeatureFlagsPage() {
               {FLAG_TYPES.map((ft) => (
                 <option key={ft.value} value={ft.value}>{t(ft.labelKey)}</option>
               ))}
-            </Select>
-          </Field>
+            </GlassSelect>
+          </GlassField>
           <p className="text-xs text-muted">
             {t('featureFlags.createHint')}
           </p>

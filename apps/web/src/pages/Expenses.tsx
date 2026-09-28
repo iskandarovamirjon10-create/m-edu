@@ -2,22 +2,8 @@ import { toLocalISOString } from '../lib/format';
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { expensesApi } from '@/lib/api';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Pagination,
-  TextInput,
-  Select,
-  Field,
-  Modal,
-  ConfirmDialog,
-  GlassButton,
-  useToasts,
-  statusColor,
-} from '@/components/ui';
+import { queryKeys } from '@/lib/query-keys.factory';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassPagination, GlassInput, GlassSelect, GlassField, GlassModal, ConfirmDialog, GlassButton, useToasts, statusColor } from '@/components/ui';
 import { formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Expense, ExpenseCategory } from '@/lib/types';
@@ -99,7 +85,7 @@ export function ExpensesPage() {
 
   // Data fetching
   const expenses = useQuery({
-    queryKey: ['expenses', params],
+    queryKey: queryKeys.expenses.list(params),
     queryFn: () => expensesApi.list(params),
     placeholderData: (previousData) => previousData,
   });
@@ -128,7 +114,8 @@ export function ExpensesPage() {
       setEditingId(null);
       setForm(INITIAL_FORM);
       setFormErrors({});
-      qc.invalidateQueries({ queryKey: ['expenses'] });
+      qc.invalidateQueries({ queryKey: queryKeys.expenses.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -140,7 +127,8 @@ export function ExpensesPage() {
     mutationFn: (id: string) => expensesApi.remove(id),
     onSuccess: () => {
       push('success', t('expenses.deleted'));
-      qc.invalidateQueries({ queryKey: ['expenses'] });
+      qc.invalidateQueries({ queryKey: queryKeys.expenses.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -239,12 +227,12 @@ export function ExpensesPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('expenses.title')}
             subtitle={t('expenses.subtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label={t('expenses.loading')} />
+            <GlassPageLoader label={t('expenses.loading')} />
           </div>
         </div>
       </div>
@@ -256,12 +244,12 @@ export function ExpensesPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('expenses.title')}
             subtitle={t('expenses.subtitle')}
           />
           <div className="glass-card p-8">
-            <ErrorState
+            <GlassErrorState
               title={t('expenses.loadError')}
               message={getErrorMessage(expenses.error as Error)}
               onRetry={handleRetry}
@@ -275,7 +263,7 @@ export function ExpensesPage() {
   return (
     <div style={{ display: "contents" }}>
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('expenses.title')}
           subtitle={t('expenses.subtitle')}
           actions={
@@ -293,7 +281,7 @@ export function ExpensesPage() {
         <div className="glass-card p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="grid grid-cols-1 gap-3 sm:flex-1">
-            <Select
+            <GlassSelect
               value={category}
               onChange={handleCategoryChange}
               aria-label={t('expenses.filterByCategory')}
@@ -304,7 +292,7 @@ export function ExpensesPage() {
                   {t(categoryKey(cat))}
                 </option>
               ))}
-            </Select>
+            </GlassSelect>
           </div>
           <div className="flex items-center justify-between gap-4 sm:ml-4 sm:shrink-0">
             <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -324,7 +312,7 @@ export function ExpensesPage() {
       {/* Expenses table */}
       <div className="glass-card">
         {expenseList.length === 0 ? (
-          <EmptyState
+          <GlassEmptyState
             title={hasActiveFilter ? t('expenses.noMatching') : t('expenses.emptyTitle')}
             message={
               hasActiveFilter
@@ -352,9 +340,9 @@ export function ExpensesPage() {
                         {formatDate(expense.date)}
                       </td>
                       <td>
-                        <Badge color={statusColor(expense.category)}>
+                        <GlassBadge color={statusColor(expense.category)}>
                           {t(categoryKey(expense.category))}
-                        </Badge>
+                        </GlassBadge>
                       </td>
                       <td className="max-w-xs truncate" title={expense.description || undefined}>
                         {expense.description || '—'}
@@ -388,7 +376,7 @@ export function ExpensesPage() {
               </table>
             </div>
             <div className="border-t px-4 py-3" style={{ borderColor: 'var(--border-subtle)' }}>
-              <Pagination
+              <GlassPagination
                 page={page}
                 totalPages={data?.totalPages ?? 1}
                 onPageChange={setPage}
@@ -399,15 +387,15 @@ export function ExpensesPage() {
       </div>
 
       {/* Add expense modal */}
-      <Modal
+      <GlassModal
         open={modalOpen}
         onClose={handleCloseModal}
         title={editingId ? t('expenses.editTitle') : t('expenses.addTitle')}
       >
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label={t('expenses.category')} required>
-              <Select
+            <GlassField label={t('expenses.category')} required>
+              <GlassSelect
                 value={form.category}
                 onChange={handleFormChange('category')}
                 aria-label={t('expenses.categoryAria')}
@@ -417,10 +405,10 @@ export function ExpensesPage() {
                     {t(categoryKey(cat))}
                   </option>
                 ))}
-              </Select>
-            </Field>
-            <Field label={t('expenses.amountUsd')} required error={formErrors.amount}>
-              <TextInput
+              </GlassSelect>
+            </GlassField>
+            <GlassField label={t('expenses.amountUsd')} required error={formErrors.amount}>
+              <GlassInput
                 type="number"
                 step="0.01"
                 min="0.01"
@@ -436,11 +424,11 @@ export function ExpensesPage() {
                   {formErrors.amount}
                 </span>
               )}
-            </Field>
+            </GlassField>
           </div>
 
-          <Field label={t('common.date')} required error={formErrors.date}>
-            <TextInput
+          <GlassField label={t('common.date')} required error={formErrors.date}>
+            <GlassInput
               type="date"
               value={form.date}
               onChange={handleFormChange('date')}
@@ -453,15 +441,15 @@ export function ExpensesPage() {
                 {formErrors.date}
               </span>
             )}
-          </Field>
+          </GlassField>
 
-          <Field label={t('common.description')}>
-            <TextInput
+          <GlassField label={t('common.description')}>
+            <GlassInput
               value={form.description}
               onChange={handleFormChange('description')}
               placeholder={t('common.optionalDescription')}
             />
-          </Field>
+          </GlassField>
 
           <div className="flex justify-end gap-2">
             <GlassButton
@@ -485,7 +473,7 @@ export function ExpensesPage() {
             </GlassButton>
           </div>
         </form>
-      </Modal>
+      </GlassModal>
 
       <ConfirmDialog
         open={deleteTarget !== null}

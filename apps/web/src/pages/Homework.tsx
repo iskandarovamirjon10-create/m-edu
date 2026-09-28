@@ -1,27 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { homeworkApi, groupsApi } from '@/lib/api';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Table,
-  THead,
-  TBody,
-  TR,
-  TH,
-  TD,
-  Field,
-  TextInput,
-  TextArea,
-  Select,
-  Modal,
-  ConfirmDialog,
-  GlassButton,
-  useToasts,
-} from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassField, GlassInput, GlassTextArea, GlassSelect, GlassModal, ConfirmDialog, GlassButton, useToasts } from '@/components/ui';
 import { formatDate } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Homework, Group } from '@/lib/types';
@@ -238,12 +218,12 @@ export function HomeworkPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('homework.title')}
             subtitle={t('homework.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label={t('homework.loading')} />
+            <GlassPageLoader label={t('homework.loading')} />
           </div>
         </div>
       </div>
@@ -255,12 +235,12 @@ export function HomeworkPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('homework.title')}
             subtitle={t('homework.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <ErrorState
+            <GlassErrorState
               title={t('homework.loadFailed')}
               message={getErrorMessage(homework.error as Error)}
               onRetry={handleRetry}
@@ -278,7 +258,7 @@ export function HomeworkPage() {
       <div className="orb orb-indigo-1"></div>
       <div className="orb orb-deep-1"></div>
     <div className="page-container space-y-4">
-      <PageHeader
+      <GlassPageHeader
         title={t('homework.title')}
         subtitle={t('homework.pageSubtitle')}
         actions={
@@ -295,50 +275,50 @@ export function HomeworkPage() {
       {/* Homework table */}
       <div className="glass-card overflow-hidden">
         {homeworkList.length === 0 ? (
-          <EmptyState
+          <GlassEmptyState
             title={t('homework.empty')}
             message={t('homework.emptyMessage')}
           />
         ) : (
           <div className="glass-table-wrap">
-            <Table>
-              <THead>
-                <TR>
-                  <TH>{t('homework.form.title')}</TH>
-                  <TH>{t('homework.form.group')}</TH>
-                  <TH>{t('homework.form.deadline')}</TH>
-                  <TH>{t('homework.form.maxScore')}</TH>
-                  <TH>{t('common.status')}</TH>
-                  <TH>{t('common.actions')}</TH>
-                </TR>
-              </THead>
-              <TBody>
+            <GlassTable>
+              <GlassTHead>
+                <GlassTR>
+                  <GlassTH>{t('homework.form.title')}</GlassTH>
+                  <GlassTH>{t('homework.form.group')}</GlassTH>
+                  <GlassTH>{t('homework.form.deadline')}</GlassTH>
+                  <GlassTH>{t('homework.form.maxScore')}</GlassTH>
+                  <GlassTH>{t('common.status')}</GlassTH>
+                  <GlassTH>{t('common.actions')}</GlassTH>
+                </GlassTR>
+              </GlassTHead>
+              <GlassTBody>
                 {homeworkList.map((homeworkItem) => {
                   const isPast = isDeadlinePast(homeworkItem.deadline);
                   const isSoon = isDeadlineSoon(homeworkItem.deadline);
 
                   return (
-                    <TR
+                    <GlassTR
                       key={homeworkItem.id}
                     >
-                      <TD className="font-medium">
+                      <GlassTD className="font-medium">
                         {homeworkItem.title}
-                      </TD>
-                      <TD>{homeworkItem.group?.name || '—'}</TD>
-                      <TD className="whitespace-nowrap">
+                      </GlassTD>
+                      <GlassTD>{homeworkItem.group?.name || '—'}</GlassTD>
+                      <GlassTD className="whitespace-nowrap">
                         {formatDeadline(homeworkItem.deadline)}
-                      </TD>
-                      <TD>{formatMaxScore(homeworkItem.maxScore)}</TD>
-                      <TD>
+                      </GlassTD>
+                      <GlassTD>{formatMaxScore(homeworkItem.maxScore)}</GlassTD>
+                      <GlassTD>
                         {isPast ? (
-                          <Badge color="slate">{t('homework.status.pastDue')}</Badge>
+                          <GlassBadge color="slate">{t('homework.status.pastDue')}</GlassBadge>
                         ) : isSoon ? (
-                          <Badge color="amber">{t('homework.status.dueSoon')}</Badge>
+                          <GlassBadge color="amber">{t('homework.status.dueSoon')}</GlassBadge>
                         ) : (
-                          <Badge color="green">{t('homework.status.open')}</Badge>
+                          <GlassBadge color="green">{t('homework.status.open')}</GlassBadge>
                         )}
-                      </TD>
-                      <TD>
+                      </GlassTD>
+                      <GlassTD>
                         <div className="flex gap-2">
                           <GlassButton
                             type="button"
@@ -357,18 +337,18 @@ export function HomeworkPage() {
                             {t('common.delete')}
                           </GlassButton>
                         </div>
-                      </TD>
-                    </TR>
+                      </GlassTD>
+                    </GlassTR>
                   );
                 })}
-              </TBody>
-            </Table>
+              </GlassTBody>
+            </GlassTable>
           </div>
         )}
       </div>
 
       {/* Add homework modal */}
-      <Modal
+      <GlassModal
         open={modalOpen}
         onClose={handleCloseModal}
         title={editingId ? t('homework.editTitle') : t('homework.addButton')}
@@ -376,8 +356,8 @@ export function HomeworkPage() {
       >
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label={t('homework.form.title')} required error={formErrors.title}>
-              <TextInput
+            <GlassField label={t('homework.form.title')} required error={formErrors.title}>
+              <GlassInput
                 value={form.title}
                 onChange={handleFormChange('title')}
                 required
@@ -390,10 +370,10 @@ export function HomeworkPage() {
                   {formErrors.title}
                 </span>
               )}
-            </Field>
+            </GlassField>
 
-            <Field label={t('homework.form.group')} required error={formErrors.groupId}>
-              <Select
+            <GlassField label={t('homework.form.group')} required error={formErrors.groupId}>
+              <GlassSelect
                 value={form.groupId}
                 onChange={handleFormChange('groupId')}
                 required
@@ -408,24 +388,24 @@ export function HomeworkPage() {
                     {group.name}
                   </option>
                 ))}
-              </Select>
+              </GlassSelect>
               {formErrors.groupId && (
                 <span id="group-error" className="mt-1 text-sm text-red-600">
                   {formErrors.groupId}
                 </span>
               )}
-            </Field>
+            </GlassField>
 
-            <Field label={t('homework.form.deadline')}>
-              <TextInput
+            <GlassField label={t('homework.form.deadline')}>
+              <GlassInput
                 type="datetime-local"
                 value={form.deadline}
                 onChange={handleFormChange('deadline')}
               />
-            </Field>
+            </GlassField>
 
-            <Field label={t('homework.form.maxScore')} error={formErrors.maxScore}>
-              <TextInput
+            <GlassField label={t('homework.form.maxScore')} error={formErrors.maxScore}>
+              <GlassInput
                 type="number"
                 min="0"
                 step="0.1"
@@ -445,17 +425,17 @@ export function HomeworkPage() {
                   {formErrors.maxScore}
                 </span>
               )}
-            </Field>
+            </GlassField>
           </div>
 
-          <Field label={t('homework.form.description')}>
-            <TextArea
+          <GlassField label={t('homework.form.description')}>
+            <GlassTextArea
               rows={3}
               value={form.description}
               onChange={handleFormChange('description')}
               placeholder={t('homework.descriptionPlaceholder')}
             />
-          </Field>
+          </GlassField>
 
           <div className="flex justify-end gap-2">
             <GlassButton
@@ -479,7 +459,7 @@ export function HomeworkPage() {
             </GlassButton>
           </div>
         </form>
-      </Modal>
+      </GlassModal>
 
       <ConfirmDialog
         open={deleteTarget !== null}

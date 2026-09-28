@@ -7,31 +7,14 @@ import { formatDate } from '../lib/format';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invoicesApi, studentsApi } from '@/lib/api';
-import {
-  GlassPageHeader,
-  GlassPageLoader,
-  GlassErrorState,
-  GlassEmptyState,
-  GlassTable,
-  GlassTHead,
-  GlassTBody,
-  GlassTR,
-  GlassTH,
-  GlassTD,
-  GlassModal,
-  GlassInput,
-  GlassTextArea,
-  GlassSelect,
-  GlassField,
-  GlassButton,
-  useToast,
-  GlassTabs,
-} from '@/components/ui';
+import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassModal, GlassInput, GlassTextArea, GlassSelect, GlassField, GlassButton, useToast, GlassTabs } from '@/components/ui';
 import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Invoice, InvoicePayment, InvoiceRefund } from '@/lib/types';
+import { queryKeys } from '@/lib/query-keys.factory';
+import { Printer } from 'lucide-react';
 
 // Shared invoice/payment status label keys (PAID/OVERDUE/… reuse payments.*).
 const INVOICE_STATUS_KEYS: Record<string, string> = {
@@ -98,6 +81,7 @@ export function InvoicesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [payTarget, setPayTarget] = useState<Invoice | null>(null);
   const [refundTarget, setRefundTarget] = useState<Invoice | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<Invoice | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>(EMPTY_PAYMENT);
   const [refundForm, setRefundForm] = useState<RefundFormState>(EMPTY_REFUND);
   const [issueTarget, setIssueTarget] = useState<any>(null);
@@ -106,6 +90,12 @@ export function InvoicesPage() {
   const [createForm, setCreateForm] = useState<any>({ description: '', unitPrice: '' });
   const [createErrors, setCreateErrors] = useState<any>({});
 
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.payments.all() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
+  };
+
   const invoiceDetail = useQuery({
     queryKey: ['invoice-detail', refundTarget?.id],
     queryFn: () => (refundTarget ? (invoicesApi.get(refundTarget.id) as Promise<any>) : null),
@@ -113,7 +103,7 @@ export function InvoicesPage() {
   });
 
   const students = useQuery({
-    queryKey: ['students'],
+    queryKey: queryKeys.students.selectors(),
     queryFn: () => studentsApi.list({ limit: 100 }),
   });
 
@@ -122,7 +112,7 @@ export function InvoicesPage() {
     onSuccess: () => {
       push('success', t('invoices.createSuccess'));
       setCreateOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      invalidateAll();
     },
     onError: (err: any) => setCreateErrors({ _error: getErrorMessage(err) }),
   });
@@ -132,7 +122,7 @@ export function InvoicesPage() {
     onSuccess: () => {
       push('success', 'Refund processed');
       setRefundTarget(null);
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      invalidateAll();
     },
   });
 
@@ -141,7 +131,7 @@ export function InvoicesPage() {
     onSuccess: () => {
       push('success', 'Refund rejected');
       setRejectTarget(null);
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      invalidateAll();
     },
   });
 
@@ -150,7 +140,7 @@ export function InvoicesPage() {
     onSuccess: () => {
       push('success', 'Refund requested');
       setRefundTarget(null);
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      invalidateAll();
     },
   });
 
@@ -159,12 +149,12 @@ export function InvoicesPage() {
     onSuccess: () => {
       push('success', 'Invoice issued');
       setIssueTarget(null);
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      invalidateAll();
     },
   });
 
   const invoices = useQuery({
-    queryKey: ['invoices', statusFilter],
+    queryKey: queryKeys.invoices.list({ status: statusFilter || undefined, limit: 100 }),
     queryFn: () => invoicesApi.list({ status: statusFilter || undefined, limit: 100 }) as Promise<any>,
   });
 
@@ -183,7 +173,7 @@ export function InvoicesPage() {
       push('success', t('invoices.paymentSuccess'));
       setPayTarget(null);
       setPaymentForm(EMPTY_PAYMENT);
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      invalidateAll();
     },
     onError: (error: any) => {
       push('error', getErrorMessage(error));
@@ -263,12 +253,25 @@ export function InvoicesPage() {
                       <GlassTD className="text-right font-medium">{formatCurrency(Number(inv.paidAmount || 0))}</GlassTD>
                       <GlassTD className="text-right font-medium text-rose-500">{formatCurrency(bal)}</GlassTD>
                       <GlassTD className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <GlassButton type="button" variant="secondary" size="sm" onClick={() => setPayTarget(inv)}>
-                            {t('invoices.recordPayment')}
-                          </GlassButton>
-                          <GlassButton type="button" variant="secondary" size="sm" onClick={() => setRefundTarget(inv)}>
-                            {t('invoices.recordRefund')}
+                        <div className="flex justify-end gap-1.5 flex-wrap">
+                          {inv.status === 'DRAFT' && (
+                            <GlassButton type="button" variant="primary" size="sm" onClick={() => setIssueTarget(inv)}>
+                              {t('invoices.confirmIssue')}
+                            </GlassButton>
+                          )}
+                          {inv.status !== 'DRAFT' && bal > 0 && (
+                            <GlassButton type="button" variant="secondary" size="sm" onClick={() => setPayTarget(inv)}>
+                              {t('invoices.recordPayment')}
+                            </GlassButton>
+                          )}
+                          {Number(inv.paidAmount || 0) > 0 && (
+                            <GlassButton type="button" variant="ghost" size="sm" onClick={() => setRefundTarget(inv)}>
+                              {t('invoices.recordRefund')}
+                            </GlassButton>
+                          )}
+                          <GlassButton type="button" variant="ghost" size="sm" onClick={() => setPreviewTarget(inv)} title="Preview / Print">
+                            <Printer className="w-3.5 h-3.5 mr-1" />
+                            <span>{t('invoices.preview') || 'Preview'}</span>
                           </GlassButton>
                         </div>
                       </GlassTD>
@@ -601,6 +604,148 @@ export function InvoicesPage() {
             </GlassButton>
           </div>
         </form>
+      </GlassModal>
+
+      {/* Invoice Preview & Print Modal */}
+      <GlassModal
+        open={previewTarget !== null}
+        onClose={() => setPreviewTarget(null)}
+        title={t('invoices.preview') || 'Invoice Preview'}
+        wide
+      >
+        {previewTarget && (
+          <div className="space-y-6 pt-2">
+            <div
+              id="medu-printable-invoice"
+              className="p-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] space-y-6"
+            >
+              {/* Invoice Header */}
+              <div className="flex justify-between items-start border-b pb-6 border-[var(--border-subtle)]">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-[var(--primary)] text-white flex items-center justify-center font-black text-base shadow-sm">
+                      M
+                    </div>
+                    <div>
+                      <h2 className="font-extrabold text-xl text-[var(--text-primary)] tracking-tight">M-EDU ACADEMY</h2>
+                      <p className="text-xs text-[var(--text-muted)]">Official Tuition & Billing Document</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <h1 className="text-2xl font-black tracking-tight text-[var(--text-primary)] uppercase">INVOICE</h1>
+                  <p className="font-mono text-sm font-semibold text-[var(--text-secondary)] mt-0.5">#{previewTarget.number || previewTarget.id.slice(0, 8)}</p>
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 mt-2 rounded-full text-xs font-bold ${getInvoiceStatusConfig(previewTarget.status).bg} ${getInvoiceStatusConfig(previewTarget.status).text}`}>
+                    {t(invoiceStatusKey(previewTarget.status))}
+                  </span>
+                </div>
+              </div>
+
+              {/* Invoice Meta Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 text-sm">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Billed To</p>
+                  <p className="font-bold text-[var(--text-primary)] mt-1">
+                    {previewTarget.student?.user
+                      ? `${previewTarget.student.user.firstName} ${previewTarget.student.user.lastName}`
+                      : previewTarget.studentId || '—'}
+                  </p>
+                  {previewTarget.student?.user?.email && (
+                    <p className="text-xs text-[var(--text-muted)]">{previewTarget.student.user.email}</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Issue Date</p>
+                  <p className="font-medium text-[var(--text-primary)] mt-1">
+                    {previewTarget.issueDate ? formatDate(previewTarget.issueDate) : formatDate(previewTarget.createdAt)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Due Date</p>
+                  <p className="font-medium text-[var(--text-primary)] mt-1">
+                    {previewTarget.dueDate ? formatDate(previewTarget.dueDate) : 'On Receipt'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Line Items Table */}
+              <div className="border border-[var(--border-subtle)] rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--state-hover)] text-xs font-bold uppercase text-[var(--text-secondary)] border-b border-[var(--border-subtle)]">
+                    <tr>
+                      <th className="py-3 px-4 text-left">Description</th>
+                      <th className="py-3 px-4 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border-subtle)]">
+                    <tr>
+                      <td className="py-3 px-4 text-[var(--text-primary)]">
+                        {previewTarget.notes || (previewTarget as any).description || 'Educational Tuition & Course Services'}
+                      </td>
+                      <td className="py-3 px-4 text-right font-medium text-[var(--text-primary)]">
+                        {formatCurrency(Number(previewTarget.total || previewTarget.subtotal || 0))}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totals Summary */}
+              <div className="flex justify-end">
+                <div className="w-72 space-y-2 text-sm">
+                  <div className="flex justify-between py-1 border-b border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-secondary)]">Subtotal</span>
+                    <span className="font-medium text-[var(--text-primary)]">
+                      {formatCurrency(Number(previewTarget.subtotal || previewTarget.total || 0))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-secondary)]">Paid Amount</span>
+                    <span className="font-medium text-emerald-600">
+                      {formatCurrency(Number(previewTarget.paidAmount || 0))}
+                    </span>
+                  </div>
+                  {Number(previewTarget.refundedAmount || 0) > 0 && (
+                    <div className="flex justify-between py-1 border-b border-[var(--border-subtle)]">
+                      <span className="text-[var(--text-secondary)]">Refunded</span>
+                      <span className="font-medium text-rose-500">
+                        {formatCurrency(Number(previewTarget.refundedAmount))}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-2 text-base font-bold">
+                    <span className="text-[var(--text-primary)]">Balance Due</span>
+                    <span className="text-rose-600 font-black">
+                      {formatCurrency(remaining(previewTarget))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Notes */}
+              <div className="pt-4 border-t border-[var(--border-subtle)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs text-[var(--text-muted)]">
+                <div>
+                  <p className="font-semibold text-[var(--text-secondary)]">Payment Instructions</p>
+                  <p>Please include invoice number #{previewTarget.number || previewTarget.id.slice(0, 8)} on all transfers.</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-[var(--text-secondary)]">M-EDU Learning Systems</p>
+                  <p>Thank you for choosing M-EDU Education.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <GlassButton type="button" variant="secondary" onClick={() => setPreviewTarget(null)}>
+                {t('common.close')}
+              </GlassButton>
+              <GlassButton type="button" variant="primary" onClick={() => window.print()}>
+                <Printer className="w-4 h-4 mr-1.5" />
+                Print Invoice
+              </GlassButton>
+            </div>
+          </div>
+        )}
       </GlassModal>
     </div>
   );

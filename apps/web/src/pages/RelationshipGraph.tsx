@@ -1,13 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  PageHeader,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  GlassInput,
-  GlassSelect,
-} from '@/components/ui';
+import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassInput, GlassSelect } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -61,7 +54,7 @@ export function RelationshipGraphPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('relationshipGraph.title')}
           subtitle={t('relationshipGraph.subtitle')}
         />
@@ -105,23 +98,23 @@ export function RelationshipGraphPage() {
         <div className="glass-card overflow-hidden">
           {!entityId ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('relationshipGraph.emptyTitle')}
                 message={t('relationshipGraph.emptyMessage')}
               />
             </div>
           ) : graphQuery.isLoading ? (
-            <div className="p-8"><PageLoader label={t('relationshipGraph.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('relationshipGraph.loading')} /></div>
           ) : graphQuery.isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 message={getErrorMessage(graphQuery.error)}
                 onRetry={() => graphQuery.refetch()}
               />
             </div>
           ) : !graph || graph.nodes.length === 0 ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('relationshipGraph.noResultsTitle')}
                 message={t('relationshipGraph.noResultsMessage')}
               />

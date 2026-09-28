@@ -1,25 +1,15 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { paymentsApi, studentsApi } from '@/lib/api';
-import {
-  PageHeader,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Pagination,
-  TextInput,
-  Select,
-  Field,
-  Modal,
-  GlassButton,
-  useToasts,
-} from '@/components/ui';
+import { queryKeys } from '@/lib/query-keys.factory';
+import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassPagination, GlassInput, GlassSelect, GlassField, GlassModal, GlassButton, useToasts } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Payment, Student, PaymentStatus, PaymentMethod } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { Receipt, Printer, CreditCard, Banknote, ShieldCheck } from 'lucide-react';
 
 const PAYMENT_STATUSES: PaymentStatus[] = ['PAID', 'PENDING', 'OVERDUE', 'CANCELLED'];
 const PAYMENT_METHODS: PaymentMethod[] = [
@@ -83,6 +73,7 @@ export function PaymentsPage() {
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
+  const [receiptTarget, setReceiptTarget] = useState<Payment | null>(null);
 
   // Form state
   const [form, setForm] = useState<PaymentFormState>(INITIAL_FORM);
@@ -103,13 +94,13 @@ export function PaymentsPage() {
 
   // Data fetching
   const payments = useQuery({
-    queryKey: ['payments', params],
+    queryKey: queryKeys.payments.list(params),
     queryFn: () => paymentsApi.list(params),
     placeholderData: (previousData) => previousData,
   });
 
   const students = useQuery({
-    queryKey: ['students-payments'],
+    queryKey: queryKeys.students.selectors(),
     queryFn: () => studentsApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -117,10 +108,10 @@ export function PaymentsPage() {
 
   const data = payments.data as Paginated<Payment> | undefined;
   const paymentList = useMemo(() => data?.items || [], [data]);
-  const studentList = useMemo(
-    () => (students.data as Paginated<Student> | undefined)?.items || [],
-    [students.data],
-  );
+  const studentList = useMemo(() => {
+    if (Array.isArray(students.data)) return students.data;
+    return (students.data as Paginated<Student> | undefined)?.items || [];
+  }, [students.data]);
 
   // Create payment mutation
   const create = useMutation({
@@ -137,7 +128,13 @@ export function PaymentsPage() {
       setModalOpen(false);
       setForm(INITIAL_FORM);
       setFormErrors({});
-      qc.invalidateQueries({ queryKey: ['payments'] });
+      qc.invalidateQueries({ queryKey: queryKeys.payments.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.invoices.all() });
+      if (form.studentId) {
+        qc.invalidateQueries({ queryKey: queryKeys.students.detail(form.studentId) });
+      }
+      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -150,7 +147,9 @@ export function PaymentsPage() {
       paymentsApi.update(id, { status }),
     onSuccess: () => {
       push('success', t('payments.updated'));
-      qc.invalidateQueries({ queryKey: ['payments'] });
+      qc.invalidateQueries({ queryKey: queryKeys.payments.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.invoices.all() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -241,12 +240,12 @@ export function PaymentsPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('payments.title')}
             subtitle={t('payments.subtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label={t('payments.loading')} />
+            <GlassPageLoader label={t('payments.loading')} />
           </div>
         </div>
       </div>
@@ -258,12 +257,12 @@ export function PaymentsPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('payments.title')}
             subtitle={t('payments.subtitle')}
           />
           <div className="glass-card p-8">
-            <ErrorState
+            <GlassErrorState
               title={t('payments.loadError')}
               message={getErrorMessage(payments.error as Error)}
               onRetry={handleRetry}
@@ -277,7 +276,7 @@ export function PaymentsPage() {
   return (
     <div style={{ display: "contents" }}>
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('payments.title')}
           subtitle={t('payments.subtitle')}
           actions={
@@ -295,14 +294,14 @@ export function PaymentsPage() {
         <div className="glass-card p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
-              <TextInput
+              <GlassInput
                 placeholder={t('payments.searchPlaceholder')}
                 value={search}
                 onChange={handleSearchChange}
                 aria-label={t('payments.searchPlaceholder')}
                 type="search"
               />
-              <Select
+              <GlassSelect
                 value={status}
                 onChange={handleStatusFilterChange}
                 aria-label={t('payments.filterByStatus')}
@@ -313,7 +312,7 @@ export function PaymentsPage() {
                     {t(`payments.status.${status}`)}
                   </option>
                 ))}
-              </Select>
+              </GlassSelect>
             </div>
             <div className="text-sm sm:ml-4 sm:shrink-0" style={{ color: 'var(--text-muted)' }}>
               {totalPayments} {totalPayments === 1 ? t('payments.countOne') : t('payments.countMany')}
@@ -324,7 +323,7 @@ export function PaymentsPage() {
         {/* Payments table */}
         <div className="glass-card">
           {paymentList.length === 0 ? (
-            <EmptyState
+            <GlassEmptyState
               title={hasActiveFilters ? t('payments.emptyFiltered') : t('payments.empty')}
               message={
                 hasActiveFilters
@@ -341,8 +340,10 @@ export function PaymentsPage() {
                       <th>{t('common.date')}</th>
                       <th>{t('payments.form.student')}</th>
                       <th>{t('payments.col.description')}</th>
+                      <th>{t('payments.form.method')}</th>
                       <th>{t('payments.col.status')}</th>
                       <th style={{ textAlign: 'right' }}>{t('payments.col.amount')}</th>
+                      <th style={{ textAlign: 'right' }}>{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -366,8 +367,29 @@ export function PaymentsPage() {
                             {payment.description || '—'}
                           </td>
                           <td>
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-[var(--state-hover)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+                              {payment.method === 'CASH' ? (
+                                <Banknote className="w-3 h-3 text-emerald-500" />
+                              ) : (
+                                <CreditCard className="w-3 h-3 text-blue-500" />
+                              )}
+                              {t(`payments.method.${payment.method || 'CASH'}`)}
+                            </span>
+                          </td>
+                          <td>
                             <div className="flex items-center gap-2">
-                              <Select
+                              <span
+                                className={`w-2 h-2 rounded-full shrink-0 ${
+                                  payment.status === 'PAID'
+                                    ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
+                                    : payment.status === 'PENDING'
+                                    ? 'bg-amber-500'
+                                    : payment.status === 'OVERDUE'
+                                    ? 'bg-rose-500 animate-pulse'
+                                    : 'bg-gray-400'
+                                }`}
+                              />
+                              <GlassSelect
                                 className="w-28 !py-1 text-xs"
                                 value={payment.status}
                                 onChange={(e) =>
@@ -386,7 +408,7 @@ export function PaymentsPage() {
                                     {t(`payments.status.${status}`)}
                                   </option>
                                 ))}
-                              </Select>
+                              </GlassSelect>
                               {isUpdatingStatus && (
                                 <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                                   {t('payments.saving')}
@@ -394,8 +416,23 @@ export function PaymentsPage() {
                               )}
                             </div>
                           </td>
-                          <td style={{ textAlign: 'right' }} className="font-semibold">
+                          <td style={{ textAlign: 'right' }} className="font-semibold text-[var(--text-primary)]">
                             {formatCurrency(payment.amount)}
+                          </td>
+                          <td>
+                            <div className="flex justify-end">
+                              <GlassButton
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setReceiptTarget(payment)}
+                                title={t('payments.receipt')}
+                                aria-label={t('payments.receipt')}
+                              >
+                                <Receipt className="w-3.5 h-3.5 mr-1" />
+                                <span>{t('payments.receipt')}</span>
+                              </GlassButton>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -404,7 +441,7 @@ export function PaymentsPage() {
                 </table>
               </div>
               <div className="border-t px-4 py-3" style={{ borderColor: 'var(--border-subtle)' }}>
-                <Pagination
+                <GlassPagination
                   page={page}
                   totalPages={data?.totalPages ?? 1}
                   onPageChange={setPage}
@@ -415,7 +452,7 @@ export function PaymentsPage() {
         </div>
 
         {/* Record payment modal */}
-        <Modal
+        <GlassModal
           open={modalOpen}
           onClose={handleCloseModal}
           title={t('payments.form.title')}
@@ -423,8 +460,8 @@ export function PaymentsPage() {
         >
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label={t('payments.form.student')} required error={formErrors.studentId ? t(formErrors.studentId) : undefined}>
-                <Select
+              <GlassField label={t('payments.form.student')} required error={formErrors.studentId ? t(formErrors.studentId) : undefined}>
+                <GlassSelect
                   value={form.studentId}
                   onChange={handleFormChange('studentId')}
                   required
@@ -439,7 +476,7 @@ export function PaymentsPage() {
                       {formatStudentName(student)}
                     </option>
                   ))}
-                </Select>
+                </GlassSelect>
                 {formErrors.studentId && (
                   <span
                     id="student-error"
@@ -448,10 +485,10 @@ export function PaymentsPage() {
                     {t(formErrors.studentId)}
                   </span>
                 )}
-              </Field>
+              </GlassField>
 
-              <Field label={t('payments.form.amount')} required error={formErrors.amount ? t(formErrors.amount) : undefined}>
-                <TextInput
+              <GlassField label={t('payments.form.amount')} required error={formErrors.amount ? t(formErrors.amount) : undefined}>
+                <GlassInput
                   type="number"
                   step="0.01"
                   min="0.01"
@@ -469,10 +506,10 @@ export function PaymentsPage() {
                     {t(formErrors.amount)}
                   </span>
                 )}
-              </Field>
+              </GlassField>
 
-              <Field label={t('payments.form.method')}>
-                <Select
+              <GlassField label={t('payments.form.method')}>
+                <GlassSelect
                   value={form.method}
                   onChange={handleFormChange('method')}
                   aria-label={t('payments.form.method')}
@@ -482,25 +519,25 @@ export function PaymentsPage() {
                       {t(`payments.method.${method}`)}
                     </option>
                   ))}
-                </Select>
-              </Field>
+                </GlassSelect>
+              </GlassField>
 
-              <Field label={t('payments.form.dueDate')}>
-                <TextInput
+              <GlassField label={t('payments.form.dueDate')}>
+                <GlassInput
                   type="date"
                   value={form.dueDate}
                   onChange={handleFormChange('dueDate')}
                 />
-              </Field>
+              </GlassField>
             </div>
 
-            <Field label={t('common.description')}>
-              <TextInput
+            <GlassField label={t('common.description')}>
+              <GlassInput
                 value={form.description}
                 onChange={handleFormChange('description')}
                 placeholder={t('common.optionalDescription')}
               />
-            </Field>
+            </GlassField>
 
             <div className="flex justify-end gap-2">
               <GlassButton
@@ -520,7 +557,120 @@ export function PaymentsPage() {
               </GlassButton>
             </div>
           </form>
-        </Modal>
+        </GlassModal>
+
+        {/* Official Payment Receipt Modal */}
+        <GlassModal
+          open={receiptTarget !== null}
+          onClose={() => setReceiptTarget(null)}
+          title={t('payments.receipt')}
+          wide
+        >
+          {receiptTarget && (
+            <div className="space-y-6 pt-1">
+              <div
+                id="medu-printable-receipt"
+                className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] space-y-5"
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between border-b pb-4 border-[var(--border-subtle)]">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-[var(--primary)] text-white flex items-center justify-center font-black text-sm">
+                        M
+                      </div>
+                      <h3 className="font-bold text-lg text-[var(--text-primary)]">M-EDU ACADEMY</h3>
+                    </div>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">Official Tuition & Educational Services Receipt</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-mono text-xs font-bold px-2 py-1 rounded bg-[var(--state-hover)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+                      RCP-{receiptTarget.id.slice(0, 8).toUpperCase()}
+                    </span>
+                    <p className="text-xs text-[var(--text-muted)] mt-1.5">{formatDate(receiptTarget.createdAt)}</p>
+                  </div>
+                </div>
+
+                {/* Details Grid */}
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">{t('payments.form.student')}</span>
+                    <p className="font-semibold text-[var(--text-primary)] mt-0.5">{formatStudentName(receiptTarget.student)}</p>
+                    {receiptTarget.student?.user?.email && (
+                      <p className="text-xs text-[var(--text-muted)]">{receiptTarget.student.user.email}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">{t('common.status')}</span>
+                    <div className="mt-0.5">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        receiptTarget.status === 'PAID'
+                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                          : receiptTarget.status === 'PENDING'
+                          ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                          : receiptTarget.status === 'OVERDUE'
+                          ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+                          : 'bg-gray-500/10 text-gray-500 border border-gray-500/20'
+                      }`}>
+                        {formatPaymentStatus(receiptTarget.status)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Item description & Amount Box */}
+                <div className="p-4 rounded-xl bg-[var(--bg-base)] border border-[var(--border-subtle)] space-y-3">
+                  <div className="flex justify-between items-center text-sm border-b pb-2 border-[var(--border-subtle)]">
+                    <span className="font-medium text-[var(--text-secondary)]">{t('common.description')}</span>
+                    <span className="font-medium text-[var(--text-secondary)]">{t('payments.col.amount')}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-[var(--text-primary)]">{receiptTarget.description || 'Course Tuition & Materials'}</span>
+                    <span className="font-bold text-[var(--text-primary)]">{formatCurrency(receiptTarget.amount)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-[var(--border-subtle)]">
+                    <div>
+                      <span className="text-xs text-[var(--text-muted)]">{t('payments.form.method')}: </span>
+                      <span className="text-xs font-semibold text-[var(--text-secondary)]">{t(`payments.method.${receiptTarget.method || 'CASH'}`)}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-[var(--text-muted)] mr-2">Total:</span>
+                      <span className="text-lg font-black text-emerald-600">{formatCurrency(receiptTarget.amount)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Verification footer */}
+                <div className="pt-2 flex items-center justify-between text-xs text-[var(--text-muted)] border-t border-[var(--border-subtle)]">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                    <span>Verified Digital Payment · M-EDU Education Management System</span>
+                  </div>
+                  <span className="font-mono">ID: {receiptTarget.id.slice(0, 12)}</span>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex justify-end gap-2 pt-2">
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setReceiptTarget(null)}
+                >
+                  {t('common.close')}
+                </GlassButton>
+                <GlassButton
+                  type="button"
+                  variant="primary"
+                  onClick={() => window.print()}
+                >
+                  <Printer className="w-4 h-4 mr-1.5" />
+                  Print Receipt
+                </GlassButton>
+              </div>
+            </div>
+          )}
+        </GlassModal>
 
         {toastNode}
       </div>

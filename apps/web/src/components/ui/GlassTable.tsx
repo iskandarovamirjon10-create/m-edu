@@ -3,7 +3,7 @@
  * Features: sticky header, sort indicators, loading skeleton rows,
  *           empty state, responsive, token-driven hover.
  */
-import { type ReactNode, type CSSProperties, type KeyboardEvent } from 'react';
+import { type ReactNode, type CSSProperties, type KeyboardEvent, isValidElement } from 'react';
 
 interface GlassTableProps {
   children: ReactNode;
@@ -46,9 +46,10 @@ export function GlassTable({ children, className = '', stickyHeader = false }: G
 }
 
 export function GlassTHead({ children }: { children: ReactNode | ReactNode[] }) {
+  const isRowChild = isValidElement(children) && (children.type === GlassTR || children.type === 'tr');
   return (
     <thead className="bg-[rgba(15,23,42,0.04)] dark:bg-[rgba(255,255,255,0.03)] sticky top-0 z-10">
-      <tr>{children as never}</tr>
+      {isRowChild ? children : <tr>{children as never}</tr>}
     </thead>
   );
 }

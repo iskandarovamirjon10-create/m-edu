@@ -2,28 +2,8 @@ import { toLocalISOString } from '../lib/format';
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { attendanceApi, studentsApi, groupsApi } from '@/lib/api';
-import {
-  GlassPageHeader,
-  GlassCard,
-  GlassBadge,
-  GlassPageLoader,
-  GlassErrorState,
-  GlassEmptyState,
-  GlassTable,
-  GlassTHead,
-  GlassTBody,
-  GlassTR,
-  GlassTH,
-  GlassTD,
-  GlassPagination,
-  GlassInput,
-  GlassSelect,
-  GlassField,
-  GlassModal,
-  GlassButton,
-  GlassStatCard,
-  useToasts,
-} from '@/components/ui';
+import { queryKeys } from '@/lib/query-keys.factory';
+import { GlassPageHeader, GlassCard, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassPagination, GlassInput, GlassSelect, GlassField, GlassModal, GlassButton, GlassStatCard, useToasts } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -128,20 +108,26 @@ export function AttendancePage() {
   });
 
   const groups = useQuery({
-    queryKey: ['groups-selector'],
+    queryKey: queryKeys.groups.selectors(),
     queryFn: () => groupsApi.list({ limit: 100 }),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const students = useQuery({
-    queryKey: ['students-selector'],
+    queryKey: queryKeys.students.selectors(),
     queryFn: () => studentsApi.list({ limit: 100 }),
     staleTime: 5 * 60 * 1000,
   });
 
   const data = attendance.data as Paginated<Attendance> | undefined;
-  const groupList = (groups.data as Paginated<Group> | undefined)?.items || [];
-  const studentList = (students.data as Paginated<Student> | undefined)?.items || [];
+  const groupList = useMemo(() => {
+    if (Array.isArray(groups.data)) return groups.data;
+    return (groups.data as Paginated<Group> | undefined)?.items || [];
+  }, [groups.data]);
+  const studentList = useMemo(() => {
+    if (Array.isArray(students.data)) return students.data;
+    return (students.data as Paginated<Student> | undefined)?.items || [];
+  }, [students.data]);
 
   // Reset page when filters change
   const handleFilterChange = useCallback(
@@ -192,6 +178,12 @@ export function AttendancePage() {
       setForm(INITIAL_FORM);
       setFormErrors({});
       qc.invalidateQueries({ queryKey: ['attendance'] });
+      qc.invalidateQueries({ queryKey: ['attendance-analytics'] });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
+      if (form.studentId) {
+        qc.invalidateQueries({ queryKey: queryKeys.students.detail(form.studentId) });
+      }
+      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
     },
     onError: (e: Error) => {
       const msg = getErrorMessage(e);

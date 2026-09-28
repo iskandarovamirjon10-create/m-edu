@@ -115,7 +115,7 @@ export function GlassPagination({
               </span>
             ) : (
               <button
-                key={pageNum}
+                key={`page-${pageNum}-${index}`}
                 type="button"
                 className={[
                   'h-8 w-8 rounded-[var(--radius-md)] text-[var(--text-body-sm)] font-medium',

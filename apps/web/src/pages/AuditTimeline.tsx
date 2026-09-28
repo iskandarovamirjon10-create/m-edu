@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, Table, THead, TBody, TR, TH, TD, Pagination, TextInput, Select } from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassPagination, GlassInput, GlassSelect } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n, type Locale } from '@/i18n/I18nProvider';
 
@@ -100,7 +100,7 @@ export function AuditTimelinePage() {
       <div className="orb orb-cyan-2" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('auditTimeline.title')}
           subtitle={t('auditTimeline.pageSubtitle')}
         />
@@ -109,14 +109,14 @@ export function AuditTimelinePage() {
         <div className="glass-card p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
-              <TextInput
+              <GlassInput
                 placeholder={t('auditTimeline.searchPlaceholder')}
                 aria-label={t('auditTimeline.searchAria')}
                 value={search}
                 onChange={handleSearchChange}
                 type="search"
               />
-              <Select
+              <GlassSelect
                 value={action}
                 onChange={handleActionChange}
                 aria-label={t('common.filterByAction')}
@@ -124,7 +124,7 @@ export function AuditTimelinePage() {
                 {EVENT_TYPE_FILTERS.map((f) => (
                   <option key={f.value} value={f.value}>{t(f.label)}</option>
                 ))}
-              </Select>
+              </GlassSelect>
             </div>
             <div className="text-sm text-muted sm:ml-4 sm:shrink-0">
               {data ? t('auditTimeline.count', { count: data.total }) : '—'}
@@ -135,55 +135,55 @@ export function AuditTimelinePage() {
         {/* Table */}
         <div className="glass-card overflow-hidden">
           {auditQuery.isLoading && !data ? (
-            <div className="p-8"><PageLoader label={t('auditTimeline.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('auditTimeline.loading')} /></div>
           ) : auditQuery.isError ? (
-            <div className="p-8"><ErrorState title={t('auditTimeline.loadError')} message={auditQuery.error instanceof Error ? auditQuery.error.message : t('common.unknownError')} /></div>
+            <div className="p-8"><GlassErrorState title={t('auditTimeline.loadError')} message={auditQuery.error instanceof Error ? auditQuery.error.message : t('common.unknownError')} /></div>
           ) : (!data || data.items.length === 0) ? (
-            <EmptyState
+            <GlassEmptyState
               title={search || action ? t('auditTimeline.emptyFilteredTitle') : t('auditTimeline.emptyTitle')}
               message={search || action ? t('common.adjustFilters') : t('auditTimeline.emptyMessage')}
             />
           ) : (
             <>
               <div className="glass-table-wrap">
-                <Table>
-                  <THead>
-                    <TR>
-                      <TH>{t('audit.col.time')}</TH>
-                      <TH>{t('audit.col.action')}</TH>
-                      <TH>{t('auditTimeline.col.resource')}</TH>
-                      <TH>{t('audit.col.actor')}</TH>
-                      <TH>{t('auditTimeline.col.details')}</TH>
-                    </TR>
-                  </THead>
-                  <TBody>
+                <GlassTable>
+                  <GlassTHead>
+                    <GlassTR>
+                      <GlassTH>{t('audit.col.time')}</GlassTH>
+                      <GlassTH>{t('audit.col.action')}</GlassTH>
+                      <GlassTH>{t('auditTimeline.col.resource')}</GlassTH>
+                      <GlassTH>{t('audit.col.actor')}</GlassTH>
+                      <GlassTH>{t('auditTimeline.col.details')}</GlassTH>
+                    </GlassTR>
+                  </GlassTHead>
+                  <GlassTBody>
                     {data.items.map((item) => (
-                      <TR key={item.id} className="group hover:bg-[rgba(148,234,239,0.06)] transition-colors">
-                        <TD className="whitespace-nowrap font-mono text-xs text-muted">
+                      <GlassTR key={item.id} className="group hover:bg-[rgba(148,234,239,0.06)] transition-colors">
+                        <GlassTD className="whitespace-nowrap font-mono text-xs text-muted">
                           {new Date(item.createdAt).toLocaleString(DATE_LOCALES[locale], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </TD>
-                        <TD>
-                          <Badge color={statusColor(item.action)}>
+                        </GlassTD>
+                        <GlassTD>
+                          <GlassBadge color={statusColor(item.action)}>
                             {t(actionKey(item.action || ''))}
-                          </Badge>
-                        </TD>
-                        <TD className="text-xs text-muted font-medium">
+                          </GlassBadge>
+                        </GlassTD>
+                        <GlassTD className="text-xs text-muted font-medium">
                           {item.entityType}
                           {item.entityId ? ` · ${String(item.entityId).slice(0, 8)}` : ''}
-                        </TD>
-                        <TD className="whitespace-nowrap text-sm">
+                        </GlassTD>
+                        <GlassTD className="whitespace-nowrap text-sm">
                           {item.actorName || t('common.system')}
-                        </TD>
-                        <TD className="max-w-xs truncate text-xs text-muted" title={item.description}>
+                        </GlassTD>
+                        <GlassTD className="max-w-xs truncate text-xs text-muted" title={item.description}>
                           {item.description}
-                        </TD>
-                      </TR>
+                        </GlassTD>
+                      </GlassTR>
                     ))}
-                  </TBody>
-                </Table>
+                  </GlassTBody>
+                </GlassTable>
               </div>
               <div className="border-t border-subtle px-4 py-3">
-                <Pagination
+                <GlassPagination
                   page={page}
                   totalPages={data.totalPages}
                   onPageChange={setPage}

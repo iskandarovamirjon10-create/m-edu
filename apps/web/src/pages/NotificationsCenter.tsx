@@ -1,15 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  EmptyState,
-  ErrorState,
-  GlassButton,
-} from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassEmptyState, GlassErrorState, GlassButton } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
 import { notificationsApi } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys.factory';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useI18n } from '@/i18n/I18nProvider';
 
@@ -42,7 +36,7 @@ export function NotificationsCenterPage() {
   const { push } = useToast();
 
   const listQuery = useQuery({
-    queryKey: ['notifications'],
+    queryKey: queryKeys.notifications.all(),
     queryFn: () => notificationsApi.list() as Promise<{ items: AppNotification[]; unread: number }>,
   });
 
@@ -50,7 +44,7 @@ export function NotificationsCenterPage() {
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => {
       push('success', t('notifications.allReadToast'));
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() });
     },
     onError: (e) => push('error', getErrorMessage(e)),
   });
@@ -58,7 +52,7 @@ export function NotificationsCenterPage() {
   const markOneMutation = useMutation({
     mutationFn: (id: string) => notificationsApi.markRead(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() });
     },
     onError: (e) => push('error', getErrorMessage(e)),
   });
@@ -71,7 +65,7 @@ export function NotificationsCenterPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('notifications.title')}
           subtitle={t('notifications.subtitle')}
         />
@@ -103,10 +97,10 @@ export function NotificationsCenterPage() {
 
         <div className="glass-card overflow-hidden">
           {listQuery.isLoading ? (
-            <div className="p-8"><PageLoader label={t('notifications.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('notifications.loading')} /></div>
           ) : listQuery.isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 title={t('notifications.loadError')}
                 message={getErrorMessage(listQuery.error)}
                 onRetry={() => listQuery.refetch()}
@@ -114,7 +108,7 @@ export function NotificationsCenterPage() {
             </div>
           ) : items.length === 0 ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('notifications.empty')}
                 message={t('notifications.emptyHint')}
               />
@@ -129,7 +123,7 @@ export function NotificationsCenterPage() {
                     !n.read ? 'bg-brand-500/5' : '',
                   ].join(' ')}
                 >
-                  <Badge color={KIND_COLOR[n.kind]}>{n.kind}</Badge>
+                  <GlassBadge color={KIND_COLOR[n.kind]}>{n.kind}</GlassBadge>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium text-sm text-[var(--text-primary)]">
                       {!n.read && <span className="inline-block h-2 w-2 rounded-full bg-brand-500 mr-2 align-middle" />}

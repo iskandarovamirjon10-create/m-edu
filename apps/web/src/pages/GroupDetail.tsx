@@ -2,21 +2,7 @@ import { useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { groupsApi } from '@/lib/api';
-import {
-  GlassPageHeader,
-  GlassCard,
-  GlassBadge,
-  GlassPageLoader,
-  GlassErrorState,
-  GlassEmptyState,
-  GlassTable,
-  GlassTHead,
-  GlassTBody,
-  GlassTR,
-  GlassTH,
-  GlassTD,
-  GlassButton,
-} from '@/components/ui';
+import { GlassPageHeader, GlassCard, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassButton } from '@/components/ui';
 import { fullName, formatDate, formatTime } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Group, GroupSchedule } from '@/lib/types';

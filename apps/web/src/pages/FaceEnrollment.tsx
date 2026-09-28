@@ -1,19 +1,8 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { faceApi, studentsApi } from '@/lib/api';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Field,
-  Select,
-  GlassButton,
-  ConfirmDialog,
-  useToasts,
-  statusColor,
-} from '@/components/ui';
+import { queryKeys } from '@/lib/query-keys.factory';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassField, GlassSelect, GlassButton, ConfirmDialog, useToasts, statusColor } from '@/components/ui';
 import { WebcamCapture } from '@/components/WebcamCapture';
 import { formatDate } from '@/lib/format';
 import { friendlyFaceError } from '@/lib/faceErrors';
@@ -105,16 +94,25 @@ export function FaceEnrollmentPage() {
   // Reference to track if enrollment was just started
   const enrollmentStartedRef = useRef(false);
 
+  // Invalidation helper
+  const invalidateFaceQueries = () => {
+    qc.invalidateQueries({ queryKey: queryKeys.face.enrollments() });
+    qc.invalidateQueries({ queryKey: queryKeys.face.studentEnrollments() });
+    qc.invalidateQueries({ queryKey: queryKeys.students.faces() });
+    qc.invalidateQueries({ queryKey: queryKeys.students.details() });
+    qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+  };
+
   // Data fetching
   const students = useQuery({
-    queryKey: ['students-face'],
+    queryKey: queryKeys.students.faces(),
     queryFn: () => studentsApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const enrollments = useQuery({
-    queryKey: ['enrollments'],
+    queryKey: queryKeys.face.enrollments(),
     queryFn: () => faceApi.enrollments({ limit: 100 }),
     placeholderData: (previousData) => previousData,
   });
@@ -138,7 +136,7 @@ export function FaceEnrollmentPage() {
       setForm((prev) => ({ ...prev, enrollmentId: enrollment.enrollmentId ?? enrollment.id }));
       enrollmentStartedRef.current = true;
       push('success', t('faceEnrollment.startedToast'));
-      qc.invalidateQueries({ queryKey: ['enrollments'] });
+      invalidateFaceQueries();
     },
     onError: (e: Error) => {
       push('error', friendlyFaceError(e));
@@ -150,7 +148,7 @@ export function FaceEnrollmentPage() {
     mutationFn: (b64: string) => faceApi.capture(form.enrollmentId, b64),
     onSuccess: () => {
       push('success', t('faceEnrollment.capturedToast'));
-      qc.invalidateQueries({ queryKey: ['enrollments'] });
+      invalidateFaceQueries();
     },
     onError: (e: Error) => {
       push('error', friendlyFaceError(e));
@@ -162,7 +160,7 @@ export function FaceEnrollmentPage() {
     mutationFn: (id: string) => faceApi.revoke(id, 'operator_revoked'),
     onSuccess: () => {
       push('success', t('faceEnrollment.revokedToast'));
-      qc.invalidateQueries({ queryKey: ['enrollments'] });
+      invalidateFaceQueries();
     },
     onError: (e: Error) => {
       push('error', friendlyFaceError(e));
@@ -238,7 +236,7 @@ export function FaceEnrollmentPage() {
   return (
     <div style={{ display: "contents" }}>
       <div className="page-container space-y-6">
-        <PageHeader
+        <GlassPageHeader
           title={t('faceEnrollment.title')}
           subtitle={t('faceEnrollment.subtitle')}
         />
@@ -253,8 +251,8 @@ export function FaceEnrollmentPage() {
           </div>
           <div className="p-5">
             <div className="space-y-4">
-              <Field label={t('faceEnrollment.student')} required error={formErrors.studentId}>
-                <Select
+              <GlassField label={t('faceEnrollment.student')} required error={formErrors.studentId}>
+                <GlassSelect
                   value={form.studentId}
                   onChange={handleStudentChange}
                   aria-invalid={Boolean(formErrors.studentId)}
@@ -269,13 +267,13 @@ export function FaceEnrollmentPage() {
                       {formatStudentName(student)}
                     </option>
                   ))}
-                </Select>
+                </GlassSelect>
                 {formErrors.studentId && (
                   <span id="student-error" className="mt-1 text-sm" style={{ color: 'var(--state-error)' }}>
                     {formErrors.studentId}
                   </span>
                 )}
-              </Field>
+              </GlassField>
 
               {!form.enrollmentId ? (
                 <GlassButton
@@ -290,9 +288,9 @@ export function FaceEnrollmentPage() {
               ) : (
                 <div className="space-y-3">
  <div className="flex items-center justify-between">
- <Badge color="green">
+ <GlassBadge color="green">
  {t('faceEnrollment.inProgress', { id: truncateEnrollmentId(form.enrollmentId) })}
- </Badge>
+ </GlassBadge>
  <GlassButton
  type="button"
  variant="ghost"
@@ -341,18 +339,18 @@ export function FaceEnrollmentPage() {
 
           {enrollments.isLoading && !enrollments.data ? (
             <div className="p-8">
-              <PageLoader label={t('faceEnrollment.loading')} />
+              <GlassPageLoader label={t('faceEnrollment.loading')} />
             </div>
           ) : enrollments.isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 title={t('faceEnrollment.loadError')}
                 message={getErrorMessage(enrollments.error as Error)}
                 onRetry={handleRetryEnrollments}
               />
             </div>
           ) : enrollmentList.length === 0 ? (
-            <EmptyState
+            <GlassEmptyState
               title={t('faceEnrollment.empty')}
               message={t('faceEnrollment.emptyHint')}
             />
@@ -381,9 +379,9 @@ export function FaceEnrollmentPage() {
                           {formatStudentName(enrollment.student)}
                         </td>
                         <td>
-                          <Badge color={statusBadge.color}>
+                          <GlassBadge color={statusBadge.color}>
                             {statusBadge.labelKey ? t(statusBadge.labelKey) : enrollment.status}
-                          </Badge>
+                          </GlassBadge>
                         </td>
                         <td className="whitespace-nowrap">
                           {formatDate(enrollment.enrolledAt)}

@@ -1,7 +1,7 @@
 import { formatDate } from '../lib/format';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, GlassButton } from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassButton } from '@/components/ui';
 import { useToast } from '@/components/ui/GlassToast';
 import { dataQualityApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -108,7 +108,7 @@ export function DataQualityCenterPage() {
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <div className="flex items-start justify-between">
-          <PageHeader
+          <GlassPageHeader
             title={t('dataQualityCenter.title')}
             subtitle={t('dataQualityCenter.subtitle')}
           />
@@ -148,10 +148,10 @@ export function DataQualityCenterPage() {
         {/* Issues list */}
         <div className="glass-card overflow-hidden">
           {issuesQuery.isLoading ? (
-            <div className="p-8"><PageLoader label={t('dataQualityCenter.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('dataQualityCenter.loading')} /></div>
           ) : issuesQuery.isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 title={t('dataQualityCenter.loadFailed')}
                 message={getErrorMessage(issuesQuery.error)}
                 onRetry={() => issuesQuery.refetch()}
@@ -159,7 +159,7 @@ export function DataQualityCenterPage() {
             </div>
           ) : issues.length === 0 ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('dataQualityCenter.emptyTitle')}
                 message={
                   filter === 'critical'
@@ -175,7 +175,7 @@ export function DataQualityCenterPage() {
               {issues.map((issue) => (
                 <li key={issue.id} className="px-4 py-3 flex items-start gap-3">
                   <div className="shrink-0 mt-0.5">
-                    <Badge color={severityColor[issue.severity]}>{t(SEVERITY_LABEL_KEY[issue.severity])}</Badge>
+                    <GlassBadge color={severityColor[issue.severity]}>{t(SEVERITY_LABEL_KEY[issue.severity])}</GlassBadge>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-[var(--text-primary)]">{issue.message}</p>

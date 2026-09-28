@@ -2,18 +2,7 @@ import { fetchAllPaginated} from'@/lib/fetchAllPaginated';
 import { useState} from'react';
 import { useQuery, useMutation, useQueryClient} from'@tanstack/react-query';
 import { automationApi} from'@/lib/api';
- import {
- GlassPageHeader,
- GlassPageLoader,
- GlassErrorState,
- GlassEmptyState,
- GlassInput,
- GlassSelect,
- GlassModal,
- GlassButton,
- GlassSwitch,
- ConfirmDialog,
- useToasts, GlassTabs } from '@/components/ui';
+ import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassInput, GlassSelect, GlassModal, GlassButton, GlassSwitch, ConfirmDialog, useToasts, GlassTabs } from '@/components/ui';
 
 import { useI18n} from'@/i18n/I18nProvider';
 import { AutomationRule, AutomationExecution, AutomationStats } from '@/types/automation';

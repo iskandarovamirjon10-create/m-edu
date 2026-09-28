@@ -1,12 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  GlassStatCard,
-} from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassStatCard } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import request from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -69,7 +62,7 @@ export function AcademicRiskPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('academicRisk.title')}
           subtitle={t('academicRisk.subtitle')}
         />
@@ -96,17 +89,17 @@ export function AcademicRiskPage() {
 
         <div className="glass-card overflow-hidden">
           {studentsQuery.isLoading ? (
-            <div className="p-8"><PageLoader label={t('academicRisk.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('academicRisk.loading')} /></div>
           ) : studentsQuery.isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 message={getErrorMessage(studentsQuery.error)}
                 onRetry={() => studentsQuery.refetch()}
               />
             </div>
           ) : students.length === 0 ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('academicRisk.emptyTitle')}
                 message={t('academicRisk.emptyMessage')}
               />
@@ -122,7 +115,7 @@ export function AcademicRiskPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-mono">{s.riskScore}</span>
-                      <Badge color={LEVEL_COLOR[s.level]}>{t(LEVEL_LABEL_KEY[s.level])}</Badge>
+                      <GlassBadge color={LEVEL_COLOR[s.level]}>{t(LEVEL_LABEL_KEY[s.level])}</GlassBadge>
                     </div>
                   </div>
                   <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">

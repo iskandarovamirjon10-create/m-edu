@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthError, useAuthActions, useAuthState } from '@/auth/AuthContext';
+import { apiUrl } from '@/lib/api';
 import { MeduLogo } from '@/components/brand/MeduLogo';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
@@ -254,7 +255,7 @@ function friendlyMessage(err: unknown, t: TranslateFn): string {
  * /auth/callback with a one-time code. Exported so tests can assert the
  * exact redirect target without depending on jsdom navigation support.
  */
-export const googleOAuthUrl = '/api/auth/google';
+export const googleOAuthUrl = apiUrl('/auth/google');
 
 export function LoginPage() {
   const { t } = useI18n();
@@ -280,6 +281,8 @@ export function LoginPage() {
   const [googleBusy, setGoogleBusy] = useState(false);
 
   const emailRef = useRef<HTMLInputElement>(null);
+  const navTimerRef = useRef<number | null>(null);
+  useEffect(() => () => { if (navTimerRef.current) window.clearTimeout(navTimerRef.current); }, []);
   const busy = pending === 'login';
   const canSubmit =
     email.trim().length > 3 && password.length > 0 && !busy && !done;
@@ -304,7 +307,7 @@ export function LoginPage() {
         await login(email, password);
       }
       setDone(true);
-      window.setTimeout(() => navigate(isParent && returnTo === '/' ? '/parent-portal' : returnTo, { replace: true }), 480);
+      navTimerRef.current = window.setTimeout(() => navigate(isParent && returnTo === '/' ? '/parent-portal' : returnTo, { replace: true }), 480);
     } catch (err) {
       setError(friendlyMessage(err, t));
       setShake((n) => n + 1);

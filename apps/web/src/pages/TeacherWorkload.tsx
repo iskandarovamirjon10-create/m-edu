@@ -1,12 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  GlassStatCard,
-} from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassStatCard } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import request from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -59,7 +52,7 @@ export function TeacherWorkloadPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('teacherWorkload.title')}
           subtitle={t('teacherWorkload.subtitle')}
         />
@@ -84,17 +77,17 @@ export function TeacherWorkloadPage() {
 
         <div className="glass-card overflow-hidden">
           {teachersQuery.isLoading ? (
-            <div className="p-8"><PageLoader label={t('teacherWorkload.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('teacherWorkload.loading')} /></div>
           ) : teachersQuery.isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 message={getErrorMessage(teachersQuery.error)}
                 onRetry={() => teachersQuery.refetch()}
               />
             </div>
           ) : teachers.length === 0 ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('teacherWorkload.emptyTitle')}
                 message={t('teacherWorkload.emptyMessage')}
               />
@@ -117,7 +110,7 @@ export function TeacherWorkloadPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-mono">{Math.round(teacher.utilization * 100)}%</span>
-                      <Badge color={STATUS_COLOR[teacher.status]}>{t(`teacherWorkload.${teacher.status.toLowerCase()}`)}</Badge>
+                      <GlassBadge color={STATUS_COLOR[teacher.status]}>{t(`teacherWorkload.${teacher.status.toLowerCase()}`)}</GlassBadge>
                     </div>
                   </div>
                   <div className="mt-2 h-2 w-full rounded-full bg-[var(--bg-glass)] overflow-hidden">

@@ -29,6 +29,8 @@ export function AuthCallbackPage() {
   const { setUser } = useAuth();
   const [state, setState] = useState<CallbackState>(INITIAL_STATE);
   const exchangeAttemptedRef = useRef(false);
+  const navTimerRef = useRef<number | null>(null);
+  useEffect(() => () => { if (navTimerRef.current) window.clearTimeout(navTimerRef.current); }, []);
 
   const handleError = useCallback(
     (messageKey: string, rawMessage?: string) => {
@@ -56,7 +58,7 @@ export function AuthCallbackPage() {
 
         // Small delay to allow the success message to be visible
         // and ensure smooth UX transition
-        setTimeout(() => {
+        navTimerRef.current = window.setTimeout(() => {
           navigate('/', { replace: true });
         }, 500);
       } catch {

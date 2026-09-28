@@ -2,30 +2,16 @@ import { useMemo, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { studentsApi, groupsApi } from '@/lib/api';
-import {
-  PageHeader,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Table,
-  THead,
-  TBody,
-  TR,
-  TH,
-  TD,
-  Pagination,
-  TextInput,
-  Select,
-  Badge,
-  GlassButton,
-  ConfirmDialog,
-} from '@/components/ui';
+import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassPagination, GlassInput, GlassSelect, GlassBadge, GlassButton, ConfirmDialog } from '@/components/ui';
+import { Plus, Search } from 'lucide-react';
+
 import { useDebounce } from '@/hooks/useDebounce';
 import { fullName } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Student, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { queryKeys } from '@/lib/query-keys.factory';
 import { useToasts } from '@/components/ui';
 
 interface StudentFilters {
@@ -35,9 +21,7 @@ interface StudentFilters {
   groupId?: string;
 }
 
-function OrbBackdrop() {
-  return null;
-}
+
 
 export function formatStudentName(student: Student): string {
   return fullName(student.user?.firstName, student.user?.lastName);
@@ -76,13 +60,13 @@ export function StudentsPage() {
 
   // Data fetching
   const students = useQuery({
-    queryKey: ['students', params],
+    queryKey: queryKeys.students.list(params),
     queryFn: () => studentsApi.list(params),
     placeholderData: (previousData) => previousData,
   });
 
   const groups = useQuery({
-    queryKey: ['groups-selector'],
+    queryKey: queryKeys.groups.selectors(),
     queryFn: () => groupsApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -123,7 +107,7 @@ export function StudentsPage() {
     mutationFn: (id: string) => studentsApi.remove(id),
     onSuccess: () => {
       push('success', t('students.deleted'));
-      qc.invalidateQueries({ queryKey: ['students'] });
+      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -152,29 +136,22 @@ export function StudentsPage() {
   if (students.isLoading && !data) {
     return (
       <>
-        <OrbBackdrop />
+        
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('students.title')}
             subtitle={t('students.pageSubtitle')}
             actions={
               <GlassButton asChild variant="primary">
                 <Link to="/students/new">
-                  <svg
-                    className="h-4 w-4"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                  </svg>
+                  <Plus className="h-4 w-4" />
                   {t('students.add')}
                 </Link>
               </GlassButton>
             }
           />
           <div className="glass-card p-8">
-            <PageLoader label={t('students.loading')} />
+            <GlassPageLoader label={t('students.loading')} />
           </div>
         </div>
       </>
@@ -185,29 +162,22 @@ export function StudentsPage() {
   if (students.isError) {
     return (
       <>
-        <OrbBackdrop />
+        
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('students.title')}
             subtitle={t('students.pageSubtitle')}
             actions={
               <GlassButton asChild variant="primary">
                 <Link to="/students/new">
-                  <svg
-                    className="h-4 w-4"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                  </svg>
+                  <Plus className="h-4 w-4" />
                   {t('students.add')}
                 </Link>
               </GlassButton>
             }
           />
           <div className="glass-card p-8">
-            <ErrorState
+            <GlassErrorState
               title={t('students.loadFailed')}
               message={getErrorMessage(students.error as Error)}
               onRetry={handleRetry}
@@ -220,22 +190,15 @@ export function StudentsPage() {
 
   return (
     <>
-      <OrbBackdrop />
+      
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('students.title')}
           subtitle={t('students.pageSubtitle')}
           actions={
               <GlassButton asChild variant="primary">
                 <Link to="/students/new">
-                  <svg
-                    className="h-4 w-4"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                  </svg>
+                  <Plus className="h-4 w-4" />
                   {t('students.add')}
                 </Link>
               </GlassButton>
@@ -246,14 +209,14 @@ export function StudentsPage() {
         <div className="glass-card p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
-              <TextInput
+              <GlassInput
                 placeholder={t('students.searchPlaceholderEmail')}
                 value={search}
                 onChange={handleSearchChange}
                 aria-label={t('students.searchLabel')}
-                type="search"
+                type="search" inputPrefix={<Search className="h-4 w-4 text-[var(--text-muted)]" />}
               />
-              <Select
+              <GlassSelect
                 value={groupId}
                 onChange={handleGroupFilterChange}
                 aria-label={t('students.filterGroupLabel')}
@@ -264,7 +227,7 @@ export function StudentsPage() {
                     {group.name}
                   </option>
                 ))}
-              </Select>
+              </GlassSelect>
             </div>
             <div className="text-sm sm:ml-4 sm:shrink-0" style={{ color: 'var(--text-primary)' }}>
               {totalStudents === 1
@@ -277,7 +240,7 @@ export function StudentsPage() {
         {/* Students table */}
         <div className="glass-card overflow-hidden">
           {studentList.length === 0 ? (
-            <EmptyState
+            <GlassEmptyState
               title={hasActiveFilters ? t('students.emptyFiltered') : t('students.emptySearch')}
               message={
                 hasActiveFilters
@@ -293,18 +256,18 @@ export function StudentsPage() {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <Table>
-                  <THead>
-                    <TR>
-                      <TH>{t('common.name')}</TH>
-                      <TH>{t('common.email')}</TH>
-                      <TH>{t('students.col.groups')}</TH>
-                      <TH>{t('students.col.parentName')}</TH>
-                      <TH>{t('students.col.status')}</TH>
-                      <TH>{t('common.actions')}</TH>
-                    </TR>
-                  </THead>
-                  <TBody>
+                <GlassTable>
+                  <GlassTHead>
+                    <GlassTR>
+                      <GlassTH>{t('common.name')}</GlassTH>
+                      <GlassTH>{t('common.email')}</GlassTH>
+                      <GlassTH>{t('students.col.groups')}</GlassTH>
+                      <GlassTH>{t('students.col.parentName')}</GlassTH>
+                      <GlassTH>{t('students.col.status')}</GlassTH>
+                      <GlassTH>{t('common.actions')}</GlassTH>
+                    </GlassTR>
+                  </GlassTHead>
+                  <GlassTBody>
                     {studentList.map((student) => {
                       const statusBadge = getStudentStatusBadge(
                         student.user?.isActive,
@@ -314,7 +277,7 @@ export function StudentsPage() {
                       );
 
                       return (
-                        <TR
+                        <GlassTR
                           key={student.id}
                           onClick={() => handleStudentClick(student.id)}
                           className="cursor-pointer transition-colors"
@@ -331,37 +294,37 @@ export function StudentsPage() {
                             }
                           }}
                         >
-                          <TD className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                          <GlassTD className="font-medium" style={{ color: 'var(--text-primary)' }}>
                             {formatStudentName(student)}
-                          </TD>
-                          <TD>{student.user?.email || '—'}</TD>
-                          <TD>
+                          </GlassTD>
+                          <GlassTD>{student.user?.email || '—'}</GlassTD>
+                          <GlassTD>
                             <div className="flex flex-wrap gap-1">
                               {activeGroups.slice(0, 3).map((groupEnrollment) => (
-                                <Badge
+                                <GlassBadge
                                   key={groupEnrollment.group.id}
                                   color="blue"
                                 >
                                   {groupEnrollment.group.name}
-                                </Badge>
+                                </GlassBadge>
                               ))}
                               {activeGroups.length === 0 && (
                                 <span style={{ color: 'var(--text-muted)' }}>—</span>
                               )}
                               {activeGroups.length > 3 && (
-                                <Badge color="slate">
+                                <GlassBadge color="slate">
                                   +{activeGroups.length - 3}
-                                </Badge>
+                                </GlassBadge>
                               )}
                             </div>
-                          </TD>
-                          <TD>{student.parentName || '—'}</TD>
-                          <TD>
-                            <Badge color={statusBadge.color}>
+                          </GlassTD>
+                          <GlassTD>{student.parentName || '—'}</GlassTD>
+                          <GlassTD>
+                            <GlassBadge color={statusBadge.color}>
                               {t(statusBadge.label)}
-                            </Badge>
-                          </TD>
-                          <TD>
+                            </GlassBadge>
+                          </GlassTD>
+                          <GlassTD>
                             <div
                               className="flex gap-2"
                               onClick={(e) => e.stopPropagation()}
@@ -386,15 +349,15 @@ export function StudentsPage() {
                                 {t('common.delete')}
                               </GlassButton>
                             </div>
-                          </TD>
-                        </TR>
+                          </GlassTD>
+                        </GlassTR>
                       );
                     })}
-                  </TBody>
-                </Table>
+                  </GlassTBody>
+                </GlassTable>
               </div>
               <div className="border-t px-4 py-3" style={{ borderColor: 'var(--border-subtle)' }}>
-                <Pagination
+                <GlassPagination
                   page={page}
                   totalPages={data?.totalPages ?? 1}
                   onPageChange={setPage}
@@ -417,3 +380,4 @@ export function StudentsPage() {
     </>
   );
 }
+

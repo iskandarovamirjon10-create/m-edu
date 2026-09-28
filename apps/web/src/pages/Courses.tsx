@@ -1,33 +1,13 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { coursesApi } from '@/lib/api';
-import {
-  GlassPageHeader,
-  GlassCard,
-  GlassPageLoader,
-  GlassErrorState,
-  GlassEmptyState,
-  GlassTable,
-  GlassTHead,
-  GlassTBody,
-  GlassTR,
-  GlassTH,
-  GlassTD,
-  GlassModal,
-  GlassField,
-  GlassInput,
-  GlassTextArea,
-  GlassSelect,
-  GlassBadge,
-  GlassButton,
-  useToasts,
-  ConfirmDialog,
-} from '@/components/ui';
+import { GlassPageHeader, GlassCard, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassModal, GlassField, GlassInput, GlassTextArea, GlassSelect, GlassBadge, GlassButton, useToasts, ConfirmDialog } from '@/components/ui';
 import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Course, CourseLevel } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { queryKeys } from '@/lib/query-keys.factory';
 
 const COURSE_LEVELS: CourseLevel[] = [
   'BEGINNER',
@@ -91,7 +71,7 @@ export function CoursesPage() {
 
   // Data fetching
   const courses = useQuery({
-    queryKey: ['courses'],
+    queryKey: queryKeys.courses.all(),
     queryFn: () => coursesApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
   });
@@ -119,7 +99,8 @@ export function CoursesPage() {
       setEditingId(null);
       setForm(INITIAL_FORM);
       setFormErrors({});
-      qc.invalidateQueries({ queryKey: ['courses'] });
+      qc.invalidateQueries({ queryKey: queryKeys.courses.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.courses.selectors() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -131,7 +112,8 @@ export function CoursesPage() {
     mutationFn: (id: string) => coursesApi.remove(id),
     onSuccess: () => {
       push('success', t('courses.deleted'));
-      qc.invalidateQueries({ queryKey: ['courses'] });
+      qc.invalidateQueries({ queryKey: queryKeys.courses.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.courses.selectors() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));

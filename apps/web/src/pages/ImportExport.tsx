@@ -1,14 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  EmptyState,
-  ErrorState,
-  GlassButton,
-  GlassSelect,
-} from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassEmptyState, GlassErrorState, GlassButton, GlassSelect } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
 import request from '@/lib/api';
@@ -104,7 +96,7 @@ export function ImportExportPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('importExport.title')}
           subtitle={t('importExport.pageSubtitle')}
         />
@@ -118,7 +110,7 @@ export function ImportExportPage() {
  aria-label={t('importExport.uploadCsv')}
  className="w-auto"
  >
- {['STUDENT', 'TEACHER', 'GROUP', 'COURSE', 'PAYMENT', 'EMPLOYEE', 'BOOK', 'LEAD'].map((e) => (
+ {['STUDENT', 'TEACHER'].map((e) => (
  <option key={e} value={e}>{t(`enum.badge.${e}`)}</option>
  ))}
  </GlassSelect>
@@ -135,10 +127,9 @@ export function ImportExportPage() {
             />
             <GlassButton
                 variant="primary"
-                onClick={() => {}}
-                disabled={true}
+                onClick={() => fileInput.current?.click()}
               >
-                {t('common.comingSoon')}
+                {t('importExport.uploadCsv')}
               </GlassButton>
             <GlassButton variant="ghost" onClick={() => downloadTemplate(entity)}>
               {t('importExport.downloadTemplate')}
@@ -164,10 +155,10 @@ export function ImportExportPage() {
 
         <div className="glass-card overflow-hidden">
           {jobsQuery.isLoading ? (
-            <div className="p-8"><PageLoader label={t('importExport.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('importExport.loading')} /></div>
           ) : jobsQuery.isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 title={t('importExport.loadError')}
                 message={getErrorMessage(jobsQuery.error)}
                 onRetry={() => jobsQuery.refetch()}
@@ -175,7 +166,7 @@ export function ImportExportPage() {
             </div>
           ) : jobs.length === 0 ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('importExport.emptyTitle')}
                 message={t('importExport.emptyMessage')}
               />
@@ -193,7 +184,7 @@ export function ImportExportPage() {
                         {j.startedByName ?? t('common.system')} · {new Date(j.startedAt).toLocaleString()}
                       </p>
                     </div>
-                    <Badge
+                    <GlassBadge
                       color={
                         j.status === 'COMPLETED' ? 'success' :
                         j.status === 'FAILED' ? 'error' :
@@ -202,7 +193,7 @@ export function ImportExportPage() {
                       }
                     >
                       {t(`importExport.status.${j.status}`)}
-                    </Badge>
+                    </GlassBadge>
                   </div>
                   <div className="mt-2 grid grid-cols-4 gap-2 text-xs text-muted">
                     <div>{t('importExport.total')}: <span className="text-[var(--text-primary)]">{j.total}</span></div>

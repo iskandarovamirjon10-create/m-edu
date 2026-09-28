@@ -5,10 +5,11 @@
  * during migration.
  */
 import { type ReactNode, forwardRef} from'react';
-import { useState, useEffect, useRef, useCallback} from'react';
+import { useEffect, useRef, useCallback} from'react';
 import { createPortal } from 'react-dom';
 import type { InputHTMLAttributes, TextareaHTMLAttributes, SelectHTMLAttributes} from'react';
 import { useSafeI18n } from '@/i18n/I18nProvider';
+import { useToast } from './ui/GlassToast';
 
 // Re-export new glass library (preferred)
 export * from'./ui/index';
@@ -41,74 +42,74 @@ export { GlassSwitch as Switch} from'./ui/index';
 export const TextInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
  function TextInput(props, ref) {
  const { className ='', ...rest} = props;
- return (
- <input
- ref={ref}
- className={[
-'w-full px-4 py-2.5',
-'bg-[var(--bg-glass)] backdrop-blur-xl',
-'border border-[var(--border-medium)] rounded-xl',
-'text-[var(--text-primary)] placeholder:text-[var(--text-muted)]',
-'font-sans text-[0.9375rem] outline-none',
-'transition-[border-color,box-shadow] duration-200',
-'hover:border-[var(--border-strong)]',
-'focus:border-brand-700 focus:shadow-[0_0_0_3px_rgba(84,115,252,0.18)]',
-'disabled:opacity-45 disabled:cursor-not-allowed',
- className,
- ].join('')}
- {...rest}
- />
- );
+  return (
+    <input
+      ref={ref}
+      className={[
+        'w-full px-4 py-2.5',
+        'bg-[var(--bg-glass)] backdrop-blur-xl',
+        'border border-[var(--border-medium)] rounded-xl',
+        'text-[var(--text-primary)] placeholder:text-[var(--text-muted)]',
+        'font-sans text-[0.9375rem] outline-none',
+        'transition-[border-color,box-shadow] duration-200',
+        'hover:border-[var(--border-strong)]',
+        'focus:border-[var(--primary)] focus:shadow-[0_0_0_3px_var(--focus-ring)]',
+        'disabled:opacity-45 disabled:cursor-not-allowed',
+        className,
+      ].filter(Boolean).join(' ')}
+      {...rest}
+    />
+  );
 },
 );
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
- const { className ='', ...rest} = props;
- return (
- <textarea
- className={[
-'w-full px-4 py-2.5 min-h-[100px] resize-y',
-'bg-[var(--bg-glass)] backdrop-blur-xl',
-'border border-[var(--border-medium)] rounded-xl',
-'text-[var(--text-primary)] placeholder:text-[var(--text-muted)]',
-'font-sans text-[0.9375rem] outline-none',
-'transition-[border-color,box-shadow] duration-200',
-'hover:border-[var(--border-strong)]',
-'focus:border-brand-700 focus:shadow-[0_0_0_3px_rgba(84,115,252,0.18)]',
-'disabled:opacity-45 disabled:cursor-not-allowed',
- className,
- ].join('')}
- {...rest}
- />
- );
+  const { className = '', ...rest } = props;
+  return (
+    <textarea
+      className={[
+        'w-full px-4 py-2.5 min-h-[100px] resize-y',
+        'bg-[var(--bg-glass)] backdrop-blur-xl',
+        'border border-[var(--border-medium)] rounded-xl',
+        'text-[var(--text-primary)] placeholder:text-[var(--text-muted)]',
+        'font-sans text-[0.9375rem] outline-none',
+        'transition-[border-color,box-shadow] duration-200',
+        'hover:border-[var(--border-strong)]',
+        'focus:border-[var(--primary)] focus:shadow-[0_0_0_3px_var(--focus-ring)]',
+        'disabled:opacity-45 disabled:cursor-not-allowed',
+        className,
+      ].filter(Boolean).join(' ')}
+      {...rest}
+    />
+  );
 }
 
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
- const { className ='', children, ...rest} = props;
- return (
- <select
- className={[
-'w-full px-4 py-2.5 pr-10',
-'bg-[var(--bg-glass)] backdrop-blur-xl',
-'border border-[var(--border-medium)] rounded-xl',
-'text-[var(--text-primary)] font-sans text-[0.9375rem] outline-none cursor-pointer',
-'appearance-none',
-'transition-[border-color,box-shadow] duration-200',
-'hover:border-[var(--border-strong)]',
-'focus:border-brand-700 focus:shadow-[0_0_0_3px_rgba(84,115,252,0.18)]',
-'disabled:opacity-45 disabled:cursor-not-allowed',
- className,
- ].join('')}
- style={{
- backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238899A8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
- backgroundRepeat:'no-repeat',
- backgroundPosition:'right 12px center',
-}}
- {...rest}
- >
- {children}
- </select>
- );
+  const { className = '', children, ...rest } = props;
+  return (
+    <select
+      className={[
+        'w-full px-4 py-2.5 pr-10',
+        'bg-[var(--bg-glass)] backdrop-blur-xl',
+        'border border-[var(--border-medium)] rounded-xl',
+        'text-[var(--text-primary)] font-sans text-[0.9375rem] outline-none cursor-pointer',
+        'appearance-none',
+        'transition-[border-color,box-shadow] duration-200',
+        'hover:border-[var(--border-strong)]',
+        'focus:border-[var(--primary)] focus:shadow-[0_0_0_3px_var(--focus-ring)]',
+        'disabled:opacity-45 disabled:cursor-not-allowed',
+        className,
+      ].filter(Boolean).join(' ')}
+      style={{
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238899A8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right 12px center',
+      }}
+      {...rest}
+    >
+      {children}
+    </select>
+  );
 }
 
 // ==================== Legacy Modal ====================
@@ -242,70 +243,37 @@ interface LegacyToast {
  kind:'success' |'error' |'info';
  message: string;
 }
-let legacyToastCounter = 0;
+
 
 export function useToasts() {
-  const [toasts, setToasts] = useState<LegacyToast[]>([]);
-  const timers = useRef<number[]>([]);
-  const { t } = useSafeI18n();
+  const globalToast = useToast();
 
- const dismiss = useCallback((id: number) => {
- setToasts((prev) => prev.filter((toast) => toast.id !== id));
-}, []);
+  const push = useCallback(
+    (
+      kindOrObject: LegacyToast['kind'] | { type: LegacyToast['kind']; message: string; title?: string },
+      messageArg?: string,
+    ) => {
+      let type: 'success' | 'error' | 'warning' | 'info' = 'info';
+      let message = '';
+      let title = '';
 
- const push = useCallback(
- (
- kindOrObject: LegacyToast['kind'] | { type: LegacyToast['kind']; message: string; title?: string},
- messageArg?: string,
- ) => {
- const id = ++legacyToastCounter;
- // Both call shapes are supported:
- // push('success','Saved') — legacy positional
- // push({ type:'success', message}) — object form
- const kind = typeof kindOrObject ==='object' && kindOrObject !== null ? kindOrObject.type : kindOrObject;
- const message = typeof kindOrObject ==='object' && kindOrObject !== null ? kindOrObject.message : (messageArg ??'');
- setToasts((prev) => [...prev, { id, kind, message}]);
- timers.current.push(window.setTimeout(() => dismiss(id), 5000));
-},
- [dismiss],
- );
+      if (typeof kindOrObject === 'object' && kindOrObject !== null) {
+        type = kindOrObject.type === 'error' ? 'error' : kindOrObject.type === 'success' ? 'success' : 'info';
+        message = kindOrObject.message;
+        title = kindOrObject.title || message;
+      } else {
+        type = kindOrObject === 'error' ? 'error' : kindOrObject === 'success' ? 'success' : 'info';
+        message = messageArg || '';
+        title = message;
+      }
 
- useEffect(() => () => {
- timers.current.forEach((t) => window.clearTimeout(t));
-}, []);
+      globalToast.push(type, title);
+    },
+    [globalToast]
+  );
 
- const toastNode = toasts.length > 0 && (
- <div
- className="pointer-events-none fixed bottom-4 right-4 z-[300] flex w-full max-w-sm flex-col gap-2"
- aria-live="polite"
- >
- {toasts.map((toast) => (
- <div
- key={toast.id}
- className={[
-'pointer-events-auto flex items-start justify-between gap-3 rounded-2xl px-4 py-3 text-sm shadow-[var(--shadow-lg)]',
-'bg-[var(--bg-card)] backdrop-blur-2xl border border-[var(--border-glass)]',
-'animate-[slide-up_0.3s_cubic-bezier(.25,.46,.45,.94)_forwards]',
- toast.kind ==='success' ?'text-emerald-700' :
- toast.kind ==='error' ?'text-red-600' :
-'text-[var(--text-primary)]',
- ].join('')}
- >
- <span className="flex-1">{toast.message}</span>
- <button
- type="button"
- className="shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
-onClick={() => dismiss(toast.id)}
-  aria-label={t('a11y.dismissNotification')}
- >
- <svg className="h-4 w-4"viewBox="0 0 20 20"fill="currentColor"aria-hidden="true">
- <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
- </svg>
- </button>
- </div>
- ))}
- </div>
- );
-
- return { push, toastNode};
+  return { push, toastNode: null };
 }
+
+
+

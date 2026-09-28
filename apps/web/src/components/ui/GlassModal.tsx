@@ -167,7 +167,7 @@ export function GlassModal({
 
         {/* Footer */}
         {footer && (
-          <div className="relative flex items-center justify-end gap-3 px-6 pb-6 pt-2 flex-shrink-0 border-t border-[var(--border-subtle)]">
+          <div className="relative flex items-center justify-end gap-3 px-6 pb-6 pt-4 mt-2 flex-shrink-0 border-t border-[var(--border-subtle)]">
             {footer}
           </div>
         )}

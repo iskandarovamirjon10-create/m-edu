@@ -5,17 +5,7 @@
  */
 import { useState} from'react';
 import { useQuery} from'@tanstack/react-query';
-import {
- GlassPageHeader,
- GlassPageLoader,
- GlassErrorState,
- GlassEmptyState,
- GlassTable,
- GlassTHead,
- GlassTBody,
- GlassTR,
- GlassTH,
- GlassTD, GlassTabs } from '@/components/ui';
+import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassTabs } from '@/components/ui';
 import { analyticsApi} from'@/lib/api';
 import { CRMFunnelResponse, CRMSources, CRMVelocityResponse, CRMLostReasonsResponse, CRMAgingResponse, CRMModeratorStats, CRMAgingLead } from '@/types/analytics';
 import { usePageTitle} from'@/hooks/usePageTitle';

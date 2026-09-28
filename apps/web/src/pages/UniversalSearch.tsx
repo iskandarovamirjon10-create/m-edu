@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { PageHeader, TextInput, EmptyState, GlassButton, Badge, PageLoader, ErrorState } from '@/components/ui';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { GlassPageHeader, GlassInput, GlassEmptyState, GlassButton, GlassBadge, GlassPageLoader, GlassErrorState } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useUniversalSearch } from '@/hooks/useUniversalSearch';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -35,10 +35,18 @@ export function UniversalSearchPage() {
   const { t } = useI18n();
   usePageTitle(t('search.title'));
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
+  const [searchParams] = useSearchParams();
+  const initialQ = searchParams.get('q') ?? '';
+  const [query, setQuery] = useState(initialQ);
   const [typeFilter, setTypeFilter] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const { results, loading, error, runSearch } = useUniversalSearch(query, typeFilter ? [typeFilter] : []);
+
+  // Sync URL ?q= changes (e.g. browser back/forward or external navigation) into state
+  useEffect(() => {
+    const q = searchParams.get('q') ?? '';
+    setQuery((prev) => (prev !== q ? q : prev));
+  }, [searchParams]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -72,14 +80,14 @@ export function UniversalSearchPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('search.title')}
           subtitle={t('search.subtitle')}
         />
 
         <div className="glass-card p-4 space-y-3">
           <div className="relative">
-            <TextInput
+            <GlassInput
               ref={inputRef as unknown as React.Ref<HTMLInputElement>}
               type="search"
               placeholder={t('search.placeholder')}
@@ -113,18 +121,18 @@ export function UniversalSearchPage() {
           </div>
         ) : loading ? (
           <div className="glass-card p-8">
-            <PageLoader label={t('search.searching')} />
+            <GlassPageLoader label={t('search.searching')} />
           </div>
         ) : error ? (
           <div className="glass-card p-8">
-            <ErrorState
+            <GlassErrorState
               message={getErrorMessage(error)}
               onRetry={() => runSearch(query)}
             />
           </div>
         ) : results.results.length === 0 ? (
           <div className="glass-card p-8">
-            <EmptyState
+            <GlassEmptyState
               title={t('search.noResults')}
               message={t('search.noResultsHint', { query })}
             />
@@ -140,7 +148,7 @@ export function UniversalSearchPage() {
                 <section key={type} className="glass-card overflow-hidden">
                   <header className="flex items-center justify-between px-4 py-3 border-b border-subtle">
                     <div className="flex items-center gap-2">
-                      <Badge color={meta.color}>{meta.labelKey ? t(meta.labelKey) : type}</Badge>
+                      <GlassBadge color={meta.color}>{meta.labelKey ? t(meta.labelKey) : type}</GlassBadge>
                       <span className="text-xs text-muted">{t('search.matchCount', { n: items.length })}</span>
                     </div>
                   </header>

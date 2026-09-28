@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, StatCard, GlassCard } from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassStatCard, GlassCard } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import request from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -78,9 +78,9 @@ function ComponentStatusCard({ name, status, responseTime }: { name: string; sta
           <h4 className="font-semibold text-sm text-[var(--text-primary)]">{info.labelKey ? t(info.labelKey) : name}</h4>
           <p className="text-xs text-muted mt-0.5">{info.descriptionKey ? t(info.descriptionKey) : ''}</p>
         </div>
-        <Badge color={STATUS_BADGE_COLOR[status]}>
+        <GlassBadge color={STATUS_BADGE_COLOR[status]}>
           {t(STATUS_LABEL_KEYS[status])}
-        </Badge>
+        </GlassBadge>
       </div>
       {responseTime !== undefined && (
         <div className="text-xs text-muted">
@@ -138,26 +138,26 @@ export function SystemHealthPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('systemHealth.title')}
           subtitle={t('systemHealth.subtitle')}
         />
 
         {/* Summary stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard
+          <GlassStatCard
             label={t('systemHealth.uptime')}
             value={summary?.uptime ? formatUptime(summary.uptime) : '—'}
           />
-          <StatCard
+          <GlassStatCard
             label={t('systemHealth.avgResponse')}
             value={summary?.avgResponseTime ? formatResponseTime(summary.avgResponseTime) : '—'}
           />
-          <StatCard
+          <GlassStatCard
             label={t('systemHealth.totalErrors')}
             value={summary?.totalErrors ?? 0}
           />
-          <StatCard
+          <GlassStatCard
             label={t('systemHealth.lastIncident')}
             value={summary?.lastIncidentAt
               ? new Date(summary.lastIncidentAt).toLocaleDateString()
@@ -195,17 +195,17 @@ export function SystemHealthPage() {
             <h3 className="font-semibold text-sm text-[var(--text-primary)]">{t('systemHealth.recentErrors')}</h3>
           </div>
           {isLoading ? (
-            <div className="p-8"><PageLoader label={t('systemHealth.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('systemHealth.loading')} /></div>
           ) : isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 message={getErrorMessage(error)}
                 onRetry={refetch}
               />
             </div>
           ) : recentErrors.length === 0 ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('systemHealth.noErrors')}
                 message={t('systemHealth.noErrorsHint')}
               />
@@ -215,9 +215,9 @@ export function SystemHealthPage() {
               {recentErrors.map((error) => (
                 <li key={error.id} className="px-4 py-3 flex items-start gap-3">
                   <div className="shrink-0 mt-0.5">
-                    <Badge color={error.statusCode >= 500 ? 'error' : 'warning'}>
+                    <GlassBadge color={error.statusCode >= 500 ? 'error' : 'warning'}>
                       {error.statusCode}
-                    </Badge>
+                    </GlassBadge>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 text-xs text-muted">

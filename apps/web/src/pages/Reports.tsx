@@ -5,25 +5,7 @@
 import { toLocalISOString } from '../lib/format';
 import { useState} from'react';
 import { useQuery} from'@tanstack/react-query';
-import {
- GlassPageHeader,
- GlassPageLoader,
- GlassErrorState,
- GlassEmptyState,
- GlassCard,
- GlassStatCard,
- GlassTable,
- GlassTHead,
- GlassTBody,
- GlassTR,
- GlassTH,
- GlassTD,
- GlassButton,
- GlassSelect,
- GlassInput,
- GlassBadge,
- useToast,
-} from'@/components/ui';
+import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassCard, GlassStatCard, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassButton, GlassSelect, GlassInput, GlassBadge, useToast, GlassPagination } from '@/components/ui';
 import { reportsApi} from'@/lib/api';
 import { usePageTitle} from'@/hooks/usePageTitle';
 import { getErrorMessage} from'@/lib/errorMessages';
@@ -280,8 +262,17 @@ export function ReportsPage() {
  ))}
  </GlassTBody>
  </GlassTable>
- </div>
- </GlassCard>
+  </div>
+  {reportData.totalPages > 1 && (
+    <div className="border-t border-[var(--border-subtle)] p-4 flex justify-center">
+      <GlassPagination
+        page={page}
+        totalPages={reportData.totalPages}
+        onPageChange={setPage}
+      />
+    </div>
+  )}
+</GlassCard>
  )}
  </div>
  );

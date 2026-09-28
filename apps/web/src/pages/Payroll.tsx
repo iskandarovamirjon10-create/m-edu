@@ -5,8 +5,9 @@ import { fetchAllPaginated} from'@/lib/fetchAllPaginated';
  * action workflows (Review -> Approve -> Pay), and high-end squircle data grids.
  */
 import { useState} from'react';
-import { useQuery, useMutation, useQueryClient} from'@tanstack/react-query';
-import { payrollApi, teachersApi} from'@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { payrollApi, teachersApi } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys.factory';
 import {
  GlassPageHeader,
  GlassPageLoader,
@@ -128,25 +129,29 @@ export function PayrollPage() {
  const [cancelTarget, setCancelTarget] = useState<PayrollRun | null>(null);
  const [cancelReason, setCancelReason] = useState('');
 
- const summary = useQuery({
- queryKey: ['payroll-summary', year, month],
- queryFn: () => payrollApi.periodSummary({ year, month}) as Promise<PayrollPeriodSummary>,
-});
+  const summary = useQuery({
+    queryKey: queryKeys.payroll.summary(year, month),
+    queryFn: () => payrollApi.periodSummary({ year, month }) as Promise<PayrollPeriodSummary>,
+  });
 
- const runs = useQuery({
- queryKey: ['payroll-runs', year, month],
- queryFn: () => fetchAllPaginated(payrollApi.listRuns, { year, month}) as Promise<{ items: PayrollRun[]; total: number}>,
-});
+  const runs = useQuery({
+    queryKey: queryKeys.payroll.runs(year, month),
+    queryFn: () => fetchAllPaginated(payrollApi.listRuns, { year, month }) as Promise<{ items: PayrollRun[]; total: number }>,
+  });
 
- const teachers = useQuery({
- queryKey: ['teachers-for-payroll'],
- queryFn: () => fetchAllPaginated(teachersApi.list) as Promise<{ items: Array<{ id: string; user: { firstName: string; lastName: string}}>}>,
-});
+  const teachers = useQuery({
+    queryKey: queryKeys.payroll.teachers(),
+    queryFn: () => fetchAllPaginated(teachersApi.list) as Promise<{ items: Array<{ id: string; user: { firstName: string; lastName: string } }> }>,
+  });
 
- const invalidate = () => {
- queryClient.invalidateQueries({ queryKey: ['payroll-runs']});
- queryClient.invalidateQueries({ queryKey: ['payroll-summary']});
-};
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.payroll.runs(year, month) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.payroll.summary(year, month) });
+    queryClient.invalidateQueries({ queryKey: ['payroll-runs'] });
+    queryClient.invalidateQueries({ queryKey: ['payroll-summary'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all() });
+  };
 
  const calculate = useMutation({
  mutationFn: (data: CalculateFormState) =>

@@ -2,33 +2,14 @@ import { useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { studentsApi, groupsApi, faceApi } from '@/lib/api';
-import {
-  PageHeader,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Table,
-  THead,
-  TBody,
-  TR,
-  TH,
-  TD,
-  Modal,
-  ConfirmDialog,
-  Select,
-  useToasts,
-  statusColor,
-  Field,
-  Badge,
-  GlassButton,
-  Input,
-} from '@/components/ui';
+import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassModal, ConfirmDialog, GlassSelect, useToasts, statusColor, GlassField, GlassBadge, GlassButton, GlassInput } from '@/components/ui';
 import { useAuth } from '@/auth/AuthContext';
 import { fullName, formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
-import type { Paginated, Student, Group } from '@/lib/types';
+import type { Student, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { queryKeys } from '@/lib/query-keys.factory';
 
 function OrbBackdrop() {
   return null;
@@ -67,21 +48,21 @@ export function StudentDetailPage() {
 
   // Data fetching
   const student = useQuery({
-    queryKey: ['student', id],
+    queryKey: queryKeys.students.detail(id!),
     queryFn: () => studentsApi.get(id!),
     enabled: !!id,
     placeholderData: (previousData) => previousData,
   });
 
   const groups = useQuery({
-    queryKey: ['groups-selector'],
+    queryKey: queryKeys.groups.selectors(),
     queryFn: () => groupsApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const enrollments = useQuery({
-    queryKey: ['face-enrollments', id],
+    queryKey: queryKeys.face.studentEnrollments(id),
     queryFn: () => faceApi.enrollments({ studentId: id }),
     enabled: !!id,
     placeholderData: (previousData) => previousData,
@@ -160,7 +141,7 @@ export function StudentDetailPage() {
       setParentPassword('');
       setIsPrimary(false);
       qc.invalidateQueries({ queryKey: ['student-parents', id] });
-      qc.invalidateQueries({ queryKey: ['student', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -212,12 +193,15 @@ export function StudentDetailPage() {
   }, []);
 
   const studentData = student.data as Student | undefined;
-  const allGroups = useMemo(
-    () => (groups.data as Paginated<Group> | undefined)?.items || [],
-    [groups.data],
-  );
+  const allGroups = useMemo(() => {
+    if (Array.isArray(groups.data)) return groups.data;
+    if (groups.data && typeof groups.data === 'object' && 'items' in groups.data) {
+      return (groups.data as { items: Group[] }).items || [];
+    }
+    return [];
+  }, [groups.data]);
   const activeGroups = useMemo(
-    () => allGroups.filter((group) => group.isActive),
+    () => allGroups.filter((group) => group.isActive !== false),
     [allGroups],
   );
   const myEnrollments = useMemo(
@@ -252,7 +236,11 @@ export function StudentDetailPage() {
       push('success', t('studentDetail.assigned'));
       setAssignOpen(false);
       setGroupId('');
-      qc.invalidateQueries({ queryKey: ['student', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
+      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.selectors() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -265,7 +253,10 @@ export function StudentDetailPage() {
       studentsApi.removeGroup(id!, groupIdToRemove),
     onSuccess: () => {
       push('success', t('studentDetail.removed'));
-      qc.invalidateQueries({ queryKey: ['student', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
+      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -281,7 +272,8 @@ export function StudentDetailPage() {
   const handleOpenAssign = useCallback(() => {
     setGroupId('');
     setAssignOpen(true);
-  }, []);
+    void groups.refetch();
+  }, [groups]);
 
   const handleCloseAssign = useCallback(() => {
     setAssignOpen(false);
@@ -317,12 +309,12 @@ export function StudentDetailPage() {
       <>
         <OrbBackdrop />
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('enum.badge.STUDENT')}
             subtitle={t('studentDetail.loadingSubtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label={t('studentForm.loading')} />
+            <GlassPageLoader label={t('studentForm.loading')} />
           </div>
         </div>
       </>
@@ -335,12 +327,12 @@ export function StudentDetailPage() {
       <>
         <OrbBackdrop />
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('enum.badge.STUDENT')}
             subtitle={t('studentDetail.detailsSubtitle')}
           />
           <div className="glass-card p-8">
-            <ErrorState
+            <GlassErrorState
               title={t('studentDetail.notFound')}
               message={getErrorMessage(student.error as Error)}
               onRetry={handleRetry}
@@ -361,7 +353,7 @@ export function StudentDetailPage() {
     <>
       <OrbBackdrop />
       <div className="page-container space-y-6">
-        <PageHeader
+        <GlassPageHeader
           title={studentName}
         subtitle={studentData.user?.email || ''}
         actions={
@@ -431,9 +423,9 @@ export function StudentDetailPage() {
                   {t('common.status')}
                 </dt>
                 <dd>
-                  <Badge color={studentStatus.color}>
+                  <GlassBadge color={studentStatus.color}>
                     {t(studentStatus.label)}
-                  </Badge>
+                  </GlassBadge>
                 </dd>
               </div>
             </dl>
@@ -465,10 +457,10 @@ export function StudentDetailPage() {
           <div className="p-5">
             {parentsQuery.isLoading ? (
               <div className="py-8 flex justify-center items-center">
-                <PageLoader />
+                <GlassPageLoader />
               </div>
             ) : parentsQuery.isError ? (
-              <ErrorState
+              <GlassErrorState
                 title="Failed to load parent accounts"
                 message={getErrorMessage(parentsQuery.error)}
                 onRetry={() => parentsQuery.refetch()}
@@ -514,20 +506,20 @@ export function StudentDetailPage() {
                             <td className="py-3 pr-4">
                               <div className="flex flex-wrap gap-1">
                                 {link.canViewGrades && (
-                                  <Badge color="blue">Grades</Badge>
+                                  <GlassBadge color="blue">Grades</GlassBadge>
                                 )}
                                 {link.canViewAttendance && (
-                                  <Badge color="green">Attendance</Badge>
+                                  <GlassBadge color="green">Attendance</GlassBadge>
                                 )}
                                 {link.canViewPayments && (
-                                  <Badge color="purple">Payments</Badge>
+                                  <GlassBadge color="purple">Payments</GlassBadge>
                                 )}
                               </div>
                             </td>
                             <td className="py-3 pr-4">
-                              <Badge color={p?.isActive ? 'green' : 'slate'}>
+                              <GlassBadge color={p?.isActive ? 'green' : 'slate'}>
                                 {p?.isActive ? 'Active' : 'Inactive'}
-                              </Badge>
+                              </GlassBadge>
                             </td>
                             {canManageParents && (
                               <td className="py-3 text-right">
@@ -643,56 +635,57 @@ export function StudentDetailPage() {
  </GlassButton>
           </div>
           {studentGroups.length === 0 ? (
-            <EmptyState
+            <GlassEmptyState
               title={t('studentDetail.noGroups')}
               message={t('studentDetail.noGroupsHint')}
             />
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
-              {studentGroups.map((groupEnrollment) => {
-                const groupStatus = formatGroupStatus(
-                  groupEnrollment.isActive,
-                );
+              {studentGroups.map((groupEnrollment: any) => {
+                const groupObj = groupEnrollment?.group || groupEnrollment;
+                const groupId = groupObj?.id || groupEnrollment?.groupId || groupEnrollment?.id;
+                const groupName = groupObj?.name || 'Group';
+                const groupRoom = groupObj?.room;
+                const isActive = groupEnrollment?.isActive !== false;
+                const groupStatus = formatGroupStatus(isActive);
                 const isRemoving =
                   removeFromGroup.isPending &&
-                  removeFromGroup.variables === groupEnrollment.group.id;
+                  removeFromGroup.variables === groupId;
 
                 return (
                   <div
-                    key={groupEnrollment.group.id}
+                    key={groupId}
                     className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-[var(--state-hover)]"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-[var(--text-primary)]">
-                        {groupEnrollment.group.name}
+                        {groupName}
                       </p>
-                      {groupEnrollment.group.room && (
+                      {groupRoom && (
                         <p className="text-xs text-[var(--text-primary)]">
-                          {t('groups.col.room')} {groupEnrollment.group.room}
+                          {t('groups.col.room')} {groupRoom}
                         </p>
                       )}
                     </div>
                     <div className="ml-4 flex shrink-0 items-center gap-2">
-                      <Badge color={groupStatus.color}>
+                      <GlassBadge color={groupStatus.color}>
                         {groupStatus.label}
-                      </Badge>
- {groupEnrollment.isActive && (
- <GlassButton
- type="button"
- variant="ghost"
- size="sm"
- className="text-red-600"
- onClick={() =>
- handleRemoveFromGroup(groupEnrollment.group.id)
- }
- disabled={isRemoving}
- loading={isRemoving}
- >
- {isRemoving
- ? t('studentDetail.removing')
- : t('studentDetail.remove')}
- </GlassButton>
- )}
+                      </GlassBadge>
+                      {isActive && (
+                        <GlassButton
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600"
+                          onClick={() => handleRemoveFromGroup(groupId)}
+                          disabled={isRemoving}
+                          loading={isRemoving}
+                        >
+                          {isRemoving
+                            ? t('studentDetail.removing')
+                            : t('studentDetail.remove')}
+                        </GlassButton>
+                      )}
                     </div>
                   </div>
                 );
@@ -709,39 +702,39 @@ export function StudentDetailPage() {
             </h2>
           </div>
           {studentAttendance.length === 0 ? (
-            <EmptyState
+            <GlassEmptyState
               title={t('attendance.empty')}
               message={t('studentDetail.attendanceEmptyHint')}
             />
           ) : (
             <div className="overflow-x-auto">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>{t('common.date')}</TH>
-                    <TH>{t('common.status')}</TH>
-                    <TH>{t('attendance.col.source')}</TH>
-                  </TR>
-                </THead>
-                <TBody>
+              <GlassTable>
+                <GlassTHead>
+                  <GlassTR>
+                    <GlassTH>{t('common.date')}</GlassTH>
+                    <GlassTH>{t('common.status')}</GlassTH>
+                    <GlassTH>{t('attendance.col.source')}</GlassTH>
+                  </GlassTR>
+                </GlassTHead>
+                <GlassTBody>
                   {studentAttendance.slice(0, 10).map((attendance) => (
-                    <TR
+                    <GlassTR
                       key={attendance.id}
                       className="transition-colors hover:bg-[var(--state-hover)]"
                     >
-                      <TD className="whitespace-nowrap">
+                      <GlassTD className="whitespace-nowrap">
                         {formatDate(attendance.date)}
-                      </TD>
-                      <TD>
-                        <Badge color={statusColor(attendance.status)}>
+                      </GlassTD>
+                      <GlassTD>
+                        <GlassBadge color={statusColor(attendance.status)}>
                           {t(`attendance.${attendance.status.toLowerCase()}`)}
-                        </Badge>
-                      </TD>
-                      <TD>{attendance.source}</TD>
-                    </TR>
+                        </GlassBadge>
+                      </GlassTD>
+                      <GlassTD>{attendance.source}</GlassTD>
+                    </GlassTR>
                   ))}
-                </TBody>
-              </Table>
+                </GlassTBody>
+              </GlassTable>
             </div>
           )}
         </div>
@@ -756,41 +749,41 @@ export function StudentDetailPage() {
             </h2>
           </div>
           {studentPayments.length === 0 ? (
-            <EmptyState
+            <GlassEmptyState
               title={t('payments.empty')}
               message={t('studentDetail.paymentsEmptyHint')}
             />
           ) : (
             <div className="overflow-x-auto">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>{t('common.date')}</TH>
-                    <TH>{t('common.status')}</TH>
-                    <TH className="text-right">{t('payments.col.amount')}</TH>
-                  </TR>
-                </THead>
-                <TBody>
+              <GlassTable>
+                <GlassTHead>
+                  <GlassTR>
+                    <GlassTH>{t('common.date')}</GlassTH>
+                    <GlassTH>{t('common.status')}</GlassTH>
+                    <GlassTH className="text-right">{t('payments.col.amount')}</GlassTH>
+                  </GlassTR>
+                </GlassTHead>
+                <GlassTBody>
                   {studentPayments.slice(0, 10).map((payment) => (
-                    <TR
+                    <GlassTR
                       key={payment.id}
                       className="transition-colors hover:bg-[var(--state-hover)]"
                     >
-                      <TD className="whitespace-nowrap">
+                      <GlassTD className="whitespace-nowrap">
                         {formatDate(payment.createdAt)}
-                      </TD>
-                      <TD>
-                        <Badge color={statusColor(payment.status)}>
+                      </GlassTD>
+                      <GlassTD>
+                        <GlassBadge color={statusColor(payment.status)}>
                           {t(`payments.status.${payment.status}`)}
-                        </Badge>
-                      </TD>
-                      <TD className="text-right font-medium">
+                        </GlassBadge>
+                      </GlassTD>
+                      <GlassTD className="text-right font-medium">
                         {formatCurrency(payment.amount)}
-                      </TD>
-                    </TR>
+                      </GlassTD>
+                    </GlassTR>
                   ))}
-                </TBody>
-              </Table>
+                </GlassTBody>
+              </GlassTable>
             </div>
           )}
         </div>
@@ -803,7 +796,7 @@ export function StudentDetailPage() {
             </h2>
           </div>
           {myEnrollments.length === 0 ? (
-            <EmptyState
+            <GlassEmptyState
               title={t('studentDetail.notEnrolled')}
               message={t('studentDetail.enrollHint')}
               action={
@@ -831,9 +824,9 @@ export function StudentDetailPage() {
                       {formatDate(enrollment.enrolledAt)}
                     </p>
                   </div>
-                  <Badge color={statusColor(enrollment.status)}>
+                  <GlassBadge color={statusColor(enrollment.status)}>
                     {t(`enum.status.${enrollment.status}`)}
-                  </Badge>
+                  </GlassBadge>
                 </div>
               ))}
             </div>
@@ -842,13 +835,13 @@ export function StudentDetailPage() {
       </div>
 
       {/* Assign to group modal */}
-      <Modal
+      <GlassModal
         open={assignOpen}
         onClose={handleCloseAssign}
         title={t('studentDetail.assignToGroup')}
       >
-        <Field label={t('exams.form.group')} required>
-          <Select
+        <GlassField label={t('exams.form.group')} required>
+          <GlassSelect
             value={groupId}
             onChange={(e) => setGroupId(e.target.value)}
             aria-label={t('studentDetail.selectGroupAria')}
@@ -859,8 +852,8 @@ export function StudentDetailPage() {
                 {group.name}
               </option>
             ))}
-          </Select>
-        </Field>
+          </GlassSelect>
+        </GlassField>
         <div className="mt-4 flex justify-end gap-2">
           <GlassButton
             type="button"
@@ -881,62 +874,64 @@ export function StudentDetailPage() {
               : t('studentDetail.assign')}
           </GlassButton>
         </div>
-      </Modal>
+      </GlassModal>
 
       <ConfirmDialog
         open={removeTarget !== null}
         onClose={() => setRemoveTarget(null)}
         onConfirm={confirmRemoveFromGroup}
+        title={t('studentDetail.remove')}
+        confirmLabel={t('studentDetail.remove')}
         description={t('studentDetail.removeConfirm')}
         loading={removeFromGroup.isPending}
       />
 
       {/* Add / Invite Parent Modal */}
-      <Modal
+      <GlassModal
         open={parentModalOpen}
         onClose={() => setParentModalOpen(false)}
         title="Add or Link Parent Account"
       >
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="First Name" required>
-              <Input
+            <GlassField label="First Name" required>
+              <GlassInput
                 type="text"
                 placeholder="e.g. John"
                 value={parentFirstName}
                 onChange={(e) => setParentFirstName(e.target.value)}
               />
-            </Field>
-            <Field label="Last Name" required>
-              <Input
+            </GlassField>
+            <GlassField label="Last Name" required>
+              <GlassInput
                 type="text"
                 placeholder="e.g. Doe"
                 value={parentLastName}
                 onChange={(e) => setParentLastName(e.target.value)}
               />
-            </Field>
+            </GlassField>
           </div>
 
-          <Field label="Parent Email Address" required>
-            <Input
+          <GlassField label="Parent Email Address" required>
+            <GlassInput
               type="email"
               placeholder="e.g. parent@example.com"
               value={parentEmail}
               onChange={(e) => setParentEmail(e.target.value)}
             />
-          </Field>
+          </GlassField>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Phone Number">
-              <Input
+            <GlassField label="Phone Number">
+              <GlassInput
                 type="tel"
                 placeholder="+998..."
                 value={parentPhone}
                 onChange={(e) => setParentPhone(e.target.value)}
               />
-            </Field>
-            <Field label="Relationship">
-              <Select
+            </GlassField>
+            <GlassField label="Relationship">
+              <GlassSelect
                 value={parentRelationship}
                 onChange={(e) => setParentRelationship(e.target.value)}
               >
@@ -945,18 +940,18 @@ export function StudentDetailPage() {
                 <option value="mother">Mother</option>
                 <option value="guardian">Guardian</option>
                 <option value="other">Other</option>
-              </Select>
-            </Field>
+              </GlassSelect>
+            </GlassField>
           </div>
 
-          <Field label="Temporary Password" hint="Optional. If omitted, a secure temporary password will be auto-generated.">
-            <Input
+          <GlassField label="Temporary Password" hint="Optional. If omitted, a secure temporary password will be auto-generated.">
+            <GlassInput
               type="password"
               placeholder="Minimum 6 characters"
               value={parentPassword}
               onChange={(e) => setParentPassword(e.target.value)}
             />
-          </Field>
+          </GlassField>
 
           <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
             <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
@@ -1024,17 +1019,17 @@ export function StudentDetailPage() {
             </GlassButton>
           </div>
         </div>
-      </Modal>
+      </GlassModal>
 
       {/* Edit Parent Link Modal */}
-      <Modal
+      <GlassModal
         open={editLinkModalOpen}
         onClose={() => setEditLinkModalOpen(false)}
         title="Edit Parent Permissions"
       >
         <div className="space-y-4">
-          <Field label="Relationship">
-            <Select
+          <GlassField label="Relationship">
+            <GlassSelect
               value={editRelationship}
               onChange={(e) => setEditRelationship(e.target.value)}
             >
@@ -1043,8 +1038,8 @@ export function StudentDetailPage() {
               <option value="mother">Mother</option>
               <option value="guardian">Guardian</option>
               <option value="other">Other</option>
-            </Select>
-          </Field>
+            </GlassSelect>
+          </GlassField>
 
           <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
             <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
@@ -1107,7 +1102,7 @@ export function StudentDetailPage() {
             </GlassButton>
           </div>
         </div>
-      </Modal>
+      </GlassModal>
 
       {/* Unlink Parent Confirm Dialog */}
       <ConfirmDialog

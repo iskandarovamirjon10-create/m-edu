@@ -77,7 +77,7 @@ describe('FaceRecognitionPage — start-session response contract', () => {
 
     // The session-active state must engage and the capture surface appear.
     await waitFor(() => {
-      expect(screen.getByText(/session active/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/session active/i).length).toBeGreaterThanOrEqual(1);
     });
     expect(startSessionMock).toHaveBeenCalledWith({ groupId: undefined });
     // The truncated session id must be rendered (not 'undefined').

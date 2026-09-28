@@ -1,22 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Table,
-  THead,
-  TBody,
-  TR,
-  TH,
-  TD,
-  Pagination,
-  TextInput,
-  Select,
-} from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassPagination, GlassInput, GlassSelect } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDateTime } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -140,12 +125,12 @@ export function AuditPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('nav.audit')}
             subtitle={t('audit.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label={t('audit.loading')} />
+            <GlassPageLoader label={t('audit.loading')} />
           </div>
         </div>
       </div>
@@ -157,12 +142,12 @@ export function AuditPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('nav.audit')}
             subtitle={t('audit.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <ErrorState
+            <GlassErrorState
               title={t('audit.loadError')}
               message={getErrorMessage(audit.error as Error)}
               onRetry={handleRetry}
@@ -180,7 +165,7 @@ export function AuditPage() {
       <div className="orb orb-indigo-1"></div>
       <div className="orb orb-deep-1"></div>
     <div className="page-container space-y-4">
-      <PageHeader
+      <GlassPageHeader
         title={t('nav.audit')}
         subtitle={t('audit.pageSubtitle')}
       />
@@ -189,14 +174,14 @@ export function AuditPage() {
       <div className="glass-card p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
-            <TextInput
+            <GlassInput
               placeholder={t('audit.searchPlaceholder')}
               aria-label={t('audit.searchAria')}
               value={search}
               onChange={handleSearchChange}
               type="search"
             />
-            <Select
+            <GlassSelect
               value={action}
               onChange={handleActionChange}
               aria-label={t('common.filterByAction')}
@@ -207,7 +192,7 @@ export function AuditPage() {
                   {t(auditAction.label)}
                 </option>
               ))}
-            </Select>
+            </GlassSelect>
           </div>
           <div className="text-sm text-muted sm:ml-4 sm:shrink-0">
             {totalEvents === 1
@@ -220,7 +205,7 @@ export function AuditPage() {
       {/* Audit table */}
       <div className="glass-card overflow-hidden">
         {!data || data.items.length === 0 ? (
-          <EmptyState
+          <GlassEmptyState
               title={t('audit.emptyTitle')}
               message={
                 hasActiveFilters
@@ -231,51 +216,51 @@ export function AuditPage() {
         ) : (
           <>
             <div className="glass-table-wrap">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>{t('audit.col.time')}</TH>
-                    <TH>{t('audit.col.action')}</TH>
-                    <TH>{t('audit.col.entity')}</TH>
-                    <TH>{t('common.description')}</TH>
-                    <TH>{t('audit.col.actor')}</TH>
-                  </TR>
-                </THead>
-                <TBody>
+              <GlassTable>
+                <GlassTHead>
+                  <GlassTR>
+                    <GlassTH>{t('audit.col.time')}</GlassTH>
+                    <GlassTH>{t('audit.col.action')}</GlassTH>
+                    <GlassTH>{t('audit.col.entity')}</GlassTH>
+                    <GlassTH>{t('common.description')}</GlassTH>
+                    <GlassTH>{t('audit.col.actor')}</GlassTH>
+                  </GlassTR>
+                </GlassTHead>
+                <GlassTBody>
                   {data.items.map((event) => (
-                    <TR
+                    <GlassTR
                       key={event.id}
                     >
-                      <TD className="whitespace-nowrap">
+                      <GlassTD className="whitespace-nowrap">
                         {formatDateTime(event.createdAt)}
-                      </TD>
-                      <TD>
-                        <Badge color={actionColor(event.action)}>
+                      </GlassTD>
+                      <GlassTD>
+                        <GlassBadge color={actionColor(event.action)}>
                           {t(actionKey(event.action))}
-                        </Badge>
-                      </TD>
-                      <TD className="text-xs text-muted">
+                        </GlassBadge>
+                      </GlassTD>
+                      <GlassTD className="text-xs text-muted">
                         {event.entityType}
                         {event.entityId
                           ? ` · ${truncateId(event.entityId)}`
                           : ''}
-                      </TD>
-                      <TD
+                      </GlassTD>
+                      <GlassTD
                         className="max-w-xs truncate"
                         title={event.description}
                       >
                         {event.description}
-                      </TD>
-                      <TD className="whitespace-nowrap">
+                      </GlassTD>
+                      <GlassTD className="whitespace-nowrap">
                         {event.actorName || t('common.system')}
-                      </TD>
-                    </TR>
+                      </GlassTD>
+                    </GlassTR>
                   ))}
-                </TBody>
-              </Table>
+                </GlassTBody>
+              </GlassTable>
             </div>
             <div className="border-t border-subtle px-4 py-3">
-              <Pagination
+              <GlassPagination
                 page={page}
                 totalPages={data.totalPages}
                 onPageChange={setPage}

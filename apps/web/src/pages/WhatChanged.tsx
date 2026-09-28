@@ -1,13 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  EmptyState,
-  ErrorState,
-  GlassButton,
-} from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassEmptyState, GlassErrorState, GlassButton } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
 
@@ -79,7 +72,7 @@ export function WhatChangedPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('whatChanged.title')}
           subtitle={t('whatChanged.subtitle')}
         />
@@ -109,10 +102,10 @@ export function WhatChangedPage() {
 
         <div className="glass-card overflow-hidden">
           {auditQuery.isLoading ? (
-            <div className="p-8"><PageLoader label={t('whatChanged.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('whatChanged.loading')} /></div>
           ) : auditQuery.isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 title={t('whatChanged.loadFailed')}
                 message={
                   auditQuery.error instanceof Error
@@ -124,7 +117,7 @@ export function WhatChangedPage() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('whatChanged.emptyTitle')}
                 message={t('whatChanged.emptyMessage')}
               />
@@ -134,7 +127,7 @@ export function WhatChangedPage() {
               {filtered.map((e) => (
                 <li key={e.id} className="px-4 py-3">
                   <div className="flex items-start gap-3">
-                    <Badge
+                    <GlassBadge
                       color={
                         e.action === 'CREATE' ? 'success' :
                         e.action === 'DELETE' ? 'error' :
@@ -142,7 +135,7 @@ export function WhatChangedPage() {
                       }
                     >
                       {actionLabel(e.action, t)}
-                    </Badge>
+                    </GlassBadge>
                     <div className="min-w-0 flex-1">
                       <h4 className="font-medium text-sm text-[var(--text-primary)]">
                         {e.entityType}

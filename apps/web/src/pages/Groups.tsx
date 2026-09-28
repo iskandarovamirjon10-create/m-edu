@@ -2,27 +2,8 @@ import { useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { groupsApi, coursesApi, teachersApi } from '@/lib/api';
-import {
-  GlassPageHeader,
-  GlassCard,
-  GlassBadge,
-  GlassPageLoader,
-  GlassErrorState,
-  GlassEmptyState,
-  GlassTable,
-  GlassTHead,
-  GlassTBody,
-  GlassTR,
-  GlassTH,
-  GlassTD,
-  GlassModal,
-  GlassField,
-  GlassInput,
-  GlassSelect,
-  GlassButton,
-  useToasts,
-  ConfirmDialog,
-} from '@/components/ui';
+import { queryKeys } from '@/lib/query-keys.factory';
+import { GlassPageHeader, GlassCard, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassModal, GlassField, GlassInput, GlassSelect, GlassButton, useToasts, ConfirmDialog } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { fullName } from '@/lib/format';
 import type { Paginated, Group, Course, Teacher } from '@/lib/types';
@@ -82,20 +63,20 @@ export function GroupsPage() {
 
   // Data fetching
   const groups = useQuery({
-    queryKey: ['groups'],
+    queryKey: queryKeys.groups.all(),
     queryFn: () => groupsApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
   });
 
   const courses = useQuery({
-    queryKey: ['courses-selector'],
+    queryKey: queryKeys.courses.selectors(),
     queryFn: () => coursesApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const teachers = useQuery({
-    queryKey: ['teachers-selector'],
+    queryKey: queryKeys.teachers.selectors(),
     queryFn: () => teachersApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -128,7 +109,9 @@ export function GroupsPage() {
       setModalOpen(false);
       setForm(INITIAL_FORM);
       setFormErrors({});
-      qc.invalidateQueries({ queryKey: ['groups'] });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.selectors() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -140,7 +123,9 @@ export function GroupsPage() {
     mutationFn: (id: string) => groupsApi.remove(id),
     onSuccess: () => {
       push('success', t('groups.deleted'));
-      qc.invalidateQueries({ queryKey: ['groups'] });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.selectors() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));

@@ -1,26 +1,14 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { leadsApi } from '@/lib/api';
-import {
-  PageHeader,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Pagination,
-  TextInput,
-  Select,
-  Field,
-  Modal,
-  ConfirmDialog,
-  GlassButton,
-  useToasts,
-} from '@/components/ui';
+import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassPagination, GlassInput, GlassSelect, GlassField, GlassModal, ConfirmDialog, GlassButton, useToasts } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Lead, LeadStage } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { queryKeys } from '@/lib/query-keys.factory';
 
 const LEAD_STAGES: LeadStage[] = [
   'NEW',
@@ -170,7 +158,8 @@ export function LeadsPage() {
     onSuccess: () => {
       push('success', t('leads.converted'));
       qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['students'] });
+      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.students.selectors() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -301,12 +290,12 @@ export function LeadsPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('leads.title')}
             subtitle={t('leads.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label={t('leads.loading')} />
+            <GlassPageLoader label={t('leads.loading')} />
           </div>
         </div>
       </div>
@@ -318,12 +307,12 @@ export function LeadsPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('leads.title')}
             subtitle={t('leads.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <ErrorState
+            <GlassErrorState
               title={t('leads.loadFailed')}
               message={getErrorMessage(leads.error as Error)}
               onRetry={handleRetry}
@@ -337,7 +326,7 @@ export function LeadsPage() {
   return (
     <div style={{ display: "contents" }}>
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('leads.title')}
           subtitle={t('leads.pageSubtitle')}
           actions={
@@ -355,14 +344,14 @@ export function LeadsPage() {
         <div className="glass-card p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
-            <TextInput
+            <GlassInput
               placeholder={t('leads.searchPlaceholder')}
               value={search}
               onChange={handleSearchChange}
               aria-label={t('leads.searchPlaceholder')}
               type="search"
             />
-            <Select
+            <GlassSelect
               value={stage}
               onChange={handleStageFilterChange}
               aria-label={t('leads.filterHint')}
@@ -373,7 +362,7 @@ export function LeadsPage() {
                   {t(stageKey(stage))}
                 </option>
               ))}
-            </Select>
+            </GlassSelect>
           </div>
           <div className="text-sm sm:ml-4 sm:shrink-0" style={{ color: 'var(--text-muted)' }}>
             {totalLeads === 1
@@ -386,7 +375,7 @@ export function LeadsPage() {
       {/* Leads table */}
       <div className="glass-card">
         {leadList.length === 0 ? (
-          <EmptyState
+          <GlassEmptyState
             title={hasActiveFilters ? t('leads.noMatching') : t('leads.noLeads')}
             message={
               hasActiveFilters
@@ -441,7 +430,7 @@ export function LeadsPage() {
                         <td>{lead.source || '—'}</td>
                         <td>
                           <div className="flex items-center gap-2">
-                            <Select
+                            <GlassSelect
                               className="w-36 !py-1 text-xs"
                               value={lead.stage}
                               onChange={(e) =>
@@ -458,7 +447,7 @@ export function LeadsPage() {
                                   {t(stageKey(stage))}
                                 </option>
                               ))}
-                            </Select>
+                            </GlassSelect>
                             {isUpdatingStage && (
                               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                                 {t('common.saving')}
@@ -508,7 +497,7 @@ export function LeadsPage() {
               </table>
             </div>
             <div className="border-t px-4 py-3" style={{ borderColor: 'var(--border-subtle)' }}>
-              <Pagination
+              <GlassPagination
                 page={page}
                 totalPages={data?.totalPages ?? 1}
                 onPageChange={setPage}
@@ -519,7 +508,7 @@ export function LeadsPage() {
       </div>
 
       {/* Add lead modal */}
-      <Modal
+      <GlassModal
         open={modalOpen}
         onClose={handleCloseModal}
         title={editingId ? t('leads.editTitle') : t('leads.add')}
@@ -527,8 +516,8 @@ export function LeadsPage() {
       >
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label={t('leads.form.firstName')} required error={formErrors.firstName}>
-              <TextInput
+            <GlassField label={t('leads.form.firstName')} required error={formErrors.firstName}>
+              <GlassInput
                 value={form.firstName}
                 onChange={handleFormChange('firstName')}
                 required
@@ -546,27 +535,27 @@ export function LeadsPage() {
                   {formErrors.firstName}
                 </span>
               )}
-            </Field>
+            </GlassField>
 
-            <Field label={t('leads.form.lastName')}>
-              <TextInput
+            <GlassField label={t('leads.form.lastName')}>
+              <GlassInput
                 value={form.lastName}
                 onChange={handleFormChange('lastName')}
                 placeholder="Doe"
               />
-            </Field>
+            </GlassField>
 
-            <Field label={t('common.phone')}>
-              <TextInput
+            <GlassField label={t('common.phone')}>
+              <GlassInput
                 type="tel"
                 value={form.phone}
                 onChange={handleFormChange('phone')}
                 placeholder="+998 90 123 4567"
               />
-            </Field>
+            </GlassField>
 
-            <Field label={t('common.email')} error={formErrors.email}>
-              <TextInput
+            <GlassField label={t('common.email')} error={formErrors.email}>
+              <GlassInput
                 type="email"
                 value={form.email}
                 onChange={handleFormChange('email')}
@@ -581,18 +570,18 @@ export function LeadsPage() {
                   {formErrors.email}
                 </span>
               )}
-            </Field>
+            </GlassField>
 
-            <Field label={t('leads.col.source')}>
-              <TextInput
+            <GlassField label={t('leads.col.source')}>
+              <GlassInput
                 value={form.source}
                 onChange={handleFormChange('source')}
                 placeholder={t('leads.form.sourcePlaceholder')}
               />
-            </Field>
+            </GlassField>
 
-            <Field label={t('leads.col.stage')}>
-              <Select
+            <GlassField label={t('leads.col.stage')}>
+              <GlassSelect
                 value={form.stage}
                 onChange={handleFormChange('stage')}
                 aria-label={t('leads.col.stage')}
@@ -602,17 +591,17 @@ export function LeadsPage() {
                     {t(stageKey(stage))}
                   </option>
                 ))}
-              </Select>
-            </Field>
+              </GlassSelect>
+            </GlassField>
           </div>
 
-          <Field label={t('common.notes')}>
-            <TextInput
+          <GlassField label={t('common.notes')}>
+            <GlassInput
               value={form.notes}
               onChange={handleFormChange('notes')}
               placeholder={t('leads.form.notesPlaceholder')}
             />
-          </Field>
+          </GlassField>
 
           <div className="flex justify-end gap-2">
             <GlassButton
@@ -636,7 +625,7 @@ export function LeadsPage() {
             </GlassButton>
           </div>
         </form>
-      </Modal>
+      </GlassModal>
 
       <ConfirmDialog
         open={convertTarget !== null}

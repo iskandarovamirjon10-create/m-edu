@@ -1,4 +1,4 @@
-import { useState} from'react';
+import { useState, useRef, useEffect} from'react';
 import { useQuery, useMutation, useQueryClient} from'@tanstack/react-query';
  import {
  GlassPageHeader,
@@ -63,6 +63,8 @@ export function ApiKeysPage() {
  const [revokeTarget, setRevokeTarget] = useState<ApiKeyItem | null>(null);
  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
  const [copied, setCopied] = useState(false);
+ const copyTimerRef = useRef<number | null>(null);
+ useEffect(() => () => { if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current); }, []);
 
  const [form, setForm] = useState({
  name:'',
@@ -139,7 +141,8 @@ export function ApiKeysPage() {
  if (generatedKey) {
  navigator.clipboard.writeText(generatedKey);
  setCopied(true);
- setTimeout(() => setCopied(false), 2000);
+ if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+ copyTimerRef.current = window.setTimeout(() => setCopied(false), 2000);
 }
 };
 

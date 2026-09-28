@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Card, GlassButton } from '@/components/ui';
+import { GlassCard, GlassButton } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
 
@@ -17,7 +17,7 @@ export function NotFoundPage() {
       
 
       <div className="flex min-h-[70vh] items-center justify-center px-4" style={{ position: 'relative', zIndex: 1 }}>
-        <Card className="w-full max-w-md p-10 text-center">
+        <GlassCard className="w-full max-w-md p-10 text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[rgba(84,115,252,0.12)] text-brand-700">
             <svg
               className="h-8 w-8"
@@ -56,7 +56,7 @@ export function NotFoundPage() {
               {t('notFound.goHome')}
             </Link>
           </div>
-        </Card>
+        </GlassCard>
       </div>
     </div>
   );

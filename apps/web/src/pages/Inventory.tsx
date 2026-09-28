@@ -1,28 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inventoryApi } from '@/lib/api';
-import {
-  PageHeader,
-  Card,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Table,
-  THead,
-  TBody,
-  TR,
-  TH,
-  TD,
-  Modal,
-  Field,
-  TextInput,
-  TextArea,
-  Select,
-  Badge,
-  GlassButton,
-  useToasts,
-  ConfirmDialog,
-} from '@/components/ui';
+import { GlassPageHeader, GlassCard, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassModal, GlassField, GlassInput, GlassTextArea, GlassSelect, GlassBadge, GlassButton, useToasts, ConfirmDialog } from '@/components/ui';
 import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, InventoryItem, InventoryCategory } from '@/lib/types';
@@ -226,12 +205,12 @@ export function InventoryPage() {
   }, [form, saveItem]);
 
   if (items.isLoading) {
-    return <PageLoader />;
+    return <GlassPageLoader />;
   }
 
   if (items.isError) {
     return (
-      <ErrorState
+      <GlassErrorState
         message={getErrorMessage(items.error)}
         onRetry={() => items.refetch()}
       />
@@ -245,7 +224,7 @@ export function InventoryPage() {
       <div className="space-y-4" style={{ position: 'relative', zIndex: 1 }}>
         {toastNode}
 
-      <PageHeader
+      <GlassPageHeader
         title={t('inventory.title')}
         subtitle={t('inventory.pageSubtitle')}
         action={{
@@ -254,18 +233,18 @@ export function InventoryPage() {
         }}
       />
 
-      <Card>
+      <GlassCard>
         <div className="p-4 border-b space-y-4" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="flex gap-4">
             <div className="flex-1">
-              <TextInput
+              <GlassInput
                 placeholder={t('inventory.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
             <div className="w-48">
-              <Select
+              <GlassSelect
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
               >
@@ -275,13 +254,13 @@ export function InventoryPage() {
                     {t(`inventory.category.${cat}`)}
                   </option>
                 ))}
-              </Select>
+              </GlassSelect>
             </div>
           </div>
         </div>
 
         {filteredItems.length === 0 ? (
-          <EmptyState
+          <GlassEmptyState
             title={searchQuery || filterCategory ? t('inventory.emptySearch') : t('inventory.empty')}
             description={
               searchQuery || filterCategory
@@ -292,45 +271,45 @@ export function InventoryPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <Table>
-              <THead>
-                <TR>
-                  <TH>{t('inventory.col.name')}</TH>
-                  <TH>{t('inventory.col.category')}</TH>
-                  <TH>{t('inventory.col.quantity')}</TH>
-                  <TH>{t('inventory.col.unit')}</TH>
-                  <TH>{t('inventory.col.location')}</TH>
-                  <TH>{t('inventory.col.supplier')}</TH>
-                  <TH>{t('inventory.col.stockStatus')}</TH>
-                  <TH>{t('inventory.col.value')}</TH>
-                  <TH>{t('common.actions')}</TH>
-                </TR>
-              </THead>
-              <TBody>
+            <GlassTable>
+              <GlassTHead>
+                <GlassTR>
+                  <GlassTH>{t('inventory.col.name')}</GlassTH>
+                  <GlassTH>{t('inventory.col.category')}</GlassTH>
+                  <GlassTH>{t('inventory.col.quantity')}</GlassTH>
+                  <GlassTH>{t('inventory.col.unit')}</GlassTH>
+                  <GlassTH>{t('inventory.col.location')}</GlassTH>
+                  <GlassTH>{t('inventory.col.supplier')}</GlassTH>
+                  <GlassTH>{t('inventory.col.stockStatus')}</GlassTH>
+                  <GlassTH>{t('inventory.col.value')}</GlassTH>
+                  <GlassTH>{t('common.actions')}</GlassTH>
+                </GlassTR>
+              </GlassTHead>
+              <GlassTBody>
                 {filteredItems.map((item) => {
                   const categoryBadge = getCategoryBadge(item.category);
                   const isLowStock = item.minStock && item.quantity <= item.minStock;
                   const value = item.quantity * (item.purchasePrice || 0);
 
                   return (
-                    <TR key={item.id}>
-                      <TD className="font-medium">{item.name}</TD>
-                      <TD>
-                        <Badge variant={categoryBadge.color === 'blue' ? 'primary' : categoryBadge.color === 'purple' ? 'primary' : categoryBadge.color === 'amber' ? 'warning' : categoryBadge.color === 'green' ? 'success' : categoryBadge.color === 'indigo' ? 'cyan' : 'muted'}>
+                    <GlassTR key={item.id}>
+                      <GlassTD className="font-medium">{item.name}</GlassTD>
+                      <GlassTD>
+                        <GlassBadge variant={categoryBadge.color === 'blue' ? 'primary' : categoryBadge.color === 'purple' ? 'primary' : categoryBadge.color === 'amber' ? 'warning' : categoryBadge.color === 'green' ? 'success' : categoryBadge.color === 'indigo' ? 'cyan' : 'muted'}>
                           {t(categoryBadge.label)}
-                        </Badge>
-                      </TD>
-                      <TD className="font-mono">{item.quantity}</TD>
-                      <TD>{item.unit}</TD>
-                      <TD>{item.location || '—'}</TD>
-                      <TD>{item.supplier || '—'}</TD>
-                      <TD>
-                        <Badge variant={isLowStock ? 'error' : 'success'}>
+                        </GlassBadge>
+                      </GlassTD>
+                      <GlassTD className="font-mono">{item.quantity}</GlassTD>
+                      <GlassTD>{item.unit}</GlassTD>
+                      <GlassTD>{item.location || '—'}</GlassTD>
+                      <GlassTD>{item.supplier || '—'}</GlassTD>
+                      <GlassTD>
+                        <GlassBadge variant={isLowStock ? 'error' : 'success'}>
                           {isLowStock ? t('inventory.lowStock') : t('inventory.inStock')}
-                        </Badge>
-                      </TD>
-                      <TD>{item.purchasePrice ? formatCurrency(value) : '—'}</TD>
-                      <TD>
+                        </GlassBadge>
+                      </GlassTD>
+                      <GlassTD>{item.purchasePrice ? formatCurrency(value) : '—'}</GlassTD>
+                      <GlassTD>
                         <div className="flex gap-2">
                           <GlassButton
                             onClick={() => openModal(item)}
@@ -348,34 +327,34 @@ export function InventoryPage() {
                             {t('common.delete')}
                           </GlassButton>
                         </div>
-                      </TD>
-                    </TR>
+                      </GlassTD>
+                    </GlassTR>
                   );
                 })}
-              </TBody>
-            </Table>
+              </GlassTBody>
+            </GlassTable>
           </div>
         )}
-      </Card>
+      </GlassCard>
 
       {/* Item Form Modal */}
       {modalOpen && (
-        <Modal
-          isOpen={modalOpen}
+        <GlassModal
+          open={modalOpen}
           onClose={closeModal}
           title={editingId ? t('inventory.editTitle') : t('inventory.addTitle')}
         >
           <div className="space-y-4">
-            <Field label={t('inventory.field.name')} error={formErrors.name ? t(formErrors.name) : undefined}>
-              <TextInput
+            <GlassField label={t('inventory.field.name')} error={formErrors.name ? t(formErrors.name) : undefined}>
+              <GlassInput
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder={t('inventory.namePlaceholder')}
               />
-            </Field>
+            </GlassField>
 
-            <Field label={t('inventory.field.category')} error={formErrors.category ? t(formErrors.category) : undefined}>
-              <Select
+            <GlassField label={t('inventory.field.category')} error={formErrors.category ? t(formErrors.category) : undefined}>
+              <GlassSelect
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value as InventoryCategory })}
               >
@@ -385,42 +364,42 @@ export function InventoryPage() {
                     {t(`inventory.category.${cat}`)}
                   </option>
                 ))}
-              </Select>
-            </Field>
+              </GlassSelect>
+            </GlassField>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label={t('inventory.field.quantity')} error={formErrors.quantity ? t(formErrors.quantity) : undefined}>
-                <TextInput
+              <GlassField label={t('inventory.field.quantity')} error={formErrors.quantity ? t(formErrors.quantity) : undefined}>
+                <GlassInput
                   type="number"
                   value={form.quantity}
                   onChange={(e) => setForm({ ...form, quantity: e.target.value })}
                   placeholder="0"
                   min="0"
                 />
-              </Field>
+              </GlassField>
 
-              <Field label={t('inventory.field.unit')} error={formErrors.unit ? t(formErrors.unit) : undefined}>
-                <TextInput
+              <GlassField label={t('inventory.field.unit')} error={formErrors.unit ? t(formErrors.unit) : undefined}>
+                <GlassInput
                   value={form.unit}
                   onChange={(e) => setForm({ ...form, unit: e.target.value })}
                   placeholder={t('inventory.unitPlaceholder')}
                 />
-              </Field>
+              </GlassField>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label={t('inventory.field.minStock')} error={formErrors.minStock ? t(formErrors.minStock) : undefined}>
-                <TextInput
+              <GlassField label={t('inventory.field.minStock')} error={formErrors.minStock ? t(formErrors.minStock) : undefined}>
+                <GlassInput
                   type="number"
                   value={form.minStock}
                   onChange={(e) => setForm({ ...form, minStock: e.target.value })}
                   placeholder="5"
                   min="0"
                 />
-              </Field>
+              </GlassField>
 
-              <Field label={t('inventory.field.purchasePrice')} error={formErrors.purchasePrice ? t(formErrors.purchasePrice) : undefined}>
-                <TextInput
+              <GlassField label={t('inventory.field.purchasePrice')} error={formErrors.purchasePrice ? t(formErrors.purchasePrice) : undefined}>
+                <GlassInput
                   type="number"
                   value={form.purchasePrice}
                   onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })}
@@ -428,33 +407,33 @@ export function InventoryPage() {
                   min="0"
                   step="0.01"
                 />
-              </Field>
+              </GlassField>
             </div>
 
-            <Field label={t('inventory.field.location')} error={formErrors.location ? t(formErrors.location) : undefined}>
-              <TextInput
+            <GlassField label={t('inventory.field.location')} error={formErrors.location ? t(formErrors.location) : undefined}>
+              <GlassInput
                 value={form.location}
                 onChange={(e) => setForm({ ...form, location: e.target.value })}
                 placeholder={t('inventory.locationPlaceholder')}
               />
-            </Field>
+            </GlassField>
 
-            <Field label={t('inventory.field.supplier')} error={formErrors.supplier ? t(formErrors.supplier) : undefined}>
-              <TextInput
+            <GlassField label={t('inventory.field.supplier')} error={formErrors.supplier ? t(formErrors.supplier) : undefined}>
+              <GlassInput
                 value={form.supplier}
                 onChange={(e) => setForm({ ...form, supplier: e.target.value })}
                 placeholder={t('inventory.supplierPlaceholder')}
               />
-            </Field>
+            </GlassField>
 
-            <Field label={t('inventory.field.description')} error={formErrors.description ? t(formErrors.description) : undefined}>
-              <TextArea
+            <GlassField label={t('inventory.field.description')} error={formErrors.description ? t(formErrors.description) : undefined}>
+              <GlassTextArea
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 placeholder={t('inventory.descriptionPlaceholder')}
                 rows={2}
               />
-            </Field>
+            </GlassField>
 
             <div className="flex gap-2 justify-end pt-4">
               <GlassButton
@@ -472,7 +451,7 @@ export function InventoryPage() {
               </GlassButton>
             </div>
           </div>
-        </Modal>
+        </GlassModal>
       )}
 
       <ConfirmDialog

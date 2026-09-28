@@ -195,19 +195,36 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
 
     const content = (
       <>
-        {loading ? (
-          <GlassSpinner size={size === 'lg' || size === 'xl' ? 'md' : 'sm'} />
-        ) : showSuccess ? (
-          <CheckIcon />
-        ) : icon ? (
-          <span className="flex-shrink-0 flex items-center [&>svg]:w-[1em] [&>svg]:h-[1em]">{icon}</span>
-        ) : null}
-        {children && (size !== 'icon' && size !== 'icon-sm' && size !== 'icon-lg') && (
-          <span className="leading-none">{children}</span>
+        {/* Absolute loader to preserve geometry */}
+        {(loading || showSuccess) && (
+          <div className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-200">
+            {loading ? (
+              <GlassSpinner size={size === 'lg' || size === 'xl' ? 'md' : 'sm'} />
+            ) : (
+              <CheckIcon />
+            )}
+          </div>
         )}
-        {iconEnd && !loading && !showSuccess && (
-          <span className="flex-shrink-0 flex items-center [&>svg]:w-[1em] [&>svg]:h-[1em]">{iconEnd}</span>
-        )}
+
+        {/* Content wrapper - stays hidden during loading to maintain exact width */}
+        <span
+          className={`flex items-center justify-center ${loading || showSuccess ? 'opacity-0' : 'opacity-100'} transition-opacity duration-200`}
+          style={{ gap: 'inherit' }}
+        >
+          {icon && (
+            <span className="flex-shrink-0 flex items-center [&>svg]:w-[1em] [&>svg]:h-[1em]">
+              {icon}
+            </span>
+          )}
+          {children && size !== 'icon' && size !== 'icon-sm' && size !== 'icon-lg' && (
+            <span className="leading-none">{children}</span>
+          )}
+          {iconEnd && (
+            <span className="flex-shrink-0 flex items-center [&>svg]:w-[1em] [&>svg]:h-[1em]">
+              {iconEnd}
+            </span>
+          )}
+        </span>
       </>
     );
 

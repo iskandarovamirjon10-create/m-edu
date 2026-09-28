@@ -1,7 +1,7 @@
 import { formatDate } from '../lib/format';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, GlassButton, TextInput, Select, TextArea, GlassModal, Field, ConfirmDialog } from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassButton, GlassInput, GlassSelect, GlassTextArea, GlassModal, GlassField, ConfirmDialog } from '@/components/ui';
 import { useToast } from '@/components/ui/GlassToast';
 import { documentsApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -154,7 +154,7 @@ export function DocumentsPage() {
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <div className="flex items-start justify-between">
-          <PageHeader
+          <GlassPageHeader
             title={t('documents.title')}
             subtitle={t('documents.pageSubtitle')}
           />
@@ -170,14 +170,14 @@ export function DocumentsPage() {
         <div className="glass-card p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
-              <TextInput
+              <GlassInput
                 placeholder={t('documents.searchPlaceholder')}
                 aria-label={t('documents.searchPlaceholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 type="search"
               />
-              <Select
+              <GlassSelect
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 aria-label={t('documents.filterByCategory')}
@@ -185,7 +185,7 @@ export function DocumentsPage() {
                 {CATEGORIES.map((c) => (
                   <option key={c.value} value={c.value}>{t(c.labelKey)}</option>
                 ))}
-              </Select>
+              </GlassSelect>
             </div>
             <div className="text-sm text-muted sm:ml-4 sm:shrink-0">
               {docsQuery.data ? t('documents.count', { n: docsQuery.data.total }) : '—'}
@@ -196,10 +196,10 @@ export function DocumentsPage() {
         {/* List */}
         <div className="glass-card overflow-hidden">
           {docsQuery.isLoading ? (
-            <div className="p-8"><PageLoader label={t('documents.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('documents.loading')} /></div>
           ) : docsQuery.isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 title={t('documents.loadFailed')}
                 message={getErrorMessage(docsQuery.error)}
                 onRetry={() => docsQuery.refetch()}
@@ -207,7 +207,7 @@ export function DocumentsPage() {
             </div>
           ) : items.length === 0 ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={search || category ? t('documents.emptySearch') : t('documents.empty')}
                 message={
                   search || category
@@ -221,7 +221,7 @@ export function DocumentsPage() {
               {items.map((doc) => (
                 <li key={doc.id} className="px-4 py-3 flex items-start gap-3">
                   <div className="shrink-0 mt-0.5">
-                    <Badge color="primary">{(() => { const k = `documents.category.${doc.category}`; const v = t(k); return v === k ? doc.category : v; })()}</Badge>
+                    <GlassBadge color="primary">{(() => { const k = `documents.category.${doc.category}`; const v = t(k); return v === k ? doc.category : v; })()}</GlassBadge>
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-sm text-[var(--text-primary)] truncate">
@@ -309,27 +309,27 @@ export function DocumentsPage() {
         title={editingId ? t('documents.editTitle') : t('documents.add')}
       >
         <form onSubmit={handleCreate} className="space-y-4" noValidate>
-          <Field label={t('documents.field.title')} required>
-            <TextInput
+          <GlassField label={t('documents.field.title')} required>
+            <GlassInput
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
               placeholder={t('documents.titlePlaceholder')}
               disabled={createMutation.isPending}
               autoFocus
             />
-          </Field>
-          <Field label={t('documents.field.description')}>
-            <TextArea
+          </GlassField>
+          <GlassField label={t('documents.field.description')}>
+            <GlassTextArea
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               placeholder={t('common.optional')}
               disabled={createMutation.isPending}
               rows={2}
             />
-          </Field>
+          </GlassField>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label={t('documents.field.category')}>
-              <Select
+            <GlassField label={t('documents.field.category')}>
+              <GlassSelect
                 value={form.category}
                 onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                 disabled={createMutation.isPending}
@@ -337,28 +337,28 @@ export function DocumentsPage() {
                 {CREATE_CATEGORIES.map((c) => (
                   <option key={c.value} value={c.value}>{t(c.labelKey)}</option>
                 ))}
-              </Select>
-            </Field>
-            <Field label={t('documents.field.mimeType')}>
-              <TextInput
+              </GlassSelect>
+            </GlassField>
+            <GlassField label={t('documents.field.mimeType')}>
+              <GlassInput
                 value={form.mimeType}
                 onChange={(e) => setForm((f) => ({ ...f, mimeType: e.target.value }))}
                 placeholder="application/pdf"
                 disabled={createMutation.isPending}
               />
-            </Field>
+            </GlassField>
           </div>
-          <Field label={t('documents.field.fileUrl')} required>
-            <TextInput
+          <GlassField label={t('documents.field.fileUrl')} required>
+            <GlassInput
               value={form.fileUrl}
               onChange={(e) => setForm((f) => ({ ...f, fileUrl: e.target.value }))}
               placeholder="https://storage.example.com/files/contract.pdf"
               disabled={createMutation.isPending}
             />
-          </Field>
+          </GlassField>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label={t('documents.field.fileSize')}>
-              <TextInput
+            <GlassField label={t('documents.field.fileSize')}>
+              <GlassInput
                 type="number"
                 min={0}
                 value={form.fileSize || ''}
@@ -366,15 +366,15 @@ export function DocumentsPage() {
                 placeholder="0"
                 disabled={createMutation.isPending}
               />
-            </Field>
-            <Field label={t('documents.field.tags')} hint={t('documents.tagsHint')}>
-              <TextInput
+            </GlassField>
+            <GlassField label={t('documents.field.tags')} hint={t('documents.tagsHint')}>
+              <GlassInput
                 value={form.tags}
                 onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
                 placeholder="contract, 2026"
                 disabled={createMutation.isPending}
               />
-            </Field>
+            </GlassField>
           </div>
           {formError && (
             <p className="text-sm text-[var(--state-error)]" role="alert">{formError}</p>

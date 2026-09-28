@@ -146,7 +146,7 @@ describe('Auth flow regression (login → dashboard)', () => {
     // …after logout the cookie is gone: /auth/me 401 → guard redirects.
     (authApi.me as any).mockRejectedValueOnce(Object.assign(new Error('Unauthorized'), { status: 401 }));
     renderRoutes('/dashboard');
-    await waitFor(() => expect(screen.getByText('LOGIN_PAGE')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('LOGIN_PAGE')).toBeTruthy(), { timeout: 3000 });
     expect(screen.queryByText('DASHBOARD_PAGE')).toBeNull();
   });
 

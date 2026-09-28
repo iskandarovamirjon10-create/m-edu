@@ -1,12 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  GlassStatCard,
-} from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassStatCard } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -75,7 +68,7 @@ export function ForecastingPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('forecasting.pageTitle')}
           subtitle={t('forecasting.subtitle')}
         />
@@ -105,17 +98,17 @@ export function ForecastingPage() {
 
         <div className="space-y-3">
           {seriesQuery.isLoading ? (
-            <div className="glass-card p-8"><PageLoader label={t('forecasting.loading')} /></div>
+            <div className="glass-card p-8"><GlassPageLoader label={t('forecasting.loading')} /></div>
           ) : seriesQuery.isError ? (
             <div className="glass-card p-8">
-              <ErrorState
+              <GlassErrorState
                 message={getErrorMessage(seriesQuery.error)}
                 onRetry={() => seriesQuery.refetch()}
               />
             </div>
           ) : series.length === 0 ? (
             <div className="glass-card p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('forecasting.emptyTitle')}
                 message={t('forecasting.emptyMessage')}
               />
@@ -157,9 +150,9 @@ export function ForecastingPage() {
                 </div>
                 <div className="flex flex-wrap gap-1 text-[10px] text-muted">
                   {s.forecast.map((p) => (
-                    <Badge key={p.period} color={METHOD_COLOR[p.method]}>
+                    <GlassBadge key={p.period} color={METHOD_COLOR[p.method]}>
                       {p.period} {p.value}
-                    </Badge>
+                    </GlassBadge>
                   ))}
                 </div>
               </div>

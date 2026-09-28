@@ -2,28 +2,7 @@ import { formatDate } from '../lib/format';
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { certificatesApi, coursesApi, studentsApi } from '@/lib/api';
-import {
-  PageHeader,
-  Card,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Table,
-  THead,
-  TBody,
-  TR,
-  TH,
-  TD,
-  Modal,
-  Field,
-  TextInput,
-  TextArea,
-  Select,
-   Badge,
-   GlassButton,
-   GlassSwitch,
-   useToasts,
-} from '@/components/ui';
+import { GlassPageHeader, GlassCard, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassModal, GlassField, GlassInput, GlassTextArea, GlassSelect, GlassBadge, GlassButton, GlassSwitch, useToasts } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Certificate, CertificateTemplate, Course, Student } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -361,12 +340,12 @@ export function CertificatesPage() {
   }, [courseList, t]);
 
   if (certificates.isLoading) {
-    return <PageLoader />;
+    return <GlassPageLoader />;
   }
 
   if (certificates.isError) {
     return (
-      <ErrorState
+      <GlassErrorState
         message={getErrorMessage(certificates.error)}
         onRetry={() => certificates.refetch()}
       />
@@ -380,7 +359,7 @@ export function CertificatesPage() {
       <div className="space-y-4" style={{ position: 'relative', zIndex: 1 }}>
         {toastNode}
 
-      <PageHeader
+      <GlassPageHeader
         title={t('certificates.title')}
         subtitle={t('certificates.subtitle')}
         action={
@@ -421,9 +400,9 @@ export function CertificatesPage() {
       </div>
 
       {activeTab === 'certificates' && (
-        <Card>
+        <GlassCard>
           <div className="p-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-            <TextInput
+            <GlassInput
               placeholder={t('certificates.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -432,7 +411,7 @@ export function CertificatesPage() {
           </div>
 
           {filteredCertificates.length === 0 ? (
-            <EmptyState
+            <GlassEmptyState
               title={searchQuery ? t('certificates.emptySearch') : t('certificates.empty')}
               description={
                 searchQuery
@@ -443,30 +422,30 @@ export function CertificatesPage() {
             />
           ) : (
             <div className="overflow-x-auto">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>{t('certificates.col.student')}</TH>
-                    <TH>{t('certificates.col.course')}</TH>
-                    <TH>{t('certificates.col.number')}</TH>
-                    <TH>{t('certificates.col.verification')}</TH>
-                    <TH>{t('certificates.col.issued')}</TH>
-                    <TH>{t('common.actions')}</TH>
-                  </TR>
-                </THead>
-                <TBody>
+              <GlassTable>
+                <GlassTHead>
+                  <GlassTR>
+                    <GlassTH>{t('certificates.col.student')}</GlassTH>
+                    <GlassTH>{t('certificates.col.course')}</GlassTH>
+                    <GlassTH>{t('certificates.col.number')}</GlassTH>
+                    <GlassTH>{t('certificates.col.verification')}</GlassTH>
+                    <GlassTH>{t('certificates.col.issued')}</GlassTH>
+                    <GlassTH>{t('common.actions')}</GlassTH>
+                  </GlassTR>
+                </GlassTHead>
+                <GlassTBody>
                   {filteredCertificates.map((cert) => (
-                    <TR key={cert.id}>
-                      <TD className="font-medium">{getStudentName(cert.studentId)}</TD>
-                      <TD>{cert.course?.name || getCourseName(cert.courseId)}</TD>
-                      <TD className="font-mono text-sm">{cert.certificateNumber}</TD>
-                      <TD>
+                    <GlassTR key={cert.id}>
+                      <GlassTD className="font-medium">{getStudentName(cert.studentId)}</GlassTD>
+                      <GlassTD>{cert.course?.name || getCourseName(cert.courseId)}</GlassTD>
+                      <GlassTD className="font-mono text-sm">{cert.certificateNumber}</GlassTD>
+                      <GlassTD>
                         <code className="text-xs glass-badge glass-badge-muted">
                           {cert.verificationCode}
                         </code>
-                      </TD>
-                      <TD>{cert.issueDate ? formatDate(cert.issueDate) : '—'}</TD>
-                      <TD>
+                      </GlassTD>
+                      <GlassTD>{cert.issueDate ? formatDate(cert.issueDate) : '—'}</GlassTD>
+                      <GlassTD>
                         <GlassButton
                           onClick={() => downloadCertificate.mutate(cert.id)}
                           disabled={downloadCertificate.isPending}
@@ -475,51 +454,51 @@ export function CertificatesPage() {
                         >
                           {downloadingId === cert.id ? t('certificates.downloading') : t('certificates.download')}
                         </GlassButton>
-                      </TD>
-                    </TR>
+                      </GlassTD>
+                    </GlassTR>
                   ))}
-                </TBody>
-              </Table>
+                </GlassTBody>
+              </GlassTable>
             </div>
           )}
-        </Card>
+        </GlassCard>
       )}
 
       {activeTab === 'templates' && (
-        <Card>
+        <GlassCard>
           {templates.isLoading ? (
             <div className="p-8">
-              <PageLoader />
+              <GlassPageLoader />
             </div>
           ) : templates.isError ? (
-            <ErrorState
+            <GlassErrorState
               message={getErrorMessage(templates.error)}
               onRetry={() => templates.refetch()}
             />
           ) : templateList.length === 0 ? (
-            <EmptyState
+            <GlassEmptyState
               title={t('templates.empty')}
               description={t('templates.emptyHint')}
               action={{ label: t('templates.new'), onClick: () => openTemplateModal() }}
             />
           ) : (
             <div className="overflow-x-auto">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>{t('templates.col.name')}</TH>
-                    <TH>{t('templates.col.default')}</TH>
-                    <TH>{t('templates.col.created')}</TH>
-                    <TH>{t('common.actions')}</TH>
-                  </TR>
-                </THead>
-                <TBody>
+              <GlassTable>
+                <GlassTHead>
+                  <GlassTR>
+                    <GlassTH>{t('templates.col.name')}</GlassTH>
+                    <GlassTH>{t('templates.col.default')}</GlassTH>
+                    <GlassTH>{t('templates.col.created')}</GlassTH>
+                    <GlassTH>{t('common.actions')}</GlassTH>
+                  </GlassTR>
+                </GlassTHead>
+                <GlassTBody>
                   {templateList.map((tpl) => (
-                    <TR key={tpl.id}>
-                      <TD className="font-medium">{tpl.name}</TD>
-                      <TD>
+                    <GlassTR key={tpl.id}>
+                      <GlassTD className="font-medium">{tpl.name}</GlassTD>
+                      <GlassTD>
                         {tpl.isDefault ? (
-                          <Badge variant="success">{t('templates.badge.default')}</Badge>
+                          <GlassBadge variant="success">{t('templates.badge.default')}</GlassBadge>
                         ) : (
                           <GlassButton
                             type="button"
@@ -531,9 +510,9 @@ export function CertificatesPage() {
                             {t('templates.makeDefault')}
                           </GlassButton>
                         )}
-                      </TD>
-                      <TD>{tpl.createdAt ? formatDate(tpl.createdAt) : '—'}</TD>
-                      <TD>
+                      </GlassTD>
+                      <GlassTD>{tpl.createdAt ? formatDate(tpl.createdAt) : '—'}</GlassTD>
+                      <GlassTD>
                         <div className="flex gap-2">
                           <GlassButton
                             type="button"
@@ -554,26 +533,26 @@ export function CertificatesPage() {
                             {t('common.delete')}
                           </GlassButton>
                         </div>
-                      </TD>
-                    </TR>
+                      </GlassTD>
+                    </GlassTR>
                   ))}
-                </TBody>
-              </Table>
+                </GlassTBody>
+              </GlassTable>
             </div>
           )}
-        </Card>
+        </GlassCard>
       )}
 
       {/* Certificate Generation Modal */}
       {modalOpen && (
-        <Modal
-          isOpen={modalOpen}
+        <GlassModal
+          open={modalOpen}
           onClose={closeModal}
           title={t('certificates.generate')}
         >
           <div className="space-y-4">
-            <Field label={t('certificates.field.student')} error={formErrors.studentId ? t(formErrors.studentId) : undefined}>
-              <Select
+            <GlassField label={t('certificates.field.student')} error={formErrors.studentId ? t(formErrors.studentId) : undefined}>
+              <GlassSelect
                 value={form.studentId}
                 onChange={(e) => setForm({ ...form, studentId: e.target.value })}
               >
@@ -583,11 +562,11 @@ export function CertificatesPage() {
                     {formatStudentName(student)}
                   </option>
                 ))}
-              </Select>
-            </Field>
+              </GlassSelect>
+            </GlassField>
 
-            <Field label={t('certificates.field.course')} error={formErrors.courseId ? t(formErrors.courseId) : undefined}>
-              <Select
+            <GlassField label={t('certificates.field.course')} error={formErrors.courseId ? t(formErrors.courseId) : undefined}>
+              <GlassSelect
                 value={form.courseId}
                 onChange={(e) => setForm({ ...form, courseId: e.target.value })}
               >
@@ -597,17 +576,17 @@ export function CertificatesPage() {
                     {course.name}
                   </option>
                 ))}
-              </Select>
-            </Field>
+              </GlassSelect>
+            </GlassField>
 
-            <Field label={t('certificates.field.notes')} error={formErrors.notes ? t(formErrors.notes) : undefined}>
-              <TextArea
+            <GlassField label={t('certificates.field.notes')} error={formErrors.notes ? t(formErrors.notes) : undefined}>
+              <GlassTextArea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 placeholder={t('certificates.notesPlaceholder')}
                 rows={3}
               />
-            </Field>
+            </GlassField>
 
             <p className="text-xs text-[var(--text-muted)]">
               {t('certificates.generateHint')}
@@ -629,20 +608,20 @@ export function CertificatesPage() {
               </GlassButton>
             </div>
           </div>
-        </Modal>
+        </GlassModal>
       )}
 
       {/* Template Create/Edit Modal */}
       {templateModalOpen && (
-        <Modal
-          isOpen={templateModalOpen}
+        <GlassModal
+          open={templateModalOpen}
           onClose={closeTemplateModal}
           title={editingTemplate ? t('templates.edit', { name: editingTemplate.name }) : t('templates.createTitle')}
           wide
         >
           <div className="space-y-4">
-            <Field label={t('templates.field.name')} error={templateFormErrors.name ? t(templateFormErrors.name) : undefined}>
-              <TextInput
+            <GlassField label={t('templates.field.name')} error={templateFormErrors.name ? t(templateFormErrors.name) : undefined}>
+              <GlassInput
                 value={templateForm.name}
                 onChange={(e) => {
                   setTemplateForm((prev) => ({ ...prev, name: e.target.value }));
@@ -652,13 +631,13 @@ export function CertificatesPage() {
                 aria-invalid={Boolean(templateFormErrors.name)}
                 maxLength={200}
               />
-            </Field>
+            </GlassField>
 
-            <Field
+            <GlassField
               label={t('templates.field.html')}
               error={templateFormErrors.htmlTemplate ? t(templateFormErrors.htmlTemplate) : undefined}
             >
-              <TextArea
+              <GlassTextArea
                 value={templateForm.htmlTemplate}
                 onChange={(e) => {
                   setTemplateForm((prev) => ({ ...prev, htmlTemplate: e.target.value }));
@@ -674,10 +653,10 @@ export function CertificatesPage() {
                   variables: TEMPLATE_VARIABLES.map((v) => `{{${v}}}`).join(', '),
                 })}
               </p>
-            </Field>
+            </GlassField>
 
-            <Field label={t('templates.field.css')} error={templateFormErrors.cssStyles ? t(templateFormErrors.cssStyles) : undefined}>
-              <TextArea
+            <GlassField label={t('templates.field.css')} error={templateFormErrors.cssStyles ? t(templateFormErrors.cssStyles) : undefined}>
+              <GlassTextArea
                 value={templateForm.cssStyles}
                 onChange={(e) => {
                   setTemplateForm((prev) => ({ ...prev, cssStyles: e.target.value }));
@@ -688,7 +667,7 @@ export function CertificatesPage() {
                 className="font-mono text-xs"
                 aria-invalid={Boolean(templateFormErrors.cssStyles)}
               />
-            </Field>
+            </GlassField>
 
             <GlassSwitch
               checked={templateForm.isDefault}
@@ -722,13 +701,13 @@ export function CertificatesPage() {
               </GlassButton>
             </div>
           </div>
-        </Modal>
+        </GlassModal>
       )}
 
       {/* Template Delete Confirmation */}
       {deletingTemplate && (
-        <Modal
-          isOpen={Boolean(deletingTemplate)}
+        <GlassModal
+          open={Boolean(deletingTemplate)}
           onClose={() => setDeletingTemplate(null)}
           title={t('templates.deleteTitle')}
         >
@@ -757,7 +736,7 @@ export function CertificatesPage() {
               </GlassButton>
             </div>
           </div>
-        </Modal>
+        </GlassModal>
       )}
       </div>
     </div>

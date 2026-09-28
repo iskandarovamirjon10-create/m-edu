@@ -1,26 +1,8 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scheduleApi, groupsApi } from '@/lib/api';
-import {
-  GlassPageHeader,
-  GlassCard,
-  GlassPageLoader,
-  GlassErrorState,
-  GlassEmptyState,
-  GlassTable,
-  GlassTHead,
-  GlassTBody,
-  GlassTR,
-  GlassTH,
-  GlassTD,
-  GlassTabs,
-  GlassModal,
-  GlassSelect,
-  GlassInput,
-  GlassButton,
-  ConfirmDialog,
-  useToast,
-} from '@/components/ui';
+import { queryKeys } from '@/lib/query-keys.factory';
+import { GlassPageHeader, GlassCard, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassTabs, GlassModal, GlassSelect, GlassInput, GlassButton, ConfirmDialog, useToast } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Schedule, Group, DayOfWeek } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -92,8 +74,9 @@ export function SchedulePage() {
   const error = scheduleQ.error;
 
   const groupsQ = useQuery({
-    queryKey: ['groups-select'],
+    queryKey: queryKeys.groups.selectors(),
     queryFn: () => groupsApi.list({ limit: 200 }),
+    staleTime: 5 * 60 * 1000,
   });
 
   const createMut = useMutation({
@@ -107,6 +90,8 @@ export function SchedulePage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schedule'] });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
       push('success', t('schedule.created'));
       closeModal();
     },
@@ -123,6 +108,8 @@ export function SchedulePage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schedule'] });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
       push('success', t('schedule.updated'));
       closeModal();
     },
@@ -133,6 +120,8 @@ export function SchedulePage() {
     mutationFn: (id: string) => scheduleApi.remove(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schedule'] });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
       push('success', t('schedule.removed'));
     },
     onError: (e: unknown) => push('error', getErrorMessage(e)),

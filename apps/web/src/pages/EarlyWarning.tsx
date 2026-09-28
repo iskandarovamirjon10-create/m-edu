@@ -1,13 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  EmptyState,
-  ErrorState,
-  GlassButton,
-  GlassStatCard,
-} from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassEmptyState, GlassErrorState, GlassButton, GlassStatCard } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
 import request from '@/lib/api';
@@ -92,7 +84,7 @@ export function EarlyWarningPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('earlyWarning.title')}
           subtitle={t('earlyWarning.subtitle')}
         />
@@ -129,10 +121,10 @@ export function EarlyWarningPage() {
 
         <div className="glass-card overflow-hidden">
           {warningsQuery.isLoading ? (
-            <div className="p-8"><PageLoader label={t('earlyWarning.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('earlyWarning.loading')} /></div>
           ) : warningsQuery.isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 title={t('earlyWarning.loadFailed')}
                 message={getErrorMessage(warningsQuery.error)}
                 onRetry={() => warningsQuery.refetch()}
@@ -140,7 +132,7 @@ export function EarlyWarningPage() {
             </div>
           ) : warnings.length === 0 ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('earlyWarning.emptyTitle')}
                 message={t('earlyWarning.emptyMessage')}
               />
@@ -149,7 +141,7 @@ export function EarlyWarningPage() {
             <ul className="divide-y divide-[var(--border-subtle)]">
               {warnings.map((w) => (
                 <li key={w.id} className="px-4 py-3 flex items-start gap-3">
-                  <Badge color={SEVERITY_COLOR[w.severity]}>{t(SEVERITY_LABEL_KEY[w.severity])}</Badge>
+                  <GlassBadge color={SEVERITY_COLOR[w.severity]}>{t(SEVERITY_LABEL_KEY[w.severity])}</GlassBadge>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium text-sm text-[var(--text-primary)]">{w.title}</h4>
                     <p className="text-xs text-muted mt-0.5">{w.description}</p>

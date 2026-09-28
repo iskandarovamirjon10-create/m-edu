@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, GlassButton, Select, GlassModal, Field, TextInput, TextArea } from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassButton, GlassSelect, GlassModal, GlassField, GlassInput, GlassTextArea } from '@/components/ui';
 import { useToast } from '@/components/ui/GlassToast';
 import { resourcesApi, authApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useAuth } from '@/auth/AuthContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { MapPin, Users } from 'lucide-react';
 
 interface Resource {
   id: string;
@@ -160,7 +161,7 @@ export function ResourceBookingPage() {
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
         <div className="flex items-start justify-between">
-          <PageHeader
+          <GlassPageHeader
             title={t('resourceBooking.title')}
             subtitle={t('resourceBooking.pageSubtitle')}
           />
@@ -192,7 +193,7 @@ export function ResourceBookingPage() {
         {view === 'bookings' ? (
           <>
             <div className="glass-card p-3">
-              <Select
+              <GlassSelect
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 aria-label={t('resourceBooking.filterByStatus')}
@@ -202,15 +203,15 @@ export function ResourceBookingPage() {
                 <option value="CONFIRMED">{t('resourceBooking.status.CONFIRMED')}</option>
                 <option value="COMPLETED">{t('resourceBooking.status.COMPLETED')}</option>
                 <option value="CANCELLED">{t('resourceBooking.status.CANCELLED')}</option>
-              </Select>
+              </GlassSelect>
             </div>
 
             <div className="glass-card overflow-hidden">
               {bookingsQuery.isLoading ? (
-                <div className="p-8"><PageLoader label={t('resourceBooking.loading')} /></div>
+                <div className="p-8"><GlassPageLoader label={t('resourceBooking.loading')} /></div>
               ) : bookingsQuery.isError ? (
                 <div className="p-8">
-                  <ErrorState
+                  <GlassErrorState
                     title={t('resourceBooking.loadFailed')}
                     message={getErrorMessage(bookingsQuery.error)}
                     onRetry={() => bookingsQuery.refetch()}
@@ -218,7 +219,7 @@ export function ResourceBookingPage() {
                 </div>
               ) : bookings.length === 0 ? (
                 <div className="p-8">
-                  <EmptyState
+                  <GlassEmptyState
                     title={statusFilter ? t('resourceBooking.emptyFiltered') : t('resourceBooking.empty')}
                     message={
                       statusFilter
@@ -232,7 +233,7 @@ export function ResourceBookingPage() {
                   {bookings.map((b) => (
                     <li key={b.id} className="px-4 py-3 flex items-start gap-3">
                       <div className="shrink-0 mt-0.5">
-                        <Badge color={statusColor[b.status]}>{t(`resourceBooking.status.${b.status}`)}</Badge>
+                        <GlassBadge color={statusColor[b.status]}>{t(`resourceBooking.status.${b.status}`)}</GlassBadge>
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-sm text-[var(--text-primary)] truncate">
@@ -265,10 +266,10 @@ export function ResourceBookingPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {resourcesQuery.isLoading ? (
-              <div className="col-span-full p-8"><PageLoader label={t('resourceBooking.loadingResources')} /></div>
+              <div className="col-span-full p-8"><GlassPageLoader label={t('resourceBooking.loadingResources')} /></div>
             ) : resourcesQuery.isError ? (
               <div className="col-span-full p-8">
-                <ErrorState
+                <GlassErrorState
                   title={t('resourceBooking.loadFailedResources')}
                   message={getErrorMessage(resourcesQuery.error)}
                   onRetry={() => resourcesQuery.refetch()}
@@ -276,7 +277,7 @@ export function ResourceBookingPage() {
               </div>
             ) : resources.length === 0 ? (
               <div className="col-span-full glass-card p-8">
-                <EmptyState
+                <GlassEmptyState
                   title={t('resourceBooking.emptyResources')}
                   message={t('resourceBooking.emptyResourcesMessage')}
                 />
@@ -285,11 +286,11 @@ export function ResourceBookingPage() {
               <div key={r.id} className="glass-card p-4">
                 <div className="flex items-start justify-between mb-2">
                   <h3 className="font-medium text-[var(--text-primary)]">{r.name}</h3>
-                  <Badge color={r.isActive ? 'success' : 'muted'}>{r.isActive ? t('common.active') : t('common.inactive')}</Badge>
+                  <GlassBadge color={r.isActive ? 'success' : 'muted'}>{r.isActive ? t('common.active') : t('common.inactive')}</GlassBadge>
                 </div>
                 <p className="text-xs text-muted mb-2">{t(TYPE_LABEL[r.type] ?? 'resourceBooking.type.OTHER')}</p>
-                {r.location && <p className="text-sm text-muted mb-1">📍 {r.location}</p>}
-                {r.capacity && <p className="text-sm text-muted mb-1">👥 {t('resourceBooking.capacity', { n: r.capacity })}</p>}
+                {r.location && <p className="text-sm text-muted mb-1 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {r.location}</p>}
+                {r.capacity && <p className="text-sm text-muted mb-1 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {t('resourceBooking.capacity', { n: r.capacity })}</p>}
                 {r.description && <p className="text-xs text-muted mt-2">{r.description}</p>}
               </div>
             ))}
@@ -303,8 +304,8 @@ export function ResourceBookingPage() {
         title={t('resourceBooking.add')}
       >
         <form onSubmit={handleCreate} className="space-y-4" noValidate>
-          <Field label={t('resourceBooking.field.resource')} required>
-            <Select
+          <GlassField label={t('resourceBooking.field.resource')} required>
+            <GlassSelect
               value={form.resourceId}
               onChange={(e) => setForm((f) => ({ ...f, resourceId: e.target.value }))}
               disabled={createMutation.isPending}
@@ -316,36 +317,36 @@ export function ResourceBookingPage() {
                   {r.name} ({t(TYPE_LABEL[r.type] ?? 'resourceBooking.type.OTHER')}{r.location ? ` · ${r.location}` : ''})
                 </option>
               ))}
-            </Select>
-          </Field>
-          <Field label={t('resourceBooking.field.title')} required>
-            <TextInput
+            </GlassSelect>
+          </GlassField>
+          <GlassField label={t('resourceBooking.field.title')} required>
+            <GlassInput
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
               placeholder={t('resourceBooking.titlePlaceholder')}
               disabled={createMutation.isPending}
             />
-          </Field>
+          </GlassField>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label={t('resourceBooking.field.starts')} required>
-              <TextInput
+            <GlassField label={t('resourceBooking.field.starts')} required>
+              <GlassInput
                 type="datetime-local"
                 value={form.start}
                 onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))}
                 disabled={createMutation.isPending}
               />
-            </Field>
-            <Field label={t('resourceBooking.field.ends')} required>
-              <TextInput
+            </GlassField>
+            <GlassField label={t('resourceBooking.field.ends')} required>
+              <GlassInput
                 type="datetime-local"
                 value={form.end}
                 onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))}
                 disabled={createMutation.isPending}
               />
-            </Field>
+            </GlassField>
           </div>
-          <Field label={t('resourceBooking.field.attendees')} hint={t('common.optional')}>
-            <TextInput
+          <GlassField label={t('resourceBooking.field.attendees')} hint={t('common.optional')}>
+            <GlassInput
               type="number"
               min={1}
               value={form.attendees}
@@ -353,15 +354,15 @@ export function ResourceBookingPage() {
               placeholder={t('resourceBooking.attendeesPlaceholder')}
               disabled={createMutation.isPending}
             />
-          </Field>
-          <Field label={t('resourceBooking.field.description')} hint={t('common.optional')}>
-            <TextArea
+          </GlassField>
+          <GlassField label={t('resourceBooking.field.description')} hint={t('common.optional')}>
+            <GlassTextArea
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               rows={2}
               disabled={createMutation.isPending}
             />
-          </Field>
+          </GlassField>
           {formError && (
             <p className="text-sm text-[var(--state-error)]" role="alert">{formError}</p>
           )}

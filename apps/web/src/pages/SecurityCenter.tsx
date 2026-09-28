@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PageHeader, Badge, PageLoader, ErrorState, EmptyState, GlassButton, GlassStatCard } from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassButton, GlassStatCard } from '@/components/ui';
 import { useToast } from '@/components/ui/GlassToast';
 import { securityApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -97,7 +97,7 @@ export function SecurityCenterPage() {
       <div className="orb orb-cyan-1" />
       <div className="orb orb-indigo-1" />
       <div className="page-container space-y-4">
-        <PageHeader
+        <GlassPageHeader
           title={t('security.title')}
           subtitle={t('security.subtitle')}
         />
@@ -144,10 +144,10 @@ export function SecurityCenterPage() {
         {/* Alerts list */}
         <div className="glass-card overflow-hidden">
           {alertsQuery.isLoading ? (
-            <div className="p-8"><PageLoader label={t('security.loading')} /></div>
+            <div className="p-8"><GlassPageLoader label={t('security.loading')} /></div>
           ) : alertsQuery.isError ? (
             <div className="p-8">
-              <ErrorState
+              <GlassErrorState
                 title={t('security.loadError')}
                 message={getErrorMessage(alertsQuery.error)}
                 onRetry={() => alertsQuery.refetch()}
@@ -155,7 +155,7 @@ export function SecurityCenterPage() {
             </div>
           ) : alerts.length === 0 ? (
             <div className="p-8">
-              <EmptyState
+              <GlassEmptyState
                 title={t('security.empty')}
                 message={t('security.emptyHint')}
               />
@@ -165,7 +165,7 @@ export function SecurityCenterPage() {
               {alerts.map((alert) => (
                 <li key={alert.id} className="px-4 py-3 flex items-start gap-3">
                   <div className="shrink-0 mt-0.5">
-                    <Badge color={SEVERITY_COLOR[alert.severity]}>{t(SEVERITY_LABEL_KEYS[alert.severity])}</Badge>
+                    <GlassBadge color={SEVERITY_COLOR[alert.severity]}>{t(SEVERITY_LABEL_KEYS[alert.severity])}</GlassBadge>
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium text-sm text-[var(--text-primary)]">{alert.title}</h4>

@@ -2,27 +2,7 @@ import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersApi } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
-import {
-  PageHeader,
-  Badge,
-  PageLoader,
-  ErrorState,
-  EmptyState,
-  Table,
-  THead,
-  TBody,
-  TR,
-  TH,
-  TD,
-  Field,
-  TextInput,
-  Select,
-  Modal,
-  ConfirmDialog,
-  useToasts,
-  statusColor,
-  GlassButton,
-} from '@/components/ui';
+import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassField, GlassInput, GlassSelect, GlassModal, ConfirmDialog, useToasts, statusColor, GlassButton } from '@/components/ui';
 import { fullName, formatDate } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, User, UserRole } from '@/lib/types';
@@ -254,12 +234,12 @@ export function UsersPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('users.title')}
             subtitle={t('users.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <PageLoader label={t('users.loading')} />
+            <GlassPageLoader label={t('users.loading')} />
           </div>
         </div>
       </div>
@@ -271,12 +251,12 @@ export function UsersPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('users.title')}
             subtitle={t('users.pageSubtitle')}
           />
           <div className="glass-card p-8">
-            <ErrorState
+            <GlassErrorState
               title={t('users.loadError')}
               message={getErrorMessage(users.error as Error)}
               onRetry={handleRetry}
@@ -294,7 +274,7 @@ export function UsersPage() {
       <div className="orb orb-indigo-1"></div>
       <div className="orb orb-deep-1"></div>
     <div className="page-container space-y-4">
-      <PageHeader
+      <GlassPageHeader
         title={t('users.title')}
         subtitle={t('users.pageSubtitle')}
         actions={
@@ -311,24 +291,24 @@ export function UsersPage() {
       {/* Users table */}
       <div className="glass-card overflow-hidden">
         {userList.length === 0 ? (
-          <EmptyState
+          <GlassEmptyState
             title={t('users.emptyTitle')}
             message={t('users.emptyMessage')}
           />
         ) : (
           <div className="glass-table-wrap">
-            <Table>
-              <THead>
-                <TR>
-                  <TH>{t('common.name')}</TH>
-                  <TH>{t('common.email')}</TH>
-                  <TH>{t('users.col.role')}</TH>
-                  <TH>{t('users.col.lastLogin')}</TH>
-                  <TH>{t('common.status')}</TH>
-                  <TH className="text-right">{t('common.actions')}</TH>
-                </TR>
-              </THead>
-              <TBody>
+            <GlassTable>
+              <GlassTHead>
+                <GlassTR>
+                  <GlassTH>{t('common.name')}</GlassTH>
+                  <GlassTH>{t('common.email')}</GlassTH>
+                  <GlassTH>{t('users.col.role')}</GlassTH>
+                  <GlassTH>{t('users.col.lastLogin')}</GlassTH>
+                  <GlassTH>{t('common.status')}</GlassTH>
+                  <GlassTH className="text-right">{t('common.actions')}</GlassTH>
+                </GlassTR>
+              </GlassTHead>
+              <GlassTBody>
                 {userList.map((user) => {
                   const isToggling =
                     toggleActive.isPending &&
@@ -338,32 +318,32 @@ export function UsersPage() {
                   const isCurrentUser = currentUser?.id === user.id;
 
                   return (
-                    <TR
+                    <GlassTR
                       key={user.id}
                     >
-                      <TD className="font-medium">
+                      <GlassTD className="font-medium">
                         {formatUserName(user)}
                         {isCurrentUser && (
                           <span className="ml-2 text-xs text-muted">
                             {t('users.you')}
                           </span>
                         )}
-                      </TD>
-                      <TD>{user.email}</TD>
-                      <TD>
-                        <Badge color={statusColor(user.role)}>
+                      </GlassTD>
+                      <GlassTD>{user.email}</GlassTD>
+                      <GlassTD>
+                        <GlassBadge color={statusColor(user.role)}>
                           {t(roleKey(user.role))}
-                        </Badge>
-                      </TD>
-                      <TD className="whitespace-nowrap">
+                        </GlassBadge>
+                      </GlassTD>
+                      <GlassTD className="whitespace-nowrap">
                         {formatDate(user.lastLoginAt)}
-                      </TD>
-                      <TD>
-                        <Badge color={user.isActive ? 'green' : 'red'}>
+                      </GlassTD>
+                      <GlassTD>
+                        <GlassBadge color={user.isActive ? 'green' : 'red'}>
                           {user.isActive ? t('users.status.ACTIVE') : t('users.status.INACTIVE')}
-                        </Badge>
-                      </TD>
-                      <TD className="text-right">
+                        </GlassBadge>
+                      </GlassTD>
+                      <GlassTD className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <GlassButton
                             type="button"
@@ -412,18 +392,18 @@ export function UsersPage() {
                             {isDeleting ? t('templates.deleting') : t('common.delete')}
                           </GlassButton>
                         </div>
-                      </TD>
-                    </TR>
+                      </GlassTD>
+                    </GlassTR>
                   );
                 })}
-              </TBody>
-            </Table>
+              </GlassTBody>
+            </GlassTable>
           </div>
         )}
       </div>
 
       {/* Add/edit user modal */}
-      <Modal
+      <GlassModal
         open={modalOpen}
         onClose={handleCloseModal}
         title={editingId ? t('users.editTitle') : t('users.add')}
@@ -431,8 +411,8 @@ export function UsersPage() {
       >
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label={t('users.form.firstName')} required error={formErrors.firstName}>
-              <TextInput
+            <GlassField label={t('users.form.firstName')} required error={formErrors.firstName}>
+              <GlassInput
                 value={form.firstName}
                 onChange={handleFormChange('firstName')}
                 required
@@ -451,10 +431,10 @@ export function UsersPage() {
                   {formErrors.firstName}
                 </span>
               )}
-            </Field>
+            </GlassField>
 
-            <Field label={t('users.form.lastName')} required error={formErrors.lastName}>
-              <TextInput
+            <GlassField label={t('users.form.lastName')} required error={formErrors.lastName}>
+              <GlassInput
                 value={form.lastName}
                 onChange={handleFormChange('lastName')}
                 required
@@ -473,10 +453,10 @@ export function UsersPage() {
                   {formErrors.lastName}
                 </span>
               )}
-            </Field>
+            </GlassField>
 
-            <Field label={t('common.email')} required error={formErrors.email}>
-              <TextInput
+            <GlassField label={t('common.email')} required error={formErrors.email}>
+              <GlassInput
                 type="email"
                 value={form.email}
                 onChange={handleFormChange('email')}
@@ -493,22 +473,22 @@ export function UsersPage() {
                   {formErrors.email}
                 </span>
               )}
-            </Field>
+            </GlassField>
 
             {!editingId && (
-              <Field label={t('users.form.password')} hint={t('users.form.passwordHint')}>
-                <TextInput
+              <GlassField label={t('users.form.password')} hint={t('users.form.passwordHint')}>
+                <GlassInput
                   type="password"
                   value={form.password}
                   onChange={handleFormChange('password')}
                   autoComplete="new-password"
                   disabled={create.isPending}
                 />
-              </Field>
+              </GlassField>
             )}
 
-            <Field label={t('users.form.role')}>
-              <Select
+            <GlassField label={t('users.form.role')}>
+              <GlassSelect
                 value={form.role}
                 onChange={handleFormChange('role')}
                 aria-label={t('users.form.roleAria')}
@@ -519,8 +499,8 @@ export function UsersPage() {
                     {t(roleKey(role))}
                   </option>
                 ))}
-              </Select>
-            </Field>
+              </GlassSelect>
+            </GlassField>
           </div>
 
           <div className="flex justify-end gap-2">
@@ -545,7 +525,7 @@ export function UsersPage() {
             </GlassButton>
           </div>
         </form>
-      </Modal>
+      </GlassModal>
 
       <ConfirmDialog
         open={deleteTarget !== null}

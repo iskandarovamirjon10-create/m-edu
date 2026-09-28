@@ -1,34 +1,14 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teachersApi } from '@/lib/api';
-import {
-  GlassPageHeader,
-  GlassCard,
-  GlassBadge,
-  GlassPageLoader,
-  GlassErrorState,
-  GlassEmptyState,
-  GlassTable,
-  GlassTHead,
-  GlassTBody,
-  GlassTR,
-  GlassTH,
-  GlassTD,
-  GlassPagination,
-  GlassInput,
-  GlassModal,
-  GlassField,
-  GlassTextArea,
-  useToasts,
-  GlassButton,
-  ConfirmDialog,
-} from '@/components/ui';
+import { GlassPageHeader, GlassCard, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassPagination, GlassInput, GlassModal, GlassField, GlassTextArea, useToasts, GlassButton, ConfirmDialog } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { fullName, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Teacher } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { queryKeys } from '@/lib/query-keys.factory';
 
 interface TeacherFilters {
   page: number;
@@ -106,7 +86,7 @@ export function TeachersPage() {
 
   // Data fetching
   const teachers = useQuery({
-    queryKey: ['teachers', params],
+    queryKey: queryKeys.teachers.list(params),
     queryFn: () => teachersApi.list(params),
     placeholderData: (previousData) => previousData,
   });
@@ -142,7 +122,8 @@ export function TeachersPage() {
       setEditingId(null);
       setForm(INITIAL_FORM);
       setFormErrors({});
-      qc.invalidateQueries({ queryKey: ['teachers'] });
+      qc.invalidateQueries({ queryKey: queryKeys.teachers.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.teachers.selectors() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -154,7 +135,8 @@ export function TeachersPage() {
     mutationFn: (id: string) => teachersApi.remove(id),
     onSuccess: () => {
       push('success', t('teachers.deleted'));
-      qc.invalidateQueries({ queryKey: ['teachers'] });
+      qc.invalidateQueries({ queryKey: queryKeys.teachers.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.teachers.selectors() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));

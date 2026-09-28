@@ -2,16 +2,7 @@ import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { organizationsApi, usersApi, authApi } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
-import {
-  PageHeader,
-  PageLoader,
-  ErrorState,
-  Field,
-  TextInput,
-  Select,
-  useToasts,
-  GlassButton,
-} from '@/components/ui';
+import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassField, GlassInput, GlassSelect, useToasts, GlassButton } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { TelegramIntegration } from '@/components/TelegramIntegration';
 import type { Organization, User } from '@/lib/types';
@@ -458,12 +449,12 @@ export function SettingsPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container mx-auto max-w-3xl space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('settings.title')}
             subtitle={t('settings.subtitle')}
           />
           <GlassPanel title={t('common.loading')}>
-            <PageLoader label={t('settings.loading')} />
+            <GlassPageLoader label={t('settings.loading')} />
           </GlassPanel>
         </div>
       </div>
@@ -475,12 +466,12 @@ export function SettingsPage() {
     return (
       <div style={{ display: "contents" }}>
         <div className="page-container mx-auto max-w-3xl space-y-4">
-          <PageHeader
+          <GlassPageHeader
             title={t('settings.title')}
             subtitle={t('settings.subtitle')}
           />
           <GlassPanel title={t('settings.loadFailed')}>
-            <ErrorState
+            <GlassErrorState
               title={t('settings.loadFailed')}
               message={getErrorMessage(org.error as Error)}
               onRetry={handleRetry}
@@ -495,7 +486,7 @@ export function SettingsPage() {
     <div style={{ display: "contents" }}>
 
       <div className="page-container mx-auto max-w-3xl space-y-6">
-        <PageHeader
+        <GlassPageHeader
           title={t('settings.title')}
           subtitle={t('settings.subtitle')}
         />
@@ -533,12 +524,12 @@ export function SettingsPage() {
             {orgForm && (
               <form className="space-y-4" onSubmit={handleOrgSubmit} noValidate>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field
+                  <GlassField
                     label={t('settings.orgName')}
                     required
                     error={orgErrors.name}
                   >
-                    <TextInput
+                    <GlassInput
                       value={orgForm.name}
                       onChange={handleOrgChange('name')}
                       required
@@ -551,10 +542,10 @@ export function SettingsPage() {
                         {orgErrors.name}
                       </span>
                     )}
-                  </Field>
+                  </GlassField>
 
-                  <Field label={t('settings.contactEmail')} required error={orgErrors.email}>
-                    <TextInput
+                  <GlassField label={t('settings.contactEmail')} required error={orgErrors.email}>
+                    <GlassInput
                       type="email"
                       value={orgForm.email}
                       onChange={handleOrgChange('email')}
@@ -568,16 +559,16 @@ export function SettingsPage() {
                         {orgErrors.email}
                       </span>
                     )}
-                  </Field>
+                  </GlassField>
 
-                  <Field label={t('settings.phone')}>
-                    <TextInput
+                  <GlassField label={t('settings.phone')}>
+                    <GlassInput
                       type="tel"
                       value={orgForm.phone}
                       onChange={handleOrgChange('phone')}
                       disabled={saveOrg.isPending}
                     />
-                  </Field>
+                  </GlassField>
                 </div>
 
                 <div className="flex justify-end pt-2">
@@ -602,8 +593,8 @@ export function SettingsPage() {
         >
           <form className="space-y-4" onSubmit={handleSettingsSubmit} noValidate>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label={t('settings.language')}>
-                <Select
+              <GlassField label={t('settings.language')}>
+                <GlassSelect
                   value={settingsForm.language}
                   onChange={handleSettingsChange('language')}
                   aria-label={t('settings.language')}
@@ -614,11 +605,11 @@ export function SettingsPage() {
                       {language.label}
                     </option>
                   ))}
-                </Select>
-              </Field>
+                </GlassSelect>
+              </GlassField>
 
-              <Field label={t('settings.timezone')}>
-                <Select
+              <GlassField label={t('settings.timezone')}>
+                <GlassSelect
                   value={settingsForm.timezone}
                   onChange={handleSettingsChange('timezone')}
                   aria-label={t('settings.timezone')}
@@ -629,8 +620,8 @@ export function SettingsPage() {
                       {timezone.label}
                     </option>
                   ))}
-                </Select>
-              </Field>
+                </GlassSelect>
+              </GlassField>
             </div>
 
             <div className="flex justify-end pt-2">
@@ -653,8 +644,8 @@ export function SettingsPage() {
         >
           <form className="space-y-4" onSubmit={handlePasswordSubmit} noValidate>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label={t('settings.currentPassword')} required error={pwdErrors.currentPassword}>
-                <TextInput
+              <GlassField label={t('settings.currentPassword')} required error={pwdErrors.currentPassword}>
+                <GlassInput
                   type="password"
                   value={pwdForm.currentPassword}
                   onChange={handlePwdChange('currentPassword')}
@@ -669,10 +660,10 @@ export function SettingsPage() {
                     {pwdErrors.currentPassword}
                   </span>
                 )}
-              </Field>
+              </GlassField>
 
-              <Field label={t('settings.newPassword')} required error={pwdErrors.newPassword}>
-                <TextInput
+              <GlassField label={t('settings.newPassword')} required error={pwdErrors.newPassword}>
+                <GlassInput
                   type="password"
                   value={pwdForm.newPassword}
                   onChange={handlePwdChange('newPassword')}
@@ -687,10 +678,10 @@ export function SettingsPage() {
                     {pwdErrors.newPassword}
                   </span>
                 )}
-              </Field>
+              </GlassField>
 
-              <Field label={t('settings.confirmPassword')} required error={pwdErrors.confirm}>
-                <TextInput
+              <GlassField label={t('settings.confirmPassword')} required error={pwdErrors.confirm}>
+                <GlassInput
                   type="password"
                   value={pwdForm.confirm}
                   onChange={handlePwdChange('confirm')}
@@ -705,7 +696,7 @@ export function SettingsPage() {
                     {pwdErrors.confirm}
                   </span>
                 )}
-              </Field>
+              </GlassField>
             </div>
 
             <div className="flex justify-end pt-2">

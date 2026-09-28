@@ -2,17 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { groupsApi, coursesApi, teachersApi } from '@/lib/api';
-import {
-  GlassPageHeader,
-  GlassCard,
-  GlassPageLoader,
-  GlassErrorState,
-  GlassField,
-  GlassInput,
-  GlassSelect,
-  GlassButton,
-  useToasts,
-} from '@/components/ui';
+import { queryKeys } from '@/lib/query-keys.factory';
+import { GlassPageHeader, GlassCard, GlassPageLoader, GlassErrorState, GlassField, GlassInput, GlassSelect, GlassButton, useToasts } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Group, Course, Teacher } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -55,20 +46,20 @@ export function GroupFormPage() {
   >({});
 
   const existing = useQuery({
-    queryKey: ['group', id],
+    queryKey: queryKeys.groups.detail(id || ''),
     queryFn: () => groupsApi.get(id!),
     enabled: isEdit,
     placeholderData: (previousData) => previousData,
   });
 
   const courses = useQuery({
-    queryKey: ['courses-selector'],
+    queryKey: queryKeys.courses.selectors(),
     queryFn: () => coursesApi.list({ limit: 100, isActive: true }),
     staleTime: 5 * 60 * 1000,
   });
 
   const teachers = useQuery({
-    queryKey: ['teachers-selector'],
+    queryKey: queryKeys.teachers.selectors(),
     queryFn: () => teachersApi.list({ limit: 100 }),
     staleTime: 5 * 60 * 1000,
   });
@@ -128,8 +119,9 @@ export function GroupFormPage() {
     },
     onSuccess: (res) => {
       push('success', isEdit ? t('groups.updated') : t('groups.created'));
-      qc.invalidateQueries({ queryKey: ['groups'] });
-      qc.invalidateQueries({ queryKey: ['group', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.selectors() });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
       navigate(`/groups/${(res as Group).id}`, { replace: true });
     },
     onError: (e: Error) => {

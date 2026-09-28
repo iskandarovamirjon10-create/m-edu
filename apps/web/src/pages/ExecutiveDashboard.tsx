@@ -50,6 +50,7 @@ function SeverityBadge({ severity}: { severity: string}) {
 function RevenueExpenseChart({ data}: { data: { month: string; revenue: number; expenses: number}[]}) {
  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
  const svgRef = useRef<SVGSVGElement>(null);
+ const { t } = useI18n();
 
  if (!data || data.length === 0) return null;
 
@@ -77,8 +78,9 @@ function RevenueExpenseChart({ data}: { data: { month: string; revenue: number; 
  return (
  <div className="relative overflow-hidden rounded-3xl bg-[var(--bg-card)] border border-[var(--border-glass)] p-6">
  <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit]"style={{ background:'linear-gradient(135deg, rgba(255,255,255,0.28) 0%, transparent 50%, rgba(148,234,239,0.04) 100%)'}} />
- <h3 className="relative z-10 text-sm font-semibold text-[var(--text-secondary)] mb-4">Revenue vs Expenses</h3>
- <svg ref={svgRef} viewBox={`0 0 ${w} ${h}`} className="w-full h-auto relative z-10"onMouseLeave={() => setHoverIdx(null)}>
+ <h3 className="relative z-10 text-sm font-semibold text-[var(--text-secondary)] mb-4">{t('executive.revenueVsExpenses')}</h3>
+ <svg ref={svgRef} viewBox={`0 0 ${w} ${h}`} className="w-full h-auto relative z-10"onMouseLeave={() => setHoverIdx(null)}
+   role="img" aria-label={t('executive.revenueVsExpenses')}>
  {yTicks.map((tick, i) => (
  <g key={i}>
  <line x1={pad.left} y1={toY(tick)} x2={w - pad.right} y2={toY(tick)} stroke="var(--border-subtle)"strokeDasharray="4 4"strokeWidth="0.5"/>
@@ -107,10 +109,10 @@ function RevenueExpenseChart({ data}: { data: { month: string; revenue: number; 
  <line x1={toX(hoverIdx)} y1={pad.top} x2={toX(hoverIdx)} y2={pad.top + chartH} stroke="var(--text-muted)"strokeWidth="1"strokeDasharray="4 4"/>
  <rect x={toX(hoverIdx) - 60} y={pad.top - 8} width="120"height="52"rx="8"fill="var(--bg-card)"stroke="var(--border-glass)"strokeWidth="1"/>
  <text x={toX(hoverIdx)} y={pad.top + 10} textAnchor="middle"fontSize="10"fill="#10b981"fontWeight="600">
- Rev: {formatCurrency(data[hoverIdx].revenue)}
+ {t('executive.rev')} {formatCurrency(data[hoverIdx].revenue)}
  </text>
  <text x={toX(hoverIdx)} y={pad.top + 24} textAnchor="middle"fontSize="10"fill="#f43f5e"fontWeight="600">
- Exp: {formatCurrency(data[hoverIdx].expenses)}
+ {t('executive.exp')} {formatCurrency(data[hoverIdx].expenses)}
  </text>
  <text x={toX(hoverIdx)} y={pad.top + 38} textAnchor="middle"fontSize="10"fill="var(--text-muted)"fontWeight="500">
  {data[hoverIdx].month}
@@ -125,12 +127,13 @@ function RevenueExpenseChart({ data}: { data: { month: string; revenue: number; 
  </defs>
  </svg>
  <div className="relative z-10 flex items-center gap-6 mt-3 text-xs font-medium text-[var(--text-muted)]">
- <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500"/>Revenue</span>
- <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-rose-500"/>Expenses</span>
+ <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500"/>{t('executive.revenue')}</span>
+ <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-rose-500"/>{t('executive.expenses')}</span>
  </div>
  </div>
  );
 }
+
 
 function MetricCard({ label, value, sub}: { label: string; value: string | number; sub?: string}) {
  return (
