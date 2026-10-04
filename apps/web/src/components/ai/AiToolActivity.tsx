@@ -45,21 +45,23 @@ export function AiToolActivityCard({ activities }: AiToolActivityCardProps) {
 
         <ul className="mt-1.5 flex flex-col gap-1.5">
           {activities.map((activity) => {
-            const description = describeAiTool(activity.toolName);
+            const toolName = activity.toolName || '';
+            const status = (activity.status || 'running') as AiToolActivityStatus;
+            const description = describeAiTool(toolName);
             return (
               <li
-                key={activity.id}
+                key={activity.id || toolName}
                 className="flex items-center gap-2 text-xs leading-5 text-[var(--text-secondary)]"
               >
-                <span className={['shrink-0', STATUS_COLOR[activity.status]].join(' ')}>
-                  {STATUS_ICON[activity.status]}
+                <span className={['shrink-0', STATUS_COLOR[status] || STATUS_COLOR.running].join(' ')}>
+                  {STATUS_ICON[status] || STATUS_ICON.running}
                 </span>
                 <span className="min-w-0 break-words">
-                  {aiToolStatusText(activity.toolName, activity.status)}
+                  {aiToolStatusText(toolName, status)}
                 </span>
-                {!description.known && activity.toolName && (
+                {!description.known && toolName && (
                   <code className="shrink-0 rounded bg-[var(--state-hover)] px-1.5 py-0.5 text-[10px] text-[var(--text-tertiary)]">
-                    {activity.toolName}
+                    {toolName}
                   </code>
                 )}
               </li>

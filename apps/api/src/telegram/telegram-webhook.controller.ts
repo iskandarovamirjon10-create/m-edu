@@ -28,6 +28,7 @@ import {
   TELEGRAM_START_COMMAND,
   TELEGRAM_WEBHOOK_MAX_BODY_BYTES,
 } from './telegram.constants';
+import { AllowPublic } from '../auth/public.decorator';
 
 /** Header Telegram sends when the webhook was registered with a secret_token. */
 const SECRET_HEADER = 'x-telegram-bot-api-secret-token';
@@ -43,6 +44,7 @@ const SECRET_HEADER = 'x-telegram-bot-api-secret-token';
  *     callback router,
  *   - no internal error, stack trace or identifier is ever returned.
  */
+@AllowPublic()
 @Controller('webhooks/telegram')
 export class TelegramWebhookController {
   private readonly logger = new Logger(TelegramWebhookController.name);

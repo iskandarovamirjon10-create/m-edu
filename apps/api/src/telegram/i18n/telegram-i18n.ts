@@ -154,6 +154,19 @@ const CATALOGUE: Catalogue = {
     'unlink.cancelled': 'Cancelled — nothing changed.',
     'unlink.done': '✅ Telegram has been disconnected from your M-EDU account.',
 
+    // The first sentence is the assistant's canonical identity and is kept
+    // verbatim in every language (it is also what AiService answers with).
+    'copilot.title': '🤖 M-EDU AI Copilot',
+    'copilot.description': '🤖 Ask the M-EDU AI Copilot',
+    'copilot.intro': 'Salom! Men Amirjon Iskandarov tomonidan yaratilgan M-EDU AI Copilotman.',
+    'copilot.introHint':
+      'I help with M-EDU: students, groups, schedule, attendance and payments. Send me your question.',
+    'copilot.usage': 'Usage: /copilot <your question>',
+    'copilot.throttled':
+      '⏳ Too many Copilot requests. Please wait a moment and try again.',
+    'copilot.error': '⚠️ The Copilot is unavailable right now. Please try again later.',
+    'btn.copilot': '🤖 Copilot',
+
     'help.title': '❓ Available commands',
     'help.hint': 'Send a command or open the menu.',
 
@@ -291,6 +304,17 @@ const CATALOGUE: Catalogue = {
     'unlink.cancelled': 'Отменено — ничего не изменено.',
     'unlink.done': '✅ Telegram отключён от вашего аккаунта M-EDU.',
 
+    // Identity sentence is intentionally identical in all catalogues.
+    'copilot.title': '🤖 M-EDU AI Copilot',
+    'copilot.description': '🤖 Спросить M-EDU AI Copilot',
+    'copilot.intro': 'Salom! Men Amirjon Iskandarov tomonidan yaratilgan M-EDU AI Copilotman.',
+    'copilot.introHint':
+      'Я помогаю по M-EDU: студенты, группы, расписание, посещаемость и платежи. Задайте вопрос.',
+    'copilot.usage': 'Использование: /copilot <ваш вопрос>',
+    'copilot.throttled': '⏳ Слишком много запросов к Copilot. Подождите немного.',
+    'copilot.error': '⚠️ Copilot сейчас недоступен. Попробуйте позже.',
+    'btn.copilot': '🤖 Copilot',
+
     'help.title': '❓ Доступные команды',
     'help.hint': 'Отправьте команду или откройте меню.',
 
@@ -427,6 +451,17 @@ const CATALOGUE: Catalogue = {
     'unlink.confirm': 'Uzish',
     'unlink.cancelled': 'Bekor qilindi — hech narsa o‘zgarmadi.',
     'unlink.done': '✅ Telegram M-EDU hisobingizdan uzildi.',
+
+    // Identity sentence is intentionally identical in all catalogues.
+    'copilot.title': '🤖 M-EDU AI Copilot',
+    'copilot.description': '🤖 M-EDU AI Copilotga savol bering',
+    'copilot.intro': 'Salom! Men Amirjon Iskandarov tomonidan yaratilgan M-EDU AI Copilotman.',
+    'copilot.introHint':
+      "Men M-EDU bo'yicha yordam beraman: studentlar, guruhlar, dars jadvali, davomat va to'lovlar. Savolingizni yuboring.",
+    'copilot.usage': 'Foydalanish: /copilot <savolingiz>',
+    'copilot.throttled': "⏳ Copilot so'rovi juda ko'p. Biroz kuting va qayta urinib ko'ring.",
+    'copilot.error': '⚠️ Copilot hozircha mavjud emas. Keyinroq urinib koʻring.',
+    'btn.copilot': '🤖 Copilot',
 
     'help.title': '❓ Mavjud buyruqlar',
     'help.hint': 'Buyruq yuboring yoki menyuni oching.',

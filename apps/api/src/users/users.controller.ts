@@ -96,3 +96,4 @@ export class UsersController {
     return this.usersService.updateSettings(orgId, id, dto, userId, role);
   }
 }
+

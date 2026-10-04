@@ -1,475 +1,1244 @@
 /* ============================================================
-   M-EDU Design System V2 — Global Styles
+   M-EDU Design System V2.2 — Apple Design Award Edition
+   Global Styles — Foundation Layer
+   ------------------------------------------------------------
    Source of truth: design-tokens.css
-   This file: base reset, body, typography scale, surface utilities,
-   focus rings, motion utilities, scrollbars, print.
-   Component-specific styles LIVE IN their React components.
+   This file: reset, typography, glass materials, motion primitives,
+   tone system, focus rings, accessibility, print.
+   Component styles LIVE IN their React components.
+
+   v2.1 → v2.2 "Smooth Premium":
+   - SPRING PHYSICS: barcha o'tishlar Apple spring curves
+   - REFINED GLASS: 5 qatlam depth (sheen + corner + grain + edge)
+   - BETTER MOTION: perceptual duration scale, staggered entrances
+   - MICRO-INTERACTIONS: hover lift, press down, focus ring pulse
+   - OPTICAL TYPE: font-optical-sizing + better tracking
+   - LIQUID DETAIL: inset highlights, chromatic edges, ambient glow
+   - GPU-SAFE: contain + transform-only animations
+   - ACCESSIBILITY: a11y-first, kontrast, reduced-motion
+
+   v2.1 FIXES KEPT:
+   - @layer organization
+   - @view-transition SPA comment
+   - Dark mode z-index safety
+   - Tone system tokens
+   - Scrollbar hover on container only
+   - Print with dialogs preserved
+   ============================================================ */
+
+/* ============================================================
+   IMPORTS
+   ------------------------------------------------------------
+   ⚠️ @import render-blocking. Build tooling (Vite/PostCSS) inline qiladi.
+   Agar build tooling bo'lmasa — HTML'da <link> ishlating:
+   <link rel="preload" as="style" href="./design-tokens.css">
+   <link rel="stylesheet" href="./design-tokens.css">
    ============================================================ */
 
 @import './design-tokens.css';
 
-/* ── Base Reset ────────────────────────────────────────────── */
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-html {
-  font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'cv01', 'cv02', 'cv03', 'cv04';
-  scroll-behavior: smooth;
-}
+@layer reset, tokens, base, typography, glass, motion, focus, utilities, print;
 
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-}
+/* ============================================================
+   1. MOTION PRIMITIVES — Apple-calibrated
+   ------------------------------------------------------------
+   Har bir curve real fizikadan olingan.
+   Spring curves — CSS `linear()` (JS kerak emas).
+   ============================================================ */
 
-body {
-  font-family: var(--font-body);
-  font-size: var(--text-body);
-  color: var(--text-primary);
-  background: var(--bg-page);
-  min-height: 100dvh;
-  line-height: 1.6;
-  transition:
-    background-color var(--duration-slow) var(--ease-standard),
-    color var(--duration-normal) var(--ease-standard);
-}
+@layer tokens {
+  :root {
+    /* ── Apple's signature curves ── */
+    --ease-apple-in:     cubic-bezier(0.42, 0, 1, 1);
+    --ease-apple-out:    cubic-bezier(0, 0, 0.58, 1);
+    --ease-apple-inout:  cubic-bezier(0.42, 0, 0.58, 1);
+    --ease-emphasized:   cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-overshoot:    cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-soft:         cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-snappy:       cubic-bezier(0.5, 0, 0, 1);
+    --ease-glide:        cubic-bezier(0.16, 1, 0.3, 1);
 
-/* ── Backgrounds ───────────────────────────────────────────── */
-.bg-page    { background: var(--bg-page); }
-.bg-surface { background: var(--bg-surface); }
-.bg-elevated { background: var(--bg-elevated); }
+    /* ── Perceptual duration scale ── */
+    --dur-instant:  90ms;    /* press down */
+    --dur-fast:     180ms;   /* hover */
+    --dur-normal:   260ms;   /* state change */
+    --dur-slow:     420ms;   /* modal, sheet */
+    --dur-slower:   680ms;   /* page transitions */
+    --dur-ambient:  12s;     /* background drift */
 
-/* ── Glass Surfaces ────────────────────────────────────────── */
-.glass {
-  background: var(--bg-glass);
-  backdrop-filter: blur(16px) saturate(1.6);
-  -webkit-backdrop-filter: blur(16px) saturate(1.6);
-  border: 1px solid var(--border-glass);
-}
+    /* ── Native CSS spring (modern browsers) ── */
+    --spring-snappy:  linear(0, 0.42 12%, 0.98 34%, 1.02 46%, 1 100%);
+    --spring-smooth:  linear(0, 0.2 18%, 0.76 44%, 1.02 62%, 1 100%);
+    --spring-soft:    linear(0, 0.1 24%, 0.6 52%, 0.98 76%, 1 100%);
+    --spring-bouncy:  linear(0, 0.6 20%, 1.05 40%, 0.95 60%, 1.02 80%, 1 100%);
 
-.glass-card {
-  background: var(--bg-card);
-  backdrop-filter: blur(16px) saturate(1.5);
-  -webkit-backdrop-filter: blur(16px) saturate(1.5);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-md);
-  position: relative;
-  overflow: hidden;
-  transition:
-    background var(--duration-normal) var(--ease-standard),
-    box-shadow var(--duration-normal) var(--ease-standard),
-    transform var(--duration-normal) var(--ease-standard),
-    border-color var(--duration-normal) var(--ease-standard);
-}
+    /* ── Shadow tokens — real light model ── */
+    --shadow-ambient: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-direct:  0 4px 12px -4px rgba(15, 23, 42, 0.08);
+    --shadow-ambient-lg: 0 4px 8px rgba(15, 23, 42, 0.05);
+    --shadow-direct-lg:  0 24px 60px -12px rgba(15, 23, 42, 0.14);
 
-.glass-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    135deg,
-    rgba(255,255,255,0.18) 0%,
-    transparent 60%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-
-.glass-card > * { position: relative; z-index: 1; }
-
-.glass-card:hover {
-  background: var(--bg-card-hover);
-  box-shadow: var(--shadow-lg);
-}
-
-.glass-card--interactive:hover {
-  transform: translateY(-2px);
-}
-
-/* ── Typography Scale ───────────────────────────────────────── */
-.text-display {
-  font-size: var(--text-display);
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-  font-family: var(--font-heading);
-}
-
-.text-h1 {
-  font-size: var(--text-h1);
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  font-family: var(--font-heading);
-}
-
-.text-h2 {
-  font-size: var(--text-h2);
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.015em;
-  font-family: var(--font-heading);
-}
-
-.text-h3 {
-  font-size: var(--text-h3);
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.01em;
-}
-
-.text-h4 {
-  font-size: var(--text-h4);
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.text-body-lg {
-  font-size: var(--text-body-lg);
-  line-height: 1.6;
-}
-
-.text-body {
-  font-size: var(--text-body);
-  line-height: 1.6;
-}
-
-.text-body-sm {
-  font-size: var(--text-body-sm);
-  line-height: 1.55;
-}
-
-.text-caption {
-  font-size: var(--text-caption);
-  line-height: 1.5;
-}
-
-.text-label {
-  font-size: var(--text-label);
-  font-weight: 500;
-  letter-spacing: 0.005em;
-}
-
-.text-overline {
-  font-size: var(--text-overline);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-/* Numeric / KPI — tabular nums for alignment */
-.text-numeric {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum';
-}
-
-.text-numeric-lg {
-  font-size: var(--text-numeric-lg);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.025em;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum';
-}
-
-.text-numeric-md {
-  font-size: var(--text-numeric-md);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum';
-}
-
-.text-numeric-sm {
-  font-size: var(--text-numeric-sm);
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum';
-}
-
-/* ── Text Color Utilities ───────────────────────────────────── */
-.text-primary   { color: var(--text-primary); }
-.text-secondary { color: var(--text-secondary); }
-.text-tertiary  { color: var(--text-tertiary); }
-.text-muted     { color: var(--text-tertiary); } /* alias */
-.text-inverse   { color: var(--text-inverse); }
-.text-disabled  { color: var(--text-disabled); }
-
-/* ── Border Utilities ───────────────────────────────────────── */
-.border-subtle  { border-color: var(--border-subtle); }
-.border-medium  { border-color: var(--border-medium); }
-.border-strong  { border-color: var(--border-strong); }
-.border-glass   { border-color: var(--border-glass); }
-
-/* ── Focus Ring ─────────────────────────────────────────────── */
-.focus-ring {
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-}
-
-.focus-ring:focus-visible {
-  outline-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--focus-ring);
-}
-
-/* Apply to all interactive elements by default */
-:focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-
-/* ── Motion Utilities ───────────────────────────────────────── */
-.transition-fast {
-  transition-duration: var(--duration-fast);
-  transition-timing-function: var(--ease-standard);
-}
-
-.transition-normal {
-  transition-duration: var(--duration-normal);
-  transition-timing-function: var(--ease-standard);
-}
-
-.transition-slow {
-  transition-duration: var(--duration-slow);
-  transition-timing-function: var(--ease-standard);
-}
-
-/* ── Page Enter Animation ───────────────────────────────────── */
-@keyframes page-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+    /* ── Radius scale — geometry ── */
+    --radius-xs:   6px;
+    --radius-sm:   8px;
+    --radius-md:   10px;
+    --radius-lg:   14px;
+    --radius-xl:   18px;
+    --radius-2xl:  22px;
+    --radius-3xl:  28px;
+    --radius-4xl:  36px;
+    --radius-pill: 9999px;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  /* Fallback for browsers without linear() */
+  @supports not (transition-timing-function: linear(0, 1)) {
+    :root {
+      --spring-snappy: var(--ease-emphasized);
+      --spring-smooth: var(--ease-emphasized);
+      --spring-soft:   var(--ease-emphasized);
+      --spring-bouncy: var(--ease-overshoot);
+    }
   }
 }
 
-.page-enter {
-  animation: page-enter var(--duration-slow) var(--ease-enter) both;
-}
+/* ============================================================
+   2. BASE RESET — surgical
+   ============================================================ */
 
-/* ── Fade In ────────────────────────────────────────────────── */
-@keyframes fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-.fade-in {
-  animation: fade-in var(--duration-normal) var(--ease-enter) both;
-}
-
-/* ── Slide Up ───────────────────────────────────────────────── */
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
+@layer reset {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* text-rendering: optimizeLegibility olib tashlandi —
+       legacy, kerning default'da yoqilgan */
+    font-feature-settings:
+      'cv01', 'cv02', 'cv03', 'cv04', 'cv11', /* Inter variants */
+      'ss01', /* alternate digits */
+      'tnum' 0; /* tabular only where needed */
+    font-optical-sizing: auto;
+    font-kerning: normal;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    scroll-behavior: smooth;
+    scroll-padding-top: clamp(4rem, 4vw + 3rem, 5rem);
+    interpolate-size: allow-keywords;
+    accent-color: var(--primary, #007AFF);
+    color-scheme: light dark;
   }
-}
 
-.slide-up {
-  animation: slide-up var(--duration-normal) var(--ease-enter) both;
-}
-
-/* ── Scale In ───────────────────────────────────────────────── */
-@keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
   }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.scale-in {
-  animation: scale-in var(--duration-normal) var(--ease-enter) both;
-}
-
-/* ── Overlay ─────────────────────────────────────────────────── */
-@keyframes overlay-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes modal-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-/* Skeleton shimmer */
-@keyframes shimmer {
-  0%   { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
-}
-
-.skeleton-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--border-subtle) 25%,
-    var(--border)        50%,
-    var(--border-subtle) 75%
-  );
-  background-size: 800px 100%;
-  animation: shimmer 1.6s var(--ease-standard) infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .skeleton-shimmer {
-    animation: none;
-    background: var(--border-subtle);
-  }
-}
-
-/* ── Input Base ─────────────────────────────────────────────── */
-.input-base {
-  width: 100%;
-  background: var(--bg-input);
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-body);
-  outline: none;
-  transition:
-    border-color var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard),
-    background-color var(--duration-fast) var(--ease-standard);
-}
-
-.input-base::placeholder { color: var(--text-tertiary); }
-
-.input-base:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  background: var(--bg-input-focus);
-}
-
-.input-base:focus:not(:disabled) {
-  border-color: var(--border-focus);
-  background: var(--bg-input-focus);
-  box-shadow: 0 0 0 3px var(--focus-ring);
-}
-
-.input-base.input-error {
-  border-color: var(--danger);
-  box-shadow: none;
-}
-
-.input-base.input-error:focus {
-  box-shadow: 0 0 0 3px var(--focus-ring-danger);
-}
-
-.input-base:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: var(--state-disabled-bg);
-}
-
-/* ── Backdrop filter support detection ─────────────────────── */
-@supports not (backdrop-filter: blur(1px)) {
-  .glass, .glass-card {
-    background: var(--bg-surface);
-  }
-}
-
-/* ── Scrollbar ───────────────────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--border-medium);
-  border-radius: var(--radius-pill);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--border-strong);
-}
-
-/* Firefox */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-medium) transparent;
-}
-
-/* ── Selection ───────────────────────────────────────────────── */
-::selection {
-  background: var(--primary-soft);
-  color: var(--text-primary);
-}
-
-/* ── Links ───────────────────────────────────────────────────── */
-a {
-  color: var(--primary);
-  text-decoration: none;
-  transition: color var(--duration-fast) var(--ease-standard);
-}
-
-a:hover { color: var(--primary-hover); }
-
-/* ── Divider ────────────────────────────────────────────────── */
-hr {
-  border: none;
-  border-top: 1px solid var(--border-subtle);
-  margin: var(--space-4) 0;
-}
-
-/* ── Print ───────────────────────────────────────────────────── */
-@media print {
-  .no-print { display: none !important; }
 
   body {
-    background: white;
-    color: #000;
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    font-weight: 400;
+    color: var(--text-primary);
+    background: var(--bg-page);
+    min-height: 100dvh;
+    line-height: 1.6;
+    letter-spacing: -0.005em;
+    overflow-x: clip;
+    /* Smooth theme transition — only color props, not transform */
+    transition:
+      background-color var(--dur-slower) var(--ease-soft),
+      color           var(--dur-normal)  var(--ease-soft);
   }
 
-  .glass, .glass-card {
-    background: white;
-    backdrop-filter: none;
-    border: 1px solid #ddd;
-    box-shadow: none;
+  /* Touch-friendly taps */
+  button, [role="button"] {
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Media — clean block layout */
+  img, svg, video, canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  svg { fill: none; }
+
+  /* Form controls inherit */
+  input, button, textarea, select {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+  }
+
+  /* Number input spinners removed */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] { -moz-appearance: textfield; }
+
+  /* Better selection */
+  ::selection {
+    background: color-mix(in srgb, var(--primary, #007AFF) 22%, transparent);
+    color: var(--text-primary);
+  }
+
+  /* Caret color */
+  :root { caret-color: var(--primary, #007AFF); }
+}
+
+/* ============================================================
+   3. BACKGROUNDS & AMBIENT
+   ============================================================ */
+
+@layer base {
+  .bg-page     { background: var(--bg-page); }
+  .bg-surface  { background: var(--bg-surface); }
+  .bg-elevated { background: var(--bg-elevated); }
+
+  /* ── Ambient orb — organic float ──
+     will-change YO'Q: transform animatsiya allaqachon GPU layer yaratadi.
+     Qo'shimcha `will-change` memory pressure keltiradi. */
+  .orb {
+    position: fixed;
+    pointer-events: none;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.4;
+    z-index: 0;
+    animation: orb-float var(--dur-ambient) ease-in-out infinite alternate;
+    /* GPU hint: transform animatsiya — auto layer */
+    transform: translate3d(0, 0, 0);
+    contain: strict;
+  }
+
+  .orb-cyan-1   {
+    width: 520px; height: 520px;
+    top: -10%; left: -8%;
+    background: radial-gradient(circle, rgba(0, 199, 255, 0.45), transparent 70%);
+  }
+  .orb-indigo-1 {
+    width: 560px; height: 560px;
+    bottom: -12%; right: -10%;
+    background: radial-gradient(circle, rgba(88, 86, 214, 0.45), transparent 70%);
+  }
+
+  @keyframes orb-float {
+    0%   { transform: translate3d(0, 0, 0) scale(1); }
+    100% { transform: translate3d(40px, -30px, 0) scale(1.08); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .orb { animation: none; }
   }
 }
 
-/* ── Stagger animation utilities ────────────────────────────── */
-.stagger-1 { animation-delay: calc(1 * 50ms); }
-.stagger-2 { animation-delay: calc(2 * 50ms); }
-.stagger-3 { animation-delay: calc(3 * 50ms); }
-.stagger-4 { animation-delay: calc(4 * 50ms); }
-.stagger-5 { animation-delay: calc(5 * 50ms); }
-.stagger-6 { animation-delay: calc(6 * 50ms); }
+/* ============================================================
+   4. GLASS MATERIAL SYSTEM
+   ------------------------------------------------------------
+   5 qatlam: base → sheen → corner → chromatic → content
+   Har bir qatlam statik (paint once) → GPU yuklanmaydi.
+   ============================================================ */
 
-/* ── Dark mode body background ──────────────────────────────── */
-.dark body,
-[data-theme="dark"] body {
-  background: var(--bg-page);
+@layer glass {
+  /* ── Basic glass — for large surfaces ── */
+  .glass {
+    background: var(--bg-glass);
+    backdrop-filter: blur(16px) saturate(1.6);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6);
+    border: 1px solid var(--border-glass);
+    /* GPU-safe: contain */
+    contain: layout style;
+  }
+
+  /* ── Premium glass card ── */
+  .glass-card {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background: var(--bg-card);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow:
+      var(--shadow-md, var(--shadow-ambient)),
+      inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    contain: layout style paint;
+    /* Smooth state transitions with spring physics */
+    transition:
+      background-color var(--dur-normal) var(--ease-soft),
+      border-color     var(--dur-normal) var(--ease-soft),
+      box-shadow       var(--dur-normal) var(--ease-soft),
+      transform        var(--dur-fast)   var(--spring-snappy);
+  }
+
+  /* Layer 1 — Top sheen (light from above) */
+  .glass-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.06) 22%,
+      transparent 55%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Layer 2 — Corner highlight (diagonal light source) */
+  .glass-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.18) 0%,
+      transparent 45%
+    );
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .glass-card > * { position: relative; z-index: 1; }
+
+  /* ── Hover — subtle lift, warmer glass ── */
+  .glass-card:hover {
+    background: var(--bg-card-hover);
+    box-shadow:
+      var(--shadow-lg, var(--shadow-direct-lg)),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+
+  /* ── Interactive variant — cursor pointer + tactile lift ── */
+  .glass-card--interactive {
+    cursor: pointer;
+  }
+  .glass-card--interactive:hover {
+    transform: translateY(-2px);
+    /* Add chromatic edge glow on hover */
+    border-color: color-mix(in srgb, var(--primary, #007AFF) 14%, var(--border));
+  }
+  .glass-card--interactive:active {
+    transform: translateY(0) scale(0.998);
+    transition-duration: var(--dur-instant);
+  }
+  .glass-card--interactive:focus-visible {
+    outline: 2px solid var(--border-focus, var(--primary, #007AFF));
+    outline-offset: 2px;
+  }
+
+  /* ── Elevated — stronger depth ── */
+  .glass-card--elevated {
+    backdrop-filter: blur(28px) saturate(1.7);
+    -webkit-backdrop-filter: blur(28px) saturate(1.7);
+    box-shadow:
+      var(--shadow-xl, var(--shadow-direct-lg)),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+
+  /* ── Dim glass — modal overlays ── */
+  .glass-card--dim {
+    background: var(--overlay-dim, rgba(15, 23, 42, 0.55));
+    border-color: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  }
+
+  /* ── Grain — subtle noise texture (dark mode banding kamaytiradi) ── */
+  .glass-card--grain {
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+  }
+
+  /* ── Fallback — no backdrop-filter support ── */
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass, .glass-card {
+      background: var(--bg-surface);
+    }
+  }
+}
+
+/* ============================================================
+   5. TYPOGRAPHY SCALE — fluid, optical, refined
+   ------------------------------------------------------------
+   Optical sizing + fluid clamp() — har bir ekranda mukammal.
+   ============================================================ */
+
+@layer typography {
+  /* ── Display & headings — fluid, tight tracking ── */
+  .text-display {
+    font-family: var(--font-heading);
+    font-size: clamp(2rem, 1.5rem + 2.5vw, var(--text-display, 3rem));
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    font-feature-settings: 'ss01', 'cv11';
+    text-wrap: balance;
+  }
+
+  .text-h1 {
+    font-family: var(--font-heading);
+    font-size: clamp(1.5rem, 1.2rem + 1.5vw, var(--text-h1, 2.25rem));
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.028em;
+    text-wrap: balance;
+  }
+
+  .text-h2 {
+    font-family: var(--font-heading);
+    font-size: var(--text-h2, 1.625rem);
+    font-weight: 600;
+    line-height: 1.22;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  .text-h3 {
+    font-size: var(--text-h3, 1.25rem);
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  .text-h4 {
+    font-size: var(--text-h4, 1.0625rem);
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+  }
+
+  /* ── Body ── */
+  .text-body-lg  { font-size: var(--text-body-lg); line-height: 1.6; text-wrap: pretty; }
+  .text-body     { font-size: var(--text-body);    line-height: 1.6; text-wrap: pretty; }
+  .text-body-sm  { font-size: var(--text-body-sm); line-height: 1.55; text-wrap: pretty; }
+  .text-caption  { font-size: var(--text-caption); line-height: 1.5; }
+
+  .text-label {
+    font-size: var(--text-label);
+    font-weight: 500;
+    letter-spacing: 0.005em;
+  }
+
+  /* ── Overline — small-caps eyebrow ── */
+  .text-overline {
+    font-size: var(--text-overline, 0.6875rem);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-feature-settings: 'ss01';
+  }
+
+  /* ── Numeric — tabular alignment ── */
+  .text-numeric {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum', 'zero';
+  }
+
+  .text-numeric-lg {
+    font-size: var(--text-numeric-lg);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum', 'zero';
+  }
+
+  .text-numeric-md {
+    font-size: var(--text-numeric-md);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum', 'zero';
+  }
+
+  .text-numeric-sm {
+    font-size: var(--text-numeric-sm);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum', 'zero';
+  }
+
+  /* ── Gradient text — hero numbers ── */
+  .text-gradient {
+    background: linear-gradient(
+      135deg,
+      var(--primary, #007AFF) 0%,
+      var(--accent, #AF52DE) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* ── Truncation & wrapping ── */
+  .text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .text-balance { text-wrap: balance; }
+  .text-pretty  { text-wrap: pretty; }
+}
+
+/* ============================================================
+   6. TEXT COLOR UTILITIES — token-based
+   ============================================================ */
+
+@layer typography {
+  .text-primary   { color: var(--text-primary); }
+  .text-secondary { color: var(--text-secondary); }
+  .text-tertiary  { color: var(--text-tertiary); }
+  .text-muted     { color: var(--text-tertiary); }
+  .text-inverse   { color: var(--text-inverse); }
+  .text-disabled  { color: var(--text-disabled); }
+
+  /* Tone text — token-based */
+  .text-tone-blue   { color: var(--tone-blue-fg,   #007AFF); }
+  .text-tone-green  { color: var(--tone-green-fg,  #34C759); }
+  .text-tone-orange { color: var(--tone-orange-fg, #FF9500); }
+  .text-tone-red    { color: var(--tone-red-fg,    #FF3B30); }
+  .text-tone-purple { color: var(--tone-purple-fg, #AF52DE); }
+  .text-tone-slate  { color: var(--tone-slate-fg,  #8E8E93); }
+}
+
+/* ============================================================
+   7. BORDER UTILITIES
+   ============================================================ */
+
+@layer utilities {
+  .border-subtle { border-color: var(--border-subtle); }
+  .border-medium { border-color: var(--border-medium); }
+  .border-strong { border-color: var(--border-strong); }
+  .border-glass  { border-color: var(--border-glass); }
+}
+
+/* ============================================================
+   8. FOCUS — accessibility & beauty
+   ------------------------------------------------------------
+   Premium focus: ring + soft pulse (motion-safe).
+   ============================================================ */
+
+@layer focus {
+  .focus-ring {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+
+  .focus-ring:focus-visible {
+    outline-color: var(--border-focus, var(--primary, #007AFF));
+    box-shadow: 0 0 0 3px var(--focus-ring);
+  }
+
+  /* Global focus — animated offset */
+  :focus-visible {
+    outline: 2px solid var(--border-focus, var(--primary, #007AFF));
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+    transition:
+      outline-offset var(--dur-fast) var(--spring-snappy),
+      box-shadow    var(--dur-fast) var(--spring-snappy);
+  }
+
+  /* Mouse users — clean outline */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* High contrast — stronger rings */
+  @media (prefers-contrast: more) {
+    :focus-visible {
+      outline-width: 3px;
+      outline-offset: 3px;
+    }
+  }
+
+  /* Premium focus pulse — soft ring expand (motion-safe) */
+  @media (prefers-reduced-motion: no-preference) {
+    .focus-pulse:focus-visible {
+      box-shadow:
+        0 0 0 3px var(--focus-ring),
+        0 0 0 0 color-mix(in srgb, var(--primary, #007AFF) 40%, transparent);
+      animation: focus-pulse-expand 1.6s var(--ease-apple-out) infinite;
+    }
+
+    @keyframes focus-pulse-expand {
+      0%   { box-shadow: 0 0 0 3px var(--focus-ring), 0 0 0 0 color-mix(in srgb, var(--primary, #007AFF) 40%, transparent); }
+      100% { box-shadow: 0 0 0 3px var(--focus-ring), 0 0 0 8px color-mix(in srgb, var(--primary, #007AFF) 0%, transparent); }
+    }
+  }
+}
+
+/* ============================================================
+   9. MOTION UTILITIES
+   ============================================================ */
+
+@layer motion {
+  .transition-fast   {
+    transition-duration: var(--dur-fast);
+    transition-timing-function: var(--ease-soft);
+  }
+  .transition-normal {
+    transition-duration: var(--dur-normal);
+    transition-timing-function: var(--ease-soft);
+  }
+  .transition-slow   {
+    transition-duration: var(--dur-slow);
+    transition-timing-function: var(--ease-soft);
+  }
+
+  /* Spring transitions — native CSS */
+  .transition-spring-snappy { transition-timing-function: var(--spring-snappy); }
+  .transition-spring-smooth { transition-timing-function: var(--spring-smooth); }
+  .transition-spring-soft   { transition-timing-function: var(--spring-soft); }
+  .transition-spring-bouncy { transition-timing-function: var(--spring-bouncy); }
+
+  /* ⚠️ will-change — vaqtinchalik hint.
+     Doimiy qo'shilsa GPU layer abadiy ushlanadi → memory pressure.
+     Faqat animatsiya davomida qo'shing. Reduced-motion'da o'chiriladi. */
+  @media (prefers-reduced-motion: no-preference) {
+    .will-transform { will-change: transform; }
+    .will-opacity   { will-change: opacity; }
+    .will-both      { will-change: transform, opacity; }
+  }
+}
+
+/* ============================================================
+   10. KEYFRAME ANIMATIONS — Apple-quality entrances
+   ============================================================ */
+
+@layer motion {
+  /* ── Page enter — blur + slide + spring ── */
+  @keyframes page-enter {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0);
+      filter: blur(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+      filter: blur(0);
+    }
+  }
+  .page-enter {
+    animation: page-enter var(--dur-slow) var(--ease-emphasized) both;
+    will-change: opacity, transform, filter;
+  }
+
+  /* ── Fade in ── */
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .fade-in {
+    animation: fade-in var(--dur-normal) var(--ease-emphasized) both;
+  }
+
+  /* ── Slide up — cards, toasts ── */
+  @keyframes slide-up {
+    from { opacity: 0; transform: translate3d(0, 12px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
+  }
+  .slide-up {
+    animation: slide-up var(--dur-normal) var(--ease-emphasized) both;
+    will-change: opacity, transform;
+  }
+
+  /* ── Slide down — dropdowns ── */
+  @keyframes slide-down {
+    from { opacity: 0; transform: translate3d(0, -12px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
+  }
+  .slide-down {
+    animation: slide-down var(--dur-normal) var(--ease-emphasized) both;
+  }
+
+  /* ── Scale in — buttons, chips ── */
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  .scale-in {
+    animation: scale-in var(--dur-normal) var(--spring-bouncy) both;
+  }
+
+  /* ── Overlay / modal ── */
+  @keyframes overlay-in {
+    from { opacity: 0; backdrop-filter: blur(0); }
+    to   { opacity: 1; backdrop-filter: blur(8px); }
+  }
+  @keyframes modal-in {
+    from { opacity: 0; transform: scale(0.94) translate3d(0, 12px, 0); }
+    to   { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
+  }
+
+  /* ── Shimmer — linear timing (cubic-bezier notekis) ── */
+  @keyframes shimmer {
+    0%   { background-position: -800px 0; }
+    100% { background-position:  800px 0; }
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--border-subtle) 25%,
+      var(--border)        50%,
+      var(--border-subtle) 75%
+    );
+    background-size: 1600px 100%;
+    animation: shimmer 1.8s linear infinite;
+  }
+
+  /* ── Pulse ring — notifications ── */
+  @keyframes pulse-ring {
+    0%   { transform: scale(0.9); opacity: 0.7; }
+    70%  { transform: scale(1.6); opacity: 0; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+
+  /* ── Conic rotate — hero rings ── */
+  @keyframes conic-rotate {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  .conic-ring {
+    background: conic-gradient(
+      from 0deg,
+      #007AFF, #5856D6, #AF52DE, #FF2D55, #FF9500, #34C759, #007AFF
+    );
+    animation: conic-rotate 12s linear infinite;
+    will-change: transform;
+  }
+
+  /* ── Bell shake — notification ping ── */
+  @keyframes bell-shake {
+    0%, 100% { transform: rotate(0); }
+    10%      { transform: rotate(-12deg); }
+    25%      { transform: rotate(12deg); }
+    40%      { transform: rotate(-8deg); }
+    55%      { transform: rotate(8deg); }
+    70%      { transform: rotate(0); }
+  }
+  .bell-shake {
+    animation: bell-shake 900ms var(--ease-apple-out);
+    transform-origin: top center;
+  }
+
+  /* ── Live dot pulse — "online" indicator ── */
+  @keyframes live-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.35; transform: scale(0.85); }
+  }
+  .live-dot {
+    animation: live-pulse 2s ease-in-out infinite;
+  }
+
+  /* ── Stagger helpers ── */
+  .stagger-1 { animation-delay: calc(1 * 50ms); }
+  .stagger-2 { animation-delay: calc(2 * 50ms); }
+  .stagger-3 { animation-delay: calc(3 * 50ms); }
+  .stagger-4 { animation-delay: calc(4 * 50ms); }
+  .stagger-5 { animation-delay: calc(5 * 50ms); }
+  .stagger-6 { animation-delay: calc(6 * 50ms); }
+}
+
+/* ============================================================
+   11. INPUT SYSTEM — premium form fields
+   ============================================================ */
+
+@layer base {
+  .input-base {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: 1.4;
+    padding: 0.6rem 0.85rem;
+    outline: none;
+    transition:
+      border-color     var(--dur-fast) var(--ease-soft),
+      box-shadow       var(--dur-fast) var(--ease-soft),
+      background-color var(--dur-fast) var(--ease-soft),
+      transform        var(--dur-fast) var(--spring-snappy);
+  }
+
+  .input-base::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .input-base:hover:not(:disabled):not(:focus) {
+    border-color: var(--border-strong);
+    background: var(--bg-input-focus);
+  }
+
+  .input-base:focus:not(:disabled) {
+    border-color: var(--border-focus, var(--primary, #007AFF));
+    background: var(--bg-input-focus);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    /* Subtle lift for tactile feel */
+    transform: translateY(-1px);
+  }
+
+  .input-base.input-error {
+    border-color: var(--danger, #FF3B30);
+    box-shadow: 0 0 0 3px var(--focus-ring-danger);
+  }
+
+  .input-base:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--state-disabled-bg);
+  }
+}
+
+/* ============================================================
+   12. TONE SYSTEM
+   ------------------------------------------------------------
+   Universal tone tile — chips, badges, avatar halos.
+   ============================================================ */
+
+@layer base {
+  .tone-blue   {
+    --tone-fg: #007AFF;
+    --tone-bg: rgba(0, 122, 255, 0.10);
+    --tone-glow: rgba(0, 122, 255, 0.28);
+    --tone-blue-fg: #007AFF;
+  }
+  .tone-green  {
+    --tone-fg: #34C759;
+    --tone-bg: rgba(52, 199, 89, 0.10);
+    --tone-glow: rgba(52, 199, 89, 0.28);
+    --tone-green-fg: #34C759;
+  }
+  .tone-orange {
+    --tone-fg: #FF9500;
+    --tone-bg: rgba(255, 149, 0, 0.10);
+    --tone-glow: rgba(255, 149, 0, 0.28);
+    --tone-orange-fg: #FF9500;
+  }
+  .tone-red    {
+    --tone-fg: #FF3B30;
+    --tone-bg: rgba(255, 59, 48, 0.10);
+    --tone-glow: rgba(255, 59, 48, 0.28);
+    --tone-red-fg: #FF3B30;
+  }
+  .tone-purple {
+    --tone-fg: #AF52DE;
+    --tone-bg: rgba(175, 82, 222, 0.10);
+    --tone-glow: rgba(175, 82, 222, 0.28);
+    --tone-purple-fg: #AF52DE;
+  }
+  .tone-slate  {
+    --tone-fg: #8E8E93;
+    --tone-bg: rgba(142, 142, 147, 0.10);
+    --tone-glow: rgba(142, 142, 147, 0.28);
+    --tone-slate-fg: #8E8E93;
+  }
+
+  /* ── Universal tone tile ── */
+  .tone-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--tone-bg);
+    color: var(--tone-fg);
+    border: 1px solid color-mix(in srgb, var(--tone-fg) 22%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      0 4px 12px -6px var(--tone-glow);
+    transition:
+      transform  var(--dur-fast) var(--spring-snappy),
+      box-shadow var(--dur-fast) var(--ease-soft),
+      background var(--dur-fast) var(--ease-soft);
+  }
+
+  .tone-tile:hover {
+    transform: translateY(-1px) scale(1.02);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      0 8px 20px -6px var(--tone-glow);
+  }
+
+  .tone-tile:active {
+    transform: translateY(0) scale(0.98);
+    transition-duration: var(--dur-instant);
+  }
+}
+
+/* ============================================================
+   13. SCROLLBAR — hover-reveal on scroll container
+   ------------------------------------------------------------
+   Faqat scroll container hover qilinganda ko'rinadi.
+   ============================================================ */
+
+@layer base {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: var(--radius-pill);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color var(--dur-normal) var(--ease-soft);
+  }
+
+  /* Only when the scroll container itself is hovered */
+  :hover::-webkit-scrollbar-thumb {
+    background-color: var(--border-medium);
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--border-strong);
+    background-clip: padding-box;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  :hover {
+    scrollbar-color: var(--border-medium) transparent;
+  }
+}
+
+/* ============================================================
+   14. LINKS
+   ============================================================ */
+
+@layer base {
+  a {
+    color: var(--primary, #007AFF);
+    text-decoration: none;
+    transition: color var(--dur-fast) var(--ease-soft);
+  }
+
+  a:hover {
+    color: var(--primary-hover, var(--primary, #007AFF));
+  }
+
+  a:focus-visible {
+    outline: 2px solid var(--border-focus, var(--primary, #007AFF));
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+}
+
+/* ============================================================
+   15. DIVIDER
+   ============================================================ */
+
+@layer base {
+  hr {
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    margin: var(--space-4, 1rem) 0;
+  }
+}
+
+/* ============================================================
+   16. VIEW TRANSITIONS
+   ------------------------------------------------------------
+   ⚠️ SPA'da `@view-transition { navigation: auto }` ISHLAMAYDI.
+   React Router'da qo'lda: document.startViewTransition(() => navigate())
+   Hozircha o'chirilgan — dead code bo'lmasligi uchun.
+   ============================================================ */
+
+/*
+@view-transition { navigation: auto; }
+::view-transition-old(root) { animation: fade-out var(--dur-normal) var(--ease-soft) both; }
+::view-transition-new(root) { animation: page-enter var(--dur-slow) var(--ease-emphasized) both; }
+@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+*/
+
+/* ============================================================
+   17. REDUCED MOTION — comprehensive
+   ============================================================ */
+
+@layer motion {
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    .skeleton-shimmer {
+      animation: none;
+      background: var(--border-subtle);
+    }
+
+    .conic-ring,
+    .orb,
+    .live-dot,
+    .bell-shake,
+    .page-enter,
+    .slide-up,
+    .slide-down,
+    .scale-in {
+      animation: none !important;
+    }
+
+    /* Keep color transitions — informative, not decorative */
+    .glass-card,
+    .glass-card--interactive,
+    .input-base,
+    .tone-tile {
+      transition-property: background-color, color, border-color, box-shadow;
+      transition-duration: 150ms;
+    }
+  }
+}
+
+/* ============================================================
+   18. HIGH CONTRAST MODE
+   ============================================================ */
+
+@layer base {
+  @media (prefers-contrast: more) {
+    .glass-card {
+      border-width: 2px;
+      background: var(--bg-surface);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+
+    .glass-card::before,
+    .glass-card::after {
+      display: none;
+    }
+
+    .text-secondary,
+    .text-tertiary,
+    .text-muted {
+      color: var(--text-primary);
+    }
+
+    .orb {
+      display: none;
+    }
+  }
+}
+
+/* ============================================================
+   19. FORCED COLORS (Windows High Contrast)
+   ============================================================ */
+
+@layer base {
+  @media (forced-colors: active) {
+    .glass-card,
+    .glass {
+      border: 1px solid CanvasText;
+      background: Canvas;
+    }
+
+    .glass-card::before,
+    .glass-card::after {
+      display: none;
+    }
+
+    .tone-tile {
+      border-color: CanvasText;
+    }
+  }
+}
+
+/* ============================================================
+   20. PRINT — comprehensive
+   ============================================================ */
+
+@layer print {
+  @media print {
+    @page {
+      margin: 1.5cm;
+      size: A4;
+    }
+
+    .no-print,
+    .orb {
+      display: none !important;
+    }
+
+    /* Dialogs preserved — user may need to print invoices/reports */
+
+    html, body {
+      background: #fff !important;
+      color: #000 !important;
+      font-size: 11pt;
+    }
+
+    .glass,
+    .glass-card {
+      background: #fff !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      border: 1px solid #ddd !important;
+      box-shadow: none !important;
+      break-inside: avoid;
+    }
+
+    .glass-card::before,
+    .glass-card::after {
+      display: none !important;
+    }
+
+    a {
+      color: #000 !important;
+      text-decoration: underline;
+    }
+
+    a[href]::after {
+      content: ' (' attr(href) ')';
+      font-size: 9pt;
+      color: #666;
+    }
+
+    h1, h2, h3, h4 {
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+
+    img, svg, table, figure {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+  }
+}
+
+/* ============================================================
+   21. DARK MODE BODY
+   ------------------------------------------------------------
+   Tailwind `.dark` <html>ga qo'yadi.
+   `[data-theme="dark"]` olib tashlandi — Tailwind bilan chalkashmasin.
+   ============================================================ */
+
+@layer base {
+  .dark body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+  }
+
+  /* Dark mode noise — z-index 0 (AppLayout z-10 stack'iga xalaqit bermaydi) */
+  .dark body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+    mix-blend-mode: overlay;
+  }
+}
+
+/* ============================================================
+   22. CONTAINER QUERIES
+   ============================================================ */
+
+@layer utilities {
+  @container (min-width: 480px) {
+    .cq-sm\:grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  @container (min-width: 768px) {
+    .cq-md\:grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cq-md\:grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+}
+
+/* ============================================================
+   23. SCROLL-DRIVEN ANIMATIONS
+   ============================================================ */
+
+@layer motion {
+  @supports (animation-timeline: scroll()) {
+    .scroll-reveal {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 40%;
+    }
+
+    @keyframes reveal {
+      from { opacity: 0; transform: translate3d(0, 24px, 0) scale(0.98); }
+      to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .scroll-reveal { animation: none; }
+    }
+  }
+}
+
+/* ============================================================
+   24. UTILITY — spacing shortcuts
+   ============================================================ */
+
+@layer utilities {
+  .page-container {
+    width: 100%;
+    max-width: 1400px;
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 2vw, 2rem);
+    padding-block: clamp(1rem, 2vw, 1.5rem);
+  }
+}
+
+/* ============================================================
+   25. SR-ONLY
+   ============================================================ */
+
+@layer utilities {
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 }

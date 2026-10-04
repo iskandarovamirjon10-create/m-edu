@@ -55,17 +55,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         throw new UnauthorizedException('Token organization mismatch');
       }
 
-      if (payload.sid) {
-        const session = await this.prisma.parentSession.findUnique({
-          where: { id: payload.sid },
-          select: { id: true, revokedAt: true, expiresAt: true, parentId: true, organizationId: true },
-        });
-        if (!session || session.revokedAt || session.expiresAt < new Date()) {
-          throw new UnauthorizedException('Session expired or revoked');
-        }
-        if (session.parentId !== parent.id || session.organizationId !== parent.organizationId) {
-          throw new UnauthorizedException('Session binding mismatch');
-        }
+      if (!payload.sid) {
+        throw new UnauthorizedException('Token missing sid');
+      }
+
+      const session = await this.prisma.parentSession.findUnique({
+        where: { id: payload.sid },
+        select: { id: true, revokedAt: true, expiresAt: true, parentId: true, organizationId: true },
+      });
+      if (!session || session.revokedAt || session.expiresAt < new Date()) {
+        throw new UnauthorizedException('Session expired or revoked');
+      }
+      if (session.parentId !== parent.id || session.organizationId !== parent.organizationId) {
+        throw new UnauthorizedException('Session binding mismatch');
       }
 
       return {
@@ -74,7 +76,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         email: parent.email,
         role: 'PARENT',
         organizationId: parent.organizationId,
-        sid: payload.sid ?? null,
+        sid: payload.sid,
       };
     }
 
@@ -91,17 +93,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Token organization mismatch');
     }
 
-    if (payload.sid) {
-      const session = await this.prisma.session.findUnique({
-        where: { id: payload.sid },
-        select: { id: true, revokedAt: true, expiresAt: true, userId: true, organizationId: true },
-      });
-      if (!session || session.revokedAt || session.expiresAt < new Date()) {
-        throw new UnauthorizedException('Session expired or revoked');
-      }
-      if (session.userId !== user.id || session.organizationId !== user.organizationId) {
-        throw new UnauthorizedException('Session binding mismatch');
-      }
+    if (!payload.sid) {
+      throw new UnauthorizedException('Token missing sid');
+    }
+
+    const session = await this.prisma.session.findUnique({
+      where: { id: payload.sid },
+      select: { id: true, revokedAt: true, expiresAt: true, userId: true, organizationId: true },
+    });
+    if (!session || session.revokedAt || session.expiresAt < new Date()) {
+      throw new UnauthorizedException('Session expired or revoked');
+    }
+    if (session.userId !== user.id || session.organizationId !== user.organizationId) {
+      throw new UnauthorizedException('Session binding mismatch');
     }
 
     return {
@@ -109,10 +113,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: user.email,
       role: user.role,
       organizationId: user.organizationId,
-      // Propagate the session id so controllers (e.g. logout) can revoke
-      // the exact session that issued the token. Missing sid (legacy
-      // tokens) is handled by callers.
-      sid: payload.sid ?? null,
+      sid: payload.sid,
     };
   }
 }

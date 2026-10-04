@@ -29,6 +29,31 @@ export interface TelegramSendResult {
 /** Bot API request timeout — a hung Telegram call must not hang an API request. */
 const TELEGRAM_API_TIMEOUT_MS = 10_000;
 
+/** Public Telegram Bot API host, used when no override is configured. */
+const DEFAULT_TELEGRAM_API_BASE_URL = 'https://api.telegram.org';
+
+/** One entry of the bot's command menu (`setMyCommands`). */
+export interface TelegramBotCommand {
+  command: string;
+  description: string;
+}
+
+/**
+ * Resolve the Bot API host.
+ *
+ * Accepts an override for self-hosted Bot API servers / egress proxies
+ * (`TELEGRAM_API_BASE_URL`). Anything that is not an absolute http(s) URL is
+ * rejected in favour of the public API — a malformed value must not silently
+ * send the bot token to an unintended host.
+ */
+export function resolveTelegramApiBaseUrl(raw?: string | null): string {
+  const value = (raw ?? '').trim().replace(/\/+$/, '');
+  if (!value) return DEFAULT_TELEGRAM_API_BASE_URL;
+  if (!/^https?:\/\/[^\s]+$/i.test(value)) return DEFAULT_TELEGRAM_API_BASE_URL;
+  return value;
+}
+
+
 /**
  * Telegram Bot API provider adapter.
  *
@@ -45,21 +70,35 @@ const TELEGRAM_API_TIMEOUT_MS = 10_000;
 export class TelegramService {
   private readonly logger = new Logger(TelegramService.name);
   private readonly botToken: string;
+  private readonly apiBaseUrl: string;
   private readonly isEnabled: boolean;
+  private readonly isMock: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN') || '';
 
-    // TELEGRAM_ENABLED is a kill switch, not an opt-in: only the literal
-    // string 'false' disables the integration. This keeps a configured token
-    // working for existing deployments while still letting an operator shut
-    // Telegram off during an incident. (An undefined value must not silently
-    // disable delivery that is otherwise configured.)
+    const configuredBaseUrl = this.configService.get<string>('TELEGRAM_API_BASE_URL');
+    this.apiBaseUrl = resolveTelegramApiBaseUrl(configuredBaseUrl);
+    if (configuredBaseUrl && this.apiBaseUrl === DEFAULT_TELEGRAM_API_BASE_URL && configuredBaseUrl.trim() !== DEFAULT_TELEGRAM_API_BASE_URL) {
+      this.logger.warn(
+        'TELEGRAM_API_BASE_URL is not a valid http(s) URL — using the public Telegram Bot API instead.',
+      );
+    }
+
     const disabledByFlag = this.configService.get<string>('TELEGRAM_ENABLED') === 'false';
-    this.isEnabled = !!this.botToken && !disabledByFlag;
+    const nodeEnv = this.configService.get<string>('NODE_ENV') || process.env.NODE_ENV;
+    // DEV MOCK only in a real development shell. `NODE_ENV=test` must never
+    // silently turn a missing token into a "working" integration — specs assert
+    // that an unconfigured bot fails honestly instead of faking success.
+    const isDev = nodeEnv !== 'production' && nodeEnv !== 'test';
+    this.isMock = this.configService.get<string>('TELEGRAM_MOCK') === 'true' || (isDev && (!this.botToken || this.botToken.startsWith('mock')));
+
+    this.isEnabled = (!!this.botToken || this.isMock) && !disabledByFlag;
 
     if (disabledByFlag) {
       this.logger.warn('TELEGRAM_ENABLED=false — Telegram delivery is disabled by configuration.');
+    } else if (this.isMock) {
+      this.logger.log('TelegramService initialized in DEV MOCK mode (simulated delivery active).');
     } else if (!this.isEnabled) {
       this.logger.warn(
         'TELEGRAM_BOT_TOKEN is not configured. Telegram notifications will be disabled.',
@@ -77,8 +116,110 @@ export class TelegramService {
    */
   getBotUsername(): string | null {
     const raw = this.configService.get<string>('TELEGRAM_BOT_USERNAME')?.trim();
-    if (!raw) return null;
-    return raw.startsWith('@') ? raw.slice(1) : raw;
+    if (raw) return raw.startsWith('@') ? raw.slice(1) : raw;
+    if (this.isMock) return 'medu_education_bot';
+    return null;
+  }
+
+  /**
+   * Absolute URL for a Bot API method.
+   *
+   * The only place the token is ever placed into a URL, and it is never logged
+   * from here — every caller logs the method name and status only.
+   */
+  private endpoint(method: string): string {
+    return `${this.apiBaseUrl}/bot${this.botToken}/${method}`;
+  }
+
+  /**
+   * POST a JSON payload to a Bot API method.
+   *
+   * Shared by the low-volume control-plane calls below (webhook registration,
+   * command menu sync). Never throws, never logs the URL or the payload —
+   * both can contain the bot token or the webhook secret.
+   */
+  private async callControlMethod(
+    method: string,
+    payload: Record<string, unknown>,
+  ): Promise<boolean> {
+    if (!this.isEnabled) return false;
+    if (this.isMock || this.botToken.startsWith('mock')) {
+      this.logger.log(`[TelegramService DEV MOCK] ${method} skipped (simulated mode).`);
+      return true;
+    }
+    try {
+      const response = await fetch(this.endpoint(method), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(TELEGRAM_API_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        this.logger.warn(
+          JSON.stringify({ event: 'telegram_control_call_failed', method, status: response.status }),
+        );
+        return false;
+      }
+      return true;
+    } catch (error: unknown) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'telegram_control_call_error',
+          method,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Register (or re-register) the webhook endpoint with Telegram.
+   *
+   * Idempotent: Telegram replaces the existing webhook on success, so calling
+   * this at every boot keeps the endpoint and its `secret_token` in sync after
+   * a secret rotation. `secretToken` becomes the value the webhook controller
+   * verifies in constant time.
+   */
+  async setWebhook(url: string, secretToken?: string): Promise<boolean> {
+    const target = url.trim();
+    if (!/^https:\/\/[^\s]+$/i.test(target)) {
+      this.logger.warn(
+        JSON.stringify({ event: 'telegram_webhook_registration_skipped', reason: 'not_https' }),
+      );
+      return false;
+    }
+    const ok = await this.callControlMethod('setWebhook', {
+      url: target,
+      secret_token: secretToken,
+      drop_pending_updates: false,
+      allowed_updates: ['message', 'callback_query'],
+    });
+    if (ok) {
+      this.logger.log(JSON.stringify({ event: 'telegram_webhook_registered', url: target }));
+    }
+    return ok;
+  }
+
+  /**
+   * Publish the bot's command menu (Telegram's command autocomplete).
+   *
+   * `languageCode` is an ISO 639-1 code; omit it to (re)register the DEFAULT
+   * list, which Telegram falls back to for languages without their own list.
+   * Descriptions come from the centralized i18n catalogue, so uz/ru/en clients
+   * see localized text. Failures are non-fatal: `/help` renders the same list
+   * from the registry regardless of what Telegram has cached.
+   */
+  async setMyCommands(
+    commands: TelegramBotCommand[],
+    languageCode?: string,
+  ): Promise<boolean> {
+    if (commands.length === 0) return false;
+    return this.callControlMethod('setMyCommands', {
+      commands,
+      scope: { type: 'default' },
+      ...(languageCode ? { language_code: languageCode } : {}),
+    });
   }
 
   /**
@@ -113,7 +254,7 @@ export class TelegramService {
   async answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
     if (!this.isEnabled) return;
     try {
-      await fetch(`https://api.telegram.org/bot${this.botToken}/answerCallbackQuery`, {
+      await fetch(this.endpoint('answerCallbackQuery'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
@@ -139,8 +280,13 @@ export class TelegramService {
       return { ok: false, errorCategory: 'NOT_CONFIGURED', retryable: false };
     }
 
+    if (this.isMock || this.botToken.startsWith('mock')) {
+      this.logger.log(`[TelegramService DEV MOCK] Delivered message to chat ${chatId}: ${text.slice(0, 100)}...`);
+      return { ok: true, retryable: false };
+    }
+
     try {
-      const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
+      const url = this.endpoint('sendMessage');
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

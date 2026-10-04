@@ -4,6 +4,7 @@ import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, Gla
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useI18n } from '@/i18n/I18nProvider';
+import { relationshipsApi } from '@/lib/api';
 
 interface GraphNode {
   id: string;
@@ -36,14 +37,9 @@ export function RelationshipGraphPage() {
 
   const graphQuery = useQuery({
     queryKey: ['relationship-graph', entityType, entityId],
-    queryFn: async () => {
-      if (!entityId) return null;
-      const res = await fetch(
-        `/api/relationships/graph?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}`,
-      );
-      if (!res.ok) return null;
-      return res.json() as Promise<GraphData>;
-    },
+    queryFn: () => entityId
+      ? relationshipsApi.graph(entityType, entityId) as Promise<GraphData>
+      : Promise.resolve(null),
     enabled: !!entityId,
   });
 

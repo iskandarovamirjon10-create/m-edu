@@ -4,6 +4,8 @@ import * as crypto from 'node:crypto';
 import { SecureLogger } from '@medu/face-security';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisPubSubService } from '../common/redis/redis-pubsub.service';
+import { ATTENDANCE_CREATED_EVENT } from '../attendance/attendance.gateway';
 import { getOrganizationDate, getLocalDateTime } from '../common/date-range';
 import { getErrorMessage } from '../lib/error';
 
@@ -99,6 +101,7 @@ interface ScheduleCandidate {
 interface ResolvedGroup {
   groupId: string;
   status: 'MATCHED' | 'NO_MATCH' | 'AMBIGUOUS';
+  startMinutes?: number;
 }
 
 /**
@@ -135,7 +138,10 @@ export class AttendanceDecisionEngine {
    */
   private readonly scheduleGraceMinutes = 30;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisPubSub: RedisPubSubService
+  ) {}
 
   /**
    * Main recognition → attendance decision pipeline.
@@ -447,7 +453,7 @@ export class AttendanceDecisionEngine {
               studentId: student.id,
               groupId,
               date: attendanceDate,
-              status: 'PRESENT',
+              status: (resolvedGroup.startMinutes !== undefined && this.getLocalDateTime(recognizedAt, organization.timezone ?? 'UTC').minutes > resolvedGroup.startMinutes + 15) ? 'LATE' : 'PRESENT',
               source: 'FACE',
 
               confidence: baseEvent.confidence,
@@ -680,6 +686,7 @@ export class AttendanceDecisionEngine {
         return {
           status: 'MATCHED',
           groupId: roomCandidates[0].groupId,
+          startMinutes: parseInt(roomCandidates[0].schedule.startTime.split(':')[0], 10) * 60 + parseInt(roomCandidates[0].schedule.startTime.split(':')[1], 10),
         };
       }
 
@@ -691,8 +698,9 @@ export class AttendanceDecisionEngine {
         if (uniqueGroupIds.size === 1) {
           return {
             status: 'MATCHED',
-            groupId: roomCandidates[0].groupId,
-          };
+          groupId: roomCandidates[0].groupId,
+          startMinutes: parseInt(roomCandidates[0].schedule.startTime.split(':')[0], 10) * 60 + parseInt(roomCandidates[0].schedule.startTime.split(':')[1], 10),
+        };
         }
 
         return {
@@ -729,6 +737,7 @@ export class AttendanceDecisionEngine {
       return {
         status: 'MATCHED',
         groupId: candidates[0].groupId,
+        startMinutes: parseInt(candidates[0].schedule.startTime.split(':')[0], 10) * 60 + parseInt(candidates[0].schedule.startTime.split(':')[1], 10),
       };
     }
 

@@ -278,4 +278,93 @@ describe('Tenant Isolation (e2e)', () => {
     // Since org B has no data, forecast should be empty or default
     // We just verify it succeeds and doesn't crash or leak Org A's numbers
   });
+
+  it('Org B should not be able to access or assign Org A student in StudentGroup', async () => {
+    const res = await api('/groups', { token: orgBToken });
+    expect(res.status).toBe(200);
+    expect(res.body.items.length).toBe(0);
+  });
+
+  it('DeviceToken isolation: tokens created for Org A cannot be read or managed by Org B', async () => {
+    const orgADeviceToken = await prisma.deviceToken.create({
+      data: {
+        userId: (await prisma.user.findFirst({ where: { organizationId: orgAId } }))!.id,
+        organizationId: orgAId,
+        token: `fcm-token-a-${Date.now()}`,
+        platform: 'android',
+      },
+    });
+
+    const bTokens = await prisma.deviceToken.findMany({
+      where: { organizationId: orgBId },
+    });
+    expect(bTokens.some((t) => t.id === orgADeviceToken.id)).toBe(false);
+
+    await prisma.deviceToken.delete({ where: { id: orgADeviceToken.id } }).catch(() => {});
+  });
+
+  it('ParentSession isolation: Org B cannot access Org A parent session credentials', async () => {
+    const parentAccountA = await prisma.parentAccount.create({
+      data: {
+        organizationId: orgAId,
+        phone: `+99890${Math.floor(1000000 + Math.random() * 9000000)}`,
+        passwordHash: 'hashed',
+        firstName: 'Parent',
+        lastName: 'A',
+      },
+    });
+
+    const sessionA = await prisma.parentSession.create({
+      data: {
+        parentId: parentAccountA.id,
+        organizationId: orgAId,
+        expiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+
+    const bParentSessions = await prisma.parentSession.findMany({
+      where: { organizationId: orgBId },
+    });
+    expect(bParentSessions.some((s) => s.id === sessionA.id)).toBe(false);
+
+    await prisma.parentSession.delete({ where: { id: sessionA.id } }).catch(() => {});
+    await prisma.parentAccount.delete({ where: { id: parentAccountA.id } }).catch(() => {});
+  });
+
+  it('NotificationDedup isolation: deduplication keys are scoped per organization', async () => {
+    const dedupA = await prisma.notificationDedup.create({
+      data: {
+        organizationId: orgAId,
+        dedupKey: `dedup-key-${Date.now()}`,
+        entityType: 'ATTENDANCE',
+        entityId: crypto.randomUUID(),
+      },
+    });
+
+    const bDedup = await prisma.notificationDedup.findFirst({
+      where: {
+        organizationId: orgBId,
+        dedupKey: dedupA.dedupKey,
+      },
+    });
+    expect(bDedup).toBeNull();
+
+    await prisma.notificationDedup.delete({ where: { id: dedupA.id } }).catch(() => {});
+  });
+
+  it('Group.branchId isolation: Groups with branches strictly enforce organization bounds', async () => {
+    const branchA = await prisma.branch.create({
+      data: {
+        organizationId: orgAId,
+        name: 'Main Campus A',
+      },
+    });
+
+    const bBranches = await prisma.branch.findMany({
+      where: { organizationId: orgBId },
+    });
+    expect(bBranches.some((b) => b.id === branchA.id)).toBe(false);
+
+    await prisma.branch.delete({ where: { id: branchA.id } }).catch(() => {});
+  });
 });

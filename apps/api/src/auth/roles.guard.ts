@@ -14,10 +14,10 @@ import { isFamilyRole } from './authorization.policy';
  *
  *   1. `@Roles(...)`               → the role MUST be in the list.
  *      (An explicit list is the strongest statement and always wins, so a
- *      leftover `@AllowAnyRole()` next to `@Roles()` can never widen access.)
+ *      leftover `@()` next to `@Roles()` can never widen access.)
  *   2. `@AllowSelfService()`       → any authenticated principal, including
  *      `PARENT` / `STUDENT`. Self-service endpoints only.
- *   3. `@AllowAnyRole()`           → any authenticated **staff** role.
+ *   3. `@()`           → any authenticated **staff** role.
  *      `PARENT` / `STUDENT` are DENIED here: these accounts only ever see
  *      their own data (see authorization.policy.ts).
  *   4. otherwise                   → DENY (secure default).
@@ -78,3 +78,4 @@ export class RolesGuard implements CanActivate {
     return false;
   }
 }
+

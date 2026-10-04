@@ -30,7 +30,7 @@ const BODY_LIMIT = '12mb';
 
 // Module-level logger so process-level error handlers (registered below)
 // can report before/outside NestJS bootstrap.
-const processLogger = new Logger('Process');
+const processLogger = process.env.NODE_ENV === 'production' ? new (require('./common/json-logger').JsonLogger)('Process') : new Logger('Process');
 
 // Unhandled async rejections otherwise kill the process silently in
 // production with a default Node abort (exit code 1, no NestJS stack).
@@ -46,9 +46,12 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
+import { JsonLogger } from './common/json-logger';
+
 async function bootstrap() {
-  const bootstrapLogger = new Logger('Bootstrap');
   const nodeEnv = process.env.NODE_ENV || 'development';
+  const isProd = nodeEnv === 'production';
+  const bootstrapLogger = isProd ? new JsonLogger('Bootstrap') : new Logger('Bootstrap');
 
   // Fail fast on invalid/critical configuration (aggregated, never silent).
   assertValidConfig(nodeEnv);
@@ -56,7 +59,10 @@ async function bootstrap() {
     bootstrapLogger.warn(`${w.variable}: ${w.message}`);
   }
 
-  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  const app = await NestFactory.create(AppModule, { 
+    bodyParser: false,
+    logger: isProd ? new JsonLogger() : ['log', 'error', 'warn', 'debug', 'verbose'],
+  });
   app.use(cookieParser());
   // Tight, route-scoped parser for the Telegram webhook.
   //

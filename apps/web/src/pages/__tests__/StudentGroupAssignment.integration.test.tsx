@@ -255,7 +255,13 @@ describe('Student -> Group Assignment End-to-End Integration Flow', () => {
     });
     expect(await screen.findByText('Advanced Mathematics 101')).toBeInTheDocument();
     expect(screen.getByText(/Room 304/i)).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
+    // "Active" also appears in the student status / face-enrollment tiles,
+    // so assert the group's own status badge within its row.
+    const groupRow = screen
+      .getByText('Advanced Mathematics 101')
+      .closest('div.flex.items-center');
+    expect(groupRow).not.toBeNull();
+    expect(within(groupRow as HTMLElement).getByText('Active')).toBeInTheDocument();
 
     // 8. Simulate page refresh / new session: unmount and remount with a fresh QueryClient
     unmount();

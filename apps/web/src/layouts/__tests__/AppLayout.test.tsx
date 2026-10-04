@@ -29,6 +29,7 @@ const { logoutMock, currentUser } = vi.hoisted(() => ({
 vi.mock('@/auth/AuthContext', () => ({
   useAuth: () => ({ user: currentUser, logout: logoutMock, loading: false }),
   useAuthState: () => ({ user: currentUser, loading: false }),
+  useOptionalAuthState: () => ({ user: currentUser, loading: false }),
 }));
 
 // NotificationsMenu in the header uses react-query; provide a client with

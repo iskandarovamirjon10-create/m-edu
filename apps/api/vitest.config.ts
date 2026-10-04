@@ -52,6 +52,13 @@ export default defineConfig({
     setupFiles: [path.resolve(__dirname, 'vitest.setup.ts')],
     testTimeout: 60000,
     hookTimeout: 120000,
+    coverage: {
+      provider: 'v8',
+      thresholds: {
+        statements: 70,
+        branches: 60,
+      }
+    }
   },
   esbuild: false,
   plugins: [swcPlugin()],

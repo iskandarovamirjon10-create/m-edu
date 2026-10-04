@@ -37,12 +37,11 @@ describe('Attendance Concurrency (Integration)', () => {
     });
     groupId = group.id;
 
-    await prisma.studentGroup.create({
-      data: { organizationId: orgId, studentId, groupId, isActive: true },
-    });
-
-    // markAttendance requires a planned Lesson for the group on the target date.
     const testDateUtc = new Date(`${testDate}T00:00:00.000Z`);
+
+    await prisma.studentGroup.create({
+      data: { organizationId: orgId, studentId, groupId, isActive: true, joinedAt: testDateUtc },
+    });
     await prisma.lesson.create({
       data: {
         organizationId: orgId,

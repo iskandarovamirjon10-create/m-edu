@@ -120,7 +120,7 @@ export function InvoicesPage() {
   const processRefund = useMutation({
     mutationFn: (id: string) => invoicesApi.processRefund(id),
     onSuccess: () => {
-      push('success', 'Refund processed');
+      push('success', t('invoices.refundProcessed') || 'Refund processed');
       setRefundTarget(null);
       invalidateAll();
     },
@@ -129,7 +129,7 @@ export function InvoicesPage() {
   const rejectRefund = useMutation({
     mutationFn: (data: { id: string; reason: string }) => invoicesApi.rejectRefund(data.id, data.reason),
     onSuccess: () => {
-      push('success', 'Refund rejected');
+      push('success', t('invoices.refundRejected') || 'Refund rejected');
       setRejectTarget(null);
       invalidateAll();
     },
@@ -138,7 +138,7 @@ export function InvoicesPage() {
   const requestRefund = useMutation({
     mutationFn: (data: any) => invoicesApi.requestRefund(data),
     onSuccess: () => {
-      push('success', 'Refund requested');
+      push('success', t('invoices.refundRequested') || 'Refund requested');
       setRefundTarget(null);
       invalidateAll();
     },
@@ -147,7 +147,7 @@ export function InvoicesPage() {
   const issue = useMutation({
     mutationFn: (id: string) => invoicesApi.issue(id),
     onSuccess: () => {
-      push('success', 'Invoice issued');
+      push('success', t('invoices.issueSuccess') || 'Invoice issued');
       setIssueTarget(null);
       invalidateAll();
     },

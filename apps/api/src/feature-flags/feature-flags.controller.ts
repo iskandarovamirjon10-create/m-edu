@@ -40,3 +40,4 @@ export class FeatureFlagsController {
     return this.featureFlagsService.update(orgId, key, dto);
   }
 }
+

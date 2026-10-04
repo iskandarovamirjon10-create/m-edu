@@ -31,12 +31,11 @@ export class TelegramAttemptLimiter {
     this.initialised = true;
     try {
       const mod = await import('ioredis');
+      const url = process.env.REDIS_URL || 'redis://localhost:6379';
       const RedisCtor = mod.default as unknown as {
-        new (opts: Record<string, unknown>): Redis;
+        new (url: string, opts: Record<string, unknown>): Redis;
       };
-      const client = new RedisCtor({
-        host: process.env.REDIS_HOST || 'localhost',
-        port: Number(process.env.REDIS_PORT) || 6379,
+      const client = new RedisCtor(url, {
         lazyConnect: false,
         maxRetriesPerRequest: 1,
         connectTimeout: 3000,

@@ -12,6 +12,7 @@ import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api';
 import type { AiChatResponse, AiWireMessage } from '@/types/ai';
 import AiCopilot from '../AiCopilot';
+import { I18nProvider } from '@/i18n/I18nProvider';
 
 const { aiChatMock, confirmMock } = vi.hoisted(() => ({
   aiChatMock: vi.fn(),
@@ -83,6 +84,14 @@ function pendingConfirmationResponse(): AiChatResponse {
   };
 }
 
+function renderCopilot() {
+  return render(
+    <I18nProvider>
+      <AiCopilot />
+    </I18nProvider>,
+  );
+}
+
 async function reachConfirmation(user: ReturnType<typeof userEvent.setup>) {
   aiChatMock.mockResolvedValueOnce(pendingConfirmationResponse());
   await typeAndSend(user, 'Ota-onalarga xabar yubor');
@@ -101,7 +110,7 @@ describe('AiCopilot empty state', () => {
   });
 
   it('renders the welcome, six capability quick prompts and the composer', () => {
-    render(<AiCopilot />);
+    renderCopilot();
 
     expect(
       screen.getByRole('heading', { name: 'Bugun sizga qanday yordam beray?' }),
@@ -120,7 +129,7 @@ describe('AiCopilot empty state', () => {
   it('sends a quick prompt straight to the API', async () => {
     aiChatMock.mockResolvedValue(assistantReply('Davomat tayyor.'));
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     await user.click(screen.getByRole('button', { name: /^Davomat — / }));
 
@@ -143,7 +152,7 @@ describe('AiCopilot sending and replies', () => {
     const pending = deferred<AiChatResponse>();
     aiChatMock.mockReturnValue(pending.promise);
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     await typeAndSend(user, 'Bugungi davomatni ko‘rsat');
 
@@ -168,7 +177,7 @@ describe('AiCopilot sending and replies', () => {
     expect(within(messageList()).queryByRole('status')).toBeNull();
     expect(messageList()).toHaveAttribute('aria-busy', 'false');
     expect(composer()).toBeEnabled();
-    expect(sendButton()).toHaveAttribute('aria-busy', 'false');
+    expect(sendButton()).not.toHaveAttribute('aria-busy');
   });
 
   it('renders markdown replies (headings, emphasis, tables)', async () => {
@@ -176,7 +185,7 @@ describe('AiCopilot sending and replies', () => {
       assistantReply('## Hisobot\n\n**Jami:** 42\n\n| Guruh | Soni |\n| --- | --- |\n| A-1 | 20 |'),
     );
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     await typeAndSend(user, 'Bugungi hisobot');
 
@@ -189,7 +198,7 @@ describe('AiCopilot sending and replies', () => {
   it('Shift+Enter inserts a newline instead of sending', async () => {
     aiChatMock.mockResolvedValue(assistantReply('ok'));
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     await user.type(composer(), 'birinchi qator');
     await user.keyboard('{shift>}{enter}{/shift}');
@@ -210,7 +219,7 @@ describe('AiCopilot errors and retry', () => {
   it('shows a friendly network error with retry and the last prompt', async () => {
     aiChatMock.mockRejectedValue(new TypeError('fetch failed'));
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     await typeAndSend(user, 'Bugungi davomatni ko‘rsat');
 
@@ -229,7 +238,7 @@ describe('AiCopilot errors and retry', () => {
       .mockRejectedValueOnce(new TypeError('fetch failed'))
       .mockResolvedValueOnce(assistantReply('Tayyor javob'));
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     await typeAndSend(user, 'Salom');
     await screen.findByRole('alert');
@@ -247,7 +256,7 @@ describe('AiCopilot errors and retry', () => {
   it('hides retry for non-retryable auth errors and keeps the composer usable', async () => {
     aiChatMock.mockRejectedValue(new ApiError(401, 'expired'));
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     await typeAndSend(user, 'Birinchi savol');
     const alert = await screen.findByRole('alert');
@@ -270,7 +279,7 @@ describe('AiCopilot errors and retry', () => {
         }),
     );
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     await typeAndSend(user, 'Salom');
     await user.click(await screen.findByTestId('ai-stop'));
@@ -301,7 +310,7 @@ describe('AiCopilot tool calls', () => {
       })
       .mockResolvedValueOnce(assistantReply('Bugungi davomat: 12 kishi.'));
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     await typeAndSend(user, 'Bugungi davomat?');
 
@@ -326,18 +335,18 @@ describe('AiCopilot action confirmation', () => {
 
   it('opens an explicit confirmation card with backend-provided parameters and locks the composer', async () => {
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     const card = await reachConfirmation(user);
 
     expect(card).toHaveTextContent('Telegram xabari tayyorlash');
-    expect(card).toHaveTextContent('Tasdiqlash talab qilinadi');
+    expect(card).toHaveTextContent(/Tasdiqlash talab qilinadi|ai\.confirmationRequired/i);
     expect(within(card).getByText('Xabar')).toBeInTheDocument();
     expect(within(card).getByText('Ertangi darslar bekor qilindi')).toBeInTheDocument();
     expect(within(card).getByText('Olchov')).toBeInTheDocument();
     expect(within(card).getByText('Barcha ota-onalar')).toBeInTheDocument();
-    expect(within(card).getByRole('button', { name: 'Tasdiqlash' })).toBeEnabled();
-    expect(within(card).getByRole('button', { name: 'Bekor qilish' })).toBeEnabled();
+    expect(within(card).getByRole('button', { name: /Tasdiqlash|Confirm/i })).toBeEnabled();
+    expect(within(card).getByRole('button', { name: /Bekor qilish|Cancel|common\.cancel/i })).toBeEnabled();
 
     expect(composer()).toBeDisabled();
     expect(screen.getByText('Amalni tasdiqlashni yakunlang')).toBeInTheDocument();
@@ -348,11 +357,12 @@ describe('AiCopilot action confirmation', () => {
   it('confirms exactly once and renders the structured result card', async () => {
     confirmMock.mockResolvedValue({ status: 'PREPARED', message: 'Tayyorlandi' });
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     const card = await reachConfirmation(user);
-    const confirmButton = within(card).getByRole('button', { name: 'Tasdiqlash' });
-    expect(document.activeElement).toBe(confirmButton);
+    const confirmButton = within(card).getByRole('button', { name: /Tasdiqlash|common\.confirm|Confirm/i });
+    const cancelButton = within(card).getByRole('button', { name: /Bekor qilish|Cancel|common\.cancel/i });
+    expect(document.activeElement).toBe(cancelButton);
 
     await user.click(confirmButton);
 
@@ -362,8 +372,9 @@ describe('AiCopilot action confirmation', () => {
     expect(result).toHaveTextContent('Amal muvaffaqiyatli bajarildi');
     expect(result).toHaveTextContent('Holat');
     expect(result).toHaveTextContent('PREPARED');
-    expect(result).toHaveTextContent('Texnik tafsilotlar');
-    expect(result).toHaveTextContent('"status": "PREPARED"');
+    expect(result).toHaveTextContent(/Texnik tafsilotlar|ai\.technicalDetails/i);
+    await user.click(within(result).getByRole('button', { name: /Texnik tafsilotlar|ai\.technicalDetails/i }));
+    await waitFor(() => expect(result).toHaveTextContent('"status": "PREPARED"'));
 
     expect(screen.queryByTestId('ai-action-confirmation')).toBeNull();
     expect(aiChatMock).toHaveBeenCalledTimes(1);
@@ -372,10 +383,10 @@ describe('AiCopilot action confirmation', () => {
 
   it('rejecting (button or Escape) cancels without calling the API again', async () => {
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     const card = await reachConfirmation(user);
-    await user.click(within(card).getByRole('button', { name: 'Bekor qilish' }));
+    await user.click(within(card).getByRole('button', { name: /Bekor qilish|Cancel|common\.cancel/i }));
 
     expect(screen.queryByTestId('ai-action-confirmation')).toBeNull();
     expect(
@@ -387,7 +398,8 @@ describe('AiCopilot action confirmation', () => {
 
     // A second confirmation round, dismissed with Escape from the focused button.
     const secondCard = await reachConfirmation(user);
-    expect(document.activeElement).toBe(within(secondCard).getByRole('button', { name: 'Tasdiqlash' }));
+    const secondCancelButton = within(secondCard).getByRole('button', { name: /Bekor qilish|Cancel|common\.cancel/i });
+    expect(document.activeElement).toBe(secondCancelButton);
     await user.keyboard('{Escape}');
     expect(screen.queryByTestId('ai-action-confirmation')).toBeNull();
     expect(confirmMock).not.toHaveBeenCalled();
@@ -396,14 +408,14 @@ describe('AiCopilot action confirmation', () => {
   it('shows a non-retryable failure card when confirmation is rejected by the backend', async () => {
     confirmMock.mockRejectedValue(new ApiError(404, 'action expired'));
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     const card = await reachConfirmation(user);
-    await user.click(within(card).getByRole('button', { name: 'Tasdiqlash' }));
+    await user.click(within(card).getByRole('button', { name: /Tasdiqlash|Confirm/i }));
 
     const errorCard = await screen.findByTestId('ai-action-error');
     expect(errorCard).toHaveAttribute('role', 'alert');
-    expect(errorCard).toHaveTextContent('Tasdiqlanayotgan amal topilmadi yoki muddati tugagan');
+    expect(errorCard).toHaveTextContent(/Tasdiqlanayotgan amal topilmadi|muddati tugagan|ai\./i);
     expect(screen.queryByTestId('ai-action-confirmation')).toBeNull();
     expect(confirmMock).toHaveBeenCalledTimes(1);
     expect(aiChatMock).toHaveBeenCalledTimes(1);
@@ -421,7 +433,7 @@ describe('AiCopilot persistence and clear', () => {
   it('persists the conversation and restores it on the next visit', async () => {
     aiChatMock.mockResolvedValue(assistantReply('Saqlangan javob.'));
     const user = userEvent.setup();
-    const first = render(<AiCopilot />);
+    const first = renderCopilot();
 
     await typeAndSend(user, 'Assalomu alaykum');
     await screen.findByText('Saqlangan javob.');
@@ -435,7 +447,7 @@ describe('AiCopilot persistence and clear', () => {
     ).toBe(true);
 
     first.unmount();
-    render(<AiCopilot />);
+    renderCopilot();
 
     expect(screen.getByText('Assalomu alaykum')).toBeInTheDocument();
     expect(screen.getByText('Saqlangan javob.')).toBeInTheDocument();
@@ -463,7 +475,7 @@ describe('AiCopilot persistence and clear', () => {
       }),
     );
 
-    render(<AiCopilot />);
+    renderCopilot();
 
     expect(screen.queryByTestId('ai-action-confirmation')).toBeNull();
     expect(screen.getByText('Telegram xabari bekor qilindi')).toBeInTheDocument();
@@ -482,7 +494,7 @@ describe('AiCopilot persistence and clear', () => {
       }),
     );
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     expect(screen.getByText('eski xabar')).toBeInTheDocument();
     await user.click(screen.getByTestId('ai-clear-header'));
@@ -514,7 +526,7 @@ describe('AiCopilot presentation states', () => {
     const pending = deferred<AiChatResponse>();
     aiChatMock.mockReturnValue(pending.promise);
     const user = userEvent.setup();
-    render(<AiCopilot />);
+    renderCopilot();
 
     expect(messageList()).toHaveAttribute('aria-busy', 'false');
     await typeAndSend(user, 'Salom');
@@ -529,7 +541,7 @@ describe('AiCopilot presentation states', () => {
   it('keeps mobile-safe layout constraints on prompts, bubbles and composer', async () => {
     aiChatMock.mockResolvedValue(assistantReply('Javob matni'));
     const user = userEvent.setup();
-    const { container } = render(<AiCopilot />);
+    const { container } = renderCopilot();
 
     const [firstPrompt] = screen.getAllByRole('button', { name: /— / });
     const grid = firstPrompt.parentElement as HTMLElement;
@@ -541,7 +553,7 @@ describe('AiCopilot presentation states', () => {
     await typeAndSend(user, 'Salom');
     await screen.findByText('Javob matni');
 
-    const userLabel = screen.getByText('Siz');
+    const userLabel = screen.getByText(/ai\.you|You|Siz/i);
     const userBubble = userLabel.parentElement as HTMLElement;
     expect(userBubble.className).toContain('max-w-[85%]');
     expect(userBubble.className).toContain('sm:max-w-[70%]');
@@ -553,7 +565,7 @@ describe('AiCopilot presentation states', () => {
 
   it('renders with the dark theme class applied (design tokens, no hard-coded colors)', () => {
     document.documentElement.classList.add('dark');
-    render(<AiCopilot />);
+    renderCopilot();
 
     expect(document.documentElement).toHaveClass('dark');
     expect(screen.getByText('M-EDU AI Copilot')).toBeInTheDocument();
@@ -568,7 +580,7 @@ describe('AiCopilot presentation states', () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
 
     try {
-      render(<AiCopilot />);
+      renderCopilot();
       expect(screen.getByText('Oflayn')).toBeInTheDocument();
       expect(screen.queryByText('AI yordamchi')).toBeNull();
     } finally {

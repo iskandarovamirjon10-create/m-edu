@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassEmptyState, GlassErrorState, GlassButton, GlassSelect } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
-import request from '@/lib/api';
+import request, { downloadFile } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useI18n } from '@/i18n/I18nProvider';
 
@@ -40,17 +40,10 @@ export function ImportExportPage() {
       const form = new FormData();
       form.append('file', file);
       form.append('entityType', entity);
-      // FormData upload: no Content-Type header (browser sets the boundary)
-      const res = await fetch('/api/imports', {
+      return await request<{ id?: string }>('/imports', {
         method: 'POST',
         body: form,
-        credentials: 'include',
       });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(body?.message || t('importExport.uploadFailed'));
-      }
-      return (await res.json()) as { id?: string };
     },
     onSuccess: (data) => {
       push('success', t('importExport.jobStarted', { id: data?.id ?? '' }));
@@ -60,33 +53,25 @@ export function ImportExportPage() {
   });
 
   const downloadTemplate = async (e: string) => {
-    const res = await fetch(`/api/template?entityType=${encodeURIComponent(e)}`, {
-      credentials: 'include',
-    });
-    if (!res.ok) return push('error', t('importExport.templateUnavailable'));
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${e.toLowerCase()}-template.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      await downloadFile(`/template?entityType=${encodeURIComponent(e)}`, {
+        defaultFilename: `${e.toLowerCase()}-template.csv`
+      });
+    } catch {
+      push('error', t('importExport.templateUnavailable'));
+    }
   };
 
   const exportData = async (e: string) => {
     push('info', t('importExport.preparing', { entity: e.toLowerCase() }));
-    const res = await fetch(`/api/export?entityType=${encodeURIComponent(e)}&format=csv`, {
-      credentials: 'include',
-    });
-    if (!res.ok) return push('error', t('importExport.exportFailed'));
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${e.toLowerCase()}-export.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    push('success', t('importExport.exportDownloaded'));
+    try {
+      await downloadFile(`/export?entityType=${encodeURIComponent(e)}&format=csv`, {
+        defaultFilename: `${e.toLowerCase()}-export.csv`
+      });
+      push('success', t('importExport.exportDownloaded'));
+    } catch {
+      push('error', t('importExport.exportFailed'));
+    }
   };
 
   const jobs: ImportJob[] = jobsQuery.data?.items ?? [];

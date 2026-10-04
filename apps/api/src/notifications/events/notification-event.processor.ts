@@ -64,13 +64,10 @@ export class NotificationEventProcessor extends WorkerHost {
     try {
       const mod = await import('ioredis');
       const RedisCtor = mod.default;
-      const host = process.env.REDIS_HOST || 'localhost';
-      const port = Number(process.env.REDIS_PORT) || 6379;
+      const url = process.env.REDIS_URL || 'redis://localhost:6379';
       const client = new (RedisCtor as unknown as {
-        new (opts: Record<string, unknown>): Redis;
-      })({
-        host,
-        port,
+        new (url: string, opts: Record<string, unknown>): Redis;
+      })(url, {
         lazyConnect: false,
         maxRetriesPerRequest: 1,
         connectTimeout: 3000,

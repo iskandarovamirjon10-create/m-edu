@@ -4,6 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
+import { AllowPublic } from './public.decorator';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { BootstrapDto, ExchangeAuthCodeDto, ForgotPasswordDto, LoginDto, ParentLoginDto, RegisterDto, ResetPasswordDto } from './dto';
@@ -21,6 +22,7 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @AllowPublic()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Login with email and password' })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
@@ -36,6 +38,7 @@ export class AuthController {
 
 
   @Post('bootstrap')
+  @AllowPublic()
   @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({
     summary: 'Bootstrap the FIRST SUPER_ADMIN (one-time, platform-level)',
@@ -49,6 +52,7 @@ export class AuthController {
   }
 
   @Post('register')
+  @AllowPublic()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Register a new user and organization' })
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
@@ -68,6 +72,7 @@ export class AuthController {
   }
 
   @Get('google')
+  @AllowPublic()
   @UseGuards(GoogleAuthGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Initiate Google OAuth login' })
@@ -76,6 +81,7 @@ export class AuthController {
   }
 
   @Get('google/callback')
+  @AllowPublic()
   @UseGuards(GoogleAuthGuard)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({ summary: 'Google OAuth callback' })
@@ -108,6 +114,7 @@ export class AuthController {
   }
 
   @Post('oauth/exchange')
+  @AllowPublic()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Exchange authorization code for session cookie' })
   async exchangeAuthCode(@Body() body: ExchangeAuthCodeDto, @Res({ passthrough: true }) res: Response) {
@@ -128,6 +135,7 @@ export class AuthController {
   }
 
   @Get('apple')
+  @AllowPublic()
   @ApiOperation({ summary: 'Initiate Apple OAuth login' })
   async appleAuth() {
     throw new BadRequestException(
@@ -137,6 +145,7 @@ export class AuthController {
   }
 
   @Get('apple/callback')
+  @AllowPublic()
   @ApiOperation({ summary: 'Apple OAuth callback' })
   async appleAuthCallback() {
     throw new BadRequestException(
@@ -189,6 +198,7 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @AllowPublic()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Request a password reset link' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -196,6 +206,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @AllowPublic()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Reset password with token' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
@@ -203,6 +214,7 @@ export class AuthController {
   }
 
   @Post('parent-login')
+  @AllowPublic()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Login for parents using email' })
   async parentLogin(@Body() dto: ParentLoginDto, @Res({ passthrough: true }) res: Response) {

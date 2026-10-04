@@ -300,13 +300,21 @@ export class FfmpegStreamIngester {
   static buildArgs(streamUri: string, fps: number, transport: 'tcp' | 'udp'): string[] {
     const args: string[] = [];
     if (streamUri.toLowerCase().startsWith('rtsp://')) {
-      args.push('-rtsp_transport', transport);
+      args.push(
+        '-rtsp_transport', transport,
+        // Hikvision RTSP optimization: reduces initial delay and prevents stream stalling
+        '-analyzeduration', '5000000',
+        '-probesize', '5000000'
+      );
     }
     args.push(
+      '-fflags', 'nobuffer', // Professional low-latency flag
+      '-flags', 'low_delay', // Reduce delay for real-time streaming
       '-i', streamUri,
-      '-an',
-      '-f', 'mjpeg',
-      '-q:v', '5',
+      '-an', // No audio
+      '-f', 'image2pipe', // More robust than mjpeg for pipe extraction
+      '-vcodec', 'mjpeg',
+      '-q:v', '5', // Balance between quality and decoding speed
       '-r', String(Math.max(1, Math.min(30, Math.round(fps)))),
       'pipe:1',
     );

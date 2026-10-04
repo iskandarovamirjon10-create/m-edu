@@ -1,6 +1,9 @@
 // Enums
 export * from './enums';
 
+// AI protocol (canonical, shared by @medu/api and @medu/web)
+export * from './ai';
+
 // DTOs
 export * from './enrollment.dto';
 export * from './recognition.dto';

@@ -578,6 +578,11 @@ export function useAuthState(): AuthStateValue {
   return assertCtx(useContext(AuthStateContext), 'useAuthState');
 }
 
+/** Optional state — returns null if outside AuthProvider. */
+export function useOptionalAuthState(): AuthStateValue | null {
+  return useContext(AuthStateContext);
+}
+
 /** Actions only — never re-renders when the user object changes. */
 export function useAuthActions(): AuthActionsValue {
   return assertCtx(useContext(AuthActionsContext), 'useAuthActions');

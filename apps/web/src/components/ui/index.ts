@@ -22,7 +22,6 @@ export { GlassPageHeader} from'./GlassPageHeader';
 export { GlassDivider} from'./GlassDivider';
 export { GlassSwitch} from'./GlassSwitch';
 export { GlassSurface, type GlassElevation, type GlassTone} from'./Glass';
-export { default as LiquidIDCard, type LiquidIDCardProps} from'./LiquidIDCard';
 
 // Toast API
 export { useToast, setToastContext, ToastContainer, ToastHost, ToastItemView, type ToastType, type ToastItem} from'./GlassToast';

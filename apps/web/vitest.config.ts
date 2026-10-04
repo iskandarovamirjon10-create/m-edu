@@ -9,6 +9,13 @@ export default defineConfig({
     setupFiles: ['src/test-setup.ts'],
     testTimeout: 15000,
     hookTimeout: 15000,
+    coverage: {
+      provider: 'v8',
+      thresholds: {
+        statements: 70,
+        branches: 60,
+      }
+    }
   },
   resolve: {
     alias: {

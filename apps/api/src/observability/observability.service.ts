@@ -85,9 +85,7 @@ export class ObservabilityService {
   }>> {
     try {
       const { Queue } = await import('bullmq');
-      const host = process.env.REDIS_HOST || 'localhost';
-      const port = Number(process.env.REDIS_PORT) || 6379;
-
+      const url = process.env.REDIS_URL || 'redis://localhost:6379';
       const queueNames = ['background-jobs'];
       const results: Array<{
         name: string;
@@ -102,15 +100,10 @@ export class ObservabilityService {
       for (const name of queueNames) {
         let queue: InstanceType<typeof Queue> | null = null;
         try {
-          queue = new Queue(name, { 
-            connection: { 
-              host, 
-              port, 
-              maxRetriesPerRequest: 0, 
-              connectTimeout: 500,
-              commandTimeout: 500,
-            } 
-          });
+          const mod = await import('ioredis');
+          const RedisCtor = mod.default as unknown as any;
+          const conn = new RedisCtor(url, { maxRetriesPerRequest: 0, connectTimeout: 500, commandTimeout: 500 });
+          queue = new Queue(name, { connection: conn });
           
           const statsPromise = Promise.all([
             queue.getWaitingCount(),
@@ -194,14 +187,13 @@ export class ObservabilityService {
     try {
       const RedisModule = await import('ioredis');
       const RedisCtor = (RedisModule.default ?? RedisModule) as unknown as {
-        new (opts: Record<string, unknown>): {
+        new (url: string, opts: Record<string, unknown>): {
           ping(): Promise<string>;
           quit(): Promise<unknown>;
         };
       };
-      const host = process.env.REDIS_HOST || 'localhost';
-      const port = Number(process.env.REDIS_PORT) || 6379;
-      const client = new RedisCtor({ host, port, maxRetriesPerRequest: 1, connectTimeout: 3000 });
+      const url = process.env.REDIS_URL || 'redis://localhost:6379';
+      const client = new RedisCtor(url, { maxRetriesPerRequest: 1, connectTimeout: 3000 });
       const start = Date.now();
       const pong = await client.ping();
       await client.quit();

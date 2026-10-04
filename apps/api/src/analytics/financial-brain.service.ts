@@ -11,7 +11,7 @@ export class FinancialBrainService {
       this.prisma.payment.aggregate({ where: { organizationId, status: 'PAID', paidAt: { gte: startDate, lte: endDate } }, _sum: { amount: true } }),
       this.prisma.refund.aggregate({ where: { organizationId, status: 'PROCESSED', processedAt: { gte: startDate, lte: endDate } }, _sum: { amount: true } }),
       this.prisma.expense.aggregate({ where: { organizationId, date: { gte: startDate, lte: endDate } }, _sum: { amount: true } }),
-      this.prisma.payrollRun.aggregate({ where: { organizationId, status: 'PAID', calculatedAt: { gte: startDate, lte: endDate } }, _sum: { netAmount: true } }),
+      this.prisma.payrollRun.aggregate({ where: { organizationId, status: 'PAID', paidAt: { gte: startDate, lte: endDate } }, _sum: { netAmount: true } }),
     ]);
     const cashCollected = Number(inflows._sum.amount || 0);
     const refundsTotal = Number(refunds._sum.amount || 0);
@@ -27,12 +27,27 @@ export class FinancialBrainService {
 
   async getMonthlyRevenueSeries(organizationId: string) {
     const rows = await this.prisma.$queryRaw<any[]>`
-      WITH latest AS (
+      WITH payments AS (
         SELECT DATE_TRUNC('month', "paidAt") AS bucket, COALESCE(SUM(amount), 0) AS total, COUNT(*)::int AS count
         FROM "Payment"
-        WHERE "organizationId" = ${organizationId}::uuid AND status = 'PAID'
+        WHERE "organizationId" = ${organizationId}::uuid AND status = 'PAID' AND "paidAt" IS NOT NULL
         GROUP BY 1
-        ORDER BY 1 DESC
+      ), refunds AS (
+        SELECT DATE_TRUNC('month', "processedAt") AS bucket, COALESCE(SUM(amount), 0) AS total
+        FROM "Refund"
+        WHERE "organizationId" = ${organizationId}::uuid AND status = 'PROCESSED' AND "processedAt" IS NOT NULL
+        GROUP BY 1
+      ), months AS (
+        SELECT bucket FROM payments UNION SELECT bucket FROM refunds
+      ), latest AS (
+        SELECT 
+          m.bucket, 
+          (COALESCE(p.total, 0) - COALESCE(r.total, 0))::decimal AS total, 
+          COALESCE(p.count, 0)::int AS count
+        FROM months m
+        LEFT JOIN payments p ON m.bucket = p.bucket
+        LEFT JOIN refunds r ON m.bucket = r.bucket
+        ORDER BY m.bucket DESC
         LIMIT 12
       )
       SELECT * FROM latest ORDER BY bucket ASC
@@ -92,7 +107,7 @@ export class FinancialBrainService {
         _sum: { amount: true },
       }),
       this.prisma.payrollRun.aggregate({
-        where: { organizationId, status: 'PAID', calculatedAt: periodFilter },
+        where: { organizationId, status: 'PAID', paidAt: periodFilter },
         _sum: { netAmount: true },
       }),
     ]);
@@ -152,7 +167,7 @@ export class FinancialBrainService {
         select: { group: { select: { course: { select: { price: true } } } } },
       }),
       this.prisma.payrollRun.aggregate({
-        where: { organizationId, status: 'PAID', calculatedAt: { gte: lookbackStart } },
+        where: { organizationId, status: 'PAID', paidAt: { gte: lookbackStart } },
         _sum: { netAmount: true },
       }),
       this.prisma.expense.aggregate({

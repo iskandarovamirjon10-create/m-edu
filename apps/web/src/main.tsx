@@ -1,10 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { I18nProvider } from './i18n/I18nProvider';
-import { ThemeProvider } from './hooks/useTheme';
 import './styles/globals.css';
-import './index.css';
 
 // Get the root element
 const rootElement = document.getElementById('root');
@@ -21,17 +18,22 @@ const root = ReactDOM.createRoot(rootElement);
 // Render the application
 root.render(
   <React.StrictMode>
-    <ThemeProvider>
-      <I18nProvider>
-        <App />
-      </I18nProvider>
-    </ThemeProvider>
+    <App />
   </React.StrictMode>,
 );
 
 // Enable hot module replacement in development
 if (import.meta.env.DEV) {
   import.meta.hot?.accept();
+}
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((error) => {
+      console.error('ServiceWorker registration failed:', error);
+    });
+  });
 }
 
 // Log performance metrics in development

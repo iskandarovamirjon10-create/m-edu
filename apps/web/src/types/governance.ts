@@ -1,3 +1,10 @@
+/**
+ * Data governance, retention policies, and compliance export logs.
+ */
+
+import type { Paginated } from './common';
+export type { Paginated };
+
 export interface DataGovernancePolicy {
   id: string;
   dataType: string;
@@ -31,14 +38,6 @@ export interface DataAccessLog {
   ipAddress: string | null;
   timestamp: string;
   createdAt?: string;
-}
-
-export interface Paginated<T> {
-  items: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
 }
 
 export interface ExportStats {

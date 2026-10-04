@@ -116,6 +116,9 @@ export function mainMenuKeyboard(
     rows.push(row(button(ctx.tr('btn.admin'), ctx.cb(CallbackCodes.ADMIN_MENU))));
   }
 
+  // Backed by the registered `/copilot` command — every role may run it.
+  rows.push(row(button(ctx.tr('btn.copilot'), ctx.cb('cmd', 'copilot'))));
+
   rows.push(
     row(
       button(ctx.tr('btn.settings'), ctx.cb('cmd', 'settings')),

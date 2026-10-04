@@ -2,8 +2,10 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
+import { AllowPublic } from '../auth/public.decorator';
 
 @ApiTags('Health')
+@AllowPublic()
 @Controller('health')
 // Health probes are exempt from rate limiting: orchestrators, load balancers
 // and uptime monitors poll them far more often than interactive endpoints,

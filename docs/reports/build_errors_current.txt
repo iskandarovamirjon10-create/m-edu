@@ -1,0 +1,80 @@
+﻿src/pages/AcademicRisk.tsx(20,11): error TS6196: 'AcademicRisk' is declared but never used.
+src/pages/AcademicRisk.tsx(29,44): error TS2339: Property 'level' does not exist on type 'AcademicRiskItem'.
+src/pages/AcademicRisk.tsx(94,13): error TS2339: Property 'studentId' does not exist on type 'AcademicRiskItem'.
+src/pages/AcademicRisk.tsx(97,68): error TS2339: Property 'studentName' does not exist on type 'AcademicRiskItem'.
+src/pages/AcademicRisk.tsx(98,46): error TS2339: Property 'recommendation' does not exist on type 'AcademicRiskItem'.
+src/pages/AcademicRisk.tsx(102,30): error TS2339: Property 'level' does not exist on type 'AcademicRiskItem'.
+src/pages/AcademicRisk.tsx(102,41): error TS2339: Property 'level' does not exist on type 'AcademicRiskItem'.
+src/pages/AutomationEngine.tsx(17,64): error TS6133: 'AutomationCondition' is declared but its value is never read.
+src/pages/AutomationEngine.tsx(17,85): error TS6133: 'AutomationAction' is declared but its value is never read.
+src/pages/AutomationEngine.tsx(138,14): error TS6133: 'data' is declared but its value is never read.
+src/pages/AutomationEngine.tsx(149,14): error TS6133: 'data' is declared but its value is never read.
+src/pages/AutomationEngine.tsx(182,11): error TS2339: Property 'success' does not exist on type '(kindOrObject: "success" | "error" | "info" | { type: "success" | "error" | "info"; message: string; title?: string | undefined; }, messageArg?: string | undefined) => void'.
+src/pages/CRMAnalytics.tsx(146,53): error TS2339: Property 'conversionFromTop' does not exist on type '{ stage: string; count: number; }'.
+src/pages/CRMAnalytics.tsx(205,87): error TS2339: Property 'totalLeads' does not exist on type 'CRMSources'.
+src/pages/CRMAnalytics.tsx(208,7): error TS2339: Property 'wonLeads' does not exist on type 'CRMSources'.
+src/pages/CRMAnalytics.tsx(213,7): error TS2339: Property 'lostLeads' does not exist on type 'CRMSources'.
+src/pages/CRMAnalytics.tsx(222,7): error TS2339: Property 'avgDaysToConvert' does not exist on type 'CRMSources'.
+src/pages/CRMAnalytics.tsx(239,87): error TS2339: Property 'avgDaysInPipeline' does not exist on type 'CRMAnalyticsSummary'.
+src/pages/CRMAnalytics.tsx(240,77): error TS2339: Property 'avgTimeToWin' does not exist on type 'CRMAnalyticsSummary'.
+src/pages/CRMAnalytics.tsx(241,79): error TS2339: Property 'totalActiveLeads' does not exist on type 'CRMAnalyticsSummary'.
+src/pages/CRMAnalytics.tsx(292,11): error TS2339: Property 'totalLost' does not exist on type 'CRMAnalyticsSummary'.
+src/pages/CRMAnalytics.tsx(302,80): error TS2339: Property 'totalLost' does not exist on type 'CRMAnalyticsSummary'.
+src/pages/CRMAnalytics.tsx(352,23): error TS2339: Property 'statusCounts' does not exist on type 'CRMAnalyticsSummary'.
+src/pages/CRMAnalytics.tsx(458,7): error TS2339: Property 'name' does not exist on type 'CRMModeratorStats'.
+src/pages/CRMAnalytics.tsx(461,86): error TS2339: Property 'name' does not exist on type 'CRMModeratorStats'.
+src/pages/CRMAnalytics.tsx(462,7): error TS2339: Property 'email' does not exist on type 'CRMModeratorStats'.
+src/pages/CRMAnalytics.tsx(462,107): error TS2339: Property 'email' does not exist on type 'CRMModeratorStats'.
+src/pages/CRMAnalytics.tsx(466,87): error TS2339: Property 'totalLeads' does not exist on type 'CRMModeratorStats'.
+src/pages/CRMAnalytics.tsx(475,7): error TS2339: Property 'lostLeads' does not exist on type 'CRMModeratorStats'.
+src/pages/CRMAnalytics.tsx(543,34): error TS2740: Type '{}' is missing the following properties from type 'CRMAnalyticsSummary': funnel, total, overallConversion, stageVelocity, and 2 more.
+src/pages/CRMAnalytics.tsx(544,36): error TS2740: Type '{}' is missing the following properties from type 'CRMSources[]': length, pop, push, concat, and 29 more.
+src/pages/CRMAnalytics.tsx(545,38): error TS2740: Type '{}' is missing the following properties from type 'CRMAnalyticsSummary': funnel, total, overallConversion, stageVelocity, and 2 more.
+src/pages/CRMAnalytics.tsx(546,45): error TS2740: Type '{}' is missing the following properties from type 'CRMAnalyticsSummary': funnel, total, overallConversion, stageVelocity, and 2 more.
+src/pages/CRMAnalytics.tsx(547,32): error TS2740: Type '{}' is missing the following properties from type 'CRMAnalyticsSummary': funnel, total, overallConversion, stageVelocity, and 2 more.
+src/pages/CRMAnalytics.tsx(548,42): error TS2740: Type '{}' is missing the following properties from type 'CRMModeratorStats[]': length, pop, push, concat, and 29 more.
+src/pages/DataGovernance.tsx(67,42): error TS2304: Cannot find name 'DataGovernancePolicy'.
+src/pages/DataGovernance.tsx(68,45): error TS2304: Cannot find name 'DataGovernancePolicy'.
+src/pages/DataGovernance.tsx(168,47): error TS2304: Cannot find name 'ExportLog'.
+src/pages/DataGovernance.tsx(229,16): error TS2339: Property 'totalPages' does not exist on type '{ items: ExportLog[]; }'.
+src/pages/DataGovernance.tsx(232,68): error TS2339: Property 'totalPages' does not exist on type '{ items: ExportLog[]; }'.
+src/pages/DataGovernance.tsx(233,68): error TS2339: Property 'totalPages' does not exist on type '{ items: ExportLog[]; }'.
+src/pages/DataGovernance.tsx(233,112): error TS2339: Property 'totalPages' does not exist on type '{ items: ExportLog[]; }'.
+src/pages/DataGovernance.tsx(251,44): error TS2304: Cannot find name 'DataAccessLog'.
+src/pages/DataGovernance.tsx(321,16): error TS2339: Property 'totalPages' does not exist on type '{ items: DataAccessLog[]; }'.
+src/pages/DataGovernance.tsx(324,68): error TS2339: Property 'totalPages' does not exist on type '{ items: DataAccessLog[]; }'.
+src/pages/DataGovernance.tsx(325,68): error TS2339: Property 'totalPages' does not exist on type '{ items: DataAccessLog[]; }'.
+src/pages/DataGovernance.tsx(325,112): error TS2339: Property 'totalPages' does not exist on type '{ items: DataAccessLog[]; }'.
+src/pages/DataGovernance.tsx(347,2): error TS2322: Type '() => Promise<unknown>' is not assignable to type 'MutationFunction<{ policiesChecked: number; }, void>'.
+  Type 'Promise<unknown>' is not assignable to type 'Promise<{ policiesChecked: number; }>'.
+    Type 'unknown' is not assignable to type '{ policiesChecked: number; }'.
+src/pages/DataGovernance.tsx(354,35): error TS2304: Cannot find name 'ExportStats'.
+src/pages/DataGovernance.tsx(355,42): error TS2304: Cannot find name 'DataGovernancePolicy'.
+src/pages/DataGovernance.tsx(356,45): error TS2304: Cannot find name 'DataGovernancePolicy'.
+src/pages/FinancialAnalytics.tsx(38,10): error TS6133: 'getDefaultYearMonth' is declared but its value is never read.
+src/pages/FinancialAnalytics.tsx(48,10): error TS6133: 'PremiumSegmentedControl' is declared but its value is never read.
+src/pages/FinancialAnalytics.tsx(104,10): error TS6133: 'PremiumBarChart' is declared but its value is never read.
+src/pages/FinancialAnalytics.tsx(152,9): error TS6133: '_ncf' is declared but its value is never read.
+src/pages/FinancialAnalytics.tsx(225,33): error TS2322: Type '"success" | "danger"' is not assignable to type 'GlassBadgeVariant | undefined'.
+  Type '"danger"' is not assignable to type 'GlassBadgeVariant | undefined'.
+src/pages/FinancialAnalytics.tsx(245,12): error TS2339: Property 'status' does not exist on type 'Anomaly[]'.
+src/pages/FinancialAnalytics.tsx(245,22): error TS2367: This comparison appears to be unintentional because the types '""' and '"INSUFFICIENT_DATA"' have no overlap.
+src/pages/FinancialAnalytics.tsx(279,33): error TS2322: Type '"default" | "danger" | "warning"' is not assignable to type 'GlassBadgeVariant | undefined'.
+  Type '"default"' is not assignable to type 'GlassBadgeVariant | undefined'.
+src/pages/FinancialAnalytics.tsx(299,24): error TS2554: Expected 1 arguments, but got 0.
+src/pages/FinancialAnalytics.tsx(301,17): error TS6133: 'setRange' is declared but its value is never read.
+src/pages/FinancialAnalytics.tsx(308,3): error TS2349: This expression is not callable.
+  Type 'void' has no call signatures.
+src/pages/FinancialAnalytics.tsx(322,17): error TS6133: 'whatIfData' is declared but its value is never read.
+src/pages/FinancialAnalytics.tsx(327,15): error TS2304: Cannot find name 'data'.
+src/pages/FinancialAnalytics.tsx(363,24): error TS2322: Type 'unknown' is not assignable to type 'CashFlowData'.
+src/pages/FinancialAnalytics.tsx(369,24): error TS2322: Type 'unknown' is not assignable to type 'CashFlowData'.
+src/pages/FinancialAnalytics.tsx(375,25): error TS2322: Type 'unknown' is not assignable to type 'Anomaly[]'.
+src/pages/FinancialAnalytics.tsx(471,17): error TS2339: Property 'status' does not exist on type 'ForecastData | { status: string; }'.
+  Property 'status' does not exist on type 'ForecastData'.
+src/pages/FinancialAnalytics.tsx(501,114): error TS2339: Property 'summary' does not exist on type 'ForecastData | { status: string; }'.
+  Property 'summary' does not exist on type '{ status: string; }'.
+src/pages/FinancialAnalytics.tsx(505,111): error TS2339: Property 'summary' does not exist on type 'ForecastData | { status: string; }'.
+  Property 'summary' does not exist on type '{ status: string; }'.
+src/pages/FinancialAnalytics.tsx(519,25): error TS2339: Property 'forecasts' does not exist on type 'ForecastData | { status: string; }'.
+  Property 'forecasts' does not exist on type '{ status: string; }'.

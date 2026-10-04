@@ -1,15 +1,27 @@
 import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
 import { authTracker } from './config/auth-tracker';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
+import { RedisPubSubModule } from './common/redis/redis-pubsub.module';
 import { AuthModule } from './auth/auth.module';
+import { GlobalAuthGuard } from './auth/global-auth.guard';
 import { UsersModule } from './users/users.module';
+import { AdminModule } from './admin/admin.module';
 import { StudentsModule } from './students/students.module';
 import { TeachersModule } from './teachers/teachers.module';
 import { CoursesModule } from './courses/courses.module';
+import { SubjectsModule } from './subjects/subjects.module';
+import { CurriculumModule } from './curriculum/curriculum.module';
+import { LessonsModule } from './lessons/lessons.module';
+import { LearningMaterialsModule } from './learning-materials/learning-materials.module';
+import { AssignmentsModule } from './assignments/assignments.module';
+import { AssessmentModule } from './assessment/assessment.module';
+import { ProgressModule } from './progress/progress.module';
+import { CommunicationModule } from './communication/communication.module';
+import { CalendarModule } from './calendar/calendar.module';
 import { GroupsModule } from './groups/groups.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { AttendanceModule } from './attendance/attendance.module';
@@ -26,6 +38,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { HealthModule } from './health/health.module';
 import { FaceModule } from './face/face.module';
 import { CameraModule } from './camera/camera.module';
+import { AiModule } from './ai/ai.module';
 import { CsrfMiddleware } from './security/csrf.middleware';
 
 // ===================== v2 Modules =====================
@@ -35,6 +48,7 @@ import { ExamsModule } from './exams/exams.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { AuditModule } from './audit/audit.module';
+import { AuditInterceptor } from './audit/audit.interceptor';
 import { SearchModule } from './search/search.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { DocumentsModule } from './documents/documents.module';
@@ -62,6 +76,7 @@ import { AutomationModule } from './automation/automation.module';
 import { CronModule } from './cron/cron.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { PerformanceModule } from './performance/performance.module';
+import { PublicMetricsController } from './observability/public-metrics.controller';
 
 import { ResilientRedisThrottlerStorage } from './common/guards/throttler-redis.storage';
 import { isRedisEnabled, redisQueueConnection } from './config/redis.config';
@@ -73,7 +88,7 @@ const redisEnabled = isRedisEnabled();
 
 @Module({
   imports: [
-    PrometheusModule.register(),
+    PrometheusModule.register({ controller: PublicMetricsController }),
     ConfigModule.forRoot({ isGlobal: true }),
     NestScheduleModule.forRoot(),
     // Central BullMQ connection for every registerQueue() below.
@@ -101,11 +116,22 @@ const redisEnabled = isRedisEnabled();
       getTracker: authTracker,
     })}),
     PrismaModule,
+    RedisPubSubModule,
     AuthModule,
     UsersModule,
+    AdminModule,
     StudentsModule,
     TeachersModule,
     CoursesModule,
+    SubjectsModule,
+    CurriculumModule,
+    LessonsModule,
+    LearningMaterialsModule,
+    AssignmentsModule,
+    AssessmentModule,
+    ProgressModule,
+    CommunicationModule,
+    CalendarModule,
     GroupsModule,
     ScheduleModule,
     AttendanceModule,
@@ -122,6 +148,7 @@ const redisEnabled = isRedisEnabled();
     HealthModule,
     FaceModule,
     CameraModule,
+    AiModule,
 
     // v2 Premium Modules
     LibraryModule,
@@ -161,11 +188,23 @@ const redisEnabled = isRedisEnabled();
   ],
   providers: [
     // Apply rate limiting to every HTTP endpoint. Per-endpoint overrides use
-    // @Throttle({ default: { limit, ttl } }) � e.g. auth (login/register) and
+    // @Throttle({ default: { limit, ttl } }) — e.g. auth (login/register) and
     // face capture/attempt endpoints are tightened well below the 100/min
     // default (see auth.controller.ts and face.controller.ts).
+    //
+    // ORDER MATTERS. ThrottlerGuard must stay first:
+    //   1. `rate-limiting.spec.ts` resolves the first APP_GUARD provider.
+    //   2. `authTracker` keys anonymous traffic by IP, so brute-force attempts
+    //      are counted before we spend a JWT verification on them.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // FAIL-CLOSED AUTHENTICATION. Every HTTP route now requires a valid JWT
+    // unless its handler/controller carries `@AllowPublic()` (see
+    // auth/public.decorator.ts for the reviewed allow-list). Registering a
+    // controller without @UseGuards(...) no longer publishes it.
+    { provide: APP_GUARD, useClass: GlobalAuthGuard },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
+
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {

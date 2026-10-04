@@ -14,6 +14,8 @@ interface GlassCardProps extends HTMLAttributes<HTMLDivElement> {
   variant?: GlassCardVariant;
   /** @deprecated use variant="interactive" */
   hover?: boolean;
+  /** @deprecated use variant="interactive" */
+  interactive?: boolean;
   className?: string;
   /** Render without glass reflection overlay */
   noReflection?: boolean;
@@ -79,16 +81,25 @@ export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
   (
     {
       children,
-      padding = 'md',
+      padding,
       variant: variantProp = 'default',
       hover = false,
+      interactive = false,
       className = '',
       noReflection = false,
       ...rest
     },
     ref,
   ) => {
-    const variant = hover ? 'interactive' : variantProp;
+    const variant = hover || interactive ? 'interactive' : variantProp;
+    // An explicit `padding` prop wins. Otherwise, when the caller passes its own
+    // padding via className (e.g. "p-0", "p-6"), don't stack the default on top.
+    const hasExplicitPadding = /(^|\s)p[xytrbl]?-/.test(className);
+    const paddingClass = padding
+      ? PADDING_CLASSES[padding]
+      : hasExplicitPadding
+        ? ''
+        : PADDING_CLASSES.md;
 
     return (
       <div
@@ -99,7 +110,7 @@ export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
           '[-webkit-backdrop-filter:blur(16px)_saturate(1.5)]',
           'rounded-[var(--radius-xl)]',
           VARIANT_CLASSES[variant],
-          PADDING_CLASSES[padding],
+          paddingClass,
           className,
         ].join(' ')}
         {...rest}

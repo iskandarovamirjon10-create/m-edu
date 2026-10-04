@@ -3,6 +3,7 @@ import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmp
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useI18n } from '@/i18n/I18nProvider';
+import { forecastingApi } from '@/lib/api';
 
 interface ForecastPoint {
   period: string; // YYYY-MM
@@ -40,24 +41,14 @@ export function ForecastingPage() {
   const { t } = useI18n();
   usePageTitle(t('forecasting.pageTitle'));
 
-  // NOTE: the backend controller is mounted at /api/forecasting (not /forecast).
-  // The previous URLs hit a non-existent route, so this page always showed zeros.
   const summaryQuery = useQuery({
     queryKey: ['forecast-summary'],
-    queryFn: async (): Promise<ForecastSummary> => {
-      const res = await fetch('/api/forecasting/summary');
-      if (!res.ok) return { series: 0, projectedRevenue: 0, projectedEnrollments: 0 };
-      return res.json() as Promise<ForecastSummary>;
-    },
+    queryFn: () => forecastingApi.summary() as Promise<ForecastSummary>,
   });
 
   const seriesQuery = useQuery({
     queryKey: ['forecast'],
-    queryFn: async (): Promise<ForecastListResponse> => {
-      const res = await fetch('/api/forecasting');
-      if (!res.ok) return { items: [] as ForecastSeries[] };
-      return res.json() as Promise<ForecastListResponse>;
-    },
+    queryFn: () => forecastingApi.list() as Promise<ForecastListResponse>,
   });
 
   const series: ForecastSeries[] = seriesQuery.data?.items ?? [];

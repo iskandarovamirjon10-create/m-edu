@@ -1,7 +1,0 @@
-/* This file is kept for backwards compatibility.
- * New styles are in src/styles/globals.css
- * Only minimal base styles here - no component classes.
- */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;

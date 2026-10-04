@@ -21,6 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AttendanceDecisionEngine } from './attendance-decision.engine';
 import { CameraWorkerSession } from './camera-worker-session';
 import { CameraAlertingService } from './camera-alerting.service';
+import { RedisPubSubService } from '../common/redis/redis-pubsub.service';
 
 interface CameraFaceEngine extends FaceEngine {
   initialize(): Promise<void>;
@@ -117,6 +118,7 @@ export class CameraWorkerManagerService
   constructor(
     private readonly prisma: PrismaService,
     private readonly alerting: CameraAlertingService,
+    private readonly redisPubSub: RedisPubSubService,
   ) {
     this.networkSecurity = new NetworkSecurity({
       allowPrivateIps: process.env.ALLOW_LOCAL_CAMERAS === 'true' || process.env.NODE_ENV !== 'production',
@@ -388,7 +390,7 @@ export class CameraWorkerManagerService
     await this.initializeFaceEngine();
 
     this.attendanceEngine =
-      new AttendanceDecisionEngine(this.prisma);
+      new AttendanceDecisionEngine(this.prisma, this.redisPubSub);
 
     await this.startEnabledCameras();
   }

@@ -50,6 +50,7 @@ an external, fully untrusted client.
 | Concern | Component |
 | --- | --- |
 | Bot API adapter (only place that calls Telegram) | `src/telegram/telegram.service.ts` |
+| Bot initialization at boot (`setMyCommands` + `setWebhook`) | `src/telegram/telegram-bootstrap.service.ts` |
 | Link-token issue/consume, disconnect, status | `src/telegram/telegram-link.service.ts` |
 | Webhook deduplication (`update_id`) | `src/telegram/telegram-update.service.ts` |
 | Distributed limiter (attempts + command/callback floods + one-time claims) | `src/telegram/telegram-attempt-limiter.service.ts` |
@@ -306,10 +307,15 @@ allowed, whitespace-normalized, arguments preserved). Commands:
 | `/settings` | all | Connection state, language, unlink entry |
 | `/language` | all | UZ/RU/EN picker; persists to `UserSettings.language`; ParentAccounts are told it's unavailable |
 | `/unlink` | all | Confirmation keyboard; the disconnect happens only on the signed one-time callback |
+| `/copilot` | all | The M-EDU AI Copilot — same `AiService` (identity, M-EDU-only scope, tenant statistics) as the web assistant; per-chat Redis budget of 10 turns/60 s, HTML-escaped and length-capped reply |
 
 Unknown commands get a localized "not available" reply; every list reply is
 paginated through signed `PAGE` callbacks (page bounded to 1..20, list name
 whitelisted).
+
+Only commands with `roles === 'ALL'` are published to Telegram's command
+autocomplete (via `setMyCommands` at boot); `/help` stays the authoritative,
+role-filtered list.
 
 ---
 
@@ -482,11 +488,14 @@ Set in the API environment only — **never** shipped to the frontend bundle.
 | Variable | Required | Notes |
 | --- | --- | --- |
 | `TELEGRAM_ENABLED` | no | Kill switch. Only the literal `false` disables delivery |
-| `TELEGRAM_BOT_TOKEN` | when enabled | BotFather token |
-| `TELEGRAM_BOT_USERNAME` | for deep links | `@name` or `name` |
+| `TELEGRAM_BOT_TOKEN` | when enabled | BotFather token. Backend-only — never a `NEXT_PUBLIC_` var, never logged |
+| `TELEGRAM_BOT_USERNAME` | for deep links | `medu_education_bot` (`@name` or `name` both accepted) |
 | `TELEGRAM_WEBHOOK_SECRET` | production | ≥32 chars; webhook fails closed without it |
-| `TELEGRAM_WEBHOOK_URL` | production | Public HTTPS endpoint |
+| `TELEGRAM_WEBHOOK_URL` | production | Public HTTPS endpoint of `/api/webhooks/telegram`. When set, the API registers it at boot (see §8) |
+| `TELEGRAM_API_BASE_URL` | no | Override of the Bot API host (self-hosted Bot API / proxy). Invalid values fall back to `https://api.telegram.org` |
 | `TELEGRAM_CALLBACK_SECRET` | recommended | Dedicated HMAC key for callback envelopes; falls back to `JWT_SECRET` when unset |
+
+`.env.example` carries safe placeholders for every variable above.
 
 `assertValidConfig` refuses production startup when `TELEGRAM_ENABLED=true` and
 any of the token/username/secret (or secret length) is missing.
@@ -499,10 +508,22 @@ any of the token/username/secret (or secret length) is missing.
 # API env
 TELEGRAM_ENABLED=true
 TELEGRAM_BOT_TOKEN=<botfather token>
-TELEGRAM_BOT_USERNAME=<bot username>
+TELEGRAM_BOT_USERNAME=medu_education_bot
 TELEGRAM_WEBHOOK_SECRET=<32+ random chars>
 
-# Expose the API publicly, then register the webhook once
+# Optional: auto-registration at boot (setWebhook + secret_token)
+TELEGRAM_WEBHOOK_URL=https://<public-host>/api/webhooks/telegram
+```
+
+With `TELEGRAM_WEBHOOK_URL` set, `TelegramBootstrapService` calls `setWebhook`
+(and publishes the localized command menu) after the API boots — idempotent, so
+a secret rotation is applied by restarting. Registration is skipped when the
+secret is missing (the controller would reject every update anyway) and never
+runs under `NODE_ENV=test`.
+
+Without it, register manually once:
+
+```bash
 curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
   -d "url=https://<public-host>/api/webhooks/telegram" \
   -d "secret_token=$TELEGRAM_WEBHOOK_SECRET"
@@ -517,11 +538,13 @@ open (link tokens still cannot be brute-forced).
 
 1. Run migrations: `prisma migrate deploy` (additive; safe on a live DB).
 2. Provide the environment variables above.
-3. Register/refresh the webhook (`setWebhook`) and verify
-   `getWebhookInfo` reports no `last_error_message`.
+3. Set `TELEGRAM_WEBHOOK_URL` to the public endpoint and restart — the API
+   registers the webhook (with `TELEGRAM_WEBHOOK_SECRET`) and the localized
+   command menu itself. Otherwise register manually with `setWebhook`, then
+   verify `getWebhookInfo` reports no `last_error_message`.
 4. Secret rotation: update `TELEGRAM_BOT_TOKEN` (BotFather revoke/regenerate)
-   and re-run `setWebhook` with the new `secret_token`; no data migration is
-   needed because no secret is stored in the database.
+   and restart (or re-run `setWebhook`) so the new `secret_token` is applied;
+   no data migration is needed because no secret is stored in the database.
 
 ---
 
@@ -546,7 +569,7 @@ retention is a separate, existing system.
 
 ```bash
 cd apps/api
-npx vitest run src/telegram          # 226 tests, 14 files
+npx vitest run src/telegram          # 273 tests, 17 files
 npx vitest run src/notifications     # 99 tests, 14 files
 npx tsc --noEmit -p tsconfig.json
 ```
@@ -586,6 +609,16 @@ HTML escaping (hostile names/statuses/group titles), role menus (only
 reachable commands shown, admin menu excluded for non-admins, downgrade
 shrinks immediately), large-Telegram-ID handling, i18n parity across uz/ru/en
 and the `resolveLanguage` precedence chain.
+
+The Copilot/bootstrap slice adds: `/copilot` identity and usage (the canonical
+assistant sentence in all three languages), tenant scoping of the model call
+(context wins over question text, `ParentAccount` → `principalId`), question
+length cap, HTML escaping + truncation without a dangling entity, model-failure
+containment (no key/prompt/id leak), per-chat Copilot budget, and boot
+registration (skipped under test, `roles === 'ALL'` filter, ru/uz lists,
+webhook + secret pairing, never-fail boot). `telegram.service.spec.ts` pins the
+configurable Bot API host and asserts the token and webhook secret never reach
+the logs.
 
 **Migration verification:** `npx tsx scripts/verify-telegram-migration.ts`
 boots an ephemeral embedded Postgres and asserts the tables, enum, unique

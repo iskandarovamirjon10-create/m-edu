@@ -71,3 +71,17 @@ const PRIVILEGED_ROLE_SET: ReadonlySet<string> = new Set<string>(
 export function isPrivilegedRole(role: string | undefined | null): boolean {
   return typeof role === 'string' && PRIVILEGED_ROLE_SET.has(role);
 }
+
+const ADMIN_ROLE_SET: ReadonlySet<string> = new Set<string>(ADMIN_ROLES);
+
+/**
+ * True for roles allowed to see organization-wide financial data
+ * (debt totals, payer identities, aggregate payment history).
+ *
+ * Teachers and assistants are staff, but payroll/debt figures are not part
+ * of their job, so the AI copilot only injects them for these roles.
+ */
+export function isAdminRole(role: string | undefined | null): boolean {
+  return typeof role === 'string' && ADMIN_ROLE_SET.has(role);
+}
+

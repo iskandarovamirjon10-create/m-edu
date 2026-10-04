@@ -22,3 +22,4 @@ export const AllowAnyRole = () => SetMetadata(ALLOW_ANY_ROLE_KEY, true);
  */
 export const ALLOW_SELF_SERVICE_KEY = 'allowSelfService';
 export const AllowSelfService = () => SetMetadata(ALLOW_SELF_SERVICE_KEY, true);
+

@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { CSRF_COOKIE_NAME } from './csrf.middleware';
+import { AllowPublic } from '../auth/public.decorator';
 
 /**
  * Public CSRF-token seed endpoint.
@@ -14,6 +15,7 @@ import { CSRF_COOKIE_NAME } from './csrf.middleware';
  * from the cookie, which the browser must echo back in `X-XSRF-TOKEN`.
  */
 @ApiTags('Security')
+@AllowPublic()
 @Controller('csrf-token')
 @SkipThrottle()
 export class CsrfController {

@@ -83,7 +83,12 @@ export type RequestOptions = RequestInit & { timeout?: number; defaultFilename?:
  * / CI) so the SPA can talk to a separately deployed API host; development
  * falls back to the Vite dev-server proxy at `/api`.
  */
-const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
+export const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
+
+export function apiUrl(path: string): string {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE}${p}`;
+}
 
 /** Read the double-submit CSRF cookie, if the browser holds one. */
 function readXsrfCookie(): string | null {
@@ -122,6 +127,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> | undefined),
   };
+  if (options.body instanceof FormData) {
+    delete headers['Content-Type'];
+  }
 
   const method = options.method?.toUpperCase() || 'GET';
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
@@ -323,8 +331,34 @@ export interface TelegramStatusResponse {
   lastSeenAt: string | null;
   pendingLinkExpiresAt: string | null;
 }
+
+export interface TelegramAdminOverview {
+  configured: boolean;
+  botUsername: string | null;
+  organizationId: string;
+  accounts: {
+    total: number;
+    active: number;
+    disconnected: number;
+    blocked: number;
+    suspended: number;
+    lastSeenAt: string | null;
+  };
+  deliveries: {
+    last24h: { sent: number; failed: number; deferred: number; skipped: number };
+    recentFailures: Array<{
+      eventType: string;
+      channel: string;
+      failureCategory: string | null;
+      attempts: number;
+      failedAt: string | null;
+    }>;
+  };
+  webhook: { updatesLast24h: number; lastUpdateAt: string | null } | null;
+}
 export const telegramApi = {
   status: () => request<TelegramStatusResponse>('/telegram/status'),
+  adminOverview: () => request<TelegramAdminOverview>('/telegram/admin/overview'),
   createLink: () =>
     request<{ token: string; deepLink: string; expiresAt: string }>('/telegram/link', {
       method: 'POST',
@@ -332,6 +366,15 @@ export const telegramApi = {
   unlink: () => request<{ disconnected: boolean }>('/telegram/link', { method: 'DELETE' }),
   testNotification: () =>
     request<{ sent: boolean }>('/telegram/test-notification', { method: 'POST' }),
+};
+
+export const aiApi = {
+  chat: (body: { message: string; history?: unknown[]; conversationId?: string }, options: RequestOptions = {}) =>
+    request<{ content: string; conversationId?: string; role?: string }>('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
 };
 export const gradesApi = crud('/grades');
 export const homeworkApi = crud('/homework');
@@ -617,6 +660,10 @@ export const communicationApi = {
   getTimeline: (entityType: string, entityId: string) => request(`/communication/timeline${buildQuery({ entityType, entityId })}`),
   getHistory: (params?: object) => request(`/communication/history${buildQuery(params)}`),
   getStats: () => request('/communication/stats'),
+  messages: (studentId: string) => request<any>(`/communication/messages/${studentId}`),
+  sendMessage: (data: object) => request<any>('/communication/messages', { method: 'POST', body: JSON.stringify(data) }),
+  announcements: () => request<any>('/communication/announcements'),
+  createAnnouncement: (data: object) => request<any>('/communication/announcements', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const dataGovernanceApi = {
@@ -806,6 +853,75 @@ export const earlyWarningApi = {
 export const academicRiskApi = {
   summary: () => request('/academic-risk/summary'),
   list: (params?: object) => request(`/academic-risk${buildQuery(params)}`),
+};
+
+export const forecastingApi = {
+  summary: () => request('/forecasting/summary'),
+  list: (params?: object) => request(`/forecasting${buildQuery(params)}`),
+};
+
+export const relationshipsApi = {
+  graph: (entityType: string, entityId: string, depth?: number) =>
+    request(`/relationships/graph${buildQuery({ entityType, entityId, depth })}`),
+};
+
+/* ============================================================================
+ * EDUCATION OPERATING SYSTEM CORE APIS (P0)
+ * ========================================================================== */
+
+export const subjectsApi = {
+  list: (params?: object) => request<any>(`/subjects${buildQuery(params)}`),
+  get: (id: string) => request<any>(`/subjects/${id}`),
+  create: (data: object) => request<any>('/subjects', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: object) => request<any>(`/subjects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) => request<any>(`/subjects/${id}`, { method: 'DELETE' }),
+};
+
+export const curriculumApi = {
+  list: (params?: object) => request<any>(`/curriculum${buildQuery(params)}`),
+  get: (id: string) => request<any>(`/curriculum/${id}`),
+  create: (data: object) => request<any>('/curriculum', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: object) => request<any>(`/curriculum/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  addModule: (id: string, data: object) => request<any>(`/curriculum/${id}/modules`, { method: 'POST', body: JSON.stringify(data) }),
+  addTopic: (id: string, moduleId: string, data: object) => request<any>(`/curriculum/${id}/modules/${moduleId}/topics`, { method: 'POST', body: JSON.stringify(data) }),
+  addObjective: (id: string, topicId: string, data: object) => request<any>(`/curriculum/${id}/topics/${topicId}/objectives`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
+export const materialsApi = {
+  list: (params?: object) => request<any>(`/learning-materials${buildQuery(params)}`),
+  get: (id: string) => request<any>(`/learning-materials/${id}`),
+  create: (data: object) => request<any>('/learning-materials', { method: 'POST', body: JSON.stringify(data) }),
+  folders: (params?: object) => request<any>(`/learning-materials/folders${buildQuery(params)}`),
+  createFolder: (data: object) => request<any>('/learning-materials/folders', { method: 'POST', body: JSON.stringify(data) }),
+};
+
+export const assignmentsApi = {
+  list: (params?: object) => request<any>(`/assignments${buildQuery(params)}`),
+  get: (id: string) => request<any>(`/assignments/${id}`),
+  create: (data: object) => request<any>('/assignments', { method: 'POST', body: JSON.stringify(data) }),
+  submit: (id: string, data: object) => request<any>(`/assignments/${id}/submit`, { method: 'POST', body: JSON.stringify(data) }),
+  grade: (id: string, data: object) => request<any>(`/assignments/submissions/${id}/grade`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
+export const assessmentApi = {
+  questions: (params?: object) => request<any>(`/assessment/questions${buildQuery(params)}`),
+  createQuestion: (data: object) => request<any>('/assessment/questions', { method: 'POST', body: JSON.stringify(data) }),
+  quizzes: (params?: object) => request<any>(`/assessment/quizzes${buildQuery(params)}`),
+  getQuiz: (id: string) => request<any>(`/assessment/quizzes/${id}`),
+  createQuiz: (data: object) => request<any>('/assessment/quizzes', { method: 'POST', body: JSON.stringify(data) }),
+  startAttempt: (quizId: string) => request<any>(`/assessment/quizzes/${quizId}/start`, { method: 'POST' }),
+  submitAttempt: (attemptId: string, data: object) => request<any>(`/assessment/attempts/${attemptId}/submit`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
+export const progressApi = {
+  student360: (studentId: string) => request<any>(`/progress/student-360/${studentId}`),
+  recordMastery: (studentId: string, data: object) => request<any>(`/progress/mastery/${studentId}`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
+export const calendarApi = {
+  list: (params?: object) => request<any>(`/calendar/events${buildQuery(params)}`),
+  create: (data: object) => request<any>('/calendar/events', { method: 'POST', body: JSON.stringify(data) }),
+  delete: (id: string) => request<any>(`/calendar/events/${id}`, { method: 'DELETE' }),
 };
 
 export default request;

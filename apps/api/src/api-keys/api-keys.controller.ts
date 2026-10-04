@@ -7,7 +7,6 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
-import { AllowAnyRole } from '../auth/roles.decorator';
 
 @ApiTags('API Keys')
 @ApiBearerAuth()
@@ -17,7 +16,6 @@ import { AllowAnyRole } from '../auth/roles.decorator';
 export class ApiKeysController {
   constructor(private readonly apiKeysService: ApiKeysService) {}
 
-  @AllowAnyRole()
   @Get('scopes')
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
   @ApiOperation({ summary: 'Get available API key scopes' })
@@ -26,7 +24,6 @@ export class ApiKeysController {
     return this.apiKeysService.getScopes();
   }
 
-  @AllowAnyRole()
   @Get('usage')
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
   @ApiOperation({ summary: 'Get API key usage statistics' })
@@ -52,7 +49,6 @@ export class ApiKeysController {
     return this.apiKeysService.generate(orgId, dto, userId);
   }
 
-  @AllowAnyRole()
   @Get()
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
   @ApiOperation({ summary: 'List all API keys for the organization' })
@@ -88,3 +84,4 @@ export class ApiKeysController {
     await this.apiKeysService.revoke(orgId, id);
   }
 }
+

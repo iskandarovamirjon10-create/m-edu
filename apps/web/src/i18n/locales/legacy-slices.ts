@@ -144,6 +144,12 @@ export const legacyEn = {
   'payments.emptyFiltered': 'No matching payments',
   'payments.emptyHint': 'Record your first payment to start tracking.',
   'payments.emptyFilteredHint': 'Try adjusting your filters.',
+  'payments.modalSubtitle': 'Record a new tuition payment. Amount is required; description is optional.',
+  'payments.receipt.academyName': 'M-EDU ACADEMY',
+  'payments.receipt.title': 'Official Tuition & Educational Services Receipt',
+  'payments.receipt.total': 'Total',
+  'payments.receipt.footer': 'Verified Digital Payment · M-EDU Education Management System',
+  'payments.receipt.print': 'Print Receipt',
   'payments.col.student': 'Student / Date',
   'payments.col.description': 'Description',
   'payments.col.status': 'Status',
@@ -542,6 +548,26 @@ export const legacyEn = {
   'dashboard.noFollowUpsHint': 'Schedule follow-ups from the Leads page.',
   'dashboard.noRevenue': 'No revenue data',
   'dashboard.noRevenueHint': 'Revenue will appear after the first payments.',
+  'dashboard.goodMorning': 'Good morning',
+  'dashboard.goodAfternoon': 'Good afternoon',
+  'dashboard.goodEvening': 'Good evening',
+  'dashboard.goodNight': 'Good night',
+  'dashboard.active': 'active',
+  'dashboard.liveOverview': 'Live Overview',
+
+  // ── invoices (gap fill) ────────────────────────────────────────────
+  'invoices.refundProcessed': 'Refund processed',
+  'invoices.refundRejected': 'Refund rejected',
+  'invoices.refundRequested': 'Refund requested',
+  'invoices.issueSuccess': 'Invoice issued',
+
+  // ── notifications (gap fill) ───────────────────────────────────────
+  'notifications.actionNeeded': 'Action needed',
+  'notifications.allCaughtUp': 'All caught up',
+  'notifications.total': 'total',
+
+  // ── teacherWorkload (gap fill) ─────────────────────────────────────
+  'teacherWorkload.modelSubtitle': 'How utilization is calculated',
 
   // ── auth (gap fill) ────────────────────────────────────────────────
   'auth.passwordMinLength': 'Password must be at least {min} characters',

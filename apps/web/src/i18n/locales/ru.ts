@@ -12,6 +12,7 @@ const ru = {
   'common.edit': 'Редактировать',
   'common.delete': 'Удалить',
   'common.search': 'Поиск',
+  'common.confirm': 'Подтвердить',
   'common.loading': 'Загрузка…',
   'common.saving': 'Сохранение…',
   'common.retry': 'Повторить',
@@ -31,6 +32,7 @@ const ru = {
   'branches.deactivateConfirm': 'Деактивировать этот филиал? Его можно будет активировать позже.',
   'apiKeys.revokeConfirm': 'Отозвать этот API-ключ? Интеграции, использующие его, перестанут работать немедленно.',
   'hr.terminateConfirm': 'Уволить этого сотрудника? Это действие нельзя отменить.',
+  'a11y.skipToContent': 'Перейти к основному содержимому',
 
   // Navigation
   'nav.dashboard': 'Панель управления',
@@ -38,6 +40,10 @@ const ru = {
   'nav.teachers': 'Учителя',
   'nav.groups': 'Группы',
   'nav.courses': 'Курсы',
+  'nav.subjects': 'Предметы',
+  'nav.curriculum': 'Учебные планы',
+  'nav.assignments': 'Задания',
+  'nav.assessment': 'Оценка и тесты',
   'nav.schedule': 'Расписание',
   'nav.attendance': 'Посещаемость',
   'nav.payments': 'Платежи',
@@ -53,6 +59,7 @@ const ru = {
   'nav.reports': 'Отчёты',
   'nav.homework': 'Домашние задания',
   'nav.chat': 'Чат',
+  'nav.aiCopilot': 'AI-ассистент',
   'nav.executiveDashboard': 'Панель руководителя',
   'nav.financialAnalytics': 'Финансовая аналитика',
   'nav.payrollAnalytics': 'Аналитика зарплат',
@@ -74,6 +81,11 @@ const ru = {
   'nav.searchPlaceholder': 'Поиск учеников, учителей, групп…',
   'nav.signIn': 'Вход',
   'nav.createAccount': 'Создать аккаунт',
+  'nav.calculator': 'Калькулятор',
+  'nav.greetingMorning': 'Доброе утро',
+  'nav.greetingAfternoon': 'Добрый день',
+  'nav.greetingEvening': 'Добрый вечер',
+  'nav.greetingNight': 'Доброй ночи',
 
   // Auth
   'auth.loginTitle': 'Вход в ваш аккаунт',
@@ -81,6 +93,8 @@ const ru = {
   'auth.password': 'Пароль',
   'auth.login': 'Войти',
   'auth.loggingIn': 'Вход…',
+  'auth.verifyingSession': 'Проверка сеанса...',
+  'auth.preparing': 'Подготовка...',
   'auth.forgotPassword': 'Забыли пароль?',
   'auth.invalidCredentials': 'Неверный email или пароль',
 
@@ -235,12 +249,21 @@ const ru = {
   'hr.form.validation.positionRequired': 'Position is required',
   'hr.form.validation.departmentRequired': 'Department is required',
   'hr.form.validation.salaryInvalid': 'Salary is invalid',
+  'common.clear': 'Очистить',
+  'ai.clearChatTitle': 'Очистить историю чата',
+  'ai.clearChatDescription': 'Все сообщения будут удалены. Продолжить?',
+  'calculator.basic': 'Обычный калькулятор',
+  'calculator.finance': 'Финансовый калькулятор',
+  'students.create': 'Добавить ученика',
+  'dashboard.pending': 'В ожидании',
+  'common.all': 'Все',
 };
 
 import { legacyRu } from './legacy-slices.ru';
 import { analyticsRu } from './analytics-slices.ru';
 import { pagesRu } from './pages-slices.ru';
+import { aiRu } from './ai-slices';
 
 // Legacy fills gaps → analytics fills more → curated base wins for overrides.
-export default { ...legacyRu, ...analyticsRu, ...pagesRu, ...ru };
+export default { ...legacyRu, ...analyticsRu, ...pagesRu, ...aiRu, ...ru };
 

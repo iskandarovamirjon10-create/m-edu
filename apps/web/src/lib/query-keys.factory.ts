@@ -204,6 +204,13 @@ export const queryKeys = {
   },
 
   /* ── Operations ───────────────────────────────────────────────────────── */
+  face: {
+    all: (): QueryKey => ['face'],
+    engine: (): QueryKey => ['face-engine'],
+    history: (params?: ListParams): QueryKey => ['face-history', params],
+    enrollments: (params?: ListParams): QueryKey => ['face-enrollments', params],
+    studentEnrollments: (id?: string): QueryKey => ['face-student-enrollments', id],
+  },
   cameras: {
     all: (): QueryKey => ['cameras'],
     events: (cameraId: string | null | undefined): QueryKey => ['camera-events', cameraId],

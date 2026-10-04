@@ -13,6 +13,7 @@ const en = {
   'common.edit': 'Edit',
   'common.delete': 'Delete',
   'common.search': 'Search',
+  'common.confirm': 'Confirm',
   'common.loading': 'Loading…',
   'common.saving': 'Saving…',
   'common.retry': 'Retry',
@@ -32,6 +33,7 @@ const en = {
   'branches.deactivateConfirm': 'Deactivate this branch? It can be reactivated later.',
   'apiKeys.revokeConfirm': 'Revoke this API key? Integrations using it will stop working immediately.',
   'hr.terminateConfirm': 'Terminate this employee? This action cannot be undone.',
+  'a11y.skipToContent': 'Skip to content',
 
   // Navigation
   'nav.dashboard': 'Dashboard',
@@ -39,6 +41,10 @@ const en = {
   'nav.teachers': 'Teachers',
   'nav.groups': 'Groups',
   'nav.courses': 'Courses',
+  'nav.subjects': 'Subjects',
+  'nav.curriculum': 'Curriculum',
+  'nav.assignments': 'Assignments',
+  'nav.assessment': 'Assessment',
   'nav.schedule': 'Schedule',
   'nav.attendance': 'Attendance',
   'nav.payments': 'Payments',
@@ -54,6 +60,7 @@ const en = {
   'nav.reports': 'Reports',
   'nav.homework': 'Homework',
   'nav.chat': 'Chat',
+  'nav.aiCopilot': 'AI Copilot',
   'nav.executiveDashboard': 'Executive Dashboard',
   'nav.financialAnalytics': 'Financial Analytics',
   'nav.payrollAnalytics': 'Payroll Analytics',
@@ -75,6 +82,11 @@ const en = {
   'nav.searchPlaceholder': 'Search students, teachers, groups…',
   'nav.signIn': 'Sign In',
   'nav.createAccount': 'Create Account',
+  'nav.calculator': 'Calculator',
+  'nav.greetingMorning': 'Good morning',
+  'nav.greetingAfternoon': 'Good afternoon',
+  'nav.greetingEvening': 'Good evening',
+  'nav.greetingNight': 'Good night',
 
   // Auth
   'auth.loginTitle': 'Sign in to your account',
@@ -82,6 +94,8 @@ const en = {
   'auth.password': 'Password',
   'auth.login': 'Sign in',
   'auth.loggingIn': 'Signing in…',
+  'auth.verifyingSession': 'Verifying session...',
+  'auth.preparing': 'Preparing...',
   'auth.forgotPassword': 'Forgot password?',
   'auth.invalidCredentials': 'Invalid email or password',
 
@@ -236,12 +250,21 @@ const en = {
   'hr.form.validation.positionRequired': 'Position is required',
   'hr.form.validation.departmentRequired': 'Department is required',
   'hr.form.validation.salaryInvalid': 'Salary is invalid',
+  'common.clear': 'Clear',
+  'ai.clearChatTitle': 'Clear chat history',
+  'ai.clearChatDescription': 'All conversation messages will be deleted. Do you want to continue?',
+  'calculator.basic': 'Basic calculator',
+  'calculator.finance': 'Financial calculator',
+  'students.create': 'Add student',
+  'dashboard.pending': 'Pending',
+  'common.all': 'All',
 };
 
 import { legacyEn } from './legacy-slices';
 import { analyticsEn } from './analytics-slices';
 import { pagesEn } from './pages-slices';
+import { aiEn } from './ai-slices';
 
 // Legacy fills gaps → analytics fills more → curated base wins for overrides.
-export default { ...legacyEn, ...analyticsEn, ...pagesEn, ...en };
+export default { ...legacyEn, ...analyticsEn, ...pagesEn, ...aiEn, ...en };
 

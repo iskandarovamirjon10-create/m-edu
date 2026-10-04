@@ -1,158 +1,186 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
   extensions = [pg_trgm]
 }
 
 model Organization {
-  branches               Branch[]
-  holidays               OrganizationHoliday[]
-  id                     String                  @id @default(uuid()) @db.Uuid
-  name                   String
-  email                  String
-  phone                  String?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  timezone               String?                 @default("Asia/Tashkent")
-  language               String?                 @default("en")
-  currency               String?                 @default("UZS")
-  logoUrl                String?
-  address                String?
-  website                String?
-  subscriptionId         String?                 @db.Uuid
-  settings               Json?
-  attendance             Attendance[]
-  auditLogs              AuditLog[]
-  cameras                Camera[]
-  cameraAttendanceEvents CameraAttendanceEvent[]
-  certificates           Certificate[]
-  certificateTemplates   CertificateTemplate[]
-  chatConversations      ChatConversation[]
-  ChatMessage            ChatMessage[]
-  courses                Course[]
-  customRoles            CustomRole[]
-  deviceTokens           DeviceToken[]
-  Discount               Discount[]
-  emailLogs              EmailLog[]
-  emailTemplates         EmailTemplate[]
-  employees              Employee[]
-  exams                  Exam[]
-  ExamResult             ExamResult[]
-  expenses               Expense[]
-  faceAuditEvents        FaceAuditEvent[]
-  faceDevices            FaceDevice[]
-  faceDeviceCredentials  FaceDeviceCredential[]
-  faceEnrollments        FaceEnrollment[]
-  faceTemplates          FaceTemplate[]
-  followUps              FollowUp[]
-  grades                 Grade[]
-  groups                 Group[]
-  homework               Homework[]
-  inventoryItems         InventoryItem[]
-  InventoryTransaction   InventoryTransaction[]
-  Invoice                Invoice[]
-  leads                  Lead[]
-  LeaveRequest           LeaveRequest[]
-  Lesson                 Lesson[]
-  libraryBooks           LibraryBook[]
-  LibraryBorrow          LibraryBorrow[]
-  notifications          Notification[]
-  branding               OrganizationBranding?
-  parentAccounts         ParentAccount[]
-  payments               Payment[]
-  paymentTransactions    PaymentTransaction[]
-  PayrollRun             PayrollRun[]
-  recognitionAttempts    RecognitionAttempt[]
-  recognitionSessions    RecognitionSession[]
-  refunds                Refund[]
-  reports                Report[]
-  smsLogs                SMSLog[]
-  SalaryRecord           SalaryRecord[]
-  sessions               Session[]
-  students               Student[]
-  subscription           Subscription?
-  teachers               Teacher[]
-  users                  User[]
-  DataExportLog          DataExportLog[]
-  ApiKey                 ApiKey[]
-  StudentGamification    StudentGamification[]
-  ParentSession          ParentSession[]
-  HomeworkSubmission     HomeworkSubmission[]
-  telegramAccounts       TelegramAccount[]
-  telegramLinkTokens     TelegramLinkToken[]
-  notificationDeliveries NotificationDelivery[]
+  id                      String                    @id @default(uuid()) @db.Uuid
+  name                    String
+  email                   String
+  phone                   String?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  timezone                String?                   @default("Asia/Tashkent")
+  language                String?                   @default("en")
+  currency                String?                   @default("UZS")
+  logoUrl                 String?
+  address                 String?
+  website                 String?
+  subscriptionId          String?                   @db.Uuid
+  settings                Json?
+  AiAction                AiAction[]
+  AiConversation          AiConversation[]
+  AiMessage               AiMessage[]
+  Announcement            Announcement[]
+  ApiKey                  ApiKey[]
+  Assignment              Assignment[]
+  attendance              Attendance[]
+  auditLogs               AuditLog[]
+  branches                Branch[]
+  CalendarEvent           CalendarEvent[]
+  cameras                 Camera[]
+  cameraAttendanceEvents  CameraAttendanceEvent[]
+  certificates            Certificate[]
+  certificateTemplates    CertificateTemplate[]
+  chatConversations       ChatConversation[]
+  ChatMessage             ChatMessage[]
+  courses                 Course[]
+  Curriculum              Curriculum[]
+  customRoles             CustomRole[]
+  DataExportLog           DataExportLog[]
+  deviceTokens            DeviceToken[]
+  Discount                Discount[]
+  emailLogs               EmailLog[]
+  emailTemplates          EmailTemplate[]
+  employees               Employee[]
+  exams                   Exam[]
+  ExamResult              ExamResult[]
+  expenses                Expense[]
+  faceAuditEvents         FaceAuditEvent[]
+  faceDevices             FaceDevice[]
+  faceDeviceCredentials   FaceDeviceCredential[]
+  faceEnrollments         FaceEnrollment[]
+  faceTemplates           FaceTemplate[]
+  followUps               FollowUp[]
+  grades                  Grade[]
+  groups                  Group[]
+  homework                Homework[]
+  HomeworkSubmission      HomeworkSubmission[]
+  inventoryItems          InventoryItem[]
+  InventoryTransaction    InventoryTransaction[]
+  Invitation              Invitation[]
+  Invoice                 Invoice[]
+  leads                   Lead[]
+  LeaveRequest            LeaveRequest[]
+  Lesson                  Lesson[]
+  libraryBooks            LibraryBook[]
+  LibraryBorrow           LibraryBorrow[]
+  Material                Material[]
+  MaterialFolder          MaterialFolder[]
+  notifications           Notification[]
+  notificationDeliveries  NotificationDelivery[]
+  branding                OrganizationBranding?
+  holidays                OrganizationHoliday[]
+  parentAccounts          ParentAccount[]
+  ParentSession           ParentSession[]
+  ParentTeacherMessage    ParentTeacherMessage[]
+  payments                Payment[]
+  paymentTransactions     PaymentTransaction[]
+  PayrollRun              PayrollRun[]
+  Question                Question[]
+  Quiz                    Quiz[]
+  QuizAttempt             QuizAttempt[]
+  recognitionAttempts     RecognitionAttempt[]
+  recognitionSessions     RecognitionSession[]
+  refunds                 Refund[]
+  reports                 Report[]
+  smsLogs                 SMSLog[]
+  SalaryRecord            SalaryRecord[]
+  sessions                Session[]
+  students                Student[]
+  StudentGamification     StudentGamification[]
+  StudentObjectiveMastery StudentObjectiveMastery[]
+  StudentProgressSnapshot StudentProgressSnapshot[]
+  Subject                 Subject[]
+  subscription            Subscription?
+  teachers                Teacher[]
+  telegramAccounts        TelegramAccount[]
+  telegramLinkTokens      TelegramLinkToken[]
+  users                   User[]
 
   @@index([email])
 }
 
 model User {
-  id                     String                   @id @default(uuid()) @db.Uuid
-  organizationId         String                   @db.Uuid
-  email                  String                   @unique
-  passwordHash           String?
-  firstName              String
-  lastName               String
-  phone                  String?
-  avatar                 String?
-  role                   Role                     @default(STUDENT)
-  isActive               Boolean                  @default(true)
-  provider               String?                  @default("local")
-  googleSubject          String?                  @unique
-  googleEmail            String?
+  id                                                             String                   @id @default(uuid()) @db.Uuid
+  organizationId                                                 String                   @db.Uuid
+  email                                                          String                   @unique
+  passwordHash                                                   String?
+  firstName                                                      String
+  lastName                                                       String
+  phone                                                          String?
+  avatar                                                         String?
+  role                                                           Role                     @default(STUDENT)
+  isActive                                                       Boolean                  @default(true)
+  provider                                                       String?                  @default("local")
+  googleSubject                                                  String?                  @unique
+  googleEmail                                                    String?
+  lastLoginAt                                                    DateTime?
+  createdAt                                                      DateTime                 @default(now())
+  updatedAt                                                      DateTime                 @updatedAt
+  /// @deprecated Delivery-pointer mirror of `TelegramAccount.chatId`, kept in
+  /// sync by TelegramLinkService so the existing notification worker keeps
+  /// delivering during the migration. `TelegramAccount` is the source of
+  /// truth for Telegram identity/lifecycle; read that model in new code.
+  telegramChatId                                                 String?                  @unique
+  /// @deprecated Superseded by `TelegramLinkToken` (hash-stored, single-use).
+  /// Retained for backwards compatibility; no longer written by the linking flow.
+  telegramLinkToken                                              String?                  @unique
+  /// @deprecated See `telegramLinkToken`.
+  telegramLinkExpiresAt                                          DateTime?
   /// Audit P0-2 — account-model opt-in for Google sign-in.
   ///
   /// Automatic Google linking on a verified-email match is disabled for every
   /// privileged role regardless of this flag. For non-privileged accounts
   /// (STUDENT / PARENT) linking only happens when this flag is explicitly
   /// true, i.e. "explicitly allowed by the account model".
-  googleLinkAllowed      Boolean                  @default(false)
-  lastLoginAt            DateTime?
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
-  /// @deprecated Delivery-pointer mirror of `TelegramAccount.chatId`, kept in
-  /// sync by TelegramLinkService so the existing notification worker keeps
-  /// delivering during the migration. `TelegramAccount` is the source of
-  /// truth for Telegram identity/lifecycle; read that model in new code.
-  telegramChatId         String?                  @unique
-  /// @deprecated Superseded by `TelegramLinkToken` (hash-stored, single-use).
-  /// Retained for backwards compatibility; no longer written by the linking flow.
-  telegramLinkToken      String?                  @unique
-  /// @deprecated See `telegramLinkToken`.
-  telegramLinkExpiresAt  DateTime?
-  authorizationCodes     AuthorizationCode[]
-  ChatMessage            ChatMessage[]
-  ChatParticipant        ChatParticipant[]
-  DeviceToken            DeviceToken[]
-  Employee               Employee?
-  faceAuditEvents        FaceAuditEvent[]
-  inventoryTransactions  InventoryTransaction[]
-  notifications          Notification[]
-  NotificationPreference NotificationPreference[]
-  parentStudents         ParentStudent[]
-  passwordResetTokens    PasswordResetToken[]
-  sessions               Session[]
-  student                Student?
-  teacher                Teacher?
-  organization           Organization             @relation(fields: [organizationId], references: [id])
-  userRoles              UserRole[]
-  settings               UserSettings?
-  DataExportLog          DataExportLog[]
-  Branch                 Branch[]
-  automationRulesCreated AutomationRule[]
-  financialPeriodsClosed FinancialPeriod[]
-  apiKeysCreated         ApiKey[]
-  telegramAccounts       TelegramAccount[]
+  googleLinkAllowed                                              Boolean                  @default(false)
+  status                                                         UserStatus               @default(ACTIVE)
+  AccessRequest                                                  AccessRequest[]
+  AiAction                                                       AiAction[]
+  AiConversation                                                 AiConversation[]
+  Announcement                                                   Announcement[]
+  AnnouncementRead                                               AnnouncementRead[]
+  apiKeysCreated                                                 ApiKey[]
+  authorizationCodes                                             AuthorizationCode[]
+  automationRulesCreated                                         AutomationRule[]
+  Branch                                                         Branch[]
+  CalendarEvent                                                  CalendarEvent[]
+  ChatMessage                                                    ChatMessage[]
+  ChatParticipant                                                ChatParticipant[]
+  DataExportLog                                                  DataExportLog[]
+  DeviceToken                                                    DeviceToken[]
+  Employee                                                       Employee?
+  faceAuditEvents                                                FaceAuditEvent[]
+  financialPeriodsClosed                                         FinancialPeriod[]
+  inventoryTransactions                                          InventoryTransaction[]
+  Invitation                                                     Invitation[]
+  notifications                                                  Notification[]
+  NotificationPreference                                         NotificationPreference[]
+  parentStudents                                                 ParentStudent[]
+  ParentTeacherMessage_ParentTeacherMessage_receiverUserIdToUser ParentTeacherMessage[]   @relation("ParentTeacherMessage_receiverUserIdToUser")
+  ParentTeacherMessage_ParentTeacherMessage_senderUserIdToUser   ParentTeacherMessage[]   @relation("ParentTeacherMessage_senderUserIdToUser")
+  passwordResetTokens                                            PasswordResetToken[]
+  sessions                                                       Session[]
+  student                                                        Student?
+  teacher                                                        Teacher?
+  telegramAccounts                                               TelegramAccount[]
+  organization                                                   Organization             @relation(fields: [organizationId], references: [id])
+  userRoles                                                      UserRole[]
+  settings                                                       UserSettings?
 
   @@index([organizationId])
-  @@index([email(ops: raw("gin_trgm_ops"))], type: Gin, map: "user_email_trgm_idx")
-  @@index([firstName(ops: raw("gin_trgm_ops"))], type: Gin, map: "user_first_name_trgm_idx")
-  @@index([lastName(ops: raw("gin_trgm_ops"))], type: Gin, map: "user_last_name_trgm_idx")
-  @@index([phone(ops: raw("gin_trgm_ops"))], type: Gin, map: "user_phone_trgm_idx")
+  @@index([email(ops: raw("gin_trgm_ops"))], map: "user_email_trgm_idx", type: Gin)
+  @@index([firstName(ops: raw("gin_trgm_ops"))], map: "user_first_name_trgm_idx", type: Gin)
+  @@index([lastName(ops: raw("gin_trgm_ops"))], map: "user_last_name_trgm_idx", type: Gin)
+  @@index([phone(ops: raw("gin_trgm_ops"))], map: "user_phone_trgm_idx", type: Gin)
+  @@index([status])
 }
 
 model PasswordResetToken {
@@ -179,14 +207,14 @@ model AuthorizationCode {
   /// what identifies the pre-created session; the JWT is re-signed from it at
   /// redemption time.
   accessToken String?
-  /// Session pre-created by `issueToken` during the OAuth callback. Binding the
-  /// code to a session means the exchange mints a token for an existing,
-  /// revocable session row instead of trusting stored credential material.
-  sessionId   String?   @db.Uuid
   expiresAt   DateTime
   usedAt      DateTime?
   createdAt   DateTime  @default(now())
   userId      String    @db.Uuid
+  /// Session pre-created by `issueToken` during the OAuth callback. Binding the
+  /// code to a session means the exchange mints a token for an existing,
+  /// revocable session row instead of trusting stored credential material.
+  sessionId   String?   @db.Uuid
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([code])
@@ -195,25 +223,25 @@ model AuthorizationCode {
 }
 
 model UserSettings {
-  id                 String   @id @default(uuid()) @db.Uuid
-  userId             String   @unique @db.Uuid
-  theme              String?  @default("light")
-  language           String?  @default("en")
-  timezone           String?  @default("UTC")
-  emailNotifications Boolean? @default(true)
-  pushNotifications  Boolean? @default(true)
-  smsNotifications   Boolean? @default(false)
-  /// Telegram channel opt-in (self-service). Server is the source of truth:
-  /// the notification worker reads this flag, never a Telegram-side value.
-  telegramNotifications Boolean? @default(true)
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String   @unique @db.Uuid
+  theme                 String?  @default("light")
+  language              String?  @default("en")
+  timezone              String?  @default("UTC")
+  emailNotifications    Boolean? @default(true)
+  pushNotifications     Boolean? @default(true)
+  smsNotifications      Boolean? @default(false)
   /// Quiet hours: while inside the window Telegram delivery is DEFERRED (never
   /// dropped). `quietHoursStart`/`End` are wall-clock `HH:mm` in `timezone`
   /// (falling back to the organization timezone, then UTC). Equal start/end
   /// means "no quiet window".
-  quietHoursEnabled  Boolean  @default(false)
-  quietHoursStart    String?
-  quietHoursEnd      String?
-  user               User     @relation(fields: [userId], references: [id])
+  quietHoursEnabled     Boolean  @default(false)
+  quietHoursEnd         String?
+  quietHoursStart       String?
+  /// Telegram channel opt-in (self-service). Server is the source of truth:
+  /// the notification worker reads this flag, never a Telegram-side value.
+  telegramNotifications Boolean? @default(true)
+  user                  User     @relation(fields: [userId], references: [id])
 }
 
 model Session {
@@ -233,45 +261,50 @@ model Session {
 }
 
 model Student {
-  homeworkSubmissions    HomeworkSubmission[]
-  branchId               String?                 @db.Uuid
-  branch                 Branch?                 @relation(fields: [branchId], references: [id])
-  id                     String                  @id @default(uuid()) @db.Uuid
-  organizationId         String                  @db.Uuid
-  userId                 String                  @unique @db.Uuid
-  dateOfBirth            DateTime?
-  gender                 Gender?
-  address                String?
-  notes                  String?
-  parentName             String?
-  parentPhone            String?
-  parentEmail            String?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  status                 StudentStatus           @default(ACTIVE)
-  discount               Decimal?                @db.Decimal(5, 2)
-  emergencyContact       String?
-  enrollmentDate         DateTime?
-  nationality            String?
-  balance                Decimal                 @default(0) @db.Decimal(12, 2)
-  attendance             Attendance[]
-  cameraAttendanceEvents CameraAttendanceEvent[]
-  Certificate            Certificate[]
-  Discount               Discount[]
-  ExamResult             ExamResult[]
-  faceEnrollments        FaceEnrollment[]
-  faceTemplates          FaceTemplate[]
-  grades                 Grade[]
-  Invoice                Invoice[]
-  LibraryBorrow          LibraryBorrow[]
-  parentStudents         ParentStudent[]
-  payments               Payment[]
-  recognitionAttempts    RecognitionAttempt[]
-  organization           Organization            @relation(fields: [organizationId], references: [id])
-  user                   User                    @relation(fields: [userId], references: [id])
-  groups                 StudentGroup[]
-  StudentGamification    StudentGamification?
-  xpEvents               GamificationXpEvent[]
+  branchId                String?                   @db.Uuid
+  id                      String                    @id @default(uuid()) @db.Uuid
+  organizationId          String                    @db.Uuid
+  userId                  String                    @unique @db.Uuid
+  dateOfBirth             DateTime?
+  gender                  Gender?
+  address                 String?
+  notes                   String?
+  parentName              String?
+  parentPhone             String?
+  parentEmail             String?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  status                  StudentStatus             @default(ACTIVE)
+  balance                 Decimal                   @default(0) @db.Decimal(12, 2)
+  discount                Decimal?                  @db.Decimal(5, 2)
+  emergencyContact        String?
+  enrollmentDate          DateTime?
+  nationality             String?
+  AssignmentSubmission    AssignmentSubmission[]
+  attendance              Attendance[]
+  cameraAttendanceEvents  CameraAttendanceEvent[]
+  Certificate             Certificate[]
+  Discount                Discount[]
+  ExamResult              ExamResult[]
+  faceEnrollments         FaceEnrollment[]
+  faceTemplates           FaceTemplate[]
+  xpEvents                GamificationXpEvent[]
+  grades                  Grade[]
+  homeworkSubmissions     HomeworkSubmission[]
+  Invoice                 Invoice[]
+  LibraryBorrow           LibraryBorrow[]
+  parentStudents          ParentStudent[]
+  ParentTeacherMessage    ParentTeacherMessage[]
+  payments                Payment[]
+  QuizAttempt             QuizAttempt[]
+  recognitionAttempts     RecognitionAttempt[]
+  branch                  Branch?                   @relation(fields: [branchId], references: [id])
+  organization            Organization              @relation(fields: [organizationId], references: [id])
+  user                    User                      @relation(fields: [userId], references: [id])
+  StudentGamification     StudentGamification?
+  groups                  StudentGroup[]
+  StudentObjectiveMastery StudentObjectiveMastery[]
+  StudentProgressSnapshot StudentProgressSnapshot[]
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -279,47 +312,51 @@ model Student {
 }
 
 model Teacher {
-  id              String       @id @default(uuid()) @db.Uuid
-  organizationId  String       @db.Uuid
-  userId          String       @unique @db.Uuid
+  id              String          @id @default(uuid()) @db.Uuid
+  organizationId  String          @db.Uuid
+  userId          String          @unique @db.Uuid
   specializations String[]
-  hourlyRate      Decimal?     @db.Decimal(10, 2)
+  hourlyRate      Decimal?        @db.Decimal(10, 2)
   bio             String?
   experience      Int?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  lessonRate      Decimal?     @db.Decimal(10, 2)
-  salaryType      SalaryType   @default(MONTHLY)
-  employeeId      String?      @unique @db.Uuid
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  lessonRate      Decimal?        @db.Decimal(10, 2)
+  salaryType      SalaryType      @default(MONTHLY)
+  employeeId      String?         @unique @db.Uuid
+  CalendarEvent   CalendarEvent[]
   groups          Group[]
   Lesson          Lesson[]
   PayrollRun      PayrollRun[]
-  Employee        Employee?    @relation(fields: [employeeId], references: [id])
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  user            User         @relation(fields: [userId], references: [id])
+  Employee        Employee?       @relation(fields: [employeeId], references: [id])
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  user            User            @relation(fields: [userId], references: [id])
 
   @@index([organizationId])
 }
 
 model Course {
-  id             String        @id @default(uuid()) @db.Uuid
-  organizationId String        @db.Uuid
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
   name           String
   description    String?
-  price          Decimal       @db.Decimal(12, 2)
+  price          Decimal        @db.Decimal(12, 2)
   duration       Int
   level          String?
-  isActive       Boolean       @default(true)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  Announcement   Announcement[]
   Certificate    Certificate[]
-  organization   Organization  @relation(fields: [organizationId], references: [id])
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  Curriculum     Curriculum[]
   Discount       Discount[]
   groups         Group[]
+  Subject        Subject[]
 
   @@index([organizationId])
-  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "course_name_trgm_idx")
-  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin, map: "course_description_trgm_idx")
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "course_name_trgm_idx", type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], map: "course_description_trgm_idx", type: Gin)
 }
 
 model Group {
@@ -335,40 +372,46 @@ model Group {
   isActive               Boolean                 @default(true)
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
+  branchId               String?                 @db.Uuid
+  Announcement           Announcement[]
+  Assignment             Assignment[]
   attendance             Attendance[]
+  CalendarEvent          CalendarEvent[]
   cameraAttendanceEvents CameraAttendanceEvent[]
   Discount               Discount[]
   Exam                   Exam[]
   grades                 Grade[]
+  Branch                 Branch?                 @relation(fields: [branchId], references: [id])
   course                 Course                  @relation(fields: [courseId], references: [id])
   organization           Organization            @relation(fields: [organizationId], references: [id])
   teacher                Teacher?                @relation(fields: [teacherId], references: [id])
   homework               Homework[]
   Lesson                 Lesson[]
+  Quiz                   Quiz[]
   recognitionSessions    RecognitionSession[]
   schedules              Schedule[]
   enrollments            StudentGroup[]
-  Branch                 Branch?                 @relation(fields: [branchId], references: [id])
-  branchId               String?                 @db.Uuid
 
   @@index([organizationId])
   @@index([courseId])
   @@index([teacherId])
-  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "group_name_trgm_idx")
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "group_name_trgm_idx", type: Gin)
+  @@index([branchId])
 }
 
 model StudentGroup {
-  organizationId String   @db.Uuid
-  studentId      String   @db.Uuid
-  groupId        String   @db.Uuid
-  isActive       Boolean  @default(true)
-  joinedAt       DateTime @default(now())
+  organizationId String    @db.Uuid
+  studentId      String    @db.Uuid
+  groupId        String    @db.Uuid
+  isActive       Boolean   @default(true)
+  joinedAt       DateTime  @default(now())
   leftAt         DateTime?
-  group          Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  group          Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@id([studentId, groupId])
   @@index([groupId])
+  @@index([studentId])
 }
 
 model Schedule {
@@ -449,8 +492,8 @@ model Payment {
   @@index([studentId])
   @@index([invoiceId])
   @@index([reference])
-  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin, map: "payment_description_trgm_idx")
-  @@index([reference(ops: raw("gin_trgm_ops"))], type: Gin, map: "payment_reference_trgm_idx")
+  @@index([description(ops: raw("gin_trgm_ops"))], map: "payment_description_trgm_idx", type: Gin)
+  @@index([reference(ops: raw("gin_trgm_ops"))], map: "payment_reference_trgm_idx", type: Gin)
 }
 
 model Expense {
@@ -490,10 +533,10 @@ model Lead {
   @@index([organizationId])
   @@index([organizationId, stage])
   @@index([ownerId])
-  @@index([firstName(ops: raw("gin_trgm_ops"))], type: Gin, map: "lead_first_name_trgm_idx")
-  @@index([lastName(ops: raw("gin_trgm_ops"))], type: Gin, map: "lead_last_name_trgm_idx")
-  @@index([email(ops: raw("gin_trgm_ops"))], type: Gin, map: "lead_email_trgm_idx")
-  @@index([phone(ops: raw("gin_trgm_ops"))], type: Gin, map: "lead_phone_trgm_idx")
+  @@index([firstName(ops: raw("gin_trgm_ops"))], map: "lead_first_name_trgm_idx", type: Gin)
+  @@index([lastName(ops: raw("gin_trgm_ops"))], map: "lead_last_name_trgm_idx", type: Gin)
+  @@index([email(ops: raw("gin_trgm_ops"))], map: "lead_email_trgm_idx", type: Gin)
+  @@index([phone(ops: raw("gin_trgm_ops"))], map: "lead_phone_trgm_idx", type: Gin)
 }
 
 model LeadActivity {
@@ -562,7 +605,6 @@ model Grade {
 }
 
 model Homework {
-  submissions    HomeworkSubmission[]
   id             String               @id @default(uuid()) @db.Uuid
   organizationId String               @db.Uuid
   groupId        String               @db.Uuid
@@ -574,6 +616,7 @@ model Homework {
   updatedAt      DateTime             @updatedAt
   group          Group                @relation(fields: [groupId], references: [id])
   organization   Organization         @relation(fields: [organizationId], references: [id])
+  submissions    HomeworkSubmission[]
 
   @@index([organizationId])
   @@index([groupId])
@@ -841,10 +884,10 @@ model LibraryBook {
   @@index([organizationId])
   @@index([category])
   @@index([isbn])
-  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "library_book_title_trgm_idx")
-  @@index([author(ops: raw("gin_trgm_ops"))], type: Gin, map: "library_book_author_trgm_idx")
-  @@index([isbn(ops: raw("gin_trgm_ops"))], type: Gin, map: "library_book_isbn_trgm_idx")
-  @@index([barcode(ops: raw("gin_trgm_ops"))], type: Gin, map: "library_book_barcode_trgm_idx")
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "library_book_title_trgm_idx", type: Gin)
+  @@index([author(ops: raw("gin_trgm_ops"))], map: "library_book_author_trgm_idx", type: Gin)
+  @@index([isbn(ops: raw("gin_trgm_ops"))], map: "library_book_isbn_trgm_idx", type: Gin)
+  @@index([barcode(ops: raw("gin_trgm_ops"))], map: "library_book_barcode_trgm_idx", type: Gin)
 }
 
 model LibraryBorrow {
@@ -895,7 +938,7 @@ model Employee {
 
   @@index([organizationId])
   @@index([department])
-  @@index([position(ops: raw("gin_trgm_ops"))], type: Gin, map: "employee_position_trgm_idx")
+  @@index([position(ops: raw("gin_trgm_ops"))], map: "employee_position_trgm_idx", type: Gin)
 }
 
 model SalaryRecord {
@@ -1013,8 +1056,9 @@ model Certificate {
   @@index([studentId])
   @@index([certificateNumber])
   @@index([verificationCode])
-  @@index([certificateNumber(ops: raw("gin_trgm_ops"))], type: Gin, map: "certificate_number_trgm_idx")
-  @@index([verificationCode(ops: raw("gin_trgm_ops"))], type: Gin, map: "certificate_verification_code_trgm_idx")
+  @@index([certificateNumber(ops: raw("gin_trgm_ops"))], map: "certificate_number_trgm_idx", type: Gin)
+  @@index([verificationCode(ops: raw("gin_trgm_ops"))], map: "certificate_verification_code_trgm_idx", type: Gin)
+  @@index([courseId])
 }
 
 model CertificateTemplate {
@@ -1187,28 +1231,30 @@ model ChatMessage {
 }
 
 model ParentAccount {
-  id                    String          @id @default(uuid()) @db.Uuid
-  organizationId        String          @db.Uuid
-  email                 String
-  phone                 String?
-  firstName             String
-  lastName              String
-  passwordHash          String
-  isActive              Boolean         @default(true)
-  lastLoginAt           DateTime?
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
+  id                                                                        String                     @id @default(uuid()) @db.Uuid
+  organizationId                                                            String                     @db.Uuid
+  email                                                                     String
+  phone                                                                     String?
+  firstName                                                                 String
+  lastName                                                                  String
+  passwordHash                                                              String
+  isActive                                                                  Boolean                    @default(true)
+  lastLoginAt                                                               DateTime?
+  createdAt                                                                 DateTime                   @default(now())
+  updatedAt                                                                 DateTime                   @updatedAt
   /// @deprecated Delivery-pointer mirror of `TelegramAccount.chatId` (see User).
-  telegramChatId        String?         @unique
+  telegramChatId                                                            String?                    @unique
   /// @deprecated Superseded by `TelegramLinkToken`; no longer written.
-  telegramLinkToken     String?         @unique
+  telegramLinkToken                                                         String?                    @unique
   /// @deprecated See `telegramLinkToken`.
-  telegramLinkExpiresAt DateTime?
-  organization          Organization    @relation(fields: [organizationId], references: [id])
-  students              ParentStudent[]
-  ParentSession         ParentSession[]
-  telegramAccounts      TelegramAccount[]
-  passwordResetTokens   ParentPasswordResetToken[]
+  telegramLinkExpiresAt                                                     DateTime?
+  organization                                                              Organization               @relation(fields: [organizationId], references: [id])
+  passwordResetTokens                                                       ParentPasswordResetToken[]
+  ParentSession                                                             ParentSession[]
+  students                                                                  ParentStudent[]
+  ParentTeacherMessage_ParentTeacherMessage_receiverParentIdToParentAccount ParentTeacherMessage[]     @relation("ParentTeacherMessage_receiverParentIdToParentAccount")
+  ParentTeacherMessage_ParentTeacherMessage_senderParentIdToParentAccount   ParentTeacherMessage[]     @relation("ParentTeacherMessage_senderParentIdToParentAccount")
+  telegramAccounts                                                          TelegramAccount[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -1227,7 +1273,6 @@ model ParentPasswordResetToken {
   @@index([tokenHash])
   @@index([expiresAt])
 }
-
 
 model ParentStudent {
   id                String        @id @default(uuid()) @db.Uuid
@@ -1334,6 +1379,7 @@ model PaymentTransaction {
   @@index([externalId])
   @@index([status])
   @@index([createdAt])
+  @@index([paymentId])
 }
 
 model Subscription {
@@ -1368,6 +1414,7 @@ model CustomRole {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id])
+  Invitation     Invitation[]
   users          UserRole[]
 
   @@unique([organizationId, name])
@@ -1384,6 +1431,7 @@ model UserRole {
 
   @@unique([userId, roleId])
   @@index([userId])
+  @@index([roleId])
 }
 
 model DeviceToken {
@@ -1538,7 +1586,7 @@ model Discount {
   isActive       Boolean       @default(true)
   createdBy      String?       @db.Uuid
   createdAt      DateTime      @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime      @updatedAt
   Course         Course?       @relation(fields: [courseId], references: [id], onDelete: Cascade)
   Group          Group?        @relation(fields: [groupId], references: [id], onDelete: Cascade)
   organization   Organization  @relation(fields: [organizationId], references: [id])
@@ -1570,7 +1618,7 @@ model Invoice {
   paidAt         DateTime?
   notes          String?
   createdAt      DateTime      @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime      @updatedAt
   organization   Organization  @relation(fields: [organizationId], references: [id])
   student        Student       @relation(fields: [studentId], references: [id])
   items          InvoiceItem[]
@@ -1600,33 +1648,38 @@ model InvoiceItem {
 }
 
 model Lesson {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String       @db.Uuid
-  scheduleId     String?      @db.Uuid
-  groupId        String       @db.Uuid
-  teacherId      String?      @db.Uuid
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String           @db.Uuid
+  scheduleId     String?          @db.Uuid
+  groupId        String           @db.Uuid
+  teacherId      String?          @db.Uuid
   date           DateTime
   startTime      String
   endTime        String
   room           String?
-  status         LessonStatus @default(PLANNED)
+  status         LessonStatus     @default(PLANNED)
   topic          String?
   notes          String?
   cancelledAt    DateTime?
   cancelReason   String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  topicId        String?          @db.Uuid
+  Assignment     Assignment[]
   attendances    Attendance[]
-  Group          Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  Schedule       Schedule?    @relation(fields: [scheduleId], references: [id])
-  teacher        Teacher?     @relation(fields: [teacherId], references: [id])
+  Group          Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  Schedule       Schedule?        @relation(fields: [scheduleId], references: [id])
+  teacher        Teacher?         @relation(fields: [teacherId], references: [id])
+  Topic          Topic?           @relation(fields: [topicId], references: [id])
+  LessonMaterial LessonMaterial[]
 
   @@unique([groupId, date, startTime])
   @@index([groupId, date])
   @@index([organizationId, date])
   @@index([scheduleId])
   @@index([teacherId, date])
+  @@index([topicId])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -1667,7 +1720,7 @@ model PayrollRun {
   cancelledAt    DateTime?
   cancelReason   String?
   createdAt      DateTime      @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime      @updatedAt
   organization   Organization  @relation(fields: [organizationId], references: [id])
   teacher        Teacher       @relation(fields: [teacherId], references: [id])
 
@@ -1692,7 +1745,7 @@ model Refund {
   requestedAt    DateTime     @default(now())
   processedAt    DateTime?
   createdAt      DateTime     @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime     @updatedAt
   Invoice        Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
   organization   Organization @relation(fields: [organizationId], references: [id])
   Payment        Payment      @relation(fields: [paymentId], references: [id])
@@ -1700,6 +1753,7 @@ model Refund {
   @@unique([organizationId, externalId])
   @@index([organizationId])
   @@index([paymentId])
+  @@index([invoiceId])
 }
 
 model oauth_session {
@@ -1708,6 +1762,1076 @@ model oauth_session {
   expire DateTime @db.Timestamp(6)
 
   @@index([expire], map: "IDX_session_expire")
+}
+
+model AutomationExecution {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String         @db.Uuid
+  ruleId         String         @db.Uuid
+  entityType     String?
+  entityId       String?        @db.Uuid
+  status         String         @default("PENDING")
+  triggeredAt    DateTime       @default(now())
+  executedAt     DateTime       @default(now())
+  completedAt    DateTime?
+  error          String?
+  result         Json?
+  triggerPayload Json?
+  rule           AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([ruleId])
+}
+
+model AutomationRule {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String                @db.Uuid
+  name                 String
+  description          String?
+  isActive             Boolean               @default(true)
+  eventType            String?
+  conditions           Json?
+  actions              Json
+  cooldownMinutes      Int                   @default(60)
+  maxTriggersPerDay    Int                   @default(50)
+  triggerCountToday    Int                   @default(0)
+  lastTriggeredAt      DateTime?
+  createdBy            String?               @db.Uuid
+  lastRunAt            DateTime?
+  totalRuns            Int                   @default(0)
+  successCount         Int                   @default(0)
+  failureCount         Int                   @default(0)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  enabled              Boolean               @default(true)
+  entityType           String?
+  lastRunStatus        String?
+  runCount             Int                   @default(0)
+  trigger              String
+  automationExecutions AutomationExecution[]
+  createdByUser        User?                 @relation(fields: [createdBy], references: [id])
+
+  @@index([enabled, trigger])
+  @@index([entityType])
+  @@index([organizationId])
+}
+
+model CommunicationHistory {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String   @db.Uuid
+  entityType        String
+  entityId          String
+  channel           String
+  direction         String?
+  subject           String?
+  content           String?
+  status            String?
+  failureReason     String?
+  retryCount        Int?
+  relatedEntityId   String?
+  relatedEntityType String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+
+  @@index([channel])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([organizationId])
+}
+
+model DataExportLog {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @db.Uuid
+  userId         String?      @db.Uuid
+  exportType     String?
+  format         String
+  recordCount    Int?
+  fileSizeBytes  Int?
+  status         String       @default("PENDING")
+  ipAddress      String?
+  purpose        String?
+  createdAt      DateTime     @default(now())
+  completedAt    DateTime?
+  entityType     String?
+  errorMessage   String?
+  fileUrl        String?
+  requestedAt    DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User?        @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model DataQualityIssue {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @db.Uuid
+  entityType     String
+  entityId       String
+  category       String    @default("OTHER")
+  severity       String    @default("MEDIUM")
+  field          String?
+  message        String
+  ruleId         String
+  detectedAt     DateTime  @default(now())
+  resolvedAt     DateTime?
+  resolvedBy     String?
+  resolutionNote String?
+
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, resolvedAt])
+  @@index([organizationId, severity])
+  @@index([ruleId])
+}
+
+model DataRetentionPolicy {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String    @db.Uuid
+  dataType        String?
+  retentionDays   Int
+  archivalDays    Int?
+  deleteAfterDays Int?
+  isActive        Boolean   @default(true)
+  lastRunAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  enabled         Boolean   @default(true)
+  entityType      String
+
+  @@unique([organizationId, dataType])
+  @@index([entityType])
+  @@index([organizationId])
+}
+
+model FinancialPeriod {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @db.Uuid
+  periodYear     Int
+  periodMonth    Int
+  status         PeriodStatus @default(OPEN)
+  closedBy       String?      @db.Uuid
+  closedAt       DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  endDate        DateTime?
+  name           String       @default("")
+  startDate      DateTime?
+  closedByUser   User?        @relation(fields: [closedBy], references: [id])
+
+  @@unique([organizationId, periodYear, periodMonth])
+  @@index([organizationId])
+  @@index([organizationId, status])
+}
+
+model FollowUpRule {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @db.Uuid
+  name           String
+  triggerType    String?
+  triggerDays    Int?
+  targetStage    String?
+  actionType     String?
+  channel        String?
+  message        String?
+  isActive       Boolean   @default(true)
+  lastRunAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  action         Json
+  conditions     Json?
+  enabled        Boolean   @default(true)
+  entityType     String?
+
+  @@index([organizationId])
+}
+
+model GamificationXpEvent {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                @db.Uuid
+  studentId      String                @db.Uuid
+  type           GamificationEventType
+  xp             Int
+  coins          Int
+  refType        String?
+  refId          String?
+  createdAt      DateTime              @default(now())
+  reason         String?
+  student        Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, type, refId])
+  @@index([organizationId, createdAt])
+  @@index([studentId])
+}
+
+model ReceiptCounter {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @unique @db.Uuid
+  lastNumber     Int      @default(0)
+  year           Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model TelegramLinkLog {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @db.Uuid
+  entityType     String?
+  entityId       String?
+  userId         String?  @db.Uuid
+  chatId         String?
+  telegramUserId String?
+  idempotencyKey String   @unique
+  linkToken      String?
+  status         String?
+  createdAt      DateTime @default(now())
+
+  @@index([idempotencyKey])
+  @@index([organizationId])
+}
+
+/// Durable M-EDU <-> Telegram identity link (external, untrusted channel).
+///
+/// This is a mapping of an EXTERNAL identity onto an existing M-EDU principal,
+/// not a source of business truth and not an authorization grant. Every
+/// request that arrives from Telegram re-resolves `organizationId` / role /
+/// permissions from the M-EDU tables — the Telegram side is never trusted.
+///
+/// Bot secrets and message payloads are never stored here. `telegramUserId`
+/// and `chatId` are Telegram int64 values persisted as strings (they overflow
+/// a 32-bit integer and are not safe as JS `number`). A single central M-EDU
+/// bot is assumed, so both are globally unique: one Telegram identity maps to
+/// at most one M-EDU principal.
+model TelegramAccount {
+  id              String                @id @default(uuid()) @db.Uuid
+  organizationId  String                @db.Uuid
+  /// Telegram numeric user id (int64), stored as a string for safety.
+  telegramUserId  String                @unique
+  /// Private chat id with the M-EDU bot (equals telegramUserId for DMs).
+  chatId          String                @unique
+  username        String?
+  firstName       String?
+  lastName        String?
+  languageCode    String?
+  status          TelegramAccountStatus @default(ACTIVE)
+  userId          String?               @db.Uuid
+  parentAccountId String?               @db.Uuid
+  linkedAt        DateTime              @default(now())
+  lastSeenAt      DateTime?
+  disconnectedAt  DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  organization    Organization          @relation(fields: [organizationId], references: [id])
+  parentAccount   ParentAccount?        @relation(fields: [parentAccountId], references: [id])
+  user            User?                 @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([parentAccountId])
+  @@index([status])
+}
+
+/// Short-lived, single-use, hash-stored account-linking token.
+///
+/// Only the SHA-256 hash is persisted (mirrors `PasswordResetToken`) so a
+/// database dump can never be replayed to hijack a link. Consumption is
+/// atomic: a conditional `updateMany` on `usedAt IS NULL` guarantees exactly
+/// one of several concurrent webhook deliveries (possibly on different API
+/// instances) succeeds.
+model TelegramLinkToken {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @db.Uuid
+  /// SHA-256 hex of the opaque token handed to the user. Never the raw value.
+  tokenHash       String       @unique
+  /// 'USER' | 'PARENT_ACCOUNT' — which principal table the link targets.
+  targetType      String
+  userId          String?      @db.Uuid
+  parentAccountId String?      @db.Uuid
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([expiresAt])
+  @@index([organizationId])
+  @@index([usedAt])
+}
+
+/// Webhook update deduplication ledger.
+///
+/// Telegram retries webhook deliveries and may deliver the same `update_id` to
+/// several API instances. The primary key makes "process exactly once" a
+/// database guarantee instead of a process-local one. Rows are metadata only
+/// (no payloads) and are subject to the retention policy in docs/TELEGRAM.md.
+model TelegramUpdate {
+  updateId   BigInt   @id
+  receivedAt DateTime @default(now())
+  status     String   @default("PROCESSED")
+
+  @@index([receivedAt])
+}
+
+model Branch {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  code           String?
+  address        String?
+  email          String?
+  timezone       String?
+  currency       String?
+  phone          String?
+  managerId      String?      @db.Uuid
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  manager        User?        @relation(fields: [managerId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  groups         Group[]
+  students       Student[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([managerId])
+}
+
+model ApiKey {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  isActive       Boolean      @default(true)
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  usageCount     Int          @default(0)
+  keyHash        String       @unique
+  keyPrefix      String?
+  scopes         String[]
+  rateLimit      Int          @default(100)
+  createdBy      String?      @db.Uuid
+  createdByUser  User?        @relation(fields: [createdBy], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model ParentSession {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parentId       String        @db.Uuid
+  token          String        @unique @default(dbgenerated("gen_random_uuid()"))
+  deviceInfo     String?
+  ipAddress      String?
+  expiresAt      DateTime
+  createdAt      DateTime      @default(now())
+  revokedAt      DateTime?
+  organizationId String?       @db.Uuid
+  revokedReason  String?
+  lastActiveAt   DateTime?
+  userAgent      String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  parent         ParentAccount @relation(fields: [parentId], references: [id])
+
+  @@index([parentId])
+}
+
+model StudentGamification {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @db.Uuid
+  studentId      String       @unique @db.Uuid
+  level          Int          @default(1)
+  currentXp      Int          @default(0)
+  totalXp        Int          @default(0)
+  coins          Int          @default(0)
+  streakDays     Int          @default(0)
+  lastActiveDate DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  xp             Int          @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  student        Student      @relation(fields: [studentId], references: [id])
+
+  @@index([organizationId, level])
+  @@index([organizationId, xp])
+}
+
+model NotificationDedup {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @db.Uuid
+  dedupKey       String   @unique
+  entityType     String
+  eventType      String?
+  entityId       String
+  createdAt      DateTime @default(now())
+}
+
+/// Delivery tracking for the Telegram channel of a notification event.
+///
+/// One row per (event instance, principal, channel): it records WHAT was
+/// attempted, WHEN, and how the provider classified the outcome. It exists so
+/// the pipeline can distinguish a transient Telegram outage (retry) from a
+/// permanent user/bot relationship failure (stop retrying, mark the account).
+///
+/// Deliberately never stores secrets (bot token, webhook/callback secret) or
+/// raw Telegram API payloads. `telegramAccountId` is a soft reference (no FK):
+/// an audit/delivery record must survive account-row lifecycle changes and is
+/// removed only by the retention job.
+model NotificationDelivery {
+  id                String                     @id @default(uuid()) @db.Uuid
+  organizationId    String                     @db.Uuid
+  /// BullMQ job id of the originating notification event (never a Telegram id).
+  eventId           String
+  eventType         String
+  entityType        String
+  entityId          String
+  channel           String                     @default("TELEGRAM")
+  /// 'USER' | 'PARENT_ACCOUNT' — which principal table owns the delivery.
+  principalType     String
+  principalId       String                     @db.Uuid
+  telegramAccountId String?                    @db.Uuid
+  status            NotificationDeliveryStatus @default(PENDING)
+  /// Categorized provider failure (NETWORK_ERROR, TIMEOUT, RATE_LIMITED,
+  /// TELEGRAM_SERVER_ERROR, BLOCKED_USER, INVALID_CHAT, NOT_CONFIGURED, ...).
+  failureCategory   String?
+  attempts          Int                        @default(0)
+  /// Idempotency key: one delivery record per (event, principal, channel).
+  dedupKey          String                     @unique
+  /// Rendered content, kept ONLY so a quiet-hours deferral can be re-delivered.
+  title             String?
+  body              String?
+  deferredUntil     DateTime?
+  attemptedAt       DateTime                   @default(now())
+  sentAt            DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  organization      Organization               @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([telegramAccountId])
+  @@index([status, deferredUntil])
+  @@index([createdAt])
+}
+
+model HomeworkSubmission {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  homeworkId     String        @db.Uuid
+  studentId      String        @db.Uuid
+  status         String        @default("SUBMITTED")
+  content        String?
+  grade          Float?
+  feedback       String?
+  submittedAt    DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  isLate         Boolean       @default(false)
+  organizationId String?       @db.Uuid
+  fileUrl        String?
+  gradedAt       DateTime?
+  gradedBy       String?       @db.Uuid
+  resubmittedAt  DateTime?
+  homework       Homework      @relation(fields: [homeworkId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  student        Student       @relation(fields: [studentId], references: [id])
+
+  @@unique([homeworkId, studentId])
+  @@index([homeworkId])
+  @@index([studentId])
+  @@index([status])
+  @@index([organizationId])
+}
+
+model OrganizationHoliday {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  date           DateTime     @db.Date
+  name           String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, date])
+}
+
+model AccessRequest {
+  id            String              @id @default(uuid()) @db.Uuid
+  firstName     String
+  lastName      String
+  email         String              @unique
+  phone         String?
+  organization  String?
+  requestedRole String?
+  reason        String?
+  status        AccessRequestStatus @default(PENDING)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  reviewedBy    String?             @db.Uuid
+  User          User?               @relation(fields: [reviewedBy], references: [id])
+  Invitation    Invitation[]
+
+  @@index([createdAt])
+  @@index([status])
+}
+
+model AiAction {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  conversationId String         @db.Uuid
+  messageId      String?        @db.Uuid
+  createdBy      String         @db.Uuid
+  toolName       String
+  riskLevel      String
+  status         String         @default("PENDING_CONFIRMATION")
+  summary        String
+  parameters     Json
+  result         Json?
+  error          Json?
+  expiresAt      DateTime
+  confirmedAt    DateTime?
+  executedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  User           User           @relation(fields: [createdBy], references: [id])
+  Organization   Organization   @relation(fields: [organizationId], references: [id])
+
+  @@index([conversationId])
+  @@index([expiresAt])
+  @@index([organizationId, status])
+  @@index([status, expiresAt])
+}
+
+model AiConversation {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  createdBy      String       @db.Uuid
+  title          String?
+  preview        String?
+  messageCount   Int          @default(0)
+  archivedAt     DateTime?
+  lastMessageAt  DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  actions        AiAction[]
+  User           User         @relation(fields: [createdBy], references: [id])
+  Organization   Organization @relation(fields: [organizationId], references: [id])
+  messages       AiMessage[]
+
+  @@index([organizationId, archivedAt])
+  @@index([organizationId, createdBy])
+  @@index([organizationId, updatedAt])
+}
+
+model AiMessage {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  conversationId String         @db.Uuid
+  role           String
+  content        String
+  status         String         @default("completed")
+  toolCalls      Json?
+  toolResult     Json?
+  actionId       String?        @db.Uuid
+  error          Json?
+  createdAt      DateTime       @default(now())
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  Organization   Organization   @relation(fields: [organizationId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([organizationId])
+}
+
+model Announcement {
+  id               String               @id @default(uuid()) @db.Uuid
+  organizationId   String               @db.Uuid
+  branchId         String?              @db.Uuid
+  groupId          String?              @db.Uuid
+  courseId         String?              @db.Uuid
+  audience         AnnouncementAudience @default(ALL)
+  title            String
+  content          String
+  status           AnnouncementStatus   @default(PUBLISHED)
+  publishAt        DateTime             @default(now())
+  expireAt         DateTime?
+  createdBy        String               @db.Uuid
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  Course           Course?              @relation(fields: [courseId], references: [id])
+  author           User                 @relation(fields: [createdBy], references: [id])
+  Group            Group?               @relation(fields: [groupId], references: [id])
+  Organization     Organization         @relation(fields: [organizationId], references: [id])
+  AnnouncementRead AnnouncementRead[]
+
+  @@index([courseId])
+  @@index([groupId])
+  @@index([organizationId])
+  @@index([status, publishAt])
+}
+
+model AnnouncementRead {
+  id             String       @id @default(uuid()) @db.Uuid
+  announcementId String       @db.Uuid
+  userId         String       @db.Uuid
+  readAt         DateTime     @default(now())
+  Announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  User           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([announcementId])
+  @@index([userId])
+}
+
+model Assignment {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  organizationId       String                 @db.Uuid
+  groupId              String                 @db.Uuid
+  lessonId             String?                @db.Uuid
+  topicId              String?                @db.Uuid
+  title                String
+  description          String?
+  dueDate              DateTime
+  maxScore             Float                  @default(100.0)
+  maxAttempts          Int                    @default(1)
+  status               AssignmentStatus       @default(PUBLISHED)
+  attachments          String[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  Group                Group                  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  Lesson               Lesson?                @relation(fields: [lessonId], references: [id])
+  Organization         Organization           @relation(fields: [organizationId], references: [id])
+  Topic                Topic?                 @relation(fields: [topicId], references: [id])
+  AssignmentSubmission AssignmentSubmission[]
+
+  @@index([dueDate])
+  @@index([groupId])
+  @@index([lessonId])
+  @@index([organizationId])
+  @@index([topicId])
+}
+
+model AssignmentSubmission {
+  id            String           @id @default(uuid()) @db.Uuid
+  assignmentId  String           @db.Uuid
+  studentId     String           @db.Uuid
+  attemptNumber Int              @default(1)
+  status        SubmissionStatus @default(SUBMITTED)
+  content       String?
+  attachments   String[]
+  score         Float?
+  feedback      String?
+  gradedBy      String?          @db.Uuid
+  gradedAt      DateTime?
+  submittedAt   DateTime         @default(now())
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  Assignment    Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  Student       Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId, attemptNumber])
+  @@index([assignmentId])
+  @@index([status])
+  @@index([studentId])
+}
+
+model CalendarEvent {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  groupId        String?           @db.Uuid
+  teacherId      String?           @db.Uuid
+  room           String?
+  title          String
+  description    String?
+  type           CalendarEventType @default(EVENT)
+  startDate      DateTime
+  endDate        DateTime
+  isAllDay       Boolean           @default(false)
+  createdBy      String            @db.Uuid
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  User           User              @relation(fields: [createdBy], references: [id])
+  Group          Group?            @relation(fields: [groupId], references: [id])
+  Organization   Organization      @relation(fields: [organizationId], references: [id])
+  Teacher        Teacher?          @relation(fields: [teacherId], references: [id])
+
+  @@index([groupId])
+  @@index([organizationId])
+  @@index([startDate, endDate])
+  @@index([teacherId])
+  @@index([createdBy])
+}
+
+model Curriculum {
+  id               String             @id @default(uuid()) @db.Uuid
+  organizationId   String             @db.Uuid
+  courseId         String?            @db.Uuid
+  subjectId        String?            @db.Uuid
+  name             String
+  version          Int                @default(1)
+  status           CurriculumStatus   @default(DRAFT)
+  description      String?
+  effectiveFrom    DateTime?
+  effectiveTo      DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  Course           Course?            @relation(fields: [courseId], references: [id])
+  Organization     Organization       @relation(fields: [organizationId], references: [id])
+  Subject          Subject?           @relation(fields: [subjectId], references: [id])
+  CurriculumModule CurriculumModule[]
+
+  @@index([courseId])
+  @@index([organizationId])
+  @@index([subjectId])
+}
+
+model CurriculumModule {
+  id           String     @id @default(uuid()) @db.Uuid
+  curriculumId String     @db.Uuid
+  title        String
+  description  String?
+  order        Int        @default(1)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  Curriculum   Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  Topic        Topic[]
+
+  @@index([curriculumId])
+}
+
+model Invitation {
+  id              String           @id @default(uuid()) @db.Uuid
+  email           String
+  tokenHash       String           @unique
+  organizationId  String           @db.Uuid
+  role            Role             @default(TEACHER)
+  customRoleId    String?          @db.Uuid
+  status          InvitationStatus @default(PENDING)
+  expiresAt       DateTime
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  createdBy       String?          @db.Uuid
+  acceptedAt      DateTime?
+  accessRequestId String?          @db.Uuid
+  AccessRequest   AccessRequest?   @relation(fields: [accessRequestId], references: [id])
+  User            User?            @relation(fields: [createdBy], references: [id])
+  CustomRole      CustomRole?      @relation(fields: [customRoleId], references: [id])
+  Organization    Organization     @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, email])
+  @@index([expiresAt])
+  @@index([organizationId])
+  @@index([status])
+  @@index([customRoleId])
+  @@index([createdBy])
+  @@index([accessRequestId])
+}
+
+model LearningObjective {
+  id                      String                    @id @default(uuid()) @db.Uuid
+  topicId                 String                    @db.Uuid
+  code                    String
+  title                   String
+  description             String?
+  masteryThreshold        Float                     @default(75.0)
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  Topic                   Topic                     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  Question                Question[]
+  StudentObjectiveMastery StudentObjectiveMastery[]
+
+  @@index([topicId])
+}
+
+model LessonMaterial {
+  id         String   @id @default(uuid()) @db.Uuid
+  lessonId   String   @db.Uuid
+  materialId String   @db.Uuid
+  createdAt  DateTime @default(now())
+  Lesson     Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  Material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, materialId])
+  @@index([lessonId])
+  @@index([materialId])
+}
+
+model Material {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @db.Uuid
+  folderId       String?            @db.Uuid
+  subjectId      String?            @db.Uuid
+  topicId        String?            @db.Uuid
+  title          String
+  description    String?
+  type           MaterialType
+  fileUrl        String
+  fileSize       Int?               @default(0)
+  mimeType       String?
+  visibility     MaterialVisibility @default(ALL)
+  publishedAt    DateTime?          @default(now())
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  LessonMaterial LessonMaterial[]
+  MaterialFolder MaterialFolder?    @relation(fields: [folderId], references: [id])
+  Organization   Organization       @relation(fields: [organizationId], references: [id])
+  Subject        Subject?           @relation(fields: [subjectId], references: [id])
+  Topic          Topic?             @relation(fields: [topicId], references: [id])
+
+  @@index([folderId])
+  @@index([organizationId])
+  @@index([subjectId])
+  @@index([topicId])
+}
+
+model MaterialFolder {
+  id                   String           @id @default(uuid()) @db.Uuid
+  organizationId       String           @db.Uuid
+  name                 String
+  parentId             String?          @db.Uuid
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  Material             Material[]
+  Organization         Organization     @relation(fields: [organizationId], references: [id])
+  MaterialFolder       MaterialFolder?  @relation("MaterialFolderToMaterialFolder", fields: [parentId], references: [id])
+  other_MaterialFolder MaterialFolder[] @relation("MaterialFolderToMaterialFolder")
+
+  @@index([organizationId])
+  @@index([parentId])
+}
+
+model ParentTeacherMessage {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @db.Uuid
+  studentId        String         @db.Uuid
+  senderUserId     String?        @db.Uuid
+  senderParentId   String?        @db.Uuid
+  receiverUserId   String?        @db.Uuid
+  receiverParentId String?        @db.Uuid
+  content          String
+  attachments      String[]
+  isRead           Boolean        @default(false)
+  readAt           DateTime?
+  createdAt        DateTime       @default(now())
+  Organization     Organization   @relation(fields: [organizationId], references: [id])
+  receiverParent   ParentAccount? @relation("ParentTeacherMessage_receiverParentIdToParentAccount", fields: [receiverParentId], references: [id])
+  receiverUser     User?          @relation("ParentTeacherMessage_receiverUserIdToUser", fields: [receiverUserId], references: [id])
+  senderParent     ParentAccount? @relation("ParentTeacherMessage_senderParentIdToParentAccount", fields: [senderParentId], references: [id])
+  senderUser       User?          @relation("ParentTeacherMessage_senderUserIdToUser", fields: [senderUserId], references: [id])
+  Student          Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([receiverParentId])
+  @@index([receiverUserId])
+  @@index([senderParentId])
+  @@index([senderUserId])
+  @@index([studentId])
+}
+
+model Question {
+  id                String              @id @default(uuid()) @db.Uuid
+  organizationId    String              @db.Uuid
+  subjectId         String?             @db.Uuid
+  topicId           String?             @db.Uuid
+  objectiveId       String?             @db.Uuid
+  type              QuestionType
+  difficulty        QuestionDifficulty  @default(MEDIUM)
+  prompt            String
+  explanation       String?
+  points            Float               @default(1.0)
+  tags              String[]
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  LearningObjective LearningObjective?  @relation(fields: [objectiveId], references: [id])
+  Organization      Organization        @relation(fields: [organizationId], references: [id])
+  Subject           Subject?            @relation(fields: [subjectId], references: [id])
+  Topic             Topic?              @relation(fields: [topicId], references: [id])
+  QuestionOption    QuestionOption[]
+  QuizAttemptAnswer QuizAttemptAnswer[]
+  QuizQuestion      QuizQuestion[]
+
+  @@index([objectiveId])
+  @@index([organizationId])
+  @@index([subjectId])
+  @@index([topicId])
+}
+
+model QuestionOption {
+  id         String   @id @default(uuid()) @db.Uuid
+  questionId String   @db.Uuid
+  text       String
+  isCorrect  Boolean  @default(false)
+  order      Int      @default(1)
+  createdAt  DateTime @default(now())
+  Question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+}
+
+model Quiz {
+  id                 String         @id @default(uuid()) @db.Uuid
+  organizationId     String         @db.Uuid
+  groupId            String?        @db.Uuid
+  title              String
+  description        String?
+  durationMinutes    Int            @default(30)
+  passingScore       Float          @default(60.0)
+  maxAttempts        Int            @default(1)
+  randomizeQuestions Boolean        @default(true)
+  randomizeAnswers   Boolean        @default(true)
+  isPublished        Boolean        @default(false)
+  startsAt           DateTime?
+  endsAt             DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  Group              Group?         @relation(fields: [groupId], references: [id])
+  Organization       Organization   @relation(fields: [organizationId], references: [id])
+  QuizAttempt        QuizAttempt[]
+  QuizQuestion       QuizQuestion[]
+
+  @@index([groupId])
+  @@index([organizationId])
+}
+
+model QuizAttempt {
+  id                String              @id @default(uuid()) @db.Uuid
+  quizId            String              @db.Uuid
+  studentId         String              @db.Uuid
+  attemptNumber     Int                 @default(1)
+  status            QuizAttemptStatus   @default(STARTED)
+  score             Float?
+  isPassed          Boolean             @default(false)
+  durationSec       Int?
+  startedAt         DateTime            @default(now())
+  submittedAt       DateTime?
+  expiresAt         DateTime
+  idempotencyKey    String?             @unique
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  organizationId    String              @db.Uuid
+  Organization      Organization        @relation(fields: [organizationId], references: [id])
+  quiz              Quiz                @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  Student           Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  QuizAttemptAnswer QuizAttemptAnswer[]
+
+  @@unique([quizId, studentId, attemptNumber])
+  @@index([organizationId])
+  @@index([quizId])
+  @@index([status])
+  @@index([studentId])
+}
+
+model QuizAttemptAnswer {
+  id                String      @id @default(uuid()) @db.Uuid
+  attemptId         String      @db.Uuid
+  questionId        String      @db.Uuid
+  selectedOptionIds String[]
+  textAnswer        String?
+  isCorrect         Boolean?
+  pointsAwarded     Float?      @default(0)
+  createdAt         DateTime    @default(now())
+  QuizAttempt       QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  Question          Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
+}
+
+model QuizQuestion {
+  id         String   @id @default(uuid()) @db.Uuid
+  quizId     String   @db.Uuid
+  questionId String   @db.Uuid
+  order      Int      @default(1)
+  points     Float    @default(1.0)
+  Question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  Quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, questionId])
+  @@index([questionId])
+  @@index([quizId])
+}
+
+model StudentObjectiveMastery {
+  id                String            @id @default(uuid()) @db.Uuid
+  organizationId    String            @db.Uuid
+  studentId         String            @db.Uuid
+  subjectId         String            @db.Uuid
+  objectiveId       String            @db.Uuid
+  masteryScore      Float             @default(0.0)
+  isMastered        Boolean           @default(false)
+  assessmentsCount  Int               @default(0)
+  lastAssessedAt    DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  LearningObjective LearningObjective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  Organization      Organization      @relation(fields: [organizationId], references: [id])
+  Student           Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  Subject           Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, objectiveId])
+  @@index([organizationId])
+  @@index([studentId])
+  @@index([subjectId])
+}
+
+model StudentProgressSnapshot {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  studentId      String        @db.Uuid
+  overallMastery Float         @default(0.0)
+  attendanceRate Float         @default(0.0)
+  homeworkRate   Float         @default(0.0)
+  trend          ProgressTrend @default(STABLE)
+  snapshotDate   DateTime      @default(now()) @db.Date
+  createdAt      DateTime      @default(now())
+  Organization   Organization  @relation(fields: [organizationId], references: [id])
+  Student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, snapshotDate])
+  @@index([organizationId])
+  @@index([snapshotDate])
+  @@index([studentId])
+}
+
+model Subject {
+  id                      String                    @id @default(uuid()) @db.Uuid
+  organizationId          String                    @db.Uuid
+  courseId                String?                   @db.Uuid
+  name                    String
+  code                    String
+  description             String?
+  isActive                Boolean                   @default(true)
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  Curriculum              Curriculum[]
+  Material                Material[]
+  Question                Question[]
+  StudentObjectiveMastery StudentObjectiveMastery[]
+  Course                  Course?                   @relation(fields: [courseId], references: [id])
+  Organization            Organization              @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, code])
+  @@index([courseId])
+  @@index([organizationId])
+}
+
+model Topic {
+  id                String              @id @default(uuid()) @db.Uuid
+  moduleId          String              @db.Uuid
+  title             String
+  description       String?
+  order             Int                 @default(1)
+  difficulty        QuestionDifficulty  @default(MEDIUM)
+  estimatedMinutes  Int?                @default(45)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  Assignment        Assignment[]
+  LearningObjective LearningObjective[]
+  Lesson            Lesson[]
+  Material          Material[]
+  Question          Question[]
+  CurriculumModule  CurriculumModule    @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@index([moduleId])
 }
 
 enum Role {
@@ -1992,232 +3116,6 @@ enum StudentStatus {
   TRIAL
 }
 
-model AutomationExecution {
-  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String         @db.Uuid
-  ruleId         String         @db.Uuid
-  entityType     String?
-  entityId       String?        @db.Uuid
-  status         String         @default("PENDING")
-  triggeredAt    DateTime       @default(now())
-  executedAt     DateTime       @default(now())
-  completedAt    DateTime?
-  error          String?
-  result         Json?
-  triggerPayload Json?
-  rule           AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId])
-  @@index([ruleId])
-}
-
-model AutomationRule {
-  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId       String                @db.Uuid
-  name                 String
-  description          String?
-  isActive             Boolean               @default(true)
-  eventType            String?
-  conditions           Json?
-  actions              Json
-  cooldownMinutes      Int                   @default(60)
-  maxTriggersPerDay    Int                   @default(50)
-  triggerCountToday    Int                   @default(0)
-  lastTriggeredAt      DateTime?
-  createdBy            String?               @db.Uuid
-  lastRunAt            DateTime?
-  totalRuns            Int                   @default(0)
-  successCount         Int                   @default(0)
-  failureCount         Int                   @default(0)
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  enabled              Boolean               @default(true)
-  entityType           String?
-  lastRunStatus        String?
-  runCount             Int                   @default(0)
-  trigger              String
-  createdByUser        User?                 @relation(fields: [createdBy], references: [id], onDelete: SetNull)
-  automationExecutions AutomationExecution[]
-
-  @@index([enabled, trigger])
-  @@index([entityType])
-  @@index([organizationId])
-}
-
-model CommunicationHistory {
-  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId    String   @db.Uuid
-  entityType        String
-  entityId          String
-  channel           String
-  direction         String?
-  subject           String?
-  content           String?
-  status            String?
-  failureReason     String?
-  retryCount        Int?
-  relatedEntityId   String?
-  relatedEntityType String?
-  metadata          Json?
-  createdAt         DateTime @default(now())
-
-  @@index([channel])
-  @@index([createdAt])
-  @@index([entityType, entityId])
-  @@index([organizationId])
-}
-
-model DataExportLog {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String       @db.Uuid
-  userId         String?      @db.Uuid
-  exportType     String?
-  format         String
-  recordCount    Int?
-  fileSizeBytes  Int?
-  status         String       @default("PENDING")
-  ipAddress      String?
-  purpose        String?
-  createdAt      DateTime     @default(now())
-  completedAt    DateTime?
-  entityType     String?
-  errorMessage   String?
-  fileUrl        String?
-  requestedAt    DateTime     @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  user           User?        @relation(fields: [userId], references: [id])
-
-  @@index([createdAt])
-  @@index([organizationId])
-  @@index([userId])
-}
-
-model DataQualityIssue {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String    @db.Uuid
-  entityType     String
-  entityId       String
-  category       String    @default("OTHER")
-  severity       String    @default("MEDIUM")
-  field          String?
-  message        String
-  ruleId         String
-  detectedAt     DateTime  @default(now())
-  resolvedAt     DateTime?
-  resolvedBy     String?
-  resolutionNote String?
-
-  @@index([organizationId, entityType, entityId])
-  @@index([organizationId, resolvedAt])
-  @@index([organizationId, severity])
-  @@index([ruleId])
-}
-
-model DataRetentionPolicy {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId  String    @db.Uuid
-  dataType        String?
-  retentionDays   Int
-  archivalDays    Int?
-  deleteAfterDays Int?
-  isActive        Boolean   @default(true)
-  lastRunAt       DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  enabled         Boolean   @default(true)
-  entityType      String
-
-  @@unique([organizationId, dataType])
-  @@index([entityType])
-  @@index([organizationId])
-}
-
-model FinancialPeriod {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String       @db.Uuid
-  periodYear     Int
-  periodMonth    Int
-  status         PeriodStatus @default(OPEN)
-  closedBy       String?      @db.Uuid
-  closedAt       DateTime?
-  closedByUser   User?        @relation(fields: [closedBy], references: [id], onDelete: SetNull)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  endDate        DateTime?
-  name           String       @default("")
-  startDate      DateTime?
-
-  @@unique([organizationId, periodYear, periodMonth])
-  @@index([organizationId])
-  @@index([organizationId, status])
-}
-
-model FollowUpRule {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String    @db.Uuid
-  name           String
-  triggerType    String?
-  triggerDays    Int?
-  targetStage    String?
-  actionType     String?
-  channel        String?
-  message        String?
-  isActive       Boolean   @default(true)
-  lastRunAt      DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  action         Json
-  conditions     Json?
-  enabled        Boolean   @default(true)
-  entityType     String?
-
-  @@index([organizationId])
-}
-
-model GamificationXpEvent {
-  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String                @db.Uuid
-  studentId      String                @db.Uuid
-  type           GamificationEventType
-  xp             Int
-  coins          Int
-  refType        String?
-  refId          String?
-  createdAt      DateTime              @default(now())
-  reason         String?
-  student        Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, type, refId])
-  @@index([organizationId, createdAt])
-  @@index([studentId])
-}
-
-model ReceiptCounter {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String   @unique @db.Uuid
-  lastNumber     Int      @default(0)
-  year           Int
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-}
-
-model TelegramLinkLog {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String   @db.Uuid
-  entityType     String?
-  entityId       String?
-  userId         String?  @db.Uuid
-  chatId         String?
-  telegramUserId String?
-  idempotencyKey String   @unique
-  linkToken      String?
-  status         String?
-  createdAt      DateTime @default(now())
-
-  @@index([idempotencyKey])
-  @@index([organizationId])
-}
-
 /// Lifecycle of a linked Telegram identity.
 ///
 /// Telegram is an external/untrusted channel: `BLOCKED` (the user blocked the
@@ -2228,91 +3126,6 @@ enum TelegramAccountStatus {
   DISCONNECTED
   BLOCKED
   SUSPENDED
-}
-
-/// Durable M-EDU <-> Telegram identity link (external, untrusted channel).
-///
-/// This is a mapping of an EXTERNAL identity onto an existing M-EDU principal,
-/// not a source of business truth and not an authorization grant. Every
-/// request that arrives from Telegram re-resolves `organizationId` / role /
-/// permissions from the M-EDU tables — the Telegram side is never trusted.
-///
-/// Bot secrets and message payloads are never stored here. `telegramUserId`
-/// and `chatId` are Telegram int64 values persisted as strings (they overflow
-/// a 32-bit integer and are not safe as JS `number`). A single central M-EDU
-/// bot is assumed, so both are globally unique: one Telegram identity maps to
-/// at most one M-EDU principal.
-model TelegramAccount {
-  id              String                @id @default(uuid()) @db.Uuid
-  organizationId  String                @db.Uuid
-  /// Telegram numeric user id (int64), stored as a string for safety.
-  telegramUserId  String
-  /// Private chat id with the M-EDU bot (equals telegramUserId for DMs).
-  chatId          String
-  username        String?
-  firstName       String?
-  lastName        String?
-  languageCode    String?
-  status          TelegramAccountStatus @default(ACTIVE)
-  userId          String?               @db.Uuid
-  parentAccountId String?               @db.Uuid
-  linkedAt        DateTime              @default(now())
-  lastSeenAt      DateTime?
-  disconnectedAt  DateTime?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-
-  organization  Organization   @relation(fields: [organizationId], references: [id])
-  user          User?          @relation(fields: [userId], references: [id])
-  parentAccount ParentAccount? @relation(fields: [parentAccountId], references: [id])
-
-  @@unique([telegramUserId])
-  @@unique([chatId])
-  @@index([organizationId])
-  @@index([userId])
-  @@index([parentAccountId])
-  @@index([status])
-}
-
-/// Short-lived, single-use, hash-stored account-linking token.
-///
-/// Only the SHA-256 hash is persisted (mirrors `PasswordResetToken`) so a
-/// database dump can never be replayed to hijack a link. Consumption is
-/// atomic: a conditional `updateMany` on `usedAt IS NULL` guarantees exactly
-/// one of several concurrent webhook deliveries (possibly on different API
-/// instances) succeeds.
-model TelegramLinkToken {
-  id              String    @id @default(uuid()) @db.Uuid
-  organizationId  String    @db.Uuid
-  /// SHA-256 hex of the opaque token handed to the user. Never the raw value.
-  tokenHash       String    @unique
-  /// 'USER' | 'PARENT_ACCOUNT' — which principal table the link targets.
-  targetType      String
-  userId          String?   @db.Uuid
-  parentAccountId String?   @db.Uuid
-  expiresAt       DateTime
-  usedAt          DateTime?
-  createdAt       DateTime  @default(now())
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-
-  @@index([expiresAt])
-  @@index([organizationId])
-  @@index([usedAt])
-}
-
-/// Webhook update deduplication ledger.
-///
-/// Telegram retries webhook deliveries and may deliver the same `update_id` to
-/// several API instances. The primary key makes "process exactly once" a
-/// database guarantee instead of a process-local one. Rows are metadata only
-/// (no payloads) and are subject to the retention policy in docs/TELEGRAM.md.
-model TelegramUpdate {
-  updateId   BigInt   @id
-  receivedAt DateTime @default(now())
-  status     String   @default("PROCESSED")
-
-  @@index([receivedAt])
 }
 
 enum GamificationEventType {
@@ -2326,156 +3139,6 @@ enum PeriodStatus {
   REVIEW
   RECONCILED
   CLOSED
-}
-
-model Branch {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String   @db.Uuid
-  name           String
-  code           String?
-  address        String?
-  email          String?
-  timezone       String?
-  currency       String?
-  phone          String?
-  managerId      String?  @db.Uuid
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-  manager      User?        @relation(fields: [managerId], references: [id])
-
-  groups   Group[]
-  students Student[]
-
-  @@unique([organizationId, code])
-  @@index([organizationId])
-  @@index([managerId])
-}
-
-model ApiKey {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String    @db.Uuid
-  name           String
-  isActive       Boolean   @default(true)
-  lastUsedAt     DateTime?
-  expiresAt      DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  organization  Organization @relation(fields: [organizationId], references: [id])
-  usageCount    Int          @default(0)
-  keyHash       String
-  keyPrefix     String?
-  scopes        String[]
-  rateLimit     Int          @default(100)
-  createdBy     String?      @db.Uuid
-  createdByUser User?        @relation(fields: [createdBy], references: [id], onDelete: SetNull)
-
-  @@unique([keyHash])
-  @@index([organizationId])
-}
-
-model ParentSession {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  parentId     String    @db.Uuid
-  token        String    @unique @default(dbgenerated("gen_random_uuid()"))
-  lastActiveAt DateTime?
-  userAgent    String?
-  deviceInfo   String?
-  ipAddress    String?
-  expiresAt    DateTime
-  createdAt    DateTime  @default(now())
-
-  parent         ParentAccount @relation(fields: [parentId], references: [id])
-  revokedAt      DateTime?
-  organizationId String?       @db.Uuid
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  revokedReason  String?
-
-  @@index([parentId])
-}
-
-model StudentGamification {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String    @db.Uuid
-  studentId      String    @unique @db.Uuid
-  level          Int       @default(1)
-  currentXp      Int       @default(0)
-  totalXp        Int       @default(0)
-  coins          Int       @default(0)
-  streakDays     Int       @default(0)
-  lastActiveDate DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-  student      Student      @relation(fields: [studentId], references: [id])
-  xp           Int          @default(0)
-
-  @@index([organizationId, level])
-  @@index([organizationId, xp])
-}
-
-model NotificationDedup {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String   @db.Uuid
-  dedupKey       String   @unique
-  entityType     String
-  eventType      String?
-  entityId       String
-  createdAt      DateTime @default(now())
-}
-
-/// Delivery tracking for the Telegram channel of a notification event.
-///
-/// One row per (event instance, principal, channel): it records WHAT was
-/// attempted, WHEN, and how the provider classified the outcome. It exists so
-/// the pipeline can distinguish a transient Telegram outage (retry) from a
-/// permanent user/bot relationship failure (stop retrying, mark the account).
-///
-/// Deliberately never stores secrets (bot token, webhook/callback secret) or
-/// raw Telegram API payloads. `telegramAccountId` is a soft reference (no FK):
-/// an audit/delivery record must survive account-row lifecycle changes and is
-/// removed only by the retention job.
-model NotificationDelivery {
-  id                String                     @id @default(uuid()) @db.Uuid
-  organizationId    String                     @db.Uuid
-  /// BullMQ job id of the originating notification event (never a Telegram id).
-  eventId           String
-  eventType         String
-  entityType        String
-  entityId          String
-  channel           String                     @default("TELEGRAM")
-  /// 'USER' | 'PARENT_ACCOUNT' — which principal table owns the delivery.
-  principalType     String
-  principalId       String                     @db.Uuid
-  telegramAccountId String?                    @db.Uuid
-  status            NotificationDeliveryStatus @default(PENDING)
-  /// Categorized provider failure (NETWORK_ERROR, TIMEOUT, RATE_LIMITED,
-  /// TELEGRAM_SERVER_ERROR, BLOCKED_USER, INVALID_CHAT, NOT_CONFIGURED, ...).
-  failureCategory   String?
-  attempts          Int                        @default(0)
-  /// Idempotency key: one delivery record per (event, principal, channel).
-  dedupKey          String                     @unique
-  /// Rendered content, kept ONLY so a quiet-hours deferral can be re-delivered.
-  title             String?
-  body              String?
-  deferredUntil     DateTime?
-  attemptedAt       DateTime                   @default(now())
-  sentAt            DateTime?
-  failedAt          DateTime?
-  createdAt         DateTime                   @default(now())
-  updatedAt         DateTime                   @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-
-  @@index([organizationId])
-  @@index([organizationId, status])
-  @@index([telegramAccountId])
-  @@index([status, deferredUntil])
-  @@index([createdAt])
 }
 
 /// Lifecycle of ONE channel delivery attempt for a notification event.
@@ -2493,47 +3156,120 @@ enum NotificationDeliveryStatus {
   DEFERRED
 }
 
-model HomeworkSubmission {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  homeworkId    String    @db.Uuid
-  studentId     String    @db.Uuid
-  status        String    @default("SUBMITTED")
-  content       String?
-  grade         Float?
-  fileUrl       String?
-  gradedAt      DateTime?
-  gradedBy      String?   @db.Uuid
-  resubmittedAt DateTime?
-  feedback      String?
-  submittedAt   DateTime  @default(now())
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  homework       Homework      @relation(fields: [homeworkId], references: [id])
-  student        Student       @relation(fields: [studentId], references: [id])
-  isLate         Boolean       @default(false)
-  organizationId String?       @db.Uuid
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-
-  @@unique([homeworkId, studentId])
-  @@index([homeworkId])
-  @@index([studentId])
-  @@index([status])
-  @@index([organizationId])
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
 }
 
-
-model OrganizationHoliday {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  date           DateTime     @db.Date
-  name           String
-  
-  @@unique([organizationId, date])
+enum AnnouncementAudience {
+  ALL
+  BRANCH
+  GROUP
+  COURSE
+  TEACHERS
+  STUDENTS
+  PARENTS
+  CUSTOM
 }
 
+enum AnnouncementStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  EXPIRED
+}
 
+enum AssignmentStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
 
+enum CalendarEventType {
+  ACADEMIC
+  EXAM
+  LESSON
+  MEETING
+  PARENT_MEETING
+  TEACHER_MEETING
+  HOLIDAY
+  COMPETITION
+  EVENT
+}
 
+enum CurriculumStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
 
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum MaterialType {
+  PDF
+  VIDEO
+  AUDIO
+  IMAGE
+  DOCUMENT
+  EXTERNAL_LINK
+  TEXT
+}
+
+enum MaterialVisibility {
+  ALL
+  TEACHERS_ONLY
+  STUDENTS_AND_PARENTS
+}
+
+enum ProgressTrend {
+  IMPROVING
+  STABLE
+  DECLINING
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+  ESSAY
+}
+
+enum QuizAttemptStatus {
+  STARTED
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
+  GRADED
+}
+
+enum SubmissionStatus {
+  NOT_STARTED
+  DRAFT
+  SUBMITTED
+  LATE
+  GRADED
+  RETURNED
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REVOKED
+  DEACTIVATED
+}

@@ -50,6 +50,25 @@ export const TELEGRAM_CALLBACK_MAX_PER_WINDOW = 45;
 /** Cap on the command text parsed from an update (Telegram allows 4096). */
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
 
+/**
+ * `/copilot` budget.
+ *
+ * An AI turn costs a model invocation, so it gets a much tighter window than
+ * the generic command flood limit — counted per chat in the distributed Redis
+ * limiter, therefore enforced across every API instance.
+ */
+export const TELEGRAM_COPILOT_WINDOW_SECONDS = 60;
+export const TELEGRAM_COPILOT_MAX_PER_WINDOW = 10;
+
+/** Cap on the question forwarded to the model (untrusted user input). */
+export const TELEGRAM_COPILOT_MAX_QUESTION_LENGTH = 1000;
+
+/**
+ * Cap on the rendered Copilot reply. Telegram rejects messages over 4096
+ * characters; the remainder of the budget is taken by the title and blank line.
+ */
+export const TELEGRAM_COPILOT_MAX_ANSWER_LENGTH = 3500;
+
 /** Commands understood by the webhook in this (foundation) slice. */
 export const TELEGRAM_START_COMMAND = '/start';
 export const TELEGRAM_UNLINK_COMMAND = '/unlink';

@@ -1,125 +1,250 @@
 /**
- * M-EDU AppLayout — Glass Shell
- * Premium, light-first, futuristic. Sidebar uses glass surface with
- * brand accent on active items. Mobile sheet uses the same glass.
+ * M-EDU AppLayout — iOS 27 Liquid Glass "Vision Pro" Edition v6 (PATCHED)
+ *
+ * 🔧 v5 → v6 FIXES:
+ *  - AnimatePresence: motion.div wrapper + top-level exit delay (sheet endi slide-out qiladi)
+ *  - backdropVariants: real fade (0 → 1 → 0)
+ *  - mobileSheetVariants: invalid `opacity: 1.3` olib tashlandi
+ *  - useScroll({ container: mainRef }) — header parallaks ishlaydi
+ *  - !user → /login redirect (privilege escalation fix)
+ *  - Profile button → navigate('/settings') + dead `whileHover="hover"` removed
+ *  - role.replace(/_/g, ' ') — barcha `_`ni almashtiradi
+ *  - React 19 type: RefObject<HTMLInputElement | null>
+ *  - MobileSearchSheet: focus trap qo‘shildi
+ *  - useNow(30_000) — TopBar va LiveClock bir xil vaqtda yangilanadi
+ *  - Mobile topbar: focus-visible:ring-2 qo‘shildi
+ *  - Barcha buttonlarda type="button"
+ *  - willChange faqat animatsiya davomida (route transition)
+ *  - i18n: loading, skip-to-content
+ *  - aria-hidden on decorative online dot
  */
-import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+
+import {
+  useState, useCallback, useEffect, useRef, useMemo,
+} from 'react';
 import { NavLink, Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
+import {
+  motion, AnimatePresence, useMotionValue, useSpring,
+  useScroll, useTransform, type MotionValue, type Variants,
+} from 'framer-motion';
 import { useAuth } from '@/auth/AuthContext';
 import { NotificationsMenu } from '@/components/NotificationsMenu';
 import { MeduLogo } from '@/components/brand/MeduLogo';
 import { CommandPalette } from '@/components/CommandPalette';
-import { AIAssistant } from '@/components/AIAssistant';
+import { GlobalAiCopilot } from '@/components/ai';
+import { GlobalCalculator } from '@/components/calculator';
+import { setCalculatorOpen } from '@/stores/ui.store';
 import { LanguageSwitcher } from '@/i18n/LanguageSwitcher';
 import { useI18n } from '@/i18n/I18nProvider';
 import { usePersistSettings } from '@/hooks/usePersistSettings';
 import { initials, fullName } from '@/lib/format';
 import { useTheme } from '../hooks/useTheme';
 
-interface NavItem {
-  to: string;
-  /** Dictionary key under `nav.*`; preferred over `label`. */
-  labelKey: string;
-  /** English fallback only — prefer `labelKey`. */
-  label: string;
-  icon: ReactNode;
-  end?: boolean;
+/* ============================================================================
+ * MOTION TOKENS
+ * ========================================================================== */
+
+const SPRING = {
+  snappy:   { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
+  smooth:   { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
+  soft:     { type: 'spring', stiffness: 240, damping: 28, mass: 1.0 },
+  magnetic: { type: 'spring', stiffness: 260, damping: 22, mass: 0.6 },
+} as const;
+
+const EASE_APPLE = [0.22, 1, 0.36, 1] as const;
+
+/* ============================================================================
+ * REDUCED MOTION HOOK
+ * ========================================================================== */
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return reduced;
 }
 
-// Minimalist, line-style icons (24x24, stroke 1.6)
-const Icon = ({ d }: { d: string }) => (
-  <svg
-    className="h-[1.125rem] w-[1.125rem] shrink-0"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.6"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d={d} />
-  </svg>
-);
+/* ============================================================================
+ * SHARED "NOW" HOOK — TopBar va LiveClock bir xil vaqtda yangilanadi
+ * ========================================================================== */
 
-const I = {
-  dashboard: 'M3 13.5 12 5.25 21 13.5M4.5 11.25V21h15v-9.75',
-  students:  'M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z',
-  teachers:  'M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.595 60.595 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.902 59.902 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5',
-  groups:    'M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z',
-  courses:   'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
-  attendance:'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
-  face:      'M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z',
-  payments:  'M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z',
-  library:   'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
-  exams:     'M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z',
-  homework:  'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
-  hr:        'M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 0 0 .75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 0 0-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0 1 12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 0 1-.673-.38m0 0A2.18 2.18 0 0 1 3 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 0 1 3.413-.387m7.5 0V5.25A2.25 2.25 0 0 0 13.5 3h-3a2.25 2.25 0 0 0-2.25 2.25v.894m7.5 0a48.667 48.667 0 0 0-7.5 0M12 12.75h.008v.008H12v-.008Z',
-  cert:      'M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 0 0 2.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 0 1 2.916.52 6.003 6.003 0 0 1-5.395 4.972m0 0a6.726 6.726 0 0 1-2.749 1.35',
-  inventory: 'M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z',
-  expenses:  'M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
-  leads:     'M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15',
-  cameras:   'M6.115 5.19l.319 1.913A6.75 6.75 0 0 0 8.11 10.36L9.75 12l-.387.775c-.217.433-.132.956.21 1.298l1.348 1.348c.21.21.329.497.329.795v1.089c0 .426.24.815.622 1.006l.153.076c.433.217.956.132 1.298-.21l.723-.723a8.7 8.7 0 0 0 2.288-4.042 1.087 1.087 0 0 0-.358-1.099l-1.33-1.108c-.251-.21-.582-.299-.905-.245l-1.17.195a1.125 1.125 0 0 1-.98-.314l-.295-.295a1.125 1.125 0 0 1 0-1.591l.13-.132a1.125 1.125 0 0 1 1.445-.261l.156.09c.446.256.976.234 1.375-.058L15.5 8.25',
-  users:     'M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
-  audit:     'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
-  settings:  'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87',
-  logout:    'M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9',
-  search:    'm21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z',
-  menu:      'M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5',
-  close:     'M6 18 18 6M6 6l12 12',
-  bell:      'M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0',
-  invoices:  'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
-  reports:   'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z',
-  chat:      'M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z',
-  parentPortal: 'M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z',
-  executive:  'M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605',
-  automation: 'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1-.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a7.723 7.723 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.49l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z',
-  payroll:    'M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15',
-  financial:  'M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15',
-  branches:   'M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z',
-  governance: 'M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z',
-  anomaly:    'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z',
-  followUp:   'M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5',
+function useNow(intervalMs = 30_000) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const msToNextMinute = 60_000 - (Date.now() % 60_000);
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const timeoutId = setTimeout(() => {
+      setNow(new Date());
+      intervalId = setInterval(() => setNow(new Date()), intervalMs);
+    }, msToNextMinute);
+    return () => {
+      clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [intervalMs]);
+  return now;
+}
+
+/* ============================================================================
+ * VARIANTS — v6: to‘g‘ri fade qiymatlari
+ * ========================================================================== */
+
+const navListVariants: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.028, delayChildren: 0.05 } },
+};
+
+const navItemVariants: Variants = {
+  hidden: { opacity: 0, x: -18 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
+};
+
+/** v6: mobile sheet — opacity olib tashlandi (x bilan boshqariladi) */
+const mobileSheetVariants: Variants = {
+  hidden: { x: '-100%', scale: 0.94 },
+  visible: {
+    x: 0, scale: 1,
+    transition: { type: 'spring', stiffness: 320, damping: 32, mass: 0.85 },
+  },
+  exit: {
+    x: '-100%', scale: 0.94,
+    transition: { duration: 0.3, ease: EASE_APPLE },
+  },
+};
+
+/** v6: backdrop — real fade */
+const backdropVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.28, ease: EASE_APPLE } },
+  exit: { opacity: 0, transition: { duration: 0.22, ease: EASE_APPLE } },
+};
+
+/** v6: top-level mobile menu wrapper — AnimatePresence uchun direct motion child */
+const mobileMenuWrapperVariants: Variants = {
+  hidden: { opacity: 1 },
+  visible: { opacity: 1 },
+  exit: {
+    opacity: 1,
+    transition: { duration: 0.35, ease: EASE_APPLE }, // children exit tugashini kutadi
+  },
+};
+
+/* ============================================================================
+ * TYPES
+ * ========================================================================== */
+
+interface NavItem {
+  to: string;
+  labelKey: string;
+  label: string;
+  iconPath: string[];
+  end?: boolean;
+  accent?: AccentKey;
+}
+
+type AccentKey = 'blue' | 'purple' | 'pink' | 'green' | 'orange' | 'rainbow';
+
+/* ============================================================================
+ * ICONS (unchanged)
+ * ========================================================================== */
+
+const I: Record<string, string[]> = {
+  dashboard: ['M4 4h6.5v6.5H4z', 'M13.5 4H20v6.5h-6.5z', 'M4 13.5h6.5V20H4z', 'M13.5 13.5H20V20h-6.5z'],
+  ai: ['M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z', 'M18.5 3.5v3', 'M20 5h-3', 'M5.5 18v2.5', 'M6.75 19.25h-2.5'],
+  students: ['M22 9 12 4 2 9l10 5z', 'M6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5', 'M22 9v6'],
+  teachers: ['M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M15 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2', 'M16 10l2 2 4-4'],
+  groups: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M22 21v-2a4 4 0 0 0-3-3.9', 'M16 3.1a4 4 0 0 1 0 7.8'],
+  courses: ['M12 7v14', 'M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z'],
+  subjects: ['M4 19.5A2.5 2.5 0 0 1 6.5 17H20', 'M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z', 'M9 7h6', 'M9 11h6'],
+  curriculum: ['M12 2 2 7l10 5 10-5-10-5z', 'M2 17l10 5 10-5', 'M2 12l10 5 10-5'],
+  assignments: ['M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2', 'M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z', 'M9 12l2 2 4-4'],
+  assessment: ['M9 11l3 3L22 4', 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'],
+  attendance: ['M8 2v4', 'M16 2v4', 'M3 10h18', 'M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z', 'M9 15l2 2 4-4'],
+  face: ['M9 3H5a2 2 0 0 0-2 2v4', 'M15 3h4a2 2 0 0 1 2 2v4', 'M21 15v4a2 2 0 0 1-2 2h-4', 'M9 21H5a2 2 0 0 1-2-2v-4', 'M9.5 10v.5', 'M14.5 10v.5', 'M9 15a4 4 0 0 0 6 0'],
+  library: ['M4 4v16', 'M9 4v16', 'M14 4v16', 'M17.5 5.2 21 19.5', 'M2 20h20'],
+  exams: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6', 'M9 15l2 2 4-4'],
+  payments: ['M21 6H3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z', 'M1 10h22', 'M6 15h2'],
+  invoices: ['M5 2v20l3-2 2 2 2-2 2 2 2-2 3 2V2z', 'M9 7h6', 'M9 11h6', 'M9 15h4'],
+  reports: ['M4 20V4', 'M4 20h17', 'M9 20v-7', 'M14 20V8', 'M19 20v-4'],
+  homework: ['M13 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7', 'M18 2l4 4-9 9-4 1 1-4z'],
+  cert: ['M12 15a5 5 0 1 0 0-10 5 5 0 0 0 0 10z', 'M8.2 13.9 7 22l5-3 5 3-1.2-8.1'],
+  chat: ['M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z'],
+  executive: ['M21.2 15.9A10 10 0 1 1 8 2.8', 'M22 12A10 10 0 0 0 12 2v10z'],
+  financial: ['M12 2v20', 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'],
+  payroll: ['M20 12V8H6a2 2 0 0 1 0-4h12v4', 'M4 6v12c0 1.1.9 2 2 2h14v-4', 'M18 12a2 2 0 1 1 0 4 2 2 0 0 1 0-4z'],
+  leads: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M12 12h.01'],
+  parentPortal: ['M3 11 12 3l9 8', 'M5 9.5V21h14V9.5', 'M9 21v-6h6v6'],
+  hr: ['M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z', 'M8 10h4', 'M8 14h4', 'M8 18h4', 'M16 10h.01', 'M16 14h.01', 'M16 18h.01'],
+  automation: ['M13 2 3 14h9l-1 8 10-12h-9l1-8z'],
+  followUp: ['M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7 12.8 12.8 0 0 0 .7 2.8 2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4 12.8 12.8 0 0 0 2.8.7 2 2 0 0 1 1.7 2z', 'M15 2h6v6', 'M21 2l-6 6'],
+  branches: ['M3 21h18', 'M5 21V8l7-5 7 5v13', 'M9 21v-6h6v6', 'M10 12h.01', 'M14 12h.01'],
+  inventory: ['M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z', 'M3.3 7 12 12l8.7-5', 'M12 22V12'],
+  expenses: ['M5 2v20l3-2 2 2 2-2 2 2 2-2 3 2V2z', 'M9 12h6'],
+  cameras: ['M23 7l-7 5 7 5V7z', 'M1 5h15v14H1z'],
+  anomaly: ['M22 12h-4l-3 9L9 3l-3 9H2'],
+  governance: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'M9 12l2 2 4-4'],
+  users: ['M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M23 21v-2a4 4 0 0 0-3-3.9', 'M16 3.1a4 4 0 0 1 0 7.8'],
+  audit: ['M2 12s4-8 10-8 10 8 10 8-4 8-10 8-10-8-10-8z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
+  settings: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'],
+  logout: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'M16 17l5-5-5-5', 'M21 12H9'],
+  search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.3-4.3'],
+  menu: ['M3 6h18', 'M3 12h18', 'M3 18h18'],
+  close: ['M18 6 6 18', 'M6 6l12 12'],
+  bell: ['M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9', 'M13.7 21a2 2 0 0 1-3.4 0'],
+  calculator: ['M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z', 'M8 7h8', 'M8 11h.01', 'M12 11h.01', 'M16 11h.01', 'M8 15h.01', 'M12 15h.01', 'M16 15h.01'],
 };
 
 const PRIMARY_NAV: NavItem[] = [
-  { to: '/',           labelKey: 'nav.dashboard',        label: 'Dashboard',        icon: <Icon d={I.dashboard}/>,  end: true },
-  { to: '/students',   labelKey: 'nav.students',         label: 'Students',         icon: <Icon d={I.students}/> },
-  { to: '/teachers',   labelKey: 'nav.teachers',         label: 'Teachers',         icon: <Icon d={I.teachers}/> },
-  { to: '/groups',     labelKey: 'nav.groups',           label: 'Groups',           icon: <Icon d={I.groups}/> },
-  { to: '/courses',    labelKey: 'nav.courses',          label: 'Courses',          icon: <Icon d={I.courses}/> },
-  { to: '/attendance', labelKey: 'nav.attendance',       label: 'Attendance',       icon: <Icon d={I.attendance}/> },
-  { to: '/face',       labelKey: 'nav.faceRecognition',  label: 'Face Recognition', icon: <Icon d={I.face}/> },
-  { to: '/library',    labelKey: 'nav.library',          label: 'Library',          icon: <Icon d={I.library}/> },
-  { to: '/exams',      labelKey: 'nav.exams',            label: 'Exams',            icon: <Icon d={I.exams}/> },
-  { to: '/payments',   labelKey: 'nav.payments',         label: 'Payments',         icon: <Icon d={I.payments}/> },
-  { to: '/invoices',   labelKey: 'nav.invoices',         label: 'Invoices',         icon: <Icon d={I.invoices}/> },
-  { to: '/reports',    labelKey: 'nav.reports',          label: 'Reports',          icon: <Icon d={I.reports}/> },
-  { to: '/homework',   labelKey: 'nav.homework',         label: 'Homework',         icon: <Icon d={I.homework}/> },
-  { to: '/certificates', labelKey: 'nav.certificates',   label: 'Certificates',     icon: <Icon d={I.cert}/> },
-  { to: '/chat',         labelKey: 'nav.chat',           label: 'Chat',             icon: <Icon d={I.chat}/> },
+  { to: '/', labelKey: 'nav.dashboard', label: 'Dashboard', iconPath: I.dashboard, end: true, accent: 'blue' },
+  { to: '/ai-copilot', labelKey: 'nav.aiCopilot', label: 'AI Copilot', iconPath: I.ai, accent: 'rainbow' },
+  { to: '/students', labelKey: 'nav.students', label: 'Students', iconPath: I.students, accent: 'blue' },
+  { to: '/teachers', labelKey: 'nav.teachers', label: 'Teachers', iconPath: I.teachers, accent: 'purple' },
+  { to: '/groups', labelKey: 'nav.groups', label: 'Groups', iconPath: I.groups, accent: 'blue' },
+  { to: '/courses', labelKey: 'nav.courses', label: 'Courses', iconPath: I.courses, accent: 'orange' },
+  { to: '/subjects', labelKey: 'nav.subjects', label: 'Subjects', iconPath: I.subjects, accent: 'blue' },
+  { to: '/curriculum', labelKey: 'nav.curriculum', label: 'Curriculum', iconPath: I.curriculum, accent: 'purple' },
+  { to: '/assignments', labelKey: 'nav.assignments', label: 'Assignments', iconPath: I.assignments, accent: 'pink' },
+  { to: '/assessment', labelKey: 'nav.assessment', label: 'Assessment', iconPath: I.assessment, accent: 'green' },
+  { to: '/attendance', labelKey: 'nav.attendance', label: 'Attendance', iconPath: I.attendance, accent: 'green' },
+  { to: '/face', labelKey: 'nav.faceRecognition', label: 'Face Recognition', iconPath: I.face, accent: 'purple' },
+  { to: '/library', labelKey: 'nav.library', label: 'Library', iconPath: I.library, accent: 'orange' },
+  { to: '/exams', labelKey: 'nav.exams', label: 'Exams', iconPath: I.exams, accent: 'pink' },
+  { to: '/payments', labelKey: 'nav.payments', label: 'Payments', iconPath: I.payments, accent: 'green' },
+  { to: '/invoices', labelKey: 'nav.invoices', label: 'Invoices', iconPath: I.invoices, accent: 'green' },
+  { to: '/reports', labelKey: 'nav.reports', label: 'Reports', iconPath: I.reports, accent: 'blue' },
+  { to: '/homework', labelKey: 'nav.homework', label: 'Homework', iconPath: I.homework, accent: 'pink' },
+  { to: '/certificates', labelKey: 'nav.certificates', label: 'Certificates', iconPath: I.cert, accent: 'orange' },
+  { to: '/chat', labelKey: 'nav.chat', label: 'Chat', iconPath: I.chat, accent: 'blue' },
 ];
 
 const SECONDARY_NAV: NavItem[] = [
-  { to: '/executive-dashboard', labelKey: 'nav.executiveDashboard', label: 'Executive Dashboard', icon: <Icon d={I.executive}/> },
-  { to: '/financial-analytics', labelKey: 'nav.financialAnalytics', label: 'Financial Analytics', icon: <Icon d={I.financial}/> },
-  { to: '/payroll-analytics',   labelKey: 'nav.payrollAnalytics',   label: 'Payroll Analytics',   icon: <Icon d={I.payroll}/> },
-  { to: '/crm-analytics',       labelKey: 'nav.crmAnalytics',       label: 'CRM Analytics',       icon: <Icon d={I.leads}/> },
-  { to: '/parent-portal',       labelKey: 'nav.parentPortal',       label: 'Parent Portal',       icon: <Icon d={I.parentPortal}/> },
-  { to: '/hr',                  labelKey: 'nav.hrPayroll',          label: 'HR & Payroll',        icon: <Icon d={I.hr}/> },
-  { to: '/payroll',             labelKey: 'nav.payrollRuns',        label: 'Payroll Runs',        icon: <Icon d={I.payroll}/> },
-  { to: '/automation',          labelKey: 'nav.automation',         label: 'Automation',          icon: <Icon d={I.automation}/> },
-  { to: '/follow-up-automation',labelKey: 'nav.followUpRules',      label: 'Follow-Up Rules',     icon: <Icon d={I.followUp}/> },
-  { to: '/branches',            labelKey: 'nav.branches',           label: 'Branches',            icon: <Icon d={I.branches}/> },
-  { to: '/inventory',           labelKey: 'nav.inventory',          label: 'Inventory',           icon: <Icon d={I.inventory}/> },
-  { to: '/expenses',            labelKey: 'nav.expenses',           label: 'Expenses',            icon: <Icon d={I.expenses}/> },
-  { to: '/leads',               labelKey: 'nav.leads',              label: 'Leads',               icon: <Icon d={I.leads}/> },
-  { to: '/cameras',             labelKey: 'nav.cameras',            label: 'Cameras',             icon: <Icon d={I.cameras}/> },
-  { to: '/anomaly-detection',   labelKey: 'nav.anomalyDetection',   label: 'Anomaly Detection',   icon: <Icon d={I.anomaly}/> },
-  { to: '/data-governance',     labelKey: 'nav.dataGovernance',     label: 'Data Governance',     icon: <Icon d={I.governance}/> },
-  { to: '/users',               labelKey: 'nav.users',              label: 'Users',               icon: <Icon d={I.users}/> },
-  { to: '/audit',               labelKey: 'nav.audit',              label: 'Audit Log',           icon: <Icon d={I.audit}/> },
-  { to: '/settings',            labelKey: 'nav.settings',           label: 'Settings',            icon: <Icon d={I.settings}/> },
+  { to: '/executive-dashboard', labelKey: 'nav.executiveDashboard', label: 'Executive Dashboard', iconPath: I.executive, accent: 'purple' },
+  { to: '/financial-analytics', labelKey: 'nav.financialAnalytics', label: 'Financial Analytics', iconPath: I.financial, accent: 'green' },
+  { to: '/payroll-analytics', labelKey: 'nav.payrollAnalytics', label: 'Payroll Analytics', iconPath: I.payroll, accent: 'green' },
+  { to: '/crm-analytics', labelKey: 'nav.crmAnalytics', label: 'CRM Analytics', iconPath: I.leads, accent: 'blue' },
+  { to: '/parent-portal', labelKey: 'nav.parentPortal', label: 'Parent Portal', iconPath: I.parentPortal, accent: 'orange' },
+  { to: '/hr', labelKey: 'nav.hrPayroll', label: 'HR & Payroll', iconPath: I.hr, accent: 'purple' },
+  { to: '/payroll', labelKey: 'nav.payrollRuns', label: 'Payroll Runs', iconPath: I.payroll, accent: 'green' },
+  { to: '/automation', labelKey: 'nav.automation', label: 'Automation', iconPath: I.automation, accent: 'orange' },
+  { to: '/follow-up-automation', labelKey: 'nav.followUpRules', label: 'Follow-Up Rules', iconPath: I.followUp, accent: 'orange' },
+  { to: '/branches', labelKey: 'nav.branches', label: 'Branches', iconPath: I.branches, accent: 'blue' },
+  { to: '/inventory', labelKey: 'nav.inventory', label: 'Inventory', iconPath: I.inventory, accent: 'orange' },
+  { to: '/expenses', labelKey: 'nav.expenses', label: 'Expenses', iconPath: I.expenses, accent: 'pink' },
+  { to: '/leads', labelKey: 'nav.leads', label: 'Leads', iconPath: I.leads, accent: 'blue' },
+  { to: '/cameras', labelKey: 'nav.cameras', label: 'Cameras', iconPath: I.cameras, accent: 'purple' },
+  { to: '/anomaly-detection', labelKey: 'nav.anomalyDetection', label: 'Anomaly Detection', iconPath: I.anomaly, accent: 'pink' },
+  { to: '/data-governance', labelKey: 'nav.dataGovernance', label: 'Data Governance', iconPath: I.governance, accent: 'purple' },
+  { to: '/users', labelKey: 'nav.users', label: 'Users', iconPath: I.users, accent: 'blue' },
+  { to: '/audit', labelKey: 'nav.audit', label: 'Audit Log', iconPath: I.audit, accent: 'purple' },
+  { to: '/settings', labelKey: 'nav.settings', label: 'Settings', iconPath: I.settings, accent: 'purple' },
 ];
 
 const HIDDEN_FOR_STUDENT = new Set([
@@ -128,21 +253,348 @@ const HIDDEN_FOR_STUDENT = new Set([
   '/invoices', '/reports', '/executive-dashboard', '/financial-analytics',
   '/payroll-analytics', '/crm-analytics', '/parent-portal', '/payroll',
   '/automation', '/follow-up-automation', '/branches', '/anomaly-detection',
-  '/data-governance',
+  '/data-governance', '/ai-copilot'
 ]);
+
+const ACCENTS: Record<AccentKey, { from: string; to: string; glow: string }> = {
+  blue:    { from: '#007AFF', to: '#5856D6', glow: 'rgba(0,122,255,0.35)' },
+  purple:  { from: '#5856D6', to: '#AF52DE', glow: 'rgba(88,86,214,0.35)' },
+  pink:    { from: '#FF2D55', to: '#AF52DE', glow: 'rgba(255,45,85,0.35)' },
+  green:   { from: '#34C759', to: '#32ADE6', glow: 'rgba(52,199,89,0.35)' },
+  orange:  { from: '#FF9500', to: '#FF2D55', glow: 'rgba(255,149,0,0.35)' },
+  rainbow: { from: '#007AFF', to: '#FF2D55', glow: 'rgba(175,82,222,0.45)' },
+};
+
+/* ============================================================================
+ * HELPERS
+ * ========================================================================== */
+
+function getGreetingKey(now: Date = new Date()): string {
+  const h = now.getHours();
+  if (h < 5) return 'nav.greetingNight';
+  if (h < 12) return 'nav.greetingMorning';
+  if (h < 17) return 'nav.greetingAfternoon';
+  if (h < 22) return 'nav.greetingEvening';
+  return 'nav.greetingNight';
+}
+
+/* ============================================================================
+ * CURSOR TRACKER
+ * ========================================================================== */
+
+function useGlobalCursor(enabled = true) {
+  const mx = useMotionValue(-1000);
+  const my = useMotionValue(-1000);
+  const sx = useSpring(mx, SPRING.magnetic);
+  const sy = useSpring(my, SPRING.magnetic);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const isFinePointer = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches;
+    if (!isFinePointer) return;
+
+    const onMove = (e: MouseEvent) => {
+      mx.set(e.clientX);
+      my.set(e.clientY);
+    };
+    window.addEventListener('mousemove', onMove, { passive: true });
+    return () => window.removeEventListener('mousemove', onMove);
+  }, [mx, my, enabled]);
+
+  return { x: sx, y: sy };
+}
+
+/* ============================================================================
+ * GLASS SURFACE — High-performance zero-rerender spotlight via CSS vars
+ * ========================================================================== */
+
+interface GlassSurfaceProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: React.ReactNode;
+  className?: string;
+  radius?: string;
+  spotlight?: boolean;
+  style?: React.CSSProperties;
+  as?: React.ElementType;
+}
+
+function GlassSurface({
+  children,
+  className = '',
+  radius = '2rem',
+  spotlight = true,
+  style,
+  as: Tag = 'div',
+  ...rest
+}: GlassSurfaceProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const rafId = useRef<number | null>(null);
+  const reduced = usePrefersReducedMotion();
+
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!spotlight || reduced || e.pointerType === 'touch') return;
+    const el = ref.current;
+    if (!el) return;
+
+    if (rafId.current) cancelAnimationFrame(rafId.current);
+    rafId.current = requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect();
+      const x = (((e.clientX - r.left) / r.width) * 100).toFixed(2);
+      const y = (((e.clientY - r.top) / r.height) * 100).toFixed(2);
+      el.style.setProperty('--spot-x', `${x}%`);
+      el.style.setProperty('--spot-y', `${y}%`);
+      el.style.setProperty('--spot-opacity', '1');
+    });
+  }, [spotlight, reduced]);
+
+  const onPointerLeave = useCallback(() => {
+    if (rafId.current) cancelAnimationFrame(rafId.current);
+    if (ref.current) {
+      ref.current.style.setProperty('--spot-opacity', '0');
+    }
+  }, []);
+
+  return (
+    <Tag
+      ref={ref}
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
+      className={`relative overflow-hidden ${className}`}
+      style={{
+        borderRadius: radius,
+        WebkitBackdropFilter: 'blur(32px) saturate(160%)',
+        backdropFilter: 'blur(32px) saturate(160%)',
+        ...style,
+      }}
+      {...rest}
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          borderRadius: radius,
+          boxShadow:
+            'inset 0 1px 0 rgba(255,255,255,0.45), ' +
+            'inset 0 -1px 0 rgba(255,255,255,0.08), ' +
+            'inset 1px 0 0 rgba(255,255,255,0.12), ' +
+            'inset -1px 0 0 rgba(255,255,255,0.12)',
+        }}
+      />
+      {spotlight && !reduced && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+          style={{
+            borderRadius: radius,
+            opacity: 'var(--spot-opacity, 0)',
+            background:
+              'radial-gradient(550px circle at var(--spot-x, 50%) var(--spot-y, 0%), rgba(255,255,255,0.22), transparent 45%)',
+            mixBlendMode: 'overlay',
+          }}
+        />
+      )}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.25] dark:opacity-15"
+        style={{
+          borderRadius: radius,
+          background:
+            'linear-gradient(90deg, rgba(255,0,80,0.04) 0%, transparent 8%, transparent 92%, rgba(0,120,255,0.04) 100%)',
+        }}
+      />
+      {children}
+    </Tag>
+  );
+}
+
+/* ============================================================================
+ * MAGNETIC
+ * ========================================================================== */
+
+function Magnetic({
+  children,
+  strength = 0.35,
+  className = '',
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  strength?: number;
+  className?: string;
+  disabled?: boolean;
+}) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const sx = useSpring(x, SPRING.magnetic);
+  const sy = useSpring(y, SPRING.magnetic);
+  const reduced = usePrefersReducedMotion();
+  const isDisabled = disabled || reduced;
+
+  const onMove = (e: React.MouseEvent) => {
+    if (isDisabled) return;
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    x.set((e.clientX - (r.left + r.width / 2)) * strength);
+    y.set((e.clientY - (r.top + r.height / 2)) * strength);
+  };
+  const onLeave = () => { x.set(0); y.set(0); };
+
+  return (
+    <motion.span
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      style={{ x: sx, y: sy }}
+      className={`inline-flex ${className}`}
+    >
+      {children}
+    </motion.span>
+  );
+}
+
+/* ============================================================================
+ * ICONS
+ * ========================================================================== */
+
+const STROKE_BASE = 1.75;
+const STROKE_ACTIVE = 2.15;
+
+function StaticIcon({ paths, className = '' }: { paths: string[]; className?: string }) {
+  return (
+    <svg
+      className={`h-[1.25rem] w-[1.25rem] shrink-0 ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={STROKE_BASE}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {paths.map((d, i) => <path key={i} d={d} />)}
+    </svg>
+  );
+}
+
+function AnimatedIcon({
+  paths,
+  isActive,
+  accent = 'blue',
+}: {
+  paths: string[];
+  isActive?: boolean;
+  accent?: AccentKey;
+}) {
+  const c = ACCENTS[accent];
+  const reduced = usePrefersReducedMotion();
+  const glow = isActive ? c.glow : 'transparent';
+
+  return (
+    <svg
+      className="h-[1.25rem] w-[1.25rem] shrink-0 transition-[filter,transform] duration-300 ease-out"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={isActive ? STROKE_ACTIVE : STROKE_BASE}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      style={{
+        transform: isActive && !reduced ? 'scale(1.08)' : 'scale(1)',
+        filter: isActive ? `drop-shadow(0 0 6px ${glow})` : 'none',
+        transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      }}
+    >
+      {paths.map((d, i) => <path key={i} d={d} />)}
+    </svg>
+  );
+}
+
+/* ============================================================================
+ * AMBIENT PARTICLES
+ * ========================================================================== */
+
+function AmbientParticles() {
+  const reduced = usePrefersReducedMotion();
+  const particles = useMemo(
+    () => Array.from({ length: 12 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+      size: 1 + Math.random() * 2.5,
+      delay: Math.random() * 6,
+      duration: 12 + Math.random() * 12,
+      drift: (Math.random() - 0.5) * 60,
+    })),
+    [],
+  );
+  if (reduced) return null;
+  return (
+    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      {particles.map((p) => (
+        <motion.span
+          key={p.id}
+          className="absolute rounded-full bg-white/60 dark:bg-white/30"
+          style={{ left: `${p.left}%`, top: `${p.top}%`, width: p.size, height: p.size }}
+          animate={{ y: [0, -60, 0], x: [0, p.drift, 0], opacity: [0, 0.7, 0] }}
+          transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ============================================================================
+ * LIVE CLOCK — v6: shared useNow()
+ * ========================================================================== */
+
+function LiveClock() {
+  const reduced = usePrefersReducedMotion();
+  const now = useNow(30_000);
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+
+  return (
+    <span className="tabular-nums tracking-tight inline-flex items-center gap-1.5">
+      <motion.span
+        className="inline-block h-1.5 w-1.5 rounded-full"
+        style={{ background: '#34C759' }}
+        animate={reduced ? undefined : { opacity: [1, 0.35, 1] }}
+        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+        aria-hidden
+      />
+      {hh}
+      <motion.span
+        animate={reduced ? undefined : { opacity: [1, 0.3, 1] }}
+        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+        className="mx-[1px]"
+      >
+        :
+      </motion.span>
+      {mm}
+    </span>
+  );
+}
+
+/* ============================================================================
+ * BRAND
+ * ========================================================================== */
 
 function Brand({ size = 'md' }: { size?: 'sm' | 'md' }) {
   return (
-    <Link to="/" className="flex items-center gap-2.5 no-underline group">
-      <MeduLogo
-        size={size === 'sm' ? 'sm' : 'md'}
-        alt=""
-        className="transition-transform duration-300 group-hover:scale-105"
-      />
+    <Link
+      to="/"
+      className="flex items-center gap-3 no-underline group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 rounded-xl"
+    >
+      <Magnetic strength={0.4}>
+        <motion.div whileTap={{ scale: 0.92 }}>
+          <MeduLogo size={size === 'sm' ? 'sm' : 'md'} alt="" className="drop-shadow-sm" />
+        </motion.div>
+      </Magnetic>
       <span
         className={[
-          'font-bold tracking-tight text-[var(--text-primary)]',
-          size === 'sm' ? 'text-base' : 'text-lg',
+          'font-semibold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7]',
+          size === 'sm' ? 'text-[17px]' : 'text-[19px]',
         ].join(' ')}
       >
         M-EDU
@@ -151,343 +603,960 @@ function Brand({ size = 'md' }: { size?: 'sm' | 'md' }) {
   );
 }
 
-function NavItems({ role, onNavigate }: { role: string; onNavigate?: () => void }) {
+/* ============================================================================
+ * NAV ITEMS
+ * ========================================================================== */
+
+function NavItems({
+  role,
+  onNavigate,
+  layoutIdScope = 'desktop',
+}: {
+  role: string;
+  onNavigate?: () => void;
+  layoutIdScope?: string;
+}) {
   const { t } = useI18n();
+  const reduced = usePrefersReducedMotion();
+  const normalizedRole = role?.toUpperCase() ?? '';
+
   const renderItem = (item: NavItem) => {
-    if (role === 'STUDENT' && HIDDEN_FOR_STUDENT.has(item.to)) return null;
+    if (normalizedRole === 'STUDENT' && HIDDEN_FOR_STUDENT.has(item.to)) return null;
+    const accent = item.accent ?? 'blue';
+    const c = ACCENTS[accent];
+    const isAi = accent === 'rainbow';
+
     return (
-      <NavLink
-        key={item.to}
-        to={item.to}
-        end={item.end}
-        onClick={onNavigate}
-        className={({ isActive }) =>
-          [
-            'group relative flex items-center gap-3',
-            'px-3 py-2.5 rounded-xl',
-            'text-[0.9375rem] font-medium',
-            'transition-all duration-200 ease-out',
-            isActive
-              ? 'bg-gradient-to-r from-brand-700/12 to-brand-700/4 text-brand-700 font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]'
-              : 'text-[var(--text-secondary)] hover:bg-[var(--state-hover)] hover:text-[var(--text-primary)] hover:translate-x-0.5',
-          ].join(' ')
-        }
-      >
-        {({ isActive }) => (
-          <>
-            {isActive && (
-              <span
-                aria-hidden
-                className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-gradient-to-b from-brand-500 to-brand-700"
-              />
-            )}
-            <span
-              className={[
-                'flex-shrink-0 transition-transform duration-200',
-                isActive ? 'text-brand-700 scale-110' : 'text-[var(--text-muted)] group-hover:text-[var(--text-primary)]',
-              ].join(' ')}
-            >
-              {item.icon}
-            </span>
-            <span className="flex-1">{t(item.labelKey) || item.label}</span>
-          </>
-        )}
-      </NavLink>
+      <motion.div key={item.to} variants={navItemVariants}>
+        <NavLink
+          to={item.to}
+          end={item.end}
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            [
+              'group relative flex items-center gap-3.5',
+              'px-3.5 py-2.5 rounded-[0.875rem]',
+              'text-[14px] tracking-tight outline-none',
+              'transition-colors duration-300 ease-out',
+              'focus-visible:ring-2 focus-visible:ring-[#007AFF]/50',
+              isActive
+                ? 'text-[#1D1D1F] font-bold dark:text-white'
+                : 'text-[#86868B] font-medium hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]',
+            ].join(' ')
+          }
+        >
+          {({ isActive }) => (
+            <>
+              {isActive && (
+                <>
+                  <motion.span
+                    layoutId={`${layoutIdScope}-activeNavPill`}
+                    className="absolute inset-0 rounded-[0.875rem]"
+                    style={{
+                      background: `linear-gradient(135deg, ${c.from}22 0%, ${c.to}22 100%)`,
+                      boxShadow: `0 8px 24px -8px ${c.glow}, inset 0 1px 0 rgba(255,255,255,0.5)`,
+                      border: `1px solid ${c.from}33`,
+                    }}
+                    transition={reduced ? { duration: 0 } : SPRING.smooth}
+                    aria-hidden
+                  />
+                  <motion.span
+                    layoutId={`${layoutIdScope}-activeNavSpecular`}
+                    className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-[0.875rem]"
+                    style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.55), transparent)' }}
+                    transition={reduced ? { duration: 0 } : SPRING.smooth}
+                    aria-hidden
+                  />
+                </>
+              )}
+
+              {!isActive && (
+                <span className="pointer-events-none absolute inset-0 rounded-[0.875rem] bg-transparent transition-colors duration-300 group-hover:bg-black/[0.045] dark:group-hover:bg-white/[0.06]" />
+              )}
+
+              <Magnetic strength={0.18}>
+                <span className="relative z-10 flex-shrink-0 flex items-center justify-center">
+                  {isAi && !reduced && (
+                    <motion.span
+                      className="absolute -inset-1 -z-10 rounded-full blur-md"
+                      style={{
+                        background: 'conic-gradient(from 0deg, #007AFF, #5856D6, #FF2D55, #FF9500, #34C759, #007AFF)',
+                      }}
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
+                      aria-hidden
+                    />
+                  )}
+                  <AnimatedIcon paths={item.iconPath} isActive={isActive} accent={accent} />
+                </span>
+              </Magnetic>
+
+              <span className="relative z-10 flex-1 truncate">{t(item.labelKey) || item.label}</span>
+
+              {isAi && !isActive && (
+                <motion.span
+                  className="relative z-10 h-1.5 w-1.5 rounded-full"
+                  style={{ background: c.from }}
+                  animate={reduced ? undefined : { opacity: [0.4, 1, 0.4], scale: [0.9, 1.2, 0.9] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                  aria-hidden
+                />
+              )}
+            </>
+          )}
+        </NavLink>
+      </motion.div>
     );
   };
 
+  const visibleSecondary = SECONDARY_NAV.filter(
+    (item) => !(normalizedRole === 'STUDENT' && HIDDEN_FOR_STUDENT.has(item.to)),
+  );
+
   return (
-    <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label={t('a11y.mainNav')}>
-      <div className="space-y-0.5">{PRIMARY_NAV.map(renderItem)}</div>
-      {SECONDARY_NAV.some((item) => !(role === 'STUDENT' && HIDDEN_FOR_STUDENT.has(item.to))) && (
-        <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]">
-          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            {t('nav.administration')}
-          </p>
-          <div className="space-y-0.5">{SECONDARY_NAV.map(renderItem)}</div>
-        </div>
-      )}
+    <nav
+      className="flex-1 min-h-0 overflow-y-auto px-3.5 py-4 scrollbar-thin"
+      style={{
+        WebkitOverflowScrolling: 'touch',
+        transform: 'translateZ(0)',
+        scrollBehavior: 'smooth',
+        maskImage: 'linear-gradient(to bottom, transparent, black 16px, black calc(100% - 16px), transparent)',
+        WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 16px, black calc(100% - 16px), transparent)',
+      }}
+      aria-label={t('a11y.mainNav')}
+    >
+      <motion.div variants={navListVariants} initial="hidden" animate="visible" className="space-y-1">
+        {PRIMARY_NAV.map(renderItem)}
+
+        {visibleSecondary.length > 0 && (
+          <div className="mt-6 border-t border-[#00000010] pt-5 dark:border-[#ffffff10]">
+            <p className="mb-2.5 px-3.5 text-[11px] font-bold uppercase tracking-widest text-[#86868B]/70">
+              {t('nav.administration')}
+            </p>
+            {visibleSecondary.map(renderItem)}
+          </div>
+        )}
+      </motion.div>
     </nav>
   );
 }
+
+/* ============================================================================
+ * THEME TOGGLE
+ * ========================================================================== */
 
 function ThemeToggle() {
   const { setTheme, isDark } = useTheme();
   const { t } = useI18n();
   const persist = usePersistSettings();
+  const label = isDark ? t('a11y.switchToLight') : t('a11y.switchToDark');
 
-  const themeLabel = isDark ? t('a11y.switchToLight') : t('a11y.switchToDark');
-
-  const toggle = () => {
+  const toggle = useCallback(() => {
     const next = isDark ? 'light' : 'dark';
     setTheme(next);
-    // Theme is server-backed user data (`UserSettings.theme`), not device
-    // cache — publish it so the choice follows the account to other devices.
     persist({ theme: next });
-  };
+  }, [isDark, setTheme, persist]);
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-label={themeLabel}
-      className="rounded-xl p-2 text-[var(--text-secondary)] hover:bg-[var(--state-hover)] hover:text-[var(--text-primary)] transition-colors"
-      title={themeLabel}
-    >
-      {isDark ? (
-        <svg className="h-[1.125rem] w-[1.125rem]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
-          <circle cx="12" cy="12" r="4" />
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-        </svg>
-      ) : (
-        <svg className="h-[1.125rem] w-[1.125rem]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
-          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-        </svg>
-      )}
-    </button>
+    <Magnetic strength={0.3}>
+      <motion.button
+        whileHover={{ scale: 1.06 }}
+        whileTap={{ scale: 0.9, rotate: -12 }}
+        type="button"
+        onClick={toggle}
+        aria-label={label}
+        title={label}
+        className="relative rounded-full p-2.5 text-[#86868B] outline-none transition-colors hover:bg-black/5 hover:text-[#1D1D1F] focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:hover:bg-white/5 dark:hover:text-[#F5F5F7]"
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={isDark ? 'dark' : 'light'}
+            initial={{ y: -22, opacity: 0, rotate: -90, scale: 0.7 }}
+            animate={{ y: 0, opacity: 1, rotate: 0, scale: 1 }}
+            exit={{ y: 22, opacity: 0, rotate: 90, scale: 0.7 }}
+            transition={{ duration: 0.28, ease: EASE_APPLE }}
+          >
+            {isDark ? (
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+              </svg>
+            ) : (
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+              </svg>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </motion.button>
+    </Magnetic>
   );
 }
 
-export function AppLayout() {
-  const { user, logout } = useAuth();
-  const { t } = useI18n();
-  const navigate = useNavigate();
+/* ============================================================================
+ * ANIMATED OUTLET
+ * ========================================================================== */
+
+function AnimatedOutlet() {
   const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const mobileMenuRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const [search, setSearch] = useState('');
-
-  const handleLogout = useCallback(async () => {
-    await logout();
-    navigate('/login');
-  }, [logout, navigate]);
-
-  // Global search: Enter navigates to /search?q=…, Escape clears the field.
-  const handleSearchKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const q = search.trim();
-        if (!q) {
-          searchRef.current?.focus();
-          return;
-        }
-        navigate(`/search?q=${encodeURIComponent(q)}`);
-        setSearch('');
-        searchRef.current?.blur();
-      } else if (e.key === 'Escape') {
-        setSearch('');
-        searchRef.current?.blur();
-      }
-    },
-    [search, navigate],
-  );
-
-  useEffect(() => { setMobileMenuOpen(false); }, [location.pathname]);
+  const reduced = usePrefersReducedMotion();
+  const [animating, setAnimating] = useState(false);
 
   useEffect(() => {
-    if (!mobileMenuOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileMenuOpen(false); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [mobileMenuOpen]);
+    if (reduced) return;
+    setAnimating(true);
+    const id = setTimeout(() => setAnimating(false), 600);
+    return () => clearTimeout(id);
+  }, [location.pathname, reduced]);
 
-  useEffect(() => {
-    if (!mobileMenuOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
-        setMobileMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [mobileMenuOpen]);
-
-  const userRole = user?.role || '';
-  const userFullName = user ? fullName(user.firstName, user.lastName) : '';
-  const userInitials = user ? initials(user.firstName, user.lastName) : '?';
-  const organizationName = user?.organization?.name || 'Education Center';
+  if (reduced) return <Outlet />;
 
   return (
-    <div className="relative flex min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)]">
-      {/* Floating background orbs */}
-      <div className="orb-container" aria-hidden>
-        <div className="orb orb-cyan-1" />
-        <div className="orb orb-cyan-2" />
-        <div className="orb orb-indigo-1" />
-        <div className="orb orb-deep-1" />
-      </div>
+    <motion.div
+      key={location.pathname}
+      initial={{ opacity: 0, y: 12, filter: 'blur(8px)', scale: 0.985 }}
+      animate={{ opacity: 1, y: 0, filter: 'blur(0px)', scale: 1 }}
+      transition={{ duration: 0.45, ease: EASE_APPLE }}
+      style={{
+        minHeight: 1,
+        willChange: animating ? 'opacity, transform, filter' : 'auto',
+      }}
+    >
+      <Outlet />
+    </motion.div>
+  );
+}
 
-      {/* Skip link */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-brand-700 focus:shadow-lg"
-      >
-        Skip to content
-      </a>
+/* ============================================================================
+ * FOCUS TRAP
+ * ========================================================================== */
 
-      {/* Desktop sidebar — glass surface */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[260px] flex-col lg:flex">
-        <div className="flex h-full flex-col m-3 rounded-3xl border border-[var(--border-glass)] bg-[var(--bg-glass)] backdrop-blur-3xl backdrop-saturate-[1.7] shadow-[var(--shadow-lg)] overflow-hidden">
-          {/* Brand */}
-          <div className="flex h-16 items-center px-5 border-b border-[var(--border-subtle)]">
-            <Brand />
-          </div>
+function useFocusTrap(ref: React.RefObject<HTMLElement | null>, active: boolean) {
+  useEffect(() => {
+    if (!active || !ref.current) return;
+    const root = ref.current;
+    const focusableSelector =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const previouslyFocused = document.activeElement as HTMLElement | null;
 
-          {/* Org info */}
-          <div className="px-5 py-3 border-b border-[var(--border-subtle)]">
-            <p className="text-[0.9375rem] font-semibold text-[var(--text-primary)] truncate">
-              {organizationName}
-            </p>
-            <p className="text-[0.75rem] text-[var(--text-muted)] capitalize">
-              {userRole.replace('_', ' ').toLowerCase()}
-            </p>
-          </div>
+    const getFocusable = () =>
+      Array.from(root.querySelectorAll<HTMLElement>(focusableSelector));
 
-          <NavItems role={userRole} />
+    const first = getFocusable()[0];
+    first?.focus();
 
-          {/* Logout */}
-          <div className="p-3 border-t border-[var(--border-subtle)]">
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--state-hover)] hover:text-[var(--text-primary)] transition-all duration-200"
-            >
-              <Icon d={I.logout}/>
-              {t('nav.logout')}
-            </button>
-          </div>
-        </div>
-      </aside>
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const focusable = getFocusable();
+      if (focusable.length === 0) return;
+      const firstEl = focusable[0];
+      const lastEl = focusable[focusable.length - 1];
 
-      {/* Mobile top bar */}
-      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between lg:hidden">
-        <div className="flex h-full w-full items-center justify-between px-4 m-2 rounded-2xl border border-[var(--border-glass)] bg-[var(--bg-glass)] backdrop-blur-2xl shadow-[var(--shadow-md)]">
-          <Brand size="sm" />
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <NotificationsMenu />
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="rounded-xl p-2 text-[var(--text-secondary)] hover:bg-[var(--state-hover)] hover:text-[var(--text-primary)] transition-colors"
-              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
-              aria-expanded={mobileMenuOpen}
-            >
-              {mobileMenuOpen ? <Icon d={I.close}/> : <Icon d={I.menu}/>}
-            </button>
-          </div>
-        </div>
-      </header>
+      if (e.shiftKey && document.activeElement === firstEl) {
+        e.preventDefault();
+        lastEl.focus();
+      } else if (!e.shiftKey && document.activeElement === lastEl) {
+        e.preventDefault();
+        firstEl.focus();
+      }
+    };
 
-      {/* Mobile sheet */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-30 lg:hidden">
-          <div
-            className="absolute inset-0 bg-[rgba(15,25,45,0.45)] backdrop-blur-sm"
-            onClick={() => setMobileMenuOpen(false)}
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [active, ref]);
+}
+
+/* ============================================================================
+ * BODY SCROLL LOCK
+ * ========================================================================== */
+
+function useBodyScrollLock(locked: boolean) {
+  useEffect(() => {
+    if (!locked) return;
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouchAction;
+    };
+  }, [locked]);
+}
+
+/* ============================================================================
+ * MOBILE SEARCH SHEET — v6: focus trap & scroll lock qo‘shildi
+ * ========================================================================== */
+
+interface SearchSheetProps {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (query: string) => void;
+}
+
+function MobileSearchSheet({ open, onClose, onSubmit }: SearchSheetProps) {
+  const { t } = useI18n();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [value, setValue] = useState('');
+
+  useFocusTrap(containerRef, open);
+  useBodyScrollLock(open);
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => inputRef.current?.focus(), 120);
+      return () => clearTimeout(timer);
+    }
+    setValue('');
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  const submit = () => {
+    const q = value.trim();
+    if (!q) return;
+    onSubmit(q);
+    onClose();
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="mobile-search"
+          className="fixed inset-0 z-[70] flex items-start justify-center px-4 pt-20 lg:hidden"
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          variants={{
+            hidden: { opacity: 1 },
+            visible: { opacity: 1 },
+            exit: { opacity: 1, transition: { duration: 0.28, ease: EASE_APPLE } },
+          }}
+        >
+          <motion.div
+            className="absolute inset-0 bg-black/40 backdrop-blur-md"
+            onClick={onClose}
+            variants={backdropVariants}
+            aria-hidden
           />
-          <div
-            ref={mobileMenuRef}
-            className="absolute left-0 top-0 h-full w-[280px] m-3 rounded-3xl border border-[var(--border-glass)] bg-[var(--bg-card)] backdrop-blur-3xl shadow-[var(--shadow-lg)] overflow-hidden flex flex-col"
+          <motion.div
+            ref={containerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('nav.searchPlaceholder') || 'Search'}
+            initial={{ y: -20, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: -20, opacity: 0, scale: 0.96 }}
+            transition={SPRING.smooth}
+            className="relative w-full max-w-md"
           >
-            <div className="flex h-16 items-center justify-between px-5 border-b border-[var(--border-subtle)]">
-              <Brand />
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                className="rounded-xl p-1.5 text-[var(--text-muted)] hover:bg-[var(--state-hover)] hover:text-[var(--text-primary)]"
-                aria-label={t('a11y.closeMenu')}
+            <GlassSurface
+              className="border border-[#ffffff60] bg-white/90 shadow-2xl dark:border-[#ffffff15] dark:bg-[#1c1c1e90]"
+              radius="1.5rem"
+            >
+              <form
+                role="search"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submit();
+                }}
+                className="flex items-center gap-3 px-4 py-3"
               >
-                <Icon d={I.close}/>
-              </button>
-            </div>
-            <div className="px-5 py-3 border-b border-[var(--border-subtle)]">
-              <p className="text-[0.9375rem] font-semibold text-[var(--text-primary)] truncate">{organizationName}</p>
-              <p className="text-[0.75rem] text-[var(--text-muted)] capitalize">{userRole.replace('_', ' ').toLowerCase()}</p>
-            </div>
-            <NavItems role={userRole} onNavigate={() => setMobileMenuOpen(false)} />
-            <div className="p-3 border-t border-[var(--border-subtle)]">
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--state-hover)] hover:text-[var(--text-primary)]"
-              >
-                <Icon d={I.logout}/>
-                {t('nav.logout')}
-              </button>
-            </div>
-          </div>
-        </div>
+                <StaticIcon paths={I.search} className="h-5 w-5 text-[#86868B]" />
+                <input
+                  ref={inputRef}
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  placeholder={t('nav.searchPlaceholder') || 'Search…'}
+                  className="flex-1 bg-transparent text-[15px] font-medium outline-none placeholder:text-[#86868B]"
+                  aria-label={t('nav.searchPlaceholder') || 'Search'}
+                  type="search"
+                />
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-full p-1.5 text-[#86868B] hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:hover:bg-white/10"
+                  aria-label={t('a11y.closeSearch') || 'Close search'}
+                >
+                  <StaticIcon paths={I.close} className="h-4 w-4" />
+                </button>
+              </form>
+            </GlassSurface>
+          </motion.div>
+        </motion.div>
       )}
+    </AnimatePresence>
+  );
+}
 
-      {/* Main */}
-      <div className="relative z-10 flex min-h-screen flex-1 flex-col lg:pl-[280px]">
-        {/* Top bar (desktop) */}
-        <header className="sticky top-0 z-20 hidden lg:flex h-16 items-center gap-3 px-4 m-3 mb-0 rounded-2xl border border-[var(--border-glass)] bg-[var(--bg-glass)] backdrop-blur-2xl backdrop-saturate-[1.6] shadow-[var(--shadow-md)]">
-          <div className="relative flex-1 max-w-md">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
-              <Icon d={I.search}/>
+/* ============================================================================
+ * TOP BAR (Desktop)
+ * ========================================================================== */
+
+interface TopBarProps {
+  search: string;
+  setSearch: (v: string) => void;
+  searchRef: React.RefObject<HTMLInputElement>;
+  isSearchFocused: boolean;
+  setIsSearchFocused: (v: boolean) => void;
+  onSearchKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onSearchSubmit: (q: string) => void;
+  userFullName: string;
+  userInitials: string;
+  userRole: string;
+  orgName: string;
+  headerY: MotionValue<number>;
+  headerScale: MotionValue<number>;
+  onCommandPalette: () => void;
+  onProfileClick: () => void;
+}
+
+function TopBar({
+  search, setSearch, searchRef, isSearchFocused, setIsSearchFocused,
+  onSearchKeyDown, onSearchSubmit, userFullName, userInitials, userRole, orgName,
+  headerY, headerScale, onCommandPalette, onProfileClick,
+}: TopBarProps) {
+  const { t } = useI18n();
+  const reduced = usePrefersReducedMotion();
+  const now = useNow(60_000); // v6: greeting har daqiqada yangilanadi
+  const greeting = t(getGreetingKey(now)) || 'Welcome';
+  const isMac = useMemo(
+    () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent),
+    [],
+  );
+  const shortcutLabel = isMac ? '⌘K' : 'Ctrl K';
+
+  return (
+    <motion.header
+      style={{ y: headerY, scale: headerScale }}
+      className="mx-4 mb-3 mt-4 hidden shrink-0 lg:flex"
+    >
+      <GlassSurface
+        className="flex w-full items-center gap-4 border border-[#ffffff60] bg-[#ffffff70] shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:border-[#ffffff10] dark:bg-[#1c1c1e70] dark:shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
+        radius="1.75rem"
+      >
+        <div className="flex w-full items-center gap-4 px-5 py-3">
+          <div className="hidden min-w-[200px] flex-col xl:flex">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#86868B]">
+              <LiveClock /> · {greeting}
+            </span>
+            <span className="mt-0.5 truncate text-[14px] font-semibold leading-tight tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+              {orgName}
+            </span>
+          </div>
+
+          <span className="hidden h-8 w-px bg-[#00000012] dark:bg-[#ffffff12] xl:block" aria-hidden />
+
+          <motion.form
+            className="relative max-w-xl flex-1"
+            animate={{ maxWidth: isSearchFocused ? '680px' : '560px' }}
+            transition={reduced ? { duration: 0 } : SPRING.smooth}
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSearchSubmit(search);
+            }}
+          >
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#86868B]">
+              <StaticIcon paths={I.search} className="h-[18px] w-[18px]" />
             </span>
             <input
               ref={searchRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
+              onKeyDown={onSearchKeyDown}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
               type="search"
-              placeholder={t('nav.searchPlaceholder')}
-              className="w-full pl-10 pr-16 py-2 rounded-xl bg-[var(--bg-glass)] backdrop-blur-xl border border-[var(--border-subtle)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-brand-700 focus:shadow-[0_0_0_3px_rgba(84,115,252,0.15)] transition-all"
-              aria-label={t('nav.searchPlaceholder')}
+              placeholder={t('nav.searchPlaceholder') || 'Search anything…'}
+              className="w-full rounded-full border border-transparent bg-[#00000008] py-2.5 pl-11 pr-20 text-[14px] font-medium tracking-tight text-[#1D1D1F] outline-none transition-all placeholder:text-[#86868B] focus:border-[#007AFF]/30 focus:bg-white focus:shadow-[0_0_0_4px_rgba(0,122,255,0.1)] dark:bg-[#ffffff10] dark:text-[#F5F5F7] dark:focus:border-[#0A84FF]/40 dark:focus:bg-[#1C1C1E]"
+              aria-label={t('nav.searchPlaceholder') || 'Search'}
             />
-            {/* Command palette shortcut hint */}
             <button
               type="button"
-              onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))}
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--m-vivid)] transition-colors pointer-events-none"
-              style={{ background: 'var(--border-subtle)', border: '1px solid var(--border-subtle)' }}
-              tabIndex={-1}
-              aria-hidden="true"
+              onClick={onCommandPalette}
+              className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1 overflow-hidden rounded-md border border-[#00000015] bg-[#00000005] px-2 py-1 text-[11px] font-bold text-[#86868B] transition-colors hover:bg-[#00000010] focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:border-[#ffffff20] dark:bg-[#ffffff10] dark:hover:bg-[#ffffff18]"
+              aria-label={`Open command palette (${shortcutLabel})`}
+              title={`Open command palette (${shortcutLabel})`}
             >
-              ⌘K
+              {shortcutLabel}
+              {!reduced && (
+                <motion.span
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/70 to-transparent"
+                  initial={{ x: '-100%' }}
+                  animate={{ x: '200%' }}
+                  transition={{ duration: 2.4, repeat: Infinity, repeatDelay: 4, ease: 'easeInOut' }}
+                  aria-hidden
+                />
+              )}
             </button>
-          </div>
-          <div className="flex items-center gap-3">
+          </motion.form>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <Magnetic strength={0.4}>
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setCalculatorOpen(true)}
+                className="rounded-full p-2.5 text-[#86868B] transition-colors hover:bg-black/5 hover:text-[#1D1D1F] focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:hover:bg-white/5 dark:hover:text-[#F5F5F7]"
+                title={t('nav.calculator') || 'Calculator'}
+                aria-label={t('nav.calculator') || 'Calculator'}
+              >
+                <StaticIcon paths={I.calculator} className="h-[18px] w-[18px]" />
+              </motion.button>
+            </Magnetic>
+
             <LanguageSwitcher />
             <ThemeToggle />
             <NotificationsMenu />
-            <div className="h-6 w-px bg-[var(--border-subtle)]" />
-            <div className="flex items-center gap-2.5">
-              <div
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-semibold text-white shadow-[0_2px_8px_rgba(84,115,252,0.25)] ring-2 ring-white/40"
-                title={user?.email}
-              >
-                {userInitials}
+
+            <span className="mx-2 h-8 w-px bg-[#00000015] dark:bg-[#ffffff15]" aria-hidden />
+
+            <motion.button
+              type="button"
+              onClick={onProfileClick}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-3 rounded-full py-1 pl-1 pr-3 outline-none transition-colors hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:hover:bg-white/[0.06]"
+              aria-label={userFullName}
+            >
+              <div className="relative">
+                <motion.div
+                  className="relative h-10 w-10 rounded-full p-[2px]"
+                  animate={reduced ? undefined : { rotate: 360 }}
+                  transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                >
+                  <span
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      background: 'conic-gradient(from 0deg, #007AFF, #5856D6, #FF2D55, #FF9500, #34C759, #007AFF)',
+                    }}
+                    aria-hidden
+                  />
+                  <div className="relative flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] text-[14px] font-bold text-white ring-2 ring-white/60 dark:ring-black/50">
+                    <span
+                      className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/40 to-transparent"
+                      aria-hidden
+                    />
+                    <span className="relative">{userInitials}</span>
+                  </div>
+                </motion.div>
+                <motion.span
+                  className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-white dark:ring-[#1c1c1e]"
+                  style={{ background: '#34C759' }}
+                  animate={reduced ? undefined : { scale: [1, 1.15, 1] }}
+                  transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                  aria-hidden
+                />
               </div>
-              <div className="hidden xl:flex flex-col text-left">
-                <span className="text-sm font-semibold text-[var(--text-primary)] leading-none">
+              <div className="hidden flex-col text-left xl:flex">
+                <span className="text-[13px] font-semibold leading-tight tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {userFullName}
                 </span>
-                <span className="text-[0.75rem] text-[var(--text-muted)] capitalize leading-none mt-0.5">
-                  {userRole.replace('_', ' ').toLowerCase()}
+                <span className="mt-1 text-[10px] font-semibold uppercase leading-none tracking-wider text-[#86868B]">
+                  {userRole.replace(/_/g, ' ')}
                 </span>
               </div>
-            </div>
+            </motion.button>
           </div>
-        </header>
+        </div>
+      </GlassSurface>
+    </motion.header>
+  );
+}
+
+/* ============================================================================
+ * MAIN: AppLayout — v6
+ * ========================================================================== */
+
+export function AppLayout() {
+  const { user, logout, loading: authLoading } = useAuth();
+  const { t } = useI18n();
+  const reduced = usePrefersReducedMotion();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [search, setSearch] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const mainRef = useRef<HTMLElement | null>(null);
+
+  useFocusTrap(mobileMenuRef, mobileMenuOpen);
+  useBodyScrollLock(mobileMenuOpen || mobileSearchOpen);
+
+  /* v6: parallaks endi mainRef ichidagi scroll’ga bog‘langan */
+  const { scrollY } = useScroll({ container: mainRef });
+  const headerY = useTransform(scrollY, [0, 80], [0, -6]);
+  const headerScale = useTransform(scrollY, [0, 80], [1, 0.985]);
+
+  const cursor = useGlobalCursor();
+  const orb1X = useTransform(cursor.x, (v: number) => v * -0.008);
+  const orb1Y = useTransform(cursor.y, (v: number) => v * -0.008);
+  const orb2X = useTransform(cursor.x, (v: number) => v * 0.006);
+  const orb2Y = useTransform(cursor.y, (v: number) => v * 0.006);
+
+  /* v6: user null bo‘lsa — login’ga */
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/login', { replace: true });
+    }
+  }, [authLoading, user, navigate]);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await logout();
+    } finally {
+      navigate('/login');
+    }
+  }, [logout, navigate]);
+
+  const handleSearchSubmit = useCallback(
+    (query: string) => {
+      const q = query.trim();
+      if (!q) {
+        searchRef.current?.focus();
+        return;
+      }
+      navigate(`/search?q=${encodeURIComponent(q)}`);
+      setSearch('');
+      searchRef.current?.blur();
+    },
+    [navigate],
+  );
+
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSearchSubmit(search);
+      } else if (e.key === 'Escape') {
+        setSearch('');
+        searchRef.current?.blur();
+      }
+    },
+    [search, handleSearchSubmit],
+  );
+
+  const handleCommandPalette = useCallback(() => {
+    const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform);
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'k',
+        metaKey: isMac,
+        ctrlKey: !isMac,
+        bubbles: true,
+      }),
+    );
+  }, []);
+
+  const handleMobileSearchSubmit = useCallback(
+    (q: string) => navigate(`/search?q=${encodeURIComponent(q)}`),
+    [navigate],
+  );
+
+  const handleProfileClick = useCallback(() => navigate('/settings'), [navigate]);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    if (mainRef.current) {
+      if (typeof mainRef.current.scrollTo === 'function') {
+        mainRef.current.scrollTo({ top: 0, behavior: 'auto' });
+      } else {
+        mainRef.current.scrollTop = 0;
+      }
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mobileMenuOpen]);
+
+  const userRole = user?.role || '';
+  const userFullName = user ? fullName(user.firstName, user.lastName) : '';
+  const userInitials = user ? initials(user.firstName, user.lastName) : '?';
+  const orgName = user?.organization?.name || 'Education Center';
+
+  if (authLoading) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-[#F5F5F7] dark:bg-[#000000]">
+        <div className="flex flex-col items-center gap-4">
+          <motion.div
+            className="h-12 w-12 rounded-full border-4 border-[#007AFF]/20 border-t-[#007AFF]"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          />
+          <p className="text-[13px] font-medium text-[#86868B]">
+            {t('common.loadingSession') || 'Loading session…'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /* v6: user yo‘q — redirect kutayapmiz */
+  if (!user) return null;
+
+  return (
+    <div
+      className="fixed inset-0 flex bg-[#F5F5F7] text-[#1D1D1F] dark:bg-[#000000] dark:text-[#F5F5F7]"
+      style={{ overflow: 'hidden' }}
+    >
+      <AmbientParticles />
+
+      <motion.div
+        aria-hidden
+        className="pointer-events-none fixed -z-10 h-[36rem] w-[36rem] rounded-full opacity-[0.06] dark:opacity-[0.10]"
+        style={{
+          left: cursor.x,
+          top: cursor.y,
+          x: '-50%',
+          y: '-50%',
+          background: 'radial-gradient(circle, #007AFF 0%, #5856D6 40%, transparent 70%)',
+        }}
+      />
+
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden>
+        <motion.div
+          style={{ x: orb1X, y: orb1Y }}
+          animate={
+            reduced
+              ? undefined
+              : { opacity: [0.3, 0.6, 0.3], scale: [0.95, 1.05, 0.95], rotate: [0, 5, -5, 0] }
+          }
+          transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute -left-[10%] -top-[10%] h-[40rem] w-[40rem] rounded-full bg-gradient-to-tr from-[#007AFF]/10 to-[#5856D6]/10 blur-[100px] dark:from-[#0A84FF]/15 dark:to-[#5E5CE6]/15"
+        />
+        <motion.div
+          style={{ x: orb2X, y: orb2Y }}
+          animate={
+            reduced
+              ? undefined
+              : { opacity: [0.3, 0.6, 0.3], scale: [0.95, 1.05, 0.95], rotate: [0, -5, 5, 0] }
+          }
+          transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+          className="absolute right-[5%] top-[20%] h-[35rem] w-[35rem] rounded-full bg-gradient-to-bl from-[#32ADE6]/10 to-[#34C759]/10 blur-[120px] dark:from-[#64D2FF]/10 dark:to-[#30D158]/10"
+        />
+      </div>
+
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-[1rem] focus:bg-[#007AFF] focus:px-5 focus:py-2.5 focus:text-[14px] focus:font-semibold focus:text-white focus:shadow-[0_8px_30px_rgba(0,122,255,0.4)] focus:outline-none"
+      >
+        {t('a11y.skipToContent') || 'Skip to content'}
+      </a>
+
+      {/* DESKTOP SIDEBAR */}
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[270px] flex-col p-3.5 lg:flex">
+        <GlassSurface
+          className="flex min-h-0 flex-1 flex-col overflow-hidden border border-[#ffffff60] bg-[#ffffff80] shadow-[0_8px_40px_rgba(0,0,0,0.04)] dark:border-[#ffffff10] dark:bg-[#1c1c1e80] dark:shadow-[0_10px_50px_rgba(0,0,0,0.4)]"
+          radius="2rem"
+        >
+          <div className="flex h-[4.5rem] shrink-0 items-center border-b border-[#00000010] px-6 dark:border-[#ffffff10]">
+            <Brand />
+          </div>
+
+          <div className="shrink-0 border-b border-[#00000010] px-6 py-4 dark:border-[#ffffff10]">
+            <p className="truncate text-[15px] font-semibold tracking-tight">{orgName}</p>
+            <p className="mt-0.5 text-[12px] font-medium capitalize text-[#86868B]">
+              {userRole.replace(/_/g, ' ').toLowerCase()}
+            </p>
+          </div>
+
+          <NavItems role={userRole} layoutIdScope="desktop" />
+
+          <div className="shrink-0 border-t border-[#00000010] p-3.5 dark:border-[#ffffff10]">
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleLogout}
+              className="group flex w-full items-center gap-3.5 rounded-[1rem] px-3.5 py-2.5 text-[14px] font-semibold tracking-tight text-[#86868B] outline-none transition-colors hover:bg-[#FF3B30]/10 hover:text-[#FF3B30] focus-visible:ring-2 focus-visible:ring-[#FF3B30]/50"
+            >
+              <StaticIcon paths={I.logout} className="transition-transform group-hover:-translate-x-1" />
+              {t('nav.logout')}
+            </motion.button>
+          </div>
+        </GlassSurface>
+      </aside>
+
+      {/* MOBILE TOP BAR */}
+      <header className="fixed inset-x-0 top-0 z-40 flex h-16 items-center lg:hidden">
+        <GlassSurface
+          className="m-2.5 flex h-full w-full items-center justify-between border border-[#ffffff60] bg-[#ffffff90] px-5 shadow-[0_4px_24px_rgba(0,0,0,0.06)] dark:border-[#ffffff15] dark:bg-[#1c1c1e90] dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)]"
+          radius="1.5rem"
+        >
+          <Brand size="sm" />
+          <div className="flex items-center gap-1.5">
+            <Magnetic strength={0.4}>
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setMobileSearchOpen(true)}
+                className="rounded-full p-2 text-[#86868B] outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/50"
+                aria-label={t('nav.searchPlaceholder') || 'Search'}
+              >
+                <StaticIcon paths={I.search} />
+              </motion.button>
+            </Magnetic>
+            <Magnetic strength={0.4}>
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setCalculatorOpen(true)}
+                className="rounded-full p-2 text-[#86868B] outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/50"
+                aria-label={t('nav.calculator') || 'Calculator'}
+              >
+                <StaticIcon paths={I.calculator} />
+              </motion.button>
+            </Magnetic>
+            <ThemeToggle />
+            <NotificationsMenu />
+            <Magnetic strength={0.4}>
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.9, rotate: -8 }}
+                onClick={() => setMobileMenuOpen(true)}
+                className="rounded-full p-2 text-[#1D1D1F] outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:text-[#F5F5F7]"
+                aria-label="Menu"
+              >
+                <StaticIcon paths={I.menu} className="h-6 w-6" />
+              </motion.button>
+            </Magnetic>
+          </div>
+        </GlassSurface>
+      </header>
+
+      {/* MOBILE MENU — v6: motion.div wrapper, exit ishlaydi */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            key="mobile-menu"
+            className="fixed inset-0 z-[60] lg:hidden"
+            variants={mobileMenuWrapperVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            <motion.div
+              variants={backdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="absolute inset-0 bg-black/40 backdrop-blur-md"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <motion.div
+              ref={mobileMenuRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation menu"
+              variants={mobileSheetVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="absolute left-0 top-0 ml-2.5 mt-2.5 h-[calc(100dvh-20px)] w-[290px]"
+            >
+              <GlassSurface
+                className="flex flex-1 h-full min-h-0 flex-col overflow-hidden border border-[#ffffff60] bg-[#ffffff90] shadow-[20px_0_40px_rgba(0,0,0,0.2)] dark:border-[#ffffff15] dark:bg-[#1c1c1e90]"
+                radius="2rem"
+              >
+                <div className="flex h-16 shrink-0 items-center justify-between border-b border-[#00000010] px-6 dark:border-[#ffffff10]">
+                  <Brand />
+                  <Magnetic strength={0.4}>
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.9, rotate: 90 }}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="rounded-full bg-black/5 p-2 text-[#86868B] outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:bg-white/10 dark:text-[#F5F5F7]"
+                      aria-label="Close menu"
+                    >
+                      <StaticIcon paths={I.close} />
+                    </motion.button>
+                  </Magnetic>
+                </div>
+                <div className="shrink-0 border-b border-[#00000010] px-6 py-4 dark:border-[#ffffff10]">
+                  <p className="truncate text-[15px] font-semibold tracking-tight">{orgName}</p>
+                  <p className="mt-0.5 text-[12px] font-medium capitalize text-[#86868B]">
+                    {userRole.replace(/_/g, ' ').toLowerCase()}
+                  </p>
+                </div>
+                <NavItems role={userRole} onNavigate={() => setMobileMenuOpen(false)} layoutIdScope="mobile" />
+                <div className="shrink-0 border-t border-[#00000010] p-4 dark:border-[#ffffff10]">
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex w-full items-center justify-center gap-2.5 rounded-[1rem] bg-[#FF3B30]/10 px-4 py-3 text-[14px] font-bold text-[#FF3B30] transition-colors hover:bg-[#FF3B30]/20 focus-visible:ring-2 focus-visible:ring-[#FF3B30]/50"
+                  >
+                    <StaticIcon paths={I.logout} />
+                    {t('nav.logout')}
+                  </button>
+                </div>
+              </GlassSurface>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <MobileSearchSheet
+        open={mobileSearchOpen}
+        onClose={() => setMobileSearchOpen(false)}
+        onSubmit={handleMobileSearchSubmit}
+      />
+
+      {/* MAIN COLUMN */}
+      <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col lg:pl-[290px]">
+        <TopBar
+          search={search}
+          setSearch={setSearch}
+          searchRef={searchRef}
+          isSearchFocused={isSearchFocused}
+          setIsSearchFocused={setIsSearchFocused}
+          onSearchKeyDown={handleSearchKeyDown}
+          onSearchSubmit={handleSearchSubmit}
+          userFullName={userFullName}
+          userInitials={userInitials}
+          userRole={userRole}
+          orgName={orgName}
+          headerY={headerY}
+          headerScale={headerScale}
+          onCommandPalette={handleCommandPalette}
+          onProfileClick={handleProfileClick}
+        />
 
         <main
+          ref={mainRef}
           id="main-content"
           tabIndex={-1}
-          className="flex-1 px-6 pt-20 pb-8 outline-none lg:px-7 lg:pt-7"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 pb-12 pt-24 outline-none scrollbar-thin lg:px-8 lg:pb-10 lg:pt-2"
+          style={{ WebkitOverflowScrolling: 'touch', scrollBehavior: 'smooth', transform: 'translateZ(0)' }}
         >
-          <Outlet />
+          <AnimatedOutlet />
         </main>
       </div>
 
-      {/* Global overlays */}
       <CommandPalette />
-      <AIAssistant />
+      <GlobalAiCopilot />
+      <GlobalCalculator />
     </div>
   );
 }

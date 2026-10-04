@@ -17,7 +17,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Role } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ReportBuilderService } from './report-builder.service';
-import { AllowAnyRole, Roles } from '../auth/roles.decorator';
+import { Roles } from '../auth/roles.decorator';
 import {
   ExportReportDto,
   RunReportParamsDto,
@@ -31,7 +31,7 @@ import {
 export class ReportsController {
   constructor(private readonly reports: ReportBuilderService) {}
 
-  @AllowAnyRole()
+
   @Get('designs')
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER)
   @ApiOperation({ summary: 'List available report designs and their whitelisted columns' })
@@ -39,7 +39,7 @@ export class ReportsController {
     return this.reports.listDesigns();
   }
 
-  @AllowAnyRole()
+
   @Get('designs/:type')
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER)
   @ApiOperation({ summary: 'Get one report design' })
@@ -65,7 +65,7 @@ export class ReportsController {
     return this.reports.saveDefinition(orgId, userId, body);
   }
 
-  @AllowAnyRole()
+
   @Get('definitions')
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER)
   @ApiOperation({ summary: 'List saved report definitions' })
@@ -115,4 +115,5 @@ export class ReportsController {
     res.send(buffer);
   }
 }
+
 

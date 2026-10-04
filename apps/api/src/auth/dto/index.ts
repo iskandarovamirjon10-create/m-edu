@@ -135,3 +135,5 @@ export class ResetPasswordDto {
   @MaxLength(128)
   password: string;
 }
+export * from './access-request.dto';
+export * from './accept-invitation.dto';

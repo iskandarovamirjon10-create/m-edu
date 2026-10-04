@@ -53,3 +53,4 @@ export class ScheduleController {
     return this.scheduleService.remove(orgId, id);
   }
 }
+

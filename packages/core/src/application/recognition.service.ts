@@ -326,9 +326,13 @@ export class RecognitionService {
       } else if (decision.outcome === 'UNCERTAIN') {
         attemptStatus = RecognitionAttemptStatus.MATCH_UNCERTAIN;
         message = decision.message;
+        identifiedStudentId = null;
+        student = null;
       } else {
         attemptStatus = RecognitionAttemptStatus.UNIDENTIFIED;
         message = decision.message;
+        identifiedStudentId = null;
+        student = null;
       }
 
       // Persist attempt

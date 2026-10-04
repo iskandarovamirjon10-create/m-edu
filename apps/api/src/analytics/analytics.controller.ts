@@ -2,7 +2,7 @@ import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles, AllowAnyRole } from '../auth/roles.decorator';
+import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { OrgRateLimiter } from '../camera/org-rate-limiter';
 import { AnalyticsService } from './analytics.service';
@@ -33,7 +33,6 @@ export class AnalyticsController {
 
   // ── Overview ──────────────────────────────────────────────────────
 
-  @AllowAnyRole()
   @Get('overview')
   @ApiOperation({ summary: 'Get analytics overview' })
   getOverview(@CurrentUser('organizationId') orgId: string) {
@@ -283,3 +282,4 @@ export class AnalyticsController {
     return this.reconciliationService.getReconciliationHistory(orgId);
   }
 }
+

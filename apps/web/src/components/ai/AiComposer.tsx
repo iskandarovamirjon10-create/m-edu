@@ -10,6 +10,8 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Square, X } from 'lucide-react';
 import { GlassButton, GlassTextArea } from '@/components/ui';
 import type { AiStatus } from '@/hooks/useAiCopilot';
+import { useHaptics } from '@/hooks/useHaptics';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 const MIN_HEIGHT = 46;
 const MAX_HEIGHT = 160;
@@ -23,6 +25,8 @@ export interface AiComposerProps {
 export function AiComposer({ status, onSend, onStop }: AiComposerProps) {
   const [draft, setDraft] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const haptics = useHaptics();
+  const sound = usePremiumSound();
 
   const busy = status === 'sending' || status === 'thinking' || status === 'confirming';
   const locked = busy || status === 'awaiting_confirmation';
@@ -39,6 +43,8 @@ export function AiComposer({ status, onSend, onStop }: AiComposerProps) {
   const submit = (): void => {
     const text = draft.trim();
     if (!text || locked) return;
+    haptics.light();
+    sound.playPop();
     onSend(text);
     setDraft('');
   };

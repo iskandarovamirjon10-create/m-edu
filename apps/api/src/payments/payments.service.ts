@@ -84,6 +84,9 @@ export class PaymentsService {
     });
     if (!student) throw new NotFoundException('Student not found');
 
+    const reference = data.reference || 
+      `idemp-${data.studentId}-${data.amount}-${Math.floor(Date.now() / 15000)}`;
+
     try {
       const created = await this.prisma.payment.create({
         data: {
@@ -94,13 +97,13 @@ export class PaymentsService {
           description: data.description,
           dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
           method: data.method,
-          reference: data.reference,
+          reference,
         },
         include: { student: { include: { user: { select: { firstName: true, lastName: true } } } } },
       });
       return created;
-    } catch (error: any) {
-      if (error.code === 'P2002') {
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('A payment with this reference already exists');
       }
       throw error;
@@ -165,10 +168,7 @@ export class PaymentsService {
     // FOR UPDATE on Payment serializes with InvoicesService.processRefund.
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const snapshot =
-        attempt === 1
-          ? existing
-          : await this.findOne(organizationId, id);
+      // snapshot is no longer needed as we use locked row inside transaction
 
       try {
         const result = await this.prisma.$transaction(async (tx) => {
@@ -250,8 +250,8 @@ export class PaymentsService {
         if (attempt === maxAttempts) {
           throw new ConflictException('Payment was modified concurrently, retry');
         }
-      } catch (error: any) {
-        if (error.code === 'P2002') {
+      } catch (error: unknown) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
           throw new ConflictException('A payment with this reference already exists');
         }
         // Illegal transition / concurrent conflict: do not retry a rejected transition.

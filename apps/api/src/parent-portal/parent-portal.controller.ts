@@ -93,3 +93,4 @@ export class ParentPortalController {
     return this.parentPortal.getChildInvoices(this.ctx(user), studentId);
   }
 }
+

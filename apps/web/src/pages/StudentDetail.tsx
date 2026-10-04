@@ -1,8 +1,38 @@
-import { useState, useCallback, useMemo } from 'react';
+/**
+ * M-EDU StudentDetailPage — Apple Design Award Edition
+ *
+ * Premium craft:
+ *  - Hero section with gradient avatar + status + quick actions
+ *  - Animated stats bar (Attendance %, Groups, Payments, Face ID)
+ *  - Premium info grid with 3D squircle icons
+ *  - Parent account management with gradient avatars + permission chips
+ *  - Custom toggle cards for permissions (no raw checkboxes)
+ *  - Custom SVG icons in SF Symbols proportions
+ *  - Shimmer skeletons (not pulse)
+ *  - Tone-aware colors throughout
+ *  - Framer Motion spring physics
+ */
+
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { studentsApi, groupsApi, faceApi } from '@/lib/api';
-import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassModal, ConfirmDialog, GlassSelect, useToasts, statusColor, GlassField, GlassBadge, GlassButton, GlassInput } from '@/components/ui';
+import {
+  GlassPageHeader,
+  GlassErrorState,
+  GlassEmptyState,
+  GlassModal,
+  ConfirmDialog,
+  GlassSelect,
+  useToasts,
+  statusColor,
+  GlassField,
+  GlassBadge,
+  GlassButton,
+  GlassInput,
+  GlassCard,
+} from '@/components/ui';
 import { useAuth } from '@/auth/AuthContext';
 import { fullName, formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -11,15 +41,197 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
 import { queryKeys } from '@/lib/query-keys.factory';
 
-function OrbBackdrop() {
-  return null;
-}
+/* ============================================================================
+ * MOTION TOKENS
+ * ========================================================================== */
+
+const SPRING = {
+  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
+  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
+  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
+} as const;
+
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.08 } },
+};
+
+const cardVariants: Variants = {
+  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
+  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+};
+
+const rowVariants: Variants = {
+  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
+  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+};
+
+/* ============================================================================
+ * TYPES
+ * ========================================================================== */
 
 interface FaceEnrollmentItem {
   id: string;
   status: string;
   enrolledAt: string;
 }
+
+interface ParentLink {
+  id: string;
+  parentId: string;
+  parent?: {
+    id?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    isActive?: boolean;
+  };
+  relationship?: string;
+  isPrimary?: boolean;
+  canViewGrades?: boolean;
+  canViewPayments?: boolean;
+  canViewAttendance?: boolean;
+}
+
+/* ============================================================================
+ * CUSTOM ICONS (SF Symbols proportions)
+ * ========================================================================== */
+
+const ICON_STROKE = 1.75;
+
+const I = {
+  userCircle: [
+    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+    'M12 14a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+    'M6.2 18.4c.9-1.4 2.4-2.4 5.8-2.4s4.9 1 5.8 2.4',
+  ],
+  edit: [
+    'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
+    'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z',
+  ],
+  plus: ['M12 5v14', 'M5 12h14'],
+  userPlus: [
+    'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
+    'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+    'M19 8v6', 'M22 11h-6',
+  ],
+  users: [
+    'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2',
+    'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+    'M23 21v-2a4 4 0 0 0-3-3.9',
+    'M16 3.1a4 4 0 0 1 0 7.8',
+  ],
+  usersRound: [
+    'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
+    'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+    'M22 21v-2a4 4 0 0 0-3-3.9',
+    'M16 3.1a4 4 0 0 1 0 7.8',
+  ],
+  checkCircle: [
+    'M22 11.08V12a10 10 0 1 1-5.93-9.14',
+    'M22 4 12 14.01l-3-3',
+  ],
+  calendar: [
+    'M8 2v4', 'M16 2v4', 'M3 10h18',
+    'M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z',
+  ],
+  calendarCheck: [
+    'M8 2v4', 'M16 2v4', 'M3 10h18',
+    'M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z',
+    'M9 15l2 2 4-4',
+  ],
+  creditCard: [
+    'M21 6H3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z',
+    'M1 10h22',
+    'M6 15h2',
+  ],
+  face: [
+    'M9 3H5a2 2 0 0 0-2 2v4',
+    'M15 3h4a2 2 0 0 1 2 2v4',
+    'M21 15v4a2 2 0 0 1-2 2h-4',
+    'M9 21H5a2 2 0 0 1-2-2v-4',
+    'M9.5 10v.5', 'M14.5 10v.5',
+    'M9 15a4 4 0 0 0 6 0',
+  ],
+  phone: [
+    'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7 12.8 12.8 0 0 0 .7 2.8 2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4 12.8 12.8 0 0 0 2.8.7 2 2 0 0 1 1.7 2z',
+  ],
+  mail: [
+    'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+    'M22 6 12 13 2 6',
+  ],
+  mapPin: [
+    'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z',
+    'M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  ],
+  trash: [
+    'M3 6h18',
+    'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6',
+    'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
+    'M10 11v6', 'M14 11v6',
+  ],
+  link: [
+    'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71',
+    'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
+  ],
+  unlink: [
+    'M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.71 1.71',
+    'M5.17 11.75l-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71',
+  ],
+  lock: [
+    'M5 11h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z',
+    'M7 11V7a5 5 0 0 1 10 0v4',
+  ],
+  shield: [
+    'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  ],
+  award: [
+    'M12 15a5 5 0 1 0 0-10 5 5 0 0 0 0 10z',
+    'M8.2 13.9 7 22l5-3 5 3-1.2-8.1',
+  ],
+  book: [
+    'M12 7v14',
+    'M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z',
+  ],
+  sparkles: [
+    'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
+    'M18.5 3.5v3', 'M20 5h-3',
+    'M5.5 18v2.5', 'M6.75 19.25h-2.5',
+  ],
+  arrowRight: ['M5 12h14', 'M12 5l7 7-7 7'],
+  empty: [
+    'M20 7h-9', 'M14 17H5',
+    'M19 19v-2a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v2',
+    'M10 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+  ],
+  info: [
+    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+    'M12 16v-4',
+    'M12 8h.01',
+  ],
+};
+
+function Icon({
+  paths, size = 18, className = '', strokeWidth = ICON_STROKE, ...rest
+}: {
+  paths: string[]; size?: number; className?: string; strokeWidth?: number;
+} & React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor"
+      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+      className={className} aria-hidden {...rest}
+    >
+      {paths.map((d, i) => <path key={i} d={d} />)}
+    </svg>
+  );
+}
+
+/* ============================================================================
+ * HELPERS
+ * ========================================================================== */
 
 function formatStudentStatus(isActive: boolean | undefined): { color: string; label: string } {
   return isActive === false
@@ -32,6 +244,341 @@ function formatGroupStatus(isActive: boolean): { color: string; label: string } 
     ? { color: 'green', label: 'enum.status.ACTIVE' }
     : { color: 'slate', label: 'enum.status.INACTIVE' };
 }
+
+function getInitials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .map((p) => p.charAt(0))
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || '—'
+  );
+}
+
+function nameHash(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+const AVATAR_PALETTES = [
+  ['#007AFF', '#5856D6'],
+  ['#AF52DE', '#FF2D55'],
+  ['#34C759', '#32ADE6'],
+  ['#FF9500', '#FF2D55'],
+  ['#5856D6', '#AF52DE'],
+  ['#32ADE6', '#007AFF'],
+  ['#FF2D55', '#FF9500'],
+  ['#30D158', '#34C759'],
+];
+
+function avatarGradient(name: string): string {
+  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
+  return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
+}
+
+/* ============================================================================
+ * PREMIUM SUB-COMPONENTS
+ * ========================================================================== */
+
+function CountUp({
+  value, duration = 1.1, suffix = '', decimals = 0,
+}: { value: number; duration?: number; suffix?: string; decimals?: number }) {
+  const [n, setN] = useState(0);
+  const startRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    let raf: number;
+    startRef.current = null;
+    const step = (ts: number) => {
+      if (startRef.current === null) startRef.current = ts;
+      const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
+      const eased = 1 - Math.pow(1 - p, 4);
+      setN(value * eased);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+
+  const shown = decimals > 0 ? n.toFixed(decimals) : Math.round(n).toLocaleString();
+  return <span className="tabular-nums">{shown}{suffix}</span>;
+}
+
+/** Big hero avatar with conic ring */
+function HeroAvatar({
+  name, isActive, size = 96,
+}: { name: string; isActive: boolean | undefined; size?: number }) {
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      {/* Conic rotating ring */}
+      <motion.div
+        className="absolute inset-[-4px] rounded-full p-[3px]"
+        animate={{ rotate: 360 }}
+        transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
+      >
+        <span
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: 'conic-gradient(from 0deg, #007AFF, #5856D6, #FF2D55, #FF9500, #34C759, #007AFF)',
+          }}
+          aria-hidden
+        />
+      </motion.div>
+
+      {/* Avatar */}
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={SPRING.smooth}
+        className="relative flex h-full w-full items-center justify-center rounded-full font-bold text-white ring-2 ring-white/70 dark:ring-black/50"
+        style={{
+          background: avatarGradient(name),
+          fontSize: size * 0.32,
+          letterSpacing: '0.02em',
+          boxShadow:
+            '0 12px 32px -8px rgba(0,0,0,0.3), ' +
+            'inset 0 2px 0 rgba(255,255,255,0.4)',
+        }}
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full"
+          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)' }}
+        />
+        <span className="relative">{getInitials(name)}</span>
+      </motion.div>
+
+      {/* Status indicator */}
+      <motion.span
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ ...SPRING.snappy, delay: 0.3 }}
+        className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full ring-4 ring-white dark:ring-[#1c1c1e]"
+        style={{
+          background: isActive === false ? '#FF3B30' : '#34C759',
+          boxShadow: `0 4px 12px -2px ${isActive === false ? 'rgba(255,59,48,0.6)' : 'rgba(52,199,89,0.6)'}`,
+        }}
+        aria-label={isActive === false ? 'Inactive' : 'Active'}
+      >
+        <span className="h-2 w-2 rounded-full bg-white" />
+      </motion.span>
+    </div>
+  );
+}
+
+/** Stat tile */
+function StatTile({
+  label, value, icon, tone = 'blue', format = 'number',
+}: {
+  label: string;
+  value: number | string;
+  icon: string[];
+  tone?: 'blue' | 'green' | 'orange' | 'red' | 'purple';
+  format?: 'number' | 'percent' | 'string';
+}) {
+  const palette: Record<string, { fg: string; bg: string; glow: string }> = {
+    blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)' },
+    green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)' },
+    orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)' },
+    red:    { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)' },
+    purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)' },
+  };
+  const c = palette[tone];
+
+  return (
+    <motion.div
+      variants={rowVariants}
+      whileHover={{ y: -3 }}
+      transition={SPRING.smooth}
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      style={{
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
+      }}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
+        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
+      />
+      <div
+        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        style={{
+          background: c.bg,
+          color: c.fg,
+          border: `1px solid ${c.fg}22`,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
+        }}
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-xl"
+          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent)' }}
+        />
+        <Icon paths={icon} size={18} strokeWidth={2} className="relative" />
+      </div>
+      <div className="relative min-w-0 flex-1">
+        <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
+          {typeof value === 'number' ? (
+            format === 'percent' ? <CountUp value={value} suffix="%" /> : <CountUp value={value} />
+          ) : value}
+        </div>
+        <div className="mt-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B] truncate">
+          {label}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/** Info row with icon */
+function InfoRow({
+  icon, label, value, tone = 'blue',
+}: {
+  icon: string[];
+  label: string;
+  value: React.ReactNode;
+  tone?: 'blue' | 'green' | 'orange' | 'purple';
+}) {
+  const palette: Record<string, { fg: string; bg: string }> = {
+    blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)' },
+    green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)' },
+    orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)' },
+    purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)' },
+  };
+  const c = palette[tone];
+
+  return (
+    <div className="flex items-start gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
+      <div
+        className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+        style={{ background: c.bg, color: c.fg }}
+      >
+        <Icon paths={icon} size={14} strokeWidth={2} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <dt className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+          {label}
+        </dt>
+        <dd className="mt-0.5 text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] break-words">
+          {value}
+        </dd>
+      </div>
+    </div>
+  );
+}
+
+/** Shimmer */
+function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
+  return (
+    <div
+      className={`relative overflow-hidden bg-[#E5E5EA]/60 dark:bg-[#2C2C2E]/60 ${className}`}
+      style={{ borderRadius: radius }}
+    >
+      <motion.div
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.65) 50%, transparent 100%)',
+        }}
+        animate={{ x: ['-100%', '100%'] }}
+        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+      />
+    </div>
+  );
+}
+
+function DetailSkeleton() {
+  return (
+    <div className="space-y-5">
+      <Shimmer className="h-40 w-full" radius="2rem" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[68px]" radius="1rem" />)}
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Shimmer className="h-72" radius="1.5rem" />
+        <div className="lg:col-span-2"><Shimmer className="h-72" radius="1.5rem" /></div>
+      </div>
+    </div>
+  );
+}
+
+/** Premium checkbox toggle card */
+function PermissionToggle({
+  checked, onChange, icon, label, description, tone = 'blue',
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  icon: string[];
+  label: string;
+  description: string;
+  tone?: 'blue' | 'green' | 'purple';
+}) {
+  const palette: Record<string, { fg: string; bg: string; glow: string }> = {
+    blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)' },
+    green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)' },
+    purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)' },
+  };
+  const c = palette[tone];
+
+  return (
+    <motion.button
+      type="button"
+      onClick={() => onChange(!checked)}
+      whileHover={{ scale: 1.005 }}
+      whileTap={{ scale: 0.995 }}
+      transition={SPRING.snappy}
+      className={[
+        'flex w-full items-start gap-3 rounded-2xl border px-3.5 py-3 text-left outline-none transition-all',
+        checked
+          ? 'border-transparent'
+          : 'border-[#00000008] bg-transparent dark:border-[#ffffff08]',
+      ].join(' ')}
+      style={checked ? {
+        background: c.bg,
+        borderColor: `${c.fg}33`,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px -6px ${c.glow}`,
+      } : undefined}
+    >
+      <div
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors"
+        style={{
+          background: checked ? `${c.fg}25` : 'var(--bg-glass)',
+          color: checked ? c.fg : '#86868B',
+        }}
+      >
+        <Icon paths={icon} size={14} strokeWidth={2} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+            {label}
+          </p>
+          <AnimatePresence>
+            {checked && (
+              <motion.span
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                transition={SPRING.snappy}
+                className="flex h-4 w-4 items-center justify-center rounded-full"
+                style={{ background: c.fg, color: '#fff' }}
+              >
+                <Icon paths={['M20 6 9 17l-5-5']} size={10} strokeWidth={3} />
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
+        <p className="mt-0.5 text-[11.5px] font-medium text-[#86868B]">{description}</p>
+      </div>
+    </motion.button>
+  );
+}
+
+/* ============================================================================
+ * MAIN PAGE
+ * ========================================================================== */
 
 export function StudentDetailPage() {
   const { t } = useI18n();
@@ -46,7 +593,6 @@ export function StudentDetailPage() {
   const [groupId, setGroupId] = useState('');
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
 
-  // Data fetching
   const student = useQuery({
     queryKey: queryKeys.students.detail(id!),
     queryFn: () => studentsApi.get(id!),
@@ -58,7 +604,7 @@ export function StudentDetailPage() {
     queryKey: queryKeys.groups.selectors(),
     queryFn: () => groupsApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
   const enrollments = useQuery({
@@ -71,21 +617,15 @@ export function StudentDetailPage() {
   const { user } = useAuth();
   const canManageParents = ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'].includes(user?.role || '');
 
-  // Parent Management State
+  // Parent management state
   const [parentModalOpen, setParentModalOpen] = useState(false);
   const [editLinkModalOpen, setEditLinkModalOpen] = useState(false);
   const [unlinkParentTarget, setUnlinkParentTarget] = useState<{ id: string; name: string } | null>(null);
   const [editingLink, setEditingLink] = useState<{
-    id: string;
-    parentId: string;
-    relationship?: string;
-    isPrimary?: boolean;
-    canViewGrades?: boolean;
-    canViewPayments?: boolean;
-    canViewAttendance?: boolean;
+    id: string; parentId: string; relationship?: string; isPrimary?: boolean;
+    canViewGrades?: boolean; canViewPayments?: boolean; canViewAttendance?: boolean;
   } | null>(null);
 
-  // Form states for creating / linking parent
   const [parentFirstName, setParentFirstName] = useState('');
   const [parentLastName, setParentLastName] = useState('');
   const [parentEmail, setParentEmail] = useState('');
@@ -97,21 +637,19 @@ export function StudentDetailPage() {
   const [canViewPayments, setCanViewPayments] = useState(true);
   const [canViewAttendance, setCanViewAttendance] = useState(true);
 
-  // Edit link states
   const [editRelationship, setEditRelationship] = useState('parent');
   const [editIsPrimary, setEditIsPrimary] = useState(false);
   const [editCanViewGrades, setEditCanViewGrades] = useState(true);
   const [editCanViewPayments, setEditCanViewPayments] = useState(true);
   const [editCanViewAttendance, setEditCanViewAttendance] = useState(true);
 
-  // Parent query
   const parentsQuery = useQuery({
     queryKey: ['student-parents', id],
     queryFn: () => studentsApi.getParents(id!),
     enabled: !!id,
   });
 
-  const linkedParents = useMemo(() => parentsQuery.data || [], [parentsQuery.data]);
+  const linkedParents = useMemo(() => parentsQuery.data || [], [parentsQuery.data]) as ParentLink[];
 
   const addParentMutation = useMutation({
     mutationFn: async () => {
@@ -126,26 +664,18 @@ export function StudentDetailPage() {
         canViewPayments,
         canViewAttendance,
       };
-      if (parentPassword.trim()) {
-        payload.password = parentPassword.trim();
-      }
+      if (parentPassword.trim()) payload.password = parentPassword.trim();
       return studentsApi.addParent(id!, payload);
     },
     onSuccess: () => {
       push('success', 'Parent account linked successfully');
       setParentModalOpen(false);
-      setParentFirstName('');
-      setParentLastName('');
-      setParentEmail('');
-      setParentPhone('');
-      setParentPassword('');
-      setIsPrimary(false);
+      setParentFirstName(''); setParentLastName(''); setParentEmail('');
+      setParentPhone(''); setParentPassword(''); setIsPrimary(false);
       qc.invalidateQueries({ queryKey: ['student-parents', id] });
       qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
     },
-    onError: (e: Error) => {
-      push('error', getErrorMessage(e));
-    },
+    onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
   const updateParentLinkMutation = useMutation({
@@ -165,9 +695,7 @@ export function StudentDetailPage() {
       setEditingLink(null);
       qc.invalidateQueries({ queryKey: ['student-parents', id] });
     },
-    onError: (e: Error) => {
-      push('error', getErrorMessage(e));
-    },
+    onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
   const unlinkParentMutation = useMutation({
@@ -177,13 +705,16 @@ export function StudentDetailPage() {
       setUnlinkParentTarget(null);
       qc.invalidateQueries({ queryKey: ['student-parents', id] });
     },
-    onError: (e: Error) => {
-      push('error', getErrorMessage(e));
-    },
+    onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
-  const openEditParentModal = useCallback((link: any) => {
-    setEditingLink(link);
+  const openEditParentModal = useCallback((link: ParentLink) => {
+    setEditingLink({
+      id: link.id, parentId: link.parentId,
+      relationship: link.relationship, isPrimary: link.isPrimary,
+      canViewGrades: link.canViewGrades, canViewPayments: link.canViewPayments,
+      canViewAttendance: link.canViewAttendance,
+    });
     setEditRelationship(link.relationship || 'parent');
     setEditIsPrimary(link.isPrimary ?? false);
     setEditCanViewGrades(link.canViewGrades ?? true);
@@ -200,57 +731,46 @@ export function StudentDetailPage() {
     }
     return [];
   }, [groups.data]);
-  const activeGroups = useMemo(
-    () => allGroups.filter((group) => group.isActive !== false),
-    [allGroups],
-  );
+  const activeGroups = useMemo(() => allGroups.filter((g) => g.isActive !== false), [allGroups]);
   const myEnrollments = useMemo(
-    () =>
-      (enrollments.data as unknown as { items?: FaceEnrollmentItem[] })
-        ?.items || [],
+    () => (enrollments.data as unknown as { items?: FaceEnrollmentItem[] })?.items || [],
     [enrollments.data],
   );
 
-  // Student groups
-  const studentGroups = useMemo(
-    () => studentData?.groups || [],
-    [studentData],
-  );
+  const studentGroups = useMemo(() => studentData?.groups || [], [studentData]);
+  const studentAttendance = useMemo(() => studentData?.attendance || [], [studentData]);
+  const studentPayments = useMemo(() => studentData?.payments || [], [studentData]);
 
-  // Student attendance
-  const studentAttendance = useMemo(
-    () => studentData?.attendance || [],
-    [studentData],
-  );
+  // Derived stats
+  const stats = useMemo(() => {
+    const presentCount = studentAttendance.filter((a) => a.status === 'PRESENT').length;
+    const attendanceRate = studentAttendance.length
+      ? Math.round((presentCount / studentAttendance.length) * 100)
+      : 0;
+    const activeGroupsCount = studentGroups.filter((g: any) => g.isActive !== false).length;
+    const totalPaid = studentPayments
+      .filter((p) => p.status === 'PAID')
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    return { attendanceRate, activeGroupsCount, totalPaid, faceEnrolled: myEnrollments.length };
+  }, [studentAttendance, studentGroups, studentPayments, myEnrollments]);
 
-  // Student payments
-  const studentPayments = useMemo(
-    () => studentData?.payments || [],
-    [studentData],
-  );
-
-  // Assign to group mutation
+  // Assign mutations
   const assign = useMutation({
     mutationFn: () => studentsApi.assignGroup(id!, groupId),
     onSuccess: () => {
       push('success', t('studentDetail.assigned'));
-      setAssignOpen(false);
-      setGroupId('');
+      setAssignOpen(false); setGroupId('');
       qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
       qc.invalidateQueries({ queryKey: queryKeys.students.all() });
       qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
       qc.invalidateQueries({ queryKey: queryKeys.groups.selectors() });
       qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
     },
-    onError: (e: Error) => {
-      push('error', getErrorMessage(e));
-    },
+    onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
-  // Remove from group mutation
   const removeFromGroup = useMutation({
-    mutationFn: (groupIdToRemove: string) =>
-      studentsApi.removeGroup(id!, groupIdToRemove),
+    mutationFn: (gId: string) => studentsApi.removeGroup(id!, gId),
     onSuccess: () => {
       push('success', t('studentDetail.removed'));
       qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
@@ -258,36 +778,25 @@ export function StudentDetailPage() {
       qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
       qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
     },
-    onError: (e: Error) => {
-      push('error', getErrorMessage(e));
-    },
+    onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
-  // Handlers
   const { refetch: refetchStudent } = student;
-  const handleRetry = useCallback(() => {
-    void refetchStudent();
-  }, [refetchStudent]);
+  const handleRetry = useCallback(() => { void refetchStudent(); }, [refetchStudent]);
 
   const handleOpenAssign = useCallback(() => {
-    setGroupId('');
-    setAssignOpen(true);
+    setGroupId(''); setAssignOpen(true);
     void groups.refetch();
   }, [groups]);
 
-  const handleCloseAssign = useCallback(() => {
-    setAssignOpen(false);
-    setGroupId('');
-  }, []);
+  const handleCloseAssign = useCallback(() => { setAssignOpen(false); setGroupId(''); }, []);
 
   const handleAssign = useCallback(() => {
     if (!groupId) return;
     assign.mutate();
   }, [groupId, assign]);
 
-  const handleRemoveFromGroup = useCallback((groupIdToRemove: string) => {
-    setRemoveTarget(groupIdToRemove);
-  }, []);
+  const handleRemoveFromGroup = useCallback((gId: string) => setRemoveTarget(gId), []);
 
   const confirmRemoveFromGroup = useCallback(() => {
     if (!removeTarget) return;
@@ -295,546 +804,755 @@ export function StudentDetailPage() {
     setRemoveTarget(null);
   }, [removeTarget, removeFromGroup]);
 
-  const handleEdit = useCallback(() => {
-    navigate(`/students/${id}/edit`);
-  }, [navigate, id]);
+  const handleEdit = useCallback(() => navigate(`/students/${id}/edit`), [navigate, id]);
+  const handleEnrollFace = useCallback(() => navigate('/face/enroll'), [navigate]);
 
-  const handleEnrollFace = useCallback(() => {
-    navigate('/face/enroll');
-  }, [navigate]);
-
-  // Early return for loading state
+  /* ---------------------------------------------------------------
+     LOADING
+  --------------------------------------------------------------- */
   if (student.isLoading && !studentData) {
     return (
-      <>
-        <OrbBackdrop />
-        <div className="page-container space-y-4">
-          <GlassPageHeader
-            title={t('enum.badge.STUDENT')}
-            subtitle={t('studentDetail.loadingSubtitle')}
-          />
-          <div className="glass-card p-8">
-            <GlassPageLoader label={t('studentForm.loading')} />
-          </div>
-        </div>
-      </>
+      <div className="page-container space-y-5">
+        <GlassPageHeader title={t('enum.badge.STUDENT')} subtitle={t('studentDetail.loadingSubtitle')} />
+        <DetailSkeleton />
+      </div>
     );
   }
 
-  // Early return for error state
+  /* ---------------------------------------------------------------
+     ERROR
+  --------------------------------------------------------------- */
   if (student.isError || !studentData) {
     return (
-      <>
-        <OrbBackdrop />
-        <div className="page-container space-y-4">
-          <GlassPageHeader
-            title={t('enum.badge.STUDENT')}
-            subtitle={t('studentDetail.detailsSubtitle')}
+      <div className="page-container space-y-5">
+        <GlassPageHeader title={t('enum.badge.STUDENT')} subtitle={t('studentDetail.detailsSubtitle')} />
+        <div className="glass-card p-8">
+          <GlassErrorState
+            title={t('studentDetail.notFound')}
+            message={getErrorMessage(student.error as Error)}
+            onRetry={handleRetry}
           />
-          <div className="glass-card p-8">
-            <GlassErrorState
-              title={t('studentDetail.notFound')}
-              message={getErrorMessage(student.error as Error)}
-              onRetry={handleRetry}
-            />
-          </div>
         </div>
-      </>
+      </div>
     );
   }
 
   const studentStatus = formatStudentStatus(studentData.user?.isActive);
-  const studentName = fullName(
-    studentData.user?.firstName,
-    studentData.user?.lastName,
-  );
+  const studentName = fullName(studentData.user?.firstName, studentData.user?.lastName);
 
+  /* ---------------------------------------------------------------
+     MAIN
+  --------------------------------------------------------------- */
   return (
-    <>
-      <OrbBackdrop />
-      <div className="page-container space-y-6">
-        <GlassPageHeader
-          title={studentName}
-        subtitle={studentData.user?.email || ''}
-        actions={
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <GlassButton
-              type="button"
-              variant="secondary"
-              onClick={handleEdit}
-            >
-              {t('common.edit')}
-            </GlassButton>
-            <GlassButton
-              type="button"
-              variant="primary"
-              onClick={handleOpenAssign}
-            >
-              {t('studentDetail.assignToGroup')}
-            </GlassButton>
-          </div>
-        }
-      />
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="page-container space-y-5"
+    >
+      {/* ============================================================
+          HERO
+      ============================================================ */}
+      <motion.div variants={cardVariants}>
+        <GlassCard className="overflow-hidden p-6 sm:p-7" interactive>
+          <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
+            <HeroAvatar name={studentName} isActive={studentData.user?.isActive} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Profile card */}
-        <div className="glass-card overflow-hidden lg:col-span-1">
-          <div className="border-b border-[var(--border-subtle)] px-5 py-4">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-              {t('studentDetail.profile')}
-            </h2>
-          </div>
-          <div className="p-5">
-            <dl className="space-y-4">
-              <div className="flex items-start justify-between">
-                <dt className="text-sm text-[var(--text-primary)]">
-                  {t('studentForm.dateOfBirth')}
-                </dt>
-                <dd className="text-sm font-medium text-[var(--text-primary)]">
-                  {formatDate(studentData.dateOfBirth)}
-                </dd>
-              </div>
-              <div className="flex items-start justify-between">
-                <dt className="text-sm text-[var(--text-primary)]">
-                  {t('studentForm.gender')}
-                </dt>
-                <dd className="text-sm font-medium text-[var(--text-primary)]">
-                  {studentData.gender || '—'}
-                </dd>
-              </div>
-              <div className="flex items-start justify-between">
-                <dt className="text-sm text-[var(--text-primary)]">
-                  {t('hr.form.address')}
-                </dt>
-                <dd className="text-sm font-medium text-[var(--text-primary)]">
-                  {studentData.address || '—'}
-                </dd>
-              </div>
-              <div className="flex items-start justify-between">
-                <dt className="text-sm text-[var(--text-primary)]">
-                  {t('common.phone')}
-                </dt>
-                <dd className="text-sm font-medium text-[var(--text-primary)]">
-                  {studentData.user?.phone || '—'}
-                </dd>
-              </div>
-              <div className="flex items-start justify-between">
-                <dt className="text-sm text-[var(--text-primary)]">
-                  {t('common.status')}
-                </dt>
-                <dd>
-                  <GlassBadge color={studentStatus.color}>
-                    {t(studentStatus.label)}
+            <div className="min-w-0 flex-1 text-center sm:text-left">
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                <GlassBadge color={studentStatus.color}>{t(studentStatus.label)}</GlassBadge>
+                {stats.faceEnrolled > 0 && (
+                  <GlassBadge color="purple">
+                    <span className="inline-flex items-center gap-1">
+                      <Icon paths={I.face} size={10} strokeWidth={2.5} />
+                      Face ID
+                    </span>
                   </GlassBadge>
-                </dd>
+                )}
+                {stats.activeGroupsCount > 0 && (
+                  <GlassBadge color="blue">
+                    <span className="inline-flex items-center gap-1">
+                      <Icon paths={I.usersRound} size={10} strokeWidth={2.5} />
+                      {stats.activeGroupsCount} {stats.activeGroupsCount === 1 ? 'group' : 'groups'}
+                    </span>
+                  </GlassBadge>
+                )}
               </div>
-            </dl>
-          </div>
-        </div>
 
-        {/* Parent / Guardian Accounts Card */}
-        <div className="glass-card overflow-hidden lg:col-span-2">
-          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-4">
-            <div>
-              <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-                {t('studentForm.parentSection')}
-              </h2>
-              <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                Manage linked parent portal accounts, access permissions, and emergency contacts
-              </p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+                {studentName}
+              </h1>
+              {studentData.user?.email && (
+                <p className="mt-1 inline-flex items-center gap-1.5 text-[13.5px] font-medium text-[#86868B]">
+                  <Icon paths={I.mail} size={13} strokeWidth={2} className="opacity-70" />
+                  {studentData.user.email}
+                </p>
+              )}
             </div>
-            {canManageParents && (
-              <GlassButton
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={() => setParentModalOpen(true)}
-              >
-                + Add / Invite Parent
-              </GlassButton>
-            )}
+
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <GlassButton type="button" variant="secondary" onClick={handleEdit}>
+                  <span className="inline-flex items-center gap-2">
+                    <Icon paths={I.edit} size={15} strokeWidth={2} />
+                    {t('common.edit')}
+                  </span>
+                </GlassButton>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <GlassButton type="button" variant="primary" onClick={handleOpenAssign}>
+                  <span className="inline-flex items-center gap-2">
+                    <Icon paths={I.plus} size={15} strokeWidth={2.5} />
+                    {t('studentDetail.assignToGroup')}
+                  </span>
+                </GlassButton>
+              </motion.div>
+            </div>
           </div>
-          <div className="p-5">
-            {parentsQuery.isLoading ? (
-              <div className="py-8 flex justify-center items-center">
-                <GlassPageLoader />
+        </GlassCard>
+      </motion.div>
+
+      {/* ============================================================
+          STATS
+      ============================================================ */}
+      <motion.div
+        variants={containerVariants}
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+      >
+        <StatTile
+          label={t('dashboard.attendance')}
+          value={stats.attendanceRate}
+          icon={I.calendarCheck}
+          tone={stats.attendanceRate >= 80 ? 'green' : stats.attendanceRate >= 60 ? 'orange' : 'red'}
+          format="percent"
+        />
+        <StatTile label={t('groups.title')} value={stats.activeGroupsCount} icon={I.usersRound} tone="blue" />
+        <StatTile
+          label={t('payments.title')}
+          value={formatCurrency(stats.totalPaid)}
+          icon={I.creditCard}
+          tone="green"
+        />
+        <StatTile
+          label={t('studentDetail.faceEnrollment')}
+          value={stats.faceEnrolled > 0 ? 'Active' : 'None'}
+          icon={I.face}
+          tone={stats.faceEnrolled > 0 ? 'purple' : 'orange'}
+        />
+      </motion.div>
+
+      {/* ============================================================
+          PROFILE + PARENTS ROW
+      ============================================================ */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        {/* Profile */}
+        <motion.div variants={cardVariants} className="lg:col-span-1">
+          <GlassCard className="overflow-hidden p-0" interactive>
+            <div className="flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
+                <Icon paths={I.userCircle} size={15} strokeWidth={2} />
               </div>
-            ) : parentsQuery.isError ? (
-              <GlassErrorState
-                title="Failed to load parent accounts"
-                message={getErrorMessage(parentsQuery.error)}
-                onRetry={() => parentsQuery.refetch()}
+              <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                {t('studentDetail.profile')}
+              </h2>
+            </div>
+            <div className="space-y-0.5 p-3">
+              <InfoRow
+                icon={I.calendar}
+                label={t('studentForm.dateOfBirth')}
+                value={formatDate(studentData.dateOfBirth)}
+                tone="blue"
               />
-            ) : linkedParents.length > 0 ? (
-              <div className="space-y-4">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--border-subtle)] text-xs text-[var(--text-tertiary)]">
-                        <th className="pb-2 font-medium">Parent</th>
-                        <th className="pb-2 font-medium">Contact</th>
-                        <th className="pb-2 font-medium">Relationship</th>
-                        <th className="pb-2 font-medium">Permissions</th>
-                        <th className="pb-2 font-medium">Status</th>
-                        {canManageParents && <th className="pb-2 font-medium text-right">Actions</th>}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--border-subtle)]">
-                      {linkedParents.map((link: any) => {
-                        const p = link.parent;
-                        return (
-                          <tr key={link.id} className="hover:bg-[var(--bg-glass-hover)] transition-colors">
-                            <td className="py-3 pr-4">
-                              <div className="font-medium text-[var(--text-primary)]">
-                                {p ? `${p.firstName} ${p.lastName}` : 'Parent User'}
-                                {link.isPrimary && (
-                                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                    Primary
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-[var(--text-tertiary)]">
-                                {p?.email}
-                              </div>
-                            </td>
-                            <td className="py-3 pr-4 text-[var(--text-secondary)]">
-                              {p?.phone || '—'}
-                            </td>
-                            <td className="py-3 pr-4 capitalize text-[var(--text-secondary)]">
-                              {link.relationship || 'Parent'}
-                            </td>
-                            <td className="py-3 pr-4">
-                              <div className="flex flex-wrap gap-1">
-                                {link.canViewGrades && (
-                                  <GlassBadge color="blue">Grades</GlassBadge>
-                                )}
-                                {link.canViewAttendance && (
-                                  <GlassBadge color="green">Attendance</GlassBadge>
-                                )}
-                                {link.canViewPayments && (
-                                  <GlassBadge color="purple">Payments</GlassBadge>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3 pr-4">
-                              <GlassBadge color={p?.isActive ? 'green' : 'slate'}>
-                                {p?.isActive ? 'Active' : 'Inactive'}
-                              </GlassBadge>
-                            </td>
-                            {canManageParents && (
-                              <td className="py-3 text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <GlassButton
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => openEditParentModal(link)}
-                                  >
-                                    Edit
-                                  </GlassButton>
-                                  <GlassButton
-                                    type="button"
-                                    variant="danger"
-                                    size="sm"
-                                    onClick={() =>
-                                      setUnlinkParentTarget({
-                                        id: link.parentId,
-                                        name: p ? `${p.firstName} ${p.lastName}` : 'this parent',
-                                      })
-                                    }
-                                  >
-                                    Unlink
-                                  </GlassButton>
-                                </div>
-                              </td>
+              <InfoRow
+                icon={I.userCircle}
+                label={t('studentForm.gender')}
+                value={studentData.gender || '—'}
+                tone="purple"
+              />
+              <InfoRow
+                icon={I.mapPin}
+                label={t('hr.form.address')}
+                value={studentData.address || '—'}
+                tone="orange"
+              />
+              <InfoRow
+                icon={I.phone}
+                label={t('common.phone')}
+                value={studentData.user?.phone || '—'}
+                tone="green"
+              />
+              {studentData.notes && (
+                <div className="mt-2 rounded-xl border border-[#00000008] bg-[#00000002] p-3 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                    {t('common.notes')}
+                  </p>
+                  <p className="mt-1 text-[12.5px] leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    {studentData.notes}
+                  </p>
+                </div>
+              )}
+            </div>
+          </GlassCard>
+        </motion.div>
+
+        {/* Parents */}
+        <motion.div variants={cardVariants} className="lg:col-span-2">
+          <GlassCard className="overflow-hidden p-0" interactive>
+            <div className="flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#AF52DE]/10 text-[#AF52DE]">
+                <Icon paths={I.users} size={15} strokeWidth={2} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  {t('studentForm.parentSection')}
+                </h2>
+                <p className="text-[11px] font-medium text-[#86868B]">
+                  Manage linked parent portal accounts and access permissions
+                </p>
+              </div>
+              {canManageParents && (
+                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                  <GlassButton
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setParentModalOpen(true)}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon paths={I.userPlus} size={13} strokeWidth={2.5} />
+                      Add Parent
+                    </span>
+                  </GlassButton>
+                </motion.div>
+              )}
+            </div>
+
+            <div className="p-4">
+              {parentsQuery.isLoading ? (
+                <div className="space-y-2.5">
+                  {[1, 2].map((i) => <Shimmer key={i} className="h-20" radius="1rem" />)}
+                </div>
+              ) : parentsQuery.isError ? (
+                <GlassErrorState
+                  title="Failed to load parent accounts"
+                  message={getErrorMessage(parentsQuery.error)}
+                  onRetry={() => parentsQuery.refetch()}
+                />
+              ) : linkedParents.length > 0 ? (
+                <div className="space-y-2.5">
+                  {linkedParents.map((link, idx) => {
+                    const p = link.parent;
+                    const name = p ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : 'Parent User';
+                    return (
+                      <motion.div
+                        key={link.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ ...SPRING.smooth, delay: idx * 0.05 }}
+                        className="group flex items-center gap-3 rounded-2xl border border-[#00000008] bg-[#00000002] px-3 py-3 transition-all hover:border-[#AF52DE]/25 hover:bg-[#AF52DE]/[0.04] dark:border-[#ffffff08] dark:bg-[#ffffff04]"
+                      >
+                        {/* Avatar */}
+                        <div
+                          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
+                          style={{
+                            background: avatarGradient(name),
+                            fontSize: '13px',
+                            boxShadow: '0 4px 12px -4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.35)',
+                          }}
+                        >
+                          <span
+                            aria-hidden
+                            className="pointer-events-none absolute inset-0 rounded-full"
+                            style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)' }}
+                          />
+                          <span className="relative">{getInitials(name)}</span>
+                        </div>
+
+                        {/* Info */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                              {name}
+                            </p>
+                            {link.isPrimary && (
+                              <motion.span
+                                initial={{ scale: 0.85, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="inline-flex items-center gap-1 rounded-full bg-[#FF9500]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FF9500] ring-1 ring-[#FF9500]/30"
+                              >
+                                <Icon paths={I.award} size={9} strokeWidth={2.5} />
+                                Primary
+                              </motion.span>
                             )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-[#86868B]">
+                              {link.relationship || 'Parent'}
+                            </span>
+                          </div>
+
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] font-medium text-[#86868B]">
+                            {p?.email && (
+                              <span className="inline-flex items-center gap-1">
+                                <Icon paths={I.mail} size={11} strokeWidth={2} className="opacity-60" />
+                                {p.email}
+                              </span>
+                            )}
+                            {p?.phone && (
+                              <span className="inline-flex items-center gap-1">
+                                <Icon paths={I.phone} size={11} strokeWidth={2} className="opacity-60" />
+                                {p.phone}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Permission chips */}
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {link.canViewGrades && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[#007AFF]/10 px-2 py-0.5 text-[10px] font-bold text-[#007AFF]">
+                                <Icon paths={I.checkCircle} size={9} strokeWidth={3} />
+                                Grades
+                              </span>
+                            )}
+                            {link.canViewAttendance && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[#34C759]/10 px-2 py-0.5 text-[10px] font-bold text-[#34C759]">
+                                <Icon paths={I.checkCircle} size={9} strokeWidth={3} />
+                                Attendance
+                              </span>
+                            )}
+                            {link.canViewPayments && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[#AF52DE]/10 px-2 py-0.5 text-[10px] font-bold text-[#AF52DE]">
+                                <Icon paths={I.checkCircle} size={9} strokeWidth={3} />
+                                Payments
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Status + actions */}
+                        <div className="flex flex-col items-end gap-2">
+                          <GlassBadge color={p?.isActive ? 'green' : 'slate'}>
+                            {p?.isActive ? 'Active' : 'Inactive'}
+                          </GlassBadge>
+                          {canManageParents && (
+                            <div className="flex gap-1.5">
+                              <motion.button
+                                type="button"
+                                onClick={() => openEditParentModal(link)}
+                                whileHover={{ scale: 1.08 }}
+                                whileTap={{ scale: 0.92 }}
+                                transition={SPRING.snappy}
+                                aria-label="Edit"
+                                title="Edit"
+                                className="flex h-7 w-7 items-center justify-center rounded-lg outline-none"
+                                style={{
+                                  background: 'rgba(0,122,255,0.10)',
+                                  color: '#007AFF',
+                                  border: '1px solid rgba(0,122,255,0.2)',
+                                }}
+                              >
+                                <Icon paths={I.edit} size={13} strokeWidth={2} />
+                              </motion.button>
+                              <motion.button
+                                type="button"
+                                onClick={() => setUnlinkParentTarget({ id: link.parentId, name })}
+                                whileHover={{ scale: 1.08 }}
+                                whileTap={{ scale: 0.92 }}
+                                transition={SPRING.snappy}
+                                aria-label="Unlink"
+                                title="Unlink"
+                                className="flex h-7 w-7 items-center justify-center rounded-lg outline-none"
+                                style={{
+                                  background: 'rgba(255,59,48,0.10)',
+                                  color: '#FF3B30',
+                                  border: '1px solid rgba(255,59,48,0.2)',
+                                }}
+                              >
+                                <Icon paths={I.unlink} size={13} strokeWidth={2} />
+                              </motion.button>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-[#00000015] p-6 text-center dark:border-[#ffffff15]">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#AF52DE]/10 text-[#AF52DE]">
+                    <Icon paths={I.users} size={20} strokeWidth={2} />
+                  </div>
+                  <p className="mt-3 text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    No parent accounts linked yet
+                  </p>
+                  <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#86868B]">
+                    Link a parent or guardian to grant secure access to attendance, progress, and payments.
+                  </p>
+                  {canManageParents && (
+                    <div className="mt-4 flex justify-center">
+                      <GlassButton
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setParentModalOpen(true)}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icon paths={I.userPlus} size={13} strokeWidth={2.5} />
+                          Add Parent
+                        </span>
+                      </GlassButton>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Legacy emergency contact */}
+              {(studentData.parentName || studentData.parentPhone || studentData.parentEmail) && (
+                <div className="mt-4 rounded-2xl border border-[#00000008] bg-[#00000002] p-4 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Icon paths={I.info} size={13} strokeWidth={2} className="text-[#86868B]" />
+                    <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                      Emergency Contact on File
+                    </h3>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
+                        {t('common.name')}
+                      </div>
+                      <div className="mt-0.5 text-[13px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        {studentData.parentName || '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
+                        {t('common.phone')}
+                      </div>
+                      <div className="mt-0.5 text-[13px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
+                        {studentData.parentPhone || '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
+                        {t('common.email')}
+                      </div>
+                      <div className="mt-0.5 truncate text-[13px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        {studentData.parentEmail || '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </GlassCard>
+        </motion.div>
+      </div>
+
+      {/* ============================================================
+          GROUPS + ATTENDANCE
+      ============================================================ */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {/* Groups */}
+        <motion.div variants={cardVariants}>
+          <GlassCard className="overflow-hidden p-0" interactive>
+            <div className="flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
+                <Icon paths={I.usersRound} size={15} strokeWidth={2} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  {t('groups.title')}
+                </h2>
+              </div>
+              <motion.button
+                type="button"
+                onClick={handleOpenAssign}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                transition={SPRING.snappy}
+                className="flex h-8 items-center gap-1.5 rounded-lg bg-[#007AFF]/10 px-2.5 text-[11.5px] font-bold text-[#007AFF] outline-none hover:bg-[#007AFF]/15"
+              >
+                <Icon paths={I.plus} size={12} strokeWidth={2.5} />
+                {t('studentDetail.assign')}
+              </motion.button>
+            </div>
+
+            {studentGroups.length === 0 ? (
+              <div className="p-8">
+                <GlassEmptyState
+                  title={t('studentDetail.noGroups')}
+                  message={t('studentDetail.noGroupsHint')}
+                />
+              </div>
+            ) : (
+              <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+                {studentGroups.map((ge: any, idx) => {
+                  const gObj = ge?.group || ge;
+                  const gId = gObj?.id || ge?.groupId || ge?.id;
+                  const gName = gObj?.name || 'Group';
+                  const gRoom = gObj?.room;
+                  const isActive = ge?.isActive !== false;
+                  const gStatus = formatGroupStatus(isActive);
+                  const isRemoving = removeFromGroup.isPending && removeFromGroup.variables === gId;
+
+                  return (
+                    <motion.div
+                      key={gId}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
+                      className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#007AFF]/[0.03]"
+                    >
+                      <div
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
+                        style={{
+                          background: avatarGradient(gName),
+                          boxShadow: '0 4px 12px -4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.35)',
+                        }}
+                      >
+                        <Icon paths={I.book} size={16} strokeWidth={2} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                          {gName}
+                        </p>
+                        {gRoom && (
+                          <p className="text-[11.5px] font-medium text-[#86868B]">
+                            {t('groups.col.room')} {gRoom}
+                          </p>
+                        )}
+                      </div>
+                      <GlassBadge color={gStatus.color}>{t(gStatus.label)}</GlassBadge>
+                      {isActive && (
+                        <motion.button
+                          type="button"
+                          onClick={() => handleRemoveFromGroup(gId)}
+                          disabled={isRemoving}
+                          whileHover={{ scale: 1.08 }}
+                          whileTap={{ scale: 0.92 }}
+                          transition={SPRING.snappy}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg outline-none disabled:opacity-50"
+                          style={{
+                            background: 'rgba(255,59,48,0.10)',
+                            color: '#FF3B30',
+                            border: '1px solid rgba(255,59,48,0.2)',
+                          }}
+                          aria-label="Remove"
+                          title="Remove from group"
+                        >
+                          {isRemoving ? (
+                            <motion.span
+                              className="h-3.5 w-3.5 rounded-full border-2 border-current/30 border-t-current"
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                            />
+                          ) : (
+                            <Icon paths={I.trash} size={13} strokeWidth={2} />
+                          )}
+                        </motion.button>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </GlassCard>
+        </motion.div>
+
+        {/* Attendance */}
+        <motion.div variants={cardVariants}>
+          <GlassCard className="overflow-hidden p-0" interactive>
+            <div className="flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#34C759]/10 text-[#34C759]">
+                <Icon paths={I.calendarCheck} size={15} strokeWidth={2} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  {t('studentDetail.recentAttendance')}
+                </h2>
+              </div>
+              <GlassBadge color={stats.attendanceRate >= 80 ? 'green' : stats.attendanceRate >= 60 ? 'amber' : 'red'}>
+                <CountUp value={stats.attendanceRate} suffix="%" />
+              </GlassBadge>
+            </div>
+
+            {studentAttendance.length === 0 ? (
+              <div className="p-8">
+                <GlassEmptyState
+                  title={t('attendance.empty')}
+                  message={t('studentDetail.attendanceEmptyHint')}
+                />
+              </div>
+            ) : (
+              <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+                {studentAttendance.slice(0, 6).map((att: any, idx: number) => (
+                  <motion.div
+                    key={att.id}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
+                    className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[#34C759]/[0.03]"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#00000005] text-[#86868B] dark:bg-[#ffffff08]">
+                      <Icon paths={I.calendar} size={14} strokeWidth={2} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        {formatDate(att.date)}
+                      </p>
+                      <p className="text-[11px] font-medium text-[#86868B]">
+                        {att.source}
+                      </p>
+                    </div>
+                    <GlassBadge color={statusColor(att.status)}>
+                      {t(`attendance.${att.status.toLowerCase()}`)}
+                    </GlassBadge>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+        </motion.div>
+      </div>
+
+      {/* ============================================================
+          PAYMENTS + FACE ENROLLMENT
+      ============================================================ */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {/* Payments */}
+        <motion.div variants={cardVariants}>
+          <GlassCard className="overflow-hidden p-0" interactive>
+            <div className="flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#34C759]/10 text-[#34C759]">
+                <Icon paths={I.creditCard} size={15} strokeWidth={2} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  {t('payments.title')}
+                </h2>
+              </div>
+              <span className="text-[12px] font-bold tabular-nums text-[#34C759]">
+                {formatCurrency(stats.totalPaid)}
+              </span>
+            </div>
+
+            {studentPayments.length === 0 ? (
+              <div className="p-8">
+                <GlassEmptyState
+                  title={t('payments.empty')}
+                  message={t('studentDetail.paymentsEmptyHint')}
+                />
+              </div>
+            ) : (
+              <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+                {studentPayments.slice(0, 5).map((p: any, idx: number) => (
+                  <motion.div
+                    key={p.id}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
+                    className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[#34C759]/[0.03]"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#34C759]/10 text-[#34C759]">
+                      <Icon paths={I.creditCard} size={14} strokeWidth={2} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        {formatDate(p.createdAt)}
+                      </p>
+                      <p className="text-[11px] font-medium text-[#86868B]">
+                        {t(`payments.status.${p.status}`)}
+                      </p>
+                    </div>
+                    <span className="text-[13.5px] font-bold tabular-nums tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                      {formatCurrency(p.amount)}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+        </motion.div>
+
+        {/* Face Enrollment */}
+        <motion.div variants={cardVariants}>
+          <GlassCard className="overflow-hidden p-0" interactive>
+            <div className="flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#AF52DE]/10 text-[#AF52DE]">
+                <Icon paths={I.face} size={15} strokeWidth={2} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  {t('studentDetail.faceEnrollment')}
+                </h2>
+              </div>
+              {stats.faceEnrolled > 0 && (
+                <GlassBadge color="green">
+                  <span className="inline-flex items-center gap-1">
+                    <Icon paths={I.checkCircle} size={10} strokeWidth={2.5} />
+                    Enrolled
+                  </span>
+                </GlassBadge>
+              )}
+            </div>
+
+            {myEnrollments.length === 0 ? (
+              <div className="p-8">
+                <div className="rounded-2xl border border-dashed border-[#00000015] p-6 text-center dark:border-[#ffffff15]">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#AF52DE]/10 text-[#AF52DE]">
+                    <Icon paths={I.face} size={20} strokeWidth={2} />
+                  </div>
+                  <p className="mt-3 text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    {t('studentDetail.notEnrolled')}
+                  </p>
+                  <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#86868B]">
+                    {t('studentDetail.enrollHint')}
+                  </p>
+                  <div className="mt-4 flex justify-center">
+                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                      <GlassButton type="button" variant="primary" onClick={handleEnrollFace}>
+                        <span className="inline-flex items-center gap-2">
+                          <Icon paths={I.face} size={15} strokeWidth={2} />
+                          {t('studentDetail.enrollFace')}
+                        </span>
+                      </GlassButton>
+                    </motion.div>
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-[var(--border-subtle)] p-6 text-center">
-                <p className="text-sm font-medium text-[var(--text-primary)]">
-                  No parent portal accounts linked yet
-                </p>
-                <p className="mt-1 text-xs text-[var(--text-tertiary)] max-w-md mx-auto">
-                  Link a parent or guardian to grant them secure access to view this student's attendance records, academic progress, and payment history.
-                </p>
-                {canManageParents && (
-                  <div className="mt-4">
-                    <GlassButton
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      onClick={() => setParentModalOpen(true)}
-                    >
-                      + Add / Invite Parent
-                    </GlassButton>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Offline / Legacy Student Contact Info */}
-            {studentData && (studentData.parentName || studentData.parentPhone || studentData.parentEmail) && (
-              <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
-                <h3 className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
-                  Emergency Contact on File (Student Record)
-                </h3>
-                <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
-                  <div>
-                    <dt className="text-xs text-[var(--text-tertiary)]">{t('common.name')}</dt>
-                    <dd className="mt-0.5 font-medium text-[var(--text-primary)]">
-                      {studentData.parentName || '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-[var(--text-tertiary)]">{t('common.phone')}</dt>
-                    <dd className="mt-0.5 font-medium text-[var(--text-primary)]">
-                      {studentData.parentPhone || '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-[var(--text-tertiary)]">{t('common.email')}</dt>
-                    <dd className="mt-0.5 font-medium text-[var(--text-primary)]">
-                      {studentData.parentEmail || '—'}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            )}
-
-            {studentData?.notes && (
-              <div className="mt-4 rounded-lg glass-card p-4 text-sm text-[var(--text-primary)]">
-                <span className="font-medium">{t('common.notes')}: </span>
-                {studentData.notes}
-              </div>
-            )}
-          </div>
-        </div>
-
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Groups card */}
-        <div className="glass-card overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-4">
- <h2 className="text-sm font-semibold text-[var(--text-primary)]">
- {t('groups.title')}
- </h2>
- <GlassButton
- type="button"
- variant="ghost"
- size="sm"
- onClick={handleOpenAssign}
- >
- {t('studentDetail.assign')}
- </GlassButton>
-          </div>
-          {studentGroups.length === 0 ? (
-            <GlassEmptyState
-              title={t('studentDetail.noGroups')}
-              message={t('studentDetail.noGroupsHint')}
-            />
-          ) : (
-            <div className="divide-y divide-[var(--border-subtle)]">
-              {studentGroups.map((groupEnrollment: any) => {
-                const groupObj = groupEnrollment?.group || groupEnrollment;
-                const groupId = groupObj?.id || groupEnrollment?.groupId || groupEnrollment?.id;
-                const groupName = groupObj?.name || 'Group';
-                const groupRoom = groupObj?.room;
-                const isActive = groupEnrollment?.isActive !== false;
-                const groupStatus = formatGroupStatus(isActive);
-                const isRemoving =
-                  removeFromGroup.isPending &&
-                  removeFromGroup.variables === groupId;
-
-                return (
-                  <div
-                    key={groupId}
-                    className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-[var(--state-hover)]"
+              <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+                {myEnrollments.map((e, idx) => (
+                  <motion.div
+                    key={e.id}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
+                    className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[#AF52DE]/[0.03]"
                   >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#AF52DE]/10 text-[#AF52DE]">
+                      <Icon paths={I.face} size={14} strokeWidth={2} />
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-[var(--text-primary)]">
-                        {groupName}
+                      <p className="text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        {t('studentDetail.enrollment')}
                       </p>
-                      {groupRoom && (
-                        <p className="text-xs text-[var(--text-primary)]">
-                          {t('groups.col.room')} {groupRoom}
-                        </p>
-                      )}
+                      <p className="text-[11px] font-medium text-[#86868B]">
+                        {formatDate(e.enrolledAt)}
+                      </p>
                     </div>
-                    <div className="ml-4 flex shrink-0 items-center gap-2">
-                      <GlassBadge color={groupStatus.color}>
-                        {groupStatus.label}
-                      </GlassBadge>
-                      {isActive && (
-                        <GlassButton
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600"
-                          onClick={() => handleRemoveFromGroup(groupId)}
-                          disabled={isRemoving}
-                          loading={isRemoving}
-                        >
-                          {isRemoving
-                            ? t('studentDetail.removing')
-                            : t('studentDetail.remove')}
-                        </GlassButton>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Recent attendance card */}
-        <div className="glass-card overflow-hidden">
-          <div className="border-b border-[var(--border-subtle)] px-5 py-4">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-              {t('studentDetail.recentAttendance')}
-            </h2>
-          </div>
-          {studentAttendance.length === 0 ? (
-            <GlassEmptyState
-              title={t('attendance.empty')}
-              message={t('studentDetail.attendanceEmptyHint')}
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <GlassTable>
-                <GlassTHead>
-                  <GlassTR>
-                    <GlassTH>{t('common.date')}</GlassTH>
-                    <GlassTH>{t('common.status')}</GlassTH>
-                    <GlassTH>{t('attendance.col.source')}</GlassTH>
-                  </GlassTR>
-                </GlassTHead>
-                <GlassTBody>
-                  {studentAttendance.slice(0, 10).map((attendance) => (
-                    <GlassTR
-                      key={attendance.id}
-                      className="transition-colors hover:bg-[var(--state-hover)]"
-                    >
-                      <GlassTD className="whitespace-nowrap">
-                        {formatDate(attendance.date)}
-                      </GlassTD>
-                      <GlassTD>
-                        <GlassBadge color={statusColor(attendance.status)}>
-                          {t(`attendance.${attendance.status.toLowerCase()}`)}
-                        </GlassBadge>
-                      </GlassTD>
-                      <GlassTD>{attendance.source}</GlassTD>
-                    </GlassTR>
-                  ))}
-                </GlassTBody>
-              </GlassTable>
-            </div>
-          )}
-        </div>
+                    <GlassBadge color={statusColor(e.status)}>
+                      {t(`enum.status.${e.status}`)}
+                    </GlassBadge>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+        </motion.div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Payments card */}
-        <div className="glass-card overflow-hidden">
-          <div className="border-b border-[var(--border-subtle)] px-5 py-4">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-              {t('payments.title')}
-            </h2>
-          </div>
-          {studentPayments.length === 0 ? (
-            <GlassEmptyState
-              title={t('payments.empty')}
-              message={t('studentDetail.paymentsEmptyHint')}
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <GlassTable>
-                <GlassTHead>
-                  <GlassTR>
-                    <GlassTH>{t('common.date')}</GlassTH>
-                    <GlassTH>{t('common.status')}</GlassTH>
-                    <GlassTH className="text-right">{t('payments.col.amount')}</GlassTH>
-                  </GlassTR>
-                </GlassTHead>
-                <GlassTBody>
-                  {studentPayments.slice(0, 10).map((payment) => (
-                    <GlassTR
-                      key={payment.id}
-                      className="transition-colors hover:bg-[var(--state-hover)]"
-                    >
-                      <GlassTD className="whitespace-nowrap">
-                        {formatDate(payment.createdAt)}
-                      </GlassTD>
-                      <GlassTD>
-                        <GlassBadge color={statusColor(payment.status)}>
-                          {t(`payments.status.${payment.status}`)}
-                        </GlassBadge>
-                      </GlassTD>
-                      <GlassTD className="text-right font-medium">
-                        {formatCurrency(payment.amount)}
-                      </GlassTD>
-                    </GlassTR>
-                  ))}
-                </GlassTBody>
-              </GlassTable>
-            </div>
-          )}
-        </div>
-
-        {/* Face enrollment card */}
-        <div className="glass-card overflow-hidden">
-          <div className="border-b border-[var(--border-subtle)] px-5 py-4">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-              {t('studentDetail.faceEnrollment')}
-            </h2>
-          </div>
-          {myEnrollments.length === 0 ? (
-            <GlassEmptyState
-              title={t('studentDetail.notEnrolled')}
-              message={t('studentDetail.enrollHint')}
-              action={
-                <GlassButton
-                  type="button"
-                  variant="primary"
-                  onClick={handleEnrollFace}
-                >
-                  {t('studentDetail.enrollFace')}
-                </GlassButton>
-              }
-            />
-          ) : (
-            <div className="divide-y divide-[var(--border-subtle)]">
-              {myEnrollments.map((enrollment) => (
-                <div
-                  key={enrollment.id}
-                  className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-[var(--state-hover)]"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-[var(--text-primary)]">
-                      {t('studentDetail.enrollment')}
-                    </p>
-                    <p className="text-xs text-[var(--text-primary)]">
-                      {formatDate(enrollment.enrolledAt)}
-                    </p>
-                  </div>
-                  <GlassBadge color={statusColor(enrollment.status)}>
-                    {t(`enum.status.${enrollment.status}`)}
-                  </GlassBadge>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Assign to group modal */}
+      {/* ============================================================
+          MODALS
+      ============================================================ */}
       <GlassModal
         open={assignOpen}
         onClose={handleCloseAssign}
@@ -847,31 +1565,17 @@ export function StudentDetailPage() {
             aria-label={t('studentDetail.selectGroupAria')}
           >
             <option value="">{t('studentDetail.selectGroupPlaceholder')}</option>
-            {activeGroups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
+            {activeGroups.map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
             ))}
           </GlassSelect>
         </GlassField>
-        <div className="mt-4 flex justify-end gap-2">
-          <GlassButton
-            type="button"
-            variant="secondary"
-            onClick={handleCloseAssign}
-            disabled={assign.isPending}
-          >
+        <div className="mt-5 flex justify-end gap-2">
+          <GlassButton type="button" variant="secondary" onClick={handleCloseAssign} disabled={assign.isPending}>
             {t('common.cancel')}
           </GlassButton>
-          <GlassButton
-            type="button"
-            variant="primary"
-            disabled={!groupId || assign.isPending}
-            onClick={handleAssign}
-          >
-            {assign.isPending
-              ? t('studentDetail.assigning')
-              : t('studentDetail.assign')}
+          <GlassButton type="button" variant="primary" disabled={!groupId || assign.isPending} onClick={handleAssign}>
+            {assign.isPending ? t('studentDetail.assigning') : t('studentDetail.assign')}
           </GlassButton>
         </div>
       </GlassModal>
@@ -886,55 +1590,43 @@ export function StudentDetailPage() {
         loading={removeFromGroup.isPending}
       />
 
-      {/* Add / Invite Parent Modal */}
+      {/* Add / Invite Parent Modal — premium */}
       <GlassModal
         open={parentModalOpen}
         onClose={() => setParentModalOpen(false)}
         title="Add or Link Parent Account"
+        wide
       >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-5">
+          {/* Header hint */}
+          <div className="flex items-center gap-3 rounded-2xl border border-[#AF52DE33] bg-[#AF52DE]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#AF52DE]/15 text-[#AF52DE]">
+              <Icon paths={I.sparkles} size={18} strokeWidth={2} />
+            </div>
+            <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+              Link a parent or guardian to grant secure access to this student's records.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <GlassField label="First Name" required>
-              <GlassInput
-                type="text"
-                placeholder="e.g. John"
-                value={parentFirstName}
-                onChange={(e) => setParentFirstName(e.target.value)}
-              />
+              <GlassInput type="text" placeholder="e.g. John" value={parentFirstName} onChange={(e) => setParentFirstName(e.target.value)} />
             </GlassField>
             <GlassField label="Last Name" required>
-              <GlassInput
-                type="text"
-                placeholder="e.g. Doe"
-                value={parentLastName}
-                onChange={(e) => setParentLastName(e.target.value)}
-              />
+              <GlassInput type="text" placeholder="e.g. Doe" value={parentLastName} onChange={(e) => setParentLastName(e.target.value)} />
             </GlassField>
           </div>
 
           <GlassField label="Parent Email Address" required>
-            <GlassInput
-              type="email"
-              placeholder="e.g. parent@example.com"
-              value={parentEmail}
-              onChange={(e) => setParentEmail(e.target.value)}
-            />
+            <GlassInput type="email" placeholder="e.g. parent@example.com" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} />
           </GlassField>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <GlassField label="Phone Number">
-              <GlassInput
-                type="tel"
-                placeholder="+998..."
-                value={parentPhone}
-                onChange={(e) => setParentPhone(e.target.value)}
-              />
+              <GlassInput type="tel" placeholder="+998..." value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} />
             </GlassField>
             <GlassField label="Relationship">
-              <GlassSelect
-                value={parentRelationship}
-                onChange={(e) => setParentRelationship(e.target.value)}
-              >
+              <GlassSelect value={parentRelationship} onChange={(e) => setParentRelationship(e.target.value)}>
                 <option value="parent">Parent</option>
                 <option value="father">Father</option>
                 <option value="mother">Mother</option>
@@ -944,95 +1636,107 @@ export function StudentDetailPage() {
             </GlassField>
           </div>
 
-          <GlassField label="Temporary Password" hint="Optional. If omitted, a secure temporary password will be auto-generated.">
-            <GlassInput
-              type="password"
-              placeholder="Minimum 6 characters"
-              value={parentPassword}
-              onChange={(e) => setParentPassword(e.target.value)}
-            />
+          <GlassField label="Temporary Password" hint="Optional. Auto-generated if left blank.">
+            <GlassInput type="password" placeholder="Minimum 6 characters" value={parentPassword} onChange={(e) => setParentPassword(e.target.value)} />
           </GlassField>
 
-          <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
-            <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-              Access & Permissions
-            </p>
-            <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--text-primary)]">
-              <input
-                type="checkbox"
+          {/* Permissions */}
+          <div className="space-y-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+            <div className="flex items-center gap-2">
+              <Icon paths={I.shield} size={13} strokeWidth={2} className="text-[#86868B]" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                Access & Permissions
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <PermissionToggle
                 checked={isPrimary}
-                onChange={(e) => setIsPrimary(e.target.checked)}
-                className="rounded border-[var(--border-medium)] text-indigo-600 focus:ring-indigo-500"
+                onChange={setIsPrimary}
+                icon={I.award}
+                label="Primary Guardian"
+                description="Mark as main contact"
+                tone="purple"
               />
-              <span>Primary Guardian</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--text-primary)]">
-              <input
-                type="checkbox"
+              <PermissionToggle
                 checked={canViewGrades}
-                onChange={(e) => setCanViewGrades(e.target.checked)}
-                className="rounded border-[var(--border-medium)] text-indigo-600 focus:ring-indigo-500"
+                onChange={setCanViewGrades}
+                icon={I.book}
+                label="Academic Grades"
+                description="View report cards"
+                tone="blue"
               />
-              <span>Can View Academic Grades</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--text-primary)]">
-              <input
-                type="checkbox"
+              <PermissionToggle
                 checked={canViewAttendance}
-                onChange={(e) => setCanViewAttendance(e.target.checked)}
-                className="rounded border-[var(--border-medium)] text-indigo-600 focus:ring-indigo-500"
+                onChange={setCanViewAttendance}
+                icon={I.calendarCheck}
+                label="Attendance Logs"
+                description="See check-in history"
+                tone="green"
               />
-              <span>Can View Attendance Logs</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--text-primary)]">
-              <input
-                type="checkbox"
+              <PermissionToggle
                 checked={canViewPayments}
-                onChange={(e) => setCanViewPayments(e.target.checked)}
-                className="rounded border-[var(--border-medium)] text-indigo-600 focus:ring-indigo-500"
+                onChange={setCanViewPayments}
+                icon={I.creditCard}
+                label="Tuition & Invoices"
+                description="View payment status"
+                tone="purple"
               />
-              <span>Can View Tuition & Invoices</span>
-            </label>
+            </div>
           </div>
 
-          <div className="mt-6 flex justify-end gap-2">
-            <GlassButton
-              type="button"
-              variant="secondary"
-              onClick={() => setParentModalOpen(false)}
-              disabled={addParentMutation.isPending}
-            >
-              Cancel
-            </GlassButton>
-            <GlassButton
-              type="button"
-              variant="primary"
-              disabled={
-                !parentFirstName.trim() ||
-                !parentLastName.trim() ||
-                !parentEmail.trim() ||
-                addParentMutation.isPending
-              }
-              onClick={() => addParentMutation.mutate()}
-            >
-              {addParentMutation.isPending ? 'Linking...' : 'Link Parent'}
-            </GlassButton>
+          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <GlassButton type="button" variant="secondary" onClick={() => setParentModalOpen(false)} disabled={addParentMutation.isPending}>
+                Cancel
+              </GlassButton>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <GlassButton
+                type="button"
+                variant="primary"
+                disabled={!parentFirstName.trim() || !parentLastName.trim() || !parentEmail.trim() || addParentMutation.isPending}
+                onClick={() => addParentMutation.mutate()}
+              >
+                {addParentMutation.isPending ? (
+                  <span className="inline-flex items-center gap-2">
+                    <motion.span
+                      className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                    />
+                    Linking...
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-2">
+                    <Icon paths={I.link} size={15} strokeWidth={2} />
+                    Link Parent
+                  </span>
+                )}
+              </GlassButton>
+            </motion.div>
           </div>
         </div>
       </GlassModal>
 
-      {/* Edit Parent Link Modal */}
+      {/* Edit Parent Modal — premium */}
       <GlassModal
         open={editLinkModalOpen}
         onClose={() => setEditLinkModalOpen(false)}
         title="Edit Parent Permissions"
+        wide
       >
-        <div className="space-y-4">
+        <div className="space-y-5">
+          <div className="flex items-center gap-3 rounded-2xl border border-[#007AFF33] bg-[#007AFF]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#007AFF]/15 text-[#007AFF]">
+              <Icon paths={I.shield} size={18} strokeWidth={2} />
+            </div>
+            <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+              Adjust relationship and permissions for this parent link.
+            </p>
+          </div>
+
           <GlassField label="Relationship">
-            <GlassSelect
-              value={editRelationship}
-              onChange={(e) => setEditRelationship(e.target.value)}
-            >
+            <GlassSelect value={editRelationship} onChange={(e) => setEditRelationship(e.target.value)}>
               <option value="parent">Parent</option>
               <option value="father">Father</option>
               <option value="mother">Mother</option>
@@ -1041,70 +1745,65 @@ export function StudentDetailPage() {
             </GlassSelect>
           </GlassField>
 
-          <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
-            <p className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-              Access & Permissions
-            </p>
-            <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--text-primary)]">
-              <input
-                type="checkbox"
+          <div className="space-y-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+            <div className="flex items-center gap-2">
+              <Icon paths={I.shield} size={13} strokeWidth={2} className="text-[#86868B]" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                Access & Permissions
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <PermissionToggle
                 checked={editIsPrimary}
-                onChange={(e) => setEditIsPrimary(e.target.checked)}
-                className="rounded border-[var(--border-medium)] text-indigo-600 focus:ring-indigo-500"
+                onChange={setEditIsPrimary}
+                icon={I.award}
+                label="Primary Guardian"
+                description="Main contact"
+                tone="purple"
               />
-              <span>Primary Guardian</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--text-primary)]">
-              <input
-                type="checkbox"
+              <PermissionToggle
                 checked={editCanViewGrades}
-                onChange={(e) => setEditCanViewGrades(e.target.checked)}
-                className="rounded border-[var(--border-medium)] text-indigo-600 focus:ring-indigo-500"
+                onChange={setEditCanViewGrades}
+                icon={I.book}
+                label="Academic Grades"
+                description="Report cards"
+                tone="blue"
               />
-              <span>Can View Academic Grades</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--text-primary)]">
-              <input
-                type="checkbox"
+              <PermissionToggle
                 checked={editCanViewAttendance}
-                onChange={(e) => setEditCanViewAttendance(e.target.checked)}
-                className="rounded border-[var(--border-medium)] text-indigo-600 focus:ring-indigo-500"
+                onChange={setEditCanViewAttendance}
+                icon={I.calendarCheck}
+                label="Attendance Logs"
+                description="Check-in history"
+                tone="green"
               />
-              <span>Can View Attendance Logs</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--text-primary)]">
-              <input
-                type="checkbox"
+              <PermissionToggle
                 checked={editCanViewPayments}
-                onChange={(e) => setEditCanViewPayments(e.target.checked)}
-                className="rounded border-[var(--border-medium)] text-indigo-600 focus:ring-indigo-500"
+                onChange={setEditCanViewPayments}
+                icon={I.creditCard}
+                label="Tuition & Invoices"
+                description="Payment status"
+                tone="purple"
               />
-              <span>Can View Tuition & Invoices</span>
-            </label>
+            </div>
           </div>
 
-          <div className="mt-6 flex justify-end gap-2">
-            <GlassButton
-              type="button"
-              variant="secondary"
-              onClick={() => setEditLinkModalOpen(false)}
-              disabled={updateParentLinkMutation.isPending}
-            >
-              Cancel
-            </GlassButton>
-            <GlassButton
-              type="button"
-              variant="primary"
-              disabled={updateParentLinkMutation.isPending}
-              onClick={() => updateParentLinkMutation.mutate()}
-            >
-              {updateParentLinkMutation.isPending ? 'Saving...' : 'Save Changes'}
-            </GlassButton>
+          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <GlassButton type="button" variant="secondary" onClick={() => setEditLinkModalOpen(false)} disabled={updateParentLinkMutation.isPending}>
+                Cancel
+              </GlassButton>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <GlassButton type="button" variant="primary" disabled={updateParentLinkMutation.isPending} onClick={() => updateParentLinkMutation.mutate()}>
+                {updateParentLinkMutation.isPending ? 'Saving...' : 'Save Changes'}
+              </GlassButton>
+            </motion.div>
           </div>
         </div>
       </GlassModal>
 
-      {/* Unlink Parent Confirm Dialog */}
+      {/* Unlink Parent */}
       <ConfirmDialog
         open={unlinkParentTarget !== null}
         onClose={() => setUnlinkParentTarget(null)}
@@ -1116,7 +1815,6 @@ export function StudentDetailPage() {
       />
 
       {toastNode}
-      </div>
-    </>
+    </motion.div>
   );
 }

@@ -17,6 +17,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
+import { applyCsrf } from './helpers/csrf';
 
 const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3001';
 const prisma = new PrismaClient();
@@ -78,9 +79,16 @@ async function api(
   // transport tokens the same way the real frontend does.
   if (opts.token) headers.Cookie = `access_token=${opts.token}`;
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+
+  const method = (opts.method || (opts.body !== undefined ? 'POST' : 'GET')).toUpperCase();
+  // Cookie-authenticated mutations must also carry the double-submit CSRF
+  // token, exactly like the SPA does; otherwise the middleware rejects them
+  // with 403 before any guard or handler runs.
+  await applyCsrf(method, headers);
+
   const doFetch = () =>
     fetch(`${BASE_URL}/api${path}`, {
-      method: opts.method || (opts.body !== undefined ? 'POST' : 'GET'),
+      method,
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
       redirect: opts.redirect ?? 'manual', // never auto-follow OAuth redirects in tests

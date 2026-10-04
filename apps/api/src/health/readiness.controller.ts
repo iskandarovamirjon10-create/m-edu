@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { AllowPublic } from '../auth/public.decorator';
 
 /**
  * Readiness probe — distinguishes "process is up" (liveness, /health) from
@@ -12,7 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
  * unreachable so orchestrators stop routing traffic / restart the pod.
  * Internals are never exposed: only a coarse status + database flag.
  */
-@ApiTags('Health')
+@AllowPublic()
 @Controller('readiness')
 @SkipThrottle()
 export class ReadinessController {

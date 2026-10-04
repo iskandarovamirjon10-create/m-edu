@@ -22,3 +22,4 @@ describe('Roles decorators', () => {
     expect(metadata).toBe(true);
   });
 });
+

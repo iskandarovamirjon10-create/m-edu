@@ -12,6 +12,7 @@ const uz = {
   'common.edit': 'Tahrirlash',
   'common.delete': 'Oʻchirish',
   'common.search': 'Qidirish',
+  'common.confirm': 'Tasdiqlash',
   'common.loading': 'Yuklanmoqda…',
   'common.saving': 'Saqlanmoqda…',
   'common.retry': 'Qayta urinish',
@@ -23,7 +24,11 @@ const uz = {
   'common.close': 'Yopish',
   'common.add': 'Qoʻshish',
   'common.optional': 'Ixtiyoriy',
+  'common.clear': 'Tozalash',
   'common.deleting': 'Oʻchirilmoqda…',
+  'a11y.skipToContent': 'Asosiy tarkibga oʻtish',
+  'ai.clearChatTitle': 'Chat tarixini tozalash',
+  'ai.clearChatDescription': 'Hamma suhbat xabarlari oʻchiriladi. Davom etasizmi?',
   'confirm.title': 'Amalni tasdiqlash',
   'confirm.description': 'Bu amalni bajarishni xohlaysizmi? Buni qaytarib boʻlmaydi.',
   'automation.rule.deleteConfirm': 'Bu avtomatlashtirish qoidasi oʻchirilsinmi?',
@@ -38,6 +43,10 @@ const uz = {
   'nav.teachers': 'Oʻqituvchilar',
   'nav.groups': 'Guruhlar',
   'nav.courses': 'Kurslar',
+  'nav.subjects': 'Fanlar',
+  'nav.curriculum': 'Oʻquv rejalari',
+  'nav.assignments': 'Vazifalar',
+  'nav.assessment': 'Baholash va testlar',
   'nav.schedule': 'Jadval',
   'nav.attendance': 'Davomat',
   'nav.payments': 'Toʻlovlar',
@@ -53,6 +62,7 @@ const uz = {
   'nav.reports': 'Hisobotlar',
   'nav.homework': 'Uy vazifalari',
   'nav.chat': 'Chat',
+  'nav.aiCopilot': 'AI yordamchi',
   'nav.executiveDashboard': 'Ijrochi paneli',
   'nav.financialAnalytics': 'Moliyaviy tahlil',
   'nav.payrollAnalytics': 'Isht haqi tahlili',
@@ -74,6 +84,11 @@ const uz = {
   'nav.searchPlaceholder': 'Oʻquvchi, oʻqituvchi, guruhlarni qidirish…',
   'nav.signIn': 'Kirish',
   'nav.createAccount': 'Hisob yaratish',
+  'nav.calculator': 'Kalkulyator',
+  'nav.greetingMorning': 'Xayrli tong',
+  'nav.greetingAfternoon': 'Xayrli kun',
+  'nav.greetingEvening': 'Xayrli kech',
+  'nav.greetingNight': 'Xayrli tun',
 
   // Auth
   'auth.loginTitle': 'Hisobingizga kirish',
@@ -81,6 +96,8 @@ const uz = {
   'auth.password': 'Parol',
   'auth.login': 'Kirish',
   'auth.loggingIn': 'Kirilmoqda…',
+  'auth.verifyingSession': 'Seans tekshirilmoqda...',
+  'auth.preparing': 'Tayyorlanmoqda...',
   'auth.forgotPassword': 'Parolni unutdingizmi?',
   'auth.invalidCredentials': 'Email yoki parol xato',
 
@@ -234,13 +251,18 @@ const uz = {
   'hr.form.validation.contractTypeRequired': 'Contract type is required',
   'hr.form.validation.positionRequired': 'Position is required',
   'hr.form.validation.departmentRequired': 'Department is required',
-  'hr.form.validation.salaryInvalid': 'Salary is invalid',
+  'calculator.basic': 'Oddiy kalkulyator',
+  'calculator.finance': 'Moliyaviy kalkulyator',
+  'students.create': 'Oʻquvchi qoʻshish',
+  'dashboard.pending': 'Kutilayotgan',
+  'common.all': 'Barchasi',
 };
 
 import { legacyUz } from './legacy-slices.uz';
 import { analyticsUz } from './analytics-slices.uz';
 import { pagesUz } from './pages-slices.uz';
+import { aiUz } from './ai-slices';
 
 // Legacy fills gaps → analytics fills more → curated base wins for overrides.
-export default { ...legacyUz, ...analyticsUz, ...pagesUz, ...uz };
+export default { ...legacyUz, ...analyticsUz, ...pagesUz, ...aiUz, ...uz };
 

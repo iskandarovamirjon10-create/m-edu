@@ -15,6 +15,8 @@ interface ErrorBoundaryProps {
  children: ReactNode;
  /** Optional label used to give the fallback a context (e.g. page name). */
  label?: string;
+ /** Optional custom fallback renderer for render errors. */
+ fallback?: (args: { error: Error; reset: () => void }) => ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -46,6 +48,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
  render() {
  const { error} = this.state;
  if (!error) return this.props.children;
+
+ if (this.props.fallback) {
+ return this.props.fallback({ error, reset: this.handleRetry });
+ }
 
  const context = this.props.label ? ` while loading ${this.props.label}` :'';
 

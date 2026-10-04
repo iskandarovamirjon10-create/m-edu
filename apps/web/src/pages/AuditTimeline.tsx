@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassPagination, GlassInput, GlassSelect } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n, type Locale } from '@/i18n/I18nProvider';
+import { auditApi } from '@/lib/api';
 
 import type { Paginated, SystemAuditEvent, AuditAction } from '@/lib/types';
 
@@ -60,17 +61,7 @@ export function AuditTimelinePage() {
 
   const auditQuery = useQuery({
     queryKey: ['audit-timeline', params],
-    queryFn: async () => {
-      // Use the new audit endpoint (rule-based, no AI)
-      const res = await fetch(`/api/audit?${new URLSearchParams({
-        page: String(params.page),
-        limit: String(params.limit),
-        ...(params.action && { action: params.action }),
-        ...(params.search && { search: params.search }),
-      })}`);
-      if (!res.ok) throw new Error(t('auditTimeline.loadError'));
-      return res.json() as Promise<Paginated<SystemAuditEvent>>;
-    },
+    queryFn: () => auditApi.list(params) as Promise<Paginated<SystemAuditEvent>>,
     placeholderData: (prev) => prev,
   });
 

@@ -48,6 +48,10 @@ vi.mock('@/lib/api', () => ({
   groupsApi: { list: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 100, totalPages: 0 }) },
 }));
 
+vi.mock('@/hooks/useAttendanceSocket', () => ({
+  useAttendanceSocket: vi.fn(),
+}));
+
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 function renderPage() {

@@ -1,15 +1,218 @@
-import { useMemo, useState, useCallback } from 'react';
+/**
+ * M-EDU PaymentsPage — Apple Design Award Edition
+ *
+ * Premium craft:
+ *  - Hero header with gradient wallet tile + live stats chips + primary CTA
+ *  - Animated KPI bar (Total, Paid, Pending, Overdue) with count-up
+ *  - Premium filter toolbar with squircle leading icons
+ *  - Premium payment rows: gradient avatar + method chip + status badge + amount
+ *  - Inline status segmented control (tone-aware)
+ *  - Premium receipt modal with M-EDU branded print layout
+ *  - Custom SVG icons in SF Symbols proportions
+ *  - Shimmer skeletons (not pulse)
+ *  - Framer Motion spring physics + staggered blur-in
+ *  - Full i18n preserved
+ */
+
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, type Variants } from 'framer-motion';
 import { paymentsApi, studentsApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
-import { GlassPageHeader, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassPagination, GlassInput, GlassSelect, GlassField, GlassModal, GlassButton, useToasts } from '@/components/ui';
+import {
+  GlassErrorState,
+  GlassPagination,
+  GlassInput,
+  GlassSelect,
+  GlassField,
+  GlassModal,
+  GlassButton,
+  useToasts,
+} from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
-import type { Paginated, Payment, Student, PaymentStatus, PaymentMethod } from '@/lib/types';
+import type {
+  Paginated,
+  Payment,
+  Student,
+  PaymentStatus,
+  PaymentMethod,
+} from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
-import { Receipt, Printer, CreditCard, Banknote, ShieldCheck } from 'lucide-react';
+
+/* ============================================================================
+ * MOTION TOKENS
+ * ========================================================================== */
+
+const SPRING = {
+  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
+  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
+  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
+} as const;
+
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.08 } },
+};
+
+const cardVariants: Variants = {
+  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
+  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+};
+
+const rowVariants: Variants = {
+  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
+  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+};
+
+/* ============================================================================
+ * CUSTOM ICONS (SF Symbols proportions)
+ * ========================================================================== */
+
+const ICON_STROKE = 1.75;
+
+const I: Record<string, string[]> = {
+  wallet: [
+    'M21 12V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4',
+    'M21 12H17a2 2 0 0 0 0 4h4',
+  ],
+  cash: [
+    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+    'M12 7v10',
+    'M9 9.5C9 8.1 10.3 7 12 7s3 1.1 3 2.5S13.7 12 12 12s-3 1.1-3 2.5S10.3 17 12 17s3-1.1 3-2.5',
+  ],
+  creditCard: [
+    'M21 6H3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z',
+    'M1 10h22',
+    'M6 15h2',
+  ],
+  banknote: [
+    'M2 6h20v12H2z',
+    'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+    'M6 12h.01', 'M18 12h.01',
+  ],
+  check: ['M20 6 9 17l-5-5'],
+  checkCircle: [
+    'M22 11.08V12a10 10 0 1 1-5.93-9.14',
+    'M22 4 12 14.01l-3-3',
+  ],
+  clock: [
+    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+    'M12 6v6l4 2',
+  ],
+  alertCircle: [
+    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+    'M12 8v4', 'M12 16h.01',
+  ],
+  xCircle: [
+    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+    'M15 9l-6 6', 'M9 9l6 6',
+  ],
+  plus: ['M12 5v14', 'M5 12h14'],
+  search: [
+    'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z',
+    'M21 21l-4.35-4.35',
+  ],
+  filter: ['M22 3H2l8 9.46V19l4 2v-8.54z'],
+  receipt: [
+    'M4 2v20l3-2 3 2 3-2 3 2 3-2V2H4z',
+    'M8 8h8', 'M8 12h8', 'M8 16h5',
+  ],
+  printer: [
+    'M6 9V2h12v7',
+    'M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2',
+    'M6 14h12v8H6z',
+  ],
+  shield: [
+    'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+    'M9 12l2 2 4-4',
+  ],
+  sparkles: [
+    'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
+    'M18.5 3.5v3', 'M20 5h-3',
+    'M5.5 18v2.5', 'M6.75 19.25h-2.5',
+  ],
+  trending: ['M23 6l-9.5 9.5-5-5L1 18', 'M17 6h6v6'],
+  user: [
+    'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+    'M20 21v-1a8 8 0 0 0-16 0v1',
+  ],
+  mail: [
+    'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+    'M22 6 12 13 2 6',
+  ],
+  empty: [
+    'M20 7h-9', 'M14 17H5',
+    'M19 19v-2a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v2',
+    'M10 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+  ],
+  calendar: [
+    'M8 2v4', 'M16 2v4', 'M3 10h18',
+    'M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z',
+  ],
+  layers: [
+    'M12 2 2 7l10 5 10-5z',
+    'M2 17l10 5 10-5',
+    'M2 12l10 5 10-5',
+  ],
+  arrowUp: ['M12 19V5', 'M5 12l7-7 7 7'],
+};
+
+function Icon({
+  paths,
+  size = 18,
+  className = '',
+  strokeWidth = ICON_STROKE,
+  ...rest
+}: {
+  paths: string[];
+  size?: number;
+  className?: string;
+  strokeWidth?: number;
+} & React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+      {...rest}
+    >
+      {paths.map((d, i) => (
+        <path key={i} d={d} />
+      ))}
+    </svg>
+  );
+}
+
+/* ============================================================================
+ * TONES
+ * ========================================================================== */
+
+type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald';
+
+const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
+  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
+  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
+  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
+  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
+  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
+  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
+  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
+  emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
+};
+
+/* ============================================================================
+ * CONSTANTS
+ * ========================================================================== */
 
 const PAYMENT_STATUSES: PaymentStatus[] = ['PAID', 'PENDING', 'OVERDUE', 'CANCELLED'];
 const PAYMENT_METHODS: PaymentMethod[] = [
@@ -21,6 +224,47 @@ const PAYMENT_METHODS: PaymentMethod[] = [
   'UZUM',
   'OTHER',
 ];
+
+const STATUS_TONE: Record<PaymentStatus, Tone> = {
+  PAID: 'emerald',
+  PENDING: 'orange',
+  OVERDUE: 'red',
+  CANCELLED: 'gray',
+};
+
+const STATUS_PULSE: Record<PaymentStatus, boolean> = {
+  PAID: true,
+  PENDING: false,
+  OVERDUE: true,
+  CANCELLED: false,
+};
+
+const STATUS_ICON: Record<PaymentStatus, string[]> = {
+  PAID: ['M22 11.08V12a10 10 0 1 1-5.93-9.14', 'M22 4 12 14.01l-3-3'],
+  PENDING: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 6v6l4 2'],
+  OVERDUE: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 8v4', 'M12 16h.01'],
+  CANCELLED: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M15 9l-6 6', 'M9 9l6 6'],
+};
+
+const METHOD_TONE: Record<PaymentMethod, Tone> = {
+  CASH: 'emerald',
+  CARD: 'blue',
+  BANK_TRANSFER: 'purple',
+  PAYME: 'cyan',
+  CLICK: 'blue',
+  UZUM: 'purple',
+  OTHER: 'gray',
+};
+
+const METHOD_ICON: Record<PaymentMethod, string[]> = {
+  CASH: ['M2 6h20v12H2z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M6 12h.01', 'M18 12h.01'],
+  CARD: ['M21 6H3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z', 'M1 10h22', 'M6 15h2'],
+  BANK_TRANSFER: ['M3 21h18', 'M5 21V10l7-5 7 5v11', 'M9 21v-6h6v6'],
+  PAYME: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M8 12h8', 'M12 8v8'],
+  CLICK: ['M9 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M15 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M12 3v18'],
+  UZUM: ['M12 2v20', 'M5 8c3 0 5 2 7 4s4 4 7 4', 'M5 16c3 0 5-2 7-4s4-4 7-4'],
+  OTHER: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 8v.01', 'M11 12h1v4h1'],
+};
 
 interface PaymentFilters {
   page: number;
@@ -45,6 +289,10 @@ const INITIAL_FORM: PaymentFormState = {
   method: 'CASH',
 };
 
+/* ============================================================================
+ * HELPERS
+ * ========================================================================== */
+
 export function formatStudentName(student: Student | undefined): string {
   if (!student?.user) return '—';
   const { firstName, lastName } = student.user;
@@ -59,29 +307,309 @@ export function formatPaymentMethod(method: PaymentMethod): string {
   return method.charAt(0) + method.slice(1).toLowerCase();
 }
 
+/** Normalizes a loosely-typed API method value into a known PaymentMethod. */
+export function toPaymentMethod(method?: string | null): PaymentMethod {
+  return method && (PAYMENT_METHODS as string[]).includes(method)
+    ? (method as PaymentMethod)
+    : 'CASH';
+}
+
+function getInitials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .map((p) => p.charAt(0))
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || '—'
+  );
+}
+
+function nameHash(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+const AVATAR_PALETTES = [
+  ['#007AFF', '#5856D6'],
+  ['#AF52DE', '#FF2D55'],
+  ['#34C759', '#32ADE6'],
+  ['#FF9500', '#FF2D55'],
+  ['#5856D6', '#AF52DE'],
+  ['#32ADE6', '#007AFF'],
+  ['#FF2D55', '#FF9500'],
+  ['#30D158', '#34C759'],
+];
+
+function avatarGradient(name: string): string {
+  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
+  return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
+}
+
+/* ============================================================================
+ * PREMIUM SUB-COMPONENTS
+ * ========================================================================== */
+
+function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
+  return (
+    <div
+      className={`relative overflow-hidden bg-[#E5E5EA]/60 dark:bg-[#2C2C2E]/60 ${className}`}
+      style={{ borderRadius: radius }}
+    >
+      <motion.div
+        className="absolute inset-0"
+        style={{
+          background:
+            'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.65) 50%, transparent 100%)',
+        }}
+        animate={{ x: ['-100%', '100%'] }}
+        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+      />
+    </div>
+  );
+}
+
+function PaymentsSkeleton() {
+  return (
+    <div className="space-y-5">
+      <Shimmer className="h-28 w-full" radius="1.75rem" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[88px]" radius="1rem" />)}
+      </div>
+      <Shimmer className="h-12 w-full" radius="1rem" />
+      <Shimmer className="h-96 w-full" radius="1.75rem" />
+    </div>
+  );
+}
+
+function CountUp({
+  value,
+  duration = 1.1,
+}: {
+  value: number;
+  duration?: number;
+}) {
+  const [n, setN] = useState(0);
+  const startRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    let raf: number;
+    startRef.current = null;
+    const step = (ts: number) => {
+      if (startRef.current === null) startRef.current = ts;
+      const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
+      const eased = 1 - Math.pow(1 - p, 4);
+      setN(value * eased);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+
+  return <span className="tabular-nums">{Math.round(n).toLocaleString('uz-UZ')}</span>;
+}
+
+/** Premium KPI tile */
+function KpiTile({
+  label,
+  value,
+  icon,
+  tone = 'blue',
+}: {
+  label: string;
+  value: number;
+  icon: string[];
+  tone?: Tone;
+}) {
+  const c = TONES[tone];
+  return (
+    <motion.div
+      variants={rowVariants}
+      whileHover={{ y: -3 }}
+      transition={SPRING.smooth}
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      style={{
+        boxShadow:
+          'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
+      }}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
+        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
+      />
+      <div
+        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        style={{
+          background: c.bg,
+          color: c.fg,
+          border: `1px solid ${c.border}`,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
+        }}
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-xl"
+          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent)' }}
+        />
+        <Icon paths={icon} size={18} strokeWidth={2} className="relative" />
+      </div>
+      <div className="relative min-w-0 flex-1">
+        <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
+          <CountUp value={value} />
+        </div>
+        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+          {label}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/** Premium status badge with pulse */
+function StatusBadge({ status, label }: { status: PaymentStatus; label: string }) {
+  const tone = STATUS_TONE[status];
+  const c = TONES[tone];
+  const pulse = STATUS_PULSE[status];
+  return (
+    <span
+      className="relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em]"
+      style={{
+        background: c.bg,
+        color: c.fg,
+        border: `1px solid ${c.border}`,
+      }}
+    >
+      <span className="relative flex h-1.5 w-1.5">
+        {pulse && (
+          <motion.span
+            className="absolute inset-0 rounded-full"
+            style={{ background: c.fg, opacity: 0.6 }}
+            animate={{ scale: [1, 2.4, 1], opacity: [0.6, 0, 0.6] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+          />
+        )}
+        <span className="relative h-1.5 w-1.5 rounded-full" style={{ background: c.fg }} />
+      </span>
+      {label}
+    </span>
+  );
+}
+
+/** Method chip */
+function MethodChip({ method, label }: { method: PaymentMethod; label: string }) {
+  const tone = METHOD_TONE[method] ?? 'gray';
+  const c = TONES[tone];
+  const icon = METHOD_ICON[method] ?? METHOD_ICON.OTHER;
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.10em]"
+      style={{
+        background: c.bg,
+        color: c.fg,
+        border: `1px solid ${c.border}`,
+      }}
+    >
+      <Icon paths={icon} size={10} strokeWidth={2.2} />
+      {label}
+    </span>
+  );
+}
+
+/** Squircle leading icon for inputs */
+function FieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Tone }) {
+  const c = TONES[tone];
+  return (
+    <span
+      className="pointer-events-none absolute left-3 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg"
+      style={{ background: c.bg, color: c.fg }}
+      aria-hidden
+    >
+      <Icon paths={icon} size={12} strokeWidth={2.2} />
+    </span>
+  );
+}
+
+/** Inline status segmented control (compact) */
+function InlineStatusSelector({
+  value,
+  onChange,
+  disabled,
+  ariaLabel,
+  t,
+}: {
+  value: PaymentStatus;
+  onChange: (s: PaymentStatus) => void;
+  disabled?: boolean;
+  ariaLabel?: string;
+  t: (k: string) => string;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className="inline-flex items-center gap-0.5 rounded-xl border border-[#00000008] bg-[#00000002] p-0.5 dark:border-[#ffffff08] dark:bg-[#ffffff04]"
+    >
+      {PAYMENT_STATUSES.map((s) => {
+        const active = value === s;
+        const c = TONES[STATUS_TONE[s]];
+        return (
+          <motion.button
+            key={s}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => onChange(s)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={SPRING.snappy}
+            className="relative flex h-6 w-6 items-center justify-center rounded-lg outline-none disabled:opacity-40"
+            title={t(`payments.status.${s}`)}
+            aria-label={t(`payments.status.${s}`)}
+            style={{
+              background: active ? c.bg : 'transparent',
+              color: active ? c.fg : '#B0B0B5',
+              border: active ? `1px solid ${c.border}` : '1px solid transparent',
+            }}
+          >
+            <Icon paths={STATUS_ICON[s]} size={11} strokeWidth={2.4} />
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ============================================================================
+ * MAIN PAGE
+ * ========================================================================== */
+
 export function PaymentsPage() {
   const { t } = useI18n();
   usePageTitle(t('payments.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
-  // Filter state
+  /* ── Filter state ─────────────────────────────────────────────────── */
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
 
-  // Modal state
+  /* ── Modal state ──────────────────────────────────────────────────── */
   const [modalOpen, setModalOpen] = useState(false);
   const [receiptTarget, setReceiptTarget] = useState<Payment | null>(null);
 
-  // Form state
+  /* ── Form state ───────────────────────────────────────────────────── */
   const [form, setForm] = useState<PaymentFormState>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<
     Partial<Record<keyof PaymentFormState, string>>
   >({});
 
-  // Build query params
+  /* ── Query params ─────────────────────────────────────────────────── */
   const params = useMemo<PaymentFilters>(
     () => ({
       page,
@@ -92,7 +620,7 @@ export function PaymentsPage() {
     [page, status, debouncedSearch],
   );
 
-  // Data fetching
+  /* ── Data fetching ────────────────────────────────────────────────── */
   const payments = useQuery({
     queryKey: queryKeys.payments.list(params),
     queryFn: () => paymentsApi.list(params),
@@ -103,7 +631,7 @@ export function PaymentsPage() {
     queryKey: queryKeys.students.selectors(),
     queryFn: () => studentsApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
   const data = payments.data as Paginated<Payment> | undefined;
@@ -113,7 +641,19 @@ export function PaymentsPage() {
     return (students.data as Paginated<Student> | undefined)?.items || [];
   }, [students.data]);
 
-  // Create payment mutation
+  /* ── Derived stats (from current page) ────────────────────────────── */
+  const stats = useMemo(() => {
+    const total = paymentList.length;
+    const paid = paymentList.filter((p) => p.status === 'PAID').length;
+    const pending = paymentList.filter((p) => p.status === 'PENDING').length;
+    const overdue = paymentList.filter((p) => p.status === 'OVERDUE').length;
+    const totalAmount = paymentList
+      .filter((p) => p.status === 'PAID')
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    return { total, paid, pending, overdue, totalAmount };
+  }, [paymentList]);
+
+  /* ── Create mutation ──────────────────────────────────────────────── */
   const create = useMutation({
     mutationFn: () =>
       paymentsApi.create({
@@ -141,7 +681,7 @@ export function PaymentsPage() {
     },
   });
 
-  // Update status mutation
+  /* ── Update status mutation ───────────────────────────────────────── */
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: PaymentStatus }) =>
       paymentsApi.update(id, { status }),
@@ -156,22 +696,20 @@ export function PaymentsPage() {
     },
   });
 
-  // Form validation
+  /* ── Validators ───────────────────────────────────────────────────── */
   const validateForm = useCallback((): boolean => {
     const errors: Partial<Record<keyof PaymentFormState, string>> = {};
-
     if (!form.studentId) {
       errors.studentId = 'payments.validation.studentRequired';
     }
     if (!form.amount || parseFloat(form.amount) <= 0) {
       errors.amount = 'payments.validation.amountPositive';
     }
-
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [form]);
 
-  // Form handlers
+  /* ── Handlers ─────────────────────────────────────────────────────── */
   const handleFormChange = useCallback(
     (field: keyof PaymentFormState) =>
       (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -207,9 +745,7 @@ export function PaymentsPage() {
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (!validateForm()) {
-        return;
-      }
+      if (!validateForm()) return;
       create.mutate();
     },
     [validateForm, create],
@@ -235,232 +771,396 @@ export function PaymentsPage() {
   const hasActiveFilters = Boolean(status || search);
   const totalPayments = data?.total || 0;
 
-  // Early return for loading state
+  /* ── Loading ──────────────────────────────────────────────────────── */
   if (payments.isLoading && !data) {
     return (
-      <div style={{ display: "contents" }}>
-        <div className="page-container space-y-4">
-          <GlassPageHeader
-            title={t('payments.title')}
-            subtitle={t('payments.subtitle')}
-          />
-          <div className="glass-card p-8">
-            <GlassPageLoader label={t('payments.loading')} />
-          </div>
-        </div>
+      <div className="page-container space-y-5">
+        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <PaymentsSkeleton />
       </div>
     );
   }
 
-  // Early return for error state
+  /* ── Error ────────────────────────────────────────────────────────── */
   if (payments.isError) {
     return (
-      <div style={{ display: "contents" }}>
-        <div className="page-container space-y-4">
-          <GlassPageHeader
-            title={t('payments.title')}
-            subtitle={t('payments.subtitle')}
+      <div className="page-container space-y-5">
+        <div className="glass-card p-8">
+          <GlassErrorState
+            title={t('payments.loadError')}
+            message={getErrorMessage(payments.error as Error)}
+            onRetry={handleRetry}
           />
-          <div className="glass-card p-8">
-            <GlassErrorState
-              title={t('payments.loadError')}
-              message={getErrorMessage(payments.error as Error)}
-              onRetry={handleRetry}
-            />
-          </div>
         </div>
       </div>
     );
   }
 
+  /* ── Render ───────────────────────────────────────────────────────── */
   return (
-    <div style={{ display: "contents" }}>
-      <div className="page-container space-y-4">
-        <GlassPageHeader
-          title={t('payments.title')}
-          subtitle={t('payments.subtitle')}
-          actions={
-            <GlassButton
-              type="button"
-              variant="primary"
-              onClick={handleOpenModal}
-            >
-              {t('payments.add')}
-            </GlassButton>
-          }
-        />
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="page-container space-y-5"
+    >
+      {toastNode}
 
-        {/* Filters */}
-        <div className="glass-card p-4">
+      {/* ============================================================
+          HERO HEADER
+      ============================================================ */}
+      <motion.div variants={cardVariants}>
+        <div
+          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
+          style={{
+            boxShadow:
+              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
+          }}
+        >
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-24"
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
+            }}
+          />
+          <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+            {/* Gradient wallet tile */}
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, rotate: -6 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              transition={SPRING.smooth}
+              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
+              style={{
+                background: 'linear-gradient(135deg, #34C759 0%, #32ADE6 100%)',
+                boxShadow:
+                  '0 12px 28px -10px rgba(52,199,89,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
+              }}
+            >
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 rounded-2xl"
+                style={{
+                  background:
+                    'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
+                }}
+              />
+              <Icon paths={I.wallet} size={28} strokeWidth={2.2} className="relative" />
+            </motion.div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#34C759]">
+                  <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
+                  Payments
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
+                  <Icon paths={I.layers} size={11} strokeWidth={2.5} />
+                  {totalPayments} {totalPayments === 1 ? t('payments.countOne') : t('payments.countMany')}
+                </span>
+                {stats.overdue > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF3B30]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#FF3B30]">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FF3B30]" />
+                    {stats.overdue} overdue
+                  </span>
+                )}
+              </div>
+
+              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+                {t('payments.title')}
+              </h1>
+              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+                {t('payments.subtitle')}
+              </p>
+            </div>
+
+            <motion.div
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              transition={SPRING.snappy}
+            >
+              <GlassButton type="button" variant="primary" onClick={handleOpenModal}>
+                <span className="inline-flex items-center gap-2">
+                  <Icon paths={I.plus} size={15} strokeWidth={2.5} />
+                  {t('payments.add')}
+                </span>
+              </GlassButton>
+            </motion.div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ============================================================
+          KPI STATS
+      ============================================================ */}
+      <motion.div
+        variants={containerVariants}
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+      >
+        <KpiTile label={t('payments.allStatuses')} value={stats.total} icon={I.receipt} tone="blue" />
+        <KpiTile label={t('payments.status.PAID')} value={stats.paid} icon={I.checkCircle} tone="emerald" />
+        <KpiTile label={t('payments.status.PENDING')} value={stats.pending} icon={I.clock} tone="orange" />
+        <KpiTile label={t('payments.status.OVERDUE')} value={stats.overdue} icon={I.alertCircle} tone="red" />
+      </motion.div>
+
+      {/* ============================================================
+          FILTER TOOLBAR
+      ============================================================ */}
+      <motion.div variants={cardVariants}>
+        <div
+          className="relative overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+          style={{
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
+          }}
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
+            {/* Search */}
+            <div className="relative flex-1">
+              <FieldIcon icon={I.search} tone="blue" />
               <GlassInput
                 placeholder={t('payments.searchPlaceholder')}
                 value={search}
                 onChange={handleSearchChange}
                 aria-label={t('payments.searchPlaceholder')}
                 type="search"
+                className="pl-11"
               />
+            </div>
+            {/* Status */}
+            <div className="relative sm:w-56">
+              <FieldIcon icon={I.filter} tone="orange" />
               <GlassSelect
                 value={status}
                 onChange={handleStatusFilterChange}
                 aria-label={t('payments.filterByStatus')}
+                className="pl-11"
               >
                 <option value="">{t('payments.allStatuses')}</option>
-                {PAYMENT_STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {t(`payments.status.${status}`)}
+                {PAYMENT_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {t(`payments.status.${s}`)}
                   </option>
                 ))}
               </GlassSelect>
             </div>
-            <div className="text-sm sm:ml-4 sm:shrink-0" style={{ color: 'var(--text-muted)' }}>
-              {totalPayments} {totalPayments === 1 ? t('payments.countOne') : t('payments.countMany')}
-            </div>
           </div>
         </div>
+      </motion.div>
 
-        {/* Payments table */}
-        <div className="glass-card">
-          {paymentList.length === 0 ? (
-            <GlassEmptyState
-              title={hasActiveFilters ? t('payments.emptyFiltered') : t('payments.empty')}
-              message={
-                hasActiveFilters
+      {/* ============================================================
+          PAYMENTS LIST
+      ============================================================ */}
+      <motion.div
+        variants={cardVariants}
+        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+        style={{
+          boxShadow:
+            'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
+        }}
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-16"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
+          }}
+        />
+
+        {paymentList.length === 0 ? (
+          <div className="relative p-10">
+            <div className="flex flex-col items-center text-center">
+              <div
+                className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#007AFF]/10 text-[#007AFF]"
+                style={{
+                  boxShadow:
+                    'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(0,122,255,0.4)',
+                }}
+              >
+                <Icon paths={I.empty} size={26} strokeWidth={1.8} />
+              </div>
+              <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                {hasActiveFilters ? t('payments.emptyFiltered') : t('payments.empty')}
+              </p>
+              <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+                {hasActiveFilters
                   ? t('payments.emptyFilteredHint')
-                  : t('payments.emptyHint')
-              }
-            />
-          ) : (
-            <>
-              <div className="glass-table-wrap">
-                <table className="glass-table">
-                  <thead>
-                    <tr>
-                      <th>{t('common.date')}</th>
-                      <th>{t('payments.form.student')}</th>
-                      <th>{t('payments.col.description')}</th>
-                      <th>{t('payments.form.method')}</th>
-                      <th>{t('payments.col.status')}</th>
-                      <th style={{ textAlign: 'right' }}>{t('payments.col.amount')}</th>
-                      <th style={{ textAlign: 'right' }}>{t('common.actions')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paymentList.map((payment) => {
-                      const isUpdatingStatus =
-                        updateStatus.isPending &&
-                        updateStatus.variables?.id === payment.id;
+                  : t('payments.emptyHint')}
+              </p>
+              {!hasActiveFilters && (
+                <div className="mt-5">
+                  <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                    <GlassButton type="button" variant="primary" size="sm" onClick={handleOpenModal}>
+                      <span className="inline-flex items-center gap-2">
+                        <Icon paths={I.plus} size={14} strokeWidth={2.5} />
+                        {t('payments.add')}
+                      </span>
+                    </GlassButton>
+                  </motion.div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+              {paymentList.map((payment, idx) => {
+                const studentName = formatStudentName(payment.student);
+                const initials = getInitials(studentName);
+                const gradient = avatarGradient(studentName);
+                const isUpdatingStatus =
+                  updateStatus.isPending && updateStatus.variables?.id === payment.id;
 
-                      return (
-                        <tr key={payment.id}>
-                          <td className="whitespace-nowrap">
-                            {formatDate(payment.createdAt)}
-                          </td>
-                          <td className="font-medium" style={{ color: 'var(--text-primary)' }}>
-                            {formatStudentName(payment.student)}
-                          </td>
-                          <td
-                            className="max-w-xs truncate"
-                            title={payment.description || undefined}
+                return (
+                  <motion.div
+                    key={payment.id}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
+                    className="flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#34C759]/[0.03]"
+                  >
+                    {/* Avatar */}
+                    <div
+                      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
+                      style={{
+                        background: gradient,
+                        boxShadow:
+                          'inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 12px -4px rgba(0,0,0,0.25)',
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 rounded-full"
+                        style={{
+                          background:
+                            'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)',
+                        }}
+                      />
+                      <span className="relative">{initials}</span>
+                    </div>
+
+                    {/* Student + meta */}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        {studentName}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#86868B]">
+                        <span className="inline-flex items-center gap-1 tabular-nums">
+                          <Icon paths={I.calendar} size={10} strokeWidth={2.2} className="opacity-60" />
+                          {formatDate(payment.createdAt)}
+                        </span>
+                        <MethodChip
+                          method={toPaymentMethod(payment.method)}
+                          label={t(`payments.method.${toPaymentMethod(payment.method)}`)}
+                        />
+                        {payment.description && (
+                          <span
+                            className="max-w-[16rem] truncate"
+                            title={payment.description}
                           >
-                            {payment.description || '—'}
-                          </td>
-                          <td>
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-[var(--state-hover)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
-                              {payment.method === 'CASH' ? (
-                                <Banknote className="w-3 h-3 text-emerald-500" />
-                              ) : (
-                                <CreditCard className="w-3 h-3 text-blue-500" />
-                              )}
-                              {t(`payments.method.${payment.method || 'CASH'}`)}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`w-2 h-2 rounded-full shrink-0 ${
-                                  payment.status === 'PAID'
-                                    ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
-                                    : payment.status === 'PENDING'
-                                    ? 'bg-amber-500'
-                                    : payment.status === 'OVERDUE'
-                                    ? 'bg-rose-500 animate-pulse'
-                                    : 'bg-gray-400'
-                                }`}
-                              />
-                              <GlassSelect
-                                className="w-28 !py-1 text-xs"
-                                value={payment.status}
-                                onChange={(e) =>
-                                  handleUpdateStatus(
-                                    payment.id,
-                                    e.target.value as PaymentStatus,
-                                  )
-                                }
-                                aria-label={t('payments.updateStatusFor', {
-                                  name: formatStudentName(payment.student),
-                                })}
-                                disabled={isUpdatingStatus}
-                              >
-                                {PAYMENT_STATUSES.map((status) => (
-                                  <option key={status} value={status}>
-                                    {t(`payments.status.${status}`)}
-                                  </option>
-                                ))}
-                              </GlassSelect>
-                              {isUpdatingStatus && (
-                                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                                  {t('payments.saving')}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td style={{ textAlign: 'right' }} className="font-semibold text-[var(--text-primary)]">
-                            {formatCurrency(payment.amount)}
-                          </td>
-                          <td>
-                            <div className="flex justify-end">
-                              <GlassButton
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setReceiptTarget(payment)}
-                                title={t('payments.receipt')}
-                                aria-label={t('payments.receipt')}
-                              >
-                                <Receipt className="w-3.5 h-3.5 mr-1" />
-                                <span>{t('payments.receipt')}</span>
-                              </GlassButton>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="border-t px-4 py-3" style={{ borderColor: 'var(--border-subtle)' }}>
-                <GlassPagination
-                  page={page}
-                  totalPages={data?.totalPages ?? 1}
-                  onPageChange={setPage}
-                />
-              </div>
-            </>
-          )}
-        </div>
+                            {payment.description}
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-        {/* Record payment modal */}
-        <GlassModal
-          open={modalOpen}
-          onClose={handleCloseModal}
-          title={t('payments.form.title')}
-          wide
-        >
-          <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <GlassField label={t('payments.form.student')} required error={formErrors.studentId ? t(formErrors.studentId) : undefined}>
+                    {/* Amount */}
+                    <div className="flex flex-col items-end">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
+                        {t('payments.col.amount')}
+                      </span>
+                      <span className="mt-0.5 text-[15px] font-bold tabular-nums tracking-tight text-[#10B981]">
+                        {formatCurrency(payment.amount)}
+                      </span>
+                    </div>
+
+                    {/* Status badge + inline selector */}
+                    <div className="flex items-center gap-2">
+                      <StatusBadge
+                        status={payment.status}
+                        label={t(`payments.status.${payment.status}`)}
+                      />
+                      <InlineStatusSelector
+                        value={payment.status}
+                        onChange={(s) => handleUpdateStatus(payment.id, s)}
+                        disabled={isUpdatingStatus}
+                        ariaLabel={t('payments.updateStatusFor', { name: studentName })}
+                        t={t}
+                      />
+                      {isUpdatingStatus && (
+                        <motion.span
+                          className="h-3.5 w-3.5 rounded-full border-2 border-[#007AFF]/30 border-t-[#007AFF]"
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                        />
+                      )}
+                    </div>
+
+                    {/* Receipt action */}
+                    <motion.button
+                      type="button"
+                      onClick={() => setReceiptTarget(payment)}
+                      whileHover={{ scale: 1.06, y: -1 }}
+                      whileTap={{ scale: 0.94 }}
+                      transition={SPRING.snappy}
+                      aria-label={t('payments.receipt')}
+                      title={t('payments.receipt')}
+                      className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold tracking-tight outline-none"
+                      style={{
+                        background: 'rgba(0,122,255,0.10)',
+                        color: '#007AFF',
+                        border: '1px solid rgba(0,122,255,0.2)',
+                      }}
+                    >
+                      <Icon paths={I.receipt} size={12} strokeWidth={2.2} />
+                      <span className="hidden sm:inline">{t('payments.receipt')}</span>
+                    </motion.button>
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            {/* Pagination */}
+            <div className="relative border-t border-[#00000008] px-4 py-3 dark:border-[#ffffff08]">
+              <GlassPagination
+                page={page}
+                totalPages={data?.totalPages ?? 1}
+                onPageChange={setPage}
+              />
+            </div>
+          </>
+        )}
+      </motion.div>
+
+      {/* ============================================================
+          CREATE PAYMENT MODAL
+      ============================================================ */}
+      <GlassModal
+        open={modalOpen}
+        onClose={handleCloseModal}
+        title={t('payments.form.title')}
+        wide
+      >
+        <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+          {/* Hint banner */}
+          <div className="flex items-center gap-3 rounded-2xl border border-[#34C75933] bg-[#34C759]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#34C759]/15 text-[#34C759]">
+              <Icon paths={I.sparkles} size={18} strokeWidth={2} />
+            </div>
+            <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+              {t('payments.modalSubtitle')}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <GlassField
+              label={t('payments.form.student')}
+              required
+              error={formErrors.studentId ? t(formErrors.studentId) : undefined}
+            >
+              <div className="relative">
+                <FieldIcon icon={I.user} tone="purple" />
                 <GlassSelect
                   value={form.studentId}
                   onChange={handleFormChange('studentId')}
@@ -469,6 +1169,7 @@ export function PaymentsPage() {
                   aria-describedby={
                     formErrors.studentId ? 'student-error' : undefined
                   }
+                  className="pl-11"
                 >
                   <option value="">{t('payments.form.selectStudent')}</option>
                   {studentList.map((student) => (
@@ -477,17 +1178,25 @@ export function PaymentsPage() {
                     </option>
                   ))}
                 </GlassSelect>
-                {formErrors.studentId && (
-                  <span
-                    id="student-error"
-                    className="mt-1 text-sm text-red-600"
-                  >
-                    {t(formErrors.studentId)}
-                  </span>
-                )}
-              </GlassField>
+              </div>
+              {formErrors.studentId && (
+                <span
+                  id="student-error"
+                  className="mt-1 text-sm"
+                  style={{ color: 'var(--state-error)' }}
+                >
+                  {t(formErrors.studentId)}
+                </span>
+              )}
+            </GlassField>
 
-              <GlassField label={t('payments.form.amount')} required error={formErrors.amount ? t(formErrors.amount) : undefined}>
+            <GlassField
+              label={t('payments.form.amount')}
+              required
+              error={formErrors.amount ? t(formErrors.amount) : undefined}
+            >
+              <div className="relative">
+                <FieldIcon icon={I.cash} tone="emerald" />
                 <GlassInput
                   type="number"
                   step="0.01"
@@ -500,19 +1209,28 @@ export function PaymentsPage() {
                     formErrors.amount ? 'amount-error' : undefined
                   }
                   placeholder="299.99"
+                  className="pl-11"
                 />
-                {formErrors.amount && (
-                  <span id="amount-error" className="mt-1 text-sm text-red-600">
-                    {t(formErrors.amount)}
-                  </span>
-                )}
-              </GlassField>
+              </div>
+              {formErrors.amount && (
+                <span
+                  id="amount-error"
+                  className="mt-1 text-sm"
+                  style={{ color: 'var(--state-error)' }}
+                >
+                  {t(formErrors.amount)}
+                </span>
+              )}
+            </GlassField>
 
-              <GlassField label={t('payments.form.method')}>
+            <GlassField label={t('payments.form.method')}>
+              <div className="relative">
+                <FieldIcon icon={I.creditCard} tone="blue" />
                 <GlassSelect
                   value={form.method}
                   onChange={handleFormChange('method')}
                   aria-label={t('payments.form.method')}
+                  className="pl-11"
                 >
                   {PAYMENT_METHODS.map((method) => (
                     <option key={method} value={method}>
@@ -520,26 +1238,32 @@ export function PaymentsPage() {
                     </option>
                   ))}
                 </GlassSelect>
-              </GlassField>
+              </div>
+            </GlassField>
 
-              <GlassField label={t('payments.form.dueDate')}>
+            <GlassField label={t('payments.form.dueDate')}>
+              <div className="relative">
+                <FieldIcon icon={I.calendar} tone="orange" />
                 <GlassInput
                   type="date"
                   value={form.dueDate}
                   onChange={handleFormChange('dueDate')}
+                  className="pl-11"
                 />
-              </GlassField>
-            </div>
-
-            <GlassField label={t('common.description')}>
-              <GlassInput
-                value={form.description}
-                onChange={handleFormChange('description')}
-                placeholder={t('common.optionalDescription')}
-              />
+              </div>
             </GlassField>
+          </div>
 
-            <div className="flex justify-end gap-2">
+          <GlassField label={t('common.description')}>
+            <GlassInput
+              value={form.description}
+              onChange={handleFormChange('description')}
+              placeholder={t('common.optionalDescription')}
+            />
+          </GlassField>
+
+          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"
                 variant="secondary"
@@ -548,110 +1272,159 @@ export function PaymentsPage() {
               >
                 {t('common.cancel')}
               </GlassButton>
-              <GlassButton
-                type="submit"
-                variant="primary"
-                disabled={create.isPending}
-              >
-                {create.isPending ? t('payments.saving') : t('payments.add')}
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <GlassButton type="submit" variant="primary" disabled={create.isPending}>
+                <span className="inline-flex items-center gap-2">
+                  {create.isPending ? (
+                    <>
+                      <motion.span
+                        className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                      />
+                      {t('payments.saving')}
+                    </>
+                  ) : (
+                    <>
+                      <Icon paths={I.plus} size={14} strokeWidth={2.5} />
+                      {t('payments.add')}
+                    </>
+                  )}
+                </span>
               </GlassButton>
-            </div>
-          </form>
-        </GlassModal>
+            </motion.div>
+          </div>
+        </form>
+      </GlassModal>
 
-        {/* Official Payment Receipt Modal */}
-        <GlassModal
-          open={receiptTarget !== null}
-          onClose={() => setReceiptTarget(null)}
-          title={t('payments.receipt')}
-          wide
-        >
-          {receiptTarget && (
-            <div className="space-y-6 pt-1">
-              <div
-                id="medu-printable-receipt"
-                className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] space-y-5"
-              >
-                {/* Header */}
-                <div className="flex items-start justify-between border-b pb-4 border-[var(--border-subtle)]">
+      {/* ============================================================
+          RECEIPT MODAL
+      ============================================================ */}
+      <GlassModal
+        open={receiptTarget !== null}
+        onClose={() => setReceiptTarget(null)}
+        title={t('payments.receipt')}
+        wide
+      >
+        {receiptTarget && (
+          <div className="space-y-5">
+            <div
+              id="medu-printable-receipt"
+              className="relative overflow-hidden rounded-2xl border border-[#00000008] bg-white p-6 text-[#1D1D1F] dark:border-[#ffffff10] dark:bg-[#1c1c1e] dark:text-[#F5F5F7]"
+              style={{
+                boxShadow:
+                  'inset 0 1px 0 rgba(255,255,255,0.5), 0 10px 30px -18px rgba(0,0,0,0.15)',
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between border-b border-[#00000008] pb-4 dark:border-[#ffffff08]">
+                <div className="flex items-start gap-3">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-xl text-[15px] font-black text-white"
+                    style={{
+                      background: 'linear-gradient(135deg, #007AFF 0%, #AF52DE 100%)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)',
+                    }}
+                  >
+                    {t('payments.receipt.academyName').charAt(0)}
+                  </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-[var(--primary)] text-white flex items-center justify-center font-black text-sm">
-                        M
-                      </div>
-                      <h3 className="font-bold text-lg text-[var(--text-primary)]">M-EDU ACADEMY</h3>
-                    </div>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Official Tuition & Educational Services Receipt</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-mono text-xs font-bold px-2 py-1 rounded bg-[var(--state-hover)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
-                      RCP-{receiptTarget.id.slice(0, 8).toUpperCase()}
-                    </span>
-                    <p className="text-xs text-[var(--text-muted)] mt-1.5">{formatDate(receiptTarget.createdAt)}</p>
+                    <h3 className="text-[16px] font-bold tracking-tight">
+                      {t('payments.receipt.academyName')}
+                    </h3>
+                    <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+                      {t('payments.receipt.title')}
+                    </p>
                   </div>
                 </div>
-
-                {/* Details Grid */}
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">{t('payments.form.student')}</span>
-                    <p className="font-semibold text-[var(--text-primary)] mt-0.5">{formatStudentName(receiptTarget.student)}</p>
-                    {receiptTarget.student?.user?.email && (
-                      <p className="text-xs text-[var(--text-muted)]">{receiptTarget.student.user.email}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">{t('common.status')}</span>
-                    <div className="mt-0.5">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                        receiptTarget.status === 'PAID'
-                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                          : receiptTarget.status === 'PENDING'
-                          ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
-                          : receiptTarget.status === 'OVERDUE'
-                          ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
-                          : 'bg-gray-500/10 text-gray-500 border border-gray-500/20'
-                      }`}>
-                        {formatPaymentStatus(receiptTarget.status)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Item description & Amount Box */}
-                <div className="p-4 rounded-xl bg-[var(--bg-base)] border border-[var(--border-subtle)] space-y-3">
-                  <div className="flex justify-between items-center text-sm border-b pb-2 border-[var(--border-subtle)]">
-                    <span className="font-medium text-[var(--text-secondary)]">{t('common.description')}</span>
-                    <span className="font-medium text-[var(--text-secondary)]">{t('payments.col.amount')}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-[var(--text-primary)]">{receiptTarget.description || 'Course Tuition & Materials'}</span>
-                    <span className="font-bold text-[var(--text-primary)]">{formatCurrency(receiptTarget.amount)}</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-[var(--border-subtle)]">
-                    <div>
-                      <span className="text-xs text-[var(--text-muted)]">{t('payments.form.method')}: </span>
-                      <span className="text-xs font-semibold text-[var(--text-secondary)]">{t(`payments.method.${receiptTarget.method || 'CASH'}`)}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs text-[var(--text-muted)] mr-2">Total:</span>
-                      <span className="text-lg font-black text-emerald-600">{formatCurrency(receiptTarget.amount)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Verification footer */}
-                <div className="pt-2 flex items-center justify-between text-xs text-[var(--text-muted)] border-t border-[var(--border-subtle)]">
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                    <span>Verified Digital Payment · M-EDU Education Management System</span>
-                  </div>
-                  <span className="font-mono">ID: {receiptTarget.id.slice(0, 12)}</span>
+                <div className="text-right">
+                  <span className="rounded-lg bg-[#007AFF]/10 px-2 py-1 font-mono text-[11px] font-bold text-[#007AFF]">
+                    RCP-{receiptTarget.id.slice(0, 8).toUpperCase()}
+                  </span>
+                  <p className="mt-1.5 text-[11px] font-medium text-[#86868B]">
+                    {formatDate(receiptTarget.createdAt)}
+                  </p>
                 </div>
               </div>
 
-              {/* Action buttons */}
-              <div className="flex justify-end gap-2 pt-2">
+              {/* Student / Status */}
+              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                    {t('payments.form.student')}
+                  </span>
+                  <p className="mt-1 text-[14px] font-semibold tracking-tight">
+                    {formatStudentName(receiptTarget.student)}
+                  </p>
+                  {receiptTarget.student?.user?.email && (
+                    <p className="mt-0.5 inline-flex items-center gap-1 text-[11.5px] font-medium text-[#86868B]">
+                      <Icon paths={I.mail} size={11} strokeWidth={2} className="opacity-60" />
+                      {receiptTarget.student.user.email}
+                    </p>
+                  )}
+                </div>
+                <div className="sm:text-right">
+                  <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                    {t('common.status')}
+                  </span>
+                  <div className="mt-1.5">
+                    <StatusBadge
+                      status={receiptTarget.status}
+                      label={formatPaymentStatus(receiptTarget.status)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Item + amount panel */}
+              <div className="mt-5 rounded-2xl border border-[#00000008] bg-[#00000002] p-4 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
+                <div className="flex items-center justify-between border-b border-[#00000008] pb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B] dark:border-[#ffffff08]">
+                  <span>{t('common.description')}</span>
+                  <span>{t('payments.col.amount')}</span>
+                </div>
+                <div className="flex items-center justify-between pt-3">
+                  <span className="text-[13px] font-medium">
+                    {receiptTarget.description || '—'}
+                  </span>
+                  <span className="text-[14px] font-bold tabular-nums">
+                    {formatCurrency(receiptTarget.amount)}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between border-t border-[#00000008] pt-3 dark:border-[#ffffff08]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#86868B]">
+                      {t('payments.form.method')}:
+                    </span>
+                    <MethodChip
+                      method={toPaymentMethod(receiptTarget.method)}
+                      label={t(`payments.method.${toPaymentMethod(receiptTarget.method)}`)}
+                    />
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                      {t('payments.receipt.total')}
+                    </span>
+                    <span className="text-[20px] font-black tracking-tighter text-[#10B981]">
+                      {formatCurrency(receiptTarget.amount)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Verification footer */}
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-[#00000008] pt-4 text-[10.5px] font-medium text-[#86868B] dark:border-[#ffffff08]">
+                <div className="inline-flex items-center gap-1.5">
+                  <Icon paths={I.shield} size={13} strokeWidth={2.2} className="text-[#10B981]" />
+                  <span>{t('payments.receipt.footer')}</span>
+                </div>
+                <span className="font-mono">ID: {receiptTarget.id.slice(0, 12)}</span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2">
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <GlassButton
                   type="button"
                   variant="secondary"
@@ -659,21 +1432,23 @@ export function PaymentsPage() {
                 >
                   {t('common.close')}
                 </GlassButton>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <GlassButton
                   type="button"
                   variant="primary"
                   onClick={() => window.print()}
                 >
-                  <Printer className="w-4 h-4 mr-1.5" />
-                  Print Receipt
+                  <span className="inline-flex items-center gap-2">
+                    <Icon paths={I.printer} size={15} strokeWidth={2} />
+                    {t('payments.receipt.print')}
+                  </span>
                 </GlassButton>
-              </div>
+              </motion.div>
             </div>
-          )}
-        </GlassModal>
-
-        {toastNode}
-      </div>
-    </div>
+          </div>
+        )}
+      </GlassModal>
+    </motion.div>
   );
 }

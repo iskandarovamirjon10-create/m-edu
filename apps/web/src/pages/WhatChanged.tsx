@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassEmptyState, GlassErrorState, GlassButton } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
+import { auditApi } from '@/lib/api';
 
 interface ChangeEvent {
   id: string;
@@ -49,11 +50,7 @@ export function WhatChangedPage() {
   // silently rendered "No changes" forever.
   const auditQuery = useQuery({
     queryKey: ['what-changed'],
-    queryFn: async () => {
-      const res = await fetch('/api/audit?limit=50', { credentials: 'include' });
-      if (!res.ok) throw new Error(t('whatChanged.loadFailed'));
-      return res.json() as Promise<{ items: ChangeEvent[]; total: number }>;
-    },
+    queryFn: () => auditApi.list({ limit: 50 }) as Promise<{ items: ChangeEvent[]; total: number }>,
   });
 
   const events: ChangeEvent[] = auditQuery.data?.items ?? [];

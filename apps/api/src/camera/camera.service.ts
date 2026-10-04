@@ -1322,8 +1322,7 @@ export class CameraService {
       reconnectCount:
         camera.reconnectCount,
 
-      metadata:
-        camera.metadata,
+      metadata: ((typeof camera.metadata === "object" && camera.metadata !== null) ? (({ validatedIp, validatedHost, ...rest }) => rest)(camera.metadata as any) : camera.metadata),
 
       createdAt:
         camera.createdAt.toISOString(),

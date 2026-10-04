@@ -8,8 +8,10 @@ import { PaymentsModule } from '../payments/payments.module';
 import { UsersModule } from '../users/users.module';
 import { ParentPortalModule } from '../parent-portal/parent-portal.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AiModule } from '../ai/ai.module';
 import { TelegramCoreModule } from './telegram-core.module';
 import { TelegramWebhookController } from './telegram-webhook.controller';
+import { TelegramBootstrapService } from './telegram-bootstrap.service';
 import {
   TELEGRAM_COMMANDS,
   TelegramCommandHandler,
@@ -39,6 +41,7 @@ import {
   TeachersCommand,
   TodayCommand,
 } from './commands/staff.commands';
+import { CopilotCommand } from './commands/copilot.command';
 
 /** Every command handler, in one list. */
 const COMMAND_HANDLERS = [
@@ -59,6 +62,7 @@ const COMMAND_HANDLERS = [
   TeachersCommand,
   GroupsCommand,
   TodayCommand,
+  CopilotCommand,
 ];
 
 /**
@@ -81,6 +85,7 @@ const COMMAND_HANDLERS = [
     UsersModule,
     ParentPortalModule,
     NotificationsModule,
+    AiModule,
   ],
   controllers: [TelegramWebhookController],
   providers: [
@@ -92,6 +97,7 @@ const COMMAND_HANDLERS = [
     },
     TelegramCommandRouter,
     TelegramCallbackRouter,
+    TelegramBootstrapService,
   ],
 })
 export class TelegramCommandsModule {}

@@ -102,3 +102,9 @@ apps/api/start-db.ts
 
 # Local Postgres temp dirs under apps/api
 apps/api/.pgtmp*/
+
+test_output.log
+.brud/
+.freebuff/
+scratch/
+*.tsbuildinfo

@@ -1,7 +1,7 @@
 import { formatDate } from '../lib/format';
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { certificatesApi, coursesApi, studentsApi } from '@/lib/api';
+import { certificatesApi, coursesApi, studentsApi, downloadFile } from '@/lib/api';
 import { GlassPageHeader, GlassCard, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassModal, GlassField, GlassInput, GlassTextArea, GlassSelect, GlassBadge, GlassButton, GlassSwitch, useToasts } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Certificate, CertificateTemplate, Course, Student } from '@/lib/types';
@@ -186,39 +186,20 @@ export function CertificatesPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const downloadCertificate = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/certificates/${id}/download`, {
+      await downloadFile(`/certificates/${id}/download`, {
         method: 'POST',
-        credentials: 'include',
+        defaultFilename: 'certificate.pdf'
       });
-      if (!res.ok) {
-        let message = t('certificates.downloadFailed', { status: res.status });
-        try {
-          const body = (await res.json()) as { message?: string };
-          if (body?.message) message = body.message;
-        } catch {
-          // binary or empty body — keep default message
-        }
-        throw new Error(message);
-      }
-      return res.blob();
     },
     onMutate: (id) => setDownloadingId(id),
     onSettled: () => setDownloadingId(null),
-    onSuccess: (blob) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'certificate.pdf';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+    onSuccess: () => {
       push({ type: 'success', message: t('certificates.downloaded') });
     },
     onError: (error) => {
       push({
         type: 'error',
-        message: getErrorMessage(error),
+        message: getErrorMessage(error) || t('certificates.downloadFailed', { status: 500 }),
       });
     },
   });

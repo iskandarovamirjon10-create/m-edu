@@ -98,3 +98,4 @@ export class BranchesController {
     return this.branchesService.getBranchStats(orgId, id);
   }
 }
+

@@ -184,3 +184,4 @@ export class HremployeeController {
     return this.hrService.getHRStats(user.organizationId);
   }
 }
+

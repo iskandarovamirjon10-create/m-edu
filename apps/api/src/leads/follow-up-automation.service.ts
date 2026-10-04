@@ -143,12 +143,14 @@ export class FollowUpAutomationService {
       }
     }
 
-    await this.audit.record({
-      organizationId: organizationId ?? '00000000-0000-0000-0000-000000000000',
-      action: 'FOLLOWUP_RULES_EVALUATED',
-      resource: 'follow-up-automation',
-      changes: { evaluated: { old: null, new: rules.length }, created: { old: null, new: created } },
-    });
+    if (organizationId) {
+      await this.audit.record({
+        organizationId,
+        action: 'FOLLOWUP_RULES_EVALUATED',
+        resource: 'follow-up-automation',
+        changes: { evaluated: { old: null, new: rules.length }, created: { old: null, new: created } },
+      }).catch(err => this.logger.warn(`Failed to audit follow-up evaluation: ${err.message}`));
+    }
 
     return { evaluated: rules.length, created };
   }

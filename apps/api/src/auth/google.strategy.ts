@@ -47,6 +47,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     });
 
     if (!clientId || !clientSecret) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required for production deployment');
+      }
       this.logger.warn(
         'GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not configured — Google OAuth will not work until these are set.',
       );

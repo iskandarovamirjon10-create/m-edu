@@ -58,7 +58,7 @@ describe('JwtStrategy', () => {
     expect(result.sid).toBe('session-123');
   });
 
-  it('returns null sid for legacy tokens without one', async () => {
+  it('rejects legacy tokens without a sid', async () => {
     prisma.user.findUnique.mockResolvedValue({
       id: 'u1',
       email: 'a@b.com',
@@ -68,14 +68,12 @@ describe('JwtStrategy', () => {
     });
 
     const strategy = createStrategy(prisma);
-    const result = await strategy.validate({
+    await expect(strategy.validate({
       sub: 'u1',
       email: 'a@b.com',
       role: 'ORG_ADMIN',
       organizationId: 'org-1',
-    });
-
-    expect(result.sid).toBeNull();
+    })).rejects.toThrow(UnauthorizedException);
   });
 
   it('rejects revoked sessions', async () => {

@@ -6,10 +6,49 @@ on:
   pull_request:
 
 jobs:
-  quality:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+
+  typecheck:
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+
+  lint:
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+
+  test:
+    needs: install
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     services:
       postgres:
         image: postgres:16
@@ -33,46 +72,43 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://medu:medu@127.0.0.1:5432/medu_test
       REDIS_URL: redis://127.0.0.1:6379
       JWT_SECRET: ci-jwt-secret-at-least-32-characters-long
       REDIS_ENABLED: "true"
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
       - name: Install
         run: npm ci
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
       - name: Unit tests
         run: npm run test
-
       - name: Prisma validate
         run: npx prisma validate --schema apps/api/prisma/schema.prisma
-
       - name: Prisma migrate status
         run: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
-        env:
-          DATABASE_URL: postgresql://medu:medu@127.0.0.1:5432/medu_test
-
-      - name: Build
-        run: npm run build
-
+      - name: Integration tests
+        run: npm run test:integration
       - name: E2E tests
         run: npm run test:e2e
         env:
           API_URL: http://127.0.0.1:3000
+
+  build:
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build

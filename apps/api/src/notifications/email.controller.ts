@@ -76,3 +76,4 @@ export class EmailController {
     return this.emailService.sendTemplatedEmail(organizationId, data);
   }
 }
+

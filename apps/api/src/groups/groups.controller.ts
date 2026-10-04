@@ -51,3 +51,4 @@ export class GroupsController {
     return this.groupsService.remove(orgId, id);
   }
 }
+

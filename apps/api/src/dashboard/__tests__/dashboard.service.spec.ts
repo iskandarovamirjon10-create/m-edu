@@ -7,38 +7,51 @@ function createMockPrisma() {
     teacher: { count: vi.fn() },
     group: { count: vi.fn() },
     payment: {
-      groupBy: vi.fn(),
       findMany: vi.fn(),
+      aggregate: vi.fn(),
     },
+    refund: { aggregate: vi.fn() },
     lead: {
       groupBy: vi.fn(),
       count: vi.fn(),
     },
     followUp: { findMany: vi.fn() },
     attendance: { groupBy: vi.fn() },
-    $queryRaw: vi.fn(),
+  };
+}
+
+function createMockFinance() {
+  return {
+    getDebtAndReceivables: vi.fn(),
+    getMonthlyRevenueSeries: vi.fn(),
+    getCashFlow: vi.fn(),
   };
 }
 
 describe('DashboardService.getStats', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
+  let finance: ReturnType<typeof createMockFinance>;
   let svc: DashboardService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
-    svc = new DashboardService(prisma);
-    // Default happy-path mocks; tests override what they need.
+    finance = createMockFinance();
+    svc = new DashboardService(prisma as any, finance as any);
+    // Default happy-path mocks
     prisma.student.count.mockResolvedValue(0);
     prisma.teacher.count.mockResolvedValue(0);
     prisma.group.count.mockResolvedValue(0);
-    prisma.payment.groupBy.mockResolvedValue([]);
-    prisma.$queryRaw.mockResolvedValue([]);
     prisma.payment.findMany.mockResolvedValue([]);
+    prisma.payment.aggregate.mockResolvedValue({ _sum: { amount: null } });
+    prisma.refund.aggregate.mockResolvedValue({ _sum: { amount: null } });
     prisma.lead.groupBy.mockResolvedValue([]);
     prisma.followUp.findMany.mockResolvedValue([]);
     prisma.attendance.groupBy.mockResolvedValue([]);
     prisma.lead.count.mockResolvedValue(0);
+
+    finance.getDebtAndReceivables.mockResolvedValue({ totalReceivables: 0, overdueDebt: 0 });
+    finance.getMonthlyRevenueSeries.mockResolvedValue([]);
   });
 
   it('returns zeroed metrics when the organization has no data', async () => {
@@ -55,15 +68,14 @@ describe('DashboardService.getStats', () => {
     expect(stats.upcomingFollowUps).toEqual([]);
   });
 
-  it('aggregates payment totals by status and keeps legacy aliases', async () => {
-    prisma.payment.groupBy.mockResolvedValue([
-      { status: 'PAID', _sum: { amount: 1000 } },
-      { status: 'PENDING', _sum: { amount: 400 } },
-      { status: 'OVERDUE', _sum: { amount: 150 } },
-    ]);
+  it('aggregates payment totals accurately using financial brain data', async () => {
+    finance.getDebtAndReceivables.mockResolvedValue({ totalReceivables: 550, overdueDebt: 150 });
+    prisma.payment.aggregate.mockResolvedValue({ _sum: { amount: 1200 } });
+    prisma.refund.aggregate.mockResolvedValue({ _sum: { amount: 200 } });
+
     const stats = await svc.getStats('org-1');
-    expect(stats.totalPaid).toBe(1000);
-    expect(stats.totalPending).toBe(400);
+    expect(stats.totalPaid).toBe(1000); // 1200 - 200
+    expect(stats.totalPending).toBe(400); // 550 - 150
     expect(stats.totalOverdue).toBe(150);
     expect(stats.totalRevenue).toBe(1000); // legacy alias
     expect(stats.pendingPayments).toBe(400);
@@ -96,16 +108,14 @@ describe('DashboardService.getStats', () => {
     ]);
   });
 
-  it('maps monthly revenue rows to plain numbers', async () => {
-    prisma.$queryRaw.mockResolvedValue([
-      { month: new Date('2026-08-01'), total: '500.00', count: 3 },
-      { month: new Date('2026-09-01'), total: '250.50', count: 2 },
-    ]);
+  it('passes through monthly revenue series from FinancialBrain', async () => {
+    const series = [
+      { bucket: new Date('2026-08-01'), total: 500, count: 3 },
+      { bucket: new Date('2026-09-01'), total: 250.5, count: 2 },
+    ];
+    finance.getMonthlyRevenueSeries.mockResolvedValue(series);
     const stats = await svc.getStats('org-1');
-    expect(stats.monthlyRevenue).toEqual([
-      { month: new Date('2026-08-01'), total: 500, count: 3 },
-      { month: new Date('2026-09-01'), total: 250.5, count: 2 },
-    ]);
+    expect(stats.monthlyRevenue).toEqual(series);
   });
 
   it('includes counts for students, teachers and active groups', async () => {
@@ -119,26 +129,5 @@ describe('DashboardService.getStats', () => {
     expect(stats.activeStudents).toBe(30);
     expect(stats.totalTeachers).toBe(5);
     expect(stats.activeGroups).toBe(4);
-  });
-
-  it('scopes the raw monthly revenue query to the organization', async () => {
-    prisma.$queryRaw.mockResolvedValue([]);
-    await svc.getStats('org-1');
-    expect(prisma.$queryRaw).toHaveBeenCalled();
-    const call = prisma.$queryRaw.mock.calls[0];
-    // The org id is bound as a parameter — search the parameter array.
-    const params = call.slice(1);
-    const orgBound = params.some((p: unknown) => p === 'org-1');
-    expect(orgBound).toBe(true);
-  });
-
-  it('aggregates monthly revenue by paidAt, not createdAt', async () => {
-    prisma.$queryRaw.mockResolvedValue([]);
-    await svc.getStats('org-1');
-    const [strings, ...params] = prisma.$queryRaw.mock.calls[0] as [string[], ...unknown[]];
-    const sql = strings.join('?');
-    expect(sql).toContain('"paidAt"');
-    expect(sql).toContain(`status = 'PAID'`);
-    expect(sql).not.toContain(`DATE_TRUNC('month', "createdAt")`);
   });
 });

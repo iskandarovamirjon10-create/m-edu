@@ -102,10 +102,15 @@ export function AiQuickPrompt({ prompt, disabled = false, onSelect }: AiQuickPro
 
 export interface AiWelcomeProps {
   disabled?: boolean;
-  onSelect: (text: string) => void;
+  onSelect?: (text: string) => void;
+  onSelectPrompt?: (text: string) => void;
 }
 
-export function AiWelcome({ disabled = false, onSelect }: AiWelcomeProps) {
+export function AiWelcome({ disabled = false, onSelect, onSelectPrompt }: AiWelcomeProps) {
+  const handleSelect = (text: string) => {
+    onSelect?.(text);
+    onSelectPrompt?.(text);
+  };
   return (
     <div className="flex min-h-full items-center justify-center py-6">
       <div className="mx-auto w-full max-w-2xl text-center">
@@ -127,7 +132,7 @@ export function AiWelcome({ disabled = false, onSelect }: AiWelcomeProps) {
 
         <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {AI_QUICK_PROMPTS.map((prompt) => (
-            <AiQuickPrompt key={prompt.id} prompt={prompt} disabled={disabled} onSelect={onSelect} />
+            <AiQuickPrompt key={prompt.id} prompt={prompt} disabled={disabled} onSelect={handleSelect} />
           ))}
         </div>
       </div>

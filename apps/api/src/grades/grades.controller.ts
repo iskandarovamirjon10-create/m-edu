@@ -51,3 +51,4 @@ export class GradesController {
     return this.gradesService.remove(orgId, id);
   }
 }
+
