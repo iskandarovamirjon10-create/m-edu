@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/globals.css';
+import { initErrorReporting, reportClientError } from './lib/errorReporter';
 
 // Get the root element
 const rootElement = document.getElementById('root');
@@ -34,7 +35,9 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
       if (import.meta.env.DEV) {
         console.error('ServiceWorker registration failed:', error);
       }
-      // Do not surface SW internals in the production browser console.
+      // Never dump SW internals to the production console — report instead
+      // (no-op unless VITE_ERROR_REPORTING_URL is configured).
+      reportClientError(error, 'sw');
     });
   });
 }
@@ -58,18 +61,12 @@ if (import.meta.env.DEV) {
   });
 }
 
-// Add global error handlers for better error tracking
+// Production error telemetry: window + unhandledrejection listeners.
+// Disabled in development and whenever VITE_ERROR_REPORTING_URL is unset,
+// so local builds are never noisy and prod reports reach the API sink
+// (POST /api/client-errors) as structured log lines.
 if (import.meta.env.PROD) {
-  window.addEventListener('error', (event) => {
-    // Production telemetry should go through a real error-reporting service
-    // (Sentry/LogRocket/DataDog). Logging to the end-user console leaks
-    // internals and PII — see product-readiness audit F-WEB-1.
-    void event;
-  });
-
-  window.addEventListener('unhandledrejection', (event) => {
-    void event;
-  });
+  initErrorReporting();
 }
 
 // Add performance marks

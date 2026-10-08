@@ -116,3 +116,8 @@ test_output.log
 .freebuff/
 scratch/
 *.tsbuildinfo
+
+# Playwright artifacts
+/playwright-report/
+/test-results/
+/apps/api/pg-dev.err

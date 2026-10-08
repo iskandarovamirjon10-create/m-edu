@@ -289,11 +289,13 @@ function useTelegram() {
 
   useLayoutEffect(() => {
     let disposed = false;
-    let poll: number | undefined;
+    // Mutable holder: the interval id is created in a deferred branch while
+    // `teardown` (defined above) must be able to clear it at any time.
+    const poll: { id?: number } = {};
 
     const teardown = () => {
       disposed = true;
-      if (poll !== undefined) window.clearInterval(poll);
+      if (poll.id !== undefined) window.clearInterval(poll.id);
       window.clearTimeout(timeout);
       cleanupRef.current?.();
       cleanupRef.current = null;
@@ -333,7 +335,7 @@ function useTelegram() {
       s.async = true;
       document.head.appendChild(s);
     }
-    poll = window.setInterval(() => {
+    poll.id = window.setInterval(() => {
       const sdk = (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp;
       if (sdk) {
         teardown();

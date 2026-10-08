@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode} from'react';
+import { reportClientError } from '../lib/errorReporter';
 
 /**
  * Real React error boundary with a professional fallback UI.
@@ -31,10 +32,19 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
  return { error, attempt: 0};
 }
 
- componentDidCatch(error: Error, info: ErrorInfo) {
- // Keep the error visible to operators without leaking raw stacks to the
- // user. In dev this also surfaces in the console as usual.
- console.error('[ErrorBoundary]', error, info.componentStack);
+  componentDidCatch(error: Error, info: ErrorInfo) {
+  // Dev: keep the console copy for local debugging. Prod: never dump stacks
+  // to the end-user console — send one deduped report to the telemetry sink
+  // (no-op unless VITE_ERROR_REPORTING_URL is configured).
+  if (import.meta.env.DEV) {
+    console.error('[ErrorBoundary]', error, info.componentStack);
+  }
+  reportClientError(
+    error instanceof Error
+      ? new Error(`${error.message} @ ${info.componentStack ?? 'unknown'}`)
+      : error,
+    'boundary',
+  );
 }
 
  private handleRetry = () => {

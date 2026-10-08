@@ -36,6 +36,7 @@ import { HomeworkModule } from './homework/homework.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { HealthModule } from './health/health.module';
+import { ClientErrorsModule } from './client-errors/client-errors.module';
 import { FaceModule } from './face/face.module';
 import { CameraModule } from './camera/camera.module';
 import { AiModule } from './ai/ai.module';
@@ -174,6 +175,7 @@ const redisEnabled = isRedisEnabled();
     DashboardModule,
     AnalyticsModule,
     HealthModule,
+    ClientErrorsModule,
     FaceModule,
     CameraModule,
     AiModule,

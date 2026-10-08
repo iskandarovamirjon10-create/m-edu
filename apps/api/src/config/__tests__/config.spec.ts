@@ -173,6 +173,18 @@ describe('Config Module Suite', () => {
         expect(sms?.severity).toBe('error');
         expect(sms?.message).toContain('Unknown provider');
       });
+
+      it('production warns loudly when SMTP_HOST is not configured', () => {
+        primeValidProductionEnv();
+        delete process.env.SMTP_HOST;
+
+        const smtp = configWarnings('production').find(
+          (p) => p.variable === 'SMTP_HOST',
+        );
+
+        expect(smtp?.severity).toBe('warning');
+        expect(smtp?.message).toContain('outbound email');
+      });
     });
 
     it('configWarnings returns only warnings', () => {

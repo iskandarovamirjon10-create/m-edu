@@ -115,7 +115,10 @@ describe('Access Control & Forensic Fixes', () => {
   
   afterAll(async () => {
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } }).catch(() => {});
-    await prisma.session.deleteMany().catch(() => {});
+    // Scope to THIS suite's organizations: an unscoped deleteMany() wiped
+    // every session in the database, killing tokens of concurrently-running
+    // e2e suites (they 401'd mid-run — cross-suite interference).
+    await prisma.session.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } }).catch(() => {});
     await prisma.user.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } }).catch(() => {});
     await prisma.invitation.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } }).catch(() => {});
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } }).catch(() => {});

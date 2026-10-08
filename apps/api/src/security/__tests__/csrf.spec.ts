@@ -48,6 +48,20 @@ describe('CSRF policy (pure)', () => {
     ).toBe(false);
   });
 
+  it('exempts the client-error telemetry sink (log-only, machine)', () => {
+    expect(
+      requiresCsrfValidation({
+        method: 'POST',
+        path: '/api/client-errors',
+        headers: {},
+      }),
+    ).toBe(false);
+    // ...while still protecting real state-changing routes:
+    expect(
+      requiresCsrfValidation({ method: 'POST', path: '/api/payments', headers: {} }),
+    ).toBe(true);
+  });
+
   it('exempts Authorization-header callers (bearer / API key)', () => {
     expect(
       requiresCsrfValidation({
@@ -215,4 +229,3 @@ describe('CsrfMiddleware', () => {
     expect(next).toHaveBeenCalled();
   });
 });
-

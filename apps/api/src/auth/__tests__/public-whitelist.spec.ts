@@ -58,6 +58,8 @@ const ALLOWED_PUBLIC_ROUTES: readonly string[] = [
   'POST /api/auth/parent-login',
   'POST /api/auth/register',
   'POST /api/auth/reset-password',
+  // production client-error telemetry (log-only sink, body-validated)
+  'POST /api/client-errors',
   // webhooks (own shared-secret authentication, CSRF-exempt by policy)
   'POST /api/webhooks/telegram',
   'POST /api/webhooks/terminal/event',

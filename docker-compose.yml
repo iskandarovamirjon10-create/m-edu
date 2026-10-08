@@ -93,7 +93,13 @@ services:
     ports:
       - "${WEB_PORT:-8080}:80"
     depends_on:
-      - api
+      api:
+        # The web app must not come up before the API answers /api/health:
+        # nginx proxies every /api call, so an early start serves 502s until
+        # the API is ready. The API image carries a HEALTHCHECK on that route.
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
 
 volumes:
   pgdata:

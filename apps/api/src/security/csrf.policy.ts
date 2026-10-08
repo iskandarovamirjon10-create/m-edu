@@ -34,6 +34,10 @@ export const CSRF_PROTECTED_METHODS: readonly string[] = ['POST', 'PUT', 'PATCH'
  */
 export const DEFAULT_CSRF_EXEMPT_PATHS: readonly string[] = [
   '/api/webhooks/', // Telegram & future webhook integrations (own secret)
+  // Browser error-telemetry sink: machine endpoint, log-only (no state
+  // change), body-validated and throttled — CSRF adds nothing here and a
+  // crash reporter cannot fetch tokens before posting.
+  '/api/client-errors',
 ];
 
 export function csrfExemptPaths(env: NodeJS.ProcessEnv = process.env): string[] {

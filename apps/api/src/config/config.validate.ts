@@ -106,6 +106,14 @@ export function validateConfig(nodeEnv: string = process.env.NODE_ENV || 'develo
     error('CORS_ORIGIN', 'Required in production (browser origin of the web app).');
   }
 
+  // --- SMTP outbound email ---
+  // Not boot-blocking: a deployment may run Telegram/SMS-only on purpose.
+  // Operators still must see it - without SMTP_HOST every password-reset
+  // and invitation email fails at send time in production.
+  if (nodeEnv === 'production' && !env.SMTP_HOST) {
+    warn('SMTP_HOST', 'Not set - outbound email fails at send time in production.');
+  }
+
   // --- Frontend URL (OAuth redirects) ---
   if (nodeEnv === 'production' && !env.NEXT_PUBLIC_APP_URL) {
     error('NEXT_PUBLIC_APP_URL', 'Required in production (used for OAuth callback redirects).');
