@@ -9,7 +9,7 @@ rollback for the M-EDU monorepo. It is the operational companion to
 | Requirement | Notes |
 |---|---|
 | Node.js 20+ | API and web build |
-| PostgreSQL 15+ | Primary datastore |
+| PostgreSQL 16 | Primary datastore (canonical — compose, CI and embedded test DB all use 16) |
 | Redis 7+ | BullMQ queues, rate-limit storage, distributed locks |
 | Docker / Compose | Reference stack (`docker-compose.yml`) |
 

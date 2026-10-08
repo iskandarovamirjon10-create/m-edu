@@ -130,9 +130,15 @@ Preference model exists (`notification-preference.service.ts`) but not every
 send path consults it.
 
 ### R5. PRISMA MIGRATIONS **[FIXED 2026-09-23]**
-All **17 migrations applied** to local `medu_test` (Docker `postgres:15-alpine`,
-creds `postgres:postgres`); `prisma migrate status` → *Database schema is up to
-date*. Production/staging still need their own `npx prisma migrate deploy`.
+Canonical PostgreSQL version is **16** everywhere: docker-compose
+`postgres:16-alpine`, CI `postgres:16`, embedded test DB
+`embedded-postgres@16.14.0-beta.17` (initdb `--encoding=UTF8` — Windows'
+WIN1252 default rejected the UTF-8 arrows used in migration SQL comments).
+Verified on PG 16 (UTF8): all **37 migrations** applied
+(`scripts/verify-migration.ts`, 15/15 assertions PASS) and the real
+`prisma migrate deploy` + `migrate status` → *Database schema is up to date*
+(`scripts/verify-migrate-deploy.ts`). Production/staging run
+`npx prisma migrate deploy` at deploy time (compose `migration` service).
 
 ### R6. GIT HYGIENE (P0) — partial
 - Staged: all migration dirs (incl. the two repair migrations).

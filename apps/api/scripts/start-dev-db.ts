@@ -11,6 +11,8 @@ async function main() {
     password: 'postgres',
     port: 5432,
     persistent: true,
+    // Windows initdb defaults to WIN1252 — force UTF8 to match production.
+    initdbFlags: ['--encoding=UTF8'],
   });
 
   if (!fs.existsSync(dbDir) || fs.readdirSync(dbDir).length === 0) {

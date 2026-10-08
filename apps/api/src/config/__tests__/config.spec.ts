@@ -79,6 +79,102 @@ describe('Config Module Suite', () => {
       expect(() => assertValidConfig('development')).toThrow(/Invalid environment configuration/);
     });
 
+    // ---- SMS production safety (fail-fast, no silent fake SMS) ----
+    describe('SMS_PROVIDER production safety', () => {
+      const primeValidProductionEnv = () => {
+        process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/medu';
+        process.env.JWT_SECRET = '12345678901234567890123456789012';
+        process.env.OAUTH_SESSION_SECRET = '12345678901234567890123456789012';
+        process.env.BIOMETRIC_ENCRYPTION_KEY = '12345678901234567890123456789012';
+        process.env.FACE_ENGINE_PROVIDER = 'real-local';
+        process.env.FACE_DETECTOR_MODEL_PATH = '/models/detector.onnx';
+        process.env.FACE_EMBEDDER_MODEL_PATH = '/models/embedder.onnx';
+        process.env.CORS_ORIGIN = 'https://app.medu.uz';
+        process.env.NEXT_PUBLIC_APP_URL = 'https://app.medu.uz';
+        process.env.REDIS_URL = 'redis://localhost:6379';
+      };
+
+      it('production refuses to boot when SMS_PROVIDER is unset (would default to STUB)', () => {
+        primeValidProductionEnv();
+        delete process.env.SMS_PROVIDER;
+
+        const problems = validateConfig('production');
+        const sms = problems.find((p) => p.variable === 'SMS_PROVIDER');
+
+        expect(sms?.severity).toBe('error');
+        expect(sms?.message).toContain('STUB');
+        // The whole boot must fail, not just warn:
+        expect(() => assertValidConfig('production')).toThrow(/SMS_PROVIDER/);
+      });
+
+      it('production refuses to boot when SMS_PROVIDER=STUB (silent discard)', () => {
+        primeValidProductionEnv();
+        process.env.SMS_PROVIDER = 'STUB';
+
+        const problems = validateConfig('production');
+        const sms = problems.find((p) => p.variable === 'SMS_PROVIDER');
+
+        expect(sms?.severity).toBe('error');
+        expect(() => assertValidConfig('production')).toThrow(/SMS_PROVIDER/);
+      });
+
+      it('development and test keep SMS_PROVIDER=STUB working', () => {
+        process.env.SMS_PROVIDER = 'STUB';
+
+        for (const envName of ['development', 'test'] as const) {
+          const problems = validateConfig(envName);
+          expect(problems.find((p) => p.variable === 'SMS_PROVIDER')).toBeUndefined();
+        }
+        // Local iteration must not throw (prime the unconditional checks):
+        process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/medu';
+        process.env.JWT_SECRET = '12345678901234567890123456789012';
+        process.env.OAUTH_SESSION_SECRET = '12345678901234567890123456789012';
+        process.env.BIOMETRIC_ENCRYPTION_KEY = '12345678901234567890123456789012';
+        process.env.FACE_ENGINE_PROVIDER = 'real-local';
+        process.env.GOOGLE_CLIENT_ID = '';
+        process.env.GOOGLE_CLIENT_SECRET = '';
+        expect(() => assertValidConfig('test')).not.toThrow();
+      });
+
+      it('production accepts a real provider with credentials', () => {
+        primeValidProductionEnv();
+        process.env.SMS_PROVIDER = 'Eskiz';
+        process.env.ESKIZ_EMAIL = 'sender@example.uz';
+        process.env.ESKIZ_PASSWORD = 'real-password';
+
+        const problems = validateConfig('production');
+        const errorVars = problems
+          .filter((p) => p.severity === 'error')
+          .map((p) => p.variable);
+
+        expect(errorVars).not.toContain('SMS_PROVIDER');
+        expect(errorVars).not.toContain('ESKIZ_EMAIL');
+      });
+
+      it('production rejects a real provider with missing credentials', () => {
+        primeValidProductionEnv();
+        process.env.SMS_PROVIDER = 'Eskiz';
+        delete process.env.ESKIZ_EMAIL;
+        delete process.env.ESKIZ_PASSWORD;
+
+        const problems = validateConfig('production');
+        const eskiz = problems.find((p) => p.variable === 'ESKIZ_EMAIL');
+
+        expect(eskiz?.severity).toBe('error');
+      });
+
+      it('production rejects an unknown provider (SmsService would treat it as STUB)', () => {
+        primeValidProductionEnv();
+        process.env.SMS_PROVIDER = 'SomeFutureProvider';
+
+        const problems = validateConfig('production');
+        const sms = problems.find((p) => p.variable === 'SMS_PROVIDER');
+
+        expect(sms?.severity).toBe('error');
+        expect(sms?.message).toContain('Unknown provider');
+      });
+    });
+
     it('configWarnings returns only warnings', () => {
       process.env.DATABASE_URL = 'postgresql://localhost:5432/medu';
       process.env.JWT_SECRET = '12345678901234567890123456789012';

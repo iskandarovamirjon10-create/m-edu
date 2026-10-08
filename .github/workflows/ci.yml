@@ -77,7 +77,16 @@ jobs:
       DATABASE_URL: postgresql://medu:medu@127.0.0.1:5432/medu_test
       REDIS_URL: redis://127.0.0.1:6379
       JWT_SECRET: ci-jwt-secret-at-least-32-characters-long
+      BIOMETRIC_ENCRYPTION_KEY: ci-biometric-encryption-key-32-chars-min
+      FACE_ENGINE_PROVIDER: mock
       REDIS_ENABLED: "true"
+      # Rate limits: the full e2e suite issues far more than the production
+      # ceiling from a single CI IP — raise (not disable) for this run so the
+      # limiter stays exercised instead of failing unrelated tests with 429.
+      THROTTLE_DEFAULT_LIMIT: "1000000"
+      THROTTLE_SECURITY_LIMIT: "100000"
+      E2E_BASE_URL: http://127.0.0.1:3001
+      E2E_API_URL: http://127.0.0.1:3001
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -94,10 +103,37 @@ jobs:
         run: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
       - name: Integration tests
         run: npm run test:integration
-      - name: E2E tests
+      # ---- API end-to-end suite (root cause: a server must exist) ----
+      - name: Build API
+        run: npm run build -w @medu/api
+      - name: Start API for E2E (background)
+        run: |
+          node apps/api/dist/main.js > api-e2e.log 2>&1 &
+          echo "API_PID=$!" >> "$GITHUB_ENV"
+      - name: Wait for API health (race guard)
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3001/api/health > /dev/null 2>&1; then
+              echo "API healthy after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become healthy within 120s"
+          cat api-e2e.log
+          exit 1
+      - name: E2E tests (vitest, real HTTP against the running API)
         run: npm run test:e2e
-        env:
-          API_URL: http://127.0.0.1:3000
+      # ---- Browser smoke (Playwright reuses the API, boots web preview) ----
+      - name: Build web
+        run: npm run build -w @medu/web
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Browser smoke tests (Playwright)
+        run: npx playwright test
+      - name: API logs on failure
+        if: failure()
+        run: cat api-e2e.log || true
 
   build:
     needs: install

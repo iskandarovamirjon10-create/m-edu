@@ -5,7 +5,10 @@ import { JwtService } from '@nestjs/jwt';
 import { applyCsrf } from './helpers/csrf';
 import * as crypto from 'crypto';
 
-const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3001/api';
+// E2E_BASE_URL is the API ORIGIN (e.g. http://localhost:3001) everywhere;
+// this suite prefixes its own /api. Tolerate a pasted /api suffix too.
+const ORIGIN = (process.env.E2E_BASE_URL || 'http://localhost:3001').replace(/\/api\/?$/, '');
+const BASE_URL = `${ORIGIN}/api`;
 const prisma = new PrismaClient();
 
 const jwtService = new JwtService({

@@ -20,6 +20,10 @@ async function main() {
     password: 'postgres',
     port,
     persistent: false,
+    // Windows initdb defaults to the system codepage (WIN1252), which rejects
+    // the UTF-8 arrows used in migration SQL comments. Canonical: UTF8,
+    // matching the production/CI postgres:16 servers.
+    initdbFlags: ['--encoding=UTF8'],
   });
 
   await pg.initialise();
@@ -30,8 +34,15 @@ async function main() {
     user: 'postgres',
     password: 'postgres',
     database: 'postgres',
+    // Migrations contain UTF-8 arrows (`→`) inside SQL comments. On Windows
+    // the default client encoding is WIN1252 and the server rejects the
+    // query with "no equivalent in encoding WIN1252" — pin UTF8 explicitly.
+    options: '-c client_encoding=UTF8',
   });
   await client.connect();
+  // Force UTF8 for this session: the `options` startup parameter alone is
+  // not honored on every platform, and SQL comments contain `→` (U+2192).
+  await client.query(`SET client_encoding TO 'UTF8'`);
 
   let failures = 0;
   const check = (name: string, ok: boolean, extra = '') => {

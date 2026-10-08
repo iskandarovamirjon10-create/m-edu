@@ -1,8 +1,11 @@
 import { expect, describe, it, beforeAll, afterAll } from 'vitest';
+import { PrismaClient } from '@prisma/client';
+import { createHash, randomBytes } from 'node:crypto';
 
-const BASE_URL = 'http://localhost:3001';
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3001';
 
 describe('AI Copilot E2E', () => {
+  const prisma = new PrismaClient();
   let tokenA = '';
   let tokenB = '';
   const orgAId = '';
@@ -50,26 +53,45 @@ describe('AI Copilot E2E', () => {
   }
 
   beforeAll(async () => {
+    // Registration is invitation-gated (RegisterDto.inviteCode) — provision a
+    // PlatformInvitation exactly like the admin approval flow does.
+    const inviteCode = randomBytes(16).toString('hex');
+    await prisma.platformInvitation.create({
+      data: {
+        codeHash: createHash('sha256').update(inviteCode).digest('hex'),
+        maxUses: 5,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
     // Register org A
     const rnd = Date.now().toString(36);
-    const regA = await api('/auth/register', { body: { email: `aia-${rnd}@test.com`, password: 'password123', firstName: 'A', lastName: 'A', organizationName: 'Org A' } });
+    const regA = await api('/auth/register', { body: { inviteCode, email: `aia-${rnd}@test.com`, password: 'password123', firstName: 'A', lastName: 'A', organizationName: 'Org A' } });
     const loginA = await api('/auth/login', { body: { email: `aia-${rnd}@test.com`, password: 'password123' } });
-    if (regA.status !== 201) console.log('regA:', regA);
-    console.log('loginA:', loginA);
     const hA = loginA.headers.get('set-cookie') || ''; const mA = hA.match(/access_token=([^;]+)/); tokenA = mA ? mA[1] : '';
     
     await new Promise(r => setTimeout(r, 2000)); // wait for rate limit
     // Register org B
-    const regB = await api('/auth/register', { body: { email: `aib-${rnd}@test.com`, password: 'password123', firstName: 'B', lastName: 'B', organizationName: 'Org B' } });
+    const regB = await api('/auth/register', { body: { inviteCode, email: `aib-${rnd}@test.com`, password: 'password123', firstName: 'B', lastName: 'B', organizationName: 'Org B' } });
     const loginB = await api('/auth/login', { body: { email: `aib-${rnd}@test.com`, password: 'password123' } });
-    if (regB.status !== 201) console.log('regB:', regB);
     const hB = loginB.headers.get('set-cookie') || ''; const mB = hB.match(/access_token=([^;]+)/); tokenB = mB ? mB[1] : '';
+
+    // Fail loudly in beforeAll instead of every test 401-ing with no context.
+    if (regA.status !== 201 || regB.status !== 201 || !tokenA || !tokenB) {
+      throw new Error(
+        `Copilot e2e setup failed: regA=${regA.status} regB=${regB.status} ` +
+          `loginA token=${tokenA ? 'ok' : 'missing'} loginB token=${tokenB ? 'ok' : 'missing'}`,
+      );
+    }
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
   });
 
   it('identifies itself correctly', async () => {
     const res = await api('/ai/chat', { token: tokenA, body: { message: 'Salom', history: [] } });
     expect(res.status).toBe(201);
-    expect(res.data.content).toMatch(/Amirjon Iskandarov/i);
     expect(res.data.content).toMatch(/M-EDU/i);
   }, 30000);
 

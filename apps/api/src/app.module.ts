@@ -103,35 +103,46 @@ const redisEnabled = isRedisEnabled();
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        storage: new ResilientRedisThrottlerStorage(config.get<string>('REDIS_URL') || 'redis://localhost:6379'),
-        throttlers: [
-        {
-          name: 'default',
-          ttl: 60000,
-          limit: 100,
-        },
-        {
-          /*
-           * Second bucket covering ONLY credential endpoints (see
-           * `isCredentialEndpoint`). Its `name` is what lets the storage
-           * recognize a security-critical bucket and fail closed when Redis is
-           * down — with a single `default` throttler that branch was dead
-           * code. `skipIf` keeps the extra Redis round-trip off every other
-           * route.
-           */
-          name: 'security',
-          ttl: 60000,
-          limit: 10,
-          skipIf: (context: ExecutionContext) => !isCredentialEndpoint(context),
-        },
-      ],
-      // Rate-limit authenticated requests per-user (stable account id),
-      // falling back to the client IP for anonymous traffic (login/register).
-      // This prevents one user behind a shared NAT from exhausting the
-      // shared-IP bucket, and prevents anonymous abuse of auth endpoints.
-      getTracker: authTracker,
-    })}),
+      useFactory: (config: ConfigService) => {
+        // Rate limits are env-tunable so the CI/E2E server can raise the
+        // ceiling (THROTTLE_*_LIMIT) instead of the suite tripping 429s —
+        // production keeps the hardened defaults below.
+        const intEnv = (key: string, fallback: number): number => {
+          const raw = config.get<string>(key);
+          const parsed = raw === undefined || raw === '' ? Number.NaN : Number(raw);
+          return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
+        };
+        return {
+          storage: new ResilientRedisThrottlerStorage(config.get<string>('REDIS_URL') || 'redis://localhost:6379'),
+          throttlers: [
+            {
+              name: 'default',
+              ttl: intEnv('THROTTLE_DEFAULT_TTL', 60000),
+              limit: intEnv('THROTTLE_DEFAULT_LIMIT', 100),
+            },
+            {
+              /*
+               * Second bucket covering ONLY credential endpoints (see
+               * `isCredentialEndpoint`). Its `name` is what lets the storage
+               * recognize a security-critical bucket and fail closed when
+               * Redis is down — with a single `default` throttler that branch
+               * was dead code. `skipIf` keeps the extra Redis round-trip off
+               * every other route.
+               */
+              name: 'security',
+              ttl: intEnv('THROTTLE_SECURITY_TTL', 60000),
+              limit: intEnv('THROTTLE_SECURITY_LIMIT', 10),
+              skipIf: (context: ExecutionContext) => !isCredentialEndpoint(context),
+            },
+          ],
+          // Rate-limit authenticated requests per-user (stable account id),
+          // falling back to the client IP for anonymous traffic (login/register).
+          // This prevents one user behind a shared NAT from exhausting the
+          // shared-IP bucket, and prevents anonymous abuse of auth endpoints.
+          getTracker: authTracker,
+        };
+      },
+    }),
     PrismaModule,
     RedisPubSubModule,
     AuthModule,

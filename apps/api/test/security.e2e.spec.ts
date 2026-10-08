@@ -353,7 +353,12 @@ describe('M-EDU Security E2E', () => {
   });
 
   it('bootstrap is locked forever once a SUPER_ADMIN exists (409)', async () => {
-    const superCount = await prisma.user.count({ where: { role: 'SUPER_ADMIN' } });
+    // Mirror AuthService.bootstrap's real lock condition: it refuses once ANY
+    // PLATFORM_OWNER or SUPER_ADMIN exists — counting only SUPER_ADMIN made
+    // an already-bootstrapped DB look "fresh" and the next call 409s.
+    const bootstrappedCount = await prisma.user.count({
+      where: { role: { in: ['PLATFORM_OWNER', 'SUPER_ADMIN'] } },
+    });
     const res = await api('/auth/bootstrap', {
       method: 'POST',
       retry: true,
@@ -365,7 +370,7 @@ describe('M-EDU Security E2E', () => {
         organizationName: 'Bootstrap Org',
       },
     });
-    if (superCount === 0) {
+    if (bootstrappedCount === 0) {
       // Fresh platform (CI): first bootstrap succeeds, second is locked.
       expect(res.status).toBe(201);
       const second = await api('/auth/bootstrap', {
@@ -412,9 +417,12 @@ describe('M-EDU Security E2E', () => {
   });
 
   it('SUPER_ADMIN is still tenant-scoped (cannot read another org)', async () => {
-    const superCount = await prisma.user.count({ where: { role: 'SUPER_ADMIN' } });
+    // Same lock condition as AuthService.bootstrap (PLATFORM_OWNER counts too).
+    const bootstrappedCount = await prisma.user.count({
+      where: { role: { in: ['PLATFORM_OWNER', 'SUPER_ADMIN'] } },
+    });
     let superToken: string | null = null;
-    if (superCount === 0) {
+    if (bootstrappedCount === 0) {
       const res = await api('/auth/bootstrap', {
         method: 'POST',
         retry: true,
@@ -429,7 +437,32 @@ describe('M-EDU Security E2E', () => {
       expect(res.status).toBe(201);
       superToken = (res.data as { accessToken: string }).accessToken;
     }
-    if (!superToken) return; // no fresh SUPER_ADMIN available in this env
+    if (!superToken) {
+      // Already-bootstrapped platform: provision a SUPER_ADMIN directly (the
+      // same technique access-control.e2e uses) so the isolation assertions
+      // run in EVERY environment instead of silently returning.
+      const org = await prisma.organization.create({
+        data: { name: `Super ISO Org ${rnd}`, email: `superiso-org-${rnd}@medu.test` },
+      });
+      const user = await prisma.user.create({
+        data: {
+          organizationId: org.id,
+          email: `superiso-${rnd}@medu.test`,
+          passwordHash: 'not-a-real-hash-provisioned-token-only',
+          firstName: 'Super',
+          lastName: 'Iso',
+          role: 'SUPER_ADMIN',
+          status: 'ACTIVE',
+          isActive: true,
+        },
+      });
+      superToken = await provisionToken({
+        id: user.id,
+        email: user.email,
+        role: 'SUPER_ADMIN',
+        organizationId: org.id,
+      });
+    }
 
     // The SUPER_ADMIN's own org has no students; org A's students must not leak
     // into their listing even though SUPER_ADMIN bypasses role checks.

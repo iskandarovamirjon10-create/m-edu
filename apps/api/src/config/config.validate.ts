@@ -128,6 +128,44 @@ export function validateConfig(nodeEnv: string = process.env.NODE_ENV || 'develo
     }
   }
 
+  // --- SMS delivery ---
+  //
+  // SmsService treats an unset/unknown SMS_PROVIDER as "STUB" — a no-op that
+  // logs instead of sending. In production that silently swallows OTP codes,
+  // password-reset messages and alerts while the UI reports success. Refuse
+  // to boot instead of degrading to a fake provider; development/test keep
+  // STUB so local iteration needs no real gateway.
+  if (nodeEnv === 'production') {
+    const smsProvider = env.SMS_PROVIDER || 'STUB';
+    if (smsProvider.toUpperCase() === 'STUB') {
+      error(
+        'SMS_PROVIDER',
+        'STUB (or unset) silently discards every SMS in production. ' +
+          'Configure a real provider: Eskiz (ESKIZ_EMAIL/ESKIZ_PASSWORD) or ' +
+          'PlayMobile (PLAYMOBILE_BASE_URL/PLAYMOBILE_TOKEN).',
+      );
+    } else if (smsProvider === 'Eskiz') {
+      if (!env.ESKIZ_EMAIL || !env.ESKIZ_PASSWORD) {
+        error(
+          'ESKIZ_EMAIL',
+          'Required when SMS_PROVIDER=Eskiz in production (ESKIZ_EMAIL / ESKIZ_PASSWORD).',
+        );
+      }
+    } else if (smsProvider === 'PlayMobile') {
+      if (!env.PLAYMOBILE_BASE_URL || !env.PLAYMOBILE_TOKEN) {
+        error(
+          'PLAYMOBILE_BASE_URL',
+          'Required when SMS_PROVIDER=PlayMobile in production (PLAYMOBILE_BASE_URL / PLAYMOBILE_TOKEN).',
+        );
+      }
+    } else {
+      error(
+        'SMS_PROVIDER',
+        `Unknown provider "${smsProvider}" — expected Eskiz or PlayMobile (STUB is forbidden in production).`,
+      );
+    }
+  }
+
   // --- Telegram integration ---
   //
   // Telegram is optional, but when it is switched on in production the webhook
