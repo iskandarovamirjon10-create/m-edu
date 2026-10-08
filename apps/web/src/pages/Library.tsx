@@ -298,16 +298,14 @@ function categoryTone(category: string): Tone {
 }
 
 function bookInitials(title: string): string {
-  return (
-    title
-      .split(/\s+/)
-      .filter((w) => !['the', 'a', 'an', 'of', 'and', '&'].includes(w.toLowerCase()))
-      .map((w) => w.charAt(0))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || title.charAt(0).toUpperCase()
-  );
+  return (title
+    .split(/\s+/)
+    .filter((w) => !['the', 'a', 'an', 'of', 'and', '&'].includes(w.toLowerCase()))
+    .map((w) => w.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || title.charAt(0).toUpperCase());
 }
 
 /* ============================================================================
@@ -777,7 +775,7 @@ export function LibraryPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#AF52DE]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Library
+                  {t('library.title')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
@@ -804,7 +802,17 @@ export function LibraryPage() {
               whileTap={{ scale: 0.97 }}
               transition={SPRING.snappy}
             >
-              <GlassButton variant="primary" onClick={() => openModal()}>
+              <GlassButton
+                variant="primary"
+                onClick={() => openModal()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                   {t('library.addBook')}
@@ -916,7 +924,14 @@ export function LibraryPage() {
                         variant="primary"
                         size="sm"
                         onClick={() => openModal()}
-                      >
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
                         <span className="inline-flex items-center gap-2">
                           <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                           {t('library.addBook')}
@@ -1008,7 +1023,14 @@ export function LibraryPage() {
                           color: '#007AFF',
                           border: '1px solid rgba(0,122,255,0.2)',
                         }}
-                      >
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
                         <Icon paths={I.edit} size={13} strokeWidth={2} />
                       </motion.button>
                       <motion.button
@@ -1026,7 +1048,14 @@ export function LibraryPage() {
                           color: '#FF3B30',
                           border: '1px solid rgba(255,59,48,0.2)',
                         }}
-                      >
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
                         <Icon paths={I.trash} size={13} strokeWidth={2} />
                       </motion.button>
                     </div>
@@ -1064,7 +1093,17 @@ export function LibraryPage() {
         footer={
           <>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton variant="secondary" onClick={closeModal}>
+              <GlassButton
+                variant="secondary"
+                onClick={closeModal}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1073,7 +1112,14 @@ export function LibraryPage() {
                 variant="primary"
                 onClick={handleSubmit}
                 disabled={saveBook.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   {saveBook.isPending ? (
                     <>

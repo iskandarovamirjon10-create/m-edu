@@ -289,15 +289,13 @@ const INITIAL_FORM: AttendanceFormState = {
  * ========================================================================== */
 
 function getInitials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .map((p) => p.charAt(0))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || '—'
-  );
+  return (name
+    .split(/\s+/)
+    .map((p) => p.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '—');
 }
 
 function nameHash(str: string): number {
@@ -576,7 +574,13 @@ function StatusSegmented({
                 ? `inset 0 1px 0 rgba(255,255,255,0.6), 0 6px 16px -8px ${c.glow}`
                 : 'none',
             }}
-          >
+            tabIndex={0}
+            onKeyDown={(e: any) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}>
             <span
               className="flex h-7 w-7 items-center justify-center rounded-lg"
               style={{
@@ -972,7 +976,14 @@ export function AttendancePage() {
                     );
                   }}
                   className="!border-purple-500/30 hover:!border-purple-500/50"
-                >
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   <span className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium">
                     <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
                     AI Tahlil
@@ -989,7 +1000,14 @@ export function AttendancePage() {
                   variant="primary"
                   onClick={() => setModalOpen(true)}
                   aria-label={t('attendance.record')}
-                >
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   <span className="inline-flex items-center gap-2">
                     <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                     {t('attendance.record')}
@@ -1148,7 +1166,14 @@ export function AttendancePage() {
                       variant="primary"
                       size="sm"
                       onClick={() => setModalOpen(true)}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <span className="inline-flex items-center gap-2">
                         <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                         {t('attendance.record')}
@@ -1246,7 +1271,14 @@ export function AttendancePage() {
                           color: '#007AFF',
                           border: '1px solid rgba(0,122,255,0.2)',
                         }}
-                      >
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
                         <Icon paths={I.edit} size={13} strokeWidth={2} />
                       </motion.button>
                       <motion.button
@@ -1265,7 +1297,14 @@ export function AttendancePage() {
                           color: '#FF3B30',
                           border: '1px solid rgba(255,59,48,0.2)',
                         }}
-                      >
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
                         <Icon paths={I.trash} size={13} strokeWidth={2} />
                       </motion.button>
                     </div>
@@ -1441,7 +1480,14 @@ export function AttendancePage() {
                 variant="secondary"
                 onClick={handleCloseModal}
                 disabled={create.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1534,7 +1580,14 @@ export function AttendancePage() {
                 variant="secondary"
                 onClick={() => setEditTarget(null)}
                 disabled={updateRecord.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1597,7 +1650,14 @@ export function AttendancePage() {
                 variant="secondary"
                 onClick={() => setVoidTarget(null)}
                 disabled={voidRecord.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1607,7 +1667,14 @@ export function AttendancePage() {
                 variant="danger"
                 onClick={() => voidTarget && voidRecord.mutate(voidTarget.id)}
                 disabled={voidRecord.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   {voidRecord.isPending ? (
                     <>

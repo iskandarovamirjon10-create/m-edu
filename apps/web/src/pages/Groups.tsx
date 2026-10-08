@@ -244,15 +244,13 @@ function capacityRatio(group: Group): number {
 }
 
 function getInitials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .map((p) => p.charAt(0))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || '—'
-  );
+  return (name
+    .split(/\s+/)
+    .map((p) => p.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '—');
 }
 
 function nameHash(str: string): number {
@@ -749,7 +747,7 @@ export function GroupsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Groups
+                  {t('groups.title')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00000006] px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B] dark:bg-[#ffffff08]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
@@ -776,7 +774,18 @@ export function GroupsPage() {
               whileTap={{ scale: 0.97 }}
               transition={SPRING.snappy}
             >
-              <GlassButton type="button" variant="primary" onClick={handleOpenModal}>
+              <GlassButton
+                type="button"
+                variant="primary"
+                onClick={handleOpenModal}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                   {t('groups.create')}
@@ -847,7 +856,14 @@ export function GroupsPage() {
                     variant="primary"
                     size="sm"
                     onClick={handleOpenModal}
-                  >
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e: any) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.currentTarget.click();
+                      }
+                    }}>
                     <span className="inline-flex items-center gap-2">
                       <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                       {t('groups.create')}
@@ -998,7 +1014,14 @@ export function GroupsPage() {
                         color: '#FF3B30',
                         border: '1px solid rgba(255,59,48,0.2)',
                       }}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       {isDeleting ? (
                         <motion.span
                           className="h-3.5 w-3.5 rounded-full border-2 border-current/30 border-t-current"
@@ -1039,7 +1062,7 @@ export function GroupsPage() {
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Create a new group. Name and course are required.
+              {t('groups.createDesc')}
             </p>
           </div>
 
@@ -1178,7 +1201,14 @@ export function GroupsPage() {
                 variant="secondary"
                 onClick={handleCloseModal}
                 disabled={create.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>

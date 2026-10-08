@@ -118,16 +118,16 @@ function calcVariantClass(variant: CalcVariant, active: boolean): string {
     case 'primary':
       return active
         ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30 ring-2 ring-amber-300 scale-[1.02]'
-        : 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30';
+        : 'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 border border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-300 dark:hover:bg-amber-500/30';
     case 'secondary':
-      return 'bg-white/[0.08] text-slate-300 hover:bg-white/[0.12] border border-white/5';
+      return 'bg-black/[0.05] text-slate-700 hover:bg-black/[0.09] border border-black/5 dark:bg-white/[0.08] dark:text-slate-300 dark:hover:bg-white/[0.12] dark:border-white/5';
     case 'danger':
-      return 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30';
+      return 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 border border-rose-500/20 dark:bg-rose-500/20 dark:text-rose-300 dark:hover:bg-rose-500/30 dark:border-rose-500/30';
     case 'accent':
       return 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/30 hover:brightness-110';
     case 'default':
     default:
-      return 'bg-white/[0.05] text-white hover:bg-white/[0.1] border border-white/5 text-lg font-normal';
+      return 'bg-black/[0.03] text-slate-900 hover:bg-black/[0.07] border border-black/5 text-lg font-normal dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/[0.1] dark:border-white/5';
   }
 }
 
@@ -461,16 +461,16 @@ export function GlobalCalculator() {
             className={[
               'fixed right-3 z-[150] flex w-[370px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden',
               'inset-y-3 lg:inset-y-auto lg:top-[var(--top-bar-height,5rem)] lg:bottom-4',
-              'rounded-3xl border border-white/15 bg-slate-900/90 shadow-2xl backdrop-blur-2xl',
+              'rounded-3xl border border-black/10 bg-white/95 text-slate-900 shadow-2xl backdrop-blur-2xl dark:border-white/15 dark:bg-slate-900/95 dark:text-white',
             ].join(' ')}
           >
             {/* Header */}
-            <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 bg-white/[0.02]">
+            <header className="flex items-center justify-between border-b border-black/10 dark:border-white/10 px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02]">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/20">
                   <CalculatorIcon size={16} />
                 </div>
-                <h3 className="text-sm font-bold text-white tracking-wide">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">
                   {t('calculator.premiumTitle') || 'Kalkulyator'}
                 </h3>
               </div>
@@ -482,9 +482,9 @@ export function GlobalCalculator() {
                   onClick={toggleSound}
                   aria-label={soundEnabled ? 'Ovozni o‘chirish' : 'Ovozni yoqish'}
                   title={soundEnabled ? 'Ovozni o‘chirish' : 'Ovozni yoqish'}
-                  className="rounded-xl p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+                  className="rounded-xl p-1.5 text-slate-500 hover:bg-black/5 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
                 >
-                  {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} className="text-slate-500" />}
+                  {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} className="text-slate-400 dark:text-slate-500" />}
                 </button>
 
                 {/* History toggle */}
@@ -499,7 +499,7 @@ export function GlobalCalculator() {
                   className={`rounded-xl p-1.5 transition-colors ${
                     showHistory
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
-                      : 'text-slate-400 hover:bg-white/10 hover:text-white'
+                      : 'text-slate-500 hover:bg-black/5 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white'
                   }`}
                 >
                   <Clock size={16} />
@@ -510,7 +510,7 @@ export function GlobalCalculator() {
                   type="button"
                   onClick={() => setCalculatorOpen(false)}
                   aria-label={t('common.close') || 'Yopish'}
-                  className="rounded-xl p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+                  className="rounded-xl p-1.5 text-slate-500 hover:bg-black/5 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
                 >
                   <X size={16} />
                 </button>
@@ -532,8 +532,8 @@ export function GlobalCalculator() {
               ) : (
                 <div className="flex flex-1 flex-col">
                   {/* LCD Display */}
-                  <div className="flex flex-col items-end gap-1 px-5 py-5 bg-gradient-to-b from-black/40 to-transparent border-b border-white/5">
-                    <div className="h-5 text-xs text-slate-400 font-mono tracking-wider">
+                  <div className="flex flex-col items-end gap-1 px-5 py-5 bg-gradient-to-b from-black/[0.03] to-transparent dark:from-black/40 border-b border-black/5 dark:border-white/5">
+                    <div className="h-5 text-xs text-slate-500 dark:text-slate-400 font-mono tracking-wider">
                       {previousValue != null ? `${previousValue} ${operator}` : ''}
                     </div>
 
@@ -542,10 +542,10 @@ export function GlobalCalculator() {
                         type="button"
                         onClick={handleCopy}
                         aria-label={t('calc.copy')}
-                        className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+                        className="rounded-lg p-1.5 text-slate-500 hover:bg-black/5 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
                         title="Nusxalash"
                       >
-                        {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+                        {copied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
                       </button>
 
                       <div
@@ -553,7 +553,7 @@ export function GlobalCalculator() {
                         aria-live="polite"
                         aria-atomic="true"
                         className={`tabular-nums font-light tracking-tight transition-all select-all ${displayFontSize} ${
-                          isError ? 'text-rose-400 font-medium' : 'text-white'
+                          isError ? 'text-rose-500 font-medium' : 'text-slate-900 dark:text-white'
                         }`}
                       >
                         {formattedDisplay}
@@ -562,7 +562,7 @@ export function GlobalCalculator() {
                   </div>
 
                   {/* Tabs */}
-                  <div className="border-b border-white/10 px-4 bg-white/[0.01]">
+                  <div className="border-b border-black/10 dark:border-white/10 px-4 bg-black/[0.01] dark:bg-white/[0.01]">
                     <GlassTabs
                       tabs={tabs}
                       active={activeTab}
@@ -662,7 +662,7 @@ export function GlobalCalculator() {
                       <div>
                         <label
                           htmlFor="calc-finance-input"
-                          className="mb-1.5 block text-xs font-semibold text-slate-300"
+                          className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                         >
                           Qiymat (Foiz %, oylar yoki odamlar soni)
                         </label>
@@ -673,13 +673,13 @@ export function GlobalCalculator() {
                           value={financeInput}
                           onChange={(e) => setFinanceInput(e.target.value)}
                           placeholder="Masalan: 15"
-                          className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                          className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-slate-950/70 dark:text-white dark:placeholder-slate-500"
                         />
                       </div>
 
                       {/* Quick Discount Presets for Educational Center */}
                       <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1.5">
                           Tezkor Chegirmalar (1-bosishda):
                         </span>
                         <div className="grid grid-cols-6 gap-1.5">
@@ -688,7 +688,7 @@ export function GlobalCalculator() {
                               key={pct}
                               type="button"
                               onClick={() => handleFinanceAction('discount', pct)}
-                              className="rounded-xl border border-blue-500/30 bg-blue-500/10 py-1.5 text-xs font-bold text-blue-300 hover:bg-blue-500/20 active:scale-95 transition-all"
+                              className="rounded-xl border border-blue-500/30 bg-blue-500/10 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-500/20 active:scale-95 transition-all dark:text-blue-300"
                             >
                               -{pct}%
                             </button>
@@ -702,9 +702,9 @@ export function GlobalCalculator() {
                           type="button"
                           onClick={() => handleFinanceAction('discount')}
                           disabled={!financeInput}
-                          className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-xs font-bold text-white hover:bg-white/[0.08] active:scale-95 disabled:opacity-40 transition-all"
+                          className="flex items-center justify-center gap-2 rounded-2xl border border-black/10 bg-black/[0.02] p-3 text-xs font-bold text-slate-800 hover:bg-black/[0.05] active:scale-95 disabled:opacity-40 transition-all dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08]"
                         >
-                          <Tag size={14} className="text-amber-400" />
+                          <Tag size={14} className="text-amber-500" />
                           <span>Chegirma qo‘llash</span>
                         </button>
 
@@ -712,9 +712,9 @@ export function GlobalCalculator() {
                           type="button"
                           onClick={() => handleFinanceAction('markup')}
                           disabled={!financeInput}
-                          className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-xs font-bold text-white hover:bg-white/[0.08] active:scale-95 disabled:opacity-40 transition-all"
+                          className="flex items-center justify-center gap-2 rounded-2xl border border-black/10 bg-black/[0.02] p-3 text-xs font-bold text-slate-800 hover:bg-black/[0.05] active:scale-95 disabled:opacity-40 transition-all dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08]"
                         >
-                          <TrendingUp size={14} className="text-emerald-400" />
+                          <TrendingUp size={14} className="text-emerald-500" />
                           <span>Ustama (Komissiya)</span>
                         </button>
 
@@ -722,9 +722,9 @@ export function GlobalCalculator() {
                           type="button"
                           onClick={() => handleFinanceAction('installment')}
                           disabled={!financeInput}
-                          className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-xs font-bold text-white hover:bg-white/[0.08] active:scale-95 disabled:opacity-40 transition-all"
+                          className="flex items-center justify-center gap-2 rounded-2xl border border-black/10 bg-black/[0.02] p-3 text-xs font-bold text-slate-800 hover:bg-black/[0.05] active:scale-95 disabled:opacity-40 transition-all dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08]"
                         >
-                          <Clock size={14} className="text-cyan-400" />
+                          <Clock size={14} className="text-cyan-600 dark:text-cyan-400" />
                           <span>Bo‘lib to‘lash (Oy)</span>
                         </button>
 
@@ -732,18 +732,18 @@ export function GlobalCalculator() {
                           type="button"
                           onClick={() => handleFinanceAction('split')}
                           disabled={!financeInput}
-                          className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-xs font-bold text-white hover:bg-white/[0.08] active:scale-95 disabled:opacity-40 transition-all"
+                          className="flex items-center justify-center gap-2 rounded-2xl border border-black/10 bg-black/[0.02] p-3 text-xs font-bold text-slate-800 hover:bg-black/[0.05] active:scale-95 disabled:opacity-40 transition-all dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08]"
                         >
-                          <Users size={14} className="text-purple-400" />
+                          <Users size={14} className="text-purple-600 dark:text-purple-400" />
                           <span>Taqsimlash (Odam)</span>
                         </button>
                       </div>
 
                       {/* Hint */}
-                      <div className="mt-auto flex gap-2.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 p-3 text-blue-300">
+                      <div className="mt-auto flex gap-2.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 p-3 text-blue-700 dark:text-blue-300">
                         <Info size={16} className="mt-0.5 shrink-0" aria-hidden />
                         <p className="text-xs leading-relaxed">
-                          Hozirgi summa: <strong className="text-white">{formattedDisplay} so‘m</strong>. Yuqorida foiz yoki muddatni tanlab, hisob-kitob qiling.
+                          Hozirgi summa: <strong className="text-slate-900 dark:text-white">{formattedDisplay} so‘m</strong>. Yuqorida foiz yoki muddatni tanlab, hisob-kitob qiling.
                         </p>
                       </div>
                     </div>
@@ -778,14 +778,14 @@ function HistoryPanel({
   return (
     <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4 scrollbar-thin">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {t('calculator.historyTitle') || 'Hisob-Kitob Tarixi'}
         </h4>
         {history.length > 0 && (
           <button
             type="button"
             onClick={onClear}
-            className="text-xs text-rose-400 hover:underline"
+            className="text-xs text-rose-500 hover:underline"
           >
             {t('common.clear') || 'Tozalash'}
           </button>
@@ -802,30 +802,30 @@ function HistoryPanel({
           {history.map((item) => (
             <li
               key={item.id}
-              className="flex flex-col gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-colors hover:bg-white/[0.06]"
+              className="flex flex-col gap-1 rounded-2xl border border-black/5 bg-black/[0.02] p-3 transition-colors hover:bg-black/[0.05] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
             >
-              <div className="text-right text-xs text-slate-400 font-mono">
+              <div className="text-right text-xs text-slate-500 dark:text-slate-400 font-mono">
                 {item.expression} =
               </div>
               <div className="flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => onSelect(item.result)}
-                  className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300"
+                  className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
                   title="Kalkulyatorga yuklash"
                 >
                   <RotateCcw size={12} />
                   <span>Qayta yuklash</span>
                 </button>
-                <div className="text-right text-lg font-bold text-white tabular-nums">
+                <div className="text-right text-lg font-bold text-slate-900 dark:text-white tabular-nums">
                   {item.result}
                 </div>
               </div>
-              <div className="mt-1 flex justify-end gap-2 border-t border-white/5 pt-2">
+              <div className="mt-1 flex justify-end gap-2 border-t border-black/5 dark:border-white/5 pt-2">
                 <button
                   type="button"
                   onClick={() => onAskAi(item)}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-purple-400 hover:text-purple-300"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:text-purple-500 dark:text-purple-400 dark:hover:text-purple-300"
                 >
                   <Sparkles size={13} />
                   <span>AI bilan tahlil qilish</span>

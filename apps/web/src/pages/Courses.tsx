@@ -224,15 +224,13 @@ export function getCourseStatusBadge(isActive: boolean): { variant: 'success' | 
 }
 
 function getInitials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .map((p) => p.charAt(0))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || '—'
-  );
+  return (name
+    .split(/\s+/)
+    .map((p) => p.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '—');
 }
 
 function nameHash(str: string): number {
@@ -407,7 +405,14 @@ function SegmentedFilter({
                 ? `inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 8px -4px ${c.glow}`
                 : undefined,
             }}
-          >
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e: any) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}>
             <Icon paths={opt.icon} size={12} strokeWidth={2.2} />
             <span className="tracking-tight">{opt.label}</span>
             {count > 0 && (
@@ -525,7 +530,14 @@ const CourseRow = forwardRef<HTMLDivElement, {
             color: '#007AFF',
             border: '1px solid rgba(0,122,255,0.22)',
           }}
-        >
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e: any) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.currentTarget.click();
+            }
+          }}>
           <Icon paths={I.edit} size={13} strokeWidth={2} />
         </motion.button>
         <motion.button
@@ -542,7 +554,14 @@ const CourseRow = forwardRef<HTMLDivElement, {
             color: '#FF3B30',
             border: '1px solid rgba(255,59,48,0.22)',
           }}
-        >
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e: any) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.currentTarget.click();
+            }
+          }}>
           <Icon paths={I.trash} size={13} strokeWidth={2} />
         </motion.button>
       </div>
@@ -871,7 +890,18 @@ export function CoursesPage() {
               {/* Actions */}
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  <GlassButton type="button" variant="primary" onClick={handleOpenModal}>
+                  <GlassButton
+                    type="button"
+                    variant="primary"
+                    onClick={handleOpenModal}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e: any) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.currentTarget.click();
+                      }
+                    }}>
                     <span className="inline-flex items-center gap-2">
                       <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                       {t('courses.add')}
@@ -928,7 +958,14 @@ export function CoursesPage() {
                 whileTap={{ scale: 0.9 }}
                 className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[#86868B] outline-none hover:bg-[#00000008] dark:hover:bg-[#ffffff08]"
                 aria-label={t('courses.clearSearch')}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <Icon paths={I.x} size={12} strokeWidth={2.5} />
               </motion.button>
             )}
@@ -975,10 +1012,10 @@ export function CoursesPage() {
                       <Icon paths={I.search} size={20} strokeWidth={2} />
                     </div>
                     <p className="mt-3 text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                      No courses match your filters
+                      {t('courses.noMatch')}
                     </p>
                     <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#86868B]">
-                      Try clearing the search or switching the level filter.
+                      {t('courses.clearSearchHint')}
                     </p>
                     <div className="mt-4 flex justify-center gap-2">
                       {search && (
@@ -987,8 +1024,15 @@ export function CoursesPage() {
                           variant="secondary"
                           size="sm"
                           onClick={() => setSearch('')}
-                        >
-                          Clear search
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
+                          {t('courses.clearSearch')}
                         </GlassButton>
                       )}
                       <GlassButton
@@ -996,8 +1040,15 @@ export function CoursesPage() {
                         variant="primary"
                         size="sm"
                         onClick={() => { setFilter('ALL'); setSearch(''); }}
-                      >
-                        Show all
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
+                        {t('courses.showAll')}
                       </GlassButton>
                     </div>
                   </div>
@@ -1045,7 +1096,7 @@ export function CoursesPage() {
               <div className="flex items-center gap-2">
                 <Icon paths={I.bookOpen} size={13} strokeWidth={2} className="text-[#86868B]" />
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                  Basic Information
+                  {t('courses.basicInfo')}
                 </p>
               </div>
 
@@ -1110,7 +1161,7 @@ export function CoursesPage() {
               <div className="flex items-center gap-2">
                 <Icon paths={I.award} size={13} strokeWidth={2} className="text-[#86868B]" />
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                  Course Level
+                  {t('courses.level')}
                 </p>
               </div>
 
@@ -1135,7 +1186,14 @@ export function CoursesPage() {
                           ? `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`
                           : undefined,
                       }}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <Icon paths={I.award} size={14} strokeWidth={2.2} />
                       {formatCourseLevel(level)}
                     </motion.button>
@@ -1152,7 +1210,14 @@ export function CoursesPage() {
                   variant="secondary"
                   onClick={handleCloseModal}
                   disabled={save.isPending}
-                >
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   {t('common.cancel')}
                 </GlassButton>
               </motion.div>

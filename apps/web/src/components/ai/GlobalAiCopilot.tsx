@@ -662,7 +662,7 @@ export function GlobalAiCopilot() {
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="fixed inset-0 z-[149] bg-slate-950/40 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-[149] bg-black/30 dark:bg-slate-950/60 backdrop-blur-sm lg:hidden"
               onClick={handleClose}
               aria-hidden="true"
             />

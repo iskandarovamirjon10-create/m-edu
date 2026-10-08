@@ -233,7 +233,7 @@ export class RealEmbedder {
     // ArcFace-compatible models emit float32 tensors; guard against other
     // tensor dtypes (uint8/int8/string) so we never feed garbage to the L2
     // normalization / distance math below.
-    let embeddingData = rawData instanceof Float32Array
+    const embeddingData = rawData instanceof Float32Array
       ? rawData
       : new Float32Array(rawData as ArrayLike<number>);
 

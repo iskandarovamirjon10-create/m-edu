@@ -196,10 +196,11 @@ export function ThemeProvider({
 export const useTheme = (): ThemeContextType => {
   const ctx = useContext(ThemeContext);
   if (!ctx) {
-    throw new Error(
-      'useTheme must be used within a <ThemeProvider>. ' +
-      'Wrap your app root with <ThemeProvider> in main.tsx or App.tsx.',
-    );
+    return {
+      theme: 'system',
+      setTheme: () => {},
+      isDark: typeof document !== 'undefined' ? document.documentElement.classList.contains('dark') : false,
+    };
   }
   return ctx;
 };

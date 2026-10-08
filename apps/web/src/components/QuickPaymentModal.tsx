@@ -151,7 +151,7 @@ export function QuickPaymentModal() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 dark:bg-slate-950/70 backdrop-blur-md animate-fade-in"
       onClick={() => setOpen(false)}
     >
       <motion.div
@@ -160,25 +160,25 @@ export function QuickPaymentModal() {
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-white/15 bg-[#121826]/95 p-6 shadow-2xl backdrop-blur-2xl text-white"
+        className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-black/10 bg-white/95 p-6 shadow-2xl backdrop-blur-2xl text-slate-900 dark:border-white/15 dark:bg-[#121826]/95 dark:text-white"
         style={{
-          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 40px -10px rgba(99, 102, 241, 0.25)',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.25), 0 0 40px -10px rgba(99, 102, 241, 0.2)',
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
+        <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4 mb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-xl shadow-lg shadow-emerald-500/30">
               ⚡️
             </div>
             <div>
-              <h2 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+              <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
                 Tezkor To‘lov (3 soniya)
-                <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
                   Instant
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 O‘quvchidan to‘lovni qabul qilish va avtomat chek yuborish
               </p>
             </div>
@@ -186,7 +186,7 @@ export function QuickPaymentModal() {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/5 text-slate-500 hover:bg-black/10 hover:text-slate-800 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
           >
             ✕
           </button>
@@ -195,26 +195,26 @@ export function QuickPaymentModal() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Step 1: Student Selection */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
               1. O‘quvchi
             </label>
 
             {selectedStudent ? (
               <div className="flex items-center justify-between rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300 font-bold text-sm">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold text-sm">
                     {selectedStudent.user?.firstName?.[0] || selectedStudent.firstName?.[0] || 'O'}
                     {selectedStudent.user?.lastName?.[0] || selectedStudent.lastName?.[0] || ''}
                   </div>
                   <div>
-                    <div className="font-semibold text-sm text-white">
+                    <div className="font-semibold text-sm text-slate-900 dark:text-white">
                       {selectedStudent.user?.firstName || selectedStudent.firstName}{' '}
                       {selectedStudent.user?.lastName || selectedStudent.lastName || ''}
                     </div>
-                    <div className="text-xs text-slate-400 flex items-center gap-2">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                       <span>📞 {selectedStudent.user?.phone || selectedStudent.phone || 'Telefon yo‘q'}</span>
                       {selectedStudent.balance !== undefined && (
-                        <span className="text-emerald-400 font-medium">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-medium">
                           Balans: {Number(selectedStudent.balance).toLocaleString('uz-UZ')} so‘m
                         </span>
                       )}
@@ -227,7 +227,7 @@ export function QuickPaymentModal() {
                     setSelectedStudent(null);
                     setSearchTerm('');
                   }}
-                  className="rounded-lg bg-white/10 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/20 hover:text-white transition-colors"
+                  className="rounded-lg bg-black/5 text-slate-700 hover:bg-black/10 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20 dark:hover:text-white transition-colors px-2.5 py-1 text-xs"
                 >
                   O‘zgartirish
                 </button>
@@ -240,7 +240,7 @@ export function QuickPaymentModal() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Ism, familiya yoki telefon raqami bilan qidiring..."
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all"
+                  className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-slate-500"
                 />
 
                 {loadingStudents && (
@@ -249,7 +249,7 @@ export function QuickPaymentModal() {
 
                 {/* Dropdown search results */}
                 {searchTerm.trim().length >= 2 && studentsData?.items && studentsData.items.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-2xl border border-white/15 bg-slate-900/95 p-1 shadow-2xl backdrop-blur-xl">
+                  <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-1 shadow-2xl backdrop-blur-xl dark:border-white/15 dark:bg-slate-900/95">
                     {studentsData.items.map((student: any) => (
                       <button
                         key={student.id}
@@ -258,17 +258,17 @@ export function QuickPaymentModal() {
                           setSelectedStudent(student);
                           setSearchTerm('');
                         }}
-                        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-white/10 transition-colors"
+                        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                       >
                         <div>
-                          <div className="text-sm font-medium text-white">
+                          <div className="text-sm font-medium text-slate-900 dark:text-white">
                             {student.user?.firstName || student.firstName} {student.user?.lastName || student.lastName || ''}
                           </div>
-                          <div className="text-xs text-slate-400">
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
                             {student.user?.phone || student.phone || 'Telefon kiritilmagan'}
                           </div>
                         </div>
-                        <span className="text-xs font-semibold text-emerald-400">
+                        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                           Tanlash →
                         </span>
                       </button>
@@ -281,7 +281,7 @@ export function QuickPaymentModal() {
 
           {/* Step 2: Amount with Quick Presets */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
               2. To‘lov Summasi (UZS)
             </label>
             <div className="relative">
@@ -293,7 +293,7 @@ export function QuickPaymentModal() {
                   const val = e.target.value.replace(/[^0-9]/g, '');
                   setAmount(val ? Number(val).toLocaleString('uz-UZ') : '');
                 }}
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-lg font-bold tracking-tight text-emerald-400 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 transition-all"
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-lg font-bold tracking-tight text-emerald-600 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 transition-all dark:border-white/10 dark:bg-white/5 dark:text-emerald-400"
                 placeholder="0"
               />
               <span className="absolute right-4 top-3 text-sm font-semibold text-slate-400">
@@ -308,7 +308,7 @@ export function QuickPaymentModal() {
                   key={preset.value}
                   type="button"
                   onClick={() => setAmount(preset.value.toLocaleString('uz-UZ'))}
-                  className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-emerald-500/20 hover:border-emerald-500/30 hover:text-emerald-300 transition-all"
+                  className="rounded-xl border border-black/10 bg-black/[0.03] px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-emerald-500/15 hover:border-emerald-500/30 hover:text-emerald-700 transition-all dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-emerald-500/20 dark:hover:border-emerald-500/30 dark:hover:text-emerald-300"
                 >
                   {preset.label}
                 </button>
@@ -318,7 +318,7 @@ export function QuickPaymentModal() {
 
           {/* Step 3: Payment Method */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
               3. To‘lov turi
             </label>
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
@@ -331,8 +331,8 @@ export function QuickPaymentModal() {
                     onClick={() => setMethod(m.id)}
                     className={`flex flex-col items-center justify-center rounded-xl p-2 border text-center transition-all ${
                       active
-                        ? 'border-indigo-500 bg-indigo-500/20 text-white shadow-lg shadow-indigo-500/20 font-bold'
-                        : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
+                        ? 'border-indigo-500 bg-indigo-500/15 text-indigo-700 dark:bg-indigo-500/20 dark:text-white shadow-lg shadow-indigo-500/20 font-bold'
+                        : 'border-black/10 bg-black/[0.03] text-slate-600 hover:bg-black/[0.06] hover:text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white'
                     }`}
                   >
                     <span className="text-lg">{m.icon}</span>
@@ -350,7 +350,7 @@ export function QuickPaymentModal() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Izoh (masalan: Oktyabr oyi ingliz tili kursi uchun)"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-white/30"
+              className="w-full rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-slate-500"
             />
           </div>
 

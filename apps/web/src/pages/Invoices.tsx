@@ -667,7 +667,7 @@ export function InvoicesPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#5856D6]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#5856D6]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Billing
+                  {t('invoices.billing')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
@@ -701,7 +701,17 @@ export function InvoicesPage() {
               whileTap={{ scale: 0.97 }}
               transition={SPRING.snappy}
             >
-              <GlassButton variant="primary" onClick={() => setCreateOpen(true)}>
+              <GlassButton
+                variant="primary"
+                onClick={() => setCreateOpen(true)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                   {t('invoices.createDraft')}
@@ -788,7 +798,18 @@ export function InvoicesPage() {
               {!statusFilter && (
                 <div className="mt-5">
                   <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                    <GlassButton variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+                    <GlassButton
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setCreateOpen(true)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <span className="inline-flex items-center gap-2">
                         <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                         {t('invoices.createDraft')}
@@ -869,7 +890,14 @@ export function InvoicesPage() {
                           color: '#007AFF',
                           border: '1px solid rgba(0,122,255,0.22)',
                         }}
-                      >
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
                         <Icon paths={I.upload} size={12} strokeWidth={2.4} />
                         <span className="hidden sm:inline">{t('invoices.confirmIssue')}</span>
                       </motion.button>
@@ -887,7 +915,14 @@ export function InvoicesPage() {
                           color: '#10B981',
                           border: '1px solid rgba(16,185,129,0.22)',
                         }}
-                      >
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
                         <Icon paths={I.cash} size={12} strokeWidth={2.4} />
                         <span className="hidden sm:inline">{t('invoices.recordPayment')}</span>
                       </motion.button>
@@ -905,7 +940,14 @@ export function InvoicesPage() {
                           color: '#F43F5E',
                           border: '1px solid rgba(244,63,94,0.22)',
                         }}
-                      >
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
                         <Icon paths={I.refresh} size={12} strokeWidth={2.4} />
                         <span className="hidden sm:inline">{t('invoices.recordRefund')}</span>
                       </motion.button>
@@ -924,7 +966,14 @@ export function InvoicesPage() {
                         color: '#5856D6',
                         border: '1px solid rgba(88,86,214,0.20)',
                       }}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <Printer className="h-3.5 w-3.5" />
                     </motion.button>
                   </div>
@@ -967,7 +1016,7 @@ export function InvoicesPage() {
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Record a payment against this invoice. Amount cannot exceed the balance due.
+              {t('invoices.recordPaymentDesc')}
             </p>
           </div>
 
@@ -1052,7 +1101,18 @@ export function InvoicesPage() {
 
           <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton type="button" variant="secondary" onClick={() => setPayTarget(null)}>
+              <GlassButton
+                type="button"
+                variant="secondary"
+                onClick={() => setPayTarget(null)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1101,7 +1161,18 @@ export function InvoicesPage() {
 
           <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton type="button" variant="secondary" onClick={() => setIssueTarget(null)}>
+              <GlassButton
+                type="button"
+                variant="secondary"
+                onClick={() => setIssueTarget(null)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1111,7 +1182,14 @@ export function InvoicesPage() {
                 variant="primary"
                 disabled={issue.isPending}
                 onClick={() => issueTarget && issue.mutate(issueTarget.id)}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   {issue.isPending ? (
                     <>
@@ -1307,7 +1385,14 @@ export function InvoicesPage() {
                           size="sm"
                           onClick={() => processRefund.mutate(r.id)}
                           disabled={processRefund.isPending}
-                        >
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
                           {t('invoices.process')}
                         </GlassButton>
                         <GlassButton
@@ -1318,7 +1403,14 @@ export function InvoicesPage() {
                             setRejectTarget(r);
                             setRejectReason('');
                           }}
-                        >
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
                           {t('invoices.reject')}
                         </GlassButton>
                       </div>
@@ -1337,7 +1429,14 @@ export function InvoicesPage() {
                     setRefundTarget(null);
                     setRefundForm(EMPTY_REFUND);
                   }}
-                >
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   {t('common.close')}
                 </GlassButton>
               </motion.div>
@@ -1354,7 +1453,14 @@ export function InvoicesPage() {
                   onClick={() =>
                     requestRefund.mutate({ ...refundForm, amount: Number(refundForm.amount) })
                   }
-                >
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   <span className="inline-flex items-center gap-2">
                     {requestRefund.isPending ? (
                       <>
@@ -1414,7 +1520,18 @@ export function InvoicesPage() {
 
           <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton type="button" variant="secondary" onClick={() => setRejectTarget(null)}>
+              <GlassButton
+                type="button"
+                variant="secondary"
+                onClick={() => setRejectTarget(null)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1426,7 +1543,14 @@ export function InvoicesPage() {
                 onClick={() =>
                   rejectTarget && rejectRefund.mutate({ id: rejectTarget.id, reason: rejectReason })
                 }
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   {rejectRefund.isPending ? (
                     <>
@@ -1486,7 +1610,7 @@ export function InvoicesPage() {
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Create a new draft invoice. You can issue it later.
+              {t('invoices.createDraftDesc')}
             </p>
           </div>
 
@@ -1577,7 +1701,14 @@ export function InvoicesPage() {
                 variant="secondary"
                 onClick={() => setCreateOpen(false)}
                 disabled={createInvoice.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1638,7 +1769,7 @@ export function InvoicesPage() {
                     M
                   </div>
                   <div>
-                    <h2 className="text-[16px] font-bold tracking-tight">M-EDU ACADEMY</h2>
+                    <h2 className="text-[16px] font-bold tracking-tight">{t('common.meduAcademy')}</h2>
                     <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
                       Official Tuition & Billing Document
                     </p>
@@ -1761,7 +1892,7 @@ export function InvoicesPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-[#4A4A4F] dark:text-[#C7C7CC]">M-EDU Learning Systems</p>
+                  <p className="font-bold text-[#4A4A4F] dark:text-[#C7C7CC]">{t('common.meduSystems')}</p>
                   <p>{t('invoices.preview.thankYou')}</p>
                 </div>
               </div>
@@ -1769,12 +1900,34 @@ export function InvoicesPage() {
 
             <div className="flex justify-end gap-2">
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <GlassButton type="button" variant="secondary" onClick={() => setPreviewTarget(null)}>
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setPreviewTarget(null)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   {t('common.close')}
                 </GlassButton>
               </motion.div>
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <GlassButton type="button" variant="primary" onClick={() => window.print()}>
+                <GlassButton
+                  type="button"
+                  variant="primary"
+                  onClick={() => window.print()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   <span className="inline-flex items-center gap-2">
                     <Printer className="h-4 w-4" />
                     {t('invoices.preview.printInvoice')}

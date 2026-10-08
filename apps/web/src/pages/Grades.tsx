@@ -198,7 +198,18 @@ export function GradesPage() {
         title={t('grades.title')}
         description={t('grades.total', { n: data?.total ?? 0 })}
         actions={
-          <GlassButton variant="primary" size="sm" onClick={openCreate}>
+          <GlassButton
+            variant="primary"
+            size="sm"
+            onClick={openCreate}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e: any) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}>
             {t('grades.add')}
           </GlassButton>
         }
@@ -256,14 +267,32 @@ export function GradesPage() {
                   <GlassTD className="max-w-48 truncate text-[var(--text-muted)]">{g.notes ?? '—'}</GlassTD>
                   <GlassTD>
                     <div className="flex gap-2 justify-end">
-                      <GlassButton variant="ghost" size="sm" onClick={() => openEdit(g)}>
+                      <GlassButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEdit(g)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
                         {t('common.edit')}
                       </GlassButton>
                       <GlassButton
                         variant="danger"
                         size="sm"
                         onClick={() => setDeleteTarget(g.id)}
-                      >
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
                         {t('common.delete')}
                       </GlassButton>
                     </div>
@@ -283,7 +312,14 @@ export function GradesPage() {
                       size="sm"
                       className="w-9 h-9 text-sm font-medium rounded-xl transition-all duration-200"
                       onClick={() => setPage(p)}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       {p}
                     </GlassButton>
                   ))}
@@ -300,13 +336,31 @@ export function GradesPage() {
         title={editGrade ? t('grades.editTitle') : t('grades.newTitle')}
         footer={
           <>
-            <GlassButton variant="secondary" size="sm" onClick={closeModal}>{t('common.cancel')}</GlassButton>
+            <GlassButton
+              variant="secondary"
+              size="sm"
+              onClick={closeModal}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e: any) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.currentTarget.click();
+                }
+              }}>{t('common.cancel')}</GlassButton>
             <GlassButton
               variant="primary"
               size="sm"
               onClick={handleSubmit}
               disabled={createMut.isPending || updateMut.isPending}
-            >
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e: any) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.currentTarget.click();
+                }
+              }}>
               {editGrade ? t('common.save') : t('common.create')}
             </GlassButton>
           </>

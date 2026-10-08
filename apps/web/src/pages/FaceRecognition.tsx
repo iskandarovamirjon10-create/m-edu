@@ -398,15 +398,13 @@ export function resolveRecognitionOutcome(
 }
 
 function getInitials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .map((p) => p.charAt(0))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || '—'
-  );
+  return (name
+    .split(/\s+/)
+    .map((p) => p.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '—');
 }
 
 function nameHash(str: string): number {
@@ -720,7 +718,9 @@ function MiniAction({
           ? `inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px ${c.glow}`
           : `inset 0 1px 0 rgba(255,255,255,0.4)`,
       }}
-    >
+      
+      
+      >
       <Icon paths={icon} size={12} strokeWidth={2.6} />
       <span>{label}</span>
     </motion.button>
@@ -1189,12 +1189,12 @@ export function FaceRecognitionPage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h1 className="text-base font-bold tracking-tight text-white">M-EDU Face ID Kiosk</h1>
+                    <h1 className="text-base font-bold tracking-tight text-white">{t('face.kioskTitle')}</h1>
                     <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold tracking-widest text-emerald-400">
-                      LIVE TURNIKET
+                      {t('face.liveTurnstile')}
                     </span>
                   </div>
-                  <p className="text-xs text-white/50">Aqlli Yuz Tanish va Davomat Qayd Etish Terminali</p>
+                  <p className="text-xs text-white/50">{t('face.smartTerminal')}</p>
                 </div>
               </div>
 
@@ -1225,7 +1225,9 @@ export function FaceRecognitionPage() {
                       : 'border border-white/10 bg-white/5 text-white/50'
                   }`}
                   title="Ovozli yordamchi"
-                >
+                  
+                  
+                  >
                   <Icon paths={voice.enabled ? I.volume : I.volumeX} size={15} strokeWidth={2.2} />
                   <span className="hidden md:inline">{voice.enabled ? 'Ovoz Yoqiq' : "Ovoz O'chiq"}</span>
                 </button>
@@ -1239,7 +1241,9 @@ export function FaceRecognitionPage() {
                       ? 'border border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
                       : 'border border-white/10 bg-white/5 text-white/50'
                   }`}
-                >
+                  
+                  
+                  >
                   <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
                   <span className="hidden md:inline">{autoScan ? 'Avto-Skan: Faol' : "Avto-Skan: Qo'lda"}</span>
                 </button>
@@ -1256,9 +1260,11 @@ export function FaceRecognitionPage() {
                     onClick={handleStartSession}
                     disabled={startSession.isPending}
                     className="flex items-center gap-2 rounded-xl border border-blue-500/40 bg-blue-600/30 px-3 py-2 text-xs font-bold text-white shadow-lg shadow-blue-500/20"
-                  >
+                    
+                    
+                    >
                     <Icon paths={I.play} size={13} strokeWidth={2.4} />
-                    <span>Sessiyani Boshlash</span>
+                    <span>{t('face.startSession')}</span>
                   </button>
                 )}
 
@@ -1268,9 +1274,11 @@ export function FaceRecognitionPage() {
                   onClick={() => setIsKioskMode(false)}
                   className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 text-xs font-bold text-white transition-all hover:bg-white/20 hover:border-white/30"
                   title="Kioskdan chiqish (ESC)"
-                >
+                  
+                  
+                  >
                   <Icon paths={I.minimize} size={15} strokeWidth={2.2} />
-                  <span>Chiqish</span>
+                  <span>{t('common.exit')}</span>
                   <kbd className="hidden sm:inline-block rounded bg-black/40 px-1.5 py-0.5 text-[10px] text-white/60">ESC</kbd>
                 </button>
               </div>
@@ -1386,18 +1394,20 @@ export function FaceRecognitionPage() {
                     <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-400 mb-4">
                       <Icon paths={I.camera} size={32} strokeWidth={2} />
                     </div>
-                    <h3 className="text-lg font-bold text-white">Sessiya Faollashtirilmagan</h3>
+                    <h3 className="text-lg font-bold text-white">{t('face.sessionNotActivated')}</h3>
                     <p className="text-sm text-white/60 mt-1 mb-5">
-                      Kiosk rejimida yuzlarni avtomatik qabul qilish uchun tanish sessiyasini boshlang.
+                      {t('face.kioskDesc')}
                     </p>
                     <button
                       type="button"
                       onClick={handleStartSession}
                       disabled={startSession.isPending}
                       className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/30 transition-all"
-                    >
+                      
+                      
+                      >
                       <Icon paths={I.play} size={16} strokeWidth={2.4} />
-                      <span>Sessiyani Boshlash</span>
+                      <span>{t('face.startSession')}</span>
                     </button>
                   </div>
                 )}
@@ -1408,7 +1418,7 @@ export function FaceRecognitionPage() {
                 <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
                   <div className="flex items-center gap-2.5">
                     <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <h2 className="text-sm font-bold text-white tracking-wide">Jonli Davomat Oqimi</h2>
+                    <h2 className="text-sm font-bold text-white tracking-wide">{t('face.liveStream')}</h2>
                   </div>
                   <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-bold text-white/70">
                     {liveFeed.length}
@@ -1419,7 +1429,7 @@ export function FaceRecognitionPage() {
                   {liveFeed.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full p-6 text-center text-white/40">
                       <Icon paths={I.empty} size={28} strokeWidth={1.6} className="mb-2 opacity-50" />
-                      <p className="text-xs">Hali hech kim kirmadi</p>
+                      <p className="text-xs">{t('face.noOneEntered')}</p>
                       <p className="text-[11px] text-white/30 mt-0.5">O'quvchi tanilganda bu yerda real vaqtda paydo bo'ladi</p>
                     </div>
                   ) : (
@@ -1543,7 +1553,9 @@ export function FaceRecognitionPage() {
                     : 'border border-gray-300/40 bg-gray-200/30 text-gray-500 dark:border-white/10 dark:bg-white/5 dark:text-gray-400'
                 }`}
                 title="Ovozli qutlov va e'lonlar"
-              >
+                
+                
+                >
                 <Icon paths={voice.enabled ? I.volume : I.volumeX} size={15} strokeWidth={2.2} />
                 <span>{voice.enabled ? "Ovoz: Yoqiq" : "Ovoz: O'chiq"}</span>
               </motion.button>
@@ -1554,7 +1566,9 @@ export function FaceRecognitionPage() {
                 whileHover={{ scale: 1.03, y: -1 }}
                 whileTap={{ scale: 0.97 }}
                 className="inline-flex items-center gap-2 rounded-xl border border-[#AF52DE]/30 bg-gradient-to-r from-[#007AFF]/15 via-[#AF52DE]/15 to-[#34C759]/15 px-3.5 py-2 text-xs font-bold text-[#1D1D1F] shadow-sm backdrop-blur-xl dark:border-[#AF52DE]/40 dark:text-white"
-              >
+                
+                
+                >
                 <Icon paths={I.maximize} size={15} strokeWidth={2.2} className="text-[#AF52DE]" />
                 <span>Kiosk / Turniket Rejimi</span>
               </motion.button>
@@ -1665,8 +1679,7 @@ export function FaceRecognitionPage() {
                   tone="red"
                   onClick={handleFinishSession}
                   disabled={finish.isPending}
-                  ariaLabel={t('faceRecognition.finishSession')}
-                />
+                  ariaLabel={t('faceRecognition.finishSession')} />
               </div>
             ) : (
               <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end">
@@ -1701,7 +1714,9 @@ export function FaceRecognitionPage() {
                     onClick={handleStartSession}
                     disabled={startSession.isPending}
                     aria-busy={startSession.isPending}
-                  >
+                    
+                    
+                    >
                     <span className="inline-flex items-center gap-2">
                       {startSession.isPending ? (
                         <>
@@ -1754,8 +1769,7 @@ export function FaceRecognitionPage() {
                 icon={I.refresh}
                 label={t('faceRecognition.engineRetry')}
                 tone="red"
-                onClick={handleRetryEngine}
-              />
+                onClick={handleRetryEngine} />
             </div>
           )}
         </div>
@@ -1902,7 +1916,7 @@ export function FaceRecognitionPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <h4 className="truncate text-[14px] font-bold text-[#FF3B30] dark:text-[#FF453A]">
-                        Yuz aniqlanmadi yoki mos kelmadi
+                        {t('face.noFaceMatch')}
                       </h4>
                       <p className="text-[11.5px] font-medium text-[#86868B]">
                         Yuzingizni kameraga to'g'rilang yoki avval yuzni ro'yxatdan o'tkazing
@@ -1953,7 +1967,9 @@ export function FaceRecognitionPage() {
                     onClick={() => setRawExpanded((v) => !v)}
                     className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1 text-left text-[11.5px] font-semibold text-[#86868B] outline-none transition-colors hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]"
                     aria-expanded={rawExpanded}
-                  >
+                    
+                    
+                    >
                     <span>{t('faceRecognition.viewRaw')}</span>
                     <motion.span
                       animate={{ rotate: rawExpanded ? 180 : 0 }}

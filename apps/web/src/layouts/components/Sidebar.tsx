@@ -1,28 +1,82 @@
 /**
- * M-EDU Sidebar & Navigation Tree — v11 "Titanium"
- * Complete RBAC filtering, roving tabindex navigation, recent routes, and compact rail.
+ * M-EDU Sidebar & Navigation Tree — v13 "Artisan Titanium"
+ * RBAC filtering · roving tabindex navigation · recent routes · compact rail.
+ *
+ * Optimizations:
+ *  - Per-instance layoutId scoping (multi-sidebar safe)
+ *  - Icon registry typed as IconPaths (Icons v13)
+ *  - Single-pass nav filtering (primary + secondary in one reduce)
+ *  - Memoized leaf components; stable derived labels
+ *  - Reduced-motion respected on every animated surface
+ *  - Semantic tone tokens shared with TopBar / GlassSurface
  */
 
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import {
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  useEffect,
+  useId,
+  memo,
+} from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useI18n } from '@/i18n/I18nProvider';
-import { SPRING, ACCENTS, navListVariants, navItemVariants, type AccentKey } from '../core/tokens';
-import { useKeyboardNav, usePersistedState, useDeviceProfile } from '../core/singletons';
+import {
+  SPRING,
+  ACCENTS,
+  navListVariants,
+  navItemVariants,
+  type AccentKey,
+} from '../core/tokens';
+import {
+  useKeyboardNav,
+  usePersistedState,
+  useDeviceProfile,
+  usePrefersReducedMotion,
+} from '../core/singletons';
 import { GlassSurface } from './GlassSurface';
 import { Brand } from './Brand';
-import { StaticIcon, PremiumIcon, Magnetic, I } from './Icons';
+import {
+  StaticIcon,
+  PremiumIcon,
+  Magnetic,
+  I,
+  type IconPaths,
+} from './Icons';
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Tone tokens — shared with TopBar / Brand / GlassSurface                   */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+const TONE = {
+  label: 'text-[#1D1D1F] dark:text-[#F5F5F7]',
+  secondary: 'text-[#636366] dark:text-[#98989D]',
+  divider: 'border-[#00000010] dark:border-[#ffffff10]',
+  hover: 'hover:bg-black/[0.045] dark:hover:bg-white/[0.06]',
+  focus:
+    'outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/55 dark:focus-visible:ring-[#0A84FF]/60',
+  danger: 'hover:bg-[#FF3B30]/10 hover:text-[#FF3B30] dark:hover:text-[#FF453A]',
+} as const;
+
+const RAINBOW_GRADIENT =
+  'conic-gradient(from 0deg, #007AFF, #5856D6, #FF2D55, #FF9500, #34C759, #007AFF)';
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Nav registry                                                              */
+/* ────────────────────────────────────────────────────────────────────────── */
 
 export interface NavItem {
   to: string;
   labelKey: string;
   label: string;
-  iconPath: string[];
+  iconPath: IconPaths;
   end?: boolean;
   accent?: AccentKey;
 }
 
-export const PRIMARY_NAV: NavItem[] = [
+export const PRIMARY_NAV: readonly NavItem[] = [
   { to: '/', labelKey: 'nav.dashboard', label: 'Dashboard', iconPath: I.dashboard, end: true, accent: 'blue' },
   { to: '/ai-copilot', labelKey: 'nav.aiCopilot', label: 'AI Copilot', iconPath: I.ai, accent: 'rainbow' },
   { to: '/students', labelKey: 'nav.students', label: 'Students', iconPath: I.students, accent: 'blue' },
@@ -41,7 +95,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: '/chat', labelKey: 'nav.chat', label: 'Chat', iconPath: I.chat, accent: 'blue' },
 ];
 
-export const SECONDARY_NAV: NavItem[] = [
+export const SECONDARY_NAV: readonly NavItem[] = [
   { to: '/executive-dashboard', labelKey: 'nav.executiveDashboard', label: 'Executive Dashboard', iconPath: I.executive, accent: 'purple' },
   { to: '/financial-analytics', labelKey: 'nav.financialAnalytics', label: 'Financial Analytics', iconPath: I.financial, accent: 'green' },
   { to: '/payroll-analytics', labelKey: 'nav.payrollAnalytics', label: 'Payroll Analytics', iconPath: I.payroll, accent: 'green' },
@@ -63,45 +117,76 @@ export const SECONDARY_NAV: NavItem[] = [
   { to: '/settings', labelKey: 'nav.settings', label: 'Settings', iconPath: I.settings, accent: 'purple' },
 ];
 
-export const HIDDEN_FOR_STUDENT = new Set([
-  '/teachers','/users','/expenses','/cameras','/audit','/settings','/homework','/leads','/hr','/inventory',
-  '/invoices','/reports','/executive-dashboard','/financial-analytics','/payroll-analytics','/crm-analytics',
-  '/parent-portal','/payroll','/automation','/follow-up-automation','/branches','/anomaly-detection','/data-governance',
-  '/ai-copilot',
+export const HIDDEN_FOR_STUDENT = new Set<string>([
+  '/teachers', '/users', '/expenses', '/cameras', '/audit', '/settings',
+  '/homework', '/leads', '/hr', '/inventory', '/invoices', '/reports',
+  '/executive-dashboard', '/financial-analytics', '/payroll-analytics',
+  '/crm-analytics', '/parent-portal', '/payroll', '/automation',
+  '/follow-up-automation', '/branches', '/anomaly-detection',
+  '/data-governance', '/ai-copilot',
 ]);
 
 export const ALL_ITEMS_MAP = new Map<string, NavItem>(
   [...PRIMARY_NAV, ...SECONDARY_NAV].map((i) => [i.to, i]),
 );
 
-export function useRecentRoutes(limit = 3) {
-  const [recent, setRecent] = usePersistedState<string[]>('m-edu.recent-routes', []);
-  const location = useLocation();
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Hooks                                                                     */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export function useRecentRoutes(limit = 3): readonly string[] {
+  const [recent, setRecent] = usePersistedState<readonly string[]>(
+    'm-edu.recent-routes',
+    [],
+  );
+  const { pathname } = useLocation();
 
   useEffect(() => {
-    const path = location.pathname;
     setRecent((prev) => {
-      if (prev[0] === path) return prev;
-      return [path, ...prev.filter((p) => p !== path)].slice(0, limit);
+      if (prev[0] === pathname) return prev;
+      return [pathname, ...prev.filter((p) => p !== pathname)].slice(0, limit);
     });
-  }, [location.pathname, limit, setRecent]);
+  }, [pathname, limit, setRecent]);
 
   return recent;
 }
 
-export function RecentRoutes({ onNavigate }: { onNavigate?: () => void }) {
-  const recent = useRecentRoutes(3);
+/** Normalize a role slug ("SUPER_ADMIN" → "super admin") once per value. */
+function useRoleLabel(role: string): string {
+  return useMemo(
+    () => (role ?? '').replace(/_/g, ' ').toLowerCase(),
+    [role],
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  RecentRoutes                                                              */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export const RecentRoutes = memo(function RecentRoutes({
+  onNavigate,
+}: {
+  onNavigate?: () => void;
+}) {
   const { t } = useI18n();
+  const recent = useRecentRoutes(3);
+  const reduced = usePrefersReducedMotion();
+
   const items = useMemo(
-    () => recent.map((p) => ALL_ITEMS_MAP.get(p)).filter((x): x is NavItem => Boolean(x)),
+    () =>
+      recent
+        .map((p) => ALL_ITEMS_MAP.get(p))
+        .filter((x): x is NavItem => Boolean(x)),
     [recent],
   );
 
   if (items.length === 0) return null;
 
   return (
-    <div className="shrink-0 border-b border-[#00000010] px-3.5 py-3 dark:border-[#ffffff10]">
-      <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-widest text-[#636366] dark:text-[#98989D]">
+    <div className={`shrink-0 border-b px-3.5 py-3 ${TONE.divider}`}>
+      <p
+        className={`mb-2 px-1 text-[10px] font-bold uppercase tracking-widest ${TONE.secondary}`}
+      >
         {t('nav.recent') || 'Recent'}
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -112,9 +197,24 @@ export function RecentRoutes({ onNavigate }: { onNavigate?: () => void }) {
               key={item.to}
               to={item.to}
               onClick={onNavigate}
-              className="inline-flex items-center gap-1.5 rounded-full border border-[#00000010] bg-[#00000005] px-2.5 py-1 text-[11px] font-semibold text-[#1D1D1F] transition-all hover:-translate-y-0.5 hover:bg-[#00000008] dark:border-[#ffffff15] dark:bg-[#ffffff08] dark:text-[#F5F5F7]"
+              className={[
+                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1',
+                'text-[11px] font-semibold',
+                'border-black/[0.06] bg-black/[0.04]',
+                'dark:border-white/[0.10] dark:bg-white/[0.06]',
+                TONE.label,
+                TONE.focus,
+                'transition-all duration-200 ease-out',
+                reduced
+                  ? ''
+                  : 'hover:-translate-y-0.5 hover:bg-black/[0.07] dark:hover:bg-white/[0.09]',
+              ].join(' ')}
             >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: c.from }} aria-hidden />
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: c.from }}
+                aria-hidden
+              />
               {t(item.labelKey) || item.label}
             </NavLink>
           );
@@ -122,49 +222,54 @@ export function RecentRoutes({ onNavigate }: { onNavigate?: () => void }) {
       </div>
     </div>
   );
-}
+});
 
-export function NavItems({
-  role,
-  onNavigate,
-  collapsed = false,
-  filter = '',
-}: {
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  NavItems                                                                  */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export interface NavItemsProps {
   role: string;
   onNavigate?: () => void;
   collapsed?: boolean;
   filter?: string;
-}) {
+}
+
+export const NavItems = memo(function NavItems({
+  role,
+  onNavigate,
+  collapsed = false,
+  filter = '',
+}: NavItemsProps) {
   const { t } = useI18n();
+  const reduced = usePrefersReducedMotion();
   const navRef = useRef<HTMLElement | null>(null);
-  const normalizedRole = role?.toUpperCase() ?? '';
-  const lowered = filter.trim().toLowerCase();
+
+  /** Scope the active pill per sidebar instance (multi-sidebar safe). */
+  const layoutScope = useId();
 
   useKeyboardNav(navRef, !collapsed);
 
-  const matches = useCallback(
-    (item: NavItem) => {
+  const normalizedRole = role?.toUpperCase() ?? '';
+  const isStudent = normalizedRole === 'STUDENT';
+  const lowered = filter.trim().toLowerCase();
+
+  /** Single-pass filter → partition into primary/secondary. */
+  const { primary, secondary, isEmpty } = useMemo(() => {
+    const match = (item: NavItem) => {
+      if (isStudent && HIDDEN_FOR_STUDENT.has(item.to)) return false;
       if (!lowered) return true;
       const label = (t(item.labelKey) || item.label).toLowerCase();
       return label.includes(lowered);
-    },
-    [lowered, t],
-  );
+    };
 
-  const visiblePrimary = useMemo(
-    () =>
-      PRIMARY_NAV.filter(
-        (item) => !(normalizedRole === 'STUDENT' && HIDDEN_FOR_STUDENT.has(item.to)) && matches(item),
-      ),
-    [normalizedRole, matches],
-  );
-  const visibleSecondary = useMemo(
-    () =>
-      SECONDARY_NAV.filter(
-        (item) => !(normalizedRole === 'STUDENT' && HIDDEN_FOR_STUDENT.has(item.to)) && matches(item),
-      ),
-    [normalizedRole, matches],
-  );
+    const p: NavItem[] = [];
+    const s: NavItem[] = [];
+    for (const item of PRIMARY_NAV) if (match(item)) p.push(item);
+    for (const item of SECONDARY_NAV) if (match(item)) s.push(item);
+
+    return { primary: p, secondary: s, isEmpty: p.length === 0 && s.length === 0 };
+  }, [isStudent, lowered, t]);
 
   const renderItem = useCallback(
     (item: NavItem) => {
@@ -179,70 +284,101 @@ export function NavItems({
             end={item.end}
             onClick={onNavigate}
             title={collapsed ? t(item.labelKey) || item.label : undefined}
-            className={({ isActive }) => [
-              'group relative flex items-center',
-              collapsed ? 'justify-center px-2 py-2.5' : 'gap-3.5 px-3.5 py-2.5',
-              'rounded-[0.875rem] text-[14px] tracking-tight outline-none',
-              'transition-colors duration-300 ease-out',
-              'focus-visible:ring-2 focus-visible:ring-[#007AFF]/50',
-              isActive
-                ? 'text-[#1D1D1F] font-bold dark:text-white'
-                : 'text-[#636366] font-medium hover:text-[#1D1D1F] dark:text-[#98989D] dark:hover:text-[#F5F5F7]',
-            ].join(' ')}
+            className={({ isActive }) =>
+              [
+                'group relative flex items-center',
+                collapsed
+                  ? 'justify-center px-2 py-2.5'
+                  : 'gap-3.5 px-3.5 py-2.5',
+                'rounded-[0.875rem] text-[14px] tracking-tight',
+                TONE.focus,
+                'transition-colors duration-300 ease-out',
+                isActive
+                  ? `font-bold ${TONE.label} dark:text-white`
+                  : `font-medium ${TONE.secondary} hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]`,
+              ].join(' ')
+            }
           >
             {({ isActive }) => (
               <>
+                {/* Active pill — scoped per instance */}
                 {isActive && (
                   <>
                     <motion.span
-                      layoutId="activeNavPill"
+                      layoutId={`${layoutScope}-nav-pill`}
                       className="absolute inset-0 rounded-[0.875rem]"
                       style={{
                         background: `linear-gradient(135deg, ${c.from}22 0%, ${c.to}22 100%)`,
                         boxShadow: `0 8px 24px -8px ${c.glow}, inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 ${c.from}15`,
                         border: `1px solid ${c.from}33`,
                       }}
-                      transition={SPRING.layout}
+                      transition={reduced ? { duration: 0 } : SPRING.layout}
                       aria-hidden
                     />
                     <motion.span
-                      layoutId="activeNavSpecular"
+                      layoutId={`${layoutScope}-nav-specular`}
                       className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-[0.875rem]"
-                      style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.6), transparent)' }}
-                      transition={SPRING.layout}
+                      style={{
+                        background:
+                          'linear-gradient(180deg, rgba(255,255,255,0.6), transparent)',
+                      }}
+                      transition={reduced ? { duration: 0 } : SPRING.layout}
                       aria-hidden
                     />
                   </>
                 )}
+
+                {/* Hover wash — inactive only */}
                 {!isActive && (
-                  <span className="pointer-events-none absolute inset-0 rounded-[0.875rem] bg-transparent transition-colors duration-300 group-hover:bg-black/[0.045] dark:group-hover:bg-white/[0.06]" />
+                  <span
+                    className={[
+                      'pointer-events-none absolute inset-0 rounded-[0.875rem]',
+                      'bg-transparent transition-colors duration-300',
+                      'group-hover:bg-black/[0.045] dark:group-hover:bg-white/[0.06]',
+                    ].join(' ')}
+                  />
                 )}
 
                 <Magnetic strength={0.18}>
-                  <span className="relative z-10 flex-shrink-0 flex items-center justify-center">
-                    {isAi && (
+                  <span className="relative z-10 flex flex-shrink-0 items-center justify-center">
+                    {isAi && !reduced && (
                       <motion.span
                         className="absolute -inset-1 -z-10 rounded-full blur-md"
-                        style={{ background: 'conic-gradient(from 0deg, #007AFF, #5856D6, #FF2D55, #FF9500, #34C759, #007AFF)' }}
+                        style={{ background: RAINBOW_GRADIENT }}
                         animate={{ rotate: 360 }}
-                        transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
+                        transition={{
+                          duration: 6,
+                          repeat: Infinity,
+                          ease: 'linear',
+                        }}
                         aria-hidden
                       />
                     )}
-                    <PremiumIcon paths={item.iconPath} isActive={isActive} accent={accent} id={item.to.replace(/\W/g, '')} />
+                    {/* No `id` prop — PremiumIcon uses useId() → collision-free */}
+                    <PremiumIcon
+                      paths={item.iconPath}
+                      isActive={isActive}
+                      accent={accent}
+                    />
                   </span>
                 </Magnetic>
 
                 {!collapsed && (
-                  <span className="relative z-10 flex-1 truncate">{t(item.labelKey) || item.label}</span>
+                  <span className="relative z-10 flex-1 truncate">
+                    {t(item.labelKey) || item.label}
+                  </span>
                 )}
 
-                {isAi && !isActive && !collapsed && (
+                {isAi && !isActive && !collapsed && !reduced && (
                   <motion.span
                     className="relative z-10 h-1.5 w-1.5 rounded-full"
                     style={{ background: c.from }}
                     animate={{ opacity: [0.4, 1, 0.4], scale: [0.9, 1.2, 0.9] }}
-                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                    }}
                     aria-hidden
                   />
                 )}
@@ -252,14 +388,13 @@ export function NavItems({
         </motion.div>
       );
     },
-    [collapsed, onNavigate, t],
+    [collapsed, onNavigate, t, layoutScope, reduced],
   );
-
-  const empty = visiblePrimary.length === 0 && visibleSecondary.length === 0;
 
   return (
     <nav
       ref={navRef}
+      aria-label={t('a11y.mainNav')}
       className={[
         'flex-1 min-h-0 overflow-y-auto scrollbar-thin',
         collapsed ? 'px-2 py-4' : 'px-3.5 py-4',
@@ -267,33 +402,51 @@ export function NavItems({
       style={{
         WebkitOverflowScrolling: 'touch',
         transform: 'translateZ(0)',
-        maskImage: 'linear-gradient(to bottom, transparent, black 16px, black calc(100% - 16px), transparent)',
-        WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 16px, black calc(100% - 16px), transparent)',
+        maskImage:
+          'linear-gradient(to bottom, transparent, black 16px, black calc(100% - 16px), transparent)',
+        WebkitMaskImage:
+          'linear-gradient(to bottom, transparent, black 16px, black calc(100% - 16px), transparent)',
       }}
-      aria-label={t('a11y.mainNav')}
     >
-      {empty ? (
-        <p className="px-3 py-6 text-center text-[12px] text-[#636366] dark:text-[#98989D]">
-          {t('nav.noMatches') || 'No matches'}
-        </p>
+      {isEmpty ? (
+        <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+          <StaticIcon
+            paths={I.search}
+            className={`h-5 w-5 opacity-40 ${TONE.secondary}`}
+          />
+          <p className={`text-[12px] font-medium ${TONE.secondary}`}>
+            {t('nav.noMatches') || 'No matches'}
+          </p>
+        </div>
       ) : (
-        <motion.div variants={navListVariants} initial="hidden" animate="visible" className="space-y-1">
-          {visiblePrimary.map(renderItem)}
-          {visibleSecondary.length > 0 && (
-            <div className="mt-6 border-t border-[#00000010] pt-5 dark:border-[#ffffff10]">
+        <motion.div
+          variants={navListVariants}
+          initial="hidden"
+          animate="visible"
+          className="space-y-1"
+        >
+          {primary.map(renderItem)}
+          {secondary.length > 0 && (
+            <div className={`mt-6 border-t pt-5 ${TONE.divider}`}>
               {!collapsed && (
-                <p className="mb-2.5 px-3.5 text-[11px] font-bold uppercase tracking-widest text-[#636366] dark:text-[#98989D]">
+                <p
+                  className={`mb-2.5 px-3.5 text-[11px] font-bold uppercase tracking-widest ${TONE.secondary}`}
+                >
                   {t('nav.administration')}
                 </p>
               )}
-              {visibleSecondary.map(renderItem)}
+              {secondary.map(renderItem)}
             </div>
           )}
         </motion.div>
       )}
     </nav>
   );
-}
+});
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Sidebar                                                                   */
+/* ────────────────────────────────────────────────────────────────────────── */
 
 export interface SidebarProps {
   sidebarWidth: number;
@@ -305,7 +458,7 @@ export interface SidebarProps {
   onLogout: () => void;
 }
 
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   sidebarWidth,
   collapsed,
   setCollapsed,
@@ -316,7 +469,14 @@ export function Sidebar({
 }: SidebarProps) {
   const { t } = useI18n();
   const profile = useDeviceProfile();
+  const reduced = usePrefersReducedMotion();
   const [navFilter, setNavFilter] = useState('');
+  const roleLabel = useRoleLabel(userRole);
+
+  const logoutHover = reduced ? undefined : { scale: 1.02 };
+  const logoutTap = reduced ? undefined : { scale: 0.98 };
+
+  const clearFilter = useCallback(() => setNavFilter(''), []);
 
   return (
     <motion.aside
@@ -325,17 +485,23 @@ export function Sidebar({
       transition={SPRING.smooth}
       className="fixed inset-y-0 left-0 z-40 hidden flex-col p-2.5 md:flex md:p-3.5"
       style={{ willChange: 'width' }}
-      aria-label={t('a11y.mainNav') || 'Navigation sidebar'}
     >
       <GlassSurface
         tone="sidebar"
-        className="flex min-h-0 flex-1 flex-col overflow-hidden border border-[#ffffff70] shadow-[0_8px_40px_rgba(0,0,0,0.05)] dark:border-[#ffffff12] dark:shadow-[0_10px_50px_rgba(0,0,0,0.45)]"
         radius="2rem"
         spotlight={profile.allowCursorFx}
+        className={[
+          'flex min-h-0 flex-1 flex-col overflow-hidden border',
+          'border-black/[0.06] dark:border-white/[0.08]',
+          'shadow-[0_1px_0_rgba(255,255,255,0.85)_inset,0_0_0_0.5px_rgba(0,0,0,0.04),0_10px_40px_-12px_rgba(0,0,0,0.10)]',
+          'dark:shadow-[0_1px_0_rgba(255,255,255,0.06)_inset,0_0_0_0.5px_rgba(255,255,255,0.05),0_10px_40px_-12px_rgba(0,0,0,0.5)]',
+        ].join(' ')}
       >
+        {/* ── Header (brand + collapse) ─────────────────────────────── */}
         <div
           className={[
-            'flex h-[4.5rem] shrink-0 items-center border-b border-[#00000010] dark:border-[#ffffff10]',
+            'flex h-[4.5rem] shrink-0 items-center border-b',
+            TONE.divider,
             collapsed ? 'justify-center px-2' : 'justify-between px-6',
           ].join(' ')}
         >
@@ -346,52 +512,91 @@ export function Sidebar({
               onClick={() => setCollapsed(true)}
               aria-label={t('nav.collapse') || 'Collapse sidebar'}
               title={t('nav.collapse') || 'Collapse (⌘B)'}
-              className="rounded-full p-1.5 text-[#636366] transition-colors hover:bg-black/5 hover:text-[#1D1D1F] focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:text-[#98989D] dark:hover:bg-white/10 dark:hover:text-[#F5F5F7]"
+              className={[
+                'rounded-full p-1.5 transition-colors',
+                TONE.secondary,
+                'hover:bg-black/[0.05] hover:text-[#1D1D1F]',
+                'dark:hover:bg-white/[0.08] dark:hover:text-[#F5F5F7]',
+                TONE.focus,
+              ].join(' ')}
             >
               <StaticIcon paths={I.collapse} className="h-4 w-4" />
             </button>
           )}
         </div>
 
+        {/* ── Collapsed expand handle ───────────────────────────────── */}
         {collapsed && isWide && (
           <button
             type="button"
             onClick={() => setCollapsed(false)}
             aria-label={t('nav.expand') || 'Expand sidebar'}
             title={t('nav.expand') || 'Expand (⌘B)'}
-            className="mx-2 mt-2 flex items-center justify-center rounded-xl py-2 text-[#636366] transition-colors hover:bg-black/5 hover:text-[#1D1D1F] focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:text-[#98989D] dark:hover:bg-white/10 dark:hover:text-[#F5F5F7]"
+            className={[
+              'mx-2 mt-2 flex items-center justify-center rounded-xl py-2',
+              'transition-colors',
+              TONE.secondary,
+              'hover:bg-black/[0.05] hover:text-[#1D1D1F]',
+              'dark:hover:bg-white/[0.08] dark:hover:text-[#F5F5F7]',
+              TONE.focus,
+            ].join(' ')}
           >
             <StaticIcon paths={I.expand} className="h-4 w-4" />
           </button>
         )}
 
+        {/* ── Org identity + filter + recent ────────────────────────── */}
         {!collapsed && (
           <>
-            <div className="shrink-0 border-b border-[#00000010] px-6 py-4 dark:border-[#ffffff10]">
-              <p className="truncate text-[15px] font-semibold tracking-tight">{orgName}</p>
-              <p className="mt-0.5 text-[12px] font-medium capitalize text-[#636366] dark:text-[#98989D]">
-                {userRole.replace(/_/g, ' ').toLowerCase()}
+            <div className={`shrink-0 border-b px-6 py-4 ${TONE.divider}`}>
+              <p className={`truncate text-[15px] font-semibold tracking-tight ${TONE.label}`}>
+                {orgName}
+              </p>
+              <p
+                className={`mt-0.5 text-[12px] font-medium capitalize ${TONE.secondary}`}
+              >
+                {roleLabel}
               </p>
             </div>
 
             <div className="shrink-0 px-3.5 pt-3">
               <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#636366] dark:text-[#98989D]">
+                <span
+                  className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${TONE.secondary}`}
+                >
                   <StaticIcon paths={I.search} className="h-3.5 w-3.5" />
                 </span>
                 <input
                   value={navFilter}
                   onChange={(e) => setNavFilter(e.target.value)}
                   placeholder={t('nav.filterPlaceholder') || 'Filter…'}
-                  className="w-full rounded-full border border-[#00000010] bg-[#00000005] py-2 pl-8 pr-8 text-[12px] outline-none placeholder:text-[#636366] focus:border-[#007AFF]/30 focus:bg-white dark:border-[#ffffff15] dark:bg-[#ffffff08] dark:placeholder:text-[#98989D] dark:focus:bg-[#1c1c1e]"
                   aria-label={t('nav.filterPlaceholder') || 'Filter nav'}
+                  className={[
+                    'w-full rounded-full border py-2 pl-8 pr-8',
+                    'text-[12px] tracking-tight',
+                    'border-black/[0.08] bg-black/[0.04]',
+                    TONE.label,
+                    'placeholder:text-[#8E8E93] dark:placeholder:text-[#8E8E93]',
+                    'outline-none transition-all duration-200',
+                    'focus:border-[#007AFF]/35 focus:bg-white',
+                    'focus:shadow-[0_0_0_3px_rgba(0,122,255,0.10)]',
+                    'dark:border-white/[0.12] dark:bg-white/[0.06]',
+                    'dark:focus:border-[#0A84FF]/45 dark:focus:bg-[#1C1C1E]',
+                    'dark:focus:shadow-[0_0_0_3px_rgba(10,132,255,0.14)]',
+                  ].join(' ')}
                 />
                 {navFilter && (
                   <button
                     type="button"
-                    onClick={() => setNavFilter('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-[#636366] hover:bg-black/5 dark:text-[#98989D] dark:hover:bg-white/10"
+                    onClick={clearFilter}
                     aria-label={t('common.clear') || 'Clear'}
+                    className={[
+                      'absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1',
+                      'transition-colors',
+                      TONE.secondary,
+                      'hover:bg-black/[0.06] dark:hover:bg-white/[0.08]',
+                      TONE.focus,
+                    ].join(' ')}
                   >
                     <StaticIcon paths={I.close} className="h-3 w-3" />
                   </button>
@@ -403,24 +608,40 @@ export function Sidebar({
           </>
         )}
 
+        {/* ── Nav tree ──────────────────────────────────────────────── */}
         <NavItems role={userRole} collapsed={collapsed} filter={navFilter} />
 
-        <div className="shrink-0 border-t border-[#00000010] p-3.5 dark:border-[#ffffff10]">
+        {/* ── Logout ────────────────────────────────────────────────── */}
+        <div className={`shrink-0 border-t p-3.5 ${TONE.divider}`}>
           <motion.button
             type="button"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={logoutHover}
+            whileTap={logoutTap}
+            transition={SPRING.snappy}
             onClick={onLogout}
             className={[
-              'group flex w-full items-center rounded-[1rem] font-semibold tracking-tight text-[#636366] outline-none transition-colors hover:bg-[#FF3B30]/10 hover:text-[#FF3B30] focus-visible:ring-2 focus-visible:ring-[#FF3B30]/50 dark:text-[#98989D]',
-              collapsed ? 'justify-center px-2 py-2.5' : 'gap-3.5 px-3.5 py-2.5 text-[14px]',
+              'group flex w-full items-center rounded-[1rem] font-semibold tracking-tight',
+              'transition-colors',
+              TONE.secondary,
+              TONE.danger,
+              TONE.focus,
+              collapsed
+                ? 'justify-center px-2 py-2.5'
+                : 'gap-3.5 px-3.5 py-2.5 text-[14px]',
             ].join(' ')}
           >
-            <StaticIcon paths={I.logout} className="transition-transform group-hover:-translate-x-1" />
+            <StaticIcon
+              paths={I.logout}
+              className={
+                reduced
+                  ? ''
+                  : 'transition-transform group-hover:-translate-x-1'
+              }
+            />
             {!collapsed && <span>{t('nav.logout')}</span>}
           </motion.button>
         </div>
       </GlassSurface>
     </motion.aside>
   );
-}
+});

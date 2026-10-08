@@ -106,7 +106,7 @@ export function ForgotPasswordPage() {
             className="mb-1 text-center text-[13px] font-medium uppercase tracking-[.06em]"
             style={{ color: 'var(--text-muted)' }}
           >
-            M-EDU
+            {t('common.medu')}
           </p>
           <h1
             className="mb-2 text-center text-[22px] font-semibold tracking-[-0.02em]"

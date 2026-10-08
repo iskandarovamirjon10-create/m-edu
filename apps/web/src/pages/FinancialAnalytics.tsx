@@ -396,7 +396,13 @@ function PremiumTabs({
             transition={SPRING.snappy}
             className="relative shrink-0 overflow-hidden rounded-xl px-3.5 py-2 text-[12.5px] font-bold tracking-tight outline-none transition-colors whitespace-nowrap"
             style={{ color: isActive ? c.fg : '#86868B' }}
-          >
+            tabIndex={0}
+            onKeyDown={(e: any) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}>
             {isActive && (
               <motion.span
                 layoutId="finance-tab-active"
@@ -826,7 +832,7 @@ function WhatIfTab({
             {t('analytics.whatIfSimulation')}
           </h3>
           <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
-            Adjust variables to see projected impact
+            {t('finance.adjustVariables')}
           </p>
         </div>
       </div>
@@ -1351,7 +1357,7 @@ export function FinancialAnalyticsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Financial
+                  {t('finance.title')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.calendar} size={11} strokeWidth={2.5} />

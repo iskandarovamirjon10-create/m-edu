@@ -227,9 +227,7 @@ function avatarGradient(name: string): string {
 }
 
 function getInitials(name: string): string {
-  return (
-    name.split(/\s+/).map((p) => p.charAt(0)).filter(Boolean).slice(0, 2).join('').toUpperCase() || '—'
-  );
+  return (name.split(/\s+/).map((p) => p.charAt(0)).filter(Boolean).slice(0, 2).join('').toUpperCase() || '—');
 }
 
 /* ============================================================================
@@ -470,7 +468,13 @@ function SegmentedTabs({
             transition={SPRING.snappy}
             className="relative overflow-hidden rounded-xl px-3.5 py-2 text-[12.5px] font-bold tracking-tight outline-none transition-colors"
             style={{ color: isActive ? c.fg : '#86868B' }}
-          >
+            tabIndex={0}
+            onKeyDown={(e: any) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}>
             {isActive && (
               <motion.span
                 layoutId="cert-tab-active"
@@ -849,7 +853,7 @@ export function CertificatesPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF9500]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#FF9500]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Certificates
+                  {t('certificates.title')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
@@ -879,7 +883,14 @@ export function CertificatesPage() {
               <GlassButton
                 variant="primary"
                 onClick={activeTab === 'certificates' ? openModal : () => openTemplateModal()}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   <Icon
                     paths={activeTab === 'certificates' ? I.plus : I.layers}
@@ -985,7 +996,18 @@ export function CertificatesPage() {
                     {!searchQuery && (
                       <div className="mt-5">
                         <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                          <GlassButton variant="primary" size="sm" onClick={openModal}>
+                          <GlassButton
+                            variant="primary"
+                            size="sm"
+                            onClick={openModal}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e: any) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.currentTarget.click();
+                              }
+                            }}>
                             <span className="inline-flex items-center gap-2">
                               <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                               {t('certificates.generate')}
@@ -1082,7 +1104,14 @@ export function CertificatesPage() {
                             color: '#FF9500',
                             border: '1px solid rgba(255,149,0,0.22)',
                           }}
-                        >
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
                           {isDownloading ? (
                             <motion.span
                               className="h-3.5 w-3.5 rounded-full border-2 border-current/30 border-t-current"
@@ -1164,7 +1193,18 @@ export function CertificatesPage() {
                     </p>
                     <div className="mt-5">
                       <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                        <GlassButton variant="primary" size="sm" onClick={() => openTemplateModal()}>
+                        <GlassButton
+                          variant="primary"
+                          size="sm"
+                          onClick={() => openTemplateModal()}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
                           <span className="inline-flex items-center gap-2">
                             <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                             {t('templates.new')}
@@ -1252,7 +1292,14 @@ export function CertificatesPage() {
                               color: '#10B981',
                               border: '1px solid rgba(16,185,129,0.22)',
                             }}
-                          >
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e: any) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.currentTarget.click();
+                              }
+                            }}>
                             <Icon paths={I.check} size={11} strokeWidth={2.6} />
                             <span className="hidden sm:inline">
                               {t('templates.makeDefault')}
@@ -1273,7 +1320,14 @@ export function CertificatesPage() {
                             color: '#007AFF',
                             border: '1px solid rgba(0,122,255,0.2)',
                           }}
-                        >
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
                           <Icon paths={I.edit} size={13} strokeWidth={2} />
                         </motion.button>
                         <motion.button
@@ -1291,7 +1345,14 @@ export function CertificatesPage() {
                             color: '#FF3B30',
                             border: '1px solid rgba(255,59,48,0.2)',
                           }}
-                        >
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
                           <Icon paths={I.trash} size={13} strokeWidth={2} />
                         </motion.button>
                       </div>
@@ -1388,7 +1449,17 @@ export function CertificatesPage() {
 
           <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton variant="secondary" onClick={closeModal}>
+              <GlassButton
+                variant="secondary"
+                onClick={closeModal}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1397,7 +1468,14 @@ export function CertificatesPage() {
                 variant="primary"
                 onClick={handleCertificateSubmit}
                 disabled={generateCertificate.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   {generateCertificate.isPending ? (
                     <>
@@ -1542,7 +1620,14 @@ export function CertificatesPage() {
                 variant="secondary"
                 onClick={closeTemplateModal}
                 disabled={saveTemplate.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1551,7 +1636,14 @@ export function CertificatesPage() {
                 variant="primary"
                 onClick={handleTemplateSubmit}
                 disabled={saveTemplate.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   {saveTemplate.isPending ? (
                     <>
@@ -1604,7 +1696,14 @@ export function CertificatesPage() {
                 variant="secondary"
                 onClick={() => setDeletingTemplate(null)}
                 disabled={deleteTemplate.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1613,7 +1712,14 @@ export function CertificatesPage() {
                 variant="danger"
                 onClick={() => deletingTemplate && deleteTemplate.mutate(deletingTemplate.id)}
                 disabled={deleteTemplate.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   {deleteTemplate.isPending ? (
                     <>

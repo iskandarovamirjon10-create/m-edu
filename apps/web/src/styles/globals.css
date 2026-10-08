@@ -185,8 +185,12 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+  }
+
+  /* Prevent flex/grid container child overflow blowout without collapsing SVGs, badges, or buttons */
+  :where(p, h1, h2, h3, h4, h5, h6, li, td, th, dd, dt, figcaption, label, span) {
     min-width: 0;
-    min-height: 0;
+    overflow-wrap: break-word;
   }
 
   html {
@@ -250,7 +254,13 @@
     height: auto;
   }
 
-  svg { fill: none; }
+  /* Zero-specificity SVG defaults: preserve presentation attributes and inline alignment */
+  :where(svg) {
+    vertical-align: middle;
+  }
+  :where(svg:not([fill])) {
+    fill: none;
+  }
 
   /* ── Forms inherit ── */
   input, button, textarea, select {
@@ -298,8 +308,9 @@
   }
   details > summary::-webkit-details-marker { display: none; }
 
-  /* ── Field sizing auto-grow ── */
-  textarea, input {
+  /* ── Field sizing auto-grow for multiline textareas only ──
+     Inputs are strictly excluded to avoid typing layout jitter */
+  textarea {
     field-sizing: content;
   }
 }
@@ -336,10 +347,22 @@
     background: radial-gradient(circle, rgba(0, 199, 255, 0.45), transparent 70%);
   }
 
+  .orb-cyan-2 {
+    width: 440px; height: 440px;
+    top: 55%; left: -10%;
+    background: radial-gradient(circle, rgba(0, 199, 255, 0.35), transparent 70%);
+  }
+
   .orb-indigo-1 {
     width: 560px; height: 560px;
     bottom: -12%; right: -10%;
     background: radial-gradient(circle, rgba(88, 86, 214, 0.45), transparent 70%);
+  }
+
+  .orb-deep-1 {
+    width: 500px; height: 500px;
+    top: 25%; right: -12%;
+    background: radial-gradient(circle, rgba(147, 51, 234, 0.35), transparent 70%);
   }
 
   .orb-magenta-1 {
@@ -514,47 +537,6 @@
       inset 0 -1px 0 rgba(255, 255, 255, 0.08);
   }
 
-  /* ── Dim glass — modal overlays ── */
-  .glass-card--dim {
-    background: var(--overlay-dim, rgba(15, 23, 42, 0.55));
-    border-color: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(24px) saturate(1.4);
-    -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  }
-
-  /* ── Grain — noise texture ── */
-  .glass-card--grain {
-    background-image:
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
-    background-size: 200px 200px;
-  }
-
-  /* ── Aurora glow — cursor-following spotlight ── */
-  .glass-card--aurora {
-    --aurora-glow-x: 50%;
-    --aurora-glow-y: 50%;
-    --aurora-glow-alpha: 0;
-  }
-
-  .glass-card--aurora::after {
-    background:
-      linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.18) 0%,
-        transparent 45%
-      ),
-      radial-gradient(
-        600px circle at var(--aurora-glow-x) var(--aurora-glow-y),
-        rgba(255, 255, 255, 0.32),
-        transparent 40%
-      );
-    opacity: calc(0.6 + var(--aurora-glow-alpha) * 0.4);
-    transition: opacity var(--dur-slow) var(--ease-soft);
-  }
-
-  .glass-card--aurora:hover {
-    --aurora-glow-alpha: 1;
-  }
 
   /* ── Fallback — no backdrop-filter ── */
   @supports not (backdrop-filter: blur(1px)) {
@@ -729,12 +711,13 @@
    ============================================================ */
 
 @layer typography {
-  .text-primary   { color: var(--text-primary); }
-  .text-secondary { color: var(--text-secondary); }
-  .text-tertiary  { color: var(--text-tertiary); }
-  .text-muted     { color: var(--text-tertiary); }
-  .text-inverse   { color: var(--text-inverse); }
-  .text-disabled  { color: var(--text-disabled); }
+  .text-primary     { color: var(--text-primary); }
+  .text-secondary   { color: var(--text-secondary); }
+  .text-tertiary    { color: var(--text-tertiary); }
+  .text-muted       { color: var(--text-muted, var(--text-tertiary)); }
+  .text-placeholder { color: var(--text-placeholder, var(--text-tertiary)); }
+  .text-inverse     { color: var(--text-inverse); }
+  .text-disabled    { color: var(--text-disabled); }
 
   .text-tone-blue   { color: var(--tone-blue-fg,   #007AFF); }
   .text-tone-green  { color: var(--tone-green-fg,  #34C759); }
@@ -856,7 +839,6 @@
     .will-transform { will-change: transform; }
     .will-opacity   { will-change: opacity; }
     .will-both      { will-change: transform, opacity; }
-    .will-content   { will-change: content; }
   }
 }
 
@@ -1281,15 +1263,12 @@
     *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
+      transform: none !important;
     }
 
-    .skeleton-shimmer {
-      animation: none;
-      background: var(--border-subtle);
-    }
-
+    /* Ambient and decorative continuous animations are completely halted */
+    .skeleton-shimmer,
     .conic-ring,
     .orb,
     .live-dot,
@@ -1300,18 +1279,25 @@
     .slide-up,
     .slide-down,
     .scale-in,
-    .text-gradient-chromatic {
+    .text-gradient-chromatic,
+    .medu-pulse-dot,
+    .medu-colon-blink {
       animation: none !important;
     }
 
-    /* ✨ Keep informative transitions */
+    /* Maintain subtle, non-disorienting feedback transitions for interactive states */
+    button,
+    a,
+    input,
+    textarea,
+    select,
     .glass-card,
     .glass-card--interactive,
     .input-base,
     .tone-tile,
     .link-underline::after {
-      transition-property: background-color, color, border-color, box-shadow, transform, opacity;
-      transition-duration: 150ms;
+      transition-property: background-color, color, border-color, box-shadow, opacity !important;
+      transition-duration: 150ms !important;
     }
   }
 }
@@ -1579,13 +1565,6 @@
    ============================================================ */
 
 @layer utilities {
-  .page-container {
-    width: 100%;
-    max-width: 1400px;
-    margin-inline: auto;
-    padding-inline: clamp(1rem, 2vw, 2rem);
-    padding-block: clamp(1rem, 2vw, 1.5rem);
-  }
 
   /* ✨ Stack — flex column with gap */
   .stack {
@@ -1644,71 +1623,8 @@
 }
 
 /* ============================================================
-   26. JS BRIDGE — Cursor-follow spotlight
-   ------------------------------------------------------------
-   React hook:
-
-   function useCursorGlow(ref) {
-     useEffect(() => {
-       const el = ref.current;
-       if (!el) return;
-       let raf = 0;
-       const onMove = (e) => {
-         cancelAnimationFrame(raf);
-         raf = requestAnimationFrame(() => {
-           const r = el.getBoundingClientRect();
-           el.style.setProperty(
-             '--aurora-glow-x',
-             `${((e.clientX - r.left) / r.width) * 100}%`
-           );
-           el.style.setProperty(
-             '--aurora-glow-y',
-             `${((e.clientY - r.top) / r.height) * 100}%`
-           );
-         });
-       };
-       el.addEventListener('mousemove', onMove, { passive: true });
-       return () => {
-         el.removeEventListener('mousemove', onMove);
-         cancelAnimationFrame(raf);
-       };
-     }, [ref]);
-   }
-
-   // Ishlatish:
-   // const ref = useRef(null);
-   // useCursorGlow(ref);
-   // <div className="glass-card glass-card--aurora" ref={ref}>
+   26. M-EDU LIQUID GLASS UTILITIES
    ============================================================ */
-
-/* ============================================================
-   27. SUB-PIXEL TYPOGRAPHY REFINEMENT
-   ============================================================ */
-
-@layer typography {
-  /* Optical margin — text-aligns with punctuation */
-  .text-optical-left  { text-indent: -0.05em; padding-left: 0.05em; }
-  .text-optical-right { text-indent: 0.05em; padding-right: 0.05em; }
-
-  /* Small caps — refined */
-  .text-smallcaps {
-    font-variant-caps: all-small-caps;
-    font-feature-settings: 'smcp', 'c2sc';
-    letter-spacing: 0.05em;
-  }
-
-  /* Old-style numerals — for body text */
-  .text-oldstyle {
-    font-variant-numeric: oldstyle-nums proportional-nums;
-    font-feature-settings: 'onum', 'pnum';
-  }
-
-  /* ✨ Fluid letter-spacing — tighter on larger, looser on smaller */
-  .text-fluid {
-    letter-spacing: clamp(-0.03em, -0.005em + 0.1cqi, -0.008em);
-  }
-}
-/* ═══ M-EDU Liquid Glass utilities ═══ */
 
 /* Particle drift keyframe (AmbientParticles) */
 @keyframes medu-particle-drift {
@@ -1733,6 +1649,34 @@
 @keyframes medu-colon {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.3; }
+}
+
+/* Glass surface background: adapts dynamically to day (light) and night (dark) */
+.medu-glass {
+  background-color: var(--glass-surface-bg, var(--bg-card, rgba(255, 255, 255, 0.78)));
+}
+
+.dark .medu-glass,
+[data-theme="dark"] .medu-glass {
+  background-color: var(--glass-surface-bg-dark, var(--bg-card, rgba(28, 28, 30, 0.78)));
+}
+
+/* Glass surface specular edge */
+.medu-glass-specular {
+  box-shadow:
+    inset 0 1px 0 var(--glass-surface-edge, rgba(255, 255, 255, 0.85)),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.04),
+    inset 1px 0 0 rgba(255, 255, 255, 0.40),
+    inset -1px 0 0 rgba(255, 255, 255, 0.40);
+}
+
+.dark .medu-glass-specular,
+[data-theme="dark"] .medu-glass-specular {
+  box-shadow:
+    inset 0 1px 0 var(--glass-surface-edge-dark, rgba(255, 255, 255, 0.10)),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    inset 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset -1px 0 0 rgba(255, 255, 255, 0.08);
 }
 
 /* Glass surface: ensure the tint layers respect prefers-reduced-motion */
@@ -1762,14 +1706,6 @@
   background: rgba(255, 255, 255, 0.15);
 }
 
-/* Reduced motion — kill everything */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
 
 /* ============================================================
    24. RESPONSIVE SHELL — safe areas, viewport units, overflow
@@ -1793,12 +1729,6 @@
     overscroll-behavior-x: none;
   }
 
-  /* Long unbroken strings (emails, tokens, URLs, IDs) must wrap instead of
-     pushing the layout past the viewport — the classic invisible cause of
-     page-level horizontal overflow on phones. */
-  :where(p, h1, h2, h3, h4, h5, h6, li, td, th, dd, dt, figcaption, label, span) {
-    overflow-wrap: break-word;
-  }
 
   /* Media and tables shrink to their container first; a table that genuinely
      needs more width scrolls inside its own wrapper (see GlassTable). */

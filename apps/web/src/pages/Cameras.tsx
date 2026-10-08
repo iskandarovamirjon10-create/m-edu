@@ -557,7 +557,9 @@ function MiniAction({
           ? `inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px ${c.glow}`
           : `inset 0 1px 0 rgba(255,255,255,0.4)`,
       }}
-    >
+      
+      
+      >
       <Icon paths={icon} size={11} strokeWidth={2.6} />
       <span className="hidden sm:inline">{label}</span>
     </motion.button>
@@ -776,7 +778,8 @@ function CameraDetailTabs({
               style={{
                 color: active ? c.fg : '#86868B',
               }}
-            >
+              
+              >
               {active && (
                 <motion.span
                   layoutId="camera-tab-active"
@@ -1180,7 +1183,7 @@ export function CamerasPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Surveillance
+                  {t('cameras.surveillance')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#34C759]">
                   <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />
@@ -1208,7 +1211,9 @@ export function CamerasPage() {
                   type="button"
                   variant="secondary"
                   onClick={() => setDiscoverOpen(true)}
-                >
+                  
+                  
+                  >
                   <span className="inline-flex items-center gap-2">
                     <Icon paths={I.radar} size={15} strokeWidth={2} />
                     {t('cameras.discover')}
@@ -1220,7 +1225,9 @@ export function CamerasPage() {
                   type="button"
                   variant="primary"
                   onClick={() => setModalOpen(true)}
-                >
+                  
+                  
+                  >
                   <span className="inline-flex items-center gap-2">
                     <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                     {t('cameras.add')}
@@ -1292,7 +1299,9 @@ export function CamerasPage() {
                     variant="secondary"
                     size="sm"
                     onClick={() => setDiscoverOpen(true)}
-                  >
+                    
+                    
+                    >
                     <span className="inline-flex items-center gap-2">
                       <Icon paths={I.radar} size={14} strokeWidth={2} />
                       {t('cameras.discover')}
@@ -1305,7 +1314,9 @@ export function CamerasPage() {
                     variant="primary"
                     size="sm"
                     onClick={() => setModalOpen(true)}
-                  >
+                    
+                    
+                    >
                     <span className="inline-flex items-center gap-2">
                       <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                       {t('cameras.add')}
@@ -1346,7 +1357,9 @@ export function CamerasPage() {
                       ? 'rgba(0,122,255,0.04)'
                       : undefined,
                   }}
-                >
+                  
+                  
+                  >
                   {/* Gradient camera tile */}
                   <div
                     className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
@@ -1392,7 +1405,12 @@ export function CamerasPage() {
                   </div>
 
                   {/* Quick actions */}
-                  <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className="flex gap-1.5"
+                    onClick={(e) => e.stopPropagation()}
+                    
+                    
+                    >
                     {camera.status === 'CONFIGURED' && (
                       <MiniAction
                         icon={I.play}
@@ -1400,8 +1418,7 @@ export function CamerasPage() {
                         tone="emerald"
                         onClick={() => handleStartWorker(camera.id)}
                         disabled={isWorkerPending}
-                        ariaLabel={t('cameras.startWorkerAria', { name: camera.name })}
-                      />
+                        ariaLabel={t('cameras.startWorkerAria', { name: camera.name })} />
                     )}
                     <MiniAction
                       icon={camera.enabled ? I.xCircle : I.checkCircle}
@@ -1417,8 +1434,7 @@ export function CamerasPage() {
                       disabled={isTogglePending}
                       ariaLabel={
                         camera.enabled ? t('common.disable') : t('common.enable')
-                      }
-                    />
+                      } />
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg text-[#86868B]">
                       <motion.span
                         animate={{ rotate: isSelected ? 180 : 0 }}
@@ -1506,16 +1522,14 @@ export function CamerasPage() {
                         tone="blue"
                         onClick={() => restartWorker.mutate(selectedCamera.id)}
                         disabled={restartWorker.isPending}
-                        ariaLabel={t('cameras.restartWorkerAria', { name: selectedCamera.name })}
-                      />
+                        ariaLabel={t('cameras.restartWorkerAria', { name: selectedCamera.name })} />
                       <MiniAction
                         icon={I.stop}
                         label={t('cameras.stopWorker')}
                         tone="red"
                         onClick={() => stopWorker.mutate(selectedCamera.id)}
                         disabled={stopWorker.isPending}
-                        ariaLabel={t('cameras.stopWorkerAria', { name: selectedCamera.name })}
-                      />
+                        ariaLabel={t('cameras.stopWorkerAria', { name: selectedCamera.name })} />
                     </>
                   )}
                   {(selectedCamera.status === 'CONFIGURED' || selectedCamera.status === 'ERROR') && (
@@ -1526,8 +1540,7 @@ export function CamerasPage() {
                       primary
                       onClick={() => startWorker.mutate(selectedCamera.id)}
                       disabled={startWorker.isPending}
-                      ariaLabel={t('cameras.startWorkerAria', { name: selectedCamera.name })}
-                    />
+                      ariaLabel={t('cameras.startWorkerAria', { name: selectedCamera.name })} />
                   )}
                   <MiniAction
                     icon={I.settings}
@@ -1541,8 +1554,7 @@ export function CamerasPage() {
                       });
                       setConfigModalOpen(true);
                     }}
-                    ariaLabel={t('cameras.configureAria', { name: selectedCamera.name })}
-                  />
+                    ariaLabel={t('cameras.configureAria', { name: selectedCamera.name })} />
                   <MiniAction
                     icon={I.plug}
                     label={t('cameras.testConnection')}
@@ -1554,16 +1566,14 @@ export function CamerasPage() {
                       })
                     }
                     disabled={testConnection.isPending}
-                    ariaLabel={t('cameras.testConnectionAria', { name: selectedCamera.name })}
-                  />
+                    ariaLabel={t('cameras.testConnectionAria', { name: selectedCamera.name })} />
                   <MiniAction
                     icon={I.trash}
                     label={t('common.delete')}
                     tone="red"
                     onClick={() => setDeleteTarget(selectedCamera)}
                     disabled={deleteCamera.isPending}
-                    ariaLabel={t('cameras.deleteAria', { name: selectedCamera.name })}
-                  />
+                    ariaLabel={t('cameras.deleteAria', { name: selectedCamera.name })} />
                 </div>
               </div>
 
@@ -1593,7 +1603,7 @@ export function CamerasPage() {
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Register a new IP camera. Host and name are required.
+              {t('cameras.registerDesc')}
             </p>
           </div>
 
@@ -1749,7 +1759,9 @@ export function CamerasPage() {
                 variant="secondary"
                 onClick={handleCloseModal}
                 disabled={create.isPending}
-              >
+                
+                
+                >
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1814,7 +1826,9 @@ export function CamerasPage() {
                 variant="primary"
                 onClick={() => discover.mutate()}
                 disabled={discover.isPending}
-              >
+                
+                
+                >
                 <span className="inline-flex items-center gap-2">
                   {discover.isPending ? (
                     <>
@@ -1885,8 +1899,7 @@ export function CamerasPage() {
                       label={t('cameras.use')}
                       tone="emerald"
                       primary
-                      onClick={() => handleUseDiscovered(camera)}
-                    />
+                      onClick={() => handleUseDiscovered(camera)} />
                   </motion.div>
                 ))}
               </div>
@@ -1918,7 +1931,7 @@ export function CamerasPage() {
               <Icon paths={I.settings} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Configure capture and detection behaviour for this camera.
+              {t('cameras.configDesc')}
             </p>
           </div>
 
@@ -1973,7 +1986,9 @@ export function CamerasPage() {
               <GlassButton
                 onClick={() => setConfigModalOpen(false)}
                 variant="secondary"
-              >
+                
+                
+                >
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1993,7 +2008,9 @@ export function CamerasPage() {
                 }}
                 disabled={updateConfig.isPending}
                 variant="primary"
-              >
+                
+                
+                >
                 <span className="inline-flex items-center gap-2">
                   {updateConfig.isPending ? (
                     <>

@@ -208,15 +208,13 @@ function curriculumTone(name: string): Tone {
 }
 
 function getInitials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .map((p) => p.charAt(0))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || '—'
-  );
+  return (name
+    .split(/\s+/)
+    .map((p) => p.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '—');
 }
 
 /* ============================================================================
@@ -587,7 +585,14 @@ export default function CurriculumPage() {
               background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
               boxShadow: '0 8px 24px -8px rgba(0,122,255,0.5)',
             }}
-          >
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e: any) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}>
             <Icon paths={I.refresh} size={14} strokeWidth={2.4} />
             {t('common.retry')}
           </motion.button>
@@ -714,7 +719,14 @@ export default function CurriculumPage() {
                     background: 'linear-gradient(135deg, #AF52DE 0%, #5856D6 100%)',
                     boxShadow: '0 8px 24px -8px rgba(175,82,222,0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
                   }}
-                >
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                   {t('curriculum.create')}
                 </button>
@@ -767,7 +779,14 @@ export default function CurriculumPage() {
             whileTap={{ scale: 0.97 }}
             transition={SPRING.snappy}
             className="inline-flex items-center gap-1.5 rounded-xl border border-[#00000010] bg-[#00000004] px-3 py-2 text-[12px] font-semibold text-[#86868B] outline-none transition-colors hover:bg-[#00000008] hover:text-[#1D1D1F] dark:border-[#ffffff10] dark:bg-[#ffffff06] dark:hover:text-[#F5F5F7]"
-          >
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e: any) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}>
             {t('curriculum.clearFilter')}
           </motion.button>
         )}
@@ -824,7 +843,14 @@ export default function CurriculumPage() {
                     background: 'linear-gradient(135deg, #AF52DE 0%, #5856D6 100%)',
                     boxShadow: '0 8px 24px -8px rgba(175,82,222,0.5)',
                   }}
-                >
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   <Icon paths={I.plus} size={13} strokeWidth={2.5} />
                   {t('curriculum.create')}
                 </motion.button>
@@ -857,7 +883,14 @@ export default function CurriculumPage() {
               WebkitBackdropFilter: 'blur(12px)',
             }}
             onClick={handleCloseModal}
-          >
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e: any) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}>
             <motion.div
               initial={{ opacity: 0, scale: 0.94, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -875,7 +908,13 @@ export default function CurriculumPage() {
               role="dialog"
               aria-modal="true"
               aria-label={t('curriculum.createAria')}
-            >
+              tabIndex={0}
+              onKeyDown={(e: any) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.currentTarget.click();
+                }
+              }}>
               {/* Top sheen */}
               <span
                 aria-hidden
@@ -956,7 +995,14 @@ export default function CurriculumPage() {
                     transition={SPRING.snappy}
                     disabled={createMutation.isPending}
                     className="rounded-xl border border-[#00000010] bg-[#00000004] px-4 py-2.5 text-[13px] font-semibold text-[#1D1D1F] outline-none transition-colors hover:bg-[#00000008] disabled:opacity-50 dark:border-[#ffffff10] dark:bg-[#ffffff06] dark:text-[#F5F5F7]"
-                  >
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e: any) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.currentTarget.click();
+                      }
+                    }}>
                     {t('common.cancel')}
                   </motion.button>
                   <motion.button

@@ -173,7 +173,7 @@ export function QuickAttendanceModal() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 dark:bg-slate-950/70 backdrop-blur-md animate-fade-in"
       onClick={() => setOpen(false)}
     >
       <motion.div
@@ -182,25 +182,25 @@ export function QuickAttendanceModal() {
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden rounded-3xl border border-white/15 bg-[#121826]/95 p-6 shadow-2xl backdrop-blur-2xl text-white"
+        className="relative w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden rounded-3xl border border-black/10 bg-white/95 p-6 shadow-2xl backdrop-blur-2xl text-slate-900 dark:border-white/15 dark:bg-[#121826]/95 dark:text-white"
         style={{
-          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 40px -10px rgba(16, 185, 129, 0.25)',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.25), 0 0 40px -10px rgba(16, 185, 129, 0.2)',
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4 shrink-0">
+        <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4 mb-4 shrink-0">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-xl shadow-lg shadow-indigo-500/30">
               📋
             </div>
             <div>
-              <h2 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+              <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
                 Tezkor Davomat (Express Mode)
-                <span className="rounded-full bg-indigo-500/20 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-semibold text-indigo-300">
+                <span className="rounded-full bg-indigo-500/15 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
                   Fast Tap
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 1 daqiqada butun guruh davomatini olish va ota-onaga bildirish
               </p>
             </div>
@@ -208,7 +208,7 @@ export function QuickAttendanceModal() {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/5 text-slate-500 hover:bg-black/10 hover:text-slate-800 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
           >
             ✕
           </button>
@@ -216,16 +216,16 @@ export function QuickAttendanceModal() {
 
         {/* Group Selector */}
         <div className="mb-4 shrink-0">
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
             Guruhni tanlang
           </label>
           <select
             value={selectedGroupId}
             onChange={(e) => setSelectedGroupId(e.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
+            className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-2.5 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-white/10 dark:bg-white/5 dark:text-white"
           >
             {groups.map((g: any) => (
-              <option key={g.id} value={g.id} className="bg-slate-900 text-white">
+              <option key={g.id} value={g.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
                 {g.name} {g.course?.name ? `(${g.course.name})` : ''} {g.room ? `• Xona: ${g.room}` : ''}
               </option>
             ))}
@@ -233,22 +233,22 @@ export function QuickAttendanceModal() {
         </div>
 
         {/* Batch Actions Bar */}
-        <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl p-2.5 mb-3 shrink-0">
-          <span className="text-xs font-medium text-slate-300">
-            Jami: <strong className="text-white">{records.length}</strong> o‘quvchi
+        <div className="flex items-center justify-between bg-black/[0.03] border border-black/10 rounded-2xl p-2.5 mb-3 shrink-0 dark:bg-white/5 dark:border-white/10">
+          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            Jami: <strong className="text-slate-900 dark:text-white">{records.length}</strong> o‘quvchi
           </span>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => handleMarkAll('PRESENT')}
-              className="rounded-xl bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+              className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30 transition-colors"
             >
               🟢 Barchasi Keldi
             </button>
             <button
               type="button"
               onClick={() => handleMarkAll('ABSENT')}
-              className="rounded-xl bg-red-500/20 border border-red-500/30 px-2.5 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/30 transition-colors"
+              className="rounded-xl bg-red-500/10 border border-red-500/30 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-500/20 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30 transition-colors"
             >
               🔴 Barchasi Kelmadi
             </button>
@@ -258,12 +258,12 @@ export function QuickAttendanceModal() {
         {/* Student Records List (Scrollable) */}
         <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[160px]">
           {loadingStudents ? (
-            <div className="flex items-center justify-center py-12 text-slate-400 text-sm">
+            <div className="flex items-center justify-center py-12 text-slate-500 dark:text-slate-400 text-sm">
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent mr-2" />
               O‘quvchilar yuklanmoqda...
             </div>
           ) : records.length === 0 ? (
-            <div className="text-center py-12 text-slate-400 text-sm">
+            <div className="text-center py-12 text-slate-500 dark:text-slate-400 text-sm">
               Bu guruhda o‘quvchilar topilmadi
             </div>
           ) : (
@@ -271,13 +271,13 @@ export function QuickAttendanceModal() {
               <div
                 key={r.studentId}
                 onClick={() => cycleStatus(r.studentId)}
-                className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/5 p-3 hover:bg-white/10 cursor-pointer select-none transition-all active:scale-[0.99]"
+                className="flex items-center justify-between rounded-2xl border border-black/[0.06] bg-black/[0.02] p-3 hover:bg-black/[0.05] cursor-pointer select-none transition-all active:scale-[0.99] dark:border-white/5 dark:bg-white/5 dark:hover:bg-white/10"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-slate-500 w-5">{i + 1}.</span>
+                  <span className="text-xs font-mono text-slate-400 dark:text-slate-500 w-5">{i + 1}.</span>
                   <div>
-                    <div className="font-semibold text-sm text-white">{r.name}</div>
-                    {r.phone && <div className="text-xs text-slate-400">📞 {r.phone}</div>}
+                    <div className="font-semibold text-sm text-slate-900 dark:text-white">{r.name}</div>
+                    {r.phone && <div className="text-xs text-slate-500 dark:text-slate-400">📞 {r.phone}</div>}
                   </div>
                 </div>
 
@@ -289,10 +289,10 @@ export function QuickAttendanceModal() {
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
                       r.status === 'PRESENT'
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/20'
+                        ? 'bg-emerald-500/15 text-emerald-700 border border-emerald-500/30 shadow-sm dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40'
                         : r.status === 'LATE'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/20'
-                        : 'bg-red-500/20 text-red-300 border border-red-500/40 shadow-sm shadow-red-500/20'
+                        ? 'bg-amber-500/15 text-amber-700 border border-amber-500/30 shadow-sm dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40'
+                        : 'bg-red-500/15 text-red-700 border border-red-500/30 shadow-sm dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/40'
                     }`}
                   >
                     <span>
@@ -306,11 +306,11 @@ export function QuickAttendanceModal() {
         </div>
 
         {/* Footer Actions */}
-        <div className="pt-4 border-t border-white/10 mt-4 shrink-0 flex items-center justify-between gap-3">
+        <div className="pt-4 border-t border-black/10 dark:border-white/10 mt-4 shrink-0 flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-semibold text-slate-400 hover:bg-white/5 hover:text-white transition-colors"
+            className="rounded-2xl border border-black/10 px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-black/5 hover:text-slate-900 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
           >
             Bekor qilish
           </button>

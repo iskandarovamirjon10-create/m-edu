@@ -127,6 +127,7 @@ export interface DeviceProfile {
   allowAmbient: boolean;
   allowCursorFx: boolean;
   hoverCapable: boolean;
+  isMobile: boolean;
 }
 
 const DeviceProfileContext = createContext<DeviceProfile | null>(null);
@@ -193,7 +194,8 @@ function useDeviceProfileValue(): DeviceProfile {
     allowAmbient: !reduced && !batterySaver && !saveData && !isLowEnd,
     allowCursorFx: !reduced && !isLowEnd && hoverCapable,
     hoverCapable,
-  }), [reduced, isLowEnd, batterySaver, saveData, hoverCapable]);
+    isMobile: isNarrow,
+  }), [reduced, isLowEnd, batterySaver, saveData, hoverCapable, isNarrow]);
 }
 
 export function DeviceProfileProvider({ children }: { children: ReactNode }) {

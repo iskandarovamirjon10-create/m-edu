@@ -334,7 +334,14 @@ export function LeadsPage() {
               type="button"
               variant="primary"
               onClick={handleOpenModal}
-            >
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e: any) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.currentTarget.click();
+                }
+              }}>
               {t('leads.add')}
             </GlassButton>
           }
@@ -465,7 +472,14 @@ export function LeadsPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleEdit(lead)}
-                            >
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e: any) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  e.currentTarget.click();
+                                }
+                              }}>
                               {t('common.edit')}
                             </GlassButton>
                             <GlassButton
@@ -474,7 +488,14 @@ export function LeadsPage() {
                               size="sm"
                               onClick={() => handleDelete(lead.id)}
                               disabled={remove.isPending && remove.variables === lead.id}
-                            >
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e: any) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  e.currentTarget.click();
+                                }
+                              }}>
                               {t('common.delete')}
                             </GlassButton>
                             {lead.stage !== 'WON' && lead.stage !== 'LOST' && (
@@ -484,7 +505,14 @@ export function LeadsPage() {
                                 size="sm"
                                 onClick={() => handleConvert(lead.id)}
                                 disabled={isConverting}
-                              >
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e: any) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    e.currentTarget.click();
+                                  }
+                                }}>
                                 {isConverting ? t('leads.converting') : t('leads.convert')}
                               </GlassButton>
                             )}
@@ -609,7 +637,14 @@ export function LeadsPage() {
               variant="secondary"
               onClick={handleCloseModal}
               disabled={create.isPending}
-            >
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e: any) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.currentTarget.click();
+                }
+              }}>
               {t('common.cancel')}
             </GlassButton>
             <GlassButton

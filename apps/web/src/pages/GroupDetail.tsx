@@ -242,15 +242,13 @@ function getScheduleRoom(schedule: GroupSchedule, groupRoom?: string | null): st
 }
 
 function getInitials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .map((p) => p.charAt(0))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || '—'
-  );
+  return (name
+    .split(/\s+/)
+    .map((p) => p.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '—');
 }
 
 function nameHash(str: string): number {
@@ -834,10 +832,17 @@ export function GroupDetailPage() {
                     );
                   }}
                   className="!border-purple-500/30 hover:!border-purple-500/50"
-                >
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   <span className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium">
                     <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
-                    AI Tahlil
+                    {t('aiAnalysis')}
                   </span>
                 </GlassButton>
               </motion.div>
@@ -984,7 +989,14 @@ export function GroupDetailPage() {
                   );
                 }}
                 className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-glass)] hover:border-purple-500/30 hover:bg-purple-500/[0.05] transition-all text-left group"
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <div className="flex items-center gap-2.5">
                   <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-500/10 text-[#007AFF]">
                     <Icon paths={I.calendar} size={12} strokeWidth={2.2} />
@@ -1008,13 +1020,20 @@ export function GroupDetailPage() {
                   );
                 }}
                 className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-glass)] hover:border-purple-500/30 hover:bg-purple-500/[0.05] transition-all text-left group"
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <div className="flex items-center gap-2.5">
                   <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-purple-500/10 text-[#AF52DE]">
                     <Icon paths={I.book} size={12} strokeWidth={2.2} />
                   </span>
                   <span className="text-[12px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                    45 daqiqalik dars rejasi
+                    {t('group.lessonPlan45')}
                   </span>
                 </div>
                 <Icon paths={['M5 12h14', 'M12 5l7 7-7 7']} size={12} strokeWidth={2.5} className="text-[#86868B] group-hover:translate-x-0.5 transition-transform" />
@@ -1032,7 +1051,14 @@ export function GroupDetailPage() {
                   );
                 }}
                 className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-glass)] hover:border-purple-500/30 hover:bg-purple-500/[0.05] transition-all text-left group"
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <div className="flex items-center gap-2.5">
                   <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-[#34C759]">
                     <Icon paths={I.users} size={12} strokeWidth={2.2} />

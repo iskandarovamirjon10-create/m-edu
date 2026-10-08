@@ -307,15 +307,13 @@ function employeeEmail(emp: Employee): string {
 }
 
 function getInitials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .map((p) => p.charAt(0))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || '—'
-  );
+  return (name
+    .split(/\s+/)
+    .map((p) => p.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '—');
 }
 
 function nameHash(str: string): number {
@@ -825,7 +823,7 @@ export function HRPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  HR
+                  {t('hr.title')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#5856D6]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#5856D6]">
                   <Icon paths={I.users} size={11} strokeWidth={2.5} />
@@ -852,7 +850,18 @@ export function HRPage() {
               whileTap={{ scale: 0.97 }}
               transition={SPRING.snappy}
             >
-              <GlassButton variant="primary" size="sm" onClick={() => openModal()}>
+              <GlassButton
+                variant="primary"
+                size="sm"
+                onClick={() => openModal()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                   {t('hr.addEmployee')}
@@ -958,7 +967,18 @@ export function HRPage() {
               {!searchQuery && !filterDepartment && (
                 <div className="mt-5">
                   <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                    <GlassButton variant="primary" size="sm" onClick={() => openModal()}>
+                    <GlassButton
+                      variant="primary"
+                      size="sm"
+                      onClick={() => openModal()}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <span className="inline-flex items-center gap-2">
                         <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                         {t('hr.addEmployee')}
@@ -1049,7 +1069,14 @@ export function HRPage() {
                         color: '#007AFF',
                         border: '1px solid rgba(0,122,255,0.2)',
                       }}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <Icon paths={I.edit} size={13} strokeWidth={2} />
                     </motion.button>
                     {employee.isActive && (
@@ -1067,7 +1094,14 @@ export function HRPage() {
                           color: '#FF3B30',
                           border: '1px solid rgba(255,59,48,0.2)',
                         }}
-                      >
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e: any) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.currentTarget.click();
+                          }
+                        }}>
                         <Icon paths={I.trash} size={13} strokeWidth={2} />
                       </motion.button>
                     )}
@@ -1090,7 +1124,18 @@ export function HRPage() {
         footer={
           <>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton variant="secondary" size="sm" onClick={closeModal}>
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                onClick={closeModal}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1100,7 +1145,14 @@ export function HRPage() {
                 size="sm"
                 onClick={handleSubmit}
                 disabled={saveEmployee.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   {saveEmployee.isPending ? (
                     <>
@@ -1295,7 +1347,14 @@ export function HRPage() {
                 variant="secondary"
                 onClick={() => setTerminateTarget(null)}
                 disabled={terminateEmployee.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1304,7 +1363,14 @@ export function HRPage() {
                 variant="danger"
                 onClick={confirmTerminate}
                 disabled={terminateEmployee.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   {terminateEmployee.isPending ? (
                     <>

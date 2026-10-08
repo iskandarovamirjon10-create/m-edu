@@ -5,7 +5,7 @@
  *  - Ambient drifting gradient orbs & Apple liquid glass surface
  *  - Hero header with biometric enrollment squircle icon + live telemetry
  *  - Animated KPI statistics bar (Total Enrollments, Active Face IDs, Coverage %, Revoked)
- *  - Guided 3-step Biometric Enrollment Studio with tactile feedback & sound
+ *  - Guided 3-step {t('face.biometricEnrollment')} Studio with tactile feedback & sound
  *  - Live Apple Face ID LiDAR HUD Webcam integration
  *  - Searchable & filterable enrolled faces directory with student avatars
  *  - High-precision haptic feedback & chime effects on capture and verification
@@ -229,15 +229,13 @@ function formatStudentName(
 }
 
 function getInitials(name: string) {
-  return (
-    name
-      .split(/\s+/)
-      .map((p) => p.charAt(0))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || '—'
-  );
+  return (name
+    .split(/\s+/)
+    .map((p) => p.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '—');
 }
 
 const AVATAR_PALETTES = [
@@ -576,10 +574,10 @@ export function FaceEnrollmentPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#34C759] dark:text-[#30D158]">
                   <Icon paths={I.sparkles} size={12} strokeWidth={2.4} />
-                  Biometric Enrollment
+                  {t('face.biometricEnrollment')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-black/5 px-2.5 py-1 text-[11px] font-semibold text-[#86868B] dark:bg-white/5">
-                  Apple Neural Biometrics
+                  {t('face.appleNeuralBiometrics')}
                 </span>
               </div>
 
@@ -727,7 +725,14 @@ export function FaceEnrollmentPage() {
                   className="w-full justify-center py-3 text-[13.5px] font-bold"
                   onClick={handleStartEnrollment}
                   disabled={!form.studentId || isStartPending}
-                >
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   <span className="inline-flex items-center gap-2">
                     {isStartPending ? (
                       <>
@@ -760,7 +765,14 @@ export function FaceEnrollmentPage() {
                       aria-label={t('common.cancel')}
                       onClick={handleCancelEnrollment}
                       disabled={isCapturePending}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       {t('common.cancel')}
                     </GlassButton>
                   </div>
@@ -859,7 +871,14 @@ export function FaceEnrollmentPage() {
                           ? 'bg-white text-[#1D1D1F] shadow-xs dark:bg-[#2C2C2E] dark:text-[#F5F5F7]'
                           : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
                       }`}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       {tab === 'ALL' ? 'Barchasi' : tab === 'ACTIVE' ? 'Faol' : 'Bekor'}
                     </button>
                   ))}
@@ -932,7 +951,14 @@ export function FaceEnrollmentPage() {
                               aria-label={t('faceEnrollment.revoke')}
                               onClick={() => handleRevoke(enrollment.id)}
                               disabled={isRevokingThis}
-                            >
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e: any) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  e.currentTarget.click();
+                                }
+                              }}>
                               <span className="inline-flex items-center gap-1.5">
                                 <Icon paths={I.trash} size={12} strokeWidth={2.2} />
                                 {isRevokingThis ? t('faceEnrollment.revoking') : t('faceEnrollment.revoke')}

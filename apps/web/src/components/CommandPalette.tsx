@@ -540,7 +540,7 @@ export function CommandPalette() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-start justify-center bg-slate-950/45 px-4 pt-[12vh] backdrop-blur-md animate-overlay-in"
+      className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/35 dark:bg-black/70 px-4 pt-[12vh] backdrop-blur-md animate-overlay-in"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -719,10 +719,10 @@ export function CommandPalette() {
             <span>ESC Yopish</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400">
+            <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-600 dark:border-white/10 dark:bg-white/5 dark:text-emerald-400">
               Alt+P: To‘lov
             </span>
-            <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-indigo-400">
+            <span className="rounded-md border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-indigo-400">
               Alt+A: Davomat
             </span>
           </div>

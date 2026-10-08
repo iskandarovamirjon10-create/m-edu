@@ -385,6 +385,7 @@
   --text-inverse:       #FFFFFF;
   --text-on-brand:      #FFFFFF;
   --text-muted:         var(--_slate-500);   /* ✅ FIX: alias for legacy global.css */
+  --text-placeholder:   var(--_slate-400);
 
   /* ── BRAND / PRIMARY (indigo-600) ────────────────────────────────── */
   --primary:            var(--_indigo-600);
@@ -878,6 +879,7 @@
   --text-inverse:       var(--_slate-900);
   --text-on-brand:      #FFFFFF;
   --text-muted:         #64748B;   /* ✅ FIX: alias */
+  --text-placeholder:   #64748B;
 
   /* ── BRAND / PRIMARY — L +12% correction ────────────────────────── */
   --primary:            var(--_indigo-400);
@@ -1231,6 +1233,7 @@
   --text-secondary: #6B5A44;
   --text-tertiary:  #8A7860;
   --text-muted:     #8A7860;
+  --text-placeholder: #8A7860;
   --primary:        #8B5A2B;
   --primary-hover:  #A06B38;
   --border:         rgba(62, 47, 28, 0.15);
@@ -1602,3 +1605,50 @@
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 /* End of design tokens — v5.0 "Perceptual Constants — Refined" */
+/* Restored legacy tokens still referenced by components after the tokens.css
+   consolidation (regression guard: 25 used vars were dropped). */
+:root {
+  --ai-bg-glass: initial; /* legacy token, value lost */
+  --ai-bg-hover: initial; /* legacy token, value lost */
+  --ai-bg-page: initial; /* legacy token, value lost */
+  --ai-border: initial; /* legacy token, value lost */
+  --ai-danger: initial; /* legacy token, value lost */
+  --ai-primary: initial; /* legacy token, value lost */
+  --ai-primary-strong: initial; /* legacy token, value lost */
+  --ai-secondary: initial; /* legacy token, value lost */
+  --ai-shadow-glow-primary: initial; /* legacy token, value lost */
+  --ai-success: initial; /* legacy token, value lost */
+  --ai-text-muted: initial; /* legacy token, value lost */
+  --ai-text-primary: initial; /* legacy token, value lost */
+  --ai-warning: initial; /* legacy token, value lost */
+  --bg-app: #FFFFFF;
+  --bg-subtle: oklch(0.228 0.024 264);
+  --brand-100: #E0E3FF;
+  --brand-50: #EEF0FF;
+  --brand-600: #6366F1;
+  --brand-700: #4F46E5;
+  --context-w: 320px;
+  --danger-active: #DC2626;
+  --glass-blur-strong: 0;
+  --m-deep: initial; /* legacy token, value lost */
+  --overlay-hover: oklch(1 0 0 / 0.04);
+  --rail-w-collapsed: 64px;
+  --rail-w-expanded: 260px;
+  --shadow-brand: none;
+  --shadow-brand-strong: none;
+  --shadow-glow-cyan: initial; /* legacy token, value lost */
+  --shadow-glow-warning: none;
+  --spot-o: initial; /* legacy token, value lost */
+  --spot-x: initial; /* legacy token, value lost */
+  --spot-y: initial; /* legacy token, value lost */
+  --spotlight-opacity: initial; /* legacy token, value lost */
+  --spotlight-x: initial; /* legacy token, value lost */
+  --spotlight-y: initial; /* legacy token, value lost */
+  --success-active: #059669;
+  --text-2xs: 10px;
+  --text-lg: 15px;
+  --text-md: 14px;
+  --text-sm: 12px;
+  --text-xs: 11px;
+  --warning-active: #D97706;
+}

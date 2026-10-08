@@ -39,9 +39,9 @@ export const GlassSurface = forwardRef<HTMLDivElement, GlassSurfaceProps>(
 'transition-[background-color,box-shadow,transform] duration-[280ms] ease-[cubic-bezier(.25,.46,.45,.94)]',
  TONE_CLASSES[tone],
  ELEVATION_CLASSES[elevation],
- tilt ?'hover:-translate-y-1 hover:shadow-[var(--shadow-lg),var(--shadow-glow-cyan)] [transform-style:preserve-3d]' :'',
+ tilt ? 'hover:-translate-y-1 hover:shadow-[var(--shadow-lg),var(--shadow-glow-cyan)] [transform-style:preserve-3d]' : '',
  className,
- ].filter(Boolean).join('')}
+ ].filter(Boolean).join(' ')}
  {...rest}
  >
  {/* Glass reflection sheen */}

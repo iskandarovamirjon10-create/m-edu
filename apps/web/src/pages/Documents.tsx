@@ -706,7 +706,7 @@ export function DocumentsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#32ADE6]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#32ADE6]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Documents
+                  {t('documents.title')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
@@ -733,7 +733,17 @@ export function DocumentsPage() {
               whileTap={{ scale: 0.97 }}
               transition={SPRING.snappy}
             >
-              <GlassButton variant="primary" onClick={openCreate}>
+              <GlassButton
+                variant="primary"
+                onClick={openCreate}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                   {t('documents.add')}
@@ -846,7 +856,18 @@ export function DocumentsPage() {
               {!search && !category && (
                 <div className="mt-5">
                   <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                    <GlassButton variant="primary" size="sm" onClick={openCreate}>
+                    <GlassButton
+                      variant="primary"
+                      size="sm"
+                      onClick={openCreate}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <span className="inline-flex items-center gap-2">
                         <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                         {t('documents.add')}
@@ -950,7 +971,14 @@ export function DocumentsPage() {
                         color: '#32ADE6',
                         border: '1px solid rgba(50,173,230,0.2)',
                       }}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <Icon paths={I.externalLink} size={13} strokeWidth={2} />
                     </motion.button>
                     <motion.button
@@ -968,7 +996,14 @@ export function DocumentsPage() {
                         color: '#007AFF',
                         border: '1px solid rgba(0,122,255,0.2)',
                       }}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <Icon paths={I.edit} size={13} strokeWidth={2} />
                     </motion.button>
                     <motion.button
@@ -986,7 +1021,14 @@ export function DocumentsPage() {
                         color: '#FF3B30',
                         border: '1px solid rgba(255,59,48,0.2)',
                       }}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <Icon paths={I.trash} size={13} strokeWidth={2} />
                     </motion.button>
                   </div>
@@ -1162,7 +1204,14 @@ export function DocumentsPage() {
                 variant="secondary"
                 onClick={closeModal}
                 disabled={createMutation.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>

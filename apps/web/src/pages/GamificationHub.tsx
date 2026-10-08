@@ -14,6 +14,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassPageHeader } from '@/components/ui';
+import { useI18n } from '@/i18n/I18nProvider';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
 import request from '@/lib/api';
@@ -324,6 +325,7 @@ function LevelRing({ level, progress }: { level: number; progress: number }) {
  * ══════════════════════════════════════════════════════════════════ */
 
 function StreakFlame({ streak }: { streak: number }) {
+  const { t } = useI18n();
   return (
     <div className="relative flex items-center gap-3">
       <motion.div
@@ -345,7 +347,7 @@ function StreakFlame({ streak }: { streak: number }) {
       </motion.div>
       <div>
         <div className="text-[10px] font-bold uppercase tracking-wider text-orange-300">
-          Kunlik seriya
+          {t('gamification.dailyStreak')}
         </div>
         <div className="text-lg font-black text-white">
           {streak} kun
@@ -565,7 +567,9 @@ function RewardCard({ reward, canAfford, isPending, onClaim, index }: RewardCard
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_4px_15px_-4px_rgba(16,185,129,0.6)]'
                   : 'bg-black/[0.04] dark:bg-white/[0.05] text-[#86868B] dark:text-slate-500 cursor-not-allowed'
               }`}
-            >
+              
+              
+              >
               {isPending ? (
                 <span className="flex items-center justify-center gap-2">
                   <motion.span
@@ -601,6 +605,7 @@ function RewardCard({ reward, canAfford, isPending, onClaim, index }: RewardCard
  * ══════════════════════════════════════════════════════════════════ */
 
 function DailyCheckIn({ streak = 0 }: { streak?: number }) {
+  const { t } = useI18n();
   const days = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
   const today = new Date().getDay();
   const todayIndex = today === 0 ? 6 : today - 1;
@@ -611,7 +616,7 @@ function DailyCheckIn({ streak = 0 }: { streak?: number }) {
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-            Kunlik check-in
+            {t('gamification.dailyCheckIn')}
           </span>
         </div>
         <span className="text-[11px] font-bold text-emerald-500 dark:text-emerald-400">
@@ -708,6 +713,7 @@ function AchievementBadge({ achievement, index }: { achievement: Achievement; in
  * ══════════════════════════════════════════════════════════════════ */
 
 export function GamificationHubPage() {
+  const { t } = useI18n();
   usePageTitle('M-Coins & Gamifikatsiya');
   const { push } = useToast();
   const queryClient = useQueryClient();
@@ -852,12 +858,12 @@ export function GamificationHubPage() {
             </motion.div>
             <div>
               <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-500 dark:text-amber-300">
-                M-Coins balans
+                {t('gamification.mCoinsBalance')}
               </div>
               <div className="text-3xl font-black tracking-tight text-[#1D1D1F] dark:text-white">
                 <CoinValue value={currentCoins} />
               </div>
-              <div className="text-[11px] text-[#86868B] dark:text-slate-400">Xaridlar uchun</div>
+              <div className="text-[11px] text-[#86868B] dark:text-slate-400">{t('gamification.forPurchases')}</div>
             </div>
           </div>
 
@@ -867,7 +873,7 @@ export function GamificationHubPage() {
             <div className="relative">
               <div className="flex justify-between text-[11px] font-semibold mb-2">
                 <span className="text-[#86868B] dark:text-slate-400">
-                  Keyingi darajaga <span className="text-indigo-500 dark:text-indigo-300 font-bold">{xpToNext} XP</span>
+                  {t('gamification.nextLevel')} <span className="text-indigo-500 dark:text-indigo-300 font-bold">{xpToNext} XP</span>
                 </span>
                 <span className="text-[#1D1D1F] dark:text-white font-bold tabular-nums">
                   {currentXp} / {(Math.floor(currentXp / 100) + 1) * 100}
@@ -937,14 +943,12 @@ export function GamificationHubPage() {
           active={activeTab === 'leaderboard'}
           onClick={() => setActiveTab('leaderboard')}
           icon="🏆"
-          label="Reyting"
-        />
+          label="Reyting" />
         <TabButton
           active={activeTab === 'store'}
           onClick={() => setActiveTab('store')}
           icon="🛍️"
-          label="M-Coins Do'koni"
-        />
+          label="M-Coins Do'koni" />
       </div>
 
       {/* ═══════════ TAB: LEADERBOARD ═══════════ */}
@@ -971,7 +975,7 @@ export function GamificationHubPage() {
             <LiquidGlass radius="1.5rem" className="p-5">
               <div className="flex items-center justify-between mb-4 px-1">
                 <h4 className="font-bold text-sm text-[#1D1D1F] dark:text-white tracking-tight">
-                  Umumiy reyting
+                  {t('gamification.generalRating')}
                 </h4>
                 <span className="text-[11px] font-bold text-[#86868B]">
                   Jami {leaderboard.length} ishtirokchi
@@ -1062,7 +1066,9 @@ export function GamificationHubPage() {
                         ? 'bg-[#1D1D1F] dark:bg-white text-white dark:text-[#1D1D1F] shadow-lg'
                         : 'bg-black/[0.04] dark:bg-white/[0.05] text-[#86868B] hover:bg-black/[0.06] dark:hover:bg-white/[0.08]'
                     }`}
-                  >
+                    
+                    
+                    >
                     {cat === 'all' ? 'Hammasi' : cat}
                   </button>
                 ))}
@@ -1114,7 +1120,9 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
       className={`relative flex items-center gap-2 rounded-2xl px-6 py-3 text-[13px] font-bold tracking-tight transition-colors ${
         active ? 'text-white' : 'text-[#86868B] dark:text-slate-400 hover:text-[#1D1D1F] dark:hover:text-white'
       }`}
-    >
+      
+      
+      >
       {active && (
         <motion.span
           layoutId="tabPill"
@@ -1133,6 +1141,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 }
 
 function LeaderRow({ entry, rank, index }: { entry: LeaderboardEntry; rank: number; index: number }) {
+
   const [hovered, setHovered] = useState(false);
   return (
     <motion.div
@@ -1176,6 +1185,7 @@ function LeaderRow({ entry, rank, index }: { entry: LeaderboardEntry; rank: numb
 }
 
 function SkeletonRows({ count }: { count: number }) {
+
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
@@ -1197,6 +1207,7 @@ function SkeletonRows({ count }: { count: number }) {
 }
 
 function EmptyState({ icon, title, description }: { icon: string; title: string; description: string }) {
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}

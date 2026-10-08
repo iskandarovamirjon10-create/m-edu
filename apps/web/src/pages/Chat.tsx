@@ -365,7 +365,14 @@ function ConversationRow({
         if (isActive) return;
         e.currentTarget.style.background = 'transparent';
       }}
-    >
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e: any) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.currentTarget.click();
+        }
+      }}>
       {/* Avatar */}
       <div className="relative shrink-0">
         <div
@@ -610,7 +617,14 @@ function Composer({
               ? 'inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 22px -8px rgba(0,122,255,0.55)'
               : 'inset 0 1px 0 rgba(255,255,255,0.2)',
           }}
-        >
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e: any) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.currentTarget.click();
+            }
+          }}>
           <span
             aria-hidden
             className="pointer-events-none absolute inset-0 rounded-full"
@@ -901,7 +915,7 @@ export function ChatPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Messaging
+                  {t('chat.messaging')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#AF52DE]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
@@ -1047,7 +1061,14 @@ export function ChatPage() {
                   transition={SPRING.snappy}
                   aria-label={t('chat.backToInbox')}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#00000005] text-[#1D1D1F] outline-none transition-colors hover:bg-[#00000008] dark:bg-[#ffffff08] dark:text-[#F5F5F7] md:hidden"
-                >
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
                   <Icon paths={I.arrowLeft} size={16} strokeWidth={2.2} />
                 </motion.button>
 

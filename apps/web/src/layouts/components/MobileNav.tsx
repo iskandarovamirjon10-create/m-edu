@@ -47,7 +47,7 @@ export function MobileBottomNav({
         tone="topbar"
         radius="1.5rem"
         spotlight={false}
-        className="border border-[#ffffff70] shadow-[0_-4px_24px_rgba(0,0,0,0.10)] dark:border-[#ffffff12] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.5)]"
+        className="border border-[#00000010] shadow-[0_-4px_24px_rgba(0,0,0,0.06)] dark:border-[#ffffff12] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.5)]"
       >
         <ul className="flex items-stretch">
           {tabs.map((item) => (
@@ -150,7 +150,7 @@ export function MobileMenuDrawer({
           >
             <GlassSurface
               tone="sidebar"
-              className="flex flex-1 h-full min-h-0 flex-col overflow-hidden border border-[#ffffff70] shadow-[20px_0_40px_rgba(0,0,0,0.2)] dark:border-[#ffffff15]"
+              className="flex flex-1 h-full min-h-0 flex-col overflow-hidden border border-[#00000010] shadow-[20px_0_40px_rgba(0,0,0,0.08)] dark:border-[#ffffff15] dark:shadow-[20px_0_40px_rgba(0,0,0,0.2)]"
               radius="2rem"
               spotlight={false}
             >

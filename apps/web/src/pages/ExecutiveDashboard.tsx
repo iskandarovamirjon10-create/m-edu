@@ -825,7 +825,7 @@ export function ExecutiveDashboardPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Executive
+                  {t('executive.title')}
                 </span>
                 {data.topAlerts.length > 0 && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF9500]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#FF9500]">
@@ -871,7 +871,14 @@ export function ExecutiveDashboardPage() {
                 color: '#007AFF',
                 border: '1px solid rgba(0,122,255,0.2)',
               }}
-            >
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e: any) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.currentTarget.click();
+                }
+              }}>
               <motion.span
                 animate={isFetching ? { rotate: 360 } : { rotate: 0 }}
                 transition={isFetching ? { duration: 1, repeat: Infinity, ease: 'linear' } : { duration: 0.2 }}

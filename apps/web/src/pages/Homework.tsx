@@ -735,7 +735,7 @@ export function HomeworkPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#32ADE6]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#32ADE6]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Homework
+                  {t('homework.title')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
@@ -774,7 +774,18 @@ export function HomeworkPage() {
               whileTap={{ scale: 0.97 }}
               transition={SPRING.snappy}
             >
-              <GlassButton type="button" variant="primary" onClick={handleOpenModal}>
+              <GlassButton
+                type="button"
+                variant="primary"
+                onClick={handleOpenModal}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                   {t('homework.addButton')}
@@ -839,7 +850,18 @@ export function HomeworkPage() {
               </p>
               <div className="mt-5">
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  <GlassButton variant="primary" size="sm" onClick={handleOpenModal}>
+                  <GlassButton
+                    variant="primary"
+                    size="sm"
+                    onClick={handleOpenModal}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e: any) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.currentTarget.click();
+                      }
+                    }}>
                     <span className="inline-flex items-center gap-2">
                       <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                       {t('homework.addButton')}
@@ -910,7 +932,14 @@ export function HomeworkPage() {
                         color: '#007AFF',
                         border: '1px solid rgba(0,122,255,0.2)',
                       }}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <Icon paths={I.edit} size={13} strokeWidth={2} />
                     </motion.button>
                     <motion.button
@@ -928,7 +957,14 @@ export function HomeworkPage() {
                         color: '#FF3B30',
                         border: '1px solid rgba(255,59,48,0.2)',
                       }}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <Icon paths={I.trash} size={13} strokeWidth={2} />
                     </motion.button>
                   </div>
@@ -1067,7 +1103,14 @@ export function HomeworkPage() {
                 variant="secondary"
                 onClick={handleCloseModal}
                 disabled={save.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>

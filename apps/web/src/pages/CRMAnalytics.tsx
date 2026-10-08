@@ -375,7 +375,13 @@ function PremiumTabs({
             transition={SPRING.snappy}
             className="relative shrink-0 overflow-hidden rounded-xl px-3.5 py-2 text-[12.5px] font-bold tracking-tight outline-none transition-colors whitespace-nowrap"
             style={{ color: isActive ? c.fg : '#86868B' }}
-          >
+            tabIndex={0}
+            onKeyDown={(e: any) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}>
             {isActive && (
               <motion.span
                 layoutId="crm-tab-active"
@@ -565,10 +571,10 @@ function FunnelTab({ data }: { data: CRMFunnelResponse }) {
           </div>
           <div>
             <h3 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Pipeline Conversion Funnel
+              {t('crm.pipelineConversionFunnel')}
             </h3>
             <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
-              Stage-by-stage lead progression
+              {t('crm.stageProgression')}
             </p>
           </div>
         </div>
@@ -856,10 +862,10 @@ function LostReasonsTab({ data }: { data: CRMLostReasonsResponse }) {
           </div>
           <div>
             <h3 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Primary Loss Reasons
+              {t('crm.primaryLossReasons')}
             </h3>
             <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
-              Most common reasons leads were lost
+              {t('crm.mostCommonReasonsLost')}
             </p>
           </div>
         </div>
@@ -1360,7 +1366,7 @@ export function CRMAnalyticsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  CRM Analytics
+                  {t('crm.analytics')}
                 </span>
                 {totalLeads > 0 && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#AF52DE]">

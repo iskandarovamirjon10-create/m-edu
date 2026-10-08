@@ -769,7 +769,7 @@ export function ExamsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#5856D6]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#5856D6]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Exams
+                  {t('exams.title')}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
@@ -796,7 +796,17 @@ export function ExamsPage() {
               whileTap={{ scale: 0.97 }}
               transition={SPRING.snappy}
             >
-              <GlassButton variant="primary" onClick={() => openModal()}>
+              <GlassButton
+                variant="primary"
+                onClick={() => openModal()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                   {t('exams.add')}
@@ -893,7 +903,18 @@ export function ExamsPage() {
               {!searchQuery && !filterType && (
                 <div className="mt-5">
                   <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                    <GlassButton variant="primary" size="sm" onClick={() => openModal()}>
+                    <GlassButton
+                      variant="primary"
+                      size="sm"
+                      onClick={() => openModal()}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <span className="inline-flex items-center gap-2">
                         <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                         {t('exams.add')}
@@ -985,7 +1006,14 @@ export function ExamsPage() {
                         color: '#10B981',
                         border: '1px solid rgba(16,185,129,0.22)',
                       }}
-                    >
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
                       <Icon paths={I.upload} size={12} strokeWidth={2.4} />
                       <span className="hidden sm:inline">{t('exams.publish')}</span>
                     </motion.button>
@@ -1004,7 +1032,14 @@ export function ExamsPage() {
                       color: '#007AFF',
                       border: '1px solid rgba(0,122,255,0.2)',
                     }}
-                  >
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e: any) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.currentTarget.click();
+                      }
+                    }}>
                     <Icon paths={I.edit} size={13} strokeWidth={2} />
                   </motion.button>
                   <motion.button
@@ -1022,7 +1057,14 @@ export function ExamsPage() {
                       color: '#FF3B30',
                       border: '1px solid rgba(255,59,48,0.2)',
                     }}
-                  >
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e: any) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.currentTarget.click();
+                      }
+                    }}>
                     <Icon paths={I.trash} size={13} strokeWidth={2} />
                   </motion.button>
                 </div>
@@ -1183,7 +1225,17 @@ export function ExamsPage() {
 
           <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton variant="secondary" onClick={closeModal}>
+              <GlassButton
+                variant="secondary"
+                onClick={closeModal}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 {t('common.cancel')}
               </GlassButton>
             </motion.div>
@@ -1192,7 +1244,14 @@ export function ExamsPage() {
                 variant="primary"
                 onClick={handleSubmit}
                 disabled={saveExam.isPending}
-              >
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: any) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.click();
+                  }
+                }}>
                 <span className="inline-flex items-center gap-2">
                   {saveExam.isPending ? (
                     <>
