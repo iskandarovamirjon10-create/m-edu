@@ -29,8 +29,9 @@ export class BookingsController {
   @ApiOperation({ summary: 'Create booking with conflict detection' })
   async create(
     @CurrentUser('organizationId') orgId: string,
+    @CurrentUser('sub') userId: string,
     @Body() dto: CreateBookingDto,
   ) {
-    return this.bookingsService.create(orgId, dto);
+    return this.bookingsService.create(orgId, dto, userId);
   }
 }

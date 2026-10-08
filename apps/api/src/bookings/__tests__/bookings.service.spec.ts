@@ -206,7 +206,9 @@ describe('BookingsService', () => {
       const createdRecord = { id: 'booking-new-1', ...validDto, organizationId: orgId };
       mockPrisma.resourceBooking.create.mockResolvedValue(createdRecord);
 
-      const result = await service.create(orgId, validDto);
+      // Creator identity now comes from the authenticated principal (JWT),
+      // never from the request body (bookedBy spoofing — release gate fix).
+      const result = await service.create(orgId, validDto, 'user-123');
 
       expect(mockPrisma.resourceBooking.create).toHaveBeenCalledWith({
         data: {
@@ -217,12 +219,24 @@ describe('BookingsService', () => {
           startAt: new Date(validDto.startAt),
           endAt: new Date(validDto.endAt),
           status: 'PENDING',
-          bookedBy: 'Teacher Alice',
+          bookedBy: 'user-123',
           attendees: 25,
           notes: 'Projector needed',
         },
       });
       expect(result).toBe(createdRecord);
+    });
+
+    it('ignores a client-supplied bookedBy (no attribution spoofing)', async () => {
+      mockPrisma.resource.findFirst.mockResolvedValue({ id: 'res-1', organizationId: orgId });
+      mockPrisma.resourceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.resourceBooking.create.mockResolvedValue({ id: 'booking-3' });
+
+      await service.create(orgId, { ...validDto, bookedBy: 'administrator@evil.example' });
+
+      expect(mockPrisma.resourceBooking.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ bookedBy: 'UNKNOWN' }) }),
+      );
     });
 
     it('should fallback bookedBy to UNKNOWN and status to PENDING if not provided', async () => {

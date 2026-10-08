@@ -61,9 +61,9 @@ describe('BookingsController', () => {
       const expectedBooking = { id: 'b-1', ...dto, organizationId: orgId };
       mockService.create.mockResolvedValue(expectedBooking);
 
-      const result = await controller.create(orgId, dto);
+      const result = await controller.create(orgId, 'user-123', dto);
 
-      expect(mockService.create).toHaveBeenCalledWith(orgId, dto);
+      expect(mockService.create).toHaveBeenCalledWith(orgId, dto, 'user-123');
       expect(result).toBe(expectedBooking);
     });
   });

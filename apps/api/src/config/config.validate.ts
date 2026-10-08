@@ -113,6 +113,13 @@ export function validateConfig(nodeEnv: string = process.env.NODE_ENV || 'develo
   if (nodeEnv === 'production' && !env.SMTP_HOST) {
     warn('SMTP_HOST', 'Not set - outbound email fails at send time in production.');
   }
+  if (env.SMTP_HOST && !env.SMTP_FROM) {
+    warn(
+      'SMTP_FROM',
+      'Not set - emails fall back to noreply@m-edu.io, which is NOT a domain ' +
+        'you control (SPF/DKIM). Set SMTP_FROM to your own sender.',
+    );
+  }
 
   // --- Frontend URL (OAuth redirects) ---
   if (nodeEnv === 'production' && !env.NEXT_PUBLIC_APP_URL) {

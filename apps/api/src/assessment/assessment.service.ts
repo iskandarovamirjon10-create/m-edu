@@ -258,7 +258,7 @@ export class AssessmentService {
     });
 
     const rawQuestions = actualQuiz.QuizQuestion ?? (actualQuiz as any).questions ?? [];
-    let questions = rawQuestions.map((q: any) => {
+    const questions = rawQuestions.map((q: any) => {
       const qEntity = q.Question ?? q.question ?? q;
       const rawOptions = qEntity.QuestionOption ?? qEntity.options ?? [];
       const safeOptions = rawOptions.map((opt: any) => ({
@@ -275,7 +275,12 @@ export class AssessmentService {
 
     const shouldRandomize = actualQuiz.randomizeQuestions ?? (actualQuiz as any).shuffle ?? false;
     if (shouldRandomize) {
-      questions = questions.sort(() => Math.random() - 0.5);
+      // Unbiased Fisher-Yates shuffle (sort(() => Math.random() - 0.5) is
+      // biased and non-reproducible).
+      for (let i = questions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [questions[i], questions[j]] = [questions[j], questions[i]];
+      }
     }
 
     return {

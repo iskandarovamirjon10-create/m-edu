@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type EntityType = 'STUDENT' | 'TEACHER' | 'GROUP' | 'COURSE' | 'LEAD' | 'PAYMENT' | 'EMPLOYEE';
@@ -59,7 +59,7 @@ export class RelationshipsService {
           where: { id, organizationId: orgId },
           include: { user: { select: { firstName: true, lastName: true } } },
         });
-        if (!s) throw new Error(`Student not found: ${id}`);
+        if (!s) throw new NotFoundException(`Student not found: ${id}`);
         return {
           id: s.id,
           type: 'STUDENT',
@@ -72,7 +72,7 @@ export class RelationshipsService {
           where: { id, organizationId: orgId },
           include: { user: { select: { firstName: true, lastName: true } } },
         });
-        if (!t) throw new Error(`Teacher not found: ${id}`);
+        if (!t) throw new NotFoundException(`Teacher not found: ${id}`);
         return {
           id: t.id,
           type: 'TEACHER',
@@ -82,22 +82,22 @@ export class RelationshipsService {
       }
       case 'GROUP': {
         const g = await this.prisma.group.findFirst({ where: { id, organizationId: orgId } });
-        if (!g) throw new Error(`Group not found: ${id}`);
+        if (!g) throw new NotFoundException(`Group not found: ${id}`);
         return { id: g.id, type: 'GROUP', label: g.name, subLabel: g.id };
       }
       case 'COURSE': {
         const c = await this.prisma.course.findFirst({ where: { id, organizationId: orgId } });
-        if (!c) throw new Error(`Course not found: ${id}`);
+        if (!c) throw new NotFoundException(`Course not found: ${id}`);
         return { id: c.id, type: 'COURSE', label: c.name, subLabel: c.id };
       }
       case 'LEAD': {
         const l = await this.prisma.lead.findFirst({ where: { id, organizationId: orgId } });
-        if (!l) throw new Error(`Lead not found: ${id}`);
+        if (!l) throw new NotFoundException(`Lead not found: ${id}`);
         return { id: l.id, type: 'LEAD', label: `${l.firstName} ${l.lastName ?? ''}`.trim(), subLabel: l.stage };
       }
       case 'PAYMENT': {
         const p = await this.prisma.payment.findFirst({ where: { id, organizationId: orgId } });
-        if (!p) throw new Error(`Payment not found: ${id}`);
+        if (!p) throw new NotFoundException(`Payment not found: ${id}`);
         return { id: p.id, type: 'PAYMENT', label: `Payment ${p.amount}`, subLabel: p.status };
       }
       case 'EMPLOYEE': {
@@ -105,7 +105,7 @@ export class RelationshipsService {
           where: { id, organizationId: orgId },
           include: { user: { select: { firstName: true, lastName: true } } },
         });
-        if (!e) throw new Error(`Employee not found: ${id}`);
+        if (!e) throw new NotFoundException(`Employee not found: ${id}`);
         return {
           id: e.id,
           type: 'EMPLOYEE',

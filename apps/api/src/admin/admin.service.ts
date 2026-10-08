@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SecureLogger } from '@medu/face-security';
 import { EmailService } from '../notifications/email.service';
 import { resolveFrontendUrl } from '../auth/auth.utils';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class AdminService {
@@ -26,6 +27,13 @@ export class AdminService {
     }
     if (request.status !== 'PENDING') {
       throw new BadRequestException(`Request is already ${request.status}`);
+    }
+
+    // Validate the requested role against the Prisma enum instead of writing
+    // an arbitrary string into an enum column (500 on typos).
+    const roleValues = Object.values(Role);
+    if (!roleValues.includes(role as Role)) {
+      throw new BadRequestException(`Invalid role "${role}"`);
     }
 
     // Generate a secure random token for the invitation

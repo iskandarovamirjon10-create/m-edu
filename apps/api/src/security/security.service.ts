@@ -109,8 +109,12 @@ export class SecurityService {
     }
 
     const total = items.length;
-    const skip = query.skip ? Number(query.skip) : 0;
-    const take = query.take ? Number(query.take) : 50;
+    const takeRaw = Number(query.take ?? 50);
+    const take = Math.min(
+      Number.isFinite(takeRaw) && takeRaw > 0 ? Math.trunc(takeRaw) : 50,
+      100,
+    );
+    const skip = Math.max(0, Number(query.skip) || 0);
     items = items.slice(skip, skip + take);
 
     return { items, total };

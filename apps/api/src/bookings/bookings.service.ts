@@ -13,8 +13,12 @@ export class BookingsService {
     if (query.status) where.status = query.status;
     if (query.bookedBy) where.bookedBy = query.bookedBy;
 
-    const skip = query.skip !== undefined ? Number(query.skip) : 0;
-    const take = query.take !== undefined ? Number(query.take) : 20;
+    const takeRaw = Number(query.take ?? 20);
+    const take = Math.min(
+      Number.isFinite(takeRaw) && takeRaw > 0 ? Math.trunc(takeRaw) : 20,
+      200,
+    );
+    const skip = Math.max(0, Number(query.skip) || 0);
 
     const [items, total] = await Promise.all([
       this.prisma.resourceBooking.findMany({
@@ -34,7 +38,7 @@ export class BookingsService {
     };
   }
 
-  async create(orgId: string, dto: CreateBookingDto) {
+  async create(orgId: string, dto: CreateBookingDto, bookerId?: string) {
     const startAt = new Date(dto.startAt);
     const endAt = new Date(dto.endAt);
 
@@ -86,7 +90,10 @@ export class BookingsService {
           startAt,
           endAt,
           status: dto.status ?? 'PENDING',
-          bookedBy: dto.bookedBy ?? 'UNKNOWN',
+          // SECURITY: the creator identity comes from the JWT, never from
+          // the request body (a client-supplied bookedBy was previously
+          // written verbatim - attribution spoofing).
+          bookedBy: bookerId ?? 'UNKNOWN',
           attendees: dto.attendees,
           notes: dto.notes,
         },

@@ -483,10 +483,14 @@ ${debtorsBlock}
       ]);
 
       const candidateWords = words.filter((w) => !stopWords.has(w.toLowerCase()));
-      if (candidateWords.length === 0 || !this.prisma.student?.findFirst || !this.prisma.group?.findFirst) return '';
+      // Bound the per-message entity search: a 50-word message used to issue
+      // up to 50 nested findFirst queries (N+1, F-12). The entity a user
+      // means is almost always among the first few non-stopword tokens.
+      const boundedCandidates = candidateWords.slice(0, 5);
+      if (boundedCandidates.length === 0 || !this.prisma.student?.findFirst || !this.prisma.group?.findFirst) return '';
 
       // Check student match first
-      for (const token of candidateWords) {
+      for (const token of boundedCandidates) {
         const student = await this.prisma.student.findFirst({
           where: {
             organizationId,
@@ -545,7 +549,7 @@ ${debtorsBlock}
       }
 
       // Check group match
-      for (const token of candidateWords) {
+      for (const token of boundedCandidates) {
         const group = await this.prisma.group.findFirst({
           where: {
             organizationId,
