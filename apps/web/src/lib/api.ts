@@ -3,7 +3,8 @@
 // (access_token). This file NEVER stores or sends tokens in headers
 // or browser storage. Credentials are included so cookies travel.
 
-import type { DashboardStats } from './types';
+import type { DashboardStats, MonthlyRevenue } from './types';
+import { purgeSessionCaches } from './sessionCleanup';
 import type {
   Anomaly,
   CashFlowData,
@@ -91,7 +92,7 @@ export function apiUrl(path: string): string {
 }
 
 /** Read the double-submit CSRF cookie, if the browser holds one. */
-function readXsrfCookie(): string | null {
+export function readXsrfCookie(): string | null {
   if (typeof document === 'undefined') return null;
   const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
   return match ? decodeURIComponent(match[1]) : null;
@@ -107,7 +108,7 @@ function readXsrfCookie(): string | null {
  * Concurrent callers share one in-flight request.
  */
 let csrfSeed: Promise<void> | null = null;
-async function ensureCsrfCookie(): Promise<void> {
+export async function ensureCsrfCookie(): Promise<void> {
   if (typeof document === 'undefined' || readXsrfCookie()) return;
   if (!csrfSeed) {
     csrfSeed = fetch(`${API_BASE}/csrf-token`, { credentials: 'include', headers: { Accept: 'application/json' } })
@@ -189,6 +190,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       );
     if (!isAuthProbe && !onPublic) {
       userStore.clear();
+      // Hard boundary: wipe any cached (previous-session) data before the
+      // redirect so nothing from this account can render afterwards.
+      purgeSessionCaches();
       if (onUnauthorized) onUnauthorized();
     }
     throw new ApiError(401, 'Your session has expired. Please sign in again.');
@@ -237,15 +241,76 @@ export const authApi = {
   me: () => request<unknown>('/auth/me'),
   logout: () => request<{ message: string }>('/auth/logout', { method: 'POST' }),
   refresh: () => request<{ user: unknown }>('/auth/refresh', { method: 'POST' }),
-  exchangeCode: (code: string) =>
+  exchangeCode: (code: string, state?: string) =>
     // The session is set as an HttpOnly cookie by the API; no credential is
-    // returned to JavaScript by design.
-    request<{ authenticated: boolean }>('/auth/oauth/exchange', { method: 'POST', body: JSON.stringify({ code }) }),
+    // returned to JavaScript by design. State protects against Login CSRF.
+    request<{ authenticated: boolean }>('/auth/oauth/exchange', {
+      method: 'POST',
+      body: JSON.stringify({ code, ...(state ? { state } : {}) }),
+    }),
   forgotPassword: (email: string) =>
     request<{ message: string }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
   resetPassword: (token: string, newPassword: string) =>
     request<{ message: string }>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, newPassword }) }),
+  getWhitelist: () =>
+    request<{
+      whitelist: Array<{
+        id: string;
+        email: string;
+        role: string | null;
+        note: string | null;
+        addedBy: string | null;
+        addedByName: string | null;
+        organizationId: string | null;
+        createdAt: string;
+      }>;
+      pendingUsers: Array<{
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+        phone: string | null;
+        role: string;
+        status: string;
+        organizationId: string;
+        organizationName: string;
+        createdAt: string;
+      }>;
+      settings: {
+        inviteOnly: boolean;
+        requireApproval: boolean;
+      };
+    }>('/auth/whitelist'),
+  addToWhitelist: (data: { email: string; note?: string; role?: string }) =>
+    request<unknown>('/auth/whitelist', { method: 'POST', body: JSON.stringify(data) }),
+  removeFromWhitelist: (id: string) =>
+    request<{ success: boolean; message: string }>(`/auth/whitelist/${id}`, { method: 'DELETE' }),
+  approveUser: (id: string) =>
+    request<{ success: boolean; message: string }>(`/auth/whitelist/approve-user/${id}`, { method: 'POST' }),
+  rejectUser: (id: string) =>
+    request<{ success: boolean; message: string }>(`/auth/whitelist/reject-user/${id}`, { method: 'DELETE' }),
+  updateAccessSettings: (data: { inviteOnly?: boolean; requireApproval?: boolean }) =>
+    request<{ inviteOnly: boolean; requireApproval: boolean }>('/auth/whitelist/settings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getSessions: () => request<ActiveSession[]>('/auth/sessions'),
+  revokeSession: (id: string) => request<{ message: string; id: string }>(`/auth/sessions/${id}`, { method: 'DELETE' }),
+  revokeOtherSessions: () => request<{ message: string; revokedCount: number }>('/auth/sessions/revoke-others', { method: 'POST' }),
 };
+
+export interface ActiveSession {
+  id: string;
+  deviceName: string;
+  deviceType: 'desktop' | 'mobile' | 'tablet' | 'unknown';
+  browser: string;
+  os: string;
+  ipAddress: string;
+  createdAt: string;
+  expiresAt: string;
+  lastActiveAt: string;
+  isCurrentSession: boolean;
+}
 
 function crud<T>(base: string) {
   return {
@@ -388,6 +453,7 @@ export const attendanceApi = {
 };
 export const dashboardApi = {
   stats: () => request<DashboardStats>('/dashboard/stats'),
+  revenue: (period?: string) => request<MonthlyRevenue[]>(`/dashboard/revenue${buildQuery({ period })}`),
 };
 export const analyticsApi = {
   overview: () => request('/analytics/overview'),
@@ -588,11 +654,6 @@ export const dataQualityApi = {
   run: () => request('/data-quality/run', { method: 'POST' }),
   resolve: (id: string, note?: string) =>
     request(`/data-quality/issues/${id}/resolve`, { method: 'POST', body: JSON.stringify({ note }) }),
-};
-export const workflowApi = {
-  listRules: (params?: object) => request(`/workflow/rules${buildQuery(params)}`),
-  getRule: (id: string) => request(`/workflow/rules/${id}`),
-  listInstances: (params?: object) => request(`/workflow/instances${buildQuery(params)}`),
 };
 export const resourcesApi = {
   list: (params?: object) => request(`/resources${buildQuery(params)}`),
@@ -875,6 +936,8 @@ export const subjectsApi = {
   create: (data: object) => request<any>('/subjects', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: object) => request<any>(`/subjects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (id: string) => request<any>(`/subjects/${id}`, { method: 'DELETE' }),
+  /** Re-activate a soft-deleted subject (same PATCH endpoint, isActive: true). */
+  restore: (id: string) => request<any>(`/subjects/${id}`, { method: 'PATCH', body: JSON.stringify({ isActive: true }) }),
 };
 
 export const curriculumApi = {

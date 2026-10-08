@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+.env.docker
 
 # Node dependencies
 node_modules/
@@ -54,8 +55,15 @@ pgdata/
 /rewrite-*.js
 /backend_audit.js
 /analyzer.js
+/audit.js
 *.log
 error.log
+
+# Ad-hoc apps/web audit/i18n scripts and inventory dumps (not part of the app)
+/apps/web/inventory.txt
+/apps/web/scripts/*.json
+/apps/web/scripts/*.cjs
+/apps/web/scripts/*.mjs
 
 # Scratch / audit output at repo root
 /analysis.txt

@@ -13,7 +13,7 @@ import {
   CameraHealthTracker,
   FfmpegStreamIngester,
   FrameSampler,
-  perceptualHash,
+  perceptualHashSync,
 } from '@medu/camera-engine';
 
 import type { VideoFrame } from '@medu/camera-engine';
@@ -22,6 +22,11 @@ import { SecureLogger } from '@medu/face-security';
 import { getErrorMessage } from '../lib/error';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { AttendanceDecisionEngine } from './attendance-decision.engine';
+import {
+  DEFAULT_AMBIGUITY_MARGIN,
+  DEFAULT_SIMILARITY_THRESHOLD,
+  MIN_QUALITY_SCORE,
+} from './camera-thresholds';
 
 export interface CameraWorkerConfig {
   cameraId: string;
@@ -63,9 +68,9 @@ const FRAME_QUEUE_SIZE = 2;
 
 const DEFAULT_PROCESSING_FPS = 3;
 
-const MIN_QUALITY_SCORE = 0.3;
-
-const DEFAULT_SIMILARITY_THRESHOLD = 0.6;
+// MIN_QUALITY_SCORE / DEFAULT_SIMILARITY_THRESHOLD / DEFAULT_AMBIGUITY_MARGIN
+// come from ./camera-thresholds — the single, env-tunable source of truth
+// shared with CameraWorkerManagerService.
 
 /**
  * Maximum age of a queued frame before it is discarded.
@@ -106,8 +111,6 @@ const MAX_PROCESSING_TIME_MS = 5_000;
  * multiple attendance events from a single frame.
  */
 const FACE_SIMILARITY_DEDUP_THRESHOLD = 0.95;
-
-const SHARED_TEMPLATE_CACHE = new Map<string, { templates: any[], lastUpdated: number }>();
 
 export class CameraWorkerSession extends EventEmitter {
   private readonly logger = new SecureLogger('info');
@@ -156,6 +159,8 @@ export class CameraWorkerSession extends EventEmitter {
     | null = null;
 
   private lastTemplateCacheUpdate = 0;
+
+  private readonly activeRecognitions = new Map<string, number>();
 
   private stopped = false;
 
@@ -312,6 +317,9 @@ export class CameraWorkerSession extends EventEmitter {
 
     this.reconnectInProgress = true;
 
+    // Hoisted so the failure path can still tear down the process it spawned.
+    let ingester: FfmpegStreamIngester | null = null;
+
     try {
       await this.stopIngester();
 
@@ -325,7 +333,7 @@ export class CameraWorkerSession extends EventEmitter {
         'CONNECTING',
       );
 
-      const ingester =
+      ingester =
         new FfmpegStreamIngester({
           cameraId: this.cameraId,
 
@@ -368,7 +376,13 @@ export class CameraWorkerSession extends EventEmitter {
       await ingester.start();
 
       if (this.stopped) {
-        await this.stopIngester();
+        /*
+         * A concurrent `stop()` (the 30s start-timeout cleanup path) already
+         * ran and nulled `this.ingester`, so stopping *that* reference is a
+         * no-op — while THIS ingester may just have spawned a live FFmpeg that
+         * nobody owns any more. Always tear down the instance we created.
+         */
+        await this.stopIngester(ingester);
         return;
       }
 
@@ -403,6 +417,7 @@ export class CameraWorkerSession extends EventEmitter {
       );
     } catch (err: unknown) {
       if (this.stopped) {
+        if (ingester) await this.stopIngester(ingester);
         return;
       }
 
@@ -428,11 +443,14 @@ export class CameraWorkerSession extends EventEmitter {
     }
   }
 
-  private async stopIngester(): Promise<void> {
-    const current =
-      this.ingester;
+  private async stopIngester(
+    target?: FfmpegStreamIngester,
+  ): Promise<void> {
+    const current = target ?? this.ingester;
 
-    this.ingester = null;
+    if (current === this.ingester) {
+      this.ingester = null;
+    }
 
     if (!current) {
       return;
@@ -476,7 +494,10 @@ export class CameraWorkerSession extends EventEmitter {
     // sampler to avoid double work and to keep the cost aligned
     // with the recognition cadence.
     try {
-      const hash = perceptualHash(frame.buffer);
+      // handleIncomingFrame is synchronous: use the sync hash (async
+      // perceptualHash returns a Promise, which was being passed to the
+      // tracker as if it were a bigint — typecheck TS2345 / latent bug).
+      const hash = perceptualHashSync(frame.buffer);
       const isFrozen = this.healthTracker.observeFrameHash(hash);
       if (isFrozen) {
         this.logger.warn('Frozen frame detected', {
@@ -590,6 +611,50 @@ export class CameraWorkerSession extends EventEmitter {
   // FACE RECOGNITION PIPELINE
   // ============================================================
 
+  /**
+   * Fail the camera CLOSED when the biometric engine required for
+   * recognition is unavailable.
+   *
+   * A recognition-enabled camera whose engine is missing must not keep
+   * "running" silently — an operator looking at the dashboard would assume
+   * attendance is being captured when it is not. Transition to ERROR,
+   * record the REAL reason, and surface it through the same offline path
+   * the manager uses to persist camera ERROR status + alerting.
+   */
+  private failCameraForEngine(
+    errorCode: string,
+    message: string,
+  ): void {
+    if (this.stopped) {
+      return;
+    }
+
+    this.lifecycleState = 'ERROR';
+    this.healthTracker.recordError(
+      new Error(message),
+    );
+
+    this.logger.error(
+      message,
+      {
+        cameraId: this.cameraId,
+        organizationId: this.organizationId,
+        errorCode,
+      },
+    );
+
+    // The manager persists camera ERROR with the code + message and sends
+    // the offline alert, so the dashboard shows exactly why recognition
+    // stopped instead of a generic STREAM_ERROR.
+    this.emit('camera-offline', {
+      cameraId: this.cameraId,
+      organizationId: this.organizationId,
+      error: message,
+      errorCode,
+      timestamp: Date.now(),
+    });
+  }
+
   private async processFrame(
     frame: VideoFrame,
   ): Promise<void> {
@@ -613,15 +678,10 @@ export class CameraWorkerSession extends EventEmitter {
      * evaluated, so the intended fail-closed path became an exception.
      */
     if (!this.faceEngine) {
-      this.logger.error(
-        'Recognition rejected because face engine is unavailable',
-        {
-          cameraId: this.cameraId,
-          organizationId:
-            this.organizationId,
-        },
+      this.failCameraForEngine(
+        'FACE_ENGINE_MISSING',
+        'Recognition disabled because the face engine is not available',
       );
-
       return;
     }
 
@@ -633,15 +693,10 @@ export class CameraWorkerSession extends EventEmitter {
         await this.faceEngine.isAvailable();
 
       if (!available) {
-        this.logger.error(
-          'Recognition rejected because face engine is unavailable',
-          {
-            cameraId: this.cameraId,
-            organizationId:
-              this.organizationId,
-          },
+        this.failCameraForEngine(
+          'FACE_ENGINE_UNAVAILABLE',
+          'Recognition disabled because the real face engine is unavailable',
         );
-
         return;
       }
     }
@@ -751,15 +806,11 @@ export class CameraWorkerSession extends EventEmitter {
         typeof this.faceEngine
           .checkLiveness !== 'function'
       ) {
-        this.logger.error(
-          'Recognition rejected because liveness engine is unavailable',
-          {
-            cameraId: this.cameraId,
-            organizationId:
-              this.organizationId,
-          },
+        this.failCameraForEngine(
+          'LIVENESS_ENGINE_UNAVAILABLE',
+          'Recognition disabled because the liveness engine is unavailable',
         );
-        continue;
+        return;
       }
 
       const liveness =
@@ -847,30 +898,70 @@ export class CameraWorkerSession extends EventEmitter {
       frame.timestamp,
     );
 
+    const now = Date.now();
     for (const entry of attendedStudents.values()) {
-      await this.attendanceEngine.processRecognition(
-        {
-          organizationId:
-            this.organizationId,
+      const lastRecognized = this.activeRecognitions.get(entry.studentId);
+      if (lastRecognized && now - lastRecognized < 60_000) {
+        // Recognized within the last minute. Skip to save database writes.
+        continue;
+      }
+      /*
+       * The cooldown is claimed BEFORE the write so a failing database is
+       * retried once per minute instead of once per frame. Without that, a
+       * transient error would be hammered ~3x/second for the whole session.
+       */
+      this.activeRecognitions.set(entry.studentId, now);
 
-          cameraId: this.cameraId,
+      try {
+        await this.attendanceEngine.processRecognition(
+          {
+            organizationId:
+              this.organizationId,
 
-          studentId: entry.studentId,
+            cameraId: this.cameraId,
 
-          recognizedAt,
+            studentId: entry.studentId,
 
-          confidence: entry.similarity,
+            recognizedAt,
 
-          similarityScore: entry.similarity,
+            confidence: entry.similarity,
 
-          qualityScore: entry.qualityScore,
+            similarityScore: entry.similarity,
 
-          cameraLocation:
-            this.config.location,
+            qualityScore: entry.qualityScore,
 
-          cameraName: this.config.name,
-        },
-      );
+            cameraLocation:
+              this.config.location,
+
+            cameraName: this.config.name,
+          },
+        );
+      } catch (err: unknown) {
+        /*
+         * One student's attendance write must never abort the remaining
+         * students recognized in the SAME frame (a classroom full of faces
+         * would silently lose everyone after the first DB hiccup).
+         */
+        this.logger.error(
+          'Attendance write failed for recognized student',
+          {
+            cameraId: this.cameraId,
+            organizationId: this.organizationId,
+            studentId: entry.studentId,
+            recognizedAt: recognizedAt.toISOString(),
+            error: getErrorMessage(err),
+          },
+        );
+      }
+    }
+    
+    // Purge stale cache entries to prevent memory leak
+    if (Math.random() < 0.05) {
+      for (const [studentId, time] of this.activeRecognitions.entries()) {
+        if (now - time >= 60_000) {
+          this.activeRecognitions.delete(studentId);
+        }
+      }
     }
   }
 
@@ -885,101 +976,112 @@ export class CameraWorkerSession extends EventEmitter {
     studentId: string;
     similarity: number;
   } | null> {
-    let top1: {
-      studentId: string;
-      similarity: number;
-    } | null = null;
-
-    let top2: {
-      studentId: string;
-      similarity: number;
-    } | null = null;
+    /**
+     * Best similarity PER STUDENT (one student may own several templates),
+     * then rank the two best DISTINCT students.
+     *
+     * The ambiguity margin MUST include candidates below the similarity
+     * threshold: dropping them first made a second student scoring just
+     * under the threshold invisible, so near-ties were wrongly accepted —
+     * strictly more permissive than the core RecognitionService, which
+     * ranks every candidate.
+     */
+    const bestByStudent = new Map<string, number>();
 
     for (const template of templates) {
+      // Dimension compatibility: probe and template produced by different
+      // embedding models must never be compared (garbage similarity in,
+      // false attendance out). FaceEmbedding.cosine would throw, but an
+      // engine adapter could silently return NaN — reject explicitly here.
+      if (
+        template.embedding.getDimension() !==
+        probeEmbedding.getDimension()
+      ) {
+        this.logger.warn(
+          'Face template skipped: embedding dimension mismatch',
+          {
+            cameraId: this.cameraId,
+            templateId: template.id,
+            templateDimension: template.embedding.getDimension(),
+            probeDimension: probeEmbedding.getDimension(),
+          },
+        );
+        continue;
+      }
+
       try {
         const similarity =
-          await this.faceEngine.compareEmbeddings(
-            {
-              embeddingA:
-                probeEmbedding,
+          await this.faceEngine.compareEmbeddings({
+            embeddingA: probeEmbedding,
+            embeddingB: template.embedding,
+          });
 
-              embeddingB:
-                template.embedding,
-            },
-          );
-
-        if (
-          !Number.isFinite(similarity)
-        ) {
+        if (!Number.isFinite(similarity)) {
           continue;
         }
 
-        if (
-          similarity <
-          this.config.similarityThreshold
-        ) {
-          continue;
-        }
+        const previous =
+          bestByStudent.get(template.studentId);
 
-        if (!top1) {
-          top1 = {
-            studentId: template.studentId,
+        if (
+          previous === undefined ||
+          similarity > previous
+        ) {
+          bestByStudent.set(
+            template.studentId,
             similarity,
-          };
-        } else if (template.studentId === top1.studentId) {
-          if (similarity > top1.similarity) {
-            top1.similarity = similarity;
-          }
-        } else {
-          // Different student from current top1
-          if (similarity > top1.similarity) {
-            if (!top2 || top1.similarity > top2.similarity) {
-              top2 = {
-                studentId: top1.studentId,
-                similarity: top1.similarity,
-              };
-            }
-            top1 = {
-              studentId: template.studentId,
-              similarity,
-            };
-          } else if (!top2 || similarity > top2.similarity) {
-            top2 = {
-              studentId: template.studentId,
-              similarity,
-            };
-          }
+          );
         }
       } catch (err: unknown) {
         this.logger.warn(
           'Face template comparison failed',
           {
-            cameraId:
-              this.cameraId,
-            templateId:
-              template.id,
-            error:
-              getErrorMessage(err),
+            cameraId: this.cameraId,
+            templateId: template.id,
+            error: getErrorMessage(err),
           },
         );
       }
     }
 
-    if (!top1) {
+    if (bestByStudent.size === 0) {
       return null;
     }
 
-    const minMargin = this.config.minAmbiguityMargin ?? 0.05;
-    if (top2 && (top1.similarity - top2.similarity) < minMargin) {
-      this.logger.warn('Ambiguous face match detected — rejected to prevent false positive', {
-        cameraId: this.cameraId,
-        top1StudentId: top1.studentId,
-        top1Similarity: top1.similarity,
-        top2StudentId: top2.studentId,
-        top2Similarity: top2.similarity,
-        margin: top1.similarity - top2.similarity,
-        requiredMargin: minMargin,
-      });
+    const ranked = [...bestByStudent.entries()]
+      .map(([studentId, similarity]) => ({
+        studentId,
+        similarity,
+      }))
+      .sort((a, b) => b.similarity - a.similarity);
+
+    const top1 = ranked[0];
+    const top2 = ranked[1];
+
+    if (top1.similarity < this.config.similarityThreshold) {
+      return null;
+    }
+
+    const minMargin =
+      this.config.minAmbiguityMargin ??
+      DEFAULT_AMBIGUITY_MARGIN;
+
+    if (
+      top2 &&
+      top1.similarity - top2.similarity < minMargin
+    ) {
+      this.logger.warn(
+        'Ambiguous face match detected — rejected to prevent false positive',
+        {
+          cameraId: this.cameraId,
+          top1StudentId: top1.studentId,
+          top1Similarity: top1.similarity,
+          top2StudentId: top2.studentId,
+          top2Similarity: top2.similarity,
+          margin: top1.similarity - top2.similarity,
+          requiredMargin: minMargin,
+        },
+      );
       return null;
     }
 
@@ -1012,15 +1114,36 @@ export class CameraWorkerSession extends EventEmitter {
               this.organizationId,
 
             status: 'ACTIVE',
+            /*
+             * A template is only matchable while its enrollment is ACTIVE.
+             * Enforced on READ (not only by the revoke write path) so a
+             * revoked student can never keep producing attendance if any
+             * future code flips `FaceEnrollment.status` without revoking the
+             * templates. Mirrors PrismaEnrollmentAdapter used by the
+             * face-session pipeline — both paths must agree.
+             */
+            enrollment: { status: 'ACTIVE' },
           },
 
           select: {
             id: true,
             studentId: true,
             templateData: true,
+            modelVersion: true,
           },
         },
       );
+
+    // Parity with the core RecognitionService model-version guard: a template
+    // extracted with a different (or unknown) embedding model produces
+    // meaningless similarity scores. When the engine can report its version we
+    // enforce compatibility strictly and fail closed on a missing version.
+    // (An engine that cannot report a version — e.g. a test double — skips the
+    // guard rather than silently discarding every template.)
+    const engineVersion =
+      typeof this.faceEngine?.getModelVersion === 'function'
+        ? this.faceEngine.getModelVersion()
+        : undefined;
 
     const parsed: EnrolledTemplate[] =
       [];
@@ -1030,6 +1153,23 @@ export class CameraWorkerSession extends EventEmitter {
         if (
           !template.templateData
         ) {
+          continue;
+        }
+
+        if (
+          engineVersion &&
+          (!template.modelVersion ||
+            template.modelVersion !== engineVersion)
+        ) {
+          this.logger.warn(
+            'Face template skipped: embedding model version mismatch',
+            {
+              cameraId: this.cameraId,
+              templateId: template.id,
+              templateModelVersion: template.modelVersion,
+              engineModelVersion: engineVersion,
+            },
+          );
           continue;
         }
 

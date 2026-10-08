@@ -67,5 +67,40 @@ export function usePremiumSound() {
       playTone(300, 'triangle', 0.2, 0.2);
       setTimeout(() => playTone(250, 'triangle', 0.3, 0.2), 150);
     }, [playTone, getContext]),
+
+    /** A subtle click/tick for feedback */
+    playTick: useCallback(() => {
+      playTone(900, 'sine', 0.04, 0.08);
+    }, [playTone]),
+
+    /** Authentic Apple Face ID Unlock Match Chime (G5 -> C6 harmonic lift) */
+    playFaceIdMatch: useCallback(() => {
+      const ctx = getContext();
+      if (!ctx) return;
+      playTone(784, 'sine', 0.16, 0.14);
+      setTimeout(() => playTone(1046.5, 'sine', 0.35, 0.16), 90);
+    }, [playTone, getContext]),
+
+    /** Biometric Access Denied / Spoof Warning Tone */
+    playFaceIdDenied: useCallback(() => {
+      const ctx = getContext();
+      if (!ctx) return;
+      playTone(220, 'sawtooth', 0.15, 0.12);
+      setTimeout(() => playTone(164.8, 'sawtooth', 0.28, 0.14), 110);
+    }, [playTone, getContext]),
+
+    /** Polite Mellow Double Chime for Duplicate Attendance Already Recorded */
+    playFaceIdDuplicate: useCallback(() => {
+      const ctx = getContext();
+      if (!ctx) return;
+      playTone(523.25, 'sine', 0.12, 0.1);
+      setTimeout(() => playTone(659.25, 'sine', 0.2, 0.1), 80);
+    }, [playTone, getContext]),
+
+    /** High-tech sweep frequency tick for frame sampling radar */
+    playLaserScan: useCallback(() => {
+      playTone(1200, 'sine', 0.03, 0.05);
+    }, [playTone]),
   };
 }
+

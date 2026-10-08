@@ -46,13 +46,13 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -451,10 +451,11 @@ function FormatSelector({
   onChange: (f: ExportFormat) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div
       role="radiogroup"
-      aria-label="Export format"
+      aria-label={t('reports.exportFormat')}
       className="inline-flex items-center gap-1 rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-1 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
       style={{
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',

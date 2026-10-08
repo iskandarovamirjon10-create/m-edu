@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+﻿import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { normalizeEmail } from '../auth.utils';
@@ -34,6 +34,11 @@ export class ParentLoginDto {
 
 
 export class RegisterDto {
+  @ApiProperty({ description: 'Platform invitation code required to register' })
+  @IsString()
+  @IsNotEmpty()
+  inviteCode: string;
+
   @ApiProperty()
   @IsEmail()
   @Transform(({ value }) => (typeof value === 'string' ? normalizeEmail(value) : value))
@@ -71,6 +76,11 @@ export class RegisterDto {
 }
 
 export class BootstrapDto {
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  inviteCode?: string;
+
   @ApiProperty()
   @IsEmail()
   @Transform(({ value }) => (typeof value === 'string' ? normalizeEmail(value) : value))
@@ -112,6 +122,11 @@ export class ExchangeAuthCodeDto {
   @IsString()
   @IsNotEmpty()
   code: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  state?: string;
 }
 
 export class ForgotPasswordDto {
@@ -137,3 +152,6 @@ export class ResetPasswordDto {
 }
 export * from './access-request.dto';
 export * from './accept-invitation.dto';
+export * from './access-whitelist.dto';
+
+

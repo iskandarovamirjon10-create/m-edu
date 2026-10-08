@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
+import { hashPassword } from '../auth/auth.config';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePagination } from '../lib/pagination';
@@ -65,7 +65,7 @@ export class TeachersService {
     // rejects a null hash). It is activated later via invite/Google linking.
     // Demanding a password here contradicted both the DTO contract and the
     // placeholder-email fallback below.
-    const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : null;
+    const passwordHash = data.password ? await hashPassword(data.password) : null;
     const email = data.email || `teacher-${randomUUID()}@placeholder.local`;
 
     try {

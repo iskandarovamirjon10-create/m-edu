@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -7,14 +7,18 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { GoogleStrategy } from './google.strategy';
 import { GoogleAuthGuard } from './google-auth.guard';
+import { SyncGateway } from './sync.gateway';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ParentPortalModule } from '../parent-portal/parent-portal.module';
+import { ChatModule } from '../chat/chat.module';
 import { authTtlSeconds } from './auth.ttl';
 
 @Module({
   imports: [
+    ConfigModule,
     PrismaModule,
     ParentPortalModule,
+    forwardRef(() => ChatModule),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -35,7 +39,7 @@ import { authTtlSeconds } from './auth.ttl';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy, GoogleAuthGuard],
-  exports: [AuthService, JwtModule],
+  providers: [AuthService, JwtStrategy, GoogleStrategy, GoogleAuthGuard, SyncGateway],
+  exports: [AuthService, JwtModule, SyncGateway],
 })
 export class AuthModule {}

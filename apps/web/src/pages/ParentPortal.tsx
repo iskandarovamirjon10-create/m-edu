@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ParentPortalPage — Ultra Premium Apple-Style Dashboard
  * Features smooth glassmorphism, dynamic data rings, iOS-style cards,
  * and high-end typography for parents tracking student progress.
@@ -242,7 +242,7 @@ export function ParentPortalPage() {
  <div className="min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
  <GlassPageHeader title={t('parentPortal.title')}subtitle={t('parentPortal.loadingProfile')}/>
  <div className="mt-8 rounded-[2.5rem] p-16 flex items-center justify-center glass-card">
- <GlassPageLoader label="Fetching data…"/>
+ <GlassPageLoader label={t('parentPortal.fetchingData') || 'Fetching data…'}/>
  </div>
  </div>
  );

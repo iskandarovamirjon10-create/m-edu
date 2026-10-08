@@ -50,8 +50,8 @@ const SPRING = {
 const EASE_APPLE = [0.22, 1, 0.36, 1] as const;
 
 const sectionVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -292,6 +292,7 @@ function FormSection({
   completed?: boolean;
   badge?: React.ReactNode;
 }) {
+  const { t } = useI18n();
   const palette: Record<string, { fg: string; bg: string; glow: string }> = {
     blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)' },
     green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)' },
@@ -340,7 +341,7 @@ function FormSection({
               exit={{ scale: 0, opacity: 0 }}
               transition={SPRING.snappy}
               className="flex h-7 w-7 items-center justify-center rounded-full bg-[#34C759]/15 text-[#34C759]"
-              aria-label="Section complete"
+              aria-label={t('common.sectionComplete')}
             >
               <Icon paths={I.check} size={14} strokeWidth={2.5} />
             </motion.div>

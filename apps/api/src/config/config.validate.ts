@@ -180,7 +180,7 @@ export function validateConfig(nodeEnv: string = process.env.NODE_ENV || 'develo
     error('ALLOW_LOCAL_CAMERAS', 'Allowing local/private camera addresses in production is forbidden (SSRF risk).');
   }
   if (nodeEnv === 'production' && env.ALLOW_CAMERA_DISCOVERY === 'true') {
-    warn('ALLOW_CAMERA_DISCOVERY', 'ONVIF discovery in production should only be enabled inside trusted networks.');
+    error('ALLOW_CAMERA_DISCOVERY', 'ONVIF discovery in production should only be enabled inside trusted networks.');
   }
 
   return problems;
@@ -201,3 +201,4 @@ export function assertValidConfig(nodeEnv?: string): void {
 export function configWarnings(nodeEnv?: string): ConfigProblem[] {
   return validateConfig(nodeEnv).filter((p) => p.severity === 'warning');
 }
+

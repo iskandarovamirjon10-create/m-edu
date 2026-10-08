@@ -36,6 +36,7 @@ import {
   EngineUnavailableError,
   BiometricAccessDeniedError,
 } from '../domain/errors';
+import { FaceEmbedding } from '../domain/value-objects';
 import { Permissions } from '@medu/contracts';
 
 export interface EnrollmentServiceConfig {
@@ -52,6 +53,19 @@ export interface EnrollmentServiceConfig {
    * FAIL and UNAVAILABLE are ALWAYS rejected regardless of this flag.
    */
   acceptUncertainLiveness?: boolean;
+
+  /**
+   * Minimum similarity between a new enrollment's embedding and an existing
+   * DIFFERENT student's active template before a POTENTIAL_DUPLICATE_FACE
+   * audit event is emitted. Previously hard-coded at 0.80.
+   */
+  duplicateFaceThreshold?: number;
+
+  /**
+   * Minimum quality score required to accept an enrollment capture.
+   * Previously hard-coded at 0.4.
+   */
+  qualityThreshold?: number;
 }
 
 export class EnrollmentService {
@@ -170,8 +184,15 @@ export class EnrollmentService {
       face: primaryFace,
     });
 
-    if (!quality.passesThreshold) {
-      throw new FaceQualityTooLowError(quality.overallScore, 0.4);
+    // SECURITY/QUALITY FIX: `quality.passesThreshold` reflects the engine's
+    // *internal* threshold (hardcoded in the quality assessor), not the
+    // operator-configured `qualityThreshold`. Previously raising
+    // FACE_QUALITY_THRESHOLD only changed the error message text while the
+    // actual gate stayed at 0.4. The operator threshold is now enforced
+    // explicitly here as well.
+    const effectiveQualityThreshold = this.config.qualityThreshold ?? 0.4;
+    if (!quality.passesThreshold || quality.overallScore < effectiveQualityThreshold) {
+      throw new FaceQualityTooLowError(quality.overallScore, effectiveQualityThreshold);
     }
 
     // 6. Liveness Check — FAIL-CLOSED.
@@ -234,6 +255,49 @@ export class EnrollmentService {
       imageBuffer,
       face: primaryFace,
     });
+
+    // 7.5 Duplicate Face Detection
+    // Compares the new embedding against all existing active templates in the organization.
+    // If an extremely high similarity match is found with a DIFFERENT student, log a warning.
+    let maxSimilarity = -1;
+    let duplicateStudentId: string | null = null;
+    for await (const batch of this.enrollmentRepo.streamActiveTemplates(tenant.organizationId, 500)) {
+      for (const existingTemplate of batch) {
+        if (existingTemplate.studentId === enrollment.studentId) {
+          continue; // Expected to match their own previous enrollments
+        }
+        try {
+          const decrypted = await this.encryption.decrypt(existingTemplate.templateData);
+          const existingEmbedding = FaceEmbedding.deserialize(decrypted);
+          const sim = await this.faceEngine.compareEmbeddings({
+            embeddingA: embedding,
+            embeddingB: existingEmbedding,
+          });
+          if (sim > maxSimilarity) {
+            maxSimilarity = sim;
+            duplicateStudentId = existingTemplate.studentId;
+          }
+        } catch (e) {
+          // Ignore version/dimension mismatch during cross-comparison
+        }
+      }
+    }
+
+    if (maxSimilarity >= (this.config.duplicateFaceThreshold ?? 0.8) && duplicateStudentId) {
+      await this.audit.log({
+        organizationId: tenant.organizationId,
+        userId: tenant.userId,
+        type: 'POTENTIAL_DUPLICATE_FACE',
+        resourceType: 'FaceEnrollment',
+        resourceId: enrollmentId,
+        description: `Potential duplicate face detected during enrollment. Extremely similar to another student.`,
+        metadata: {
+          studentId: enrollment.studentId,
+          duplicateStudentId,
+          similarityScore: maxSimilarity,
+        },
+      });
+    }
 
     // 8. Encrypt Template
     const serializedEmbedding = embedding.serialize();
@@ -299,14 +363,11 @@ export class EnrollmentService {
       throw new EnrollmentNotFoundError(enrollmentId);
     }
 
-    // Revoke templates first
-    await this.enrollmentRepo.revokeTemplates(tenant.organizationId, enrollmentId);
-
-    // Revoke enrollment
-    await this.enrollmentRepo.updateStatus(
+    // Revoke templates + enrollment atomically — no window where a REVOKED
+    // enrollment keeps ACTIVE biometric templates that camera matching hits.
+    await this.enrollmentRepo.revokeEnrollmentAndTemplates(
       tenant.organizationId,
       enrollmentId,
-      'REVOKED',
       {
         revokedAt: new Date(),
         revokedBy: tenant.userId,
@@ -342,25 +403,17 @@ export class EnrollmentService {
       throw new EnrollmentNotFoundError(enrollmentId);
     }
 
-    // Revoke old enrollment
-    await this.enrollmentRepo.revokeTemplates(tenant.organizationId, enrollmentId);
-    await this.enrollmentRepo.updateStatus(
+    // Atomically revoke the old enrollment and create its replacement —
+    // the student never lingers in a half-REVOKED state with active templates.
+    const { enrolled: newEnrollment } = await this.enrollmentRepo.atomicReenroll(
       tenant.organizationId,
       enrollmentId,
-      'REVOKED',
       {
         revokedAt: new Date(),
         revokedBy: tenant.userId,
         revocationReason: `Re-enrollment: ${reason}`,
       }
     );
-
-    // Create new enrollment
-    const newEnrollment = await this.enrollmentRepo.create({
-      organizationId: tenant.organizationId,
-      studentId: oldEnrollment.studentId,
-      enrolledBy: tenant.userId,
-    });
 
     // Audit
     await this.audit.log({

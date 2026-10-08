@@ -4,7 +4,7 @@ import {
   CameraHealthTracker,
   FrameSampler,
   FfmpegStreamIngester,
-  perceptualHash,
+  perceptualHashSync,
 } from './index';
 import type { VideoFrame } from './types';
 
@@ -75,7 +75,7 @@ describe('CameraHealthTracker', () => {
 
   it('reports frozenFrame=true after repeated identical hashes fill the window', () => {
     const tracker = new CameraHealthTracker('cam-1', 3);
-    const h = perceptualHash(Buffer.alloc(2048, 0x42));
+    const h = perceptualHashSync(Buffer.alloc(2048, 0x42));
     for (let i = 0; i < 30; i++) tracker.observeFrameHash(h);
     const snap = tracker.getSnapshot();
     expect(snap.frozenFrame).toBe(true);
@@ -85,7 +85,7 @@ describe('CameraHealthTracker', () => {
 
   it('clears frozen state on resetFrozenFrameTracker', () => {
     const tracker = new CameraHealthTracker('cam-1', 3);
-    const h = perceptualHash(Buffer.alloc(2048, 0x42));
+    const h = perceptualHashSync(Buffer.alloc(2048, 0x42));
     for (let i = 0; i < 30; i++) tracker.observeFrameHash(h);
     expect(tracker.getSnapshot().frozenFrame).toBe(true);
     tracker.resetFrozenFrameTracker();
@@ -97,7 +97,7 @@ describe('CameraHealthTracker', () => {
 
   it('observeFrameHash returns true when frozen state is entered', () => {
     const tracker = new CameraHealthTracker('cam-1', 3);
-    const h = perceptualHash(Buffer.alloc(2048, 0x42));
+    const h = perceptualHashSync(Buffer.alloc(2048, 0x42));
     const beforeFrozen = tracker.observeFrameHash(h);
     expect(beforeFrozen).toBe(false);
     for (let i = 1; i < 30; i++) tracker.observeFrameHash(h);
@@ -147,6 +147,58 @@ describe('FfmpegStreamIngester.buildArgs', () => {
   it('checkAvailability returns a boolean', async () => {
     const available = await FfmpegStreamIngester.checkAvailability();
     expect(typeof available).toBe('boolean');
+  });
+});
+
+describe('FfmpegStreamIngester.handleData — chunk-split frame reassembly (regression: CA-1)', () => {
+  const jpeg = (payload: number[]): Buffer =>
+    Buffer.from([0xff, 0xd8, ...payload, 0xff, 0xd9]);
+
+  const makeIngester = () => {
+    const ing = new FfmpegStreamIngester({ cameraId: 'c1', streamUri: 'rtsp://cam/stream', fps: 5 });
+    const frames: Buffer[] = [];
+    ing.onFrame((f) => frames.push(f.buffer));
+    return { ing: ing as unknown as { handleData(chunk: Buffer): void }, frames };
+  };
+
+  it('reassembles a frame split across three chunks', () => {
+    const { ing, frames } = makeIngester();
+    const full = jpeg([0x11, 0x22, 0x33, 0x44, 0x55]);
+    ing.handleData(full.subarray(0, 4));
+    ing.handleData(full.subarray(4, 6));
+    ing.handleData(full.subarray(6));
+    expect(frames).toHaveLength(1);
+    expect(frames[0].equals(full)).toBe(true);
+    expect(frames[0][0]).toBe(0xff);
+    expect(frames[0][1]).toBe(0xd8);
+  });
+
+  it('junk bytes before SOI + split frame: stale frameStart must not slice the SOI', () => {
+    const { ing, frames } = makeIngester();
+    const junk = Buffer.from([0x09, 0x09]);
+    const full = jpeg([0xaa, 0xbb, 0xcc]);
+    // Chunk 1: junk + SOI + 1 payload byte (EOI not yet available)
+    ing.handleData(Buffer.concat([junk, full.subarray(0, 3)]));
+    // Chunk 2: rest of the frame
+    ing.handleData(full.subarray(3));
+    expect(frames).toHaveLength(1);
+    expect(frames[0].equals(full)).toBe(true);
+  });
+
+  it('extracts multiple complete frames from a single chunk in order', () => {
+    const { ing, frames } = makeIngester();
+    const a = jpeg([1, 2, 3]);
+    const b = jpeg([4, 5]);
+    ing.handleData(Buffer.concat([a, b]));
+    expect(frames).toHaveLength(2);
+    expect(frames[0].equals(a)).toBe(true);
+    expect(frames[1].equals(b)).toBe(true);
+  });
+
+  it('drops data without SOI and never emits a frame', () => {
+    const { ing, frames } = makeIngester();
+    ing.handleData(Buffer.from([0x01, 0x02, 0x03, 0x04]));
+    expect(frames).toHaveLength(0);
   });
 });
 

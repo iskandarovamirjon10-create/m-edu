@@ -92,7 +92,11 @@ export interface RecognitionRepository {
     sortOrder?: 'asc' | 'desc';
   }): Promise<{ items: RecognitionAttemptEntity[]; total: number }>;
 
-  getSessionAttempts(organizationId: string, sessionId: string): Promise<RecognitionAttemptEntity[]>;
+  getSessionAttempts(
+    organizationId: string,
+    sessionId: string,
+    pagination?: { page?: number | string; limit?: number | string },
+  ): Promise<{ items: RecognitionAttemptEntity[]; total: number }>;
 
   // ---- Attendance ----
   createAttendance(data: {

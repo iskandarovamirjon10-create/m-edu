@@ -94,6 +94,53 @@ export class EmailService {
     });
   }
 
+  async sendRawEmail(data: { to: string; subject: string; html: string; text?: string; organizationId?: string }): Promise<{ success: boolean; error?: string }> {
+    if (!this.transporter) {
+      this.logger.warn(`SMTP not configured. Would have sent email to ${data.to}: ${data.subject}`);
+      return { success: false, error: 'SMTP not configured' };
+    }
+
+    try {
+      this.logger.log(`Sending raw email to ${data.to} with subject "${data.subject}"`);
+      await this.transporter.sendMail({
+        from: this.configService.get<string>('SMTP_FROM') || 'noreply@m-edu.io',
+        to: data.to,
+        subject: data.subject,
+        html: data.html,
+        text: data.text,
+      });
+
+      if (data.organizationId) {
+        await this.prisma.emailLog.create({
+          data: {
+            organizationId: data.organizationId,
+            recipient: data.to,
+            subject: data.subject,
+            status: 'DELIVERED',
+            sentAt: new Date(),
+          },
+        });
+      }
+      return { success: true };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to send raw email to ${data.to}`, error);
+      if (data.organizationId) {
+        await this.prisma.emailLog.create({
+          data: {
+            organizationId: data.organizationId,
+            recipient: data.to,
+            subject: data.subject,
+            status: 'FAILED',
+            errorMessage: errorMessage,
+            sentAt: new Date(),
+          },
+        });
+      }
+      return { success: false, error: errorMessage };
+    }
+  }
+
   async sendTemplatedEmail(organizationId: string, data: SendEmailDto): Promise<{ success: boolean; error?: string }> {
     const template = await this.getTemplateById(organizationId, data.templateId);
 

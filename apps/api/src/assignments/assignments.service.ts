@@ -15,9 +15,43 @@ export interface AssignmentQuery {
 export class AssignmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, query: AssignmentQuery) {
+  async findAll(
+    organizationId: string,
+    query: AssignmentQuery,
+    requester?: { id: string; role: string },
+  ) {
     const { page, limit, skip } = parsePagination(query);
     const where: any = { organizationId };
+
+    // SECURITY: family roles must never list every assignment in the org
+    // (titles, due dates, submission counts of other groups). Scope them to
+    // their own enrolled groups (student) / linked children's groups (parent).
+    if (requester?.role === 'STUDENT') {
+      const student = await this.prisma.student.findUnique({
+        where: { userId: requester.id },
+      });
+      if (!student || student.organizationId !== organizationId) {
+        return { items: [], total: 0, page, limit, totalPages: 0 };
+      }
+      const enrollments = await this.prisma.studentGroup.findMany({
+        where: { studentId: student.id, isActive: true },
+        select: { groupId: true },
+      });
+      where.groupId = { in: enrollments.map((e) => e.groupId) };
+    } else if (requester?.role === 'PARENT') {
+      const children = await this.prisma.parentStudent.findMany({
+        where: { parentId: requester.id },
+        select: { studentId: true },
+      });
+      const enrollments = await this.prisma.studentGroup.findMany({
+        where: {
+          studentId: { in: children.map((c) => c.studentId) },
+          isActive: true,
+        },
+        select: { groupId: true },
+      });
+      where.groupId = { in: enrollments.map((e) => e.groupId) };
+    }
 
     if (query.groupId) where.groupId = query.groupId;
     if (query.lessonId) where.lessonId = query.lessonId;
@@ -41,7 +75,24 @@ export class AssignmentsService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async findOne(organizationId: string, id: string) {
+  async findOne(organizationId: string, id: string, requester?: { id: string; role: string }) {
+    // SECURITY: submissions contain classmates' names, content, scores and
+    // feedback. FAMILY roles may only ever see their own submissions.
+    let submissionFilter: Prisma.AssignmentSubmissionWhereInput | undefined;
+    if (requester?.role === 'STUDENT') {
+      const student = await this.prisma.student.findUnique({ where: { userId: requester.id } });
+      submissionFilter =
+        student && student.organizationId === organizationId
+          ? { studentId: student.id }
+          : { studentId: { in: [] } }; // no profile → see nothing
+    } else if (requester?.role === 'PARENT') {
+      const children = await this.prisma.parentStudent.findMany({
+        where: { parentId: requester.id },
+        select: { studentId: true },
+      });
+      submissionFilter = { studentId: { in: children.map((c) => c.studentId) } };
+    }
+
     const assignment = await this.prisma.assignment.findFirst({
       where: { id, organizationId },
       include: {
@@ -49,6 +100,7 @@ export class AssignmentsService {
         Lesson: { select: { id: true, date: true, topic: true } },
         Topic: { select: { id: true, title: true } },
         AssignmentSubmission: {
+          ...(submissionFilter ? { where: submissionFilter } : {}),
           include: {
             Student: { include: { user: { select: { firstName: true, lastName: true } } } },
           },
@@ -99,7 +151,9 @@ export class AssignmentsService {
     const student = await this.prisma.student.findUnique({
       where: { userId: studentUserId },
     });
-    if (!student) throw new NotFoundException('Student profile not found');
+    if (!student || student.organizationId !== organizationId) {
+      throw new NotFoundException('Student profile not found');
+    }
 
     // Check enrollment
     const enrollment = await this.prisma.studentGroup.findUnique({
@@ -171,3 +225,4 @@ export class AssignmentsService {
     });
   }
 }
+import type { Prisma } from '@prisma/client';

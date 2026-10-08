@@ -5,8 +5,7 @@ vi.mock('ioredis', () => {
   return {
     Redis: class {
       on = vi.fn();
-      multi = vi.fn();
-      pexpire = vi.fn();
+      eval = vi.fn();
     },
   };
 });
@@ -39,41 +38,32 @@ describe('ResilientRedisThrottlerStorage', () => {
     expect(blockedRecord.timeToBlockExpire).toBe(30);
   });
 
-  it('should handle redis increment when connected', async () => {
-    const redisInstance = (storage as unknown as { redis: { multi: ReturnType<typeof vi.fn> } }).redis;
+  it('uses ONE atomic scripted increment when connected (no separate pexpire)', async () => {
+    const redisInstance = (storage as unknown as { redis: { eval: ReturnType<typeof vi.fn> } }).redis;
     (storage as unknown as { isRedisConnected: boolean }).isRedisConnected = true;
 
-    const mockExec = vi.fn().mockResolvedValue([
-      [null, 2],
-      [null, 50000],
-    ]);
-
-    const mockMulti = {
-      incr: vi.fn().mockReturnThis(),
-      pttl: vi.fn().mockReturnThis(),
-      exec: mockExec,
-    };
-
-    redisInstance.multi = vi.fn().mockReturnValue(mockMulti);
+    redisInstance.eval = vi.fn().mockResolvedValue([2, 50000]);
 
     const record = await storage.increment('redis-key', 60000, 5, 60000, 'default');
 
     expect(record.totalHits).toBe(2);
     expect(record.isBlocked).toBe(false);
     expect(record.timeToExpire).toBe(50);
+
+    // Exactly one round-trip: the INCR + conditional PEXPIRE + PTTL all live in
+    // a single server-side script, so a crash can never leave a TTL-less
+    // counter that permanently blocks the client.
+    expect(redisInstance.eval).toHaveBeenCalledTimes(1);
+    const script = String((redisInstance.eval as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+    expect(script).toContain('INCR');
+    expect(script).toContain('PEXPIRE');
   });
 
-  it('should fall back to memory if redis multi exec fails', async () => {
-    const redisInstance = (storage as unknown as { redis: { multi: ReturnType<typeof vi.fn> } }).redis;
+  it('falls back to memory (and marks redis disconnected) when the script fails', async () => {
+    const redisInstance = (storage as unknown as { redis: { eval: ReturnType<typeof vi.fn> } }).redis;
     (storage as unknown as { isRedisConnected: boolean }).isRedisConnected = true;
 
-    const mockMulti = {
-      incr: vi.fn().mockReturnThis(),
-      pttl: vi.fn().mockReturnThis(),
-      exec: vi.fn().mockRejectedValue(new Error('Connection dropped')),
-    };
-
-    redisInstance.multi = vi.fn().mockReturnValue(mockMulti);
+    redisInstance.eval = vi.fn().mockRejectedValue(new Error('Connection dropped'));
 
     const record = await storage.increment('fallback-key', 60000, 5, 60000, 'default');
 

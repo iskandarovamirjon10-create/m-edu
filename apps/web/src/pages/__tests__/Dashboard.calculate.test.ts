@@ -11,6 +11,7 @@ function stats(paid: unknown, pending: unknown, overdue: unknown): DashboardStat
  return {
  totalPaid: paid as number, totalPending: pending as number, totalOverdue: overdue as number,
  totalStudents: 0, activeStudents: 0, totalTeachers: 0, activeGroups: 0,
+ attendanceRate: 0,
  monthlyRevenue: [], recentPayments: [], totalLeads: 0, wonLeads: 0,
  newLeadsThisMonth: 0, conversionRate: 0, upcomingFollowUps: [], attendanceStats: [], leadByStage: [],
 };

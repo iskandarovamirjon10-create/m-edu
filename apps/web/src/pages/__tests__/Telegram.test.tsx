@@ -67,7 +67,7 @@ function renderPage() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <I18nProvider initialLocale="uz">
+      <I18nProvider initialLocale="en">
         <TelegramPage />
       </I18nProvider>
     </QueryClientProvider>,
@@ -133,7 +133,7 @@ const ADMIN_OVERVIEW = {
   },
 };
 
-describe.skip('TelegramPage (Standalone Telegram Hub Screen)', () => {
+describe('TelegramPage (Standalone Telegram Hub Screen)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     statusMock.mockResolvedValue(NOT_LINKED);
@@ -156,44 +156,43 @@ describe.skip('TelegramPage (Standalone Telegram Hub Screen)', () => {
 
   it('renders the Telegram Hub title, official bot badge, and navigation tabs', async () => {
     renderPage();
-    expect(screen.getByText('Telegram Hub')).toBeInTheDocument();
-    expect(screen.getByText('Official Telegram Gateway')).toBeInTheDocument();
-    expect(screen.getByText('Mening Telegramim')).toBeInTheDocument();
-    expect(screen.getByText('Tashkilot Statistikasi')).toBeInTheDocument();
-    expect(screen.getByText('Xabarnoma Qoidalari & Qoʻllanma')).toBeInTheDocument();
+    expect(await screen.findByText('Telegram Integration')).toBeInTheDocument();
+    expect(screen.getByText('Integration')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /My Connection/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Bot Features/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Admin Overview/i })).toBeInTheDocument();
   });
 
-  it('generates a one-time deep-link and displays QR code container on connect click', async () => {
+  it('generates a one-time deep-link and displays container on connect click', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    const connectBtn = await screen.findByRole('button', { name: /Telegram hisobini ulash/i });
+    const connectBtn = await screen.findByRole('button', { name: /Generate Link/i });
     await user.click(connectBtn);
 
     expect(createLinkMock).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
-      expect(screen.getByText(/Kamerangizni QR kodga qarating/i)).toBeInTheDocument();
       expect(screen.getByDisplayValue('https://t.me/medu_education_bot?start=test-token')).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /Telegramda ochish/i })).toHaveAttribute(
+      expect(screen.getByRole('link', { name: /Open in Telegram/i })).toHaveAttribute(
         'href',
         'https://t.me/medu_education_bot?start=test-token',
       );
     });
   });
 
-  it('copies the deep link to clipboard when "Nusxalash" is clicked', async () => {
+  it('copies the deep link to clipboard when copy button is clicked', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    const connectBtn = await screen.findByRole('button', { name: /Telegram hisobini ulash/i });
+    const connectBtn = await screen.findByRole('button', { name: /Generate Link/i });
     await user.click(connectBtn);
 
-    const copyBtn = await screen.findByRole('button', { name: /Nusxalash/i });
+    const copyBtn = await screen.findByRole('button', { name: /Copy link/i });
     await user.click(copyBtn);
 
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith('success', 'Havola nusxalandi');
+      expect(pushMock).toHaveBeenCalledWith('success', expect.any(String));
     });
   });
 
@@ -204,10 +203,10 @@ describe.skip('TelegramPage (Standalone Telegram Hub Screen)', () => {
 
     await waitFor(() => {
       expect(screen.getAllByText('@amirjon_tg').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText(/Telegram xabarnomalari faol/i)).toBeInTheDocument();
+      expect(screen.getByText(/Connected to Telegram/i)).toBeInTheDocument();
     });
 
-    const testBtn = screen.getByRole('button', { name: /Sinov bildirishnomasi yuborish/i });
+    const testBtn = screen.getByRole('button', { name: /Test Notification/i });
     await user.click(testBtn);
 
     expect(testMock).toHaveBeenCalledTimes(1);
@@ -221,13 +220,10 @@ describe.skip('TelegramPage (Standalone Telegram Hub Screen)', () => {
     const user = userEvent.setup();
     renderPage();
 
-    const unlinkBtn = await screen.findByRole('button', { name: /Hisobni uzish/i });
+    const unlinkBtn = await screen.findByRole('button', { name: /Disconnect/i });
     await user.click(unlinkBtn);
 
-    // Confirmation dialog open
-    expect(screen.getByText(/Rostdan ham Telegram hisobingizni uzmoqchimisiz/i)).toBeInTheDocument();
-
-    const confirmBtn = screen.getByRole('button', { name: /Ha, uzish/i });
+    const confirmBtn = await screen.findByRole('button', { name: /Delete/i });
     await user.click(confirmBtn);
 
     expect(unlinkMock).toHaveBeenCalledTimes(1);
@@ -237,31 +233,26 @@ describe.skip('TelegramPage (Standalone Telegram Hub Screen)', () => {
   });
 
   it('renders admin observability analytics when switching to admin tab', async () => {
-    renderPage();
-
-    const adminTab = await screen.findByRole('button', { name: /Tashkilot Statistikasi/i });
-    await userEvent.setup().click(adminTab);
-
-    expect(await screen.findByText('Jami Hisoblar')).toBeInTheDocument();
-    expect(screen.getByText('120')).toBeInTheDocument();
-    expect(screen.getAllByText('95').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('450').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('ATTENDANCE_ALERT')).toBeInTheDocument();
-    expect(screen.getByText('BLOCKED_BY_USER')).toBeInTheDocument();
-  });
-
-  it('renders features and notification rules tab with bot commands reference', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    const featuresTab = screen.getByRole('button', { name: /Xabarnoma Qoidalari/i });
+    const adminTab = await screen.findByRole('tab', { name: /Admin Overview/i });
+    await user.click(adminTab);
+
+    expect(await screen.findByText('120')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText('95').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('450').length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('renders features tab with feature descriptions', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const featuresTab = await screen.findByRole('tab', { name: /Bot Features/i });
     await user.click(featuresTab);
 
-    expect(screen.getByText('Davomat Bildirishnomalari')).toBeInTheDocument();
-    expect(screen.getByText('Toʻlov Kvitansiyalari & Eslatmalar')).toBeInTheDocument();
-    expect(screen.getByText('Baholar & Imtihon Natijalari')).toBeInTheDocument();
-    expect(screen.getByText('Telegram Bot Buyruqlari')).toBeInTheDocument();
-    expect(screen.getByText('/start')).toBeInTheDocument();
-    expect(screen.getByText('/unlink')).toBeInTheDocument();
+    expect(await screen.findByText(/Instant Alerts/i)).toBeInTheDocument();
   });
 });

@@ -46,14 +46,14 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 16, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
-  exit:   { opacity: 0, x: 20, filter: 'blur(6px)', transition: { duration: 0.2 } },
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
+  exit:   { opacity: 0, x: 20, transition: { duration: 0.2 } },
 };
 
 /* ============================================================================
@@ -555,7 +555,7 @@ function SourcesCard({ t }: { t: (k: string) => string }) {
             {t('notifications.sourcesTitle')}
           </h3>
           <p className="text-[11px] font-medium text-[#86868B]">
-            Where these notifications come from
+            {t('notifications.sourcesSubtitle') || 'Where these notifications come from'}
           </p>
         </div>
         <motion.div
@@ -682,7 +682,7 @@ function NotificationRow({
               className="text-[10px] font-bold uppercase tracking-wider"
               style={{ color: c.fg }}
             >
-              New
+              {t('notifications.new') || 'New'}
             </span>
           )}
         </div>

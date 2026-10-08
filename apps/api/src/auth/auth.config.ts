@@ -14,6 +14,8 @@
  *    is capped rather than allowed to grow unbounded.
  */
 
+import * as bcrypt from 'bcryptjs';
+
 export const BCRYPT_ROUNDS_DEFAULT = 12;
 export const BCRYPT_ROUNDS_MIN = 10;
 export const BCRYPT_ROUNDS_MAX = 15;
@@ -49,4 +51,16 @@ export function resolveBcryptRounds(
     );
   }
   return value;
+}
+
+/**
+ * Hash a password with the configured (environment-tunable) bcrypt cost.
+ *
+ * Single source of truth for every password write-path in the codebase:
+ * student/teacher/lead/user account creation used to hardcode rounds 10,
+ * which silently bypassed BCRYPT_ROUNDS and produced weaker hashes than the
+ * auth service policy.
+ */
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, resolveBcryptRounds());
 }

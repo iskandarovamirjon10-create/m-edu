@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/auth/AuthContext';
-
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+import { getSocketBaseUrl } from '@/lib/socketUrl';
+import { queryKeys } from '@/lib/query-keys.factory';
 
 export interface AttendanceEventPayload {
   type: 'AttendanceCreated';
@@ -25,7 +25,7 @@ export function useAttendanceSocket() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const socketInstance = io(`${SOCKET_URL}/attendance`, {
+    const socketInstance = io(`${getSocketBaseUrl()}/attendance`, {
       withCredentials: true,
       transports: ['websocket'],
       reconnectionAttempts: 10,
@@ -33,22 +33,23 @@ export function useAttendanceSocket() {
     });
 
     socketInstance.on('connect', () => {
-      console.log('Connected to Realtime Attendance Gateway');
       setIsConnected(true);
       // Invalidate history to reconcile any missed events during disconnect
-      queryClient.invalidateQueries({ queryKey: ['face', 'history'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.face.history() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.face.all() });
     });
 
     socketInstance.on('disconnect', () => {
-      console.warn('Disconnected from Realtime Attendance Gateway');
       setIsConnected(false);
     });
 
     socketInstance.on('attendance.created', (_payload: AttendanceEventPayload) => {
-      // Opt 1: Invalidate queries to fetch the fresh list
-      queryClient.invalidateQueries({ queryKey: ['face', 'history'] });
-      queryClient.invalidateQueries({ queryKey: ['attendance'] });
-      queryClient.invalidateQueries({ queryKey: ['attendance-analytics'] });
+      // Invalidate queries using centralized query key registry
+      queryClient.invalidateQueries({ queryKey: queryKeys.face.history() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.face.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attendance.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attendance.analyticsAll() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
       
       // Opt 2 (Optional): Update local state or toast notification
       // We rely on React Query cache update to avoid duplicate render issues

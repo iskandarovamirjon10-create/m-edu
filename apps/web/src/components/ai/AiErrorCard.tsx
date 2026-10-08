@@ -7,6 +7,7 @@
  */
 import { CircleAlert, RefreshCw } from 'lucide-react';
 import { GlassButton } from '@/components/ui';
+import { useI18n } from '@/i18n/I18nProvider';
 import type { AiErrorInfo } from '@/types/ai';
 
 export interface AiErrorCardProps {
@@ -16,6 +17,7 @@ export interface AiErrorCardProps {
 }
 
 export function AiErrorCard({ error, lastPrompt, onRetry }: AiErrorCardProps) {
+  const { t } = useI18n();
   return (
     <div
       role="alert"
@@ -26,7 +28,7 @@ export function AiErrorCard({ error, lastPrompt, onRetry }: AiErrorCardProps) {
         <CircleAlert aria-hidden className="mt-0.5 h-5 w-5 shrink-0 text-[var(--danger)]" />
 
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[var(--danger)]">Xatolik yuz berdi</p>
+          <p className="text-sm font-semibold text-[var(--danger)]">{t('ai.error.title')}</p>
           <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">{error.message}</p>
 
           {lastPrompt && (
@@ -34,7 +36,7 @@ export function AiErrorCard({ error, lastPrompt, onRetry }: AiErrorCardProps) {
               className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-xs leading-5 text-[var(--text-tertiary)]"
               style={{ overflowWrap: 'anywhere' }}
             >
-              <span className="font-semibold text-[var(--text-secondary)]">So‘rov:</span>{' '}
+              <span className="font-semibold text-[var(--text-secondary)]">{t('ai.error.request')}</span>{' '}
               {lastPrompt}
             </p>
           )}
@@ -48,7 +50,7 @@ export function AiErrorCard({ error, lastPrompt, onRetry }: AiErrorCardProps) {
               className="mt-3"
               data-testid="ai-retry"
             >
-              Qayta urinish
+              {t('ai.error.retry')}
             </GlassButton>
           )}
         </div>

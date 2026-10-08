@@ -17,7 +17,7 @@ describe('LessonsService (Pedagogical Lifecycle)', () => {
         findFirst: vi.fn(),
         update: vi.fn(),
       },
-      topic: { findUnique: vi.fn() },
+      topic: { findUnique: vi.fn(), findFirst: vi.fn() },
       material: { findFirst: vi.fn() },
       lessonMaterial: { create: vi.fn() },
     };
@@ -82,5 +82,40 @@ describe('LessonsService (Pedagogical Lifecycle)', () => {
         }),
       }),
     );
+  });
+
+  describe('updateContent tenant isolation', () => {
+    beforeEach(() => {
+      prisma.lesson.findFirst.mockResolvedValue({
+        id: 'les-1',
+        organizationId: 'org-1',
+        status: LessonStatus.PLANNED,
+      });
+    });
+
+    it('scopes the linked topic to the lesson organization', async () => {
+      prisma.topic.findFirst.mockResolvedValue({ id: 'top-1' });
+      prisma.lesson.update.mockResolvedValue({ id: 'les-1', topicId: 'top-1' });
+
+      await service.updateContent('org-1', 'les-1', { topicId: 'top-1' } as never);
+
+      expect(prisma.topic.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: 'top-1',
+          CurriculumModule: { Curriculum: { organizationId: 'org-1' } },
+        },
+      });
+    });
+
+    it('rejects linking a topic owned by another organization', async () => {
+      // A foreign topic resolves to null under the tenant-scoped filter.
+      prisma.topic.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.updateContent('org-1', 'les-1', { topicId: 'foreign-topic' } as never),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prisma.lesson.update).not.toHaveBeenCalled();
+    });
   });
 });

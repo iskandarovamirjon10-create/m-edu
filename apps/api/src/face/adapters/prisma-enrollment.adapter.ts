@@ -8,6 +8,7 @@ import type {
 } from '@medu/core/src/ports/enrollment-repository.port';
 import type { EnrollmentStatus, TemplateStatus } from '@medu/contracts';
 import type { FaceEnrollment, FaceTemplate, Student, User } from '@prisma/client';
+import { canonicalMembershipWhere } from '../../common/student-membership';
 
 /**
  * Only the identity fields this adapter maps into domain objects.
@@ -334,7 +335,17 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
 
   async findActiveTemplatesByStudentId(organizationId: string, studentId: string): Promise<TemplateEntity[]> {
     const rows = await this.prisma.faceTemplate.findMany({
-      where: { organizationId, studentId, status: 'ACTIVE' },
+      where: {
+        organizationId,
+        studentId,
+        status: 'ACTIVE',
+        // A template is only usable while its enrollment is ACTIVE. Relying
+        // on the write path alone means any future code that flips
+        // enrollment.status without revoking templates would keep matching a
+        // revoked student. Enforced on READ so the invariant holds no matter
+        // who writes.
+        enrollment: { status: 'ACTIVE' },
+      },
       orderBy: { version: 'desc' },
     });
     return rows.map(r => this.mapTemplateEntity(r));
@@ -343,6 +354,7 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
   async *streamActiveTemplates(
     organizationId: string,
     batchSize = 500,
+    groupId?: string,
   ): AsyncGenerator<Array<TemplateEntity & { student: { id: string; firstName: string; lastName: string } }>> {
     if (batchSize < 1 || batchSize > 2000) {
       throw new Error('batchSize must be between 1 and 2000');
@@ -351,9 +363,39 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
     let lastId: string | null = null;
 
     while (true) {
-      const where: Record<string, unknown> = { organizationId, status: 'ACTIVE' };
+      const where: Record<string, unknown> = {
+        organizationId,
+        status: 'ACTIVE',
+        // Same invariant as findActiveTemplatesByStudentId: recognition must
+        // never see templates belonging to a non-ACTIVE enrollment.
+        enrollment: { status: 'ACTIVE' },
+      };
       if (lastId) {
         where[cursorField] = { gt: lastId };
+      }
+      
+      if (groupId) {
+        /*
+         * Candidate retrieval must agree with the ATTENDANCE GATE
+         * (`PrismaStudentAdapter.isStudentInGroup`) on who counts as a member,
+         * otherwise the pipeline identifies a student and then denies them
+         * with "not enrolled in group". Deliberately built from the SAME
+         * canonical predicate.
+         *
+         * The org-local `joinedAt`/`leftAt` window is omitted on purpose: a
+         * retrieval filter must stay a SUPERSET of the gate (this path cannot
+         * afford an organization-timezone lookup per attempt), so it can only
+         * ever yield an explicit `STUDENT_NOT_IN_GROUP` decision — never a
+         * missed enrollment.
+         */
+        where['student'] = {
+          groups: {
+            some: canonicalMembershipWhere({
+              organizationId,
+              groupId,
+            }),
+          },
+        };
       }
 
       const rows = await this.prisma.faceTemplate.findMany({
@@ -406,6 +448,131 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
     await this.prisma.faceTemplate.updateMany({
       where: { organizationId, enrollmentId, status: 'ACTIVE' },
       data: { status: 'REVOKED', revokedAt: new Date() },
+    });
+  }
+
+  /**
+   * Atomically revoke an enrollment AND all its active templates inside a
+   * single Prisma transaction. The previous two-step (revokeTemplates then
+   * updateStatus) left a window where a revoked enrollment kept ACTIVE
+   * biometric templates that camera matching could still hit.
+   */
+  async revokeEnrollmentAndTemplates(
+    organizationId: string,
+    enrollmentId: string,
+    metadata?: {
+      revokedAt?: Date;
+      revokedBy?: string;
+      revocationReason?: string;
+    },
+  ): Promise<EnrollmentEntity> {
+    const revokedAt = metadata?.revokedAt ?? new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.faceEnrollment.findFirst({
+        where: { id: enrollmentId, organizationId },
+      });
+      if (!existing) {
+        throw new NotFoundException('Enrollment not found');
+      }
+
+      await tx.faceTemplate.updateMany({
+        where: { organizationId, enrollmentId, status: 'ACTIVE' },
+        data: { status: 'REVOKED', revokedAt },
+      });
+
+      const updated = await tx.faceEnrollment.update({
+        where: { id: enrollmentId },
+        data: {
+          status: 'REVOKED',
+          revokedAt,
+          ...(metadata?.revokedBy && { revokedBy: metadata.revokedBy }),
+          ...(metadata?.revocationReason && {
+            revocationReason: metadata.revocationReason,
+          }),
+        },
+      });
+
+      return this.mapEnrollmentEntity(updated);
+    });
+  }
+
+  /**
+   * Atomically revoke the old enrollment (templates + status) and create the
+   * replacement in the SAME transaction — re-enrollment can no longer leave
+   * a revoked student (templates gone, status REVOKED) without a usable
+   * replacement, or an active template on a revoked enrollment.
+   *
+   * Also serializes concurrent re-enrollments for the same student with a
+   * row lock (matching EnrollmentRepository.create).
+   */
+  async atomicReenroll(
+    organizationId: string,
+    oldEnrollmentId: string,
+    metadata: {
+      revokedAt: Date;
+      revokedBy?: string;
+      revocationReason?: string;
+    },
+  ): Promise<{ old: EnrollmentEntity; enrolled: EnrollmentEntity }> {
+    return this.prisma.$transaction(async (tx) => {
+      const old = await tx.faceEnrollment.findFirst({
+        where: { id: oldEnrollmentId, organizationId },
+      });
+      if (!old) {
+        throw new NotFoundException('Enrollment not found');
+      }
+
+      // Serialize concurrent enrollments for the same student.
+      await tx.$executeRaw`SELECT id FROM "Student" WHERE id = ${old.studentId}::uuid FOR UPDATE`;
+
+      // A student cannot hold two PENDING/ACTIVE enrollments except the old
+      // one being replaced.
+      const competing = await tx.faceEnrollment.findFirst({
+        where: {
+          organizationId,
+          studentId: old.studentId,
+          status: { in: ['PENDING', 'ACTIVE'] },
+          id: { not: oldEnrollmentId },
+        },
+      });
+      if (competing) {
+        throw new ConflictException(
+          'An active or pending enrollment already exists for this student.',
+        );
+      }
+
+      // Revoke templates + enrollment status atomically.
+      await tx.faceTemplate.updateMany({
+        where: { organizationId, enrollmentId: oldEnrollmentId, status: 'ACTIVE' },
+        data: { status: 'REVOKED', revokedAt: metadata.revokedAt },
+      });
+
+      const oldUpdated = await tx.faceEnrollment.update({
+        where: { id: oldEnrollmentId },
+        data: {
+          status: 'REVOKED',
+          revokedAt: metadata.revokedAt,
+          ...(metadata.revokedBy && { revokedBy: metadata.revokedBy }),
+          ...(metadata.revocationReason && {
+            revocationReason: metadata.revocationReason,
+          }),
+        },
+      });
+
+      const enrolled = await tx.faceEnrollment.create({
+        data: {
+          organizationId,
+          studentId: old.studentId,
+          enrolledBy: metadata.revokedBy,
+          status: 'PENDING',
+        },
+      });
+
+      return {
+        old: this.mapEnrollmentEntity(oldUpdated),
+        enrolled: this.mapEnrollmentEntity(enrolled),
+      };
     });
   }
 

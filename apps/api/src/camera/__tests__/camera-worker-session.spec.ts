@@ -71,6 +71,9 @@ function makeFaceEngine() {
     compareEmbeddings: vi.fn(),
     extractFaceFromImage: vi.fn(),
     detectFacesFromBuffer: vi.fn(),
+    // Unset by default: an engine that does not report a model version
+    // skips the version guard (see getEnrolledTemplates).
+    getModelVersion: vi.fn().mockReturnValue(undefined),
   };
 
   // Default: one face
@@ -88,6 +91,7 @@ function makePrisma(
     id: string;
     studentId: string;
     templateData: string;
+    modelVersion?: string | null;
   }>,
 ): PrismaMock {
   return {
@@ -863,6 +867,94 @@ describe('CameraWorkerSession multi-face detection (FIX-1)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Model-version parity guard (FIX-2)
+// ---------------------------------------------------------------------------
+describe('CameraWorkerSession model-version parity guard', () => {
+  it('skips templates whose modelVersion is missing or mismatched', async () => {
+    const faceEngine = makeFaceEngine();
+    // Engine reports a concrete embedding model version.
+    faceEngine.getModelVersion.mockReturnValue('v1');
+
+    const attendanceEngine = makeAttendanceEngine();
+    const prisma = makePrisma([
+      {
+        id: 'tmpl-alice',
+        studentId: 'alice',
+        templateData: '1',
+        modelVersion: 'v1', // compatible → kept
+      },
+      {
+        id: 'tmpl-bob',
+        studentId: 'bob',
+        templateData: '2',
+        modelVersion: 'legacy', // mismatch → skipped
+      },
+      {
+        id: 'tmpl-carol',
+        studentId: 'carol',
+        templateData: '3',
+        modelVersion: null, // unknown → skipped (fail closed)
+      },
+    ]);
+    const encryption = makeEncryption();
+
+    faceEngine.detectFaces.mockResolvedValue([
+      { boundingBox: { width: 100, height: 100 } },
+    ]);
+    faceEngine.assessQuality.mockResolvedValue({
+      passesThreshold: true,
+      overallScore: 0.8,
+      blurScore: 0.9,
+      brightnessScore: 0.7,
+      poseScore: 0.8,
+    });
+    faceEngine.checkLiveness.mockResolvedValue({
+      decision: 'PASS',
+      confidence: 0.95,
+    });
+    faceEngine.generateEmbedding.mockResolvedValue(
+      makeFaceEmbedding('alice'),
+    );
+    faceEngine.compareEmbeddings.mockResolvedValue(0.92);
+
+    const session = makeSession(
+      faceEngine,
+      attendanceEngine,
+      prisma,
+      encryption,
+    );
+
+    const sessionAny = session as unknown as {
+      processFrame: (frame: {
+        buffer: Buffer;
+        timestamp: number;
+      }) => Promise<void>;
+    };
+
+    await sessionAny.processFrame(makeFrame());
+
+    // Only the compatible template is decrypted and compared.
+    expect(encryption.decrypt).toHaveBeenCalledTimes(1);
+    expect(encryption.decrypt.mock.calls[0][0]).toBe('1');
+
+    const [[cmpArgs]] =
+      faceEngine.compareEmbeddings.mock.calls as unknown as [
+        [{ embeddingB: FaceEmbedding }],
+      ];
+    expect(Math.round(cmpArgs.embeddingB.getData()[0])).toBe(1);
+
+    expect(
+      attendanceEngine.processRecognition,
+    ).toHaveBeenCalledTimes(1);
+    const [[call]] =
+      attendanceEngine.processRecognition.mock.calls;
+    expect((call as { studentId: string }).studentId).toBe(
+      'alice',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // B — emitError regression (pre-existing bug, FIX-4 fix verifies it)
 // ---------------------------------------------------------------------------
 describe('CameraWorkerSession emitError regression (B)', () => {
@@ -889,5 +981,59 @@ describe('CameraWorkerSession emitError regression (B)', () => {
     expect(() => {
       session.emit('error', new Error('reconnect cap exceeded'));
     }).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C — fail-closed biometric engine policy (recognition cannot silently no-op)
+// ---------------------------------------------------------------------------
+describe('CameraWorkerSession fail-closed engine policy (C)', () => {
+  it('transitions to ERROR and stops recognition when the face engine is missing', async () => {
+    const attendanceEngine = makeAttendanceEngine();
+    const prisma = makePrisma([]);
+    const encryption = makeEncryption();
+
+    const session = makeSession(
+      undefined as never,
+      attendanceEngine,
+      prisma,
+      encryption,
+    );
+
+    const sessionAny = session as unknown as {
+      processFrame: (frame: { buffer: Buffer; timestamp: number }) => Promise<void>;
+      lifecycleState: string;
+      healthTracker: {
+        getSnapshot: () => {
+          status: string;
+          lastErrorMessage: string | null;
+        };
+      };
+    };
+
+    let offlineEvent: {
+      errorCode?: string;
+      error?: string;
+    } | null = null;
+
+    session.on('camera-offline', (evt: {
+      errorCode?: string;
+      error?: string;
+    }) => {
+      offlineEvent = evt;
+    });
+
+    // A recognition-enabled camera with no biometric engine must fail
+    // CLOSED: ERROR state + persisted real error code — never a silent no-op
+    // that looks healthy on the dashboard while recording nothing.
+    await sessionAny.processFrame(makeFrame());
+
+    expect(sessionAny.lifecycleState).toBe('ERROR');
+    expect(sessionAny.healthTracker.getSnapshot().status).toBe('ERROR');
+    expect(sessionAny.healthTracker.getSnapshot().lastErrorMessage).toContain(
+      'face engine is not available',
+    );
+    expect(offlineEvent?.errorCode).toBe('FACE_ENGINE_MISSING');
+    expect(attendanceEngine.processRecognition).not.toHaveBeenCalled();
   });
 });

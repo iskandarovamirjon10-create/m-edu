@@ -326,19 +326,39 @@ describe('FaceController', () => {
     const sessionId = 'session-uuid-1';
     const dto: SubmitAttemptDto = { imageBase64: 'data:image/jpeg;base64,dGVzdA==' };
 
-    it('delegates to faceService.processAttempt with tenant context, id and imageBase64', async () => {
+    it('delegates to faceService.processAttempt with tenant context, id, imageBase64 and clientAttemptId', async () => {
       const mockReq = createMockRequest();
       const expected = { matched: true, studentId: 'student-1', confidence: 0.98 };
       service.processAttempt.mockResolvedValue(expected);
 
-      const result = await controller.submitAttempt(mockReq as any, sessionId, dto);
+      const dtoWithIdempotencyKey = {
+        imageBase64: dto.imageBase64,
+        clientAttemptId: 'cam-1-frame-42',
+      };
+
+      const result = await controller.submitAttempt(mockReq as any, sessionId, dtoWithIdempotencyKey);
 
       expect(result).toEqual(expected);
       expect(service.processAttempt).toHaveBeenCalledTimes(1);
       expect(service.processAttempt).toHaveBeenCalledWith(
         mockReq.tenantContext,
         sessionId,
+        dtoWithIdempotencyKey.imageBase64,
+        'cam-1-frame-42',
+      );
+    });
+
+    it('forwards an absent clientAttemptId as undefined', async () => {
+      const mockReq = createMockRequest();
+      service.processAttempt.mockResolvedValue({ matched: false });
+
+      await controller.submitAttempt(mockReq as any, sessionId, dto);
+
+      expect(service.processAttempt).toHaveBeenCalledWith(
+        mockReq.tenantContext,
+        sessionId,
         dto.imageBase64,
+        undefined,
       );
     });
 

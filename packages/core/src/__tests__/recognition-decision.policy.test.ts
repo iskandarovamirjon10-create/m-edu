@@ -167,4 +167,43 @@ describe('RecognitionDecisionPolicy', () => {
       expect(custom.getConfig().qualityThreshold).toBe(0.5);
     });
   });
+
+  describe('invalid numeric guards (fail closed)', () => {
+    it('rejects a non-finite similarity score instead of sailing past every threshold', () => {
+      // NaN < threshold is false, so without this guard a broken matcher
+      // result would reach IDENTIFIED.
+      const result = policy.decide({
+        qualityScore: 0.8,
+        livenessDecision: 'PASS',
+        similarityScore: Number.NaN,
+        bestMatchFound: true,
+      }, 'student-nan');
+      expect(result.outcome).toBe('REJECTED');
+      expect(result).toHaveProperty('reason', 'SIMILARITY_INVALID');
+    });
+
+    it('rejects a non-finite ambiguity margin as ambiguous', () => {
+      const result = policy.decide({
+        qualityScore: 0.8,
+        livenessDecision: 'PASS',
+        similarityScore: 0.9,
+        bestMatchFound: true,
+        ambiguityMargin: Number.NaN,
+      }, 'student-margin');
+      expect(result.outcome).toBe('UNCERTAIN');
+      expect(result).toHaveProperty('reason', 'AMBIGUOUS_MATCH');
+    });
+
+    it('rejects a top-1/top-2 margin below the configured minimum', () => {
+      const result = policy.decide({
+        qualityScore: 0.8,
+        livenessDecision: 'PASS',
+        similarityScore: 0.9,
+        bestMatchFound: true,
+        ambiguityMargin: 0.01,
+      }, 'student-tight');
+      expect(result.outcome).toBe('UNCERTAIN');
+      expect(result).toHaveProperty('reason', 'AMBIGUOUS_MATCH');
+    });
+  });
 });

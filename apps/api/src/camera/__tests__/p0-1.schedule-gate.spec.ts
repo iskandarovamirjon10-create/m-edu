@@ -66,6 +66,10 @@ function makePrisma(config: HarnessConfig = {}) {
       ),
     },
 
+    invoice: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+
     studentGroup: {
       findMany: vi.fn(
         async (args: { where: { groupId?: string } }) =>
@@ -317,9 +321,13 @@ describe('P0-1 schedule gate — validateGroupTime', () => {
       expect(accepted).toBe(true);
     });
 
-    it('rejects the wrong room', async () => {
+    it('falls back to time when the room mismatches but one group is time-valid', async () => {
       const { engine } = engineFor();
 
+      // A camera whose configured room (Room 9) matches NO candidate room is
+      // treated as a STALE room configuration: with exactly ONE time-valid
+      // group the schedule signal is unambiguous, so recognition falls back
+      // to time-based matching instead of denying an in-progress class.
       const accepted = await engine.validateGroupTime(
         'org-1',
         'student-1',
@@ -330,7 +338,7 @@ describe('P0-1 schedule gate — validateGroupTime', () => {
         },
       );
 
-      expect(accepted).toBe(false);
+      expect(accepted).toBe(true);
     });
   });
 
@@ -619,7 +627,7 @@ describe('P0-1 camera pipeline — schedule gate before attendance', () => {
     ).toBe('NO_SCHEDULED_GROUP');
   });
 
-  it('denies the wrong room even inside the window', async () => {
+  it('records inside the window even when the camera room mismatches (single time-valid group)', async () => {
     const { prisma, engine } = engineFor();
 
     prisma.camera.findFirst.mockResolvedValue({
@@ -632,8 +640,11 @@ describe('P0-1 camera pipeline — schedule gate before attendance', () => {
       cameraParams({ cameraLocation: null }),
     );
 
-    expect(result.decision).toBe('NO_SCHEDULED_GROUP');
-    expect(prisma.attendance.create).not.toHaveBeenCalled();
+    // The authoritative DB camera location (Room 9) matches no candidate
+    // room, but the student has exactly ONE time-valid group — the resolver
+    // falls back to the unambiguous schedule signal (stale-room fallback).
+    expect(result.decision).toBe('RECORDED');
+    expect(prisma.attendance.create).toHaveBeenCalledTimes(1);
   });
 
   it('lets exactly one of many concurrent recognitions record attendance', async () => {
@@ -649,8 +660,10 @@ describe('P0-1 camera pipeline — schedule gate before attendance', () => {
       if (created) {
         const err = new Error('Unique constraint failed') as Error & {
           code: string;
+          meta: { modelName: string };
         };
         err.code = 'P2002';
+        err.meta = { modelName: 'Attendance' };
         throw err;
       }
       created = true;

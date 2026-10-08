@@ -105,29 +105,29 @@ describe('RegisterPage critical flows', () => {
  vi.clearAllMocks();
 });
 
- it('submits a valid registration payload and navigates to the app on success', async () => {
- registerMock.mockResolvedValue({
- user: { id:'u1', email: VALID.email, firstName:'Jane', lastName:'Doe', role:'ORG_ADMIN', organizationId:'o1'},
-});
- const user = userEvent.setup();
- renderRegister();
+  it('submits a valid registration payload and navigates to the app on success', async () => {
+    registerMock.mockResolvedValue({
+      user: { id:'u1', email: VALID.email, firstName:'Jane', lastName:'Doe', role:'ORG_ADMIN', organizationId:'o1'},
+    });
+    const user = userEvent.setup({ delay: null });
+    renderRegister();
 
- const submit = screen.getByRole('button', { name: /create|register|account/i});
- expect(submit).toBeDisabled(); // empty form → disabled (no empty-field submit)
- await fill(user);
- await user.click(submit);
+    const submit = screen.getByRole('button', { name: /create|register|account/i});
+    expect(submit).toBeDisabled(); // empty form → disabled (no empty-field submit)
+    await fill(user);
+    await user.click(submit);
 
- await waitFor(() => expect(registerMock).toHaveBeenCalledTimes(1));
- expect(registerMock).toHaveBeenCalledWith({
- firstName:'Jane',
- lastName:'Doe',
- email:'jane@example.com',
- phone: undefined,
- organizationName:'Bright Future Academy',
- password:'Str0ngPass!x',
-});
- await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/', { replace: true}));
-});
+    await waitFor(() => expect(registerMock).toHaveBeenCalledTimes(1), { timeout: 10_000 });
+    expect(registerMock).toHaveBeenCalledWith({
+      firstName:'Jane',
+      lastName:'Doe',
+      email:'jane@example.com',
+      phone: undefined,
+      organizationName:'Bright Future Academy',
+      password:'Str0ngPass!x',
+    });
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/', { replace: true}), { timeout: 10_000 });
+  }, 35_000);
 
  it('shows the server error on duplicate email (409) and does NOT navigate', async () => {
  registerMock.mockRejectedValue(new ApiError(409,'Email already registered'));

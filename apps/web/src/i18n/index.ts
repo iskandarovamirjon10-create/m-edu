@@ -40,8 +40,12 @@ import ru from './locales/ru';
 
 const DICTIONARIES: Record<Locale, Record<string, string>> = { en, uz, ru };
 
-/** Flat key → translated string with {placeholder} support. */
-export type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
+/** Flat key → translated string with {placeholder} and optional fallback support. */
+export type TranslateFn = (
+  key: string,
+  varsOrFallback?: Record<string, string | number> | string,
+  fallback?: string,
+) => string;
 
 function interpolate(template: string, vars?: Record<string, string | number>): string {
   if (!vars) return template;
@@ -82,12 +86,19 @@ const MISSING_KEY = (key: string, locale: Locale) =>
  * In development a missing non-English key is logged once per key so the
  * translation gap is discoverable without breaking the UI.
  */
-export function translate(locale: Locale, key: string, vars?: Record<string, string | number>, fallback?: string): string {
+export function translate(
+  locale: Locale,
+  key: string,
+  varsOrFallback?: Record<string, string | number> | string,
+  fallback?: string,
+): string {
+  const vars = typeof varsOrFallback === 'object' && varsOrFallback !== null ? varsOrFallback : undefined;
+  const fb = typeof varsOrFallback === 'string' ? varsOrFallback : fallback;
   const dict = DICTIONARIES[locale];
   let template: string | undefined = dict?.[key];
 
   if (template === undefined && locale !== DEFAULT_LOCALE) {
-    template = DICTIONARIES[DEFAULT_LOCALE][key];
+    template = DICTIONARIES[DEFAULT_LOCALE]?.[key];
     if (template !== undefined && import.meta.env.DEV) {
       // Rate: keep it cheap — one warn per key per session is fine.
       console.warn(MISSING_KEY(key, locale));
@@ -96,7 +107,7 @@ export function translate(locale: Locale, key: string, vars?: Record<string, str
 
   if (template === undefined) {
     if (import.meta.env.DEV) console.warn(MISSING_KEY(key, locale));
-    return fallback ?? key;
+    return fb ?? key;
   }
 
   return interpolate(template, vars);

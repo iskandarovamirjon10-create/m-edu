@@ -12,7 +12,7 @@
  *  - Premium modal with section headers + validation inline
  */
 
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, forwardRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
@@ -53,13 +53,13 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 16, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, x: -8 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -428,19 +428,22 @@ function SegmentedFilter({
   );
 }
 
-function CourseRow({
-  course, onEdit, onDelete,
-}: {
+const CourseRow = forwardRef<HTMLDivElement, {
   course: Course;
   onEdit: (c: Course) => void;
   onDelete: (id: string) => void;
-}) {
+}>(function CourseRow({
+  course, onEdit, onDelete,
+}, ref) {
+  const { t } = useI18n();
   const level = course.level as CourseLevel | null | undefined;
-  const tone: Tone = level ? LEVEL_TONE[level] : 'slate';
-  const c = TONE[tone];
+  const normalizedLevel = (level || '').toUpperCase() as CourseLevel;
+  const tone: Tone = LEVEL_TONE[normalizedLevel] || 'slate';
+  const c = TONE[tone] || TONE.slate;
 
   return (
     <motion.div
+      ref={ref}
       layout
       variants={rowVariants}
       whileHover={{ y: -2 }}
@@ -470,7 +473,7 @@ function CourseRow({
             {course.name}
           </h3>
           <GlassBadge variant={course.isActive ? 'success' : 'muted'}>
-            {course.isActive ? 'Active' : 'Inactive'}
+            {course.isActive ? t('common.active') : t('common.inactive')}
           </GlassBadge>
         </div>
 
@@ -482,7 +485,7 @@ function CourseRow({
 
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11.5px] font-medium text-[#86868B]">
           {/* Level chip */}
-          {level && (
+          {course.level && (
             <span
               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
               style={{
@@ -492,7 +495,7 @@ function CourseRow({
               }}
             >
               <Icon paths={I.award} size={9} strokeWidth={2.5} />
-              {formatCourseLevel(level)}
+              {formatCourseLevel(course.level as CourseLevel)}
             </span>
           )}
           <span className="inline-flex items-center gap-1">
@@ -514,8 +517,8 @@ function CourseRow({
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
           transition={SPRING.snappy}
-          aria-label="Edit"
-          title="Edit course"
+          aria-label={t('common.edit')}
+          title={t('courses.editCourse')}
           className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
           style={{
             background: 'rgba(0,122,255,0.10)',
@@ -531,8 +534,8 @@ function CourseRow({
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
           transition={SPRING.snappy}
-          aria-label="Delete"
-          title="Delete course"
+          aria-label={t('common.delete')}
+          title={t('courses.deleteCourse')}
           className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
           style={{
             background: 'rgba(255,59,48,0.10)',
@@ -545,7 +548,7 @@ function CourseRow({
       </div>
     </motion.div>
   );
-}
+});
 
 /* ============================================================================
  * MAIN PAGE
@@ -885,12 +888,12 @@ export function CoursesPage() {
           <StatTile label={t('courses.title')} value={stats.total} icon={I.bookOpen} tone="blue" />
           <StatTile label={t('common.active')} value={stats.active} icon={I.checkCircle} tone="green" />
           <StatTile
-            label="Avg Price"
+            label={t('courses.stats.avgPrice')}
             value={formatCurrency(stats.avgPrice)}
             icon={I.trendingUp}
             tone="orange"
           />
-          <StatTile label="Levels" value={stats.levels} icon={I.award} tone="purple" />
+          <StatTile label={t('courses.stats.levels')} value={stats.levels} icon={I.award} tone="purple" />
         </motion.div>
 
         {/* TOOLBAR: filter + search */}
@@ -924,7 +927,7 @@ export function CoursesPage() {
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[#86868B] outline-none hover:bg-[#00000008] dark:hover:bg-[#ffffff08]"
-                aria-label="Clear search"
+                aria-label={t('courses.clearSearch')}
               >
                 <Icon paths={I.x} size={12} strokeWidth={2.5} />
               </motion.button>

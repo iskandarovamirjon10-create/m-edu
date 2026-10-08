@@ -16,6 +16,7 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { assessmentApi } from '../lib/api';
+import { useI18n } from '../i18n/I18nProvider';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -425,6 +426,7 @@ function TabSwitcher({
  * ========================================================================== */
 
 function QuizCard({ quiz }: { quiz: Quiz }) {
+  const { t } = useI18n();
   const tone = quizTone(quiz.title);
   const c = TONE[tone];
   const pTone = passScoreTone(quiz.passScore);
@@ -485,7 +487,7 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
                 className="h-1.5 w-1.5 rounded-full"
                 style={{ background: sc.fg, boxShadow: `0 0 6px ${sc.glow}` }}
               />
-              {quiz.isPublished ? 'Published' : 'Draft'}
+              {quiz.isPublished ? t('assessment.status.published') : t('assessment.status.draft')}
             </span>
           </div>
 
@@ -500,7 +502,7 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
               }}
             >
               <Icon paths={I.clock} size={9} strokeWidth={2.5} />
-              {quiz.timeLimitMin} min
+              {t('assessment.minutes', { count: quiz.timeLimitMin })}
             </span>
 
             {/* Pass score */}
@@ -513,7 +515,7 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
               }}
             >
               <Icon paths={I.target} size={9} strokeWidth={2.5} />
-              Pass {quiz.passScore}%
+              {t('assessment.passScore', { score: quiz.passScore })}
             </span>
 
             {/* Questions */}
@@ -525,7 +527,7 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
               }}
             >
               <Icon paths={I.helpCircle} size={9} strokeWidth={2.5} />
-              {questionCount} {questionCount === 1 ? 'question' : 'questions'}
+              {t(questionCount === 1 ? 'assessment.questionCountOne' : 'assessment.questionCountMany', { count: questionCount })}
             </span>
 
             {/* Attempts */}
@@ -538,7 +540,7 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
                 }}
               >
                 <Icon paths={I.users} size={9} strokeWidth={2.5} />
-                {attemptCount} {attemptCount === 1 ? 'attempt' : 'attempts'}
+                {t(attemptCount === 1 ? 'assessment.attemptCountOne' : 'assessment.attemptCountMany', { count: attemptCount })}
               </span>
             )}
           </div>
@@ -553,8 +555,17 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
  * ========================================================================== */
 
 function QuestionCard({ question }: { question: Question }) {
+  const { t } = useI18n();
   const dTone = difficultyTone(question.difficulty);
   const dc = TONE[dTone];
+  const typeRaw = question.type || '';
+  const typeKey = `assessment.type.${typeRaw.toUpperCase()}`;
+  const typeTranslated = t(typeKey);
+  const typeLabel = typeRaw ? (typeTranslated === typeKey ? typeRaw.replace('_', ' ') : typeTranslated) : t('assessment.na');
+  const diffRaw = question.difficulty || '';
+  const diffKey = `assessment.difficulty.${diffRaw.toUpperCase()}`;
+  const diffTranslated = t(diffKey);
+  const difficultyLabel = diffRaw ? (diffTranslated === diffKey ? diffRaw : diffTranslated) : t('assessment.na');
 
   return (
     <motion.div
@@ -619,7 +630,7 @@ function QuestionCard({ question }: { question: Question }) {
               }}
             >
               <Icon paths={I.tag} size={9} strokeWidth={2.5} />
-              {question.type?.replace('_', ' ') || 'N/A'}
+              {typeLabel}
             </span>
 
             {/* Difficulty */}
@@ -632,7 +643,7 @@ function QuestionCard({ question }: { question: Question }) {
               }}
             >
               <Icon paths={I.zap} size={9} strokeWidth={2.5} />
-              {question.difficulty || 'N/A'}
+              {difficultyLabel}
             </span>
 
             {/* Points */}
@@ -644,7 +655,7 @@ function QuestionCard({ question }: { question: Question }) {
               }}
             >
               <Icon paths={I.award} size={9} strokeWidth={2.5} />
-              {question.points} {question.points === 1 ? 'pt' : 'pts'}
+              {t(question.points === 1 ? 'assessment.pointsOne' : 'assessment.pointsMany', { count: question.points })}
             </span>
           </div>
         </div>
@@ -658,6 +669,7 @@ function QuestionCard({ question }: { question: Question }) {
  * ========================================================================== */
 
 export default function AssessmentPage() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const reduced = usePrefersReducedMotion();
 
@@ -720,10 +732,10 @@ export default function AssessmentPage() {
   /* ---------------- Handlers ---------------- */
   const validateQuiz = useCallback(() => {
     const errors: { title?: string } = {};
-    if (!quizTitle.trim()) errors.title = 'Title is required';
+    if (!quizTitle.trim()) errors.title = t('assessment.validation.titleRequired');
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [quizTitle]);
+  }, [quizTitle, t]);
 
   const handleCreateQuiz = (e: React.FormEvent) => {
     e.preventDefault();
@@ -777,10 +789,10 @@ export default function AssessmentPage() {
           </div>
           <div>
             <h3 className="text-[17px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Failed to load assessment data
+              {t('assessment.loadErrorTitle')}
             </h3>
             <p className="mt-1 text-[13px] font-medium text-[#86868B]">
-              Something went wrong. Please try again.
+              {t('assessment.loadErrorHint')}
             </p>
           </div>
           <motion.button
@@ -799,7 +811,7 @@ export default function AssessmentPage() {
             }}
           >
             <Icon paths={I.refresh} size={14} strokeWidth={2.4} />
-            Try again
+            {t('common.retry')}
           </motion.button>
         </motion.div>
       </div>
@@ -808,8 +820,8 @@ export default function AssessmentPage() {
 
   /* ---------------- Main ---------------- */
   const tabOptions = [
-    { key: 'quizzes' as TabKey,   label: 'Quizzes & Tests', icon: I.fileCheck,  count: quizzes.length,   tone: 'blue'   as Tone },
-    { key: 'questions' as TabKey, label: 'Question Bank',    icon: I.helpCircle, count: questions.length, tone: 'purple' as Tone },
+    { key: 'quizzes' as TabKey,   label: t('assessment.tab.quizzes'),   icon: I.fileCheck,  count: quizzes.length,   tone: 'blue'   as Tone },
+    { key: 'questions' as TabKey, label: t('assessment.tab.questions'), icon: I.helpCircle, count: questions.length, tone: 'purple' as Tone },
   ];
 
   return (
@@ -889,11 +901,11 @@ export default function AssessmentPage() {
                     className="h-1.5 w-1.5 rounded-full"
                     style={{ background: TONE.green.fg, boxShadow: `0 0 6px ${TONE.green.glow}` }}
                   />
-                  {stats.published} Published
+                  {t('assessment.badge.published', { count: stats.published })}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-[#00000008] bg-[#00000004] px-2.5 py-1 text-[11px] font-semibold text-[#86868B] dark:border-[#ffffff10] dark:bg-[#ffffff06]">
                   <Icon paths={I.layers} size={10} strokeWidth={2.5} />
-                  {stats.totalQuizzes} Quizzes
+                  {t('assessment.badge.quizzes', { count: stats.totalQuizzes })}
                 </span>
                 {stats.totalQuestions > 0 && (
                   <span
@@ -905,16 +917,16 @@ export default function AssessmentPage() {
                     }}
                   >
                     <Icon paths={I.helpCircle} size={10} strokeWidth={2.5} />
-                    {stats.totalQuestions} Questions
+                    {t('assessment.badge.questions', { count: stats.totalQuestions })}
                   </span>
                 )}
               </div>
 
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
-                Testing Engine
+                {t('assessment.heroTitle')}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
-                Create quizzes, manage the question bank, and track attempts
+                {t('assessment.heroSubtitle')}
               </p>
             </div>
 
@@ -932,7 +944,7 @@ export default function AssessmentPage() {
                     }}
                   >
                     <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                    Create Quiz
+                    {t('assessment.create')}
                   </button>
                 </motion.div>
               </div>
@@ -943,10 +955,10 @@ export default function AssessmentPage() {
 
       {/* STATS */}
       <motion.div variants={containerVariants} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Total Quizzes" value={stats.totalQuizzes} icon={I.fileCheck} tone="blue" />
-        <StatTile label="Published" value={stats.published} icon={I.checkCircle} tone="green" />
-        <StatTile label="Question Bank" value={stats.totalQuestions} icon={I.helpCircle} tone="purple" />
-        <StatTile label="Total Attempts" value={stats.totalAttempts} icon={I.barChart} tone="orange" />
+        <StatTile label={t('assessment.stat.totalQuizzes')} value={stats.totalQuizzes} icon={I.fileCheck} tone="blue" />
+        <StatTile label={t('assessment.stat.published')} value={stats.published} icon={I.checkCircle} tone="green" />
+        <StatTile label={t('assessment.stat.questionBank')} value={stats.totalQuestions} icon={I.helpCircle} tone="purple" />
+        <StatTile label={t('assessment.stat.totalAttempts')} value={stats.totalAttempts} icon={I.barChart} tone="orange" />
       </motion.div>
 
       {/* TAB SWITCHER */}
@@ -982,12 +994,12 @@ export default function AssessmentPage() {
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                {tab === 'quizzes' ? 'Quizzes & Tests' : 'Question Bank'}
+                {tab === 'quizzes' ? t('assessment.tab.quizzes') : t('assessment.tab.questions')}
               </h2>
               <p className="text-[11px] font-medium text-[#86868B]">
                 {tab === 'quizzes'
-                  ? `${quizzes.length} ${quizzes.length === 1 ? 'quiz' : 'quizzes'}`
-                  : `${questions.length} ${questions.length === 1 ? 'question' : 'questions'}`}
+                  ? t(quizzes.length === 1 ? 'assessment.quizCountOne' : 'assessment.quizCountMany', { count: quizzes.length })
+                  : t(questions.length === 1 ? 'assessment.questionCountOne' : 'assessment.questionCountMany', { count: questions.length })}
               </p>
             </div>
           </div>
@@ -1008,10 +1020,10 @@ export default function AssessmentPage() {
                       <Icon paths={I.fileCheck} size={26} strokeWidth={2} />
                     </div>
                     <p className="text-[14px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                      No quizzes yet
+                      {t('assessment.emptyQuizzesTitle')}
                     </p>
                     <p className="max-w-sm text-[12px] font-medium text-[#86868B]">
-                      Create your first quiz to start assessing students
+                      {t('assessment.emptyQuizzesHint')}
                     </p>
                     <motion.button
                       type="button"
@@ -1026,7 +1038,7 @@ export default function AssessmentPage() {
                       }}
                     >
                       <Icon paths={I.plus} size={13} strokeWidth={2.5} />
-                      Create Quiz
+                      {t('assessment.create')}
                     </motion.button>
                   </motion.div>
                 ) : (
@@ -1059,10 +1071,10 @@ export default function AssessmentPage() {
                       <Icon paths={I.helpCircle} size={26} strokeWidth={2} />
                     </div>
                     <p className="text-[14px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                      Question bank is empty
+                      {t('assessment.emptyQuestionsTitle')}
                     </p>
                     <p className="max-w-sm text-[12px] font-medium text-[#86868B]">
-                      Questions will appear here once they're added
+                      {t('assessment.emptyQuestionsHint')}
                     </p>
                   </motion.div>
                 ) : (
@@ -1119,7 +1131,7 @@ export default function AssessmentPage() {
               }}
               role="dialog"
               aria-modal="true"
-              aria-label="Create quiz"
+              aria-label={t('assessment.createAria')}
             >
               <span
                 aria-hidden
@@ -1133,14 +1145,14 @@ export default function AssessmentPage() {
                   <Icon paths={I.sparkles} size={18} strokeWidth={2} />
                 </div>
                 <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  Create a new quiz. You can add questions and set passing rules after saving.
+                  {t('assessment.createHint')}
                 </p>
               </div>
 
               <form onSubmit={handleCreateQuiz} className="mt-5 space-y-4" noValidate>
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                    Quiz Title <span className="text-[#FF3B30]">*</span>
+                    {t('assessment.form.title')} <span className="text-[#FF3B30]">*</span>
                   </label>
                   <input
                     type="text"
@@ -1150,7 +1162,7 @@ export default function AssessmentPage() {
                       setQuizTitle(e.target.value);
                       setFormErrors({});
                     }}
-                    placeholder="e.g. Algebra Mid-Term Quiz"
+                    placeholder={t('assessment.form.titlePlaceholder')}
                     aria-invalid={Boolean(formErrors.title)}
                     className="w-full rounded-xl border bg-white/80 px-3.5 py-2.5 text-[13.5px] font-medium text-[#1D1D1F] outline-none transition-all placeholder:text-[#86868B] focus:border-[#007AFF]/40 focus:shadow-[0_0_0_4px_rgba(0,122,255,0.1)] dark:bg-[#1c1c1e80] dark:text-[#F5F5F7]"
                     style={{
@@ -1165,7 +1177,7 @@ export default function AssessmentPage() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                      Time Limit (min)
+                      {t('assessment.form.timeLimit')}
                     </label>
                     <input
                       type="number"
@@ -1177,7 +1189,7 @@ export default function AssessmentPage() {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                      Pass Score (%)
+                      {t('assessment.form.passScore')}
                     </label>
                     <input
                       type="number"
@@ -1200,7 +1212,7 @@ export default function AssessmentPage() {
                     disabled={createQuizMutation.isPending}
                     className="rounded-xl border border-[#00000010] bg-[#00000004] px-4 py-2.5 text-[13px] font-semibold text-[#1D1D1F] outline-none transition-colors hover:bg-[#00000008] disabled:opacity-50 dark:border-[#ffffff10] dark:bg-[#ffffff06] dark:text-[#F5F5F7]"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </motion.button>
                   <motion.button
                     type="submit"
@@ -1221,12 +1233,12 @@ export default function AssessmentPage() {
                           animate={{ rotate: 360 }}
                           transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
                         />
-                        Saving…
+                        {t('common.saving')}
                       </>
                     ) : (
                       <>
                         <Icon paths={I.plus} size={14} strokeWidth={2.5} />
-                        Create Quiz
+                        {t('assessment.create')}
                       </>
                     )}
                   </motion.button>

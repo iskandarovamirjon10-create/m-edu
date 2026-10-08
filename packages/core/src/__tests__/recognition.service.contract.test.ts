@@ -45,7 +45,10 @@ function makeTemplate(id: string, studentId: string, tag: number) {
     templateHash: 'h',
     version: 1,
     status: 'ACTIVE',
-    modelVersion: 'v1',
+    // Must match the mock engine's getModelVersion() so the model-version
+    // compatibility guard does not skip the template. Typed as string | null
+    // so tests can also exercise the unversioned (legacy) template path.
+    modelVersion: 'test-v1' as string | null,
     qualityScore: 0.9,
     enrolledAt: new Date(),
     expiresAt: null,
@@ -193,7 +196,7 @@ describe('RecognitionService matching beyond maxCandidates', () => {
     const result = await svc.processAttempt(tenant, 'sess-1', Buffer.from('img'));
     expect(result.identified).toBe(true);
     expect(result.student?.id).toBe('student-5');
-    expect(enrollmentRepo.streamActiveTemplates).toHaveBeenCalledWith('org-1', 500);
+    expect(enrollmentRepo.streamActiveTemplates).toHaveBeenCalledWith('org-1', 500, 'group-1');
   });
 
   it('logs TEMPLATE_CORRUPTED audit event and safely continues when a template fails decryption', async () => {
@@ -257,5 +260,139 @@ describe('RecognitionService matching beyond maxCandidates', () => {
     // Valid template was still matched successfully
     expect(result.identified).toBe(true);
     expect(result.student?.id).toBe('student-good');
+  });
+});
+
+describe('RecognitionService hardening guards', () => {
+  function buildService(options: {
+    templates: ReturnType<typeof makeTemplate>[];
+    similarities: Record<string, number>;
+    sessionGroupId?: string | null;
+  }) {
+    const faceEngine = makeFaceEngine(options.similarities);
+    const attendancePolicy = {
+      validate: vi.fn().mockResolvedValue({ decision: 'RECORDED', message: 'ok' }),
+    } as any;
+    const createAttendance = vi.fn().mockResolvedValue({
+      id: 'att-1', organizationId: 'org-1', studentId: 'student-1', groupId: 'group-1',
+      lessonId: null, sessionId: 'sess-1', decision: 'RECORDED', recordedAt: new Date(),
+      metadata: null, createdAt: new Date(),
+    });
+
+    const recogRepo = {
+      findSession: vi.fn().mockResolvedValue({
+        id: 'sess-1', organizationId: 'org-1', deviceId: null, actorId: 'user-1',
+        groupId: options.sessionGroupId === undefined ? 'group-1' : options.sessionGroupId,
+        lessonId: null, status: 'STARTED', startedAt: new Date(),
+        endedAt: null, metadata: null, createdAt: new Date(), updatedAt: new Date(),
+      }),
+      updateSessionStatus: vi.fn().mockResolvedValue(undefined),
+      createAttempt: vi.fn().mockImplementation((data: any) =>
+        Promise.resolve({ id: 'attempt-1', ...data, occurredAt: new Date(), createdAt: new Date() })),
+      createAttendance,
+    } as any;
+
+    const enrollmentRepo = {
+      streamActiveTemplates: vi.fn(async function* () {
+        yield options.templates;
+      }),
+    } as any;
+
+    const svc = new RecognitionService(
+      faceEngine,
+      {
+        decrypt: vi.fn(async (ciphertext: string) => ciphertext),
+        verifyHash: vi.fn().mockResolvedValue(true),
+      } as any,
+      recogRepo,
+      enrollmentRepo,
+      { requirePermission: vi.fn().mockResolvedValue(undefined) } as any,
+      { log: vi.fn().mockResolvedValue(undefined) } as any,
+      new RecognitionDecisionPolicy(DEFAULT_FACE_RECOGNITION_CONFIG),
+      attendancePolicy,
+    );
+
+    return { svc, faceEngine, attendancePolicy, createAttendance };
+  }
+
+  it('never compares templates produced by a different embedding model', async () => {
+    // The foreign-model template would score HIGHER (0.99) — it must not even
+    // be compared, otherwise a cross-model garbage score decides identity.
+    const foreign = { ...makeTemplate('t-foreign', 'student-foreign', 1), modelVersion: 'other-model' };
+    const own = makeTemplate('t-own', 'student-own', 2);
+
+    const { svc, faceEngine } = buildService({
+      templates: [foreign, own],
+      similarities: { 1: 0.99, 2: 0.9 },
+    });
+
+    const result = await svc.processAttempt(tenant, 'sess-1', Buffer.from('img'));
+
+    expect(result.identified).toBe(true);
+    expect(result.student?.id).toBe('student-own');
+    expect(faceEngine.compareEmbeddings).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a template with no modelVersion (fail closed) instead of comparing it', async () => {
+    // An unversioned (legacy / mock-enrolled) template cannot be verified
+    // against the running engine, so it must not be compared at all.
+    const unversioned = { ...makeTemplate('t-null', 'student-null', 1), modelVersion: null };
+    const versioned = makeTemplate('t-ok', 'student-ok', 2);
+
+    const { svc, faceEngine } = buildService({
+      templates: [unversioned, versioned],
+      similarities: { 1: 0.99, 2: 0.9 },
+    });
+
+    const result = await svc.processAttempt(tenant, 'sess-1', Buffer.from('img'));
+
+    expect(result.identified).toBe(true);
+    expect(result.student?.id).toBe('student-ok');
+    expect(faceEngine.compareEmbeddings).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a non-finite similarity score instead of treating NaN as a match', async () => {
+    const { svc, faceEngine } = buildService({
+      templates: [makeTemplate('t1', 'student-1', 1)],
+      similarities: { 1: Number.NaN },
+    });
+
+    const result = await svc.processAttempt(tenant, 'sess-1', Buffer.from('img'));
+
+    expect(faceEngine.compareEmbeddings).toHaveBeenCalledTimes(1);
+    expect(result.identified).toBe(false);
+    expect(result.status).toBe('UNIDENTIFIED');
+    expect(result.attendanceDecision).toBeNull();
+  });
+
+  it('returns NO_GROUP_CONTEXT when the session has no group instead of silently skipping attendance', async () => {
+    const { svc, attendancePolicy, createAttendance } = buildService({
+      templates: [makeTemplate('t1', 'student-1', 1)],
+      similarities: { 1: 0.95 },
+      sessionGroupId: null,
+    });
+
+    const result = await svc.processAttempt(tenant, 'sess-1', Buffer.from('img'));
+
+    expect(result.identified).toBe(true);
+    expect(result.attendanceDecision).toBe('NO_GROUP_CONTEXT');
+    expect(result.attendanceRecorded).toBe(false);
+    expect(attendancePolicy.validate).not.toHaveBeenCalled();
+    expect(createAttendance).not.toHaveBeenCalled();
+  });
+
+  it('still records attendance when a group context IS present', async () => {
+    const { svc, attendancePolicy, createAttendance } = buildService({
+      templates: [makeTemplate('t1', 'student-1', 1)],
+      similarities: { 1: 0.95 },
+      sessionGroupId: 'group-1',
+    });
+
+    const result = await svc.processAttempt(tenant, 'sess-1', Buffer.from('img'));
+
+    expect(result.identified).toBe(true);
+    expect(result.attendanceDecision).toBe('RECORDED');
+    expect(attendancePolicy.validate).toHaveBeenCalledWith(tenant, 'student-1', 'group-1', null, 'sess-1');
+    expect(createAttendance).toHaveBeenCalled();
   });
 });

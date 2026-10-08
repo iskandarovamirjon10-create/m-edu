@@ -47,12 +47,14 @@ vi.mock('onnxruntime-node', () => {
   };
 });
 
-describe('RealEmbedder P1-1: SFace RGB/BGR Contract', () => {
+describe('RealEmbedder P1-1: SFace RGB Contract', () => {
   afterEach(() => {
     mockRun.mockClear();
   });
 
-  it('swaps RGB channels to BGR for SFace during preprocessing', async () => {
+  // OpenCV SFace feeds the network RGB (blobFromImage swapRB=true on a BGR
+  // imread result). sharp already gives us RGB, so the tensor is passthrough.
+  it('feeds RGB channel order (no BGR swap) to SFace during preprocessing', async () => {
     const embedder = new RealEmbedder({ modelPath: 'dummy-path',
       inputSize: 2,
       embeddingDimension: 128,
@@ -78,16 +80,13 @@ describe('RealEmbedder P1-1: SFace RGB/BGR Contract', () => {
     const data = tensor.data as Float32Array;
 
     // We used: Red (255, 0, 0), Green (0, 255, 0), Blue (0, 0, 255), White (255, 255, 255)
-    // Red pixel (0,0): RGB = 255, 0, 0 -> BGR = 0, 0, 255
-    // Green pixel (1,0): RGB = 0, 255, 0 -> BGR = 0, 255, 0
-    // Blue pixel (0,1): RGB = 0, 0, 255 -> BGR = 255, 0, 0
-    // White pixel (1,1): RGB = 255, 255, 255 -> BGR = 255, 255, 255
+    // SFace consumes RGB directly, so the tensor keeps RGB order.
 
-    // c=0 (B):
-    expect(data[0]).toBe(0);   // (0,0) Blue component of Red pixel is 0
-    expect(data[1]).toBe(0);   // (1,0) Blue component of Green pixel is 0
-    expect(data[2]).toBe(255); // (0,1) Blue component of Blue pixel is 255
-    expect(data[3]).toBe(255); // (1,1) Blue component of White pixel is 255
+    // c=0 (R):
+    expect(data[0]).toBe(255); // (0,0) Red pixel, R component
+    expect(data[1]).toBe(0);   // (1,0) Green pixel, R component
+    expect(data[2]).toBe(0);   // (0,1) Blue pixel, R component
+    expect(data[3]).toBe(255); // (1,1) White pixel, R component
 
     // c=1 (G):
     expect(data[4]).toBe(0);   // Green comp of Red pixel
@@ -95,10 +94,55 @@ describe('RealEmbedder P1-1: SFace RGB/BGR Contract', () => {
     expect(data[6]).toBe(0);   // Green comp of Blue pixel
     expect(data[7]).toBe(255); // Green comp of White pixel
 
-    // c=2 (R):
-    expect(data[8]).toBe(255); // Red comp of Red pixel
-    expect(data[9]).toBe(0);   // Red comp of Green pixel
-    expect(data[10]).toBe(0);  // Red comp of Blue pixel
-    expect(data[11]).toBe(255);// Red comp of White pixel
+    // c=2 (B):
+    expect(data[8]).toBe(0);   // Blue comp of Red pixel
+    expect(data[9]).toBe(0);   // Blue comp of Green pixel
+    expect(data[10]).toBe(255);// Blue comp of Blue pixel
+    expect(data[11]).toBe(255);// Blue comp of White pixel
+  });
+});
+
+describe('RealEmbedder embedding dimension contract (regression: FE-1)', () => {
+  afterEach(() => {
+    mockRun.mockClear();
+    mockRun.mockResolvedValue({
+      output: { data: new Float32Array(128).fill(0.5) },
+    });
+  });
+
+  const makeEmbedder = () =>
+    new RealEmbedder({
+      modelPath: 'dummy-path',
+      inputSize: 2,
+      embeddingDimension: 128,
+      normalize: true,
+      mean: [0, 0, 0],
+      std: [1, 1, 1],
+    });
+
+  // A minimal valid 1x1 PNG so sharp decode succeeds before the embedding
+  // dimension contract is evaluated.
+  const image = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  const face = { boundingBox: { x: 0, y: 0, width: 2, height: 2 } };
+
+  it('throws when the model output dimension does not match configuration', async () => {
+    mockRun.mockResolvedValue({ output: { data: new Float32Array(64).fill(0.5) } });
+    const embedder = makeEmbedder();
+    await embedder.initialize();
+    await expect(
+      embedder.generateEmbedding({ imageBuffer: image, face } as any),
+    ).rejects.toThrow(/dimension mismatch/i);
+  });
+
+  it('throws on a degenerate (zero-norm) embedding instead of returning one', async () => {
+    mockRun.mockResolvedValue({ output: { data: new Float32Array(128).fill(0) } });
+    const embedder = makeEmbedder();
+    await embedder.initialize();
+    await expect(
+      embedder.generateEmbedding({ imageBuffer: image, face } as any),
+    ).rejects.toThrow(/norm is 0/i);
   });
 });

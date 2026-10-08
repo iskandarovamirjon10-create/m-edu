@@ -41,6 +41,14 @@ function makePrisma() {
       groupBy: vi.fn(),
       aggregate: vi.fn(),
     },
+
+    recognitionSession: {
+      count: vi.fn(),
+    },
+
+    cameraAttendanceEvent: {
+      findMany: vi.fn(),
+    },
   } as unknown as PrismaClient;
 }
 
@@ -581,6 +589,73 @@ describe(
       ).toBe(0.88);
     });
 
+    it('maps a genuine zero score to 0 (not null)', async () => {
+      const prisma = makePrisma();
+
+      prisma.recognitionAttempt.findMany.mockResolvedValue([
+        recognitionAttemptRow({
+          confidence: 0,
+          qualityScore: 0,
+          similarityScore: 0,
+        }),
+      ]);
+
+      prisma.recognitionAttempt.count.mockResolvedValue(
+        1,
+      );
+
+      const adapter =
+        new PrismaRecognitionAdapter(prisma);
+
+      const result =
+        await adapter.listAttempts(
+          'org-1',
+          {
+            page: 1,
+            limit: 20,
+          },
+        );
+
+      // A truthiness check (`row.confidence ? … : null`) used to drop a
+      // real zero score, losing the distinction between "no score" and
+      // "scored exactly 0".
+      expect(result.items[0].confidence).toBe(0);
+      expect(result.items[0].qualityScore).toBe(0);
+      expect(result.items[0].similarityScore).toBe(0);
+    });
+
+    it('keeps null scores as null', async () => {
+      const prisma = makePrisma();
+
+      prisma.recognitionAttempt.findMany.mockResolvedValue([
+        recognitionAttemptRow({
+          confidence: null,
+          qualityScore: null,
+          similarityScore: null,
+        }),
+      ]);
+
+      prisma.recognitionAttempt.count.mockResolvedValue(
+        1,
+      );
+
+      const adapter =
+        new PrismaRecognitionAdapter(prisma);
+
+      const result =
+        await adapter.listAttempts(
+          'org-1',
+          {
+            page: 1,
+            limit: 20,
+          },
+        );
+
+      expect(result.items[0].confidence).toBeNull();
+      expect(result.items[0].qualityScore).toBeNull();
+      expect(result.items[0].similarityScore).toBeNull();
+    });
+
     it('is tenant-scoped', async () => {
       const prisma = makePrisma();
 
@@ -739,3 +814,79 @@ describe(
     });
   },
 );
+
+describe('PrismaRecognitionAdapter.countActiveSessions', () => {
+  it('counts STARTED and IN_PROGRESS sessions and excludes terminal ones', async () => {
+    const prisma = makePrisma();
+    prisma.recognitionSession.count.mockResolvedValue(3);
+
+    const adapter = new PrismaRecognitionAdapter(prisma);
+    const result = await adapter.countActiveSessions('org-1');
+
+    // A session transitions STARTED → IN_PROGRESS on its first attempt; the
+    // concurrent-session budget MUST still count it, or the limit is trivially
+    // bypassed. Only FINISHED and CANCELLED release budget.
+    expect(prisma.recognitionSession.count).toHaveBeenCalledWith({
+      where: {
+        organizationId: 'org-1',
+        status: { notIn: ['FINISHED', 'CANCELLED'] },
+      },
+    });
+    expect(result).toBe(3);
+  });
+});
+
+describe('PrismaRecognitionAdapter.listAttendance filters', () => {
+  it('applies the lessonId filter to the database where clause', async () => {
+    const prisma = makePrisma();
+    prisma.attendance.findMany.mockResolvedValue([]);
+    prisma.attendance.count.mockResolvedValue(0);
+
+    const adapter = new PrismaRecognitionAdapter(prisma);
+    await adapter.listAttendance('org-1', { lessonId: 'lesson-1' });
+
+    const where = prisma.attendance.findMany.mock.calls[0][0].where;
+    expect(where.lessonId).toBe('lesson-1');
+    expect(where.organizationId).toBe('org-1');
+  });
+
+  it('resolves the decision filter through CameraAttendanceEvent ids', async () => {
+    const prisma = makePrisma();
+    prisma.cameraAttendanceEvent.findMany.mockResolvedValue([
+      { attendanceId: 'att-1' },
+      { attendanceId: 'att-2' },
+      { attendanceId: null },
+    ]);
+    prisma.attendance.findMany.mockResolvedValue([]);
+    prisma.attendance.count.mockResolvedValue(0);
+
+    const adapter = new PrismaRecognitionAdapter(prisma);
+    await adapter.listAttendance('org-1', { decision: 'DUPLICATE_PREVENTED' });
+
+    expect(prisma.cameraAttendanceEvent.findMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: 'org-1',
+        decision: 'DUPLICATE_PREVENTED',
+        attendanceId: { not: null },
+      },
+      select: { attendanceId: true },
+      take: 1000,
+    });
+
+    const where = prisma.attendance.findMany.mock.calls[0][0].where;
+    expect(where.id).toEqual({ in: ['att-1', 'att-2'] });
+  });
+
+  it('returns empty when no camera event matches the decision filter', async () => {
+    const prisma = makePrisma();
+    prisma.cameraAttendanceEvent.findMany.mockResolvedValue([]);
+
+    const adapter = new PrismaRecognitionAdapter(prisma);
+    const result = await adapter.listAttendance('org-1', {
+      decision: 'NO_SCHEDULED_GROUP',
+    });
+
+    expect(result).toEqual({ items: [], total: 0 });
+    expect(prisma.attendance.findMany).not.toHaveBeenCalled();
+  });
+});

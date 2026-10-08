@@ -49,6 +49,8 @@ export const queryKeys = {
     /** Singular root `['student']` — invalidates all detail entries. */
     details: (): QueryKey => ['student'],
     detail: (id: string): QueryKey => ['student', id],
+    /** Parents list for student detail screen. */
+    parents: (id: string): QueryKey => ['student-parents', id],
     /** Enrolled-faces picker used by the face-enrollment screen. */
     faces: (): QueryKey => ['students-face'],
   },
@@ -118,6 +120,8 @@ export const queryKeys = {
   attendance: {
     all: (): QueryKey => ['attendance'],
     list: (params?: ListParams): QueryKey => ['attendance', params],
+    analytics: (groupId?: string, date?: string): QueryKey => ['attendance-analytics', groupId, date],
+    analyticsAll: (): QueryKey => ['attendance-analytics'],
   },
   grades: {
     all: (): QueryKey => ['grades'],
@@ -216,6 +220,7 @@ export const queryKeys = {
     events: (cameraId: string | null | undefined): QueryKey => ['camera-events', cameraId],
     health: (cameraId: string | null | undefined): QueryKey => ['camera-health', cameraId],
     worker: (cameraId: string | null | undefined): QueryKey => ['camera-worker', cameraId],
+    workersAll: (): QueryKey => ['camera-worker'],
   },
   automation: {
     rules: (): QueryKey => ['automation-rules'],

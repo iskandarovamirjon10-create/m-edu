@@ -4,7 +4,7 @@
  * variant: 'default' | 'elevated' | 'flat' | 'interactive'
  * padding: 'none' | 'sm' | 'md' | 'lg' | 'xl'
  */
-import { type ReactNode, type HTMLAttributes, forwardRef } from 'react';
+import { type ReactNode, type HTMLAttributes, forwardRef, useEffect, useRef } from 'react';
 
 export type GlassCardVariant = 'default' | 'elevated' | 'flat' | 'interactive';
 
@@ -101,11 +101,39 @@ export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
         ? ''
         : PADDING_CLASSES.md;
 
+    // Merge the external ref with a local ref for cursor tracking
+    const localRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+      const el = localRef.current;
+      if (!el || variant !== 'interactive') return;
+      
+      let raf = 0;
+      const onMove = (e: MouseEvent) => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) return;
+          el.style.setProperty('--ad-glow-x', `${((e.clientX - r.left) / r.width) * 100}%`);
+          el.style.setProperty('--ad-glow-y', `${((e.clientY - r.top) / r.height) * 100}%`);
+        });
+      };
+      
+      el.addEventListener('mousemove', onMove, { passive: true });
+      return () => {
+        el.removeEventListener('mousemove', onMove);
+        cancelAnimationFrame(raf);
+      };
+    }, [variant]);
+
     return (
       <div
-        ref={ref}
+        ref={(node) => {
+          localRef.current = node;
+          if (typeof ref === 'function') ref(node);
+          else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        }}
         className={[
-          'relative overflow-hidden',
+          'relative overflow-hidden group',
           'backdrop-blur-[16px] [backdrop-filter:blur(16px)_saturate(1.5)]',
           '[-webkit-backdrop-filter:blur(16px)_saturate(1.5)]',
           'rounded-[var(--radius-xl)]',
@@ -119,9 +147,11 @@ export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
         {!noReflection && (
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-[inherit] z-0"
+            className="pointer-events-none absolute inset-0 rounded-[inherit] z-0 transition-opacity duration-300"
             style={{
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%)',
+              background: variant === 'interactive' 
+                ? 'radial-gradient(600px circle at var(--ad-glow-x, 50%) var(--ad-glow-y, 50%), rgba(255,255,255,0.1), transparent 40%), linear-gradient(135deg, rgba(255,255,255,0.08) 0%, transparent 60%)'
+                : 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%)',
             }}
           />
         )}

@@ -52,6 +52,16 @@ describe('RbacService', () => {
     expect(await svc.hasPermission(Permissions.FACE_VIEW)).toBe(false);
   });
 
+  it('hasPermission honors an explicit role argument (regression: FS-4)', async () => {
+    // The dynamic permission list grants nothing; the role matrix grants
+    // the permission — previously the `role` parameter was ignored and
+    // every @medu/core caller was checked against the raw closure.
+    const svc = new RbacService(async () => 'ORG_ADMIN', async () => []);
+    expect(await svc.hasPermission(Permissions.FACE_ENROLL)).toBe(false);
+    expect(await svc.hasPermission(Permissions.FACE_ENROLL, 'ORG_ADMIN')).toBe(true);
+    expect(await svc.hasPermission(Permissions.FACE_DEVICE_MANAGE, 'STUDENT')).toBe(false);
+  });
+
   it('getPermissionsForRole static lookup matches contracts', () => {
     expect(RbacService.getPermissionsForRole('TEACHER')).toEqual(RolePermissions.TEACHER);
   });

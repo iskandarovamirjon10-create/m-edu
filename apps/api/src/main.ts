@@ -3,6 +3,8 @@
 // overrides variables that are already set.
 import 'dotenv/config';
 
+// Trigger reload
+
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';

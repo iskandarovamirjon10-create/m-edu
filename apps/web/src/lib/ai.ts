@@ -7,7 +7,7 @@
  * tool names and statuses into short Uzbek phrases. Raw tool payloads and
  * server error text are never surfaced directly.
  */
-import request, { ApiError, aiApi } from './api';
+import request, { ApiError, aiApi, apiUrl, ensureCsrfCookie, readXsrfCookie } from './api';
 import type {
   AiChatResponse,
   AiErrorInfo,
@@ -324,61 +324,107 @@ export async function aiChatStream(
     .filter((entry) => (entry.content || '').trim().length > 0)
     .map((entry) => ({ role: entry.role, content: entry.content || '' }));
 
-  const res = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/ai/chat/stream`, {
+  // Authentication is cookie-only (HttpOnly access_token). CSRF uses the
+  // same double-submit token as every other mutating request. No token is
+  // ever read from storage — the previous `Bearer` header here sent an
+  // empty credential and the missing `credentials: 'include'` dropped the
+  // session cookie entirely, so this endpoint could never authorize.
+  await ensureCsrfCookie();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const xsrf = readXsrfCookie();
+  if (xsrf) headers['x-xsrf-token'] = xsrf;
+
+  const res = await fetch(apiUrl('/ai/chat/stream'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
-    },
-    body: JSON.stringify({ message, history, conversationId: options.conversationId as string | undefined } as any),
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({ message, history, conversationId: options.conversationId ?? undefined }),
     signal: options.signal,
   });
 
   if (!res.ok) {
-    throw new Error('Failed to connect to stream');
+    // Surface the real failure class so the UI can react (401 → re-login,
+    // 403 → forbidden, 429 → back off) instead of a generic message.
+    let serverMessage: string | null = null;
+    try {
+      const body = (await res.json()) as { message?: string } | null;
+      serverMessage = body?.message ?? null;
+    } catch {
+      /* non-JSON error body — fall back to status text */
+    }
+    throw new ApiError(res.status, serverMessage || `AI stream failed (${res.status}).`);
   }
-  
+
   const reader = res.body?.getReader();
-  if (!reader) throw new Error('No readable stream');
-  
+  if (!reader) throw new ApiError(500, 'No readable stream');
+
   const decoder = new TextDecoder();
-  let done = false;
+  let buffer = '';
   let fullContent = '';
   let finalConversationId = options.conversationId || '';
+  let streamError: Error | null = null;
 
+  // SSE frames may be split across chunks, so events are parsed from a
+  // rolling buffer at frame boundaries (blank line), not per raw chunk.
+  let eventType = '';
+  const processFrame = (frame: string) => {
+    let dataStr: string | null = null;
+    for (const line of frame.split('\n')) {
+      if (line.startsWith('event: ')) {
+        eventType = line.slice(7).trim();
+      } else if (line.startsWith('data: ')) {
+        dataStr = line.slice(6).trim();
+      }
+    }
+    if (dataStr === null || dataStr === '') return;
+
+    let data: unknown;
+    try {
+      data = JSON.parse(dataStr);
+    } catch {
+      return; // malformed frame — ignore, never crash the stream
+    }
+
+    const payload = data as { content?: string; conversationId?: string; message?: string };
+    if (eventType === 'delta' && payload.content) {
+      fullContent += payload.content;
+      options.onDelta(payload.content);
+    } else if (eventType === 'done') {
+      finalConversationId = payload.conversationId || finalConversationId;
+    } else if (eventType === 'tool' && options.onTool) {
+      options.onTool(data);
+    } else if (eventType === 'error') {
+      // Server-reported failure must not be swallowed by the JSON parse
+      // guard above (the old implementation threw inside its own try/catch).
+      streamError = new ApiError(500, payload.message || 'The AI service reported an error.');
+    }
+  };
+
+  const flushFrames = (emitFinal: boolean) => {
+    let idx: number;
+    while ((idx = buffer.indexOf('\n\n')) !== -1) {
+      const frame = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      if (frame.trim()) processFrame(frame);
+    }
+    if (emitFinal && buffer.trim()) {
+      processFrame(buffer);
+      buffer = '';
+    }
+  };
+
+  let done = false;
   while (!done) {
     const { value, done: readerDone } = await reader.read();
     if (value) {
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
-      let eventType = '';
-      
-      for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          eventType = line.slice(7).trim();
-        } else if (line.startsWith('data: ')) {
-          const dataStr = line.slice(6).trim();
-          if (!dataStr) continue;
-          
-          try {
-            const data = JSON.parse(dataStr);
-            if (eventType === 'delta' && data.content) {
-              fullContent += data.content;
-              options.onDelta(data.content);
-            } else if (eventType === 'done') {
-              finalConversationId = data.conversationId;
-            } else if (eventType === 'tool' && options.onTool) {
-              options.onTool(data);
-            } else if (eventType === 'error') {
-              throw new Error(data.message);
-            }
-          } catch (e) {
-          }
-        }
-      }
+      buffer += decoder.decode(value, { stream: true });
+      flushFrames(false);
     }
     done = readerDone;
   }
+  flushFrames(true);
+
+  if (streamError) throw streamError;
 
   return { conversationId: finalConversationId, content: fullContent };
 }
@@ -394,6 +440,16 @@ export async function aiChatStream(
 export async function confirmAiAction(actionId: string): Promise<Record<string, unknown>> {
   return await request<Record<string, unknown>>(`/workspace/ai/actions/${actionId}/confirm`, {
     method: 'POST'
+  });
+}
+
+/**
+ * Reject a proposed action and record the rejection reason.
+ */
+export async function rejectAiAction(actionId: string, reason?: string): Promise<Record<string, unknown>> {
+  return await request<Record<string, unknown>>(`/workspace/ai/actions/${actionId}/reject`, {
+    method: 'POST',
+    body: reason ? JSON.stringify({ reason }) : undefined,
   });
 }
 export interface AiConversationSummary {

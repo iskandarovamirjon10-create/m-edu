@@ -98,13 +98,15 @@ function createMockRes() {
 describe('ImportExportService', () => {
   let service: ImportExportService;
   let prisma: {
-    student: { findMany: ReturnType<typeof import('vitest').vi.fn> };
+    student: { findMany: ReturnType<typeof import('vitest').vi.fn>; create: ReturnType<typeof import('vitest').vi.fn> };
+    teacher: { create: ReturnType<typeof import('vitest').vi.fn> };
   };
 
   beforeEach(async () => {
     const { vi } = await import('vitest');
     prisma = {
-      student: { findMany: vi.fn().mockResolvedValue([]) },
+      student: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({ id: 's1' }) },
+      teacher: { create: vi.fn().mockResolvedValue({ id: 't1' }) },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -219,6 +221,58 @@ describe('ImportExportService', () => {
       expect(text).toContain('/Type /Page');
       // Font-embedded PDFs encode glyphs, not raw 'STUDENT' text — structural
       // checks match scripts/verify-export-runtime.ts.
+    });
+  });
+
+  describe('startImport', () => {
+    it('throws error when file is missing or empty', async () => {
+      await expect(
+        service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, undefined),
+      ).rejects.toThrow('Import file is required and must not be empty');
+
+      await expect(
+        service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, { buffer: Buffer.from('') }),
+      ).rejects.toThrow('Import file is required and must not be empty');
+    });
+
+    it('successfully parses and imports CSV student rows with header aliases', async () => {
+      const csvData = 'Ism,Familiya,Telefon,Ota_onasi,Ota_ona_tel\nAlisher,Navoiy,+998901234567,Giyosiddin,+998907654321\nBobur,Zahiriddin,+998912345678,Umarshayx,+998918765432';
+      const file = {
+        buffer: Buffer.from(csvData, 'utf-8'),
+        originalname: 'students.csv',
+        mimetype: 'text/csv',
+      };
+
+      const result = await service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file);
+
+      expect(result.success).toBe(true);
+      expect(result.entityType).toBe('STUDENT');
+      expect(result.totalRows).toBe(2);
+      expect(result.importedCount).toBe(2);
+      expect(result.errorCount).toBe(0);
+      expect(prisma.student.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('successfully parses and imports Excel (.xlsx) student rows', async () => {
+      const ExcelJS = await import('exceljs');
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Students');
+      ws.addRow(['firstName', 'lastName', 'phone', 'parentPhone']);
+      ws.addRow(['Sanjar', 'Karimov', '+998931112233', '+998934445566']);
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const file = {
+        buffer: Buffer.from(buffer),
+        originalname: 'students.xlsx',
+        mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+
+      const result = await service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file);
+
+      expect(result.success).toBe(true);
+      expect(result.totalRows).toBe(1);
+      expect(result.importedCount).toBe(1);
+      expect(prisma.student.create).toHaveBeenCalled();
     });
   });
 });

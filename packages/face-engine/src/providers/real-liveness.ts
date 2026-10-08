@@ -69,12 +69,23 @@ export function cropBoxForLiveness(
   box: { x: number; y: number; width: number; height: number },
   margin: number
 ): [number, number, number, number] {
-  const x = box.x;
-  const y = box.y;
-  const boxW = box.width;
-  const boxH = box.height;
+  // Input validation: zero/negative bbox dimensions would divide-by-zero.
+  const x = Number.isFinite(box.x) ? box.x : 0;
+  const y = Number.isFinite(box.y) ? box.y : 0;
+  const boxW = Math.max(1, Math.round(box.width));
+  const boxH = Math.max(1, Math.round(box.height));
 
-  const scale = Math.min((srcH - 1) / boxH, Math.min((srcW - 1) / boxW, margin));
+  // Image must be at least 1x1 so downstream arithmetic stays finite.
+  const safeSrcW = Math.max(1, Math.round(srcW));
+  const safeSrcH = Math.max(1, Math.round(srcH));
+
+  // Scale: clamp to a positive floor so newWidth/newHeight stay >= 1.
+  const rawScale = Math.min(
+    (safeSrcH - 1) / boxH,
+    Math.min((safeSrcW - 1) / boxW, margin),
+  );
+  const scale = Math.max(Number.EPSILON, rawScale);
+
   const newWidth = boxW * scale;
   const newHeight = boxH * scale;
   const centerX = boxW / 2 + x;
@@ -93,16 +104,23 @@ export function cropBoxForLiveness(
     rightBottomY -= leftTopY;
     leftTopY = 0;
   }
-  if (rightBottomX > srcW - 1) {
-    leftTopX -= rightBottomX - srcW + 1;
-    rightBottomX = srcW - 1;
+  if (rightBottomX > safeSrcW - 1) {
+    leftTopX -= rightBottomX - safeSrcW + 1;
+    rightBottomX = safeSrcW - 1;
   }
-  if (rightBottomY > srcH - 1) {
-    leftTopY -= rightBottomY - srcH + 1;
-    rightBottomY = srcH - 1;
+  if (rightBottomY > safeSrcH - 1) {
+    leftTopY -= rightBottomY - safeSrcH + 1;
+    rightBottomY = safeSrcH - 1;
   }
 
-  return [Math.round(leftTopX), Math.round(leftTopY), Math.round(rightBottomX), Math.round(rightBottomY)];
+  // Post-clamp normalization: guarantee width >= 1 and height >= 1 so
+  // sharp.extract never receives non-positive dimensions.
+  const lx = Math.max(0, Math.min(Math.round(leftTopX), safeSrcW - 1));
+  const ty = Math.max(0, Math.min(Math.round(leftTopY), safeSrcH - 1));
+  const rx = Math.max(lx, Math.min(Math.round(rightBottomX), safeSrcW - 1));
+  const by = Math.max(ty, Math.min(Math.round(rightBottomY), safeSrcH - 1));
+
+  return [lx, ty, rx, by];
 }
 
 /**
@@ -263,7 +281,44 @@ export class RealLivenessChecker {
     // Post-process: softmax over classCount logits; liveness score = p[LIVE].
     const outputName = session.outputNames[0];
     const output = results[outputName];
-    const logits = output.data as Float32Array;
+    const rawLogits = output?.data;
+
+    if (!rawLogits || typeof (rawLogits as ArrayLike<number>).length !== 'number') {
+      return {
+        decision: 'UNAVAILABLE',
+        confidence: 0,
+        details: {
+          provider: 'real',
+          reason: 'Model produced no output tensor',
+        },
+      };
+    }
+
+    // Normalize to Float32Array. onnxruntime-node returns a TypedArray whose
+    // dtype varies by model/version (Float32Array, Float64Array, Int32Array,
+    // …). Treating a non-Float32 buffer as Float32 silently misreads every
+    // element, so validate and convert explicitly — and reject non-finite
+    // values before they poison softmax.
+    let logits: Float32Array;
+    if (rawLogits instanceof Float32Array) {
+      logits = rawLogits;
+    } else {
+      const values = Array.from(rawLogits as ArrayLike<number>);
+      if (
+        values.length > 0 &&
+        values.some((v: unknown) => typeof v !== 'number' || !Number.isFinite(v))
+      ) {
+        return {
+          decision: 'UNAVAILABLE',
+          confidence: 0,
+          details: {
+            provider: 'real',
+            reason: 'Liveness output contains non-finite or non-numeric values',
+          },
+        };
+      }
+      logits = new Float32Array(values as number[]);
+    }
 
     // Fail closed if the model does not produce the expected number of classes.
     if (logits.length !== this.config.classCount) {

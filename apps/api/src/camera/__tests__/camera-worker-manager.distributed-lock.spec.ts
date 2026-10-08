@@ -123,6 +123,7 @@ function createPrismaMock() {
     camera: {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
   };
 }

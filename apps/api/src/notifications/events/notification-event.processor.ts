@@ -30,6 +30,7 @@ const { InjectQueue, OnWorkerEvent, Processor, WorkerHost } = require('@nestjs/b
  * notification and the Telegram fallback chain.
  */
 const PARENT_SMS_EVENTS = new Set<NotificationEventPayload['type']>([
+  'ATTENDANCE_MARKED_PRESENT',
   'ATTENDANCE_MARKED_ABSENT',
   'ATTENDANCE_MARKED_LATE',
   'PAYMENT_RECORDED',
@@ -332,6 +333,11 @@ export class NotificationEventProcessor extends WorkerHost {
   private render(event: NotificationEventPayload): { title: string; body: string } {
     const name = event.data.studentName ?? '';
     switch (event.type) {
+      case 'ATTENDANCE_MARKED_PRESENT':
+        return {
+          title: 'Farzandingiz darsda',
+          body: `${name} yuzni tanish orqali darsga muvaffaqiyatli yetib keldi.`,
+        };
       case 'ATTENDANCE_MARKED_ABSENT':
         return {
           title: 'Attendance alert',

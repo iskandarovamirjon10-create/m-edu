@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DataQualityQueryDto } from './dto/data-quality.dto';
@@ -24,6 +24,7 @@ export interface QualityIssue {
 
 @Injectable()
 export class DataQualityService {
+  private readonly logger = new Logger(DataQualityService.name);
   private rules: QualityRule[] = [
     {
       id: 'student-missing-email',
@@ -269,7 +270,7 @@ export class DataQualityService {
           await this.prisma.$transaction(ops);
         }
       } catch (error) {
-        console.error(`Data quality check failed for rule ${rule.id}:`, error);
+        this.logger.error(`Data quality check failed for rule ${rule.id}:`, error);
       }
     }
 
@@ -335,4 +336,5 @@ export class DataQualityService {
     });
   }
 }
+
 

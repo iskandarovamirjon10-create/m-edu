@@ -144,7 +144,7 @@ export function ObservabilityPage() {
  onClick={() => setAutoRefresh(!autoRefresh)}
  icon={<span className={`w-2 h-2 rounded-full ${autoRefresh ?'bg-emerald-400 animate-pulse' :'bg-gray-400'}`} />}
  >
- {autoRefresh ?'Auto-refresh ON' :'Auto-refresh OFF'}
+ {autoRefresh ? (t('obs.autoRefreshOn') || 'Auto-refresh ON') : (t('obs.autoRefreshOff') || 'Auto-refresh OFF')}
  </GlassButton>
  </div>
 
@@ -332,10 +332,10 @@ export function ObservabilityPage() {
  <h2 className="text-[1.1rem] font-bold text-[var(--text-primary)]">{t('obs.endpointBreakdown')}</h2>
  <div className="flex items-center gap-3 ml-auto">
  <span className="px-3 py-1 rounded-full bg-[var(--state-hover)] text-[0.7rem] font-bold text-[var(--text-muted)]">
- P95: {apiMetrics.p95ResponseTimeMs}ms
+ {t('obs.p95') || 'P95'}: {apiMetrics.p95ResponseTimeMs}ms
  </span>
  <span className="px-3 py-1 rounded-full bg-[var(--state-hover)] text-[0.7rem] font-bold text-[var(--text-muted)]">
- P99: {apiMetrics.p99ResponseTimeMs}ms
+ {t('obs.p99') || 'P99'}: {apiMetrics.p99ResponseTimeMs}ms
  </span>
  </div>
  </div>

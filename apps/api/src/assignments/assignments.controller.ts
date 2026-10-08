@@ -8,6 +8,7 @@ import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { STAFF_ROLES } from '../auth/authorization.policy';
 import { AllowAnyRole } from '../auth/roles.decorator';
+import type { RequestUser } from '../auth/types';
 
 @ApiTags('Assignments')
 @ApiBearerAuth()
@@ -20,8 +21,11 @@ export class AssignmentsController {
   @Get()
   @Roles(...STAFF_ROLES, 'STUDENT', 'PARENT')
   @ApiOperation({ summary: 'List assignments' })
-  findAll(@CurrentUser('organizationId') orgId: string, @Query() query: AssignmentQuery) {
-    return this.assignmentsService.findAll(orgId, query);
+  findAll(@CurrentUser() user: RequestUser, @Query() query: AssignmentQuery) {
+    return this.assignmentsService.findAll(user.organizationId, query, {
+      id: user.sub,
+      role: user.role,
+    });
   }
 
   @AllowAnyRole()
@@ -29,10 +33,13 @@ export class AssignmentsController {
   @Roles(...STAFF_ROLES, 'STUDENT', 'PARENT')
   @ApiOperation({ summary: 'Get assignment details and submissions' })
   findOne(
-    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.assignmentsService.findOne(orgId, id);
+    return this.assignmentsService.findOne(user.organizationId, id, {
+      id: user.sub,
+      role: user.role,
+    });
   }
 
   @Post()

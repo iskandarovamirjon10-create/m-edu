@@ -62,6 +62,13 @@ export const AttendanceDecision = {
    * schedule gate refused attendance. Attendance is never written.
    */
   OUT_OF_SCHEDULE: 'OUT_OF_SCHEDULE',
+  /**
+   * The student was identified but the session has no group context
+   * (no groupId chosen when the session was started), so attendance CANNOT
+   * be attributed. Explicitly returned instead of silently skipping
+   * attendance — a silent skip looks identical to "recorded" in observability.
+   */
+  NO_GROUP_CONTEXT: 'NO_GROUP_CONTEXT',
 } as const;
 export type AttendanceDecision = (typeof AttendanceDecision)[keyof typeof AttendanceDecision];
 
@@ -93,6 +100,7 @@ export const AuditEventType = {
   TEMPLATE_CORRUPTED: 'TEMPLATE_CORRUPTED',
   RETENTION_POLICY_APPLIED: 'RETENTION_POLICY_APPLIED',
   SETTINGS_UPDATED: 'SETTINGS_UPDATED',
+  POTENTIAL_DUPLICATE_FACE: 'POTENTIAL_DUPLICATE_FACE',
 } as const;
 export type AuditEventType = (typeof AuditEventType)[keyof typeof AuditEventType];
 
@@ -180,3 +188,20 @@ export const RolePermissions: Record<string, Permission[]> = {
     Permissions.FACE_RECOGNIZE,
   ],
 };
+
+/**
+ * Safe, prototype-key-proof lookup into RolePermissions.
+ *
+ * Prefer this over `RolePermissions[role] ?? []`: `role === 'constructor'` /
+ * `'toString'` would otherwise resolve a Function from the prototype chain
+ * and crash callers (`.includes(...) is not a function`) on a malformed or
+ * poisoned JWT claim.
+ */
+export function rolePermissionsForRole(role: string): Permission[] {
+  return (
+    typeof role === 'string' &&
+    Object.prototype.hasOwnProperty.call(RolePermissions, role)
+      ? RolePermissions[role]
+      : []
+  );
+}

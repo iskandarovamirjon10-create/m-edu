@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { RolePermissions } from '@medu/contracts';
+import { rolePermissionsForRole } from '@medu/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ADMIN_ROLES,
@@ -107,7 +107,7 @@ export class TelegramContextService {
       principalId: user.id,
       organizationId: user.organizationId,
       role,
-      permissions: RolePermissions[role] ?? [],
+      permissions: rolePermissionsForRole(role),
       isAdmin: ADMIN_ROLES.includes(role as never),
       isStaff: STAFF_ROLES.includes(role as never),
       isTeaching: TEACHING_ROLES.includes(role as never),
@@ -155,7 +155,7 @@ export class TelegramContextService {
       role: 'PARENT',
       // PARENT is a family role with no capability grants of its own; its
       // access is entirely derived from verified ParentStudent links.
-      permissions: RolePermissions['PARENT'] ?? [],
+      permissions: rolePermissionsForRole('PARENT'),
       isAdmin: false,
       isStaff: false,
       isTeaching: false,

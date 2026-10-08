@@ -206,30 +206,48 @@ export class CameraController {
       req.user.organizationId;
 
     /**
-     * Stop recognition BEFORE deleting the DB record.
+     * 1. Pre-check FIRST.
      *
-     * This prevents an active FFmpeg process from
-     * continuing to process frames against a deleted
-     * camera.
+     * `deleteCamera` refuses to remove a camera that has recognition events,
+     * so that refusal must happen BEFORE any side effect. Stopping the worker
+     * first (the previous order) left an enabled camera with no worker after a
+     * 400 — dead recognition until the next API restart.
      */
-    await this.workerManager.stopWorker(
-      organizationId,
-      id,
-    );
+    await this.cameraService.assertCameraDeletable(organizationId, id);
 
-    this.auditLogger.info('Camera deleted', {
-      userId: req.user.sub,
-      organizationId,
-      cameraId: id,
-      action: 'DELETE',
-      resourceType: 'Camera',
-      resourceId: id,
-    });
+    /**
+     * 2. Stop recognition BEFORE deleting the DB record so an active FFmpeg
+     * process cannot keep processing frames against a deleted camera.
+     */
+    await this.workerManager.stopWorker(organizationId, id);
 
-    return this.cameraService.deleteCamera(
-      organizationId,
-      id,
-    );
+    try {
+      const result = await this.cameraService.deleteCamera(
+        organizationId,
+        id,
+      );
+
+      this.auditLogger.info('Camera deleted', {
+        userId: req.user.sub,
+        organizationId,
+        cameraId: id,
+        action: 'DELETE',
+        resourceType: 'Camera',
+        resourceId: id,
+      });
+
+      return result;
+    } catch (err: unknown) {
+      /*
+       * 3. The row survived (a dependent row appeared between the pre-check
+       * and the DELETE). Restore the worker instead of leaving the camera
+       * silently unmonitored; the original error is still what the caller sees.
+       */
+      await this.workerManager
+        .startWorker(organizationId, id)
+        .catch(() => undefined);
+      throw err;
+    }
   }
 
   // ============================================================

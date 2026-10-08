@@ -182,6 +182,17 @@ export class RecognitionDecisionPolicy {
       };
     }
 
+    // Step 3b: Invalid score — fail closed. For NaN every comparison below is
+    // false (NaN < threshold is false, NaN < margin is false), which would
+    // let a broken matcher result sail all the way to IDENTIFIED.
+    if (!Number.isFinite(input.similarityScore)) {
+      return {
+        outcome: 'REJECTED',
+        reason: 'SIMILARITY_INVALID',
+        message: 'Similarity score is not a finite number',
+      };
+    }
+
     // Step 4: Similarity threshold
     if (input.similarityScore < this.config.matching.similarityThreshold) {
       return {
@@ -205,7 +216,8 @@ export class RecognitionDecisionPolicy {
     const minMargin = this.config.matching.minAmbiguityMargin ?? 0.05;
     if (
       typeof input.ambiguityMargin === 'number' &&
-      input.ambiguityMargin < minMargin
+      (!Number.isFinite(input.ambiguityMargin) ||
+        input.ambiguityMargin < minMargin)
     ) {
       return {
         outcome: 'UNCERTAIN',

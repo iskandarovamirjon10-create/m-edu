@@ -44,13 +44,13 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -815,20 +815,47 @@ export function GroupDetailPage() {
               </p>
             </div>
 
-            <motion.div
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              transition={SPRING.snappy}
-            >
-              <GlassButton asChild variant="primary">
-                <Link to={`/groups/${groupData.id}/edit`}>
-                  <span className="inline-flex items-center gap-2">
-                    <Icon paths={I.edit} size={15} strokeWidth={2} />
-                    {t('groupForm.editTitle')}
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <motion.div
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
+              >
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('open-ai-copilot', {
+                        detail: {
+                          prompt: `"${groupData.name}" guruhi bo'yicha tahlil ber: o'quvchilar soni (${stats.totalMembers} nafar, sig'imi ${stats.capacity}), o'qituvchi (${teacherName}), dars xonasi (${groupData.room || 'belgilanmagan'}) va dars jadvali.`,
+                        },
+                      }),
+                    );
+                  }}
+                  className="!border-purple-500/30 hover:!border-purple-500/50"
+                >
+                  <span className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium">
+                    <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
+                    AI Tahlil
                   </span>
-                </Link>
-              </GlassButton>
-            </motion.div>
+                </GlassButton>
+              </motion.div>
+              <motion.div
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
+              >
+                <GlassButton asChild variant="primary">
+                  <Link to={`/groups/${groupData.id}/edit`}>
+                    <span className="inline-flex items-center gap-2">
+                      <Icon paths={I.edit} size={15} strokeWidth={2} />
+                      {t('groupForm.editTitle')}
+                    </span>
+                  </Link>
+                </GlassButton>
+              </motion.div>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -871,8 +898,8 @@ export function GroupDetailPage() {
           DETAILS + MEMBERS ROW
       ============================================================ */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        {/* Details */}
-        <motion.div variants={cardVariants} className="lg:col-span-1">
+        {/* Details & AI Copilot */}
+        <motion.div variants={cardVariants} className="lg:col-span-1 space-y-5">
           <SectionPanel
             icon={I.layers}
             tone="blue"
@@ -929,6 +956,93 @@ export function GroupDetailPage() {
                   />
                 }
               />
+            </div>
+          </SectionPanel>
+
+          {/* AI Copilot Group Card */}
+          <SectionPanel
+            icon={I.sparkles}
+            tone="purple"
+            title="AI Guruh Tahlili"
+            subtitle="Aqlli assistent va dars rejalashtirish"
+            right={
+              <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                Copilot
+              </span>
+            }
+          >
+            <div className="p-3 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('open-ai-copilot', {
+                      detail: {
+                        prompt: `"${groupData.name}" guruhining dars qatnashuv ko'rsatkichlari, eng ko'p dars qoldiruvchi talabalari va guruh davomati monitoringini ko'rsat.`,
+                      },
+                    }),
+                  );
+                }}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-glass)] hover:border-purple-500/30 hover:bg-purple-500/[0.05] transition-all text-left group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-500/10 text-[#007AFF]">
+                    <Icon paths={I.calendar} size={12} strokeWidth={2.2} />
+                  </span>
+                  <span className="text-[12px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    Guruh davomati & monitoring
+                  </span>
+                </div>
+                <Icon paths={['M5 12h14', 'M12 5l7 7-7 7']} size={12} strokeWidth={2.5} className="text-[#86868B] group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('open-ai-copilot', {
+                      detail: {
+                        prompt: `"${groupData.name}" guruhi (${groupData.course?.name || 'Fan'}) uchun 45 daqiqalik namunaviy dars rejasi, vaqt taqsimoti va interaktiv mashqlar tuzib ber.`,
+                      },
+                    }),
+                  );
+                }}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-glass)] hover:border-purple-500/30 hover:bg-purple-500/[0.05] transition-all text-left group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-purple-500/10 text-[#AF52DE]">
+                    <Icon paths={I.book} size={12} strokeWidth={2.2} />
+                  </span>
+                  <span className="text-[12px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    45 daqiqalik dars rejasi
+                  </span>
+                </div>
+                <Icon paths={['M5 12h14', 'M12 5l7 7-7 7']} size={12} strokeWidth={2.5} className="text-[#86868B] group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('open-ai-copilot', {
+                      detail: {
+                        prompt: `"${groupData.name}" guruhidagi ${members.length} nafar o'quvchining o'zlashtirish va faollik darajasi, orqada qolayotganlar bo'yicha tavsiyalar ber.`,
+                      },
+                    }),
+                  );
+                }}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-glass)] hover:border-purple-500/30 hover:bg-purple-500/[0.05] transition-all text-left group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-[#34C759]">
+                    <Icon paths={I.users} size={12} strokeWidth={2.2} />
+                  </span>
+                  <span className="text-[12px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    O'quvchilar xavf tahlili
+                  </span>
+                </div>
+                <Icon paths={['M5 12h14', 'M12 5l7 7-7 7']} size={12} strokeWidth={2.5} className="text-[#86868B] group-hover:translate-x-0.5 transition-transform" />
+              </button>
             </div>
           </SectionPanel>
         </motion.div>

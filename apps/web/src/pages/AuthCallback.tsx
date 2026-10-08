@@ -69,9 +69,9 @@ export function AuthCallbackPage() {
   );
 
   const exchangeCode = useCallback(
-    async (code: string) => {
+    async (code: string, state?: string) => {
       try {
-        await authApi.exchangeCode(code);
+        await authApi.exchangeCode(code, state);
         await handleSuccess();
       } catch {
         handleError('authCallback.errorExpired');
@@ -88,6 +88,7 @@ export function AuthCallbackPage() {
     exchangeAttemptedRef.current = true;
 
     const code = searchParams.get('code');
+    const state = searchParams.get('state');
     const errorParam = searchParams.get('error');
     const errorDescription = searchParams.get('error_description');
 
@@ -106,8 +107,8 @@ export function AuthCallbackPage() {
       return;
     }
 
-    // Exchange the code for tokens
-    exchangeCode(code);
+    // Exchange the code for tokens (bound with state for CSRF defense)
+    exchangeCode(code, state || undefined);
   }, [searchParams, exchangeCode, handleError]);
 
   const handleBackToLogin = useCallback(() => {

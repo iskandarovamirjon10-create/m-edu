@@ -125,6 +125,7 @@ const CertificatesPage     = lazyPage(() => import('@/pages/Certificates'), 'Cer
 const InventoryPage        = lazyPage(() => import('@/pages/Inventory'), 'InventoryPage');
 const EarlyWarningPage     = lazyPage(() => import('@/pages/EarlyWarning'), 'EarlyWarningPage');
 const AcademicRiskPage     = lazyPage(() => import('@/pages/AcademicRisk'), 'AcademicRiskPage');
+const GamificationHubPage  = lazyPage(() => import('@/pages/GamificationHub'), 'GamificationHubPage');
 const TeacherWorkloadPage  = lazyPage(() => import('@/pages/TeacherWorkload'), 'TeacherWorkloadPage');
 const ForecastingPage      = lazyPage(() => import('@/pages/Forecasting'), 'ForecastingPage');
 const ImportExportPage     = lazyPage(() => import('@/pages/ImportExport'), 'ImportExportPage');
@@ -139,6 +140,7 @@ const ParentPortalPage     = lazyPage(() => import('@/pages/ParentPortal'), 'Par
 const ExecutiveDashboardPage = lazyPage(() => import('@/pages/ExecutiveDashboard'), 'ExecutiveDashboardPage');
 const AutomationEnginePage = lazyPage(() => import('@/pages/AutomationEngine'), 'AutomationEnginePage');
 const TelegramPage         = lazyPage(() => import('@/pages/Telegram'), 'TelegramPage');
+const TelegramWebAppPage   = lazyPage(() => import('@/pages/TelegramWebApp'), 'TelegramWebAppPage');
 
 const SubjectsPage         = lazyPage(() => import('@/pages/Subjects'), 'default');
 const CurriculumPage       = lazyPage(() => import('@/pages/Curriculum'), 'default');
@@ -203,6 +205,7 @@ export const routeConfig: RouteConfig[] = [
   { path: '/reset-password', element: <ResetPasswordPage />, type: 'public', title: 'Set New Password', titleKey: 'auth.resetPasswordTitle' },
   { path: '/terms', element: <TermsPage />, type: 'none', title: 'Terms of Service', titleKey: 'terms.title' },
   { path: '/privacy', element: <PrivacyPage />, type: 'none', title: 'Privacy Policy', titleKey: 'privacy.title' },
+  { path: '/tg-app', element: <TelegramWebAppPage />, type: 'none', title: 'Telegram WebApp Hub' },
 
   /* -------- Protected (AppLayout) -------- */
   {
@@ -272,6 +275,7 @@ export const routeConfig: RouteConfig[] = [
       { path: 'inventory', element: <InventoryPage />, title: 'Inventory', titleKey: 'nav.inventory' },
       { path: 'early-warning', element: <EarlyWarningPage />, title: 'Early Warning', titleKey: 'earlyWarning.title' },
       { path: 'academic-risk', element: <AcademicRiskPage />, title: 'Academic Risk', titleKey: 'academicRisk.title' },
+      { path: 'gamification', element: <GamificationHubPage />, title: 'Gamification & M-Coins', titleKey: 'nav.gamification' },
       { path: 'teacher-workload', element: <TeacherWorkloadPage />, title: 'Teacher Workload', titleKey: 'teacherWorkload.title', roles: STAFF_ROLES },
       { path: 'forecast', element: <ForecastingPage />, title: 'Forecasting', titleKey: 'forecasting.title', roles: STAFF_ROLES },
       { path: 'import-export', element: <ImportExportPage />, title: 'Import / Export', titleKey: 'importExport.title', roles: STAFF_ROLES },
@@ -284,6 +288,7 @@ export const routeConfig: RouteConfig[] = [
       { path: 'ai-copilot', element: <AiCopilotPage />, title: 'AI Copilot', titleKey: 'nav.aiCopilot', roles: STAFF_ROLES },
       { path: 'parent-portal', element: <ParentPortalPage />, title: 'Parent Portal', titleKey: 'parentPortal.title' },
       { path: 'telegram', element: <TelegramPage />, title: 'Telegram', titleKey: 'nav.telegram' },
+      { path: 'tg-app', element: <TelegramWebAppPage />, title: 'Telegram WebApp Hub' },
       { path: 'executive-dashboard', element: <ExecutiveDashboardPage />, title: 'Executive Dashboard', titleKey: 'nav.executiveDashboard', roles: STAFF_ROLES },
       { path: 'automation', element: <AutomationEnginePage />, title: 'Automation', titleKey: 'nav.automation', roles: STAFF_ROLES },
       { path: 'payroll', element: <PayrollPage />, title: 'Payroll', titleKey: 'nav.payrollRuns', roles: STAFF_ROLES },
@@ -416,14 +421,42 @@ const EASE_APPLE = [0.22, 1, 0.36, 1] as const;
 function RouteMotion({ children }: { children: ReactNode }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
-      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-      exit={{ opacity: 0, y: -4, filter: 'blur(4px)' }}
-      transition={{ duration: 0.32, ease: EASE_APPLE }}
-      style={{ minHeight: 1 }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ duration: 0.28, ease: EASE_APPLE }}
+      style={{ minHeight: 1, transform: 'translateZ(0)' }}
     >
       {children}
     </motion.div>
+  );
+}
+
+function RouteLoadingFallback() {
+  return (
+    <div
+      className="relative w-full min-h-[50vh] flex flex-col justify-start pt-6 space-y-5 animate-pulse"
+      aria-busy="true"
+    >
+      {/* Top glowing progress bar */}
+      <div className="fixed top-0 inset-x-0 z-[100] h-[3px] overflow-hidden bg-transparent">
+        <motion.div
+          className="h-full w-full bg-gradient-to-r from-[#007AFF] via-[#AF52DE] to-[#34C759]"
+          initial={{ x: '-100%' }}
+          animate={{ x: '100%' }}
+          transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
+        />
+      </div>
+
+      {/* Shimmer skeleton matching Apple design cards */}
+      <div className="h-16 w-full rounded-3xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-24 rounded-2xl bg-black/[0.03] dark:bg-white/[0.03]" />
+        ))}
+      </div>
+      <div className="h-80 rounded-3xl bg-black/[0.03] dark:bg-white/[0.03]" />
+    </div>
   );
 }
 
@@ -464,7 +497,7 @@ export function AppRoutes() {
   const routes = <Routes>{routeConfig.map((route, i) => renderRoute(route, i))}</Routes>;
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<RouteLoadingFallback />}>
       {isPublicRoute ? (
         <AnimatePresence mode="wait" initial={false}>
           <RouteMotion key={location.pathname}>{routes}</RouteMotion>

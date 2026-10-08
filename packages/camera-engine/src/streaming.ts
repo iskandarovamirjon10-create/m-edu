@@ -397,8 +397,13 @@ export class FfmpegStreamIngester {
       }
       const eoi = data.indexOf(Buffer.from([0xff, 0xd9]), offset + 2);
       if (eoi === -1) {
-        // Incomplete frame — keep remainder, but bound it.
+        // Incomplete frame — keep the remainder (it starts at the SOI) and
+        // reset frameStart to 0. frameStart held an index into the *previous*
+        // data buffer; carrying it over would make the resumed frame slice
+        // away its own SOI bytes (frame corruption whenever a chunk boundary
+        // lands mid-frame, e.g. FF D8 split across stdout reads).
         this.frameBuffer = data.slice(offset);
+        this.frameStart = 0;
         return;
       }
       const frameEnd = eoi + 2;

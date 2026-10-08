@@ -30,7 +30,7 @@ export interface EmbedderConfig {
   embeddingDimension: number;
   /** Whether to L2-normalize the output */
   normalize: boolean;
-  /** Pixel mean values for preprocessing (BGR order) */
+  /** Pixel mean values for preprocessing (RGB order, matching the SFace tensor) */
   mean: [number, number, number];
   /** Pixel std values for preprocessing */
   std: [number, number, number];
@@ -41,8 +41,15 @@ const DEFAULT_CONFIG: EmbedderConfig = {
   inputSize: 112,
   embeddingDimension: 128,
   normalize: true,
-  mean: [127.5, 127.5, 127.5],
-  std: [128.0, 128.0, 128.0],
+  // OpenCV SFace contract (FaceRecognizerSFImpl::feature, opencv/modules/objdetect/src/face_recognize.cpp):
+  //   blobFromImage(aligned, scale=1, Size(112,112), mean=(0,0,0), swapRB=true, crop=false)
+  // i.e. raw BGR values in [0,255] with NO mean/std normalization. The previous
+  // ArcFace-style (x - 127.5) / 128 default compressed every face (same AND
+  // different person) into a narrow ~0.85+ cosine band, so the 0.6 threshold
+  // accepted strangers. Keep [0,0,0]/[1,1,1] as the SFace default; other
+  // models can still override mean/std explicitly.
+  mean: [0, 0, 0],
+  std: [1, 1, 1],
 };
 
 export class RealEmbedder {
@@ -187,9 +194,15 @@ export class RealEmbedder {
       alignedData = data;
     }
 
-    // Convert to NCHW float32 tensor with mean/std normalization.
-    // sharp raw output is RGB; SFace (OpenCV-zoo) expects BGR -> swap R/B,
-    // matching the detector and liveness preprocessing pipelines.
+    // Convert to NCHW float32 tensor.
+    // sharp raw output is already RGB, which is exactly what OpenCV's SFace
+    // consumes: FaceRecognizerSF::feature calls
+    //   blobFromImage(aligned, scale=1, Size(112,112), mean=(0,0,0), swapRB=true, crop=false)
+    // `swapRB=true` turns OpenCV's native BGR imread result into RGB for the
+    // network, so the network input is RGB — we must NOT swap to BGR here.
+    // Verified against real OpenCV FaceRecognizerSF: feeding RGB raw [0,255]
+    // reproduces its cosine scores exactly (F1=0.194, F2=0.590, manager=0.094);
+    // feeding BGR or applying (x-127.5)/128 does not.
     const channels = 3;
     const height = inputSize;
     const width = inputSize;
@@ -199,8 +212,7 @@ export class RealEmbedder {
       for (let h = 0; h < height; h++) {
         for (let w = 0; w < width; w++) {
           const srcIdx = (h * width + w) * channels + c;
-          const bgrSrcIdx = c === 0 ? srcIdx + 2 : c === 2 ? srcIdx - 2 : srcIdx;
-          const pixel = alignedData[bgrSrcIdx];
+          const pixel = alignedData[srcIdx];
           tensorData[c * height * width + h * width + w] =
             (pixel - this.config.mean[c]) / this.config.std[c];
         }
@@ -225,22 +237,34 @@ export class RealEmbedder {
       ? rawData
       : new Float32Array(rawData as ArrayLike<number>);
 
-    // Truncate or pad to expected dimension
-    if (embeddingData.length > this.config.embeddingDimension) {
-      embeddingData = embeddingData.slice(0, this.config.embeddingDimension);
-    } else if (embeddingData.length < this.config.embeddingDimension) {
-      const padded = new Float32Array(this.config.embeddingDimension);
-      padded.set(embeddingData);
-      embeddingData = padded;
+    // DIMENSION CONTRACT: the model output MUST match the configured
+    // embedding dimension. Silent padding/truncation used to produce
+    // plausible-looking but meaningless vectors — after a model swap or a
+    // config typo, recognition silently degraded to "nobody matches" with no
+    // error at all (regression: FE-1). Refuse loudly instead.
+    if (embeddingData.length !== this.config.embeddingDimension) {
+      throw new Error(
+        `Embedding dimension mismatch: model produced dim=${embeddingData.length}, ` +
+          `config expects dim=${this.config.embeddingDimension}. ` +
+          `Refusing to pad/truncate a biometric embedding.`,
+      );
     }
 
     // L2-normalize if configured
+    // Zero-norm must reject regardless of the normalize flag: a degenerate
+    // embedding vector would otherwise be returned when normalize:false and
+    // poison similarity math downstream (re-audit finding #9).
+    let norm = 0;
+    for (let i = 0; i < embeddingData.length; i++) {
+      norm += embeddingData[i] * embeddingData[i];
+    }
+    norm = Math.sqrt(norm);
+    if (norm === 0) {
+      throw new Error(
+        'Embedding norm is 0 — degenerate/zero embedding; refusing to normalize.',
+      );
+    }
     if (this.config.normalize) {
-      let norm = 0;
-      for (let i = 0; i < embeddingData.length; i++) {
-        norm += embeddingData[i] * embeddingData[i];
-      }
-      norm = Math.sqrt(norm);
       if (norm > 0) {
         for (let i = 0; i < embeddingData.length; i++) {
           embeddingData[i] /= norm;

@@ -1,10 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { computeInvoiceOutstanding } from '../payments/invoice-outstanding';
+import { AnomalyDetectionService } from './anomaly-detection.service';
 
 @Injectable()
 export class FinancialBrainService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => AnomalyDetectionService))
+    private readonly anomalyDetectionService: AnomalyDetectionService,
+  ) {}
 
   async getCashFlow(organizationId: string, startDate: Date, endDate: Date) {
     const [inflows, refunds, expenses, payroll] = await Promise.all([
@@ -25,7 +30,42 @@ export class FinancialBrainService {
     };
   }
 
-  async getMonthlyRevenueSeries(organizationId: string) {
+  async getRevenueSeries(organizationId: string, period?: string) {
+    if (period === '7D' || period === '30D') {
+      const days = period === '7D' ? 7 : 30;
+      const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      const rows = await this.prisma.$queryRaw<any[]>`
+        WITH payments AS (
+          SELECT DATE_TRUNC('day', "paidAt") AS bucket, COALESCE(SUM(amount), 0) AS total, COUNT(*)::int AS count
+          FROM "Payment"
+          WHERE "organizationId" = ${organizationId}::uuid AND status = 'PAID' AND "paidAt" >= ${startDate}
+          GROUP BY 1
+        ), refunds AS (
+          SELECT DATE_TRUNC('day', "processedAt") AS bucket, COALESCE(SUM(amount), 0) AS total
+          FROM "Refund"
+          WHERE "organizationId" = ${organizationId}::uuid AND status = 'PROCESSED' AND "processedAt" >= ${startDate}
+          GROUP BY 1
+        ), days AS (
+          SELECT bucket FROM payments UNION SELECT bucket FROM refunds
+        )
+        SELECT 
+          d.bucket, 
+          (COALESCE(p.total, 0) - COALESCE(r.total, 0))::decimal AS total, 
+          COALESCE(p.count, 0)::int AS count
+        FROM days d
+        LEFT JOIN payments p ON d.bucket = p.bucket
+        LEFT JOIN refunds r ON d.bucket = r.bucket
+        ORDER BY d.bucket ASC
+      `;
+      return rows.map((r) => ({
+        month: r.bucket instanceof Date ? r.bucket.toISOString() : String(r.bucket),
+        bucket: r.bucket,
+        total: Math.max(0, Number(r.total)),
+        count: Number(r.count),
+      }));
+    }
+
+    const limit = period === '90D' ? 3 : 12;
     const rows = await this.prisma.$queryRaw<any[]>`
       WITH payments AS (
         SELECT DATE_TRUNC('month', "paidAt") AS bucket, COALESCE(SUM(amount), 0) AS total, COUNT(*)::int AS count
@@ -48,15 +88,20 @@ export class FinancialBrainService {
         LEFT JOIN payments p ON m.bucket = p.bucket
         LEFT JOIN refunds r ON m.bucket = r.bucket
         ORDER BY m.bucket DESC
-        LIMIT 12
+        LIMIT ${limit}
       )
       SELECT * FROM latest ORDER BY bucket ASC
     `;
     return rows.map((r) => ({
+      month: r.bucket instanceof Date ? r.bucket.toISOString() : String(r.bucket),
       bucket: r.bucket,
-      total: Number(r.total),
+      total: Math.max(0, Number(r.total)),
       count: Number(r.count),
     }));
+  }
+
+  async getMonthlyRevenueSeries(organizationId: string) {
+    return this.getRevenueSeries(organizationId, '1Y');
   }
 
   async getDebtAndReceivables(organizationId: string) {
@@ -135,7 +180,15 @@ export class FinancialBrainService {
   }
 
   async getRevenueTimeSeries(organizationId: string, period: string) {
-    return []; // simplified
+    const monthlySeries = await this.getMonthlyRevenueSeries(organizationId);
+    
+    let sliceLength = monthlySeries.length;
+    if (period === '1M') sliceLength = 1;
+    if (period === '3M') sliceLength = 3;
+    if (period === '6M') sliceLength = 6;
+    if (period === '1Y') sliceLength = 12;
+
+    return monthlySeries.slice(-sliceLength);
   }
 
   async getGroupContribution(organizationId: string, groupId: string, start: Date, end: Date) {
@@ -143,7 +196,7 @@ export class FinancialBrainService {
       where: { id: groupId, organizationId },
     });
     if (!group) {
-      throw new Error('Group not found');
+      throw new NotFoundException('Group not found');
     }
     // Honest attribution would require allocating shared costs per group;
     // without that mapping we refuse to fabricate numbers.
@@ -157,7 +210,7 @@ export class FinancialBrainService {
 
   async getForecast(organizationId: string, days: number) {
     if (!Number.isFinite(days) || days <= 0) {
-      throw new Error('Forecast horizon must be a positive number of days');
+      throw new BadRequestException('Forecast horizon must be a positive number of days');
     }
 
     const lookbackStart = new Date(Date.now() - 90 * 86_400_000);
@@ -210,7 +263,7 @@ export class FinancialBrainService {
   }
 
   async detectAnomalies(organizationId: string, start?: Date, end?: Date) {
-    return [];
+    return this.anomalyDetectionService.detectAll(organizationId);
   }
 
   simulateWhatIf(baseCashFlow: any, dto: any) {

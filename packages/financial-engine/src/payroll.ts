@@ -6,10 +6,22 @@
  *   - All money math is integer-based in MINOR units (tiyin for UZS:
  *     1 UZS = 100 tiyin). Inputs arrive as Prisma Decimal/string/number;
  *     they are converted once, quantized to minor units, and every
- *     intermediate value is an integer. No float ever touches money.
+ *     intermediate value is an integer. Floats are used only at the
+ *     single external-input quantization boundary (toMinor) — including
+ *     its known binary-representation caveat — never inside the formulas.
  *   - Percentages are expressed in basis points (1% = 100 bp) so tax
  *     rates like 12% never introduce binary fractions.
  *   - Round-half-up at each quantization, matching accounting norms.
+ *
+ * Invariants (enforced by tests):
+ *   - Every numeric input must be finite; NaN/Infinity are rejected with
+ *     PayrollValidationError (a NaN input must never produce NaN money).
+ *   - gross − deductions − tax − employeeContribution === net (the applied
+ *     deduction lines always reconcile with the totals).
+ *   - Applied deductions never exceed gross: excess requests are capped
+ *     (priority: absence → late penalties → other deductions → employee
+ *     contribution) so a single oversized deduction cannot silently
+ *     swallow pay without being visible in the breakdown.
  *
  * Determinism contract is enforced by unit tests (payroll-engine.spec.ts).
  */
@@ -65,6 +77,19 @@ export interface PayrollInputs {
   otherDeduction?: DecimalLike;
   /** Income tax in basis points. Default: DEFAULT_TAX_BASIS_POINTS. */
   taxBasisPoints?: number;
+  /**
+   * Employee social/pension contribution withheld from the payout, in
+   * basis points (1% = 100 bp). Default 0 — jurisdictions differ, so the
+   * caller (organization payroll settings) must opt in explicitly.
+   * Applied after income tax; included in totals.deductionsMinor.
+   */
+  employeeContributionBasisPoints?: number;
+  /**
+   * Employer social contribution in basis points (1% = 100 bp).
+   * Default 0. Employer cost — reported in totals only, never deducted
+   * from the employee's net payout.
+   */
+  employerContributionBasisPoints?: number;
 }
 
 export interface PayrollLine {
@@ -86,6 +111,8 @@ export interface PayrollBreakdown {
     absenceMinor: number;
     lateMinor: number;
     otherDeductionMinor: number;
+    employeeContributionMinor: number;
+    employerContributionMinor: number;
     deductionsMinor: number;
     taxMinor: number;
     grossMinor: number;
@@ -104,7 +131,7 @@ export interface PayrollComputation {
   engineVersion: string;
 }
 
-export const PAYROLL_ENGINE_VERSION = '1.0.0';
+export const PAYROLL_ENGINE_VERSION = '1.1.0';
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -132,17 +159,17 @@ export function computePayroll(inputs: PayrollInputs): PayrollComputation {
   const bonusMinor = toMinor(inputs.bonus ?? 0);
   const otherDeductionMinor = toMinor(inputs.otherDeduction ?? 0);
   const latePerEventMinor = toMinor(inputs.latePenaltyPerEvent ?? 0);
-  const lateCount = Math.max(0, Math.trunc(inputs.lateCount ?? 0));
-  const absenceDays = Math.max(0, Math.trunc(inputs.absenceDays ?? 0));
+  const lateCount = Math.max(0, Math.trunc(asNumber(inputs.lateCount ?? 0)));
+  const absenceDays = Math.max(0, Math.trunc(asNumber(inputs.absenceDays ?? 0)));
   const overtimeHours = Math.max(0, asNumber(inputs.overtimeHours ?? 0));
   const overtimeMultiplier =
     inputs.overtimeMultiplier ?? DEFAULT_OVERTIME_MULTIPLIER;
   const workdays = inputs.workdaysInMonth ?? 21;
   const taxBp = inputs.taxBasisPoints ?? DEFAULT_TAX_BASIS_POINTS;
+  const employeeContributionBp = inputs.employeeContributionBasisPoints ?? 0;
+  const employerContributionBp = inputs.employerContributionBasisPoints ?? 0;
 
   const lines: PayrollLine[] = [];
-  let earningsMinor = 0;
-  let deductionsMinor = 0;
 
   // --- Base earnings (by salary type) --------------------------------------
   let baseMinor = 0;
@@ -171,18 +198,6 @@ export function computePayroll(inputs: PayrollInputs): PayrollComputation {
       });
     }
 
-    // Unpaid absence: pro-rata daily rate, deducted from gross.
-    if (absenceDays > 0) {
-      const dailyValue = Math.round(baseAmountMinor / workdays);
-      const absenceMinor = dailyValue * absenceDays;
-      deductionsMinor += absenceMinor;
-      lines.push({
-        key: 'ABSENCE',
-        label: 'Unpaid absence',
-        amountMinor: -absenceMinor,
-        detail: `${absenceDays}d × (base / ${workdays} workdays)`,
-      });
-    }
   } else if (inputs.salaryType === 'HOURLY') {
     // baseAmount holds the hourly rate for HOURLY teachers.
     const hours = Math.max(0, asNumber(inputs.hoursWorked ?? 0));
@@ -217,41 +232,82 @@ export function computePayroll(inputs: PayrollInputs): PayrollComputation {
     });
   }
 
-  earningsMinor = baseMinor + overtimeMinor;
+  const earningsMinor = baseMinor + overtimeMinor;
+  const grossMinor = earningsMinor + bonusMinor;
 
   // --- Bonus ----------------------------------------------------------------
   if (bonusMinor > 0) {
     lines.push({ key: 'BONUS', label: 'Bonus', amountMinor: bonusMinor });
   }
 
-  // --- Late penalties -------------------------------------------------------
+  // --- Pre-tax deductions (each capped so their sum never exceeds gross) ----
+  // Priority order when capping: absence → late penalties → other deductions.
+  // Capping keeps the reconciliation invariant
+  //   gross − deductions − tax − employeeContribution === net
+  // instead of silently clamping net to 0 while reporting the full
+  // (unpayable) deduction in the totals.
+  let appliedDeductions = 0;
+  const applyDeduction = (requestedMinor: number): number => {
+    const applied = Math.max(0, Math.min(requestedMinor, grossMinor - appliedDeductions));
+    appliedDeductions += applied;
+    return applied;
+  };
+
+  // Unpaid absence: pro-rata daily rate, deducted from gross.
+  let appliedAbsenceMinor = 0;
+  if (inputs.salaryType === 'MONTHLY' && absenceDays > 0) {
+    const dailyValue = Math.round(baseAmountMinor / workdays);
+    const requestedMinor = dailyValue * absenceDays;
+    appliedAbsenceMinor = applyDeduction(requestedMinor);
+    if (appliedAbsenceMinor > 0) {
+      lines.push({
+        key: 'ABSENCE',
+        label: 'Unpaid absence',
+        amountMinor: -appliedAbsenceMinor,
+        detail:
+          appliedAbsenceMinor < requestedMinor
+            ? `${absenceDays}d × (base / ${workdays} workdays), capped at remaining gross pay`
+            : `${absenceDays}d × (base / ${workdays} workdays)`,
+      });
+    }
+  }
+
+  // Late penalties.
+  let appliedLateMinor = 0;
   if (lateCount > 0 && latePerEventMinor > 0) {
-    const lateMinor = latePerEventMinor * lateCount;
-    deductionsMinor += lateMinor;
-    lines.push({
-      key: 'LATE_PENALTY',
-      label: 'Late penalties',
-      amountMinor: -lateMinor,
-      detail: `${lateCount} × ${fromMinor(latePerEventMinor)}`,
-    });
+    const requestedMinor = latePerEventMinor * lateCount;
+    appliedLateMinor = applyDeduction(requestedMinor);
+    if (appliedLateMinor > 0) {
+      lines.push({
+        key: 'LATE_PENALTY',
+        label: 'Late penalties',
+        amountMinor: -appliedLateMinor,
+        detail:
+          appliedLateMinor < requestedMinor
+            ? `${lateCount} × ${fromMinor(latePerEventMinor)}, capped at remaining gross pay`
+            : `${lateCount} × ${fromMinor(latePerEventMinor)}`,
+      });
+    }
   }
 
   // --- Other deductions -----------------------------------------------------
+  let appliedOtherMinor = 0;
   if (otherDeductionMinor > 0) {
-    deductionsMinor += otherDeductionMinor;
+    appliedOtherMinor = applyDeduction(otherDeductionMinor);
     lines.push({
       key: 'OTHER_DEDUCTION',
       label: 'Other deductions',
-      amountMinor: -otherDeductionMinor,
+      amountMinor: -appliedOtherMinor,
+      ...(appliedOtherMinor < otherDeductionMinor
+        ? { detail: `Requested ${fromMinor(otherDeductionMinor)}, capped at remaining gross pay` }
+        : {}),
     });
   }
 
-  // --- Gross ----------------------------------------------------------------
-  const grossMinor = earningsMinor + bonusMinor;
-
+  // --- Income tax ------------------------------------------------------------
   // Tax base may not go below zero: deductions cannot create a negative
   // taxable amount, and tax is never refunded through this engine.
-  const taxableMinor = Math.max(0, grossMinor - deductionsMinor);
+  const taxableMinor = Math.max(0, grossMinor - appliedDeductions);
   const taxMinor = Math.round(taxableMinor * bpRatio(taxBp));
   if (taxMinor > 0) {
     lines.push({
@@ -262,7 +318,29 @@ export function computePayroll(inputs: PayrollInputs): PayrollComputation {
     });
   }
 
-  const netMinor = Math.max(0, taxableMinor - taxMinor);
+  // --- Employee contribution (after income tax, capped at remaining pay) ----
+  const requestedContributionMinor = Math.round(grossMinor * bpRatio(employeeContributionBp));
+  const employeeContributionMinor = Math.max(
+    0,
+    Math.min(requestedContributionMinor, taxableMinor - taxMinor),
+  );
+  if (employeeContributionMinor > 0) {
+    appliedDeductions += employeeContributionMinor;
+    lines.push({
+      key: 'EMPLOYEE_CONTRIBUTION',
+      label: 'Employee social contribution',
+      amountMinor: -employeeContributionMinor,
+      detail:
+        employeeContributionMinor < requestedContributionMinor
+          ? `${employeeContributionBp / 100}% of gross, capped at remaining payout`
+          : `${employeeContributionBp / 100}% of ${fromMinor(grossMinor)}`,
+    });
+  }
+
+  // --- Employer contribution (employer cost, reported but never withheld) ---
+  const employerContributionMinor = Math.round(grossMinor * bpRatio(employerContributionBp));
+
+  const netMinor = Math.max(0, taxableMinor - taxMinor - employeeContributionMinor);
   lines.push({ key: 'NET', label: 'Net payout', amountMinor: netMinor });
 
   return {
@@ -273,12 +351,12 @@ export function computePayroll(inputs: PayrollInputs): PayrollComputation {
         earningsMinor,
         overtimeMinor,
         bonusMinor,
-        absenceMinor: absenceDays > 0 && inputs.salaryType === 'MONTHLY'
-          ? Math.round(Math.round(baseAmountMinor / workdays) * absenceDays)
-          : 0,
-        lateMinor: latePerEventMinor * lateCount,
-        otherDeductionMinor,
-        deductionsMinor,
+        absenceMinor: appliedAbsenceMinor,
+        lateMinor: appliedLateMinor,
+        otherDeductionMinor: appliedOtherMinor,
+        employeeContributionMinor,
+        employerContributionMinor,
+        deductionsMinor: appliedDeductions,
         taxMinor,
         grossMinor,
         netMinor,
@@ -287,7 +365,7 @@ export function computePayroll(inputs: PayrollInputs): PayrollComputation {
     grossAmount: fromMinor(grossMinor),
     netAmount: fromMinor(netMinor),
     taxAmount: fromMinor(taxMinor),
-    absenceDays,
+    absenceDays: inputs.salaryType === 'MONTHLY' ? absenceDays : 0,
     lateCount,
     engineVersion: PAYROLL_ENGINE_VERSION,
   };
@@ -300,32 +378,40 @@ function validate(inputs: PayrollInputs): void {
   }
   const base = asNumber(inputs.baseAmount);
   if (!Number.isFinite(base) || base < 0) {
-    throw new PayrollValidationError('baseAmount must be a non-negative number');
+    throw new PayrollValidationError('baseAmount must be a non-negative finite number');
   }
-  const rejectNegative = (v: DecimalLike, name: string) => {
-    if (v !== null && v !== undefined && asNumber(v) < 0) {
+  // Every numeric input must be finite: `NaN < 0` is false, so a plain
+  // negativity check silently accepts NaN and produces NaN money.
+  const requireFiniteNonNegative = (v: DecimalLike | number | undefined, name: string) => {
+    if (v === null || v === undefined) return;
+    const n = typeof v === 'number' ? v : asNumber(v);
+    if (!Number.isFinite(n)) {
+      throw new PayrollValidationError(`${name} must be a finite number (received: ${String(v)})`);
+    }
+    if (n < 0) {
       throw new PayrollValidationError(`${name} must be non-negative`);
     }
   };
-  rejectNegative(inputs.bonus, 'bonus');
-  rejectNegative(inputs.otherDeduction, 'otherDeduction');
-  rejectNegative(inputs.latePenaltyPerEvent, 'latePenaltyPerEvent');
-  rejectNegative(inputs.hoursWorked, 'hoursWorked');
-  if (asNumber(inputs.overtimeHours ?? 0) < 0) {
-    throw new PayrollValidationError('overtimeHours must be non-negative');
-  }
-  if (asNumber(inputs.overtimeMultiplier ?? DEFAULT_OVERTIME_MULTIPLIER) < 0) {
-    throw new PayrollValidationError('overtimeMultiplier must be non-negative');
-  }
-  if ((inputs.absenceDays ?? 0) < 0) {
-    throw new PayrollValidationError('absenceDays must be non-negative');
-  }
-  if ((inputs.lateCount ?? 0) < 0) {
-    throw new PayrollValidationError('lateCount must be non-negative');
-  }
+  requireFiniteNonNegative(inputs.bonus, 'bonus');
+  requireFiniteNonNegative(inputs.otherDeduction, 'otherDeduction');
+  requireFiniteNonNegative(inputs.latePenaltyPerEvent, 'latePenaltyPerEvent');
+  requireFiniteNonNegative(inputs.hoursWorked, 'hoursWorked');
+  requireFiniteNonNegative(inputs.overtimeHours, 'overtimeHours');
+  requireFiniteNonNegative(inputs.overtimeMultiplier, 'overtimeMultiplier');
+  requireFiniteNonNegative(inputs.absenceDays, 'absenceDays');
+  requireFiniteNonNegative(inputs.lateCount, 'lateCount');
+  requireFiniteNonNegative(inputs.lessonsCount, 'lessonsCount');
   const bp = inputs.taxBasisPoints ?? DEFAULT_TAX_BASIS_POINTS;
   if (!Number.isInteger(bp) || bp < 0 || bp > 10_000) {
     throw new PayrollValidationError('taxBasisPoints must be an integer in [0, 10000]');
+  }
+  const empBp = inputs.employeeContributionBasisPoints ?? 0;
+  if (!Number.isInteger(empBp) || empBp < 0 || empBp > 10_000) {
+    throw new PayrollValidationError('employeeContributionBasisPoints must be an integer in [0, 10000]');
+  }
+  const erBp = inputs.employerContributionBasisPoints ?? 0;
+  if (!Number.isInteger(erBp) || erBp < 0 || erBp > 10_000) {
+    throw new PayrollValidationError('employerContributionBasisPoints must be an integer in [0, 10000]');
   }
   const workdays = inputs.workdaysInMonth ?? 21;
   if (!Number.isInteger(workdays) || workdays <= 0 || workdays > 31) {

@@ -10,6 +10,19 @@ interface GlassTableProps {
   className?: string;
   /** Enable sticky table header */
   stickyHeader?: boolean;
+  /**
+   * Minimum width before the table starts scrolling horizontally.
+   *
+   * A data table is a legitimate horizontal scroller on a phone, but the
+   * scroll must happen INSIDE this component's wrapper: the wrapper is
+   * `overflow-x-auto`, so the page itself never gains a horizontal scrollbar.
+   */
+  minWidth?: number | string;
+  /**
+   * When a page renders its own stacked card list on phones, set this so the
+   * table is hidden below `md` instead of forcing a horizontal scroll.
+   */
+  hideOnMobile?: boolean;
 }
 
 interface ExtraProps {
@@ -25,10 +38,20 @@ interface ExtraProps {
   colSpan?: number;
 }
 
-export function GlassTable({ children, className = '', stickyHeader = false }: GlassTableProps) {
+export function GlassTable({
+  children,
+  className = '',
+  stickyHeader = false,
+  minWidth = 500,
+  hideOnMobile = false,
+}: GlassTableProps) {
+  const resolvedMinWidth = typeof minWidth === 'number' ? `${minWidth}px` : minWidth;
+
   return (
     <div
       className={[
+        'min-w-0 max-w-full',
+        hideOnMobile ? 'hidden md:block' : '',
         'bg-[var(--bg-glass)]',
         'backdrop-blur-[16px] [-webkit-backdrop-filter:blur(16px)_saturate(1.4)]',
         'border border-[var(--border-subtle)]',
@@ -38,8 +61,23 @@ export function GlassTable({ children, className = '', stickyHeader = false }: G
         className,
       ].join(' ')}
     >
-      <div className={stickyHeader ? 'overflow-auto max-h-[600px]' : 'overflow-x-auto'}>
-        <table className="w-full border-collapse min-w-[500px]">{children}</table>
+      {/* The scroller lives here — never on the page. `overscroll-contain`
+          stops a horizontal flick from chaining to the page, and the sticky
+          variant caps its height against the viewport instead of a fixed
+          600px that overflows short phones. */}
+      <div
+        className={
+          stickyHeader
+            ? 'medu-scroll-x overflow-y-auto max-h-[min(600px,70dvh)]'
+            : 'medu-scroll-x'
+        }
+      >
+        <table
+          className="w-full border-collapse"
+          style={{ minWidth: resolvedMinWidth }}
+        >
+          {children}
+        </table>
       </div>
     </div>
   );

@@ -59,7 +59,14 @@ export class RequestLoggerMiddleware implements NestMiddleware {
   private readonly logger = new Logger('HTTP');
 
   use(req: Request & { id?: string; user?: RequestUser }, res: Response, next: NextFunction) {
-    const requestId = (req.headers['x-request-id'] as string) || randomUUID();
+    // SECURITY: never trust inbound ids verbatim. An attacker can forge
+    // `\r\n`, unbounded strings or shared ids to corrupt logs / poison
+    // correlation. Accept only a tight public-safe shape, otherwise mint one.
+    const rawRequestId = req.headers['x-request-id'];
+    const requestId =
+      typeof rawRequestId === 'string' && /^[A-Za-z0-9._-]{8,64}$/.test(rawRequestId)
+        ? rawRequestId
+        : randomUUID();
     req.headers['x-request-id'] = requestId;
     res.setHeader('X-Request-Id', requestId);
     req.id = requestId;

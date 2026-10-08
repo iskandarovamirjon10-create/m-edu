@@ -1,38 +1,37 @@
 /* ============================================================
-   M-EDU Design System V2.2 — Apple Design Award Edition
+   M-EDU Design System v3.0 — "Aurora Prestige"
    Global Styles — Foundation Layer
    ------------------------------------------------------------
-   Source of truth: design-tokens.css
-   This file: reset, typography, glass materials, motion primitives,
-   tone system, focus rings, accessibility, print.
-   Component styles LIVE IN their React components.
+   Awwwards Site of the Day Edition
 
-   v2.1 → v2.2 "Smooth Premium":
-   - SPRING PHYSICS: barcha o'tishlar Apple spring curves
-   - REFINED GLASS: 5 qatlam depth (sheen + corner + grain + edge)
-   - BETTER MOTION: perceptual duration scale, staggered entrances
-   - MICRO-INTERACTIONS: hover lift, press down, focus ring pulse
-   - OPTICAL TYPE: font-optical-sizing + better tracking
-   - LIQUID DETAIL: inset highlights, chromatic edges, ambient glow
-   - GPU-SAFE: contain + transform-only animations
-   - ACCESSIBILITY: a11y-first, kontrast, reduced-motion
+   v2.2 → v3.0 YANGILIKLAR:
+   ✅ @property — animatable custom properties (glow, angle, shimmer)
+   ✅ @starting-style — JS'siz enter animations
+   ✅ OKLCH — perceptual color space
+   ✅ 6-QATLAMLI GLASS: sheen + corner + chromatic + specular + inner + grain
+   ✅ DOUBLE-RING FOCUS — Apple signature
+   ✅ MAGNETIC press — spring physics
+   ✅ CURSOR-FOLLOW spotlight (JS bridge)
+   ✅ TEXT-BALANCE everywhere
+   ✅ scrollbar-gutter: stable
+   ✅ interpolate-size + field-sizing
+   ✅ prefers-reduced-transparency support
+   ✅ Sub-pixel typography refinement
+   ✅ Modern scrollbar with progressive enhancement
+   ✅ Print preserves <details>, <dialog>
+   ✅ Full dark/light/HC/forced-colors/print coverage
 
-   v2.1 FIXES KEPT:
+   v2.2 FIXES KEPT:
    - @layer organization
-   - @view-transition SPA comment
-   - Dark mode z-index safety
-   - Tone system tokens
-   - Scrollbar hover on container only
-   - Print with dialogs preserved
+   - Tailwind compatibility
+   - Tone system
+   - Reduced-motion per component
    ============================================================ */
 
 /* ============================================================
    IMPORTS
-   ------------------------------------------------------------
-   ⚠️ @import render-blocking. Build tooling (Vite/PostCSS) inline qiladi.
-   Agar build tooling bo'lmasa — HTML'da <link> ishlating:
-   <link rel="preload" as="style" href="./design-tokens.css">
-   <link rel="stylesheet" href="./design-tokens.css">
+   ⚠️ Build tooling (Vite/PostCSS) @import'ni inline qiladi.
+   Fallback: HTML'da <link rel="preload">
    ============================================================ */
 
 @import './design-tokens.css';
@@ -44,45 +43,90 @@
 @layer reset, tokens, base, typography, glass, motion, focus, utilities, print;
 
 /* ============================================================
+   0. ANIMATABLE CUSTOM PROPERTIES (@property)
+   ------------------------------------------------------------
+   Bu "sehr" — endi gradient, glow, burchak silliq animatsiya
+   qilinadi. Oddiy CSS o'zgaruvchilar bunga qodir emas.
+   ============================================================ */
+
+@property --aurora-glow-x {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 50%;
+}
+
+@property --aurora-glow-y {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 50%;
+}
+
+@property --aurora-glow-alpha {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --aurora-conic-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@property --aurora-shimmer-x {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: -30%;
+}
+
+@property --aurora-hue-shift {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+
+@property --aurora-scale {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
+/* ============================================================
    1. MOTION PRIMITIVES — Apple-calibrated
    ------------------------------------------------------------
-   Har bir curve real fizikadan olingan.
-   Spring curves — CSS `linear()` (JS kerak emas).
+   Har bir curve haqiqiy fizikadan olingan.
+   Native CSS springs — JS kerak emas.
    ============================================================ */
 
 @layer tokens {
   :root {
-    /* ── Apple's signature curves ── */
-    --ease-apple-in:     cubic-bezier(0.42, 0, 1, 1);
-    --ease-apple-out:    cubic-bezier(0, 0, 0.58, 1);
-    --ease-apple-inout:  cubic-bezier(0.42, 0, 0.58, 1);
-    --ease-emphasized:   cubic-bezier(0.22, 1, 0.36, 1);
-    --ease-overshoot:    cubic-bezier(0.34, 1.56, 0.64, 1);
-    --ease-soft:         cubic-bezier(0.4, 0, 0.2, 1);
-    --ease-snappy:       cubic-bezier(0.5, 0, 0, 1);
-    --ease-glide:        cubic-bezier(0.16, 1, 0.3, 1);
+    /* ── Apple signature curves ── */
+    --ease-apple-in:    cubic-bezier(0.42, 0, 1, 1);
+    --ease-apple-out:   cubic-bezier(0, 0, 0.58, 1);
+    --ease-apple-inout: cubic-bezier(0.42, 0, 0.58, 1);
+    --ease-emphasized:  cubic-bezier(0.22, 1, 0.36, 1);      /* iOS default */
+    --ease-overshoot:   cubic-bezier(0.34, 1.56, 0.64, 1);   /* bouncy */
+    --ease-soft:        cubic-bezier(0.4, 0, 0.2, 1);        /* Material */
+    --ease-snappy:      cubic-bezier(0.5, 0, 0, 1);
+    --ease-glide:       cubic-bezier(0.16, 1, 0.3, 1);       /* expo out */
+    --ease-liquid:      cubic-bezier(0.65, 0, 0.35, 1);      /* symm */
 
     /* ── Perceptual duration scale ── */
-    --dur-instant:  90ms;    /* press down */
-    --dur-fast:     180ms;   /* hover */
-    --dur-normal:   260ms;   /* state change */
-    --dur-slow:     420ms;   /* modal, sheet */
-    --dur-slower:   680ms;   /* page transitions */
-    --dur-ambient:  12s;     /* background drift */
+    --dur-instant:  90ms;
+    --dur-fast:     180ms;
+    --dur-normal:   260ms;
+    --dur-slow:     420ms;
+    --dur-slower:   680ms;
+    --dur-ambient:  12s;
 
-    /* ── Native CSS spring (modern browsers) ── */
-    --spring-snappy:  linear(0, 0.42 12%, 0.98 34%, 1.02 46%, 1 100%);
-    --spring-smooth:  linear(0, 0.2 18%, 0.76 44%, 1.02 62%, 1 100%);
-    --spring-soft:    linear(0, 0.1 24%, 0.6 52%, 0.98 76%, 1 100%);
-    --spring-bouncy:  linear(0, 0.6 20%, 1.05 40%, 0.95 60%, 1.02 80%, 1 100%);
+    /* ── Native CSS springs (linear() = real spring) ── */
+    --spring-snappy: linear(0, 0.42 12%, 0.98 34%, 1.02 46%, 1 100%);
+    --spring-smooth: linear(0, 0.2 18%, 0.76 44%, 1.02 62%, 1 100%);
+    --spring-soft:   linear(0, 0.1 24%, 0.6 52%, 0.98 76%, 1 100%);
+    --spring-bouncy: linear(0, 0.6 20%, 1.05 40%, 0.95 60%, 1.02 80%, 1 100%);
+    --spring-magnetic: linear(0, 0.3 15%, 0.85 40%, 1.05 55%, 0.98 75%, 1 100%);
 
-    /* ── Shadow tokens — real light model ── */
-    --shadow-ambient: 0 1px 2px rgba(15, 23, 42, 0.04);
-    --shadow-direct:  0 4px 12px -4px rgba(15, 23, 42, 0.08);
-    --shadow-ambient-lg: 0 4px 8px rgba(15, 23, 42, 0.05);
-    --shadow-direct-lg:  0 24px 60px -12px rgba(15, 23, 42, 0.14);
-
-    /* ── Radius scale — geometry ── */
+    /* ── Radius geometry ── */
     --radius-xs:   6px;
     --radius-sm:   8px;
     --radius-md:   10px;
@@ -92,21 +136,48 @@
     --radius-3xl:  28px;
     --radius-4xl:  36px;
     --radius-pill: 9999px;
+
+    /* ── Real light model shadows ── */
+    --shadow-ambient: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-direct:  0 4px 12px -4px rgba(15, 23, 42, 0.08);
+    --shadow-ambient-lg: 0 4px 8px rgba(15, 23, 42, 0.05);
+    --shadow-direct-lg:  0 24px 60px -12px rgba(15, 23, 42, 0.14);
+    --shadow-float:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 4px 12px -4px rgba(15, 23, 42, 0.06),
+      0 12px 32px -8px rgba(15, 23, 42, 0.08);
+    --shadow-lifted:
+      0 2px 4px rgba(15, 23, 42, 0.04),
+      0 12px 40px -8px rgba(15, 23, 42, 0.10),
+      0 0 0 1px rgba(15, 23, 42, 0.02);
+    --shadow-floating:
+      0 4px 8px rgba(15, 23, 42, 0.05),
+      0 24px 60px -12px rgba(15, 23, 42, 0.16),
+      0 0 0 1px rgba(15, 23, 42, 0.03);
+
+    /* ── Focus glow (Apple double-ring signature) ── */
+    --focus-ring-inner: 0 0 0 2px var(--bg-surface, #fff);
+    --focus-ring-outer: 0 0 0 5px color-mix(in srgb, var(--primary, #007AFF) 40%, transparent);
+    --focus-glow:
+      0 0 0 2px var(--bg-surface, #fff),
+      0 0 0 5px color-mix(in srgb, var(--primary, #007AFF) 40%, transparent),
+      0 0 24px -4px color-mix(in srgb, var(--primary, #007AFF) 30%, transparent);
   }
 
-  /* Fallback for browsers without linear() */
+  /* Fallback for older browsers without linear() */
   @supports not (transition-timing-function: linear(0, 1)) {
     :root {
-      --spring-snappy: var(--ease-emphasized);
-      --spring-smooth: var(--ease-emphasized);
-      --spring-soft:   var(--ease-emphasized);
-      --spring-bouncy: var(--ease-overshoot);
+      --spring-snappy:   var(--ease-emphasized);
+      --spring-smooth:   var(--ease-emphasized);
+      --spring-soft:     var(--ease-emphasized);
+      --spring-bouncy:   var(--ease-overshoot);
+      --spring-magnetic: var(--ease-overshoot);
     }
   }
 }
 
 /* ============================================================
-   2. BASE RESET — surgical
+   2. BASE RESET — surgical, precise
    ============================================================ */
 
 @layer reset {
@@ -115,18 +186,18 @@
     margin: 0;
     padding: 0;
     min-width: 0;
+    min-height: 0;
   }
 
   html {
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* text-rendering: optimizeLegibility olib tashlandi —
-       legacy, kerning default'da yoqilgan */
+    text-rendering: geometricPrecision;
     font-feature-settings:
-      'cv01', 'cv02', 'cv03', 'cv04', 'cv11', /* Inter variants */
-      'ss01', /* alternate digits */
-      'tnum' 0; /* tabular only where needed */
+      'cv01', 'cv02', 'cv03', 'cv04', 'cv11',
+      'ss01', 'ss03',
+      'tnum' 0, 'zero' 0;
     font-optical-sizing: auto;
     font-kerning: normal;
     text-size-adjust: 100%;
@@ -137,6 +208,8 @@
     interpolate-size: allow-keywords;
     accent-color: var(--primary, #007AFF);
     color-scheme: light dark;
+    /* Sub-pixel rendering */
+    -webkit-font-feature-settings: 'liga' 1, 'kern' 1;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -145,27 +218,32 @@
 
   body {
     font-family: var(--font-body);
-    font-size: var(--text-body);
+    font-size: var(--text-body, 1rem);
     font-weight: 400;
     color: var(--text-primary);
     background: var(--bg-page);
     min-height: 100dvh;
     line-height: 1.6;
     letter-spacing: -0.005em;
-    overflow-x: clip;
-    /* Smooth theme transition — only color props, not transform */
+    text-rendering: optimizeLegibility;
     transition:
       background-color var(--dur-slower) var(--ease-soft),
-      color           var(--dur-normal)  var(--ease-soft);
+      color            var(--dur-normal)  var(--ease-soft);
   }
 
-  /* Touch-friendly taps */
+  /* ── Tap-targets & user-select ── */
   button, [role="button"] {
     user-select: none;
     -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
   }
 
-  /* Media — clean block layout */
+  button:disabled,
+  [role="button"][aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  /* ── Media — clean block layout ── */
   img, svg, video, canvas {
     display: block;
     max-width: 100%;
@@ -174,14 +252,14 @@
 
   svg { fill: none; }
 
-  /* Form controls inherit */
+  /* ── Forms inherit ── */
   input, button, textarea, select {
     font: inherit;
     color: inherit;
     letter-spacing: inherit;
   }
 
-  /* Number input spinners removed */
+  /* Number spinners removed */
   input[type="number"]::-webkit-outer-spin-button,
   input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -189,18 +267,45 @@
   }
   input[type="number"] { -moz-appearance: textfield; }
 
-  /* Better selection */
+  /* Search input clean */
+  input[type="search"]::-webkit-search-decoration,
+  input[type="search"]::-webkit-search-cancel-button,
+  input[type="search"]::-webkit-search-results-button {
+    -webkit-appearance: none;
+  }
+
+  /* ── Selection — premium ── */
   ::selection {
+    background: color-mix(in srgb, var(--primary, #007AFF) 22%, transparent);
+    color: var(--text-primary);
+    text-shadow: none;
+  }
+
+  ::-moz-selection {
     background: color-mix(in srgb, var(--primary, #007AFF) 22%, transparent);
     color: var(--text-primary);
   }
 
-  /* Caret color */
-  :root { caret-color: var(--primary, #007AFF); }
+  /* ── Caret ── */
+  :root {
+    caret-color: var(--primary, #007AFF);
+  }
+
+  /* ── Details/summary smooth ── */
+  details > summary {
+    cursor: pointer;
+    list-style: none;
+  }
+  details > summary::-webkit-details-marker { display: none; }
+
+  /* ── Field sizing auto-grow ── */
+  textarea, input {
+    field-sizing: content;
+  }
 }
 
 /* ============================================================
-   3. BACKGROUNDS & AMBIENT
+   3. BACKGROUNDS & AMBIENT — premium orbs
    ============================================================ */
 
 @layer base {
@@ -208,9 +313,7 @@
   .bg-surface  { background: var(--bg-surface); }
   .bg-elevated { background: var(--bg-elevated); }
 
-  /* ── Ambient orb — organic float ──
-     will-change YO'Q: transform animatsiya allaqachon GPU layer yaratadi.
-     Qo'shimcha `will-change` memory pressure keltiradi. */
+  /* ── Ambient orbs — organic, GPU-safe ── */
   .orb {
     position: fixed;
     pointer-events: none;
@@ -218,21 +321,32 @@
     filter: blur(80px);
     opacity: 0.4;
     z-index: 0;
-    animation: orb-float var(--dur-ambient) ease-in-out infinite alternate;
-    /* GPU hint: transform animatsiya — auto layer */
+    will-change: transform;
     transform: translate3d(0, 0, 0);
-    contain: strict;
+    contain: layout paint;
+    /* ✨ Chromatic drift via hue rotation */
+    animation:
+      orb-float var(--dur-ambient) ease-in-out infinite alternate,
+      orb-hue 24s linear infinite;
   }
 
-  .orb-cyan-1   {
+  .orb-cyan-1 {
     width: 520px; height: 520px;
     top: -10%; left: -8%;
     background: radial-gradient(circle, rgba(0, 199, 255, 0.45), transparent 70%);
   }
+
   .orb-indigo-1 {
     width: 560px; height: 560px;
     bottom: -12%; right: -10%;
     background: radial-gradient(circle, rgba(88, 86, 214, 0.45), transparent 70%);
+  }
+
+  .orb-magenta-1 {
+    width: 480px; height: 480px;
+    top: 40%; right: -15%;
+    background: radial-gradient(circle, rgba(255, 45, 85, 0.35), transparent 70%);
+    opacity: 0.28;
   }
 
   @keyframes orb-float {
@@ -240,30 +354,67 @@
     100% { transform: translate3d(40px, -30px, 0) scale(1.08); }
   }
 
+  @keyframes orb-hue {
+    from { filter: blur(80px) hue-rotate(0deg); }
+    to   { filter: blur(80px) hue-rotate(15deg); }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .orb { animation: none; }
   }
+
+  /* ── Ambient grid overlay ── */
+  .bg-grid {
+    position: relative;
+  }
+
+  .bg-grid::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(
+        to right,
+        color-mix(in srgb, var(--text-primary) 4%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--text-primary) 4%, transparent) 1px,
+        transparent 1px
+      );
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at center, black, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black, transparent 70%);
+    z-index: 0;
+  }
+
+  .bg-grid > * { position: relative; z-index: 1; }
 }
 
 /* ============================================================
-   4. GLASS MATERIAL SYSTEM
+   4. GLASS MATERIAL SYSTEM — 6 qatlam premium
    ------------------------------------------------------------
-   5 qatlam: base → sheen → corner → chromatic → content
-   Har bir qatlam statik (paint once) → GPU yuklanmaydi.
+   Layer 1: base (blur + tint)
+   Layer 2: sheen (top light)
+   Layer 3: corner (diagonal highlight)
+   Layer 4: chromatic edge (RGB split)
+   Layer 5: inner glow (specular)
+   Layer 6: grain (noise texture)
    ============================================================ */
 
 @layer glass {
-  /* ── Basic glass — for large surfaces ── */
+  /* ── Basic glass ── */
   .glass {
     background: var(--bg-glass);
     backdrop-filter: blur(16px) saturate(1.6);
     -webkit-backdrop-filter: blur(16px) saturate(1.6);
     border: 1px solid var(--border-glass);
-    /* GPU-safe: contain */
     contain: layout style;
   }
 
-  /* ── Premium glass card ── */
+  /* ── Premium glass card — 6 qatlam ── */
   .glass-card {
     position: relative;
     overflow: hidden;
@@ -274,10 +425,12 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     box-shadow:
-      var(--shadow-md, var(--shadow-ambient)),
-      inset 0 1px 0 rgba(255, 255, 255, 0.5);
+      var(--shadow-float),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06);
     contain: layout style paint;
-    /* Smooth state transitions with spring physics */
+
+    /* ✨ Spring physics for all state changes */
     transition:
       background-color var(--dur-normal) var(--ease-soft),
       border-color     var(--dur-normal) var(--ease-soft),
@@ -301,17 +454,18 @@
     z-index: 0;
   }
 
-  /* Layer 2 — Corner highlight (diagonal light source) */
+  /* Layer 2 — Corner highlight + Layer 3 — chromatic edge */
   .glass-card::after {
     content: '';
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.18) 0%,
-      transparent 45%
-    );
+    background:
+      linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.18) 0%,
+        transparent 45%
+      );
     mix-blend-mode: overlay;
     pointer-events: none;
     z-index: 0;
@@ -319,39 +473,45 @@
 
   .glass-card > * { position: relative; z-index: 1; }
 
-  /* ── Hover — subtle lift, warmer glass ── */
+  /* ── Hover — premium lift + specular reveal ── */
   .glass-card:hover {
     background: var(--bg-card-hover);
     box-shadow:
-      var(--shadow-lg, var(--shadow-direct-lg)),
-      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      var(--shadow-lifted),
+      inset 0 1px 0 rgba(255, 255, 255, 0.65),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    border-color: color-mix(in srgb, var(--primary, #007AFF) 12%, var(--border));
   }
 
-  /* ── Interactive variant — cursor pointer + tactile lift ── */
+  /* ── Interactive variant — magnetic press ── */
   .glass-card--interactive {
     cursor: pointer;
   }
+
   .glass-card--interactive:hover {
     transform: translateY(-2px);
-    /* Add chromatic edge glow on hover */
-    border-color: color-mix(in srgb, var(--primary, #007AFF) 14%, var(--border));
-  }
-  .glass-card--interactive:active {
-    transform: translateY(0) scale(0.998);
-    transition-duration: var(--dur-instant);
-  }
-  .glass-card--interactive:focus-visible {
-    outline: 2px solid var(--border-focus, var(--primary, #007AFF));
-    outline-offset: 2px;
   }
 
-  /* ── Elevated — stronger depth ── */
+  .glass-card--interactive:active {
+    transform: translateY(0) scale(0.995);
+    transition-duration: var(--dur-instant);
+  }
+
+  .glass-card--interactive:focus-visible {
+    outline: none;
+    box-shadow:
+      var(--shadow-float),
+      var(--focus-glow);
+  }
+
+  /* ── Elevated — deeper depth ── */
   .glass-card--elevated {
     backdrop-filter: blur(28px) saturate(1.7);
     -webkit-backdrop-filter: blur(28px) saturate(1.7);
     box-shadow:
-      var(--shadow-xl, var(--shadow-direct-lg)),
-      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      var(--shadow-floating),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08);
   }
 
   /* ── Dim glass — modal overlays ── */
@@ -362,16 +522,54 @@
     -webkit-backdrop-filter: blur(24px) saturate(1.4);
   }
 
-  /* ── Grain — subtle noise texture (dark mode banding kamaytiradi) ── */
+  /* ── Grain — noise texture ── */
   .glass-card--grain {
     background-image:
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
     background-size: 200px 200px;
   }
 
-  /* ── Fallback — no backdrop-filter support ── */
+  /* ── Aurora glow — cursor-following spotlight ── */
+  .glass-card--aurora {
+    --aurora-glow-x: 50%;
+    --aurora-glow-y: 50%;
+    --aurora-glow-alpha: 0;
+  }
+
+  .glass-card--aurora::after {
+    background:
+      linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.18) 0%,
+        transparent 45%
+      ),
+      radial-gradient(
+        600px circle at var(--aurora-glow-x) var(--aurora-glow-y),
+        rgba(255, 255, 255, 0.32),
+        transparent 40%
+      );
+    opacity: calc(0.6 + var(--aurora-glow-alpha) * 0.4);
+    transition: opacity var(--dur-slow) var(--ease-soft);
+  }
+
+  .glass-card--aurora:hover {
+    --aurora-glow-alpha: 1;
+  }
+
+  /* ── Fallback — no backdrop-filter ── */
   @supports not (backdrop-filter: blur(1px)) {
     .glass, .glass-card {
+      background: var(--bg-surface);
+    }
+  }
+
+  /* ✨ Prefers-reduced-transparency — turn off blur */
+  @media (prefers-reduced-transparency: reduce) {
+    .glass,
+    .glass-card,
+    .glass-card--elevated {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
       background: var(--bg-surface);
     }
   }
@@ -379,12 +577,9 @@
 
 /* ============================================================
    5. TYPOGRAPHY SCALE — fluid, optical, refined
-   ------------------------------------------------------------
-   Optical sizing + fluid clamp() — har bir ekranda mukammal.
    ============================================================ */
 
 @layer typography {
-  /* ── Display & headings — fluid, tight tracking ── */
   .text-display {
     font-family: var(--font-heading);
     font-size: clamp(2rem, 1.5rem + 2.5vw, var(--text-display, 3rem));
@@ -429,10 +624,10 @@
   }
 
   /* ── Body ── */
-  .text-body-lg  { font-size: var(--text-body-lg); line-height: 1.6; text-wrap: pretty; }
-  .text-body     { font-size: var(--text-body);    line-height: 1.6; text-wrap: pretty; }
-  .text-body-sm  { font-size: var(--text-body-sm); line-height: 1.55; text-wrap: pretty; }
-  .text-caption  { font-size: var(--text-caption); line-height: 1.5; }
+  .text-body-lg { font-size: var(--text-body-lg); line-height: 1.6; text-wrap: pretty; }
+  .text-body    { font-size: var(--text-body);    line-height: 1.6; text-wrap: pretty; }
+  .text-body-sm { font-size: var(--text-body-sm); line-height: 1.55; text-wrap: pretty; }
+  .text-caption { font-size: var(--text-caption); line-height: 1.5; }
 
   .text-label {
     font-size: var(--text-label);
@@ -449,7 +644,7 @@
     font-feature-settings: 'ss01';
   }
 
-  /* ── Numeric — tabular alignment ── */
+  /* ── Numeric alignment ── */
   .text-numeric {
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum', 'zero';
@@ -495,6 +690,29 @@
     -webkit-text-fill-color: transparent;
   }
 
+  /* ✨ Chromatic gradient (iridescent) */
+  .text-gradient-chromatic {
+    background: linear-gradient(
+      100deg,
+      #007AFF 0%,
+      #5856D6 25%,
+      #AF52DE 50%,
+      #FF2D55 75%,
+      #FF9500 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: gradient-shift 8s ease-in-out infinite;
+  }
+
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+  }
+
   /* ── Truncation & wrapping ── */
   .text-truncate {
     overflow: hidden;
@@ -507,7 +725,7 @@
 }
 
 /* ============================================================
-   6. TEXT COLOR UTILITIES — token-based
+   6. TEXT COLOR UTILITIES
    ============================================================ */
 
 @layer typography {
@@ -518,7 +736,6 @@
   .text-inverse   { color: var(--text-inverse); }
   .text-disabled  { color: var(--text-disabled); }
 
-  /* Tone text — token-based */
   .text-tone-blue   { color: var(--tone-blue-fg,   #007AFF); }
   .text-tone-green  { color: var(--tone-green-fg,  #34C759); }
   .text-tone-orange { color: var(--tone-orange-fg, #FF9500); }
@@ -539,9 +756,9 @@
 }
 
 /* ============================================================
-   8. FOCUS — accessibility & beauty
+   8. FOCUS — Apple double-ring signature
    ------------------------------------------------------------
-   Premium focus: ring + soft pulse (motion-safe).
+   Ichki oq halqa + tashqi accent + glow = Apple uslubi.
    ============================================================ */
 
 @layer focus {
@@ -552,10 +769,10 @@
 
   .focus-ring:focus-visible {
     outline-color: var(--border-focus, var(--primary, #007AFF));
-    box-shadow: 0 0 0 3px var(--focus-ring);
+    box-shadow: var(--focus-glow);
   }
 
-  /* Global focus — animated offset */
+  /* Global focus-visible — animated offset */
   :focus-visible {
     outline: 2px solid var(--border-focus, var(--primary, #007AFF));
     outline-offset: 2px;
@@ -565,12 +782,12 @@
       box-shadow    var(--dur-fast) var(--spring-snappy);
   }
 
-  /* Mouse users — clean outline */
+  /* Mouse users — clean */
   :focus:not(:focus-visible) {
     outline: none;
   }
 
-  /* High contrast — stronger rings */
+  /* High contrast — stronger */
   @media (prefers-contrast: more) {
     :focus-visible {
       outline-width: 3px;
@@ -578,18 +795,33 @@
     }
   }
 
-  /* Premium focus pulse — soft ring expand (motion-safe) */
+  /* Forced colors */
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline: 2px solid Highlight !important;
+      outline-offset: 3px;
+    }
+  }
+
+  /* ✨ Premium focus pulse */
   @media (prefers-reduced-motion: no-preference) {
     .focus-pulse:focus-visible {
-      box-shadow:
-        0 0 0 3px var(--focus-ring),
-        0 0 0 0 color-mix(in srgb, var(--primary, #007AFF) 40%, transparent);
       animation: focus-pulse-expand 1.6s var(--ease-apple-out) infinite;
     }
 
     @keyframes focus-pulse-expand {
-      0%   { box-shadow: 0 0 0 3px var(--focus-ring), 0 0 0 0 color-mix(in srgb, var(--primary, #007AFF) 40%, transparent); }
-      100% { box-shadow: 0 0 0 3px var(--focus-ring), 0 0 0 8px color-mix(in srgb, var(--primary, #007AFF) 0%, transparent); }
+      0% {
+        box-shadow:
+          var(--focus-ring-inner),
+          var(--focus-ring-outer),
+          0 0 0 0 color-mix(in srgb, var(--primary, #007AFF) 40%, transparent);
+      }
+      100% {
+        box-shadow:
+          var(--focus-ring-inner),
+          var(--focus-ring-outer),
+          0 0 0 10px color-mix(in srgb, var(--primary, #007AFF) 0%, transparent);
+      }
     }
   }
 }
@@ -599,7 +831,7 @@
    ============================================================ */
 
 @layer motion {
-  .transition-fast   {
+  .transition-fast {
     transition-duration: var(--dur-fast);
     transition-timing-function: var(--ease-soft);
   }
@@ -607,33 +839,33 @@
     transition-duration: var(--dur-normal);
     transition-timing-function: var(--ease-soft);
   }
-  .transition-slow   {
+  .transition-slow {
     transition-duration: var(--dur-slow);
     transition-timing-function: var(--ease-soft);
   }
 
-  /* Spring transitions — native CSS */
-  .transition-spring-snappy { transition-timing-function: var(--spring-snappy); }
-  .transition-spring-smooth { transition-timing-function: var(--spring-smooth); }
-  .transition-spring-soft   { transition-timing-function: var(--spring-soft); }
-  .transition-spring-bouncy { transition-timing-function: var(--spring-bouncy); }
+  /* Spring transitions */
+  .transition-spring-snappy   { transition-timing-function: var(--spring-snappy); }
+  .transition-spring-smooth   { transition-timing-function: var(--spring-smooth); }
+  .transition-spring-soft     { transition-timing-function: var(--spring-soft); }
+  .transition-spring-bouncy   { transition-timing-function: var(--spring-bouncy); }
+  .transition-spring-magnetic { transition-timing-function: var(--spring-magnetic); }
 
-  /* ⚠️ will-change — vaqtinchalik hint.
-     Doimiy qo'shilsa GPU layer abadiy ushlanadi → memory pressure.
-     Faqat animatsiya davomida qo'shing. Reduced-motion'da o'chiriladi. */
+  /* ✨ GPU-safe will-change — only during animation */
   @media (prefers-reduced-motion: no-preference) {
     .will-transform { will-change: transform; }
     .will-opacity   { will-change: opacity; }
     .will-both      { will-change: transform, opacity; }
+    .will-content   { will-change: content; }
   }
 }
 
 /* ============================================================
-   10. KEYFRAME ANIMATIONS — Apple-quality entrances
+   10. KEYFRAME ANIMATIONS — Apple-quality
    ============================================================ */
 
 @layer motion {
-  /* ── Page enter — blur + slide + spring ── */
+  /* ── Page enter ── */
   @keyframes page-enter {
     from {
       opacity: 0;
@@ -648,7 +880,6 @@
   }
   .page-enter {
     animation: page-enter var(--dur-slow) var(--ease-emphasized) both;
-    will-change: opacity, transform, filter;
   }
 
   /* ── Fade in ── */
@@ -660,17 +891,16 @@
     animation: fade-in var(--dur-normal) var(--ease-emphasized) both;
   }
 
-  /* ── Slide up — cards, toasts ── */
+  /* ── Slide up ── */
   @keyframes slide-up {
     from { opacity: 0; transform: translate3d(0, 12px, 0); }
     to   { opacity: 1; transform: translate3d(0, 0, 0); }
   }
   .slide-up {
     animation: slide-up var(--dur-normal) var(--ease-emphasized) both;
-    will-change: opacity, transform;
   }
 
-  /* ── Slide down — dropdowns ── */
+  /* ── Slide down ── */
   @keyframes slide-down {
     from { opacity: 0; transform: translate3d(0, -12px, 0); }
     to   { opacity: 1; transform: translate3d(0, 0, 0); }
@@ -679,7 +909,7 @@
     animation: slide-down var(--dur-normal) var(--ease-emphasized) both;
   }
 
-  /* ── Scale in — buttons, chips ── */
+  /* ── Scale in ── */
   @keyframes scale-in {
     from { opacity: 0; transform: scale(0.96); }
     to   { opacity: 1; transform: scale(1); }
@@ -698,7 +928,7 @@
     to   { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
   }
 
-  /* ── Shimmer — linear timing (cubic-bezier notekis) ── */
+  /* ── Shimmer — skeleton ── */
   @keyframes shimmer {
     0%   { background-position: -800px 0; }
     100% { background-position:  800px 0; }
@@ -722,22 +952,22 @@
     100% { transform: scale(1.6); opacity: 0; }
   }
 
-  /* ── Conic rotate — hero rings ── */
+  /* ── Conic rotate ── */
   @keyframes conic-rotate {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
+    from { --aurora-conic-angle: 0deg; }
+    to   { --aurora-conic-angle: 360deg; }
   }
 
   .conic-ring {
     background: conic-gradient(
-      from 0deg,
+      from var(--aurora-conic-angle),
       #007AFF, #5856D6, #AF52DE, #FF2D55, #FF9500, #34C759, #007AFF
     );
     animation: conic-rotate 12s linear infinite;
-    will-change: transform;
+    will-change: --aurora-conic-angle;
   }
 
-  /* ── Bell shake — notification ping ── */
+  /* ── Bell shake ── */
   @keyframes bell-shake {
     0%, 100% { transform: rotate(0); }
     10%      { transform: rotate(-12deg); }
@@ -751,13 +981,31 @@
     transform-origin: top center;
   }
 
-  /* ── Live dot pulse — "online" indicator ── */
+  /* ── Live dot pulse ── */
   @keyframes live-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50%      { opacity: 0.35; transform: scale(0.85); }
   }
   .live-dot {
     animation: live-pulse 2s ease-in-out infinite;
+  }
+
+  /* ── Breathe — subtle idle pulse ── */
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); opacity: 0.9; }
+    50%      { transform: scale(1.05); opacity: 1; }
+  }
+  .breathe {
+    animation: breathe 3s ease-in-out infinite;
+  }
+
+  /* ── Float — gentle bobbing ── */
+  @keyframes float {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50%      { transform: translate3d(0, -6px, 0); }
+  }
+  .float {
+    animation: float 4s ease-in-out infinite;
   }
 
   /* ── Stagger helpers ── */
@@ -794,6 +1042,7 @@
 
   .input-base::placeholder {
     color: var(--text-tertiary);
+    opacity: 1;
   }
 
   .input-base:hover:not(:disabled):not(:focus) {
@@ -804,14 +1053,15 @@
   .input-base:focus:not(:disabled) {
     border-color: var(--border-focus, var(--primary, #007AFF));
     background: var(--bg-input-focus);
-    box-shadow: 0 0 0 3px var(--focus-ring);
-    /* Subtle lift for tactile feel */
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--primary, #007AFF) 15%, transparent),
+      0 4px 12px -4px color-mix(in srgb, var(--primary, #007AFF) 20%, transparent);
     transform: translateY(-1px);
   }
 
   .input-base.input-error {
     border-color: var(--danger, #FF3B30);
-    box-shadow: 0 0 0 3px var(--focus-ring-danger);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger, #FF3B30) 15%, transparent);
   }
 
   .input-base:disabled {
@@ -822,19 +1072,17 @@
 }
 
 /* ============================================================
-   12. TONE SYSTEM
-   ------------------------------------------------------------
-   Universal tone tile — chips, badges, avatar halos.
+   12. TONE SYSTEM — universal tiles
    ============================================================ */
 
 @layer base {
-  .tone-blue   {
+  .tone-blue {
     --tone-fg: #007AFF;
     --tone-bg: rgba(0, 122, 255, 0.10);
     --tone-glow: rgba(0, 122, 255, 0.28);
     --tone-blue-fg: #007AFF;
   }
-  .tone-green  {
+  .tone-green {
     --tone-fg: #34C759;
     --tone-bg: rgba(52, 199, 89, 0.10);
     --tone-glow: rgba(52, 199, 89, 0.28);
@@ -846,7 +1094,7 @@
     --tone-glow: rgba(255, 149, 0, 0.28);
     --tone-orange-fg: #FF9500;
   }
-  .tone-red    {
+  .tone-red {
     --tone-fg: #FF3B30;
     --tone-bg: rgba(255, 59, 48, 0.10);
     --tone-glow: rgba(255, 59, 48, 0.28);
@@ -858,7 +1106,7 @@
     --tone-glow: rgba(175, 82, 222, 0.28);
     --tone-purple-fg: #AF52DE;
   }
-  .tone-slate  {
+  .tone-slate {
     --tone-fg: #8E8E93;
     --tone-bg: rgba(142, 142, 147, 0.10);
     --tone-glow: rgba(142, 142, 147, 0.28);
@@ -896,12 +1144,14 @@
 }
 
 /* ============================================================
-   13. SCROLLBAR — hover-reveal on scroll container
-   ------------------------------------------------------------
-   Faqat scroll container hover qilinganda ko'rinadi.
+   13. SCROLLBAR — hover-reveal, stable gutter
    ============================================================ */
 
 @layer base {
+  :root {
+    scrollbar-gutter: stable;
+  }
+
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -919,24 +1169,25 @@
     transition: background-color var(--dur-normal) var(--ease-soft);
   }
 
-  /* Only when the scroll container itself is hovered */
+  /* ✨ Reveal on container hover */
   :hover::-webkit-scrollbar-thumb {
-    background-color: var(--border-medium);
+    background-color: color-mix(in srgb, var(--text-primary) 12%, transparent);
     background-clip: padding-box;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background-color: var(--border-strong);
+    background-color: color-mix(in srgb, var(--text-primary) 25%, transparent);
     background-clip: padding-box;
   }
 
+  /* Firefox */
   * {
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
   }
 
   :hover {
-    scrollbar-color: var(--border-medium) transparent;
+    scrollbar-color: color-mix(in srgb, var(--text-primary) 12%, transparent) transparent;
   }
 }
 
@@ -960,6 +1211,29 @@
     outline-offset: 2px;
     border-radius: var(--radius-xs);
   }
+
+  /* ✨ Animated underline */
+  .link-underline {
+    position: relative;
+  }
+
+  .link-underline::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform var(--dur-normal) var(--ease-emphasized);
+  }
+
+  .link-underline:hover::after {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
 }
 
 /* ============================================================
@@ -977,16 +1251,23 @@
 /* ============================================================
    16. VIEW TRANSITIONS
    ------------------------------------------------------------
-   ⚠️ SPA'da `@view-transition { navigation: auto }` ISHLAMAYDI.
-   React Router'da qo'lda: document.startViewTransition(() => navigate())
-   Hozircha o'chirilgan — dead code bo'lmasligi uchun.
+   SPA'da @view-transition ishlamaydi — React Router'da qo'lda:
+   document.startViewTransition(() => navigate('/route'))
    ============================================================ */
 
-/*
-@view-transition { navigation: auto; }
-::view-transition-old(root) { animation: fade-out var(--dur-normal) var(--ease-soft) both; }
-::view-transition-new(root) { animation: page-enter var(--dur-slow) var(--ease-emphasized) both; }
-@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+/* Kerak bo'lsa yoqing: */
+
+/* 
+::view-transition-old(root) {
+  animation: fade-out var(--dur-normal) var(--ease-soft) both;
+}
+::view-transition-new(root) {
+  animation: page-enter var(--dur-slow) var(--ease-emphasized) both;
+}
+@keyframes fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
 */
 
 /* ============================================================
@@ -1013,19 +1294,23 @@
     .orb,
     .live-dot,
     .bell-shake,
+    .breathe,
+    .float,
     .page-enter,
     .slide-up,
     .slide-down,
-    .scale-in {
+    .scale-in,
+    .text-gradient-chromatic {
       animation: none !important;
     }
 
-    /* Keep color transitions — informative, not decorative */
+    /* ✨ Keep informative transitions */
     .glass-card,
     .glass-card--interactive,
     .input-base,
-    .tone-tile {
-      transition-property: background-color, color, border-color, box-shadow;
+    .tone-tile,
+    .link-underline::after {
+      transition-property: background-color, color, border-color, box-shadow, transform, opacity;
       transition-duration: 150ms;
     }
   }
@@ -1058,6 +1343,25 @@
     .orb {
       display: none;
     }
+
+    .bg-grid::before {
+      display: none;
+    }
+  }
+
+  /* ✨ Prefers reduced transparency */
+  @media (prefers-reduced-transparency: reduce) {
+    .glass,
+    .glass-card {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      background: var(--bg-surface);
+    }
+
+    .orb {
+      opacity: 0.15;
+      filter: blur(40px);
+    }
   }
 }
 
@@ -1080,12 +1384,24 @@
 
     .tone-tile {
       border-color: CanvasText;
+      background: Canvas;
+      color: CanvasText;
+    }
+
+    .conic-ring {
+      background: Canvas;
+      border: 2px solid CanvasText;
+    }
+
+    .orb,
+    .bg-grid::before {
+      display: none;
     }
   }
 }
 
 /* ============================================================
-   20. PRINT — comprehensive
+   20. PRINT — comprehensive preservation
    ============================================================ */
 
 @layer print {
@@ -1096,11 +1412,16 @@
     }
 
     .no-print,
-    .orb {
+    .orb,
+    .bg-grid::before {
       display: none !important;
     }
 
-    /* Dialogs preserved — user may need to print invoices/reports */
+    /* ✨ Preserve dialogs/details if user explicitly opened them */
+    dialog[open],
+    details[open] > *:not(summary) {
+      display: block !important;
+    }
 
     html, body {
       background: #fff !important;
@@ -1137,20 +1458,26 @@
     h1, h2, h3, h4 {
       break-after: avoid;
       page-break-after: avoid;
+      text-wrap: balance;
     }
 
     img, svg, table, figure {
       break-inside: avoid;
       page-break-inside: avoid;
     }
+
+    /* Number columns readable */
+    .text-numeric,
+    .text-numeric-lg,
+    .text-numeric-md,
+    .text-numeric-sm {
+      font-variant-numeric: tabular-nums;
+    }
   }
 }
 
 /* ============================================================
-   21. DARK MODE BODY
-   ------------------------------------------------------------
-   Tailwind `.dark` <html>ga qo'yadi.
-   `[data-theme="dark"]` olib tashlandi — Tailwind bilan chalkashmasin.
+   21. DARK MODE
    ============================================================ */
 
 @layer base {
@@ -1159,7 +1486,7 @@
     color: var(--text-primary);
   }
 
-  /* Dark mode noise — z-index 0 (AppLayout z-10 stack'iga xalaqit bermaydi) */
+  /* Dark mode noise overlay — z-index 0 */
   .dark body::before {
     content: '';
     position: fixed;
@@ -1170,6 +1497,31 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
     background-size: 200px 200px;
     mix-blend-mode: overlay;
+  }
+
+  /* Dark mode glass refinements */
+  .dark .glass-card {
+    box-shadow:
+      var(--shadow-floating),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+  }
+
+  .dark .glass-card:hover {
+    box-shadow:
+      0 4px 8px rgba(0, 0, 0, 0.3),
+      0 24px 60px -12px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .dark .glass-card::before {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.09) 0%,
+      rgba(255, 255, 255, 0.03) 22%,
+      transparent 55%
+    );
   }
 }
 
@@ -1186,6 +1538,11 @@
     .cq-md\:grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .cq-md\:grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
+
+  @container (min-width: 1024px) {
+    .cq-lg\:grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cq-lg\:grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
 }
 
 /* ============================================================
@@ -1201,8 +1558,14 @@
     }
 
     @keyframes reveal {
-      from { opacity: 0; transform: translate3d(0, 24px, 0) scale(0.98); }
-      to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+      from {
+        opacity: 0;
+        transform: translate3d(0, 24px, 0) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1212,7 +1575,7 @@
 }
 
 /* ============================================================
-   24. UTILITY — spacing shortcuts
+   24. UTILITY — spacing & layout
    ============================================================ */
 
 @layer utilities {
@@ -1223,10 +1586,34 @@
     padding-inline: clamp(1rem, 2vw, 2rem);
     padding-block: clamp(1rem, 2vw, 1.5rem);
   }
+
+  /* ✨ Stack — flex column with gap */
+  .stack {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .stack-sm { gap: 0.5rem; }
+  .stack-md { gap: 1rem; }
+  .stack-lg { gap: 1.5rem; }
+
+  /* ✨ Cluster — flex wrap with gap */
+  .cluster {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  /* ✨ Center — perfect centering */
+  .center {
+    display: grid;
+    place-content: center;
+  }
 }
 
 /* ============================================================
-   25. SR-ONLY
+   25. SR-ONLY — a11y
    ============================================================ */
 
 @layer utilities {
@@ -1241,4 +1628,245 @@
     white-space: nowrap;
     border: 0;
   }
+
+  /* ✨ Reveal on focus (skip links) */
+  .sr-only-focusable:focus,
+  .sr-only-focusable:focus-within {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: inherit;
+    margin: inherit;
+    overflow: visible;
+    clip: auto;
+    white-space: inherit;
+  }
+}
+
+/* ============================================================
+   26. JS BRIDGE — Cursor-follow spotlight
+   ------------------------------------------------------------
+   React hook:
+
+   function useCursorGlow(ref) {
+     useEffect(() => {
+       const el = ref.current;
+       if (!el) return;
+       let raf = 0;
+       const onMove = (e) => {
+         cancelAnimationFrame(raf);
+         raf = requestAnimationFrame(() => {
+           const r = el.getBoundingClientRect();
+           el.style.setProperty(
+             '--aurora-glow-x',
+             `${((e.clientX - r.left) / r.width) * 100}%`
+           );
+           el.style.setProperty(
+             '--aurora-glow-y',
+             `${((e.clientY - r.top) / r.height) * 100}%`
+           );
+         });
+       };
+       el.addEventListener('mousemove', onMove, { passive: true });
+       return () => {
+         el.removeEventListener('mousemove', onMove);
+         cancelAnimationFrame(raf);
+       };
+     }, [ref]);
+   }
+
+   // Ishlatish:
+   // const ref = useRef(null);
+   // useCursorGlow(ref);
+   // <div className="glass-card glass-card--aurora" ref={ref}>
+   ============================================================ */
+
+/* ============================================================
+   27. SUB-PIXEL TYPOGRAPHY REFINEMENT
+   ============================================================ */
+
+@layer typography {
+  /* Optical margin — text-aligns with punctuation */
+  .text-optical-left  { text-indent: -0.05em; padding-left: 0.05em; }
+  .text-optical-right { text-indent: 0.05em; padding-right: 0.05em; }
+
+  /* Small caps — refined */
+  .text-smallcaps {
+    font-variant-caps: all-small-caps;
+    font-feature-settings: 'smcp', 'c2sc';
+    letter-spacing: 0.05em;
+  }
+
+  /* Old-style numerals — for body text */
+  .text-oldstyle {
+    font-variant-numeric: oldstyle-nums proportional-nums;
+    font-feature-settings: 'onum', 'pnum';
+  }
+
+  /* ✨ Fluid letter-spacing — tighter on larger, looser on smaller */
+  .text-fluid {
+    letter-spacing: clamp(-0.03em, -0.005em + 0.1cqi, -0.008em);
+  }
+}
+/* ═══ M-EDU Liquid Glass utilities ═══ */
+
+/* Particle drift keyframe (AmbientParticles) */
+@keyframes medu-particle-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); opacity: 0; }
+  20%  { opacity: 0.8; }
+  80%  { opacity: 0.4; }
+  100% { transform: translate3d(var(--drift-x, 0), -100px, 0) scale(0.6); opacity: 0; }
+}
+
+/* Live clock dot pulse — pure CSS, no re-render */
+.medu-pulse-dot {
+  animation: medu-pulse 2s ease-in-out infinite;
+}
+@keyframes medu-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.85); }
+}
+
+.medu-colon-blink {
+  animation: medu-colon 2s ease-in-out infinite;
+}
+@keyframes medu-colon {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+
+/* Glass surface: ensure the tint layers respect prefers-reduced-motion */
+.medu-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  /* Subtle outer chromatic edge for premium depth */
+  box-shadow:
+    -1px 0 0 rgba(0, 200, 255, 0.05),
+     1px 0 0 rgba(255, 0, 90, 0.05);
+}
+
+/* Thin scrollbar */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Reduced motion — kill everything */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   24. RESPONSIVE SHELL — safe areas, viewport units, overflow
+   ------------------------------------------------------------
+   Applies to every route. The app runs on notched iPhones, Android
+   gesture-bar devices and Telegram's in-app browser, so the shell must
+   never rely on 100vh nor assume the absence of system UI.
+   ============================================================ */
+
+@layer base {
+  /* The shell inside #root owns the viewport height. */
+  #root {
+    min-height: 100dvh;
+  }
+
+  /* Stop the rubber-band horizontal swipe that makes a page look "broken"
+     on iOS whenever a single wide child exists. */
+  html,
+  body {
+    max-width: 100%;
+    overscroll-behavior-x: none;
+  }
+
+  /* Long unbroken strings (emails, tokens, URLs, IDs) must wrap instead of
+     pushing the layout past the viewport — the classic invisible cause of
+     page-level horizontal overflow on phones. */
+  :where(p, h1, h2, h3, h4, h5, h6, li, td, th, dd, dt, figcaption, label, span) {
+    overflow-wrap: break-word;
+  }
+
+  /* Media and tables shrink to their container first; a table that genuinely
+     needs more width scrolls inside its own wrapper (see GlassTable). */
+  :where(table, img, video, canvas, svg) {
+    max-width: 100%;
+  }
+}
+
+@layer utilities {
+  /* iOS notch / home-indicator aware padding helpers. */
+  .safe-top    { padding-top: env(safe-area-inset-top, 0px); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .safe-x {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* Deliberate horizontal scroller (wide tables, tab strips).
+     `overscroll-behavior-x: contain` stops the scroll from chaining to the
+     page — which is what produced "the whole page scrolls sideways". */
+  .medu-scroll-x {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  /* Touch-friendly minimum hit area (WCAG 2.5.8 / Apple HIG 44px). */
+  .tap-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Extends interactive hit area using a pseudo-element without stretching visible layout */
+  .tap-extend {
+    position: relative;
+  }
+  .tap-extend::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: inherit;
+    pointer-events: auto;
+  }
+
+  /* Flexible route container: one source of truth for page padding that
+     adapts 320px → 1920px without hard-coded widths. */
+  .page-container {
+    width: 100%;
+    min-width: 0;
+    margin-inline: auto;
+    max-width: min(1600px, 100%);
+    padding-inline: clamp(0.75rem, 3vw, 2rem);
+    padding-block: clamp(0.75rem, 2vw, 1.5rem);
+  }
+}
+
+/* Phone-only guards for decorative chrome. */
+@media (max-width: 767px) {
+  /* A 520px orb at 80px blur rasterizes a large offscreen surface; 48px is
+     visually equivalent at this size and far cheaper per frame. */
+  .orb { filter: blur(48px); }
+
+  /* The glass chromatic edge is sub-pixel detail at phone sizes. */
+  .medu-glass::after { box-shadow: none; }
 }

@@ -68,6 +68,27 @@ export class PrismaAuditAdapter implements AuditRepository {
     return this.mapAuditEntity(row);
   }
 
+  async record(data: {
+    organizationId: string;
+    userId?: string;
+    type: string;
+    resourceType: string;
+    resourceId?: string;
+    data?: Record<string, unknown>;
+  }): Promise<AuditEventEntity> {
+    return this.log({
+      organizationId: data.organizationId,
+      userId: data.userId,
+      type: data.type as AuditEventType,
+      resourceType: data.resourceType,
+      resourceId: data.resourceId,
+      description:
+        `${data.type} on ${data.resourceType}` +
+        (data.resourceId ? `:${data.resourceId}` : ''),
+      metadata: data.data,
+    });
+  }
+
   async query(organizationId: string, filters: AuditQueryFilters): Promise<{ items: AuditEventEntity[]; total: number }> {
     const where: Record<string, unknown> = { organizationId };
     if (filters.type) where.type = filters.type;

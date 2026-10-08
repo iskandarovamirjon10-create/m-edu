@@ -10,6 +10,7 @@ describe('CommunicationService (Parent-Teacher & Announcements)', () => {
 
   beforeEach(async () => {
     prisma = {
+      student: { findFirst: vi.fn() },
       parentStudent: { findUnique: vi.fn() },
       parentTeacherMessage: {
         findMany: vi.fn(),
@@ -32,6 +33,7 @@ describe('CommunicationService (Parent-Teacher & Announcements)', () => {
   });
 
   it('forbids parent from viewing messages of a student not linked to them', async () => {
+    prisma.student.findFirst.mockResolvedValue({ id: 'stu-other', organizationId: 'org-1' });
     prisma.parentStudent.findUnique.mockResolvedValue(null);
 
     await expect(
@@ -40,6 +42,7 @@ describe('CommunicationService (Parent-Teacher & Announcements)', () => {
   });
 
   it('allows linked parent to retrieve messages', async () => {
+    prisma.student.findFirst.mockResolvedValue({ id: 'stu-1', organizationId: 'org-1' });
     prisma.parentStudent.findUnique.mockResolvedValue({ parentId: 'parent-1', studentId: 'stu-1' });
     prisma.parentTeacherMessage.findMany.mockResolvedValue([
       { id: 'msg-1', body: 'Hello teacher' },

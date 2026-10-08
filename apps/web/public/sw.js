@@ -31,8 +31,12 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
+  // SECURITY: API responses are NEVER cached. Cache Storage is
+  // JavaScript-readable and survives logout, so persisting authenticated
+  // responses (students, payments, reports...) would leak one account's
+  // data to the next user of this browser. The network is the only store
+  // for API traffic; offline handling for pages is provided by the app.
   if (API_PATTERN.test(request.url)) {
-    event.respondWith(networkFirst(request));
     return;
   }
 
@@ -66,12 +70,7 @@ async function cacheFirst(request) {
 
 async function networkFirst(request) {
   try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
-    }
-    return response;
+    return await fetch(request);
   } catch {
     const cached = await caches.match(request);
     if (cached) return cached;

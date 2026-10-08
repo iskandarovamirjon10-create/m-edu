@@ -1,23 +1,34 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
+  NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { SecurityEventService, SecurityEventType } from '../common/security/security-event.service';
 import { errorMessage, GoogleProfile, TokenUser, GetMeResponse } from './types';
 import { SecureLogger } from '@medu/face-security';
 import * as bcrypt from 'bcryptjs';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, createHash, timingSafeEqual } from 'crypto';
 import * as nodemailer from 'nodemailer';
-import { BootstrapDto, RegisterDto } from './dto';
-import { isPrivilegedRole } from './authorization.policy';
+import {
+  AcceptInvitationDto,
+  AddToWhitelistDto,
+  BootstrapDto,
+  RegisterDto,
+  UpdateAccessControlSettingsDto,
+} from './dto';
+import { isPlatformRole, isPrivilegedRole } from './authorization.policy';
 import { escapeHtml, isPrismaUniqueError, normalizeEmail, resolveFrontendUrl } from './auth.utils';
 import { authTtlMs } from './auth.ttl';
 import { resolveBcryptRounds, PASSWORD_RESET_GENERIC_MESSAGE, PASSWORD_RESET_TTL_MS } from './auth.config';
+import { Role } from '@prisma/client';
 
 /**
  * May a passwordless M-EDU account be linked to a Google identity purely on
@@ -38,11 +49,8 @@ export function canAutoLink(role: string | null | undefined, googleLinkAllowed: 
   return googleLinkAllowed === true;
 }
 
-
-
 @Injectable()
 export class AuthService implements OnModuleInit, OnModuleDestroy {
-
   private readonly AUTH_CODE_TTL_MS = 5 * 60 * 1000;
   private readonly CLEANUP_INTERVAL_MS = Number(process.env.SESSION_PURGE_INTERVAL_MS) || 60 * 1000;
   // Retention grace for expired sessions: by default expired rows are purged
@@ -67,11 +75,13 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     const host = process.env.SMTP_HOST;
     const port = Number(process.env.SMTP_PORT) || 587;
     const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
+const pass = process.env.SMTP_PASSWORD;
     const secure = port === 465;
     if (!host) throw new Error('SMTP_HOST not configured');
     this.smtpTransporter = nodemailer.createTransport({
-      host, port, secure,
+      host,
+      port,
+      secure,
       auth: user && pass ? { user, pass } : undefined,
     });
     return this.smtpTransporter;
@@ -80,6 +90,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    @Optional() private readonly security?: SecurityEventService,
   ) {}
 
   /**
@@ -111,7 +122,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     return resolveFrontendUrl();
   }
 
-  private generateSecureToken(bytes = 32): string {
+  public generateSecureToken(bytes = 32): string {
     return randomBytes(bytes).toString('hex');
   }
 
@@ -122,12 +133,9 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
    *
    * The code itself is 256-bit random and carries no claim. What is persisted
    * is the SESSION id of the session `issueToken` just created — never the
-   * signed JWT. A token stored in a table is a usable credential for its whole
-   * lifetime regardless of when the row is purged; a session id is not: it is
-   * useless without the signing key, and it stays revocable through the normal
-   * `Session` lifecycle.
+   * signed JWT.
    */
-  async generateAuthCode(accessToken: string, userId: string): Promise<string> {
+  async generateAuthCode(accessToken: string, userId: string, state?: string): Promise<string> {
     const code = this.generateSecureToken();
     const expiresAt = new Date(Date.now() + this.AUTH_CODE_TTL_MS);
     const sessionId = this.extractSessionId(accessToken);
@@ -137,6 +145,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
         code,
         sessionId,
         userId,
+        state: state ?? null,
         expiresAt,
       },
     });
@@ -155,7 +164,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async exchangeAuthCode(code: string): Promise<string> {
+  async exchangeAuthCode(code: string, state?: string): Promise<string> {
     const entry = await this.prisma.authorizationCode.findUnique({
       where: { code },
     });
@@ -171,9 +180,18 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Authorization code has expired');
     }
 
-    // A code must be redeemable exactly ONCE. A separate read-then-write would
-    // let two concurrent exchanges both observe `usedAt = null` and both walk
-    // away with a session; the guarded update makes the loser fail closed.
+    if (entry.state) {
+      if (!state) {
+        throw new BadRequestException('OAuth exchange state is required');
+      }
+      const expected = Buffer.from(entry.state);
+      const actual = Buffer.from(state);
+      if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+        throw new BadRequestException('Invalid or expired OAuth exchange state');
+      }
+    }
+
+    // A code must be redeemable exactly ONCE.
     const claimed = await this.prisma.authorizationCode.updateMany({
       where: { id: entry.id, usedAt: null },
       data: { usedAt: new Date() },
@@ -183,7 +201,6 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Never mint a session for an account that was deactivated or deleted
-    // between the OAuth callback and the exchange.
     const user = await this.prisma.user.findUnique({
       where: { id: entry.userId },
       select: {
@@ -212,6 +229,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       ) {
         return this.jwtService.sign({
           sub: user.id,
+          id: user.id,
           email: user.email,
           role: user.role,
           organizationId: user.organizationId,
@@ -230,7 +248,6 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
   async cleanupExpiredEntries() {
     const now = Date.now();
 
-    // Purge expired DB sessions, password reset tokens, and authorization codes
     try {
       const cutoff = new Date(now - this.SESSION_RETENTION_HOURS * 60 * 60 * 1000);
       const [sessionResult, parentSessionResult, tokenResult, authCodeResult] = await Promise.all([
@@ -274,24 +291,45 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
   /**
    * Login with email and password
    */
-  async login(email: string, password: string): Promise<{ accessToken: string; user: TokenUser }> {
-    // `User.email` is globally unique (see schema + the P2002 handling on
-    // registration), so resolve it with the unique index rather than a
-    // findFirst scan. Deactivation is checked explicitly to keep the same
-    // outward behaviour (uniform "Invalid credentials" for inactive accounts).
+  async login(
+    email: string,
+    password: string,
+    clientMeta?: { userAgent?: string; ipAddress?: string },
+  ): Promise<{ accessToken: string; user: TokenUser }> {
+    const normalized = normalizeEmail(email);
     const user = await this.prisma.user.findUnique({
-      where: { email: normalizeEmail(email) },
+      where: { email: normalized },
       include: { organization: true },
     });
 
+    if (user && user.status === 'PENDING') {
+      throw new ForbiddenException('Your account is pending administrator approval.');
+    }
+
     if (!user || !user.isActive || !user.passwordHash) {
+      await this.security?.logEvent({
+        eventType: SecurityEventType.LOGIN_FAILED,
+        ipAddress: clientMeta?.ipAddress,
+        userAgent: clientMeta?.userAgent,
+        success: false,
+        reason: 'INVALID_CREDENTIALS',
+      });
       // Anti-timing attack delay without blocking event loop (DoS protection)
-      await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 100));
+      await new Promise((resolve) => setTimeout(resolve, 150 + Math.random() * 100));
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
+      await this.security?.logEvent({
+        eventType: SecurityEventType.LOGIN_FAILED,
+        userId: user.id,
+        organizationId: user.organizationId,
+        ipAddress: clientMeta?.ipAddress,
+        userAgent: clientMeta?.userAgent,
+        success: false,
+        reason: 'INVALID_PASSWORD',
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -300,17 +338,124 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       data: { lastLoginAt: new Date() },
     });
 
-    // Issue a tracked session (sid in JWT) so the token can be revoked on logout.
-    return await this.issueToken(user);
+    await this.security?.logEvent({
+      eventType: SecurityEventType.LOGIN_SUCCESS,
+      userId: user.id,
+      organizationId: user.organizationId,
+      ipAddress: clientMeta?.ipAddress,
+      userAgent: clientMeta?.userAgent,
+      success: true,
+    });
+
+    return await this.issueToken(user, clientMeta);
   }
 
-  async register(data: RegisterDto): Promise<{ accessToken: string; user: TokenUser }> {
+  async register(
+    data: RegisterDto,
+    clientMeta?: { userAgent?: string; ipAddress?: string },
+  ): Promise<{ accessToken?: string; user: TokenUser; pendingApproval?: boolean; message?: string }> {
     const email = normalizeEmail(data.email);
+
+    // 1. Platform invitation code check
+    let redeemedInvite: any = null;
+    if (this.prisma.platformInvitation && data.inviteCode) {
+      const codeHash = createHash('sha256').update(data.inviteCode).digest('hex');
+      const invite = await this.prisma.platformInvitation.findUnique({
+        where: { codeHash },
+      });
+
+      if (!invite) {
+        throw new ForbiddenException('Invalid platform invitation code');
+      }
+      if (invite.revokedAt) {
+        throw new ForbiddenException('Platform invitation has been revoked');
+      }
+      if (invite.expiresAt <= new Date()) {
+        throw new ForbiddenException('Platform invitation has expired');
+      }
+      if (invite.useCount >= invite.maxUses) {
+        throw new ForbiddenException('Platform invitation code has already been used');
+      }
+      redeemedInvite = invite;
+    } else {
+      // If invitation code was not provided, check whitelist and access control configuration
+      const isWhitelisted = await this.isEmailWhitelisted(email);
+      if (!isWhitelisted && this.prisma.accessControlConfig) {
+        const config = await this.prisma.accessControlConfig.findUnique({
+          where: { id: 'global' },
+        });
+
+        if (config?.requireApproval) {
+          const passwordHash = await bcrypt.hash(data.password, this.BCRYPT_ROUNDS);
+          const result = await this.prisma.$transaction(async (tx: any) => {
+            const organization = await tx.organization.create({
+              data: {
+                name: data.organizationName,
+                email,
+                phone: data.phone,
+              },
+            });
+            const user = await tx.user.create({
+              data: {
+                organizationId: organization.id,
+                email,
+                passwordHash,
+                firstName: data.firstName,
+                lastName: data.lastName,
+                phone: data.phone,
+                role: 'ORG_ADMIN',
+                status: 'PENDING',
+                isActive: false,
+              },
+              include: { organization: true },
+            });
+            return { user, organization };
+          });
+
+          return {
+            user: {
+              id: result.user.id,
+              email: result.user.email,
+              firstName: result.user.firstName,
+              lastName: result.user.lastName,
+              role: result.user.role,
+              organizationId: result.user.organizationId,
+              organization: result.organization,
+            },
+            pendingApproval: true,
+            message: 'Account registered successfully. Pending administrator approval.',
+          };
+        }
+
+        if (config?.inviteOnly) {
+          throw new ForbiddenException('Registration is currently invite-only or requires whitelist approval.');
+        }
+      }
+    }
+
     const passwordHash = await bcrypt.hash(data.password, this.BCRYPT_ROUNDS);
 
     let result;
     try {
-      result = await this.prisma.$transaction(async (tx) => {
+      result = await this.prisma.$transaction(async (tx: any) => {
+        if (redeemedInvite && tx.platformInvitation) {
+          const claim = await tx.platformInvitation.updateMany({
+            where: {
+              id: redeemedInvite.id,
+              useCount: { lt: redeemedInvite.maxUses },
+              revokedAt: null,
+              expiresAt: { gt: new Date() },
+            },
+            data: {
+              useCount: { increment: 1 },
+              usedAt: new Date(),
+            },
+          });
+          if (claim.count !== 1) {
+            throw new ForbiddenException('Platform invitation code has already been used');
+          }
+        }
+
         const organization = await tx.organization.create({
           data: {
             name: data.organizationName,
@@ -328,6 +473,8 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
             lastName: data.lastName,
             phone: data.phone,
             role: 'ORG_ADMIN',
+            status: 'ACTIVE',
+            isActive: true,
             lastLoginAt: new Date(),
           },
           include: { organization: true },
@@ -342,46 +489,68 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       throw error;
     }
 
-    // Issue a tracked session (sid in JWT) so the token can be revoked on logout.
-    return await this.issueToken(result.user);
+    if (redeemedInvite) {
+      await this.security?.logEvent({
+        eventType: SecurityEventType.INVITE_REDEEMED,
+        organizationId: result.organization.id,
+        userId: result.user.id,
+        resourceType: 'PlatformInvitation',
+        resourceId: redeemedInvite.id,
+        ipAddress: clientMeta?.ipAddress,
+        userAgent: clientMeta?.userAgent,
+        success: true,
+      });
+    }
+
+    const issued = await this.issueToken(result.user, clientMeta);
+    return {
+      accessToken: issued.accessToken,
+      user: issued.user,
+    };
   }
 
-
   /**
-   * One-time platform bootstrap: creates the FIRST SUPER_ADMIN.
-   *
-   * The SUPER_ADMIN role bypasses every permission check (authorization
-   * adapter) and currently has no other provisioning path (the seed creates
-   * ORG_ADMINs only, and ORG_ADMINs are forbidden from minting
-   * SUPER_ADMINs). Without this endpoint a fresh deployment could never
-   * reach admin control.
+   * One-time platform bootstrap: creates the FIRST PLATFORM_OWNER.
    *
    * Security model:
-   *  - Locked forever once ANY SUPER_ADMIN exists (active or not) — a
-   *    deactivated platform admin must be restored via ops, not re-booted.
-   *  - Serialized with a Postgres advisory lock so two concurrent bootstrap
-   *    requests cannot both pass the zero-SUPER_ADMIN check.
-   *  - Heavily throttled at the controller (3/min per IP).
+   *  - Locked forever once ANY PLATFORM_OWNER or SUPER_ADMIN exists
+   *  - Serialized with a Postgres advisory lock so concurrent requests cannot race
+   *  - Requires valid PLATFORM_BOOTSTRAP_SECRET if set in environment
+   *  - Heavily throttled at controller
+   *  - Audited via SecurityEvent
    */
   async bootstrap(data: BootstrapDto): Promise<{ accessToken: string; user: TokenUser }> {
     const superAdminCount = await this.prisma.user.count({
-      where: { role: 'SUPER_ADMIN' },
+      where: { role: { in: ['PLATFORM_OWNER', 'SUPER_ADMIN'] } },
     });
     if (superAdminCount > 0) {
       throw new ConflictException('Platform is already bootstrapped');
     }
 
-    
+    const configuredSecret = process.env.PLATFORM_BOOTSTRAP_SECRET;
+    if (configuredSecret) {
+      const provided = data.inviteCode || (data as any).secret;
+      if (!provided) {
+        throw new ForbiddenException('Bootstrap secret is required');
+      }
+      const expected = Buffer.from(configuredSecret);
+      const actual = Buffer.from(provided);
+      if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+        throw new ForbiddenException('Invalid bootstrap secret');
+      }
+    }
 
     const email = normalizeEmail(data.email);
     const passwordHash = await bcrypt.hash(data.password, this.BCRYPT_ROUNDS);
 
     let result;
     try {
-      result = await this.prisma.$transaction(async (tx) => {
+      result = await this.prisma.$transaction(async (tx: any) => {
         // Serialize concurrent first-bootstraps (advisory lock, per-connection).
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('medu_platform_bootstrap'))`;
-        const recheck = await tx.user.count({ where: { role: 'SUPER_ADMIN' } });
+        const recheck = await tx.user.count({
+          where: { role: { in: ['PLATFORM_OWNER', 'SUPER_ADMIN'] } },
+        });
         if (recheck > 0) {
           throw new ConflictException('Platform is already bootstrapped');
         }
@@ -402,7 +571,9 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
             firstName: data.firstName,
             lastName: data.lastName,
             phone: data.phone,
-            role: 'SUPER_ADMIN',
+            role: 'PLATFORM_OWNER',
+            status: 'ACTIVE',
+            isActive: true,
             lastLoginAt: new Date(),
           },
           include: { organization: true },
@@ -417,44 +588,29 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       throw error;
     }
 
+    await this.security?.logEvent({
+      eventType: SecurityEventType.PLATFORM_BOOTSTRAPPED,
+      organizationId: result.organization.id,
+      userId: result.user.id,
+      resourceType: 'User',
+      resourceId: result.user.id,
+      success: true,
+    });
+
     return await this.issueToken(result.user);
   }
 
   // ==================== Google OAuth ====================
 
   /**
-   * Google sign-in / account-linking policy (explicit, security-first).
-   *
-   * Identity chain: the OAuth2 authorization-code exchange with our client
-   * secret proves the token was issued to OUR client (audience), Google's
-   * token endpoint validates the code + token signature, and the userinfo
-   * profile is fetched over TLS. On top of that we enforce claim checks:
-   *   - `googleSubject` (sub) is mandatory and unique.
-   *   - ONLY verified Google emails are accepted (email_verified === true).
-   *     M-EDU local registration does NOT verify emails, so a Google email
-   *     is the strongest ownership proof available.
-   *
-   * Account linking rules (never merge on email string match alone):
-   *   1. Same googleSubject            -> login (established link).
-   *   2. Same verified email           -> link ONLY when the account model
-   *      explicitly permits auto-linking (`canAutoLink`); otherwise 409 with
-   *      an actionable message.
-   *   3. Same verified email, existing
-   *      account HAS a passwordHash    -> 409, NO auto-merge. An attacker
-   *      could register an unverified local row with the victim's email;
-   *      auto-linking would confuse identities.
-   *   4. No match                      -> create a new org + ORG_ADMIN.
-   *
-   * Duplicate protection: steps 2-4 race with a concurrent first login for
-   * the SAME Google identity from another device. `User.googleSubject` and
-   * `User.email` are unique, so exactly one transaction can win; the loser
-   * gets a P2002 and is re-resolved onto the winner's row instead of
-   * erroring out. One Google identity therefore always converges on exactly
-   * one M-EDU User (see the retry loop in `googleLogin`).
+   * Google sign-in / account-linking policy.
    *
    * Inactive accounts are rejected at this layer (fail closed — no token).
    */
-  async googleLogin(googleUser: GoogleProfile): Promise<{ accessToken: string; user: TokenUser }> {
+  async googleLogin(
+    googleUser: GoogleProfile,
+    clientMeta?: { userAgent?: string; ipAddress?: string },
+  ): Promise<{ accessToken: string; user: TokenUser }> {
     if (!googleUser.googleSubject || typeof googleUser.googleSubject !== 'string') {
       throw new BadRequestException('Invalid Google identity: missing subject ID');
     }
@@ -466,24 +622,21 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     }
     const email = normalizeEmail(googleUser.email);
 
-    // A first-time login can lose the unique-index race to a concurrent
-    // first login of the SAME Google identity on another device. Retry: once
-    // the winner's row exists, the retry resolves onto it (rule 1) instead of
-    // failing — one Google identity always converges on one M-EDU User.
     const MAX_RACE_RETRIES = 3;
     for (let attempt = 0; ; attempt++) {
       try {
-        return await this.googleLoginOnce(googleUser, email);
+        return await this.googleLoginOnce(googleUser, email, clientMeta);
       } catch (error: unknown) {
         if (!isPrismaUniqueError(error) || attempt >= MAX_RACE_RETRIES) throw error;
       }
     }
   }
 
-  /** Single attempt at the Google login policy documented above. */
+  /** Single attempt at the Google login policy. */
   private async googleLoginOnce(
     googleUser: GoogleProfile,
     email: string,
+    clientMeta?: { userAgent?: string; ipAddress?: string },
   ): Promise<{ accessToken: string; user: TokenUser }> {
     // 1) Established identity: same Google subject -> login.
     const bySubject = await this.prisma.user.findUnique({
@@ -503,11 +656,10 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
           googleEmail: email,
         },
       });
-      return await this.issueToken(bySubject);
+      return await this.issueToken(bySubject, clientMeta);
     }
 
-    // 2) Email match -> account-linking policy (rules 2 and 3 above).
-    //    `User.email` is globally unique, so there is exactly one candidate.
+    // 2) Email match -> account-linking policy.
     const byEmail = await this.prisma.user.findUnique({
       where: { email },
       include: { organization: true },
@@ -539,21 +691,23 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
         },
         include: { organization: true },
       });
-      return await this.issueToken(linked);
+      return await this.issueToken(linked, clientMeta);
     }
 
-    // 3) Brand-new identity -> Google signup (new org + ORG_ADMIN).
+    // 3) Brand-new identity -> Requires valid invitation or whitelist approval
+    const isWhitelisted = await this.isEmailWhitelisted(email);
+    if (!isWhitelisted) {
+      throw new ForbiddenException(
+        'Registration requires a valid platform invitation. Please contact your platform administrator.',
+      );
+    }
+
     const displayName =
       [googleUser.firstName, googleUser.lastName].filter(Boolean).join(' ') ||
       'My Education Center';
     const orgName = `${displayName}'s Education Center`;
 
-    // A P2002 here means a concurrent first login for the same Google
-    // identity (or a concurrent local registration for the same email) won
-    // the unique-index race. It is deliberately NOT translated into a 409:
-    // the caller retries `googleLoginOnce`, which now resolves onto the
-    // winner's row. Only an unrelated unique violation may surface.
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx: any) => {
       const organization = await tx.organization.create({
         data: {
           name: orgName,
@@ -570,6 +724,8 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
           lastName: googleUser.lastName,
           avatar: googleUser.avatar,
           role: 'ORG_ADMIN',
+          status: 'ACTIVE',
+          isActive: true,
           provider: 'google',
           googleSubject: googleUser.googleSubject,
           googleEmail: email,
@@ -579,15 +735,21 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       });
     });
 
-    return await this.issueToken(result);
+    return await this.issueToken(result, clientMeta);
   }
 
-  private async issueToken(user: TokenUser): Promise<{ accessToken: string; user: TokenUser }> {
+  private async issueToken(
+    user: TokenUser,
+    clientMeta?: { userAgent?: string; ipAddress?: string },
+  ): Promise<{ accessToken: string; user: TokenUser }> {
     const session = await this.prisma.session.create({
       data: {
         userId: user.id,
         organizationId: user.organizationId,
         expiresAt: new Date(Date.now() + authTtlMs()),
+        userAgent: clientMeta?.userAgent,
+        ipAddress: clientMeta?.ipAddress,
+        lastActiveAt: new Date(),
       },
     });
 
@@ -605,7 +767,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
             select: { id: true },
           });
           await this.prisma.session.updateMany({
-            where: { id: { in: excessSessions.map(s => s.id) } },
+            where: { id: { in: excessSessions.map((s) => s.id) } },
             data: { revokedAt: new Date(), revokedReason: 'excess_sessions' },
           });
         }
@@ -616,6 +778,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
 
     const payload = {
       sub: user.id,
+      id: user.id,
       email: user.email,
       role: user.role,
       organizationId: user.organizationId,
@@ -638,16 +801,17 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Issue a JWT for a ParentAccount (not a User row).
-   * The token carries `role: 'PARENT'` and `accountType: 'parent'` so
-   * JwtStrategy can resolve it against the correct table.
    */
-  async issueParentToken(parent: {
-    parentId: string;
-    organizationId: string;
-    firstName?: string;
-    lastName?: string;
-    email: string;
-  }): Promise<string> {
+  async issueParentToken(
+    parent: {
+      parentId: string;
+      organizationId: string;
+      firstName?: string;
+      lastName?: string;
+      email: string;
+    },
+    clientMeta?: { userAgent?: string; ipAddress?: string },
+  ): Promise<string> {
     const session = await this.prisma.parentSession.create({
       data: {
         parentId: parent.parentId,
@@ -658,6 +822,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
 
     const payload = {
       sub: parent.parentId,
+      id: parent.parentId,
       email: parent.email,
       role: 'PARENT',
       organizationId: parent.organizationId,
@@ -666,9 +831,6 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     };
     return this.jwtService.sign(payload);
   }
-
-  // Session lifetime lives in `auth.ttl.ts` (authTtlMs) so the JWT, the
-  // session row and the cookie can never drift apart.
 
   // ==================== Sessions ====================
 
@@ -700,43 +862,23 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /**
-   * Rotate a presented session into a freshly minted one.
-   *
-   * SESSION-TYPE DISPATCH is explicit — the table is chosen by the token's
-   * role claim, never by guessing which table might contain the id:
-   *
-   *   USER   (role !== 'PARENT'):
-   *     sid -> Session        -> User         -> organization/role -> issue token
-   *   PARENT (role === 'PARENT'):
-   *     sid -> ParentSession  -> ParentAccount -> organization     -> issue parent token
-   *
-   * Each branch queries exactly ONE table and binds the session on its owning
-   * id (userId / parentId) AND organizationId. A parent session id can
-   * therefore never resolve through `Session`, a user session id can never
-   * resolve through `ParentSession`, and a row owned by another principal or
-   * another tenant fails closed with 401.
-   *
-   * ROTATION / REPLAY: the presented session is revoked (`token_refresh`)
-   * before the replacement is issued, so refreshing once invalidates the JWT
-   * that performed the refresh. Replaying that JWT afterwards is rejected
-   * twice over — by JwtStrategy (revoked row) and here (no live session).
-   */
   async refreshToken(
     userId: string,
     currentSessionId?: string,
     role?: string,
+    clientMeta?: { userAgent?: string; ipAddress?: string },
   ): Promise<{ accessToken: string; user: TokenUser }> {
     if (role === 'PARENT') {
-      return this.refreshParentToken(userId, currentSessionId);
+      return this.refreshParentToken(userId, currentSessionId, clientMeta);
     }
-    return this.refreshUserToken(userId, currentSessionId);
+    return this.refreshUserToken(userId, currentSessionId, clientMeta);
   }
 
   /** USER branch: sid -> Session -> User -> new Session + JWT. */
   private async refreshUserToken(
     userId: string,
     currentSessionId?: string,
+    clientMeta?: { userAgent?: string; ipAddress?: string },
   ): Promise<{ accessToken: string; user: TokenUser }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -762,20 +904,20 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
         throw new UnauthorizedException('Session is invalid or expired');
       }
 
-      // Rotate: revoke exactly the session that presented this token.
       await this.prisma.session.updateMany({
         where: { id: live.id, userId: user.id, revokedAt: null },
         data: { revokedAt: new Date(), revokedReason: 'token_refresh' },
       });
     }
 
-    return this.issueToken(user);
+    return this.issueToken(user, clientMeta);
   }
 
   /** PARENT branch: sid -> ParentSession -> ParentAccount -> new session + JWT. */
   private async refreshParentToken(
     parentId: string,
     currentSessionId?: string,
+    clientMeta?: { userAgent?: string; ipAddress?: string },
   ): Promise<{ accessToken: string; user: TokenUser }> {
     const parent = await this.prisma.parentAccount.findUnique({
       where: { id: parentId },
@@ -814,13 +956,16 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    const accessToken = await this.issueParentToken({
-      parentId: parent.id,
-      organizationId: parent.organizationId,
-      email: parent.email,
-      firstName: parent.firstName,
-      lastName: parent.lastName,
-    });
+    const accessToken = await this.issueParentToken(
+      {
+        parentId: parent.id,
+        organizationId: parent.organizationId,
+        email: parent.email,
+        firstName: parent.firstName,
+        lastName: parent.lastName,
+      },
+      clientMeta,
+    );
 
     return {
       accessToken,
@@ -881,14 +1026,13 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
           select: {
             id: true,
             name: true,
-          }
+          },
         },
         settings: true,
-      }
+      },
     });
 
     if (!user) {
-      // Defensive fallback check for ParentAccount if role was omitted
       const parent = await this.prisma.parentAccount.findUnique({
         where: { id: userId },
         include: {
@@ -934,22 +1078,15 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
 
   // ==================== Password recovery ====================
 
-  /**
-   * Request a password reset. Always returns a generic success message
-   * regardless of whether the email exists — prevents user enumeration.
-   * Supports both staff Users and ParentAccounts.
-   */
   async forgotPassword(email: string): Promise<{ message: string }> {
     const normalizedEmail = normalizeEmail(email);
 
-    // 1. Try finding a User
     const user = await this.prisma.user.findFirst({
       where: { email: normalizedEmail, isActive: true },
       select: { id: true, email: true, passwordHash: true },
     });
 
     if (user && user.passwordHash) {
-      // Invalidate any previous unused reset tokens for this user
       await this.prisma.passwordResetToken.updateMany({
         where: { userId: user.id, usedAt: null },
         data: { usedAt: new Date() },
@@ -990,7 +1127,6 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       return { message: PASSWORD_RESET_GENERIC_MESSAGE };
     }
 
-    // 2. Try finding ParentAccount(s)
     if (this.prisma.parentAccount) {
       const parents = await this.prisma.parentAccount.findMany({
         where: { email: normalizedEmail, isActive: true },
@@ -1002,7 +1138,6 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       if (activeParentsWithPassword.length > 0) {
         const parentIds = activeParentsWithPassword.map((p) => p.id);
 
-        // Invalidate previous tokens
         if (this.prisma.parentPasswordResetToken) {
           await this.prisma.parentPasswordResetToken.updateMany({
             where: { parentId: { in: parentIds }, usedAt: null },
@@ -1026,7 +1161,9 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
           if (process.env.SMTP_HOST) {
             try {
               await this.sendPasswordResetEmail(activeParentsWithPassword[0].email, resetUrl);
-              this.logger.info('Password reset email sent to parent', { email: activeParentsWithPassword[0].email });
+              this.logger.info('Password reset email sent to parent', {
+                email: activeParentsWithPassword[0].email,
+              });
             } catch (err: unknown) {
               await this.invalidateResetToken(tokenHash);
               this.logger.error('Failed to send parent password reset email', {
@@ -1046,12 +1183,10 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Always return success to prevent email enumeration
     await new Promise((resolve) => setTimeout(resolve, 150 + Math.random() * 100));
     return { message: PASSWORD_RESET_GENERIC_MESSAGE };
   }
 
-  /** Atomically burn an undelivered reset token so it can never be redeemed. */
   private async invalidateResetToken(tokenHash: string): Promise<void> {
     await this.prisma.passwordResetToken.updateMany({
       where: { tokenHash, usedAt: null },
@@ -1065,18 +1200,10 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /**
-   * Reset password using a valid, unexpired, unused token.
-   *
-   * Consume-once guarantee: the token is claimed with a single guarded write
-   * (`usedAt: null AND expiresAt > now`) whose `count` MUST be exactly 1.
-   * Supports both User and ParentAccount reset tokens.
-   */
   async resetPassword(token: string, newPassword: string) {
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const now = new Date();
 
-    // 1. Check if token exists in User reset tokens
     const userResetToken = await this.prisma.passwordResetToken.findUnique({
       where: { tokenHash },
       select: { id: true, userId: true, usedAt: true, expiresAt: true },
@@ -1116,7 +1243,6 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
           data: { passwordHash },
         });
 
-        // Revoke all active sessions — the old password is compromised
         await tx.session.updateMany({
           where: { userId: owner.id, revokedAt: null },
           data: { revokedAt: now, revokedReason: 'password_reset' },
@@ -1126,7 +1252,6 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       return { message: 'Password has been reset successfully. Please log in with your new password.' };
     }
 
-    // 2. Check if token exists in Parent reset tokens
     const parentResetToken = this.prisma.parentPasswordResetToken
       ? await this.prisma.parentPasswordResetToken.findUnique({
           where: { tokenHash },
@@ -1163,7 +1288,6 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
           throw new BadRequestException('Invalid or expired password reset token');
         }
 
-        // Find all active parent accounts matching this email across organizations
         const matchingParents = await tx.parentAccount.findMany({
           where: { email: owner.email, isActive: true },
           select: { id: true },
@@ -1175,7 +1299,6 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
           data: { passwordHash },
         });
 
-        // Revoke all active parent sessions
         await tx.parentSession.updateMany({
           where: { parentId: { in: parentIds }, revokedAt: null },
           data: { revokedAt: now, revokedReason: 'password_reset' },
@@ -1195,10 +1318,6 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     const from = process.env.SMTP_FROM || user || 'noreply@medu.app';
 
     const transporter = this.getSmtpTransporter();
-
-    // Dynamic values only: every interpolation below is escaped for its HTML
-    // context. Static markup/text is intentionally NOT escaped (double-escaping
-    // would corrupt it).
     const appUrl = escapeHtml(resolveFrontendUrl());
     const orgName = escapeHtml(process.env.ORGANIZATION_NAME || 'M-EDU');
     const safeResetUrl = escapeHtml(resetUrl);
@@ -1231,7 +1350,312 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       text: `Reset your ${process.env.ORGANIZATION_NAME || 'M-EDU'} password\n\nClick the link to reset your password (expires in 1 hour):\n\n${resetUrl}\n\nIf you didn't request this, ignore this email.`,
     });
   }
+
+  // ==================== Access Whitelist & Approval ====================
+
+  async isEmailWhitelisted(email: string): Promise<boolean> {
+    if (!this.prisma.accessWhitelist) return false;
+    const entry = await this.prisma.accessWhitelist.findUnique({
+      where: { email: normalizeEmail(email) },
+    });
+    return Boolean(entry);
+  }
+
+  async getWhitelist(organizationId?: string, isSuperAdmin = false) {
+    if (!this.prisma.accessWhitelist) {
+      return { whitelist: [], pendingUsers: [], config: { inviteOnly: true, requireApproval: true } };
+    }
+
+    const [whitelist, pendingUsers, config] = await Promise.all([
+      this.prisma.accessWhitelist.findMany({
+        where: isSuperAdmin ? {} : { organizationId },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user.findMany({
+        where: {
+          status: 'PENDING',
+          ...(isSuperAdmin ? {} : { organizationId }),
+        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          organizationId: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.accessControlConfig
+        ? this.prisma.accessControlConfig.findUnique({ where: { id: 'global' } })
+        : null,
+    ]);
+
+    return {
+      whitelist,
+      pendingUsers,
+      config: config || { inviteOnly: true, requireApproval: true },
+    };
+  }
+
+  async addToWhitelist(data: {
+    email: string;
+    note?: string;
+    role?: Role;
+    addedBy?: string;
+    organizationId?: string;
+  }) {
+    const normalized = normalizeEmail(data.email);
+    const existing = await this.prisma.accessWhitelist.findUnique({
+      where: { email: normalized },
+    });
+    if (existing) {
+      throw new ConflictException('Email already whitelisted');
+    }
+
+    return this.prisma.accessWhitelist.create({
+      data: {
+        email: normalized,
+        note: data.note,
+        role: data.role || 'ORG_ADMIN',
+        addedBy: data.addedBy,
+        organizationId: data.organizationId || null,
+      },
+    });
+  }
+
+  async removeFromWhitelist(id: string, adminId?: string, adminRole?: string, organizationId?: string) {
+    const entry = await this.prisma.accessWhitelist.findUnique({
+      where: { id },
+    });
+    if (!entry) {
+      throw new NotFoundException('Whitelist entry not found');
+    }
+
+    /*
+     * Platform roles may delete every entry, including the tenant-less
+     * (global) ones. Everyone else must BOTH be scoped to a tenant and own
+     * the row:
+     *
+     *  - a missing `organizationId` used to fall through this guard because
+     *    the comparison `entry.organizationId !== organizationId` was the ONLY
+     *    thing standing between a foreign org admin and a shared row;
+     *  - `entry.organizationId === null` (a global entry) used to skip the
+     *    guard entirely, letting ANY org admin delete platform-wide policy.
+     */
+    if (!isPlatformRole(adminRole)) {
+      if (!organizationId?.trim()) {
+        throw new ForbiddenException('Whitelist entry cannot be modified without an organization scope');
+      }
+      if (entry.organizationId !== organizationId) {
+        await this.security?.logEvent({
+          eventType: SecurityEventType.CROSS_TENANT_ACCESS_ATTEMPT,
+          organizationId,
+          userId: adminId,
+          resourceType: 'AccessWhitelist',
+          resourceId: id,
+          success: false,
+          reason: 'WHITELIST_ENTRY_NOT_IN_ORGANIZATION',
+        });
+        throw new ForbiddenException('Cannot modify whitelist entry for another organization');
+      }
+    }
+
+    await this.prisma.accessWhitelist.delete({ where: { id } });
+    return { success: true };
+  }
+
+  async approveUser(id: string, adminId?: string, adminRole?: string, organizationId?: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (!isPlatformRole(adminRole) && user.organizationId !== organizationId) {
+      throw new ForbiddenException('Cannot approve user from another organization');
+    }
+
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        status: 'ACTIVE',
+        isActive: true,
+      },
+    });
+
+    return { success: true, message: 'User approved successfully' };
+  }
+
+  async rejectUser(id: string, adminId?: string, adminRole?: string, organizationId?: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (!isPlatformRole(adminRole) && user.organizationId !== organizationId) {
+      throw new ForbiddenException('Cannot reject user from another organization');
+    }
+
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        status: 'REVOKED',
+        isActive: false,
+      },
+    });
+
+    return { success: true, message: 'User rejected successfully' };
+  }
+
+  async updateAccessControlConfig(
+    data: UpdateAccessControlSettingsDto,
+    adminId?: string,
+    adminRole?: string,
+    organizationId?: string,
+  ) {
+    /*
+     * The row is keyed `id: 'global'`: ONE policy for the whole platform.
+     * `organizationId` is therefore deliberately NOT accepted here — a tenant
+     * admin must never be able to flip invite-only/approval for other tenants.
+     * Fails closed when the caller's role was not supplied at all.
+     */
+    if (!isPlatformRole(adminRole)) {
+      await this.security?.logEvent({
+        eventType: SecurityEventType.UNAUTHORIZED_RESOURCE_ACCESS,
+        organizationId: organizationId ?? undefined,
+        userId: adminId,
+        resourceType: 'AccessControlConfig',
+        resourceId: 'global',
+        success: false,
+        reason: 'GLOBAL_ACCESS_CONTROL_WRITE_REQUIRES_PLATFORM_ROLE',
+      });
+      throw new ForbiddenException('Only a platform administrator can change global access control settings');
+    }
+
+    if (!this.prisma.accessControlConfig) return { inviteOnly: true, requireApproval: true };
+
+    return this.prisma.accessControlConfig.upsert({
+      where: { id: 'global' },
+      create: {
+        id: 'global',
+        inviteOnly: data.inviteOnly ?? true,
+        requireApproval: data.requireApproval ?? true,
+        updatedBy: adminId,
+      },
+      update: {
+        ...(data.inviteOnly !== undefined ? { inviteOnly: data.inviteOnly } : {}),
+        ...(data.requireApproval !== undefined ? { requireApproval: data.requireApproval } : {}),
+        updatedBy: adminId,
+      },
+    });
+  }
+
+  // ==================== Sessions & Device Management ====================
+
+  async getActiveSessions(userId: string, currentSessionId?: string, role?: string) {
+    if (role === 'PARENT') {
+      const sessions = await this.prisma.parentSession.findMany({
+        where: { parentId: userId, revokedAt: null, expiresAt: { gt: new Date() } },
+        orderBy: { createdAt: 'desc' },
+      });
+      return sessions.map((s) => ({
+        id: s.id,
+        createdAt: s.createdAt,
+        expiresAt: s.expiresAt,
+        isCurrent: s.id === currentSessionId,
+      }));
+    }
+
+    const sessions = await this.prisma.session.findMany({
+      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return sessions.map((s) => ({
+      id: s.id,
+      createdAt: s.createdAt,
+      expiresAt: s.expiresAt,
+      userAgent: s.userAgent,
+      ipAddress: s.ipAddress,
+      deviceInfo: s.deviceInfo,
+      lastActiveAt: s.lastActiveAt,
+      isCurrent: s.id === currentSessionId,
+    }));
+  }
+
+  async revokeSession(userId: string, sessionId: string, role?: string) {
+    if (role === 'PARENT') {
+      await this.prisma.parentSession.updateMany({
+        where: { id: sessionId, parentId: userId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'user_revoked' },
+      });
+    } else {
+      await this.prisma.session.updateMany({
+        where: { id: sessionId, userId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'user_revoked' },
+      });
+    }
+    return { success: true };
+  }
+
+  async revokeOtherSessions(userId: string, currentSessionId?: string, role?: string) {
+    if (role === 'PARENT') {
+      await this.prisma.parentSession.updateMany({
+        where: { parentId: userId, id: { not: currentSessionId }, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'revoke_others' },
+      });
+    } else {
+      await this.prisma.session.updateMany({
+        where: { userId, id: { not: currentSessionId }, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'revoke_others' },
+      });
+    }
+    return { success: true };
+  }
+
+  async acceptInvitation(dto: AcceptInvitationDto): Promise<{ accessToken: string; user: TokenUser }> {
+    const tokenHash = createHash('sha256').update(dto.token).digest('hex');
+    const invitation = await this.prisma.invitation.findUnique({
+      where: { tokenHash },
+    });
+
+    if (
+      !invitation ||
+      invitation.status !== 'PENDING' ||
+      invitation.acceptedAt ||
+      invitation.expiresAt < new Date()
+    ) {
+      throw new BadRequestException('Invalid or expired invitation token');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, this.BCRYPT_ROUNDS);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.invitation.update({
+        where: { id: invitation.id },
+        data: { status: 'ACCEPTED', acceptedAt: new Date() },
+      });
+
+      const user = await tx.user.create({
+        data: {
+          email: invitation.email,
+          organizationId: invitation.organizationId,
+          role: invitation.role,
+          passwordHash,
+          firstName: 'Invited',
+          lastName: 'Member',
+          status: 'ACTIVE',
+          isActive: true,
+          lastLoginAt: new Date(),
+        },
+        include: { organization: true },
+      });
+
+      return user;
+    });
+
+    return this.issueToken(result);
+  }
 }
-
-
-

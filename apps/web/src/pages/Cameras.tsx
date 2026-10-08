@@ -52,13 +52,13 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -802,9 +802,9 @@ function CameraDetailTabs({
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
-            initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -6, filter: 'blur(4px)' }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
             transition={SPRING.smooth}
           >
             {tab === 'events' && (
@@ -911,7 +911,7 @@ export function CamerasPage() {
       setModalOpen(false);
       setForm(INITIAL_FORM);
       setFormErrors({});
-      qc.invalidateQueries({ queryKey: ['cameras'] });
+      qc.invalidateQueries({ queryKey: queryKeys.cameras.all() });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -922,7 +922,7 @@ export function CamerasPage() {
       enabled ? camerasApi.enable(id) : camerasApi.disable(id),
     onSuccess: () => {
       push('success', t('cameras.updatedToast'));
-      qc.invalidateQueries({ queryKey: ['cameras'] });
+      qc.invalidateQueries({ queryKey: queryKeys.cameras.all() });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -932,7 +932,7 @@ export function CamerasPage() {
     mutationFn: (id: string) => camerasApi.startWorker(id),
     onSuccess: () => {
       push('success', t('cameras.workerStartedToast'));
-      qc.invalidateQueries({ queryKey: ['cameras'] });
+      qc.invalidateQueries({ queryKey: queryKeys.cameras.all() });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -942,6 +942,7 @@ export function CamerasPage() {
     mutationFn: () => camerasApi.discover(discoverSubnet ? { subnet: discoverSubnet } : {}),
     onSuccess: () => {
       push('success', t('cameras.discoveryToast'));
+      qc.invalidateQueries({ queryKey: queryKeys.cameras.all() });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -1054,8 +1055,8 @@ export function CamerasPage() {
     mutationFn: (id: string) => camerasApi.stopWorker(id),
     onSuccess: () => {
       push('success', t('cameras.workerStoppedToast'));
-      qc.invalidateQueries({ queryKey: ['cameras'] });
-      qc.invalidateQueries({ queryKey: ['camera-worker'] });
+      qc.invalidateQueries({ queryKey: queryKeys.cameras.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.cameras.workersAll() });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -1064,8 +1065,8 @@ export function CamerasPage() {
     mutationFn: (id: string) => camerasApi.restartWorker(id),
     onSuccess: () => {
       push('success', t('cameras.workerRestartedToast'));
-      qc.invalidateQueries({ queryKey: ['cameras'] });
-      qc.invalidateQueries({ queryKey: ['camera-worker'] });
+      qc.invalidateQueries({ queryKey: queryKeys.cameras.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.cameras.workersAll() });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -1075,7 +1076,7 @@ export function CamerasPage() {
     onSuccess: () => {
       push('success', t('cameras.deletedToast'));
       setSelectedCameraId(null);
-      qc.invalidateQueries({ queryKey: ['cameras'] });
+      qc.invalidateQueries({ queryKey: queryKeys.cameras.all() });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -1092,7 +1093,7 @@ export function CamerasPage() {
     onSuccess: () => {
       push('success', t('cameras.configUpdatedToast'));
       setConfigModalOpen(false);
-      qc.invalidateQueries({ queryKey: ['cameras'] });
+      qc.invalidateQueries({ queryKey: queryKeys.cameras.all() });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -1445,9 +1446,9 @@ export function CamerasPage() {
         {selectedCamera && (
           <motion.div
             key={selectedCamera.id}
-            initial={{ opacity: 0, y: 16, filter: 'blur(6px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -12, filter: 'blur(6px)' }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
             transition={SPRING.smooth}
             className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
             style={{

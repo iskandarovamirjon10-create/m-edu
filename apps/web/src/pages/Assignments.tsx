@@ -16,6 +16,7 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { assignmentsApi, groupsApi } from '../lib/api';
+import { useI18n, type TranslateFn } from '../i18n/I18nProvider';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -109,7 +110,7 @@ interface DueInfo {
   hoursLeft?: number;
 }
 
-function getDueInfo(dueDateStr: string): DueInfo {
+function getDueInfo(dueDateStr: string, t: TranslateFn): DueInfo {
   const now = Date.now();
   const due = new Date(dueDateStr).getTime();
   const diff = due - now;
@@ -120,7 +121,7 @@ function getDueInfo(dueDateStr: string): DueInfo {
     const overdueDays = Math.abs(daysLeft);
     return {
       tone: 'red',
-      label: overdueDays === 0 ? 'Overdue' : `${overdueDays}d overdue`,
+      label: overdueDays === 0 ? t('assignments.due.overdue') : t('assignments.due.overdueDays', { days: overdueDays }),
       daysLeft,
       isOverdue: true,
       isDueToday: false,
@@ -130,7 +131,7 @@ function getDueInfo(dueDateStr: string): DueInfo {
   if (hoursLeft < 24) {
     return {
       tone: 'orange',
-      label: hoursLeft <= 1 ? 'Due soon' : `${hoursLeft}h left`,
+      label: hoursLeft <= 1 ? t('assignments.due.dueSoon') : t('assignments.due.hoursLeft', { hours: hoursLeft }),
       daysLeft: 0,
       isOverdue: false,
       isDueToday: true,
@@ -139,18 +140,16 @@ function getDueInfo(dueDateStr: string): DueInfo {
   }
 
   if (daysLeft === 1) {
-    return { tone: 'orange', label: 'Tomorrow', daysLeft, isOverdue: false, isDueToday: false };
+    return { tone: 'orange', label: t('assignments.due.tomorrow'), daysLeft, isOverdue: false, isDueToday: false };
   }
 
   if (daysLeft <= 3) {
-    return { tone: 'orange', label: `${daysLeft} days left`, daysLeft, isOverdue: false, isDueToday: false };
+    return { tone: 'orange', label: t('assignments.due.daysLeft', { days: daysLeft }), daysLeft, isOverdue: false, isDueToday: false };
   }
 
   if (daysLeft <= 7) {
-    return { tone: 'blue', label: `${daysLeft} days left`, daysLeft, isOverdue: false, isDueToday: false };
-  }
-
-  return { tone: 'green', label: `${daysLeft} days left`, daysLeft, isOverdue: false, isDueToday: false };
+    return { tone: 'blue', label: t('assignments.due.daysLeft', { days: daysLeft }), daysLeft, isOverdue: false, isDueToday: false };
+  }    return { tone: 'green', label: t('assignments.due.daysLeft', { days: daysLeft }), daysLeft, isOverdue: false, isDueToday: false };
 }
 
 function assignmentTone(title: string): Tone {
@@ -370,9 +369,10 @@ function StatTile({
  * ========================================================================== */
 
 function AssignmentCard({ assignment }: { assignment: Assignment }) {
+  const { t, locale } = useI18n();
   const tone = assignmentTone(assignment.title);
   const c = TONE[tone];
-  const due = getDueInfo(assignment.dueDate);
+  const due = getDueInfo(assignment.dueDate, t);
   const dc = TONE[due.tone];
 
   const submissionCount = assignment._count?.submissions || 0;
@@ -381,11 +381,13 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
     : assignment.status?.toUpperCase() === 'CLOSED' ? 'slate'
     : 'blue';
   const sc = TONE[statusTone];
+  const statusKey = `assignments.status.${(assignment.status || '').toUpperCase()}`;
+  const statusLabel = t(statusKey);
+  const statusText = statusLabel === statusKey ? assignment.status : statusLabel;
 
-  // Fake expected submissions for progress bar - using submissionCount as baseline
-  // In real app this would come from group size
-  const expected = Math.max(submissionCount * 1.5, 20);
-  const progress = Math.min(100, Math.round((submissionCount / expected) * 100));
+  // Real submissions progress based on genuine group size if present
+  const groupStudents = (assignment as any).group?.studentCount || (assignment as any).group?._count?.students || 0;
+  const progress = groupStudents > 0 ? Math.min(100, Math.round((submissionCount / groupStudents) * 100)) : (submissionCount > 0 ? 100 : 0);
 
   return (
     <motion.div
@@ -437,7 +439,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
                 className="h-1.5 w-1.5 rounded-full"
                 style={{ background: sc.fg, boxShadow: `0 0 6px ${sc.glow}` }}
               />
-              {assignment.status}
+              {statusText}
             </span>
           </div>
 
@@ -486,7 +488,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
               }}
             >
               <Icon paths={I.award} size={9} strokeWidth={2.5} />
-              {assignment.maxScore} pts
+              {t('assignments.maxScore', { score: assignment.maxScore })}
             </span>
           </div>
 
@@ -496,12 +498,13 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
               <div className="flex items-center justify-between gap-2 text-[10.5px] font-bold">
                 <span className="inline-flex items-center gap-1 uppercase tracking-wider text-[#86868B]">
                   <Icon paths={I.calendar} size={9} strokeWidth={2.5} />
-                  {new Date(assignment.dueDate).toLocaleDateString('en-US', {
-                    month: 'short', day: 'numeric', year: 'numeric',
-                  })}
+                  {new Date(assignment.dueDate).toLocaleDateString(
+                    locale === 'uz' ? 'uz-UZ' : locale === 'ru' ? 'ru-RU' : 'en-US',
+                    { month: 'short', day: 'numeric', year: 'numeric' },
+                  )}
                 </span>
                 <span className="tabular-nums text-[#86868B]">
-                  <span className="text-[#1D1D1F] dark:text-[#F5F5F7]">{submissionCount}</span> submitted
+                  <span className="text-[#1D1D1F] dark:text-[#F5F5F7]">{submissionCount}</span> {t('assignments.submitted')}
                 </span>
               </div>
 
@@ -531,6 +534,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
  * ========================================================================== */
 
 export default function AssignmentsPage() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const reduced = usePrefersReducedMotion();
 
@@ -569,13 +573,13 @@ export default function AssignmentsPage() {
   /* ---------------- Derived stats ---------------- */
   const stats = useMemo(() => {
     const total = assignments.length;
-    const overdue = assignments.filter((a) => getDueInfo(a.dueDate).isOverdue).length;
+    const overdue = assignments.filter((a) => getDueInfo(a.dueDate, t).isOverdue).length;
     const active = assignments.filter(
       (a) => a.status?.toUpperCase() === 'ACTIVE' || a.status?.toUpperCase() === 'OPEN',
     ).length;
     const submissions = assignments.reduce((sum, a) => sum + (a._count?.submissions || 0), 0);
     return { total, active, overdue, submissions };
-  }, [assignments]);
+  }, [assignments, t]);
 
   /* ---------------- Mutations ---------------- */
   const createMutation = useMutation({
@@ -594,12 +598,12 @@ export default function AssignmentsPage() {
   /* ---------------- Handlers ---------------- */
   const validate = useCallback(() => {
     const errors: { title?: string; groupId?: string; dueDate?: string } = {};
-    if (!title.trim()) errors.title = 'Title is required';
-    if (!groupId) errors.groupId = 'Please select a group';
-    if (!dueDate) errors.dueDate = 'Due date is required';
+    if (!title.trim()) errors.title = t('assignments.validation.titleRequired');
+    if (!groupId) errors.groupId = t('assignments.validation.groupRequired');
+    if (!dueDate) errors.dueDate = t('assignments.validation.dueDateRequired');
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [title, groupId, dueDate]);
+  }, [title, groupId, dueDate, t]);
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -652,10 +656,10 @@ export default function AssignmentsPage() {
           </div>
           <div>
             <h3 className="text-[17px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Failed to load assignments
+              {t('assignments.loadErrorTitle')}
             </h3>
             <p className="mt-1 text-[13px] font-medium text-[#86868B]">
-              {(error as Error)?.message || 'Something went wrong'}
+              {(error as Error)?.message || t('common.error')}
             </p>
           </div>
           <motion.button
@@ -671,7 +675,7 @@ export default function AssignmentsPage() {
             }}
           >
             <Icon paths={I.refresh} size={14} strokeWidth={2.4} />
-            Try again
+            {t('common.retry')}
           </motion.button>
         </motion.div>
       </div>
@@ -756,11 +760,11 @@ export default function AssignmentsPage() {
                     className="h-1.5 w-1.5 rounded-full"
                     style={{ background: TONE.green.fg, boxShadow: `0 0 6px ${TONE.green.glow}` }}
                   />
-                  {stats.active} Active
+                  {t('assignments.badge.active', { count: stats.active })}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-[#00000008] bg-[#00000004] px-2.5 py-1 text-[11px] font-semibold text-[#86868B] dark:border-[#ffffff10] dark:bg-[#ffffff06]">
                   <Icon paths={I.layers} size={10} strokeWidth={2.5} />
-                  {stats.total} Total
+                  {t('assignments.badge.total', { count: stats.total })}
                 </span>
                 {stats.overdue > 0 && (
                   <span
@@ -773,16 +777,16 @@ export default function AssignmentsPage() {
                     }}
                   >
                     <Icon paths={I.alertTriangle} size={10} strokeWidth={2.5} />
-                    {stats.overdue} Overdue
+                    {t('assignments.badge.overdue', { count: stats.overdue })}
                   </span>
                 )}
               </div>
 
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
-                Homework Hub
+                {t('assignments.heroTitle')}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
-                Create assignments, track submissions, and monitor deadlines
+                {t('assignments.heroSubtitle')}
               </p>
             </div>
 
@@ -799,7 +803,7 @@ export default function AssignmentsPage() {
                   }}
                 >
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                  Create Assignment
+                  {t('assignments.create')}
                 </button>
               </motion.div>
             </div>
@@ -809,10 +813,10 @@ export default function AssignmentsPage() {
 
       {/* STATS */}
       <motion.div variants={containerVariants} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Total Assignments" value={stats.total} icon={I.pencil} tone="green" />
-        <StatTile label="Active" value={stats.active} icon={I.checkCircle} tone="blue" />
-        <StatTile label="Overdue" value={stats.overdue} icon={I.alertTriangle} tone={stats.overdue > 0 ? 'red' : 'slate'} />
-        <StatTile label="Total Submissions" value={stats.submissions} icon={I.send} tone="purple" />
+        <StatTile label={t('assignments.stat.total')} value={stats.total} icon={I.pencil} tone="green" />
+        <StatTile label={t('assignments.stat.active')} value={stats.active} icon={I.checkCircle} tone="blue" />
+        <StatTile label={t('assignments.stat.overdue')} value={stats.overdue} icon={I.alertTriangle} tone={stats.overdue > 0 ? 'red' : 'slate'} />
+        <StatTile label={t('assignments.stat.submissions')} value={stats.submissions} icon={I.send} tone="purple" />
       </motion.div>
 
       {/* LIST */}
@@ -833,10 +837,10 @@ export default function AssignmentsPage() {
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                Assignments
+                {t('assignments.listTitle')}
               </h2>
               <p className="text-[11px] font-medium text-[#86868B]">
-                {assignments.length} {assignments.length === 1 ? 'assignment' : 'assignments'}
+                {t(assignments.length === 1 ? 'assignments.countOne' : 'assignments.countMany', { count: assignments.length })}
               </p>
             </div>
           </div>
@@ -848,10 +852,10 @@ export default function AssignmentsPage() {
                   <Icon paths={I.pencil} size={26} strokeWidth={2} />
                 </div>
                 <p className="text-[14px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  No assignments yet
+                  {t('assignments.emptyTitle')}
                 </p>
                 <p className="max-w-sm text-[12px] font-medium text-[#86868B]">
-                  Create your first assignment to start tracking homework
+                  {t('assignments.emptyHint')}
                 </p>
                 <motion.button
                   type="button"
@@ -866,7 +870,7 @@ export default function AssignmentsPage() {
                   }}
                 >
                   <Icon paths={I.plus} size={13} strokeWidth={2.5} />
-                  Create Assignment
+                  {t('assignments.create')}
                 </motion.button>
               </div>
             ) : (
@@ -914,7 +918,7 @@ export default function AssignmentsPage() {
               }}
               role="dialog"
               aria-modal="true"
-              aria-label="Create assignment"
+              aria-label={t('assignments.createAria')}
             >
               <span
                 aria-hidden
@@ -928,14 +932,14 @@ export default function AssignmentsPage() {
                   <Icon paths={I.sparkles} size={18} strokeWidth={2} />
                 </div>
                 <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  Create a new assignment. Students in the selected group will receive it immediately.
+                  {t('assignments.createHint')}
                 </p>
               </div>
 
               <form onSubmit={handleCreate} className="mt-5 space-y-4" noValidate>
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                    Title <span className="text-[#FF3B30]">*</span>
+                    {t('assignments.form.title')} <span className="text-[#FF3B30]">*</span>
                   </label>
                   <input
                     type="text"
@@ -945,7 +949,7 @@ export default function AssignmentsPage() {
                       setTitle(e.target.value);
                       setFormErrors((p) => ({ ...p, title: undefined }));
                     }}
-                    placeholder="e.g. Chapter 4 — Algebra Worksheet"
+                    placeholder={t('assignments.form.titlePlaceholder')}
                     aria-invalid={Boolean(formErrors.title)}
                     className="w-full rounded-xl border bg-white/80 px-3.5 py-2.5 text-[13.5px] font-medium text-[#1D1D1F] outline-none transition-all placeholder:text-[#86868B] focus:border-[#34C759]/40 focus:shadow-[0_0_0_4px_rgba(52,199,89,0.1)] dark:bg-[#1c1c1e80] dark:text-[#F5F5F7]"
                     style={{
@@ -959,7 +963,7 @@ export default function AssignmentsPage() {
 
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                    Group <span className="text-[#FF3B30]">*</span>
+                    {t('assignments.form.group')} <span className="text-[#FF3B30]">*</span>
                   </label>
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]">
@@ -978,7 +982,7 @@ export default function AssignmentsPage() {
                         borderColor: formErrors.groupId ? '#FF3B30' : 'rgba(0,0,0,0.10)',
                       }}
                     >
-                      <option value="">— Choose a group —</option>
+                      <option value="">{t('assignments.form.chooseGroup')}</option>
                       {groups.map((g) => (
                         <option key={g.id} value={g.id}>
                           {g.name}
@@ -999,7 +1003,7 @@ export default function AssignmentsPage() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                      Due Date <span className="text-[#FF3B30]">*</span>
+                      {t('assignments.form.dueDate')} <span className="text-[#FF3B30]">*</span>
                     </label>
                     <input
                       type="datetime-local"
@@ -1021,7 +1025,7 @@ export default function AssignmentsPage() {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                      Max Score
+                      {t('assignments.form.maxScore')}
                     </label>
                     <input
                       type="number"
@@ -1043,7 +1047,7 @@ export default function AssignmentsPage() {
                     disabled={createMutation.isPending}
                     className="rounded-xl border border-[#00000010] bg-[#00000004] px-4 py-2.5 text-[13px] font-semibold text-[#1D1D1F] outline-none transition-colors hover:bg-[#00000008] disabled:opacity-50 dark:border-[#ffffff10] dark:bg-[#ffffff06] dark:text-[#F5F5F7]"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </motion.button>
                   <motion.button
                     type="submit"
@@ -1064,12 +1068,12 @@ export default function AssignmentsPage() {
                           animate={{ rotate: 360 }}
                           transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
                         />
-                        Creating…
+                        {t('assignments.creating')}
                       </>
                     ) : (
                       <>
                         <Icon paths={I.plus} size={14} strokeWidth={2.5} />
-                        Create Assignment
+                        {t('assignments.create')}
                       </>
                     )}
                   </motion.button>

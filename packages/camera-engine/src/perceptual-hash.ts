@@ -22,6 +22,7 @@
  * detection only needs stable "is this the same scene" signal).
  */
 
+import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 
 /** Bit-set perceptual hash stored as a 64-bit BigInt. */
@@ -30,24 +31,53 @@ export type PerceptualHash = bigint;
 /**
  * Compute an 8x8 perceptual hash of a JPEG/buffer image.
  *
- * We avoid a hard dependency on `sharp` or canvas so this
- * module compiles without native bindings. Instead we use
- * a fast but semantically correct 8x8 average-hash:
+ * Algorithm (standard 8x8 average hash):
+ *   1. Decode JPEG/image to raw buffer using sharp
+ *   2. Resize to 8x8 grayscale (fill)
+ *   3. Compute mean luminance across the 64 pixels
+ *   4. Each bit i = (pixel[i] > mean) ? 1 : 0
  *
- *   1. Compute the per-byte mean of the entire buffer.
- *   2. The i-th bit is 1 iff byte[i] > mean.
- *
- * This is stable: identical JPEG frames → identical byte
- * sequences → identical hash. Small JPEG codec noise flips
- * only a few bits per frame, keeping Hamming distance low
- * for the same scene. Genuinely different content changes
- * enough byte-level statistics to diverge widely.
- *
- * The SHA-256 fallback handles tiny buffers deterministically.
+ * For non-image / corrupted / synthetic test buffers where sharp
+ * cannot parse an image, gracefully falls back to deterministic hashing.
  */
-export function perceptualHash(
+export async function perceptualHash(
   buffer: Buffer,
-): PerceptualHash {
+): Promise<PerceptualHash> {
+  try {
+    const { data } = await sharp(buffer)
+      .resize(8, 8, { fit: 'fill' })
+      .grayscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    let sum = 0;
+    for (let i = 0; i < 64; i++) {
+      sum += data[i]!;
+    }
+    const mean = sum / 64;
+
+    let hash = 0n;
+    for (let i = 0; i < 64; i++) {
+      if (data[i]! > mean) {
+        hash |= 1n << BigInt(i);
+      }
+    }
+
+    return hash;
+  } catch {
+    return perceptualHashFallback(buffer);
+  }
+}
+
+/**
+ * Synchronous perceptual hash fallback for synthetic test buffers
+ * or when async decoding is not possible.
+ */
+export function perceptualHashSync(buffer: Buffer): PerceptualHash {
+  return perceptualHashFallback(buffer);
+}
+
+function perceptualHashFallback(buffer: Buffer): PerceptualHash {
   const HASH_BITS = 64;
   const len = buffer.length;
 
@@ -55,12 +85,6 @@ export function perceptualHash(
     return hashFallback(buffer);
   }
 
-  // Average-hash: compare each byte to the buffer mean.
-  // Bit i = 1 iff byte[i] > mean(byte[0..len-1]).
-  // This is stable, fast, and produces different hashes for
-  // different content — unlike the earlier block-sampling
-  // approach which could produce identical hashes for
-  // different non-uniform buffers.
   let sum = 0;
   for (let i = 0; i < len; i++) {
     sum += buffer[i] ?? 0;
@@ -68,8 +92,6 @@ export function perceptualHash(
   const mean = sum / len;
 
   let hash = 0n;
-  // Only sample up to 64 evenly-spaced bytes to avoid O(N) on
-  // very large buffers (e.g. 4K JPEG at full quality).
   const step = Math.max(1, Math.floor(len / HASH_BITS));
   for (let i = 0; i < HASH_BITS; i++) {
     const pos = i * step;

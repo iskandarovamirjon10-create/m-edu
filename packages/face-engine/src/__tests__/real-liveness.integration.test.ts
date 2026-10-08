@@ -82,6 +82,23 @@ describe('Preprocessing helpers', () => {
     expect(b).toBeLessThanOrEqual(99);
   });
 
+  it('degrades to a valid >=1x1 region for a bbox entirely outside the image', () => {
+    const [l, t, r, b] = cropBoxForLiveness(640, 480, { x: -500, y: -500, width: 268, height: 221 }, 1.0);
+    const width = r - l + 1;
+    const height = b - t + 1;
+    expect(width).toBeGreaterThanOrEqual(1);
+    expect(height).toBeGreaterThanOrEqual(1);
+    expect(l).toBeGreaterThanOrEqual(0);
+    expect(t).toBeGreaterThanOrEqual(0);
+    expect(r).toBeLessThanOrEqual(639);
+    expect(b).toBeLessThanOrEqual(479);
+  });
+
+  it('invalidates zero-dimension bboxes (no divide-by-zero, no empty extract)', () => {
+    const [l, t, r, b] = cropBoxForLiveness(640, 480, { x: 100, y: 100, width: 0, height: 0 }, 2.7);
+    expect(r - l + 1).toBeGreaterThanOrEqual(1);
+    expect(b - t + 1).toBeGreaterThanOrEqual(1);
+  });
   it('softmax normalizes to 1 and preserves argmax', () => {
     const p = softmax([2.0, 1.0, 0.1]);
     const sum = p.reduce((a, b) => a + b, 0);

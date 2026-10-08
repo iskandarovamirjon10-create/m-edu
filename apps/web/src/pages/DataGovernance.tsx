@@ -214,13 +214,13 @@ function ExportLogTab() {
  </div>
  )}
 
- {data && data.totalPages > 1 && (
- <div className="flex items-center justify-center gap-2 mt-4">
- <GlassButton size="sm"onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Prev</GlassButton>
- <span className="text-sm text-[var(--text-muted)]">{page} / {data.totalPages}</span>
- <GlassButton size="sm"onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))} disabled={page >= data.totalPages}>Next</GlassButton>
- </div>
- )}
+      {data && data.totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <GlassButton size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>{t('common.prev')}</GlassButton>
+          <span className="text-sm text-[var(--text-muted)]">{page} / {data.totalPages}</span>
+          <GlassButton size="sm" onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))} disabled={page >= data.totalPages}>{t('common.next')}</GlassButton>
+        </div>
+      )}
  </div>
  );
 }
@@ -304,13 +304,13 @@ function AccessAuditTab() {
  </div>
  )}
 
- {data && data.totalPages > 1 && (
- <div className="flex items-center justify-center gap-2 mt-4">
- <GlassButton size="sm"onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Prev</GlassButton>
- <span className="text-sm text-[var(--text-muted)]">{page} / {data.totalPages}</span>
- <GlassButton size="sm"onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))} disabled={page >= data.totalPages}>Next</GlassButton>
- </div>
- )}
+      {data && data.totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <GlassButton size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>{t('common.prev')}</GlassButton>
+          <span className="text-sm text-[var(--text-muted)]">{page} / {data.totalPages}</span>
+          <GlassButton size="sm" onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))} disabled={page >= data.totalPages}>{t('common.next')}</GlassButton>
+        </div>
+      )}
  </div>
  );
 }

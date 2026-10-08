@@ -1,14 +1,29 @@
-import { Body, Controller, Get, HttpException, Post, Req, Res, UseGuards, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpException, Param, Post, Req, Res, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { Response } from 'express';
-import { Request } from 'express';
+import { Response, Request } from 'express';
+import { timingSafeEqual } from 'crypto';
 import { AuthService } from './auth.service';
 import { AllowPublic } from './public.decorator';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { BootstrapDto, ExchangeAuthCodeDto, ForgotPasswordDto, LoginDto, ParentLoginDto, RegisterDto, ResetPasswordDto } from './dto';
+import { RolesGuard } from './roles.guard';
+import { Roles } from './roles.decorator';
+import { Role } from '@prisma/client';
+import {
+  AcceptInvitationDto,
+  AddToWhitelistDto,
+  BootstrapDto,
+  ExchangeAuthCodeDto,
+  ForgotPasswordDto,
+  LoginDto,
+  ParentLoginDto,
+  RegisterDto,
+  ResetPasswordDto,
+  UpdateAccessControlSettingsDto,
+} from './dto';
 import { GoogleProfile, RequestUser } from './types';
+import { PLATFORM_ROLES } from './authorization.policy';
 import { ParentPortalService } from '../parent-portal/parent-portal.service';
 import { authCookieMaxAgeMs } from './auth.ttl';
 import { resolveFrontendUrl } from './auth.utils';
@@ -21,12 +36,32 @@ export class AuthController {
     private readonly parentPortalService: ParentPortalService,
   ) {}
 
+  private extractClientMeta(req?: Request) {
+    if (!req || !req.headers) return undefined;
+    const userAgent = req.headers['user-agent'] as string | undefined;
+    const forwarded = req.headers['x-forwarded-for'];
+    const ipAddress = (
+      typeof forwarded === 'string'
+        ? forwarded.split(',')[0].trim()
+        : req.socket?.remoteAddress || req.ip || undefined
+    );
+    if (!userAgent && !ipAddress) return undefined;
+    return { userAgent, ipAddress };
+  }
+
   @Post('login')
   @AllowPublic()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Login with email and password' })
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.login(dto.email, dto.password);
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+    @Req() req?: Request,
+  ) {
+    const meta = this.extractClientMeta(req);
+    const result = meta
+      ? await this.authService.login(dto.email, dto.password, meta)
+      : await this.authService.login(dto.email, dto.password);
     res.cookie('access_token', result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -55,13 +90,24 @@ export class AuthController {
   @AllowPublic()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Register a new user and organization' })
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.register(dto);
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) res: Response,
+    @Req() req?: Request,
+  ) {
+    const meta = this.extractClientMeta(req);
+    const result = meta
+      ? await this.authService.register(dto, meta)
+      : await this.authService.register(dto);
+    if (result.pendingApproval) {
+      return {
+        user: result.user,
+        pendingApproval: true,
+        message: result.message || 'Account registered successfully. Pending administrator approval.',
+      };
+    }
     // Issue the same HttpOnly session cookie as /auth/login so the newly
     // registered user lands on the dashboard already authenticated
-    // (previously the register endpoint returned the token only in the JSON
-    // body — the browser never received a session cookie and the
-    // ProtectedRoute guard bounced it straight back to /login).
     res.cookie('access_token', result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -69,6 +115,14 @@ export class AuthController {
       maxAge: authCookieMaxAgeMs(),
     });
     return { user: result.user };
+  }
+
+  @Post('invitations/accept')
+  @AllowPublic()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Accept invitation and set password' })
+  async acceptInvitation(@Body() dto: AcceptInvitationDto) {
+    return this.authService.acceptInvitation(dto);
   }
 
   @Get('google')
@@ -88,11 +142,22 @@ export class AuthController {
   async googleAuthCallback(@Req() req: Request & { user: GoogleProfile }, @Res() res: Response) {
     try {
       const googleUser = req.user;
-      const result = await this.authService.googleLogin(googleUser);
-      const authCode = await this.authService.generateAuthCode(result.accessToken, result.user.id);
+      const meta = this.extractClientMeta(req);
+      const result = meta
+        ? await this.authService.googleLogin(googleUser, meta)
+        : await this.authService.googleLogin(googleUser);
+      const exchangeState = this.authService.generateSecureToken();
+      const authCode = await this.authService.generateAuthCode(result.accessToken, result.user.id, exchangeState);
+
+      res.cookie('oauth_exchange_state', exchangeState, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 5 * 60 * 1000,
+      });
 
       const frontendUrl = resolveFrontendUrl();
-      const redirectUrl = `${frontendUrl}/auth/callback?code=${encodeURIComponent(authCode)}`;
+      const redirectUrl = `${frontendUrl}/auth/callback?code=${encodeURIComponent(authCode)}&state=${encodeURIComponent(exchangeState)}`;
       res.redirect(redirectUrl);
     } catch (error: unknown) {
       const frontendUrl = resolveFrontendUrl();
@@ -117,11 +182,28 @@ export class AuthController {
   @AllowPublic()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Exchange authorization code for session cookie' })
-  async exchangeAuthCode(@Body() body: ExchangeAuthCodeDto, @Res({ passthrough: true }) res: Response) {
+  async exchangeAuthCode(
+    @Body() body: ExchangeAuthCodeDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     if (!body.code) {
       throw new BadRequestException('Authorization code is required');
     }
-    const accessToken = await this.authService.exchangeAuthCode(body.code);
+
+    // Cookie state verification (binds exchange to the browser that completed OAuth callback)
+    const cookieState = req.cookies?.['oauth_exchange_state'];
+    if (cookieState && body.state) {
+      const expected = Buffer.from(cookieState);
+      const actual = Buffer.from(body.state);
+      if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+        throw new BadRequestException('Invalid or expired OAuth exchange state');
+      }
+    }
+
+    const accessToken = await this.authService.exchangeAuthCode(body.code, body.state);
+    res.clearCookie('oauth_exchange_state');
+
     res.cookie('access_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -161,11 +243,19 @@ export class AuthController {
   async refresh(@Req() req: Request & { user: RequestUser }, @Res({ passthrough: true }) res: Response) {
     // `role` selects the session table: 'PARENT' -> ParentSession,
     // anything else -> Session. Never resolve a sid against both.
-    const result = await this.authService.refreshToken(
-      req.user.sub,
-      req.user.sid ?? undefined,
-      req.user.role,
-    );
+    const meta = this.extractClientMeta(req);
+    const result = meta
+      ? await this.authService.refreshToken(
+          req.user.sub,
+          req.user.sid ?? undefined,
+          req.user.role,
+          meta,
+        )
+      : await this.authService.refreshToken(
+          req.user.sub,
+          req.user.sid ?? undefined,
+          req.user.role,
+        );
     res.cookie('access_token', result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -217,8 +307,13 @@ export class AuthController {
   @AllowPublic()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Login for parents using email' })
-  async parentLogin(@Body() dto: ParentLoginDto, @Res({ passthrough: true }) res: Response) {
+  async parentLogin(
+    @Body() dto: ParentLoginDto,
+    @Res({ passthrough: true }) res: Response,
+    @Req() req?: Request,
+  ) {
     const parent = await this.parentPortalService.authenticate(dto.email, dto.password, dto.organizationId);
+    const meta = this.extractClientMeta(req);
     
     // Issue token specifically for parents using authService
     const accessToken = await this.authService.issueParentToken({
@@ -227,7 +322,7 @@ export class AuthController {
       email: parent.email,
       firstName: parent.firstName,
       lastName: parent.lastName,
-    });
+    }, meta);
 
     res.cookie('access_token', accessToken, {
       httpOnly: true,
@@ -245,5 +340,127 @@ export class AuthController {
         role: 'PARENT',
       }
     };
+  }
+
+  // ==================== Active Sessions & Device Management ====================
+
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all active sessions/devices for current user' })
+  async getActiveSessions(@Req() req: Request & { user: RequestUser }) {
+    return this.authService.getActiveSessions(req.user.sub, req.user.sid ?? undefined, req.user.role);
+  }
+
+  @Delete('sessions/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke a specific session/device by id' })
+  async revokeSession(
+    @Param('id') id: string,
+    @Req() req: Request & { user: RequestUser },
+  ) {
+    return this.authService.revokeSession(req.user.sub, id, req.user.role);
+  }
+
+  @Post('sessions/revoke-others')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke all other active sessions except current' })
+  async revokeOtherSessions(@Req() req: Request & { user: RequestUser }) {
+    return this.authService.revokeOtherSessions(req.user.sub, req.user.sid ?? undefined, req.user.role);
+  }
+
+  // ==================== Access Whitelist & Approval ====================
+
+  @Get('whitelist')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get access whitelist, pending users, and access control settings' })
+  async getWhitelist(@Req() req: Request & { user: RequestUser }) {
+    const isSuperAdmin = req.user.role === 'SUPER_ADMIN';
+    return this.authService.getWhitelist(req.user.organizationId, isSuperAdmin);
+  }
+
+  @Post('whitelist')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Add email to access whitelist' })
+  async addToWhitelist(
+    @Body() dto: AddToWhitelistDto,
+    @Req() req: Request & { user: RequestUser },
+  ) {
+    return this.authService.addToWhitelist({
+      email: dto.email,
+      note: dto.note,
+      role: dto.role,
+      addedBy: req.user.sub,
+      organizationId: req.user.organizationId,
+    });
+  }
+
+  @Delete('whitelist/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove entry from access whitelist' })
+  async removeFromWhitelist(
+    @Param('id') id: string,
+    @Req() req: Request & { user: RequestUser },
+  ) {
+    // The service scopes the delete by (role, organizationId). Omitting those
+    // arguments here used to disable the ownership check completely — any
+    // ORG_ADMIN could delete any other tenant's whitelist entry.
+    return this.authService.removeFromWhitelist(
+      id,
+      req.user.sub,
+      req.user.role,
+      req.user.organizationId,
+    );
+  }
+
+  @Post('whitelist/approve-user/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Approve a pending user' })
+  async approveUser(
+    @Param('id') id: string,
+    @Req() req: Request & { user: RequestUser },
+  ) {
+    return this.authService.approveUser(id, req.user.sub, req.user.role, req.user.organizationId);
+  }
+
+  @Delete('whitelist/reject-user/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reject a pending user' })
+  async rejectUser(
+    @Param('id') id: string,
+    @Req() req: Request & { user: RequestUser },
+  ) {
+    return this.authService.rejectUser(id, req.user.sub, req.user.role, req.user.organizationId);
+  }
+
+  @Post('whitelist/settings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  // This endpoint rewrites the SINGLE `id: 'global'` policy row. A tenant
+  // admin flipping it changes registration policy for every other tenant.
+  @Roles(...PLATFORM_ROLES)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update access control settings' })
+  async updateAccessControlSettings(
+    @Body() body: UpdateAccessControlSettingsDto,
+    @Req() req: Request & { user: RequestUser },
+  ) {
+    return this.authService.updateAccessControlConfig(
+      body,
+      req.user.sub,
+      req.user.role,
+      req.user.organizationId,
+    );
   }
 }

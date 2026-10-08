@@ -1,6 +1,7 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AllowPublic } from '../auth/public.decorator';
 
@@ -16,7 +17,7 @@ export class HealthController {
 
   @Get()
   @ApiOperation({ summary: 'Liveness + readiness check' })
-  async check() {
+  async check(@Res({ passthrough: true }) res: Response) {
     let database = 'down';
     try {
       await this.prisma.$queryRaw`SELECT 1`;
@@ -24,11 +25,18 @@ export class HealthController {
     } catch {
       database = 'down';
     }
-    return {
+    const payload = {
       status: database === 'up' ? 'ok' : 'degraded',
       database,
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
     };
+    // The /health route doubles as the Docker HEALTHCHECK target. A dead
+    // database means the container serves 500s while reporting healthy, so
+    // the probe must fail (503) whenever the DB is unreachable.
+    if (database !== 'up') {
+      res.status(503);
+    }
+    return payload;
   }
 }

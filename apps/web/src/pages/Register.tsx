@@ -64,6 +64,7 @@ export function RegisterPage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   const set = useCallback(<K extends keyof RegisterFormState>(key: K, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -113,7 +114,7 @@ export function RegisterPage() {
 
       setBusy(true);
       try {
-        await register({
+        const res = await register({
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
           email: form.email.trim(),
@@ -121,6 +122,10 @@ export function RegisterPage() {
           organizationName: form.organizationName.trim(),
           password: form.password,
         });
+        if ((res as any)?.pendingApproval) {
+          setPendingMessage((res as any).message || t('auth.pendingApprovalNotice'));
+          return;
+        }
         navigate('/', { replace: true });
       } catch (err) {
         setSubmitError(
@@ -146,6 +151,38 @@ export function RegisterPage() {
       form.confirm,
     [busy, form],
   );
+
+  if (pendingMessage) {
+    return (
+      <AuthLayout
+        title={t('auth.pendingTitle')}
+        subtitle={t('auth.pendingSubtitle')}
+      >
+        <div className="text-center py-6 space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-lg shadow-amber-500/10">
+            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-white">
+            {t('auth.pendingHeader')}
+          </h3>
+          <p className="text-sm text-slate-300 leading-relaxed max-w-sm mx-auto">
+            {pendingMessage}
+          </p>
+          <div className="pt-4">
+            <Link
+              to="/login"
+              className="inline-flex items-center justify-center px-6 py-2.5 rounded-xl font-medium text-white transition-all duration-200 hover:brightness-110 shadow-md"
+              style={{ background: 'var(--m-vivid)' }}
+            >
+              {t('auth.returnToLogin')}
+            </Link>
+          </div>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout

@@ -58,6 +58,7 @@ describe('CameraWorkerManagerService - Concurrency', () => {
           streamPath: '/h264',
           processingFps: 3,
         }),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
     };
     alerting = {};

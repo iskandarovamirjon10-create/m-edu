@@ -458,7 +458,7 @@ export function NotificationsMenu() {
             {!notifications.isLoading && items.length > 0 && (
               <ul
                 className="relative z-10 max-h-80 overflow-y-auto"
-                aria-label="Notification list"
+                aria-label={t('notifications.list')}
               >
                 {items.map((notification) => (
                   <li key={notification.id}>

@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useOptionalAuthState } from '@/auth/AuthContext';
+import { searchApi } from '@/lib/api';
 
 interface CommandItem {
   id: string;
@@ -46,6 +47,69 @@ interface CommandItemWithRoles extends CommandItem {
 }
 
 const ICON_NAV = <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 12h18M3 6h18M3 18h18"/></svg>;
+
+const QUICK_ACTIONS: CommandItemWithRoles[] = [
+  {
+    id: 'quick-payment',
+    label: "⚡ Tezkor To‘lov (3 soniya)",
+    description: "O‘quvchidan zudlik bilan to‘lov qabul qilish [Alt+P]",
+    category: "Tezkor Amallar (Fast Actions)",
+    keywords: ['payment', 'tolov', 'pul', 'kassa', 'chek', 'payme', 'click', 'naqd'],
+    icon: <span className="text-base">💵</span>,
+    action: () => {
+      window.dispatchEvent(new CustomEvent('open-quick-payment'));
+    },
+  },
+  {
+    id: 'quick-attendance',
+    label: "📋 Tezkor Davomat (Express)",
+    description: "Bugungi guruh davomatini 1 daqiqada belgilash [Alt+A]",
+    category: "Tezkor Amallar (Fast Actions)",
+    keywords: ['attendance', 'davomat', 'yoqlama', 'keldi', 'dars', 'kelmadi'],
+    icon: <span className="text-base">📋</span>,
+    action: () => {
+      window.dispatchEvent(new CustomEvent('open-quick-attendance'));
+    },
+  },
+  {
+    id: 'quick-import',
+    label: "📥 Excel / CSV Bazasini Yuklash",
+    description: "Markaz o‘quvchilarini 2 soniyada tizimga o‘tkazish",
+    category: "Tezkor Amallar (Fast Actions)",
+    keywords: ['import', 'excel', 'csv', 'baza', 'upload', 'yuklash'],
+    href: '/import-export',
+    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
+    icon: <span className="text-base">📊</span>,
+  },
+  {
+    id: 'quick-new-student',
+    label: "➕ Yangi O‘quvchi Qo‘shish",
+    description: "Yangi talaba anketasini ochish",
+    category: "Tezkor Amallar (Fast Actions)",
+    keywords: ['new', 'student', 'oquvchi', 'talaba', 'qoshish'],
+    href: '/students',
+    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
+    icon: <span className="text-base">👤</span>,
+  },
+  {
+    id: 'quick-gamification',
+    label: "🏆 M-Coins & Gamifikatsiya",
+    description: "Reyting peshqadami va mukofotlar do‘koni",
+    category: "Tezkor Amallar (Fast Actions)",
+    keywords: ['gamification', 'coins', 'xp', 'tangalar', 'sovrin', 'leaderboard', 'podium'],
+    href: '/gamification',
+    icon: <span className="text-base">🏆</span>,
+  },
+  {
+    id: 'quick-tg-app',
+    label: "📱 Telegram WebApp Hub",
+    description: "Ota-ona (Face ID, invoys) & O‘qituvchi (jadval, davomat)",
+    category: "Tezkor Amallar (Fast Actions)",
+    keywords: ['telegram', 'tg', 'bot', 'webapp', 'ota-ona', 'mobil', 'davomat'],
+    href: '/tg-app',
+    icon: <span className="text-base">📱</span>,
+  },
+];
 
 const NAV_ITEMS: CommandItemWithRoles[] = [
   {
@@ -145,6 +209,24 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 3v18h18M7 16l4-4 4 4 5-5"/></svg></Icon>,
   },
   {
+    id: 'gamification',
+    label: 'Gamification & M-Coins',
+    description: 'Student XP, leaderboards, streaks and rewards store',
+    category: 'Academic',
+    keywords: ['coins', 'xp', 'points', 'leaderboard', 'store', 'rewards', 'gamification'],
+    href: '/gamification',
+    icon: <Icon><span className="text-sm">🏆</span></Icon>,
+  },
+  {
+    id: 'tg-app',
+    label: 'Telegram WebApp Hub',
+    description: 'Mobile parent & teacher Telegram portal',
+    category: 'System',
+    keywords: ['telegram', 'tg', 'bot', 'webapp', 'portal', 'parent', 'teacher'],
+    href: '/tg-app',
+    icon: <Icon><span className="text-sm">📱</span></Icon>,
+  },
+  {
     id: 'certificates',
     label: 'Certificates',
     description: 'Generate and manage student certificates',
@@ -225,6 +307,73 @@ export function CommandPalette() {
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const listId = useId();
 
+  const [liveResults, setLiveResults] = useState<CommandItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setLiveResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearching(true);
+
+    const timer = setTimeout(() => {
+      searchApi.search(q, ['STUDENT', 'TEACHER', 'GROUP', 'COURSE'], 8)
+        .then((res: any) => {
+          if (cancelled) return;
+          const mapped: CommandItem[] = (res.results || []).map((item: any) => {
+            let cat = 'Qidiruv Natijalari';
+            let icon = '🔍';
+            const desc = item.subtitle || item.description || '';
+            if (item.type === 'STUDENT') {
+              cat = 'O‘quvchilar (Students)';
+              icon = '🎓';
+            } else if (item.type === 'TEACHER') {
+              cat = 'O‘qituvchilar (Teachers)';
+              icon = '👨‍🏫';
+            } else if (item.type === 'GROUP') {
+              cat = 'Guruhlar (Groups)';
+              icon = '👥';
+            } else if (item.type === 'COURSE') {
+              cat = 'Kurslar (Courses)';
+              icon = '📚';
+            }
+
+            return {
+              id: `search-${item.type}-${item.id}`,
+              label: item.title,
+              description: desc,
+              category: cat,
+              href: item.href,
+              icon: <span className="text-base">{icon}</span>,
+            };
+          });
+          setLiveResults(mapped);
+          setIsSearching(false);
+        })
+        .catch(() => {
+          if (!cancelled) setIsSearching(false);
+        });
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  const roleFilteredActions = useMemo(() => {
+    return QUICK_ACTIONS.filter((item) => {
+      if (!item.roles || item.roles.length === 0) return true;
+      if (!userRole) return false;
+      return item.roles.includes(userRole);
+    });
+  }, [userRole]);
+
   const roleFilteredItems = useMemo(() => {
     return NAV_ITEMS.filter((item) => {
       if (!item.roles || item.roles.length === 0) return true;
@@ -236,9 +385,11 @@ export function CommandPalette() {
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
 
-    if (!value) return roleFilteredItems;
+    if (!value) {
+      return [...roleFilteredActions, ...roleFilteredItems];
+    }
 
-    return roleFilteredItems.filter((item) => {
+    const matchedNav = roleFilteredItems.filter((item) => {
       return [
         item.label,
         item.description,
@@ -248,7 +399,20 @@ export function CommandPalette() {
         .filter(Boolean)
         .some((field) => field!.toLowerCase().includes(value));
     });
-  }, [query, roleFilteredItems]);
+
+    const matchedActions = roleFilteredActions.filter((item) => {
+      return [
+        item.label,
+        item.description,
+        item.category,
+        ...(item.keywords ?? []),
+      ]
+        .filter(Boolean)
+        .some((field) => field!.toLowerCase().includes(value));
+    });
+
+    return [...liveResults, ...matchedActions, ...matchedNav];
+  }, [query, roleFilteredActions, roleFilteredItems, liveResults]);
 
   const openPalette = useCallback(() => {
     previousFocusRef.current = document.activeElement as HTMLElement;
@@ -434,6 +598,10 @@ export function CommandPalette() {
             style={{ color: 'var(--text-primary)' }}
           />
 
+          {isSearching && (
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent shrink-0" />
+          )}
+
           <kbd
             className="hidden rounded-lg border px-2 py-1 text-[10px] font-bold sm:inline-flex"
             style={{
@@ -539,15 +707,25 @@ export function CommandPalette() {
         </ul>
 
         <div
-          className="hidden items-center gap-4 border-t px-4 py-2.5 text-[11px] sm:flex"
+          className="hidden items-center justify-between border-t px-4 py-2.5 text-[11px] sm:flex"
           style={{
             borderColor: 'var(--border-subtle)',
             color: 'var(--text-muted)',
           }}
         >
-          <span>↑↓ Navigate</span>
-          <span>↵ Open</span>
-          <span>ESC Close</span>
+          <div className="flex items-center gap-3">
+            <span>↑↓ Tanlash</span>
+            <span>↵ Ochish</span>
+            <span>ESC Yopish</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400">
+              Alt+P: To‘lov
+            </span>
+            <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-indigo-400">
+              Alt+A: Davomat
+            </span>
+          </div>
         </div>
       </div>
     </div>,

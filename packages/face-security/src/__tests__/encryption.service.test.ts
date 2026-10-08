@@ -63,6 +63,15 @@ describe('AesEncryptionService (AES-256-GCM)', () => {
     expect(await service.verifyHash(data + 'x', hash)).toBe(false);
   });
 
+  it('verifyHash compares in constant time and rejects malformed / wrong-length hashes', async () => {
+    const hash = await service.hash('template-data');
+    // Must never throw (crypto.timingSafeEqual throws on length mismatch) and
+    // must never report a match for a malformed or truncated stored hash.
+    expect(await service.verifyHash('template-data', 'not-a-hex-hash')).toBe(false);
+    expect(await service.verifyHash('template-data', '')).toBe(false);
+    expect(await service.verifyHash('template-data', hash.slice(0, 10))).toBe(false);
+  });
+
   it('rejects short encryption keys', () => {
     expect(() => new AesEncryptionService('short')).toThrow();
   });

@@ -229,9 +229,9 @@ function HistoryTab() {
  aria-label={t('communication.allChannels')}
  >
  <option value="">{t('communication.allChannels')}</option>
- <option value="EMAIL">Email</option>
- <option value="SMS">SMS</option>
- <option value="TELEGRAM">Telegram</option>
+ <option value="EMAIL">{t('communication.channel.EMAIL') || 'Email'}</option>
+ <option value="SMS">{t('communication.channel.SMS') || 'SMS'}</option>
+ <option value="TELEGRAM">{t('communication.channel.TELEGRAM') || 'Telegram'}</option>
  <option value="IN_APP">{t('communication.channel.IN_APP')}</option>
  </GlassSelect>
  <GlassSelect
@@ -257,14 +257,14 @@ function HistoryTab() {
  <div className="rounded-[2.5rem] glass-card overflow-hidden relative min-h-[400px]">
  <div className="absolute inset-0 rounded-[2.5rem] pointer-events-none ring-1 ring-inset ring-black/5 dark:ring-white/5"aria-hidden="true"/>
 
- <div className="relative z-10 w-full overflow-x-auto custom-scrollbar">
- {historyQuery.isLoading ? (
- <div className="p-16 flex items-center justify-center"><GlassPageLoader label="Loading logs…"/></div>
- ) : historyQuery.isError ? (
- <div className="p-12"><GlassErrorState message={getErrorMessage(historyQuery.error)} onRetry={() => historyQuery.refetch()} /></div>
- ) : items.length === 0 ? (
- <div className="p-16"><GlassEmptyState title="No Records"message="Try adjusting your filters."/></div>
- ) : (
+    <div className="relative z-10 w-full overflow-x-auto custom-scrollbar">
+      {historyQuery.isLoading ? (
+        <div className="p-16 flex items-center justify-center"><GlassPageLoader label={t('common.loading')} /></div>
+      ) : historyQuery.isError ? (
+        <div className="p-12"><GlassErrorState message={getErrorMessage(historyQuery.error)} onRetry={() => historyQuery.refetch()} /></div>
+      ) : items.length === 0 ? (
+        <div className="p-16"><GlassEmptyState title={t('communication.noRecords')} message={t('notifications.noMatchHint')} /></div>
+      ) : (
  <GlassTable>
  <GlassTHead>
  <GlassTR>
@@ -362,6 +362,7 @@ function HistoryTab() {
 // ── SVG Donut & Bar Chart Components ────────────────────────────────────────
 
 function DonutChart({ data}: { data: any[]}) {
+ const { t } = useI18n();
  const total = data.reduce((sum, d) => sum + d.value, 0) || 1;
  let cumulative = 0;
  
@@ -399,11 +400,11 @@ function DonutChart({ data}: { data: any[]}) {
  className="transition-all duration-1000 ease-out"
  />
  );
-})}
+ })}
  </svg>
  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
  <span className="text-[1.5rem] font-extrabold text-[var(--text-primary)] leading-none font-mono">{total}</span>
- <span className="text-[0.65rem] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">Total</span>
+ <span className="text-[0.65rem] font-bold text-[var(--text-muted)] uppercase tracking-widest mt-1">{t('common.total')}</span>
  </div>
  </div>
  );

@@ -111,7 +111,7 @@ describe('QualityAssessor', () => {
       expect(largeFaceResult.faceSizeRatio).toBeGreaterThan(smallFaceResult.faceSizeRatio);
     });
 
-    it('estimates pose from bounding box position', async () => {
+    it('does not fabricate pose angles from bounding box position (regression: FE-2)', async () => {
       // Center face
       const centerResult = await assessor.assessQuality({
         imageBuffer: dummyImage,
@@ -130,9 +130,16 @@ describe('QualityAssessor', () => {
         },
       });
 
-      // Off-center face should have larger absolute yaw
-      expect(Math.abs(offCenterResult.pose.yaw))
-        .toBeGreaterThan(Math.abs(centerResult.pose.yaw));
+      // A face without landmarks has NO measured pose. Screen position must
+      // never become pseudo-pose: both faces are reported as neutral and the
+      // pose gate is skipped (previously the left-edge face got yaw -30°
+      // and was falsely rejected as HEAD_POSE_EXCEEDED).
+      expect(offCenterResult.pose).toEqual(centerResult.pose);
+      expect(centerResult.pose).toEqual({ yaw: 0, pitch: 0, roll: 0 });
+      expect(centerResult.rejectionReason).not.toBe('HEAD_POSE_EXCEEDED');
+      expect(
+        centerResult.issues.some((i) => i.includes('Pose could not be estimated')),
+      ).toBe(true);
     });
 
     it('handles custom config', async () => {

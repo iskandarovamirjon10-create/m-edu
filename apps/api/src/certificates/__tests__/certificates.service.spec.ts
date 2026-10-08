@@ -189,6 +189,9 @@ describe('CertificatesService', () => {
 
       const buffer = await service.generatePdf(orgId, 'c1');
       expect(Buffer.isBuffer(buffer)).toBe(true);
+      // Must be a REAL PDF (not HTML bytes mislabelled application/pdf) —
+      // regression F-04.
+      expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
       expect(mockPrisma.certificate.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
         data: { pdfUrl: '/api/certificates/c1/download' },

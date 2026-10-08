@@ -32,9 +32,13 @@ export function formatCurrency(
   if (value === null || value === undefined || value === '') return '—';
   const n = typeof value === 'string' ? parseFloat(value) : value;
   if (Number.isNaN(n)) return '—';
-  const loc = options?.locale || (typeof navigator !== 'undefined' ? navigator.language : undefined) || 'en-US';
-  const currency = options?.currency || 'USD';
-  return new Intl.NumberFormat(loc, { style: 'currency', currency }).format(n);
+  const currency = options?.currency || 'UZS';
+  const loc = options?.locale || (currency === 'UZS' ? 'uz-UZ' : (typeof navigator !== 'undefined' ? navigator.language : undefined) || 'en-US');
+  return new Intl.NumberFormat(loc, {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: currency === 'UZS' ? 0 : 2,
+  }).format(n);
 }
 
 export function fullName(

@@ -1,20 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { computeAttendanceRate } from '../common/attendance-rate.js';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisPubSubService } from '../common/redis/redis-pubsub.service';
 
 @Injectable()
 export class AnalyticsService {
-  // Simple in-memory cache to prevent DB overload from dashboard refresh spam
-  private cache = new Map<string, { data: any; expiry: number }>();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisPubSubService
+  ) {}
 
   async getOverview(organizationId: string) {
-    const cacheKey = `overview:${organizationId}`;
-    const cached = this.cache.get(cacheKey);
-    if (cached && cached.expiry > Date.now()) {
-      return cached.data;
+    const cacheKey = `analytics:overview:${organizationId}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch {}
     }
 
     const now = new Date();
@@ -133,9 +137,7 @@ export class AnalyticsService {
       },
     };
 
-    this.cache.set(cacheKey, { data: result, expiry: Date.now() + this.CACHE_TTL_MS });
+    await this.redis.set(cacheKey, JSON.stringify(result), this.CACHE_TTL_MS);
     return result;
   }
 }
-
-

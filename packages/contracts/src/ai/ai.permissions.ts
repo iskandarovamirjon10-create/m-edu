@@ -10,6 +10,11 @@ export const AiPermission = {
   STUDENTS_READ: 'students:read',
   STUDENTS_WRITE: 'students:write',
   TEACHERS_READ: 'teachers:read',
+  TEACHERS_WRITE: 'teachers:write',
+  GROUPS_READ: 'groups:read',
+  GROUPS_WRITE: 'groups:write',
+  COURSES_READ: 'courses:read',
+  COURSES_WRITE: 'courses:write',
   ATTENDANCE_READ: 'attendance:read',
   ATTENDANCE_WRITE: 'attendance:write',
   SCHEDULE_READ: 'schedule:read',
@@ -27,6 +32,8 @@ const ALL_AI_PERMISSIONS = Object.values(AiPermission);
 const READ_ONLY_AI_PERMISSIONS: AiPermission[] = [
   AiPermission.STUDENTS_READ,
   AiPermission.TEACHERS_READ,
+  AiPermission.GROUPS_READ,
+  AiPermission.COURSES_READ,
   AiPermission.ATTENDANCE_READ,
   AiPermission.SCHEDULE_READ,
   AiPermission.LESSONS_READ,
@@ -44,6 +51,9 @@ export const AiRolePermissions: Record<string, AiPermission[]> = {
     AiPermission.ATTENDANCE_WRITE,
     AiPermission.SCHEDULE_WRITE,
     AiPermission.STUDENTS_WRITE,
+    AiPermission.TEACHERS_WRITE,
+    AiPermission.GROUPS_WRITE,
+    AiPermission.COURSES_WRITE,
   ],
   TEACHER: [
     AiPermission.STUDENTS_READ,
@@ -58,7 +68,15 @@ export const AiRolePermissions: Record<string, AiPermission[]> = {
 };
 
 export function aiPermissionsForRole(role: string): AiPermission[] {
-  return AiRolePermissions[role] ?? [];
+  // Prototype-key safety: `AiRolePermissions['constructor']` / `['toString']`
+  // resolve to a Function via the prototype chain and would break callers
+  // that iterate/includes over the result.
+  return (
+    typeof role === 'string' &&
+    Object.prototype.hasOwnProperty.call(AiRolePermissions, role)
+      ? AiRolePermissions[role]
+      : []
+  );
 }
 
 export function hasAiPermission(permissions: readonly string[], required: string): boolean {

@@ -26,8 +26,10 @@ import {
   GlassSelect,
   useToasts,
   GlassButton,
+  GlassSwitch,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { isPlatformRole } from '@/lib/roles';
 import { TelegramIntegration } from '@/components/TelegramIntegration';
 import type { Organization, User } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -51,8 +53,8 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -142,6 +144,24 @@ const I: Record<string, string[]> = {
     'M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z',
     'M17 21v-8H7v8', 'M7 3v5h8',
   ],
+  trash: [
+    'M3 6h18',
+    'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6',
+    'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
+  ],
+  laptop: [
+    'M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z',
+    'M2 18h20v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1z',
+  ],
+  smartphone: [
+    'M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z',
+    'M11 18h2',
+  ],
+  logOut: [
+    'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4',
+    'M16 17l5-5-5-5',
+    'M21 12H9',
+  ],
 };
 
 function Icon({
@@ -175,6 +195,12 @@ function Icon({
       ))}
     </svg>
   );
+}
+
+function getDeviceIcon(deviceType?: string, os?: string) {
+  if (deviceType === 'mobile' || (os && /iOS|Android/i.test(os))) return I.smartphone;
+  if (deviceType === 'tablet' || (os && /iPad/i.test(os))) return I.smartphone;
+  return I.laptop;
 }
 
 /* ============================================================================
@@ -685,6 +711,10 @@ export function SettingsPage() {
   const { push, toastNode } = useToasts();
   const { user, setUser, hasAnyRole } = useAuth();
   const isAdmin = hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN');
+  // The invite-only / require-approval switches rewrite ONE `id: 'global'`
+  // policy row shared by every tenant, so only platform roles may see (and
+  // therefore call) them — the API enforces exactly the same rule.
+  const isPlatformAdmin = isPlatformRole(user?.role);
   const qc = useQueryClient();
 
   const [orgForm, setOrgForm] = useState<OrgFormState | null>(null);
@@ -797,27 +827,127 @@ export function SettingsPage() {
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
+  /* ── Whitelist & Access Control ─────────────────────────────────────── */
+  const whitelistQuery = useQuery({
+    queryKey: ['access-whitelist'],
+    queryFn: authApi.getWhitelist,
+    enabled: isAdmin,
+  });
+
+  const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
+  const [newWhitelistNote, setNewWhitelistNote] = useState('');
+
+  const addWhitelistMutation = useMutation({
+    mutationFn: (data: { email: string; note?: string }) => authApi.addToWhitelist(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['access-whitelist'] });
+      setNewWhitelistEmail('');
+      setNewWhitelistNote('');
+      push('success', t('settings.whitelist.addedSuccess'));
+    },
+    onError: (err) => {
+      push('error', getErrorMessage(err as Error));
+    },
+  });
+
+  const removeWhitelistMutation = useMutation({
+    mutationFn: (id: string) => authApi.removeFromWhitelist(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['access-whitelist'] });
+      push('success', t('settings.whitelist.removedSuccess'));
+    },
+    onError: (err) => {
+      push('error', getErrorMessage(err as Error));
+    },
+  });
+
+  const approveUserMutation = useMutation({
+    mutationFn: (id: string) => authApi.approveUser(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['access-whitelist'] });
+      push('success', t('settings.whitelist.approvedSuccess'));
+    },
+    onError: (err) => {
+      push('error', getErrorMessage(err as Error));
+    },
+  });
+
+  const rejectUserMutation = useMutation({
+    mutationFn: (id: string) => authApi.rejectUser(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['access-whitelist'] });
+      push('success', t('settings.whitelist.rejectedSuccess'));
+    },
+    onError: (err) => {
+      push('error', getErrorMessage(err as Error));
+    },
+  });
+
+  const updateAccessSettingsMutation = useMutation({
+    mutationFn: (settings: { inviteOnly?: boolean; requireApproval?: boolean }) =>
+      authApi.updateAccessSettings(settings),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['access-whitelist'] });
+      push('success', t('settings.whitelist.settingsUpdated'));
+    },
+    onError: (err) => {
+      push('error', getErrorMessage(err as Error));
+    },
+  });
+
+  /* ── Active Devices & Sync ────────────────────────────────────────── */
+  const sessionsQuery = useQuery({
+    queryKey: ['auth', 'sessions'],
+    queryFn: authApi.getSessions,
+    refetchInterval: 30000,
+  });
+
+  const revokeSessionMutation = useMutation({
+    mutationFn: (id: string) => authApi.revokeSession(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['auth', 'sessions'] });
+      push('success', t('settings.devices.sessionRevoked', 'Qurilma sessiyasi muvaffaqiyatli yakunlandi'));
+    },
+    onError: (err) => {
+      push('error', getErrorMessage(err as Error));
+    },
+  });
+
+  const revokeOtherSessionsMutation = useMutation({
+    mutationFn: () => authApi.revokeOtherSessions(),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['auth', 'sessions'] });
+      push(
+        'success',
+        t('settings.devices.otherSessionsRevoked', `Boshqa barcha qurilmalar sessiyasi yakunlandi (${data.revokedCount} ta)`),
+      );
+    },
+    onError: (err) => {
+      push('error', getErrorMessage(err as Error));
+    },
+  });
+
   /* ── Validators ─────────────────────────────────────────────────────── */
   const validateOrgForm = useCallback((): boolean => {
     if (!orgForm) return false;
     const errors: Partial<Record<keyof OrgFormState, string>> = {};
-    if (!orgForm.name.trim()) errors.name = 'Organization name is required';
-    if (!orgForm.email.trim()) errors.email = 'Email is required';
+    if (!orgForm.name.trim()) errors.name = t('settings.orgNameRequired');
+    if (!orgForm.email.trim()) errors.email = t('settings.emailRequired');
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(orgForm.email.trim()))
-      errors.email = 'Please enter a valid email address';
+      errors.email = t('common.emailInvalid');
     setOrgErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [orgForm]);
+  }, [orgForm, t]);
 
   const validatePasswordForm = useCallback((): boolean => {
     const errors: Partial<Record<keyof PasswordFormState, string>> = {};
-    if (!pwdForm.currentPassword) errors.currentPassword = 'Current password is required';
+    if (!pwdForm.currentPassword) errors.currentPassword = t('settings.currentPasswordRequired');
     const passwordError = validatePassword(pwdForm.newPassword);
     if (passwordError) errors.newPassword = passwordError;
-    if (pwdForm.newPassword !== pwdForm.confirm) errors.confirm = 'Passwords do not match';
+    if (pwdForm.newPassword !== pwdForm.confirm) errors.confirm = t('auth.passwordsDoNotMatch');
     setPwdErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [pwdForm]);
+  }, [pwdForm, t]);
 
   /* ── Handlers ───────────────────────────────────────────────────────── */
   const handleOrgChange = useCallback(
@@ -1074,6 +1204,366 @@ export function SettingsPage() {
           )}
         </PremiumPanel>
       )}
+
+      {/* ============================================================
+          ACCESS CONTROL & WHITELIST (admin only)
+      ============================================================ */}
+      {isAdmin && (
+        <PremiumPanel
+          icon={I.shield}
+          title={t('settings.accessControl.title')}
+          subtitle={t('settings.accessControl.subtitle')}
+          tone="blue"
+        >
+          <div className="space-y-6">
+            {/* Platform-wide mode toggles (platform roles only) */}
+            {isPlatformAdmin && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm text-[var(--text-primary)]">
+                      {t('settings.accessControl.inviteOnly')}
+                    </span>
+                    {whitelistQuery.data?.settings?.inviteOnly && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                        {t('common.active') || 'ACTIVE'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                    {t('settings.accessControl.inviteOnlyDesc')}
+                  </p>
+                </div>
+                <GlassSwitch
+                  id="inviteOnlyToggle"
+                  aria-label={t('settings.inviteOnlyMode')}
+                  checked={Boolean(whitelistQuery.data?.settings?.inviteOnly)}
+                  disabled={updateAccessSettingsMutation.isPending || whitelistQuery.isLoading}
+                  onChange={(checked) =>
+                    updateAccessSettingsMutation.mutate({ inviteOnly: checked })
+                  }
+                />
+              </div>
+
+              <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm text-[var(--text-primary)]">
+                      {t('settings.accessControl.requireApproval')}
+                    </span>
+                    {whitelistQuery.data?.settings?.requireApproval && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                        {t('common.active') || 'ACTIVE'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                    {t('settings.accessControl.requireApprovalDesc')}
+                  </p>
+                </div>
+                <GlassSwitch
+                  id="requireApprovalToggle"
+                  aria-label={t('settings.requireApprovalMode')}
+                  checked={Boolean(whitelistQuery.data?.settings?.requireApproval)}
+                  disabled={updateAccessSettingsMutation.isPending || whitelistQuery.isLoading}
+                  onChange={(checked) =>
+                    updateAccessSettingsMutation.mutate({ requireApproval: checked })
+                  }
+                />
+              </div>
+            </div>
+            )}
+
+            {/* Pending User Approvals */}
+            {(whitelistQuery.data?.pendingUsers?.length ?? 0) > 0 && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.04] p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                    <h3 className="font-semibold text-sm text-[var(--text-primary)]">
+                      {t('settings.accessControl.pendingRequests')} ({whitelistQuery.data?.pendingUsers.length})
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-[var(--border-subtle)]">
+                  {whitelistQuery.data?.pendingUsers.map((pendingUser) => (
+                    <div
+                      key={pendingUser.id}
+                      className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm"
+                    >
+                      <div>
+                        <div className="font-medium text-[var(--text-primary)]">
+                          {pendingUser.firstName} {pendingUser.lastName}
+                        </div>
+                        <div className="text-xs text-[var(--text-secondary)]">
+                          {pendingUser.email} &bull; {pendingUser.organizationName || "Tashkilot ko'rsatilmagan"} &bull;{' '}
+                          {new Date(pendingUser.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <GlassButton
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          disabled={approveUserMutation.isPending}
+                          onClick={() => approveUserMutation.mutate(pendingUser.id)}
+                        >
+                          <Icon paths={I.check} size={14} className="mr-1" />
+                          {t('common.approve')}
+                        </GlassButton>
+                        <GlassButton
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-500 hover:text-red-600"
+                          disabled={rejectUserMutation.isPending}
+                          onClick={() => rejectUserMutation.mutate(pendingUser.id)}
+                        >
+                          <Icon paths={I.trash} size={14} className="mr-1" />
+                          {t('common.reject')}
+                        </GlassButton>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Add to Whitelist Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newWhitelistEmail.trim()) return;
+                addWhitelistMutation.mutate({
+                  email: newWhitelistEmail.trim().toLowerCase(),
+                  note: newWhitelistNote.trim() || undefined,
+                });
+              }}
+              className="p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] space-y-3"
+            >
+              <h3 className="font-semibold text-sm text-[var(--text-primary)]">
+                {t('settings.accessControl.addToWhitelist')}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                <div className="sm:col-span-6">
+                  <GlassInput
+                    type="email"
+                    placeholder="email@example.com"
+                    value={newWhitelistEmail}
+                    onChange={(e) => setNewWhitelistEmail(e.target.value)}
+                    required
+                    disabled={addWhitelistMutation.isPending}
+                    aria-label={t('settings.whitelistEmail')}
+                  />
+                </div>
+                <div className="sm:col-span-4">
+                  <GlassInput
+                    placeholder={t('settings.accessControl.notePlaceholder')}
+                    value={newWhitelistNote}
+                    onChange={(e) => setNewWhitelistNote(e.target.value)}
+                    disabled={addWhitelistMutation.isPending}
+                    aria-label={t('settings.whitelistNote')}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <GlassButton
+                    type="submit"
+                    variant="primary"
+                    className="w-full h-full"
+                    disabled={!newWhitelistEmail.trim() || addWhitelistMutation.isPending}
+                  >
+                    {addWhitelistMutation.isPending ? t('common.saving') : t('common.add')}
+                  </GlassButton>
+                </div>
+              </div>
+            </form>
+
+            {/* Whitelist Table */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-sm text-[var(--text-primary)]">
+                  {t('settings.accessControl.whitelistedEmails')} (
+                  {whitelistQuery.data?.whitelist?.length ?? 0})
+                </h3>
+              </div>
+
+              {whitelistQuery.isLoading ? (
+                <div className="py-8 text-center text-xs text-[var(--text-muted)]">
+                  {t('common.loading')}
+                </div>
+              ) : (whitelistQuery.data?.whitelist?.length ?? 0) === 0 ? (
+                <div className="py-8 text-center rounded-xl border border-dashed border-[var(--border-subtle)] text-xs text-[var(--text-muted)]">
+                  {t('settings.accessControl.noWhitelist')}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-[var(--border-subtle)] overflow-hidden">
+                  <div className="divide-y divide-[var(--border-subtle)] max-h-80 overflow-y-auto">
+                    {whitelistQuery.data?.whitelist.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3 flex items-center justify-between gap-3 text-sm hover:bg-[var(--state-hover)] transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-[var(--text-primary)] truncate">
+                              {item.email}
+                            </span>
+                            {item.role && (
+                              <span className="px-1.5 py-0.5 text-[10px] rounded bg-[var(--state-hover)] text-[var(--text-secondary)] font-mono">
+                                {item.role}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-[var(--text-muted)] flex items-center gap-2 mt-0.5">
+                            {item.note && <span>{item.note} &bull;</span>}
+                            <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                            {item.addedByName && <span>({item.addedByName})</span>}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeWhitelistMutation.mutate(item.id)}
+                          disabled={removeWhitelistMutation.isPending}
+                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors"
+                          title={t('common.delete')}
+                          aria-label={`Remove ${item.email}`}
+                        >
+                          <Icon paths={I.trash} size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </PremiumPanel>
+      )}
+
+      {/* ============================================================
+          ACTIVE DEVICES & DEVICE SYNC
+      ============================================================ */}
+      <PremiumPanel
+        icon={I.laptop}
+        title={t('settings.devices.title', 'Faol qurilmalar va qurilma sinxronizatsiyasi')}
+        subtitle={t(
+          'settings.devices.subtitle',
+          'Bitta hisob ostida ulangan barcha qurilmalarni kuzating, boshqaring va masofadan sessiyani yakunlang',
+        )}
+        tone="blue"
+        footer={
+          (sessionsQuery.data?.length ?? 0) > 1 ? (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                {t('settings.devices.syncActive', 'Real-vaqt sinxronizatsiyasi faol')}
+              </span>
+              <GlassButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                disabled={revokeOtherSessionsMutation.isPending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      t(
+                        'settings.devices.revokeOthersConfirm',
+                        'Rostdan ham barcha boshqa faol qurilmalarni tizimdan chiqarmoqchimisiz?',
+                      ),
+                    )
+                  ) {
+                    revokeOtherSessionsMutation.mutate();
+                  }
+                }}
+              >
+                <Icon paths={I.logOut} size={14} className="mr-1.5" />
+                {revokeOtherSessionsMutation.isPending
+                  ? t('common.saving')
+                  : t('settings.devices.revokeOthers', 'Boshqa barcha qurilmalardan chiqish')}
+              </GlassButton>
+            </div>
+          ) : undefined
+        }
+      >
+        <div className="space-y-3">
+          {sessionsQuery.isLoading ? (
+            <div className="py-8 text-center text-xs text-[var(--text-muted)]">
+              {t('common.loading', 'Yuklanmoqda...')}
+            </div>
+          ) : (sessionsQuery.data?.length ?? 0) === 0 ? (
+            <div className="py-6 text-center text-xs text-[var(--text-muted)]">
+              {t('settings.devices.noSessions', 'Faol sessiyalar topilmadi')}
+            </div>
+          ) : (
+            <div className="divide-y divide-[var(--border-subtle)]">
+              {sessionsQuery.data?.map((session) => {
+                const isCurrent = session.isCurrentSession;
+                const iconPaths = getDeviceIcon(session.deviceType, session.os);
+                return (
+                  <div
+                    key={session.id}
+                    className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--state-hover)] text-[var(--text-secondary)]">
+                        <Icon paths={iconPaths} size={20} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-[var(--text-primary)]">
+                            {session.deviceName || session.browser || 'Nomaʼlum qurilma'}
+                          </span>
+                          {isCurrent && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              {t('settings.devices.currentBadge', 'Joriy qurilma')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-[var(--text-secondary)] mt-0.5 flex items-center gap-2 flex-wrap">
+                          <span>
+                            {session.browser || 'Brauzer'} &bull; {session.os || 'OS'}
+                          </span>
+                          <span>&bull;</span>
+                          <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                            {session.ipAddress}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                          {t('settings.devices.lastActive', 'Oxirgi faollik:')}{' '}
+                          {session.lastActiveAt
+                            ? new Date(session.lastActiveAt).toLocaleString()
+                            : new Date(session.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {!isCurrent && (
+                      <div className="self-end sm:self-center">
+                        <GlassButton
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                          disabled={revokeSessionMutation.isPending}
+                          onClick={() => revokeSessionMutation.mutate(session.id)}
+                          aria-label={`Revoke session on ${session.deviceName || session.browser}`}
+                        >
+                          <Icon paths={I.trash} size={14} className="mr-1" />
+                          {t('settings.devices.revoke', 'Chiqarish')}
+                        </GlassButton>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </PremiumPanel>
 
       {/* ============================================================
           ACCOUNT SETTINGS

@@ -51,6 +51,7 @@ describe('AuthController', () => {
       bootstrap: vi.fn(),
       register: vi.fn(),
       googleLogin: vi.fn(),
+      generateSecureToken: vi.fn().mockReturnValue('mock-state-nonce-123'),
       generateAuthCode: vi.fn(),
       exchangeAuthCode: vi.fn(),
       refreshToken: vi.fn(),
@@ -271,9 +272,10 @@ describe('AuthController', () => {
       await controller.googleAuthCallback(mockReq, res);
 
       expect(authService.googleLogin).toHaveBeenCalledWith(mockGoogleProfile);
-      expect(authService.generateAuthCode).toHaveBeenCalledWith('oauth-access-token', 'u-oauth-1');
+      expect(authService.generateAuthCode).toHaveBeenCalledWith('oauth-access-token', 'u-oauth-1', expect.any(String));
+      expect(res.cookie).toHaveBeenCalledWith('oauth_exchange_state', expect.any(String), expect.any(Object));
       expect(res.redirect).toHaveBeenCalledWith(
-        'http://localhost:3000/auth/callback?code=test-auth-code-123',
+        expect.stringMatching(/^http:\/\/localhost:3000\/auth\/callback\?code=test-auth-code-123&state=/),
       );
     });
 
@@ -290,7 +292,7 @@ describe('AuthController', () => {
       await controller.googleAuthCallback(mockReq, res);
 
       expect(res.redirect).toHaveBeenCalledWith(
-        'http://localhost:3000/auth/callback?code=code-fallback',
+        expect.stringMatching(/^http:\/\/localhost:3000\/auth\/callback\?code=code-fallback&state=/),
       );
     });
 
@@ -353,11 +355,13 @@ describe('AuthController', () => {
   });
 
   describe('exchangeAuthCode', () => {
+    const mockReq = { cookies: {} } as any;
+
     it('throws BadRequestException when authorization code is empty', async () => {
       const res = createMockResponse();
       const body: ExchangeAuthCodeDto = { code: '' };
 
-      await expect(controller.exchangeAuthCode(body, res)).rejects.toThrow(BadRequestException);
+      await expect(controller.exchangeAuthCode(body, mockReq, res)).rejects.toThrow(BadRequestException);
       expect(authService.exchangeAuthCode).not.toHaveBeenCalled();
     });
 
@@ -366,9 +370,9 @@ describe('AuthController', () => {
       const body: ExchangeAuthCodeDto = { code: 'valid-code-789' };
       authService.exchangeAuthCode.mockResolvedValue('jwt-exchanged-token');
 
-      const result = await controller.exchangeAuthCode(body, res);
+      const result = await controller.exchangeAuthCode(body, mockReq, res);
 
-      expect(authService.exchangeAuthCode).toHaveBeenCalledWith('valid-code-789');
+      expect(authService.exchangeAuthCode).toHaveBeenCalledWith('valid-code-789', undefined);
       expect(res.cookie).toHaveBeenCalledWith('access_token', 'jwt-exchanged-token', {
         httpOnly: true,
         secure: false,
@@ -387,7 +391,7 @@ describe('AuthController', () => {
       const body: ExchangeAuthCodeDto = { code: 'valid-code-789' };
       authService.exchangeAuthCode.mockResolvedValue('jwt-exchanged-token');
 
-      await controller.exchangeAuthCode(body, res);
+      await controller.exchangeAuthCode(body, mockReq, res);
 
       expect(res.cookie).toHaveBeenCalledWith('access_token', 'jwt-exchanged-token', {
         httpOnly: true,
@@ -402,8 +406,36 @@ describe('AuthController', () => {
       const body: ExchangeAuthCodeDto = { code: 'expired-code' };
       authService.exchangeAuthCode.mockRejectedValue(new UnauthorizedException('Invalid or expired code'));
 
-      await expect(controller.exchangeAuthCode(body, res)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.exchangeAuthCode(body, mockReq, res)).rejects.toThrow(UnauthorizedException);
       expect(res.cookie).not.toHaveBeenCalled();
+    });
+
+    it('validates state cookie matching body state', async () => {
+      const reqWithCookie = {
+        ...mockReq,
+        cookies: { oauth_exchange_state: 'correct-state-token' },
+      } as unknown as Request;
+      const res = createMockResponse();
+      const body: ExchangeAuthCodeDto = { code: 'valid-code', state: 'correct-state-token' };
+      authService.exchangeAuthCode.mockResolvedValue('jwt-token');
+
+      const result = await controller.exchangeAuthCode(body, reqWithCookie, res);
+      expect(result).toEqual({ authenticated: true });
+      expect(res.clearCookie).toHaveBeenCalledWith('oauth_exchange_state');
+    });
+
+    it('rejects exchange when body state mismatches oauth_exchange_state cookie', async () => {
+      const reqWithCookie = {
+        ...mockReq,
+        cookies: { oauth_exchange_state: 'correct-state-token' },
+      } as unknown as Request;
+      const res = createMockResponse();
+      const body: ExchangeAuthCodeDto = { code: 'valid-code', state: 'wrong-state-token' };
+
+      await expect(controller.exchangeAuthCode(body, reqWithCookie, res)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(authService.exchangeAuthCode).not.toHaveBeenCalled();
     });
   });
 

@@ -48,7 +48,7 @@ export function GlassEmptyState({
       <div className="flex flex-col gap-1.5 max-w-xs">
         <h3 className="text-[var(--text-h4)] font-semibold text-[var(--text-primary)]">{title}</h3>
         {desc && (
-          <p className="text-[var(--text-body-sm)] text-[var(--text-secondary)]">{desc}</p>
+          <p className="text-[var(--text-body-sm)] text-[var(--text-primary)] opacity-80">{desc}</p>
         )}
       </div>
 
@@ -81,12 +81,17 @@ interface GlassErrorStateProps {
   className?: string;
 }
 
+import { useSafeI18n } from '@/i18n/I18nProvider';
+
 export function GlassErrorState({
-  title = 'Something went wrong',
+  title,
   message,
   onRetry,
   className = '',
 }: GlassErrorStateProps) {
+  const { t } = useSafeI18n();
+  const finalTitle = title || t('common.error') || 'Something went wrong';
+
   return (
     <div
       className={[
@@ -98,12 +103,12 @@ export function GlassErrorState({
         <ErrorIcon />
       </div>
       <div className="flex flex-col gap-1.5 max-w-xs">
-        <h3 className="text-[var(--text-h4)] font-semibold text-[var(--text-primary)]">{title}</h3>
-        <p className="text-[var(--text-body-sm)] text-[var(--text-secondary)]">{message}</p>
+        <h3 className="text-[var(--text-h4)] font-semibold text-[var(--text-primary)]">{finalTitle}</h3>
+        <p className="text-[var(--text-body-sm)] text-[var(--text-primary)] opacity-80">{message}</p>
       </div>
       {onRetry && (
         <GlassButton variant="secondary" size="sm" onClick={onRetry}>
-          Try again
+          {t('common.tryAgain') || 'Try again'}
         </GlassButton>
       )}
     </div>

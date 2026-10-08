@@ -20,6 +20,7 @@ import type { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from '../dto';
 
 const VALID = {
+  inviteCode: 'M-EDU-TEST-INVITE',
   email: 'jane@example.com',
   password: 'Str0ngPass!x',
   firstName: 'Jane',
@@ -60,9 +61,15 @@ describe('RegisterDto (ValidationPipe whitelist + forbidNonWhitelisted)', () => 
   it('accepts a fully valid payload and strips nothing', async () => {
     const dto = await transform(VALID);
     expect(dto).toBeInstanceOf(RegisterDto);
+    expect(dto.inviteCode).toBe(VALID.inviteCode);
     expect(dto.email).toBe(VALID.email);
     expect(dto.password).toBe(VALID.password);
     expect(dto.organizationName).toBe(VALID.organizationName);
+  });
+
+  it('rejects missing inviteCode', async () => {
+    const { inviteCode, ...missingInvite } = VALID;
+    await expectValidationError(transform(missingInvite), /inviteCode/);
   });
 
   it('rejects an invalid email (400-class BadRequestException)', async () => {

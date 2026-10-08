@@ -1,4 +1,4 @@
-import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
+﻿import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
@@ -50,7 +50,6 @@ import { InventoryModule } from './inventory/inventory.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
 import { SearchModule } from './search/search.module';
-import { WorkflowModule } from './workflow/workflow.module';
 import { DocumentsModule } from './documents/documents.module';
 import { DataQualityModule } from './data-quality/data-quality.module';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
@@ -73,15 +72,19 @@ import { GamificationModule } from './gamification/gamification.module';
 import { ChatModule } from './chat/chat.module';
 import { DataGovernanceModule } from './data-governance/data-governance.module';
 import { AutomationModule } from './automation/automation.module';
+import { PlatformModule } from './platform/platform.module';
 import { CronModule } from './cron/cron.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { PerformanceModule } from './performance/performance.module';
 import { PublicMetricsController } from './observability/public-metrics.controller';
 
+import { RootController } from './common/root.controller';
 import { ResilientRedisThrottlerStorage } from './common/guards/throttler-redis.storage';
+import { isCredentialEndpoint } from './common/guards/is-credential-endpoint';
 import { isRedisEnabled, redisQueueConnection } from './config/redis.config';
+import type { ExecutionContext } from '@nestjs/common';
 
-// @ts-ignore � @nestjs/bullmq is ESM-only; resolved at runtime via monorepo hoisting
+// @ts-ignore ï¿½ @nestjs/bullmq is ESM-only; resolved at runtime via monorepo hoisting
 const { BullModule } = require('@nestjs/bullmq');
 
 const redisEnabled = isRedisEnabled();
@@ -107,6 +110,20 @@ const redisEnabled = isRedisEnabled();
           name: 'default',
           ttl: 60000,
           limit: 100,
+        },
+        {
+          /*
+           * Second bucket covering ONLY credential endpoints (see
+           * `isCredentialEndpoint`). Its `name` is what lets the storage
+           * recognize a security-critical bucket and fail closed when Redis is
+           * down — with a single `default` throttler that branch was dead
+           * code. `skipIf` keeps the extra Redis round-trip off every other
+           * route.
+           */
+          name: 'security',
+          ttl: 60000,
+          limit: 10,
+          skipIf: (context: ExecutionContext) => !isCredentialEndpoint(context),
         },
       ],
       // Rate-limit authenticated requests per-user (stable account id),
@@ -160,7 +177,6 @@ const redisEnabled = isRedisEnabled();
     // Platform Expansion Modules
     AuditModule,
     SearchModule,
-    WorkflowModule,
     DocumentsModule,
     DataQualityModule,
     EarlyWarningModule,
@@ -182,13 +198,15 @@ const redisEnabled = isRedisEnabled();
     ChatModule,
     DataGovernanceModule,
     AutomationModule,
+    PlatformModule,
     CronModule,
     ObservabilityModule,
     PerformanceModule,
   ],
+  controllers: [RootController],
   providers: [
     // Apply rate limiting to every HTTP endpoint. Per-endpoint overrides use
-    // @Throttle({ default: { limit, ttl } }) — e.g. auth (login/register) and
+    // @Throttle({ default: { limit, ttl } }) â€” e.g. auth (login/register) and
     // face capture/attempt endpoints are tightened well below the 100/min
     // default (see auth.controller.ts and face.controller.ts).
     //
@@ -213,4 +231,7 @@ export class AppModule {
       .forRoutes({ path: '*', method: RequestMethod.ALL });
   }
 }
+
+
+
 

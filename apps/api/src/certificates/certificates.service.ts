@@ -74,7 +74,7 @@ export class CertificatesService {
       throw new NotFoundException('Certificate not found');
     }
 
-    const isPrivileged = ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'].includes(userRole);
+    const isPrivileged = ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'].includes(userRole);
     const userBelongsToStudent = certificate.student?.userId === userId;
     if (!isPrivileged && !userBelongsToStudent) {
       throw new NotFoundException('Certificate not found');
@@ -305,16 +305,60 @@ export class CertificatesService {
   }
 
   async createPdf(html: string): Promise<Buffer> {
-    // Real PDF generation using pdf-creator-node is removed due to security concerns (PhantomJS).
-    // Fall back to a structured PDF-like output but never return a plain HTML buffer.
-    try {
-      throw new Error('pdf-creator-node removed');
-    } catch {
-      // Defensive fallback: structured HTML embedded in a minimal PDF-like wrapper
-      // This is still a document, not raw HTML. Never expose internals.
-      const wrapped = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Certificate</title></head><body style="font-family:Arial,sans-serif;padding:40px;text-align:center;"><h1>Certificate of Completion</h1><div style="font-size:18px;margin:20px 0;">${html.replace(/<[^>]+>/g, '').substring(0, 500)}</div><hr><p style="font-size:12px;color:#777;">Verified Certificate</p></body></html>`;
-      return Buffer.from(wrapped);
-    }
+    // REAL PDF via pdfmake (already bundled, used by reports/import-export).
+    // The previous implementation returned HTML bytes labelled
+    // `application/pdf` with markup stripped and truncated to 500 chars —
+    // the delivered "PDF" was a broken file (regression: F-04).
+    const pdfmakeRaw = await import('pdfmake');
+    const pdfmake = (pdfmakeRaw.default || pdfmakeRaw) as {
+      setLocalAccessPolicy: (cb: () => boolean) => void;
+      setUrlAccessPolicy: (cb: () => boolean) => void;
+      setFonts: (fonts: unknown) => void;
+      createPdf: (docDefinition: unknown) => { getBuffer: () => Promise<Uint8Array> };
+    };
+    pdfmake.setLocalAccessPolicy(() => true);
+    pdfmake.setUrlAccessPolicy(() => false);
+    pdfmake.setFonts({
+      NotoSans: {
+        normal: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf'),
+        bold: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf'),
+        italics: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf'),
+        bolditalics: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf'),
+      },
+    });
+
+    // The rendered template is HTML; reduce it to its plain-text lines and
+    // lay them out as a clean A4 landscape-style certificate.
+    const text = html
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+    const lines = text
+      .split(/\s*\n\s*/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const doc = pdfmake.createPdf({
+      pageSize: 'A4',
+      pageMargins: [48, 48, 48, 48],
+      content: [
+        { text: lines[0] ?? 'Certificate of Completion', style: 'title' },
+        ...lines.slice(1).map((line) => ({ text: line, style: 'body' })),
+        { text: 'Verified Certificate', style: 'footer' },
+      ],
+      styles: {
+        title: { fontSize: 24, bold: true, alignment: 'center', margin: [0, 0, 0, 40] },
+        body: { fontSize: 14, alignment: 'center', margin: [0, 0, 0, 10] },
+        footer: { fontSize: 10, color: '#777777', alignment: 'center', margin: [0, 60, 0, 0] },
+      },
+      defaultStyle: { font: 'NotoSans', fontSize: 12 },
+    });
+    return Buffer.from(await doc.getBuffer());
   }
 
   getDefaultTemplate(): CertificateTemplate {

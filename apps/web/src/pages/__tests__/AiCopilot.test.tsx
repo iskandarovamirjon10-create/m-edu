@@ -86,7 +86,7 @@ function pendingConfirmationResponse(): AiChatResponse {
 
 function renderCopilot() {
   return render(
-    <I18nProvider>
+    <I18nProvider initialLocale="uz">
       <AiCopilot />
     </I18nProvider>,
   );
@@ -163,7 +163,7 @@ describe('AiCopilot sending and replies', () => {
     ]);
 
     const thinking = within(messageList()).getByRole('status');
-    expect(thinking).toHaveTextContent('AI ishlayapti...');
+    expect(thinking).toHaveTextContent('AI ishlayapti');
     expect(thinking).toHaveAttribute('aria-live', 'polite');
     expect(messageList()).toHaveAttribute('aria-busy', 'true');
     expect(composer()).toBeDisabled();

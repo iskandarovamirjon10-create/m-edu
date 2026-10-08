@@ -53,6 +53,8 @@ function statusForCode(code: AiErrorCode): HttpStatus {
       return HttpStatus.GATEWAY_TIMEOUT;
     case AiErrorCode.AI_PROVIDER_UNAVAILABLE:
       return HttpStatus.SERVICE_UNAVAILABLE;
+    case AiErrorCode.AI_PROVIDER_CONFIG_ERROR:
+      return HttpStatus.BAD_GATEWAY;
     default:
       return HttpStatus.BAD_GATEWAY;
   }

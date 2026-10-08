@@ -150,6 +150,9 @@ export class RecognitionService {
     let identifiedStudentId: string | null = null;
     let student: { id: string; firstName: string; lastName: string } | null = null;
     let message = '';
+    let persistedAttempt:
+      | Awaited<ReturnType<RecognitionRepository['createAttempt']>>
+      | null = null;
 
     try {
       // Stage 1: Face Detection
@@ -205,6 +208,7 @@ export class RecognitionService {
       const stream = this.enrollmentRepo.streamActiveTemplates(
         tenant.organizationId,
         BATCH_SIZE,
+        session.groupId ?? undefined,
       );
 
       for await (const batch of stream) {
@@ -212,6 +216,22 @@ export class RecognitionService {
         await new Promise((resolve) => setImmediate(resolve));
 
         for (const template of batch) {
+          // Model-version compatibility guard: a template extracted with a
+          // DIFFERENT embedding model yields meaningless similarity scores
+          // (both false accepts and false rejects). Skip it — fail closed.
+          //
+          // A MISSING modelVersion cannot be verified against the running
+          // engine, so it is also treated as incompatible. The previous
+          // `template.modelVersion && ...` form compared unversioned
+          // (legacy / mock-enrolled) templates against real embeddings, which
+          // could fabricate a match or a rejection from a meaningless score.
+          if (
+            !template.modelVersion ||
+            template.modelVersion !== this.faceEngine.getModelVersion()
+          ) {
+            continue;
+          }
+
           try {
             // Memory Cache: Avoid O(N) AES decryptions per frame.
             // Templates are encrypted at rest, but we can cache them in-memory (in use).
@@ -251,6 +271,13 @@ export class RecognitionService {
               embeddingA: probeEmbedding,
               embeddingB: storedEmbedding.embedding,
             });
+
+            // Fail closed on a non-finite score (NaN/Infinity): every
+            // threshold comparison below (score < threshold) would be false
+            // for NaN, so an invalid score must never enter the ranking.
+            if (!Number.isFinite(similarity)) {
+              continue;
+            }
 
             if (!bestMatch) {
               bestSimilarity = similarity;
@@ -348,6 +375,7 @@ export class RecognitionService {
         similarityScore: similarityScore ?? undefined,
         processingTimeMs: Date.now() - startTime,
       });
+      persistedAttempt = attempt;
 
       // Stage 7: Attendance (if identified)
       let attendanceRecorded = false;
@@ -383,6 +411,12 @@ export class RecognitionService {
         } else {
           attendanceDecision = attendanceCheck.decision;
         }
+      } else if (decision.outcome === 'IDENTIFIED') {
+        // Identified, but the session carries no group -> attendance cannot be
+        // attributed. Return an EXPLICIT decision instead of silently
+        // skipping (a silent skip is indistinguishable from 'recorded' in
+        // logs/metrics and hides misconfigured kiosk sessions).
+        attendanceDecision = 'NO_GROUP_CONTEXT';
       }
 
       // Audit
@@ -410,21 +444,49 @@ export class RecognitionService {
         message,
       };
     } catch (error) {
-      // Create failed attempt
+      const errorMessage = error instanceof Error ? error.message : 'Recognition failed';
+
+      // A failure AFTER the attempt row was persisted must not create a
+      // second attempt row — previously the catch-all created a duplicate
+      // ERROR attempt alongside the real one (regression: CO-3).
+      if (persistedAttempt) {
+        return {
+          attemptId: persistedAttempt.id,
+          identified: false,
+          status: persistedAttempt.status,
+          student: null,
+          confidence: 'NONE',
+          liveness: livenessResult,
+          qualityScore,
+          attendanceRecorded: false,
+          attendanceDecision: null,
+          attendanceRecordId: null,
+          message: errorMessage,
+        };
+      }
+
+      // Pre-persistence failure: keep the REAL failure reason (QUALITY_FAILED,
+      // LIVENESS_FAILED, LIVENESS_UNCERTAIN, LIVENESS_UNAVAILABLE, ...)
+      // instead of collapsing every failure into ERROR (regression: CO-3).
+      const failedStatus =
+        attemptStatus !== RecognitionAttemptStatus.DETECTED
+          ? attemptStatus
+          : RecognitionAttemptStatus.ERROR;
+
       const attempt = await this.recognitionRepo.createAttempt({
         organizationId: tenant.organizationId,
         sessionId,
-        status: RecognitionAttemptStatus.ERROR,
+        status: failedStatus,
         qualityScore,
         livenessResult,
         processingTimeMs: Date.now() - startTime,
-        metadata: { error: error instanceof Error ? error.message : 'Unknown error' },
+        metadata: { error: errorMessage },
       });
 
       return {
         attemptId: attempt.id,
         identified: false,
-        status: RecognitionAttemptStatus.ERROR,
+        status: failedStatus,
         student: null,
         confidence: 'NONE',
         liveness: livenessResult,
@@ -432,7 +494,7 @@ export class RecognitionService {
         attendanceRecorded: false,
         attendanceDecision: null,
         attendanceRecordId: null,
-        message: error instanceof Error ? error.message : 'Recognition failed',
+        message: errorMessage,
       };
     }
   }

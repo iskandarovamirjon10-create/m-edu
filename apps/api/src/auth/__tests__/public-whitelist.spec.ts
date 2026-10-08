@@ -52,6 +52,7 @@ const ALLOWED_PUBLIC_ROUTES: readonly string[] = [
   'GET /api/auth/google/callback',
   'POST /api/auth/bootstrap',
   'POST /api/auth/forgot-password',
+  'POST /api/auth/invitations/accept',
   'POST /api/auth/login',
   'POST /api/auth/oauth/exchange',
   'POST /api/auth/parent-login',

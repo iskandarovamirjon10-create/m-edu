@@ -28,3 +28,5 @@ export { AiErrorCard, type AiErrorCardProps } from './AiErrorCard';
 export { MarkdownContent, type MarkdownContentProps } from './MarkdownContent';
 export { AiAvatar, UserAvatar } from './AiAvatar';
 export { GlobalAiCopilot } from './GlobalAiCopilot';
+export { CopilotHistoryRail } from './CopilotHistoryRail';
+export { CopilotContextPanel } from './CopilotContextPanel';

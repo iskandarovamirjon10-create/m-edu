@@ -5,7 +5,7 @@
  * In production, consider using a KMS (AWS KMS, HashiCorp Vault) for key management.
  */
 
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'crypto';
 import type { EncryptionPort } from '@medu/core';
 
 export class AesEncryptionService implements EncryptionPort {
@@ -58,6 +58,17 @@ export class AesEncryptionService implements EncryptionPort {
 
   async verifyHash(data: string, expectedHash: string): Promise<boolean> {
     const actualHash = await this.hash(data);
-    return actualHash === expectedHash;
+
+    // Constant-time comparison: a plain `===` short-circuits on the first
+    // differing byte and leaks the position of the mismatch through timing,
+    // which allows a stored hash to be recovered byte-by-byte. Both operands
+    // are fixed-length hex SHA-256 digests, so equal-length buffers are the
+    // only valid input; a length mismatch is a definite non-match.
+    const actual = Buffer.from(actualHash, 'hex');
+    const expected = Buffer.from(expectedHash, 'hex');
+    if (actual.length !== expected.length || actual.length === 0) {
+      return false;
+    }
+    return timingSafeEqual(actual, expected);
   }
 }

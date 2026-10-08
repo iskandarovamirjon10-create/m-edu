@@ -36,6 +36,9 @@ function createMockPrisma() {
       create: vi.fn(),
       count: vi.fn(),
     },
+    accessWhitelist: {
+      findUnique: vi.fn(),
+    },
     organization: { create: vi.fn() },
     session: {
       create: vi.fn().mockResolvedValue({ id: 'sess-1', userId: 'u1', organizationId: 'o1', expiresAt: new Date() }),
@@ -192,6 +195,12 @@ describe('AuthService.googleLogin — account-linking policy', () => {
   it('9) creates a NEW org + ORG_ADMIN account for a brand-new identity', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
     prisma.user.findFirst.mockResolvedValue(null);
+    // Brand-new identities are gated by the email whitelist (invitation):
+    // provision the ORG_ADMIN only when the email was invited.
+    prisma.accessWhitelist.findUnique.mockResolvedValue({
+      id: 'wl-1',
+      email: 'user@gmail.com',
+    });
     const txUser = {
       id: 'u9', email: 'user@gmail.com', isActive: true, role: 'ORG_ADMIN',
       organizationId: 'o9', firstName: 'Jane', lastName: 'Doe',
@@ -279,11 +288,16 @@ describe('OAuth session (express-session + PostgreSQL store)', () => {
     const { GoogleStrategy } = await import('../google.strategy');
     const instance = new GoogleStrategy({ get: (_k: string, _d?: unknown) => undefined } as unknown as ConfigService);
     expect(instance).toBeDefined();
-    // Verify the option the strategy was constructed with by checking the
-    // underlying passport-oauth2 state store type via the prototype chain is
-    // not practical; instead assert the guard passes through to passport
-    // (state handling) and the middleware is registered in the bootstrap.
-    expect(true).toBe(true);
+    // passport-oauth2 installs a SessionStateStore on `_oauth2` exactly when
+    // `options.state` is truthy. Assert that state protection is actually
+    // wired (a regression here silently removes OAuth CSRF protection),
+    // replacing the previous `expect(true).toBe(true)` placeholder.
+    // passport-oauth2 installs a SessionStateStore directly on the strategy
+    // instance when `options.state` is truthy. Assert that state protection
+    // is actually wired (a regression here silently removes OAuth CSRF
+    // protection), replacing the previous `expect(true).toBe(true)` placeholder.
+    const stateStore = (instance as unknown as { _stateStore?: unknown })._stateStore;
+    expect(stateStore).toBeDefined();
   });
 });
 

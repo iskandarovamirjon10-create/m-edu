@@ -7,6 +7,7 @@ import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { STAFF_ROLES } from '../auth/authorization.policy';
 import { AllowAnyRole } from '../auth/roles.decorator';
+import type { RequestUser } from '../auth/types';
 
 @ApiTags('Student Progress & 360')
 @ApiBearerAuth()
@@ -20,10 +21,13 @@ export class ProgressController {
   @Roles(...STAFF_ROLES, 'STUDENT', 'PARENT')
   @ApiOperation({ summary: 'Get Unified Student 360 profile with deterministic risk and objective mastery' })
   getStudent360(
-    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser() user: RequestUser,
     @Param('studentId', ParseUUIDPipe) studentId: string,
   ) {
-    return this.progressService.getStudent360(orgId, studentId);
+    return this.progressService.getStudent360(user.organizationId, studentId, {
+      id: user.sub,
+      role: user.role,
+    });
   }
 }
 

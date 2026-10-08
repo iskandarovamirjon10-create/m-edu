@@ -13,8 +13,6 @@
  *  - Framer Motion spring physics + staggered blur-in
  *  - Full i18n + debounce + schedule-error handling preserved
  */
-
-import { toLocalISOString } from '../lib/format';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
@@ -31,7 +29,7 @@ import {
   useToasts,
 } from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
-import { formatDate } from '@/lib/format';
+import { formatDate, toLocalISOString } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type {
   Paginated,
@@ -61,13 +59,13 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, x: -8 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -727,7 +725,7 @@ export function AttendancePage() {
     mutationFn: () =>
       attendanceApi.create({
         groupId: form.groupId,
-        date: new Date(form.date).toISOString(),
+        date: form.date ? `${form.date}T12:00:00.000Z` : new Date().toISOString(),
         records: [
           { studentId: form.studentId, status: form.status, note: form.note || undefined },
         ],
@@ -737,6 +735,7 @@ export function AttendancePage() {
       setModalOpen(false);
       setForm(INITIAL_FORM);
       setFormErrors({});
+      qc.invalidateQueries({ queryKey: queryKeys.attendance.all() });
       qc.invalidateQueries({ queryKey: ['attendance'] });
       qc.invalidateQueries({ queryKey: ['attendance-analytics'] });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
@@ -744,6 +743,8 @@ export function AttendancePage() {
         qc.invalidateQueries({ queryKey: queryKeys.students.detail(form.studentId) });
       }
       qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+      void attendance.refetch();
+      void analyticsQuery.refetch();
     },
     onError: pushScheduleAwareError,
   });
@@ -755,8 +756,11 @@ export function AttendancePage() {
     onSuccess: () => {
       push('success', t('attendance.recordUpdated'));
       setEditTarget(null);
+      qc.invalidateQueries({ queryKey: queryKeys.attendance.all() });
       qc.invalidateQueries({ queryKey: ['attendance'] });
       qc.invalidateQueries({ queryKey: ['attendance-analytics'] });
+      void attendance.refetch();
+      void analyticsQuery.refetch();
     },
     onError: pushScheduleAwareError,
   });
@@ -767,8 +771,11 @@ export function AttendancePage() {
     onSuccess: () => {
       push('success', t('attendance.recordVoided'));
       setVoidTarget(null);
+      qc.invalidateQueries({ queryKey: queryKeys.attendance.all() });
       qc.invalidateQueries({ queryKey: ['attendance'] });
       qc.invalidateQueries({ queryKey: ['attendance-analytics'] });
+      void attendance.refetch();
+      void analyticsQuery.refetch();
     },
     onError: pushScheduleAwareError,
   });
@@ -946,23 +953,50 @@ export function AttendancePage() {
               </p>
             </div>
 
-            <motion.div
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              transition={SPRING.snappy}
-            >
-              <GlassButton
-                type="button"
-                variant="primary"
-                onClick={() => setModalOpen(true)}
-                aria-label={t('attendance.record')}
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <motion.div
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
               >
-                <span className="inline-flex items-center gap-2">
-                  <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                  {t('attendance.record')}
-                </span>
-              </GlassButton>
-            </motion.div>
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('open-ai-copilot', {
+                        detail: {
+                          prompt: "Bugungi markaz davomati, darsga kelmaganlar va sababsiz qoldirgan o'quvchilar tahlilini ko'rsat.",
+                        },
+                      }),
+                    );
+                  }}
+                  className="!border-purple-500/30 hover:!border-purple-500/50"
+                >
+                  <span className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium">
+                    <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
+                    AI Tahlil
+                  </span>
+                </GlassButton>
+              </motion.div>
+              <motion.div
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
+              >
+                <GlassButton
+                  type="button"
+                  variant="primary"
+                  onClick={() => setModalOpen(true)}
+                  aria-label={t('attendance.record')}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Icon paths={I.plus} size={15} strokeWidth={2.5} />
+                    {t('attendance.record')}
+                  </span>
+                </GlassButton>
+              </motion.div>
+            </div>
           </div>
         </div>
       </motion.div>

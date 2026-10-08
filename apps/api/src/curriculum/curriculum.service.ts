@@ -144,7 +144,17 @@ export class CurriculumService {
 
   async addObjective(organizationId: string, curriculumId: string, topicId: string, dto: CreateObjectiveDto) {
     await this.findOne(organizationId, curriculumId);
-    const topic = await this.prisma.topic.findUnique({ where: { id: topicId } });
+
+    // Tenant isolation: the topic must belong to the SAME curriculum that was
+    // just verified for this organization. A bare `findUnique({ id })` allowed
+    // an org to attach an objective to a topic owned by any other tenant whose
+    // UUID it happened to know (the write landed in the other tenant's data).
+    const topic = await this.prisma.topic.findFirst({
+      where: {
+        id: topicId,
+        CurriculumModule: { curriculumId, Curriculum: { organizationId } },
+      },
+    });
     if (!topic) throw new NotFoundException('Topic not found');
 
     return this.prisma.learningObjective.create({

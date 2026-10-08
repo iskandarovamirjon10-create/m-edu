@@ -148,6 +148,19 @@ export class SubmitAttemptDto {
     message: 'imageBase64 must be valid base64 data',
   })
   imageBase64!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Client-generated idempotency key. Retries with the same key return ' +
+      'the original result (including accessDenied) instead of re-processing.',
+    maxLength: 128,
+    example: 'cam-1-2026-09-05T10:30:00Z-abc123',
+  })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(128)
+  clientAttemptId?: string;
 }
 
 export class FinishSessionDto {

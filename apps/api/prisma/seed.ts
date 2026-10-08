@@ -16,6 +16,15 @@ function resolveSecret(envVar: string): string {
 const isProd = process.env.NODE_ENV === 'production';
 
 async function main() {
+  // NEVER seed demo tenants/accounts into a production database silently:
+  // require an explicit opt-in flag before creating any demo data.
+  if (isProd && process.env.ALLOW_PRODUCTION_SEED !== 'true') {
+    console.warn(
+      'Seed: refusing to run in production. Set ALLOW_PRODUCTION_SEED=true to override (not recommended).',
+    );
+    process.exit(0);
+  }
+
   const email = process.env.SEED_ADMIN_EMAIL || 'admin@medu.test';
   const password = resolveSecret('SEED_ADMIN_PASSWORD');
   const demoEmail = process.env.SEED_DEMO_EMAIL || 'demo@medu.test';
@@ -30,7 +39,8 @@ async function main() {
     return;
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(
+    async (tx) => {
   const passwordHash = await bcrypt.hash(password, 10);
 
   const org = await tx.organization.create({
@@ -293,7 +303,12 @@ async function main() {
     ],
   });
 
-  });
+    },
+    {
+      maxWait: 10_000,
+      timeout: 30_000,
+    },
+  );
   console.log('Seed complete:');
   console.log(`  Admin:       ${email}`);
   console.log(`  Demo admin:  ${demoEmail}`);

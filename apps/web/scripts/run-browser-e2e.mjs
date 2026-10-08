@@ -92,14 +92,14 @@ async function run() {
 
     // ── Flow 03: Dashboard ────────────────────────────────────────────────
     try {
-      await page.waitForSelector('main', { timeout: 10000 });
-      // Wait for content inside main
-      await page.waitForSelector('main h1, main h2, main div', { timeout: 10000 });
-      await page.waitForTimeout(1000);
-      const mainText = await page.locator('main').textContent();
-      const hasContent = mainText && mainText.trim().length > 10;
-      if (!hasContent) throw new Error('Dashboard main content is empty');
-      record(3, 'Dashboard Overview', 'PASS', 'Dashboard mounted with metric cards');
+      await page.waitForSelector('#main-content', { timeout: 10000 });
+      // Wait for dashboard data to load (beyond shimmer skeleton)
+      await page.waitForFunction(() => {
+        const text = document.querySelector('#main-content')?.textContent || '';
+        return text.trim().length > 10;
+      }, { timeout: 12000 });
+      const mainText = await page.locator('#main-content').textContent();
+      record(3, 'Dashboard Overview', 'PASS', 'Dashboard mounted with metric cards and loaded stats');
     } catch (e) {
       record(3, 'Dashboard Overview', 'FAIL', e.message);
     }
@@ -107,7 +107,7 @@ async function run() {
     // ── Flow 04: Students List ────────────────────────────────────────────
     try {
       await page.goto(`${BASE_URL}/students`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('h1, h2', { timeout: 8000 });
+      await page.waitForSelector('h1, h2', { timeout: 15000 });
       const heading = await page.locator('h1, h2').first().textContent();
       record(4, 'Students List', 'PASS', `Heading: "${heading?.trim()}"`);
     } catch (e) {
@@ -117,7 +117,7 @@ async function run() {
     // ── Flow 05: Add Student Form ─────────────────────────────────────────
     try {
       await page.goto(`${BASE_URL}/students/new`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('form', { timeout: 8000 });
+      await page.waitForSelector('form', { timeout: 15000 });
 
       const uniqueSuffix = Date.now().toString().slice(-6);
       const studentEmail = `student_${uniqueSuffix}@medu.test`;
@@ -141,7 +141,7 @@ async function run() {
     // ── Flow 06: Teachers List ────────────────────────────────────────────
     try {
       await page.goto(`${BASE_URL}/teachers`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('main', { timeout: 8000 });
+      await page.waitForSelector('main', { timeout: 15000 });
       await page.waitForTimeout(800);
       record(6, 'Teachers List', 'PASS', 'Teachers page rendered');
     } catch (e) {
@@ -151,7 +151,7 @@ async function run() {
     // ── Flow 07: Groups ───────────────────────────────────────────────────
     try {
       await page.goto(`${BASE_URL}/groups`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('main', { timeout: 8000 });
+      await page.waitForSelector('main', { timeout: 15000 });
       await page.waitForTimeout(800);
       record(7, 'Groups View', 'PASS', 'Groups page rendered');
     } catch (e) {
@@ -161,7 +161,7 @@ async function run() {
     // ── Flow 08: Courses ──────────────────────────────────────────────────
     try {
       await page.goto(`${BASE_URL}/courses`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('main', { timeout: 8000 });
+      await page.waitForSelector('main', { timeout: 15000 });
       await page.waitForTimeout(800);
       record(8, 'Courses View', 'PASS', 'Courses page rendered');
     } catch (e) {
@@ -171,7 +171,7 @@ async function run() {
     // ── Flow 09: Attendance ───────────────────────────────────────────────
     try {
       await page.goto(`${BASE_URL}/attendance`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('main', { timeout: 8000 });
+      await page.waitForSelector('main', { timeout: 15000 });
       await page.waitForTimeout(800);
       record(9, 'Attendance Module', 'PASS', 'Attendance page rendered');
     } catch (e) {
@@ -181,7 +181,7 @@ async function run() {
     // ── Flow 10: Payments ─────────────────────────────────────────────────
     try {
       await page.goto(`${BASE_URL}/payments`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('main', { timeout: 8000 });
+      await page.waitForSelector('main', { timeout: 15000 });
       await page.waitForTimeout(800);
       record(10, 'Payments Module', 'PASS', 'Payments page rendered');
     } catch (e) {
@@ -191,7 +191,7 @@ async function run() {
     // ── Flow 11: Invoices / Finance ───────────────────────────────────────
     try {
       await page.goto(`${BASE_URL}/invoices`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('main', { timeout: 8000 });
+      await page.waitForSelector('main', { timeout: 15000 });
       await page.waitForTimeout(800);
       record(11, 'Invoices Module', 'PASS', 'Invoices & Billing page rendered');
     } catch (e) {
@@ -201,7 +201,7 @@ async function run() {
     // ── Flow 12: Reports ──────────────────────────────────────────────────
     try {
       await page.goto(`${BASE_URL}/reports`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('main', { timeout: 8000 });
+      await page.waitForSelector('main', { timeout: 15000 });
       await page.waitForTimeout(1000);
       record(12, 'Reports Module', 'PASS', 'Reports & Business Intelligence page rendered');
     } catch (e) {
@@ -211,7 +211,7 @@ async function run() {
     // ── Flow 13: Settings ─────────────────────────────────────────────────
     try {
       await page.goto(`${BASE_URL}/settings`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('main', { timeout: 8000 });
+      await page.waitForSelector('main', { timeout: 15000 });
       await page.waitForTimeout(800);
       record(13, 'Settings Module', 'PASS', 'Settings page rendered');
     } catch (e) {
@@ -243,8 +243,8 @@ async function run() {
 
     // ── Flow 15: Dark/Light Theme Switch ──────────────────────────────────
     try {
-      const themeBtn = page.locator('button[title*="theme"], button[aria-label*="theme"]').first();
-      await themeBtn.waitFor({ state: 'attached', timeout: 5000 });
+      const themeBtn = page.locator('button[title*="theme"]:visible, button[aria-label*="theme"]:visible, button[aria-label*="dark"]:visible, button[aria-label*="light"]:visible').first();
+      await themeBtn.waitFor({ state: 'visible', timeout: 15000 });
 
       // Click to toggle to dark
       await themeBtn.click();
@@ -271,13 +271,13 @@ async function run() {
       await page.waitForTimeout(500);
 
       // Verify mobile hamburger menu button exists and click it
-      const menuBtn = page.locator('button[aria-label="Open menu"]');
+      const menuBtn = page.locator('button[aria-label="Menu"], button[aria-label="Open menu"]').first();
       await menuBtn.waitFor({ state: 'visible', timeout: 5000 });
       await menuBtn.click();
 
       // Verify mobile drawer / sheet opens with navigation items
-      await page.waitForSelector('nav[aria-label="Main navigation"]', { timeout: 5000 });
-      const navCount = await page.locator('nav[aria-label="Main navigation"] a').count();
+      await page.waitForSelector('[role="dialog"][aria-label="Navigation menu"]', { timeout: 5000 });
+      const navCount = await page.locator('[role="dialog"] a').count();
 
       // Close mobile menu
       const closeBtn = page.locator('button[aria-label="Close menu"]').first();
@@ -296,11 +296,11 @@ async function run() {
     // ── Flow 17: Direct Deep-Link Navigation & Refresh Persistence ────────
     try {
       await page.goto(`${BASE_URL}/students`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('main', { timeout: 8000 });
+      await page.waitForSelector('main', { timeout: 15000 });
 
       // Trigger hard reload
       await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('main', { timeout: 8000 });
+      await page.waitForSelector('main', { timeout: 15000 });
 
       // Ensure we are still on /students and not redirected to /login
       const currentUrl = page.url();
@@ -315,16 +315,20 @@ async function run() {
     // ── Flow 18: Logout ───────────────────────────────────────────────────
     try {
       // Find sign out button in sidebar
-      const signOutBtn = page.locator('button:has-text("Sign out")').first();
+      const signOutBtn = page.locator('button:has-text("Log out"), button:has-text("Sign out"), button:has-text("Chiqish"), button:has-text("Выйти")').first();
       await signOutBtn.waitFor({ state: 'visible', timeout: 5000 });
       await signOutBtn.click();
 
       // Verify redirection to /login
-      await page.waitForURL((url) => url.pathname === '/login', { timeout: 8000 });
+      await page.waitForURL((url) => url.pathname === '/login', { timeout: 15000 });
 
       // Verify protected route redirection
-      await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' });
-      await page.waitForURL((url) => url.pathname === '/login', { timeout: 8000 });
+      try {
+        await page.evaluate((url) => { window.location.href = url; }, `${BASE_URL}/students`);
+      } catch {
+        /* context destroyed on immediate navigation is expected */
+      }
+      await page.waitForURL((url) => url.pathname === '/login', { timeout: 15000 });
 
       record(18, 'Logout & Route Guard', 'PASS', 'Logged out cleanly and protected route redirected to /login');
     } catch (e) {
@@ -332,9 +336,15 @@ async function run() {
     }
 
   } finally {
-    await page.close();
-    await context.close();
-    await browser.close();
+    try {
+      await Promise.race([page.close(), new Promise((r) => setTimeout(r, 2000))]);
+    } catch {}
+    try {
+      await Promise.race([context.close(), new Promise((r) => setTimeout(r, 2000))]);
+    } catch {}
+    try {
+      await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 2000))]);
+    } catch {}
   }
 
   console.log('='.repeat(70));

@@ -18,14 +18,23 @@ import { CredentialVault, NetworkSecurity } from '@medu/camera-engine';
 
 import { getErrorMessage } from '../lib/error';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationEventService } from '../notifications/events/notification-event.service';
 import { AttendanceDecisionEngine } from './attendance-decision.engine';
 import { CameraWorkerSession } from './camera-worker-session';
+import {
+  DEFAULT_AMBIGUITY_MARGIN,
+  DEFAULT_SIMILARITY_THRESHOLD,
+} from './camera-thresholds';
 import { CameraAlertingService } from './camera-alerting.service';
 import { RedisPubSubService } from '../common/redis/redis-pubsub.service';
+import {
+  FACE_TEMPLATES_CHANGED_CHANNEL,
+  type FaceTemplatesChangedPayload,
+} from '../face/face-events';
 
-interface CameraFaceEngine extends FaceEngine {
-  initialize(): Promise<void>;
-}
+// ---------------------------------------------------------------------------
+// TYPES
+// ---------------------------------------------------------------------------
 
 type WorkerState =
   | 'STARTING'
@@ -39,6 +48,8 @@ type WorkerState =
 interface WorkerRecord {
   cameraId: string;
   organizationId: string;
+  /** Cached camera name for alerts — never re-read after startup. */
+  cameraName: string;
   state: WorkerState;
   session: CameraWorkerSession;
   startedAt: Date;
@@ -58,10 +69,47 @@ interface CameraWorkerConfig {
   minAmbiguityMargin?: number;
 }
 
+// ---------------------------------------------------------------------------
+// CONSTANTS
+// ---------------------------------------------------------------------------
+
+const ENV = {
+  NODE_ENV: 'NODE_ENV',
+  REDIS_URL: 'REDIS_URL',
+  BIOMETRIC_ENCRYPTION_KEY: 'BIOMETRIC_ENCRYPTION_KEY',
+  CAMERA_ENCRYPTION_KEY: 'CAMERA_ENCRYPTION_KEY',
+  ALLOW_LOCAL_CAMERAS: 'ALLOW_LOCAL_CAMERAS',
+  MAX_CAMERA_WORKERS: 'MAX_CAMERA_WORKERS',
+  MAX_CAMERA_WORKERS_PER_ORG: 'MAX_CAMERA_WORKERS_PER_ORG',
+  // Shared with FaceService so both pipelines are calibrated with the SAME
+  // knobs (previously camera workers used compile-time constants).
+  FACE_SIMILARITY_THRESHOLD: 'FACE_SIMILARITY_THRESHOLD',
+  FACE_AMBIGUITY_MARGIN: 'FACE_AMBIGUITY_MARGIN',
+  // Bound on session.start() so a hung RTSP handshake can never hold a Redis
+  // lock or the in-process lifecycle lock forever.
+  CAMERA_WORKER_START_TIMEOUT_MS: 'CAMERA_WORKER_START_TIMEOUT_MS',
+} as const;
+
 const DEFAULT_MAX_CONCURRENT_WORKERS = 10;
 const DEFAULT_MAX_WORKERS_PER_ORG = 3;
 const DEFAULT_PROCESSING_FPS = 3;
-const DEFAULT_SIMILARITY_THRESHOLD = 0.6;
+const DEFAULT_START_TIMEOUT_MS = 30_000;
+
+const CAMERA_LOCK_TTL_SECONDS = 10;
+const CAMERA_LOCK_RENEW_INTERVAL_MS = 5_000;
+const HEALTH_PERSIST_INTERVAL_MS = 60_000;
+const HEALTH_ERROR_PERSIST_MIN_INTERVAL_MS = 30_000;
+const REDIS_ERROR_LOG_THROTTLE_MS = 30_000;
+
+const CAMERA_COMMANDS_CHANNEL = 'camera-commands';
+const AES_256_KEY_BYTES = 32;
+
+const PROCESSING_FPS_MIN = 0.5;
+const PROCESSING_FPS_MAX = 30;
+
+// ===========================================================================
+// SERVICE
+// ===========================================================================
 
 @Injectable()
 export class CameraWorkerManagerService
@@ -72,14 +120,8 @@ export class CameraWorkerManagerService
   private readonly workers = new Map<string, WorkerRecord>();
 
   /**
-   * Cameras currently being started/stopped.
-   *
-   * This prevents:
-   *
-   * startWorker(A)
-   * startWorker(A)
-   *
-   * from creating two sessions concurrently.
+   * Cameras currently being started/stopped. Prevents two concurrent
+   * startWorker(A) calls from creating two sessions.
    */
   private readonly lifecycleLocks = new Set<string>();
 
@@ -88,67 +130,150 @@ export class CameraWorkerManagerService
   private subRedis: Redis | null = null;
   private readonly replicaId = randomUUID();
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private healthPersistInterval: NodeJS.Timeout | null = null;
 
+  /** cameraId -> epoch ms of the last persisted stream-error write. */
+  private readonly lastHealthErrorPersist = new Map<string, number>();
+
+  /** organizationId -> cameraIds (tenant fairness + O(1) removal). */
+  private readonly orgWorkerCounts = new Map<string, Set<string>>();
 
   /**
-   * organizationId -> cameraIds
+   * Starts that have RESERVED a capacity slot but have not yet registered a
+   * WorkerRecord.
    *
-   * Used for tenant fairness and O(1) worker removal.
+   * Capacity used to be read from `orgWorkerCounts` / `workers` after one or
+   * more `await`s, so N concurrent `startWorker` calls for the same tenant all
+   * observed `orgCount = max - 1` and all proceeded — the per-org cap was
+   * advisory under load. Reserving synchronously (before the first await) and
+   * releasing the moment the real record lands makes the cap exact.
    */
-  private readonly orgWorkerCounts = new Map<
-    string,
-    Set<string>
-  >();
+  private readonly pendingOrgStarts = new Map<string, number>();
+  private pendingGlobalStarts = 0;
 
   private readonly maxConcurrentWorkers = this.readPositiveIntEnv(
-    'MAX_CAMERA_WORKERS',
+    ENV.MAX_CAMERA_WORKERS,
     DEFAULT_MAX_CONCURRENT_WORKERS,
   );
 
   private readonly maxWorkersPerOrg = this.readPositiveIntEnv(
-    'MAX_CAMERA_WORKERS_PER_ORG',
+    ENV.MAX_CAMERA_WORKERS_PER_ORG,
     DEFAULT_MAX_WORKERS_PER_ORG,
   );
 
+  private readonly startTimeoutMs = this.readPositiveIntEnv(
+    ENV.CAMERA_WORKER_START_TIMEOUT_MS,
+    DEFAULT_START_TIMEOUT_MS,
+  );
+
   private credentialVault!: CredentialVault;
-  private faceEngine!: CameraFaceEngine;
+  private faceEngine!: FaceEngine;
   private attendanceEngine!: AttendanceDecisionEngine;
   private networkSecurity!: NetworkSecurity;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly alerting: CameraAlertingService,
+    private readonly notificationEvents: NotificationEventService,
     private readonly redisPubSub: RedisPubSubService,
   ) {
+    // Loopback and private IPs are unlocked by the SAME flag — previously
+    // `allowPrivateIps` was on in dev but `allowLoopback` was off, which made
+    // `127.0.0.1` cameras unreachable while `192.168.x.x` ones worked.
+    const allowLocal =
+      process.env[ENV.ALLOW_LOCAL_CAMERAS] === 'true' ||
+      process.env[ENV.NODE_ENV] !== 'production';
+
     this.networkSecurity = new NetworkSecurity({
-      allowPrivateIps: process.env.ALLOW_LOCAL_CAMERAS === 'true' || process.env.NODE_ENV !== 'production',
-      allowLoopback: process.env.ALLOW_LOCAL_CAMERAS === 'true' || process.env.NODE_ENV === 'test',
+      allowPrivateIps: allowLocal,
+      allowLoopback: allowLocal,
     });
   }
 
-  // ============================================================
+  // =====================================================================
   // LIFECYCLE
-  // ============================================================
+  // =====================================================================
+
+  async onModuleInit(): Promise<void> {
+    await this.initializeRedis();
+    this.initializeCredentialVault();
+    await this.initializeFaceEngine();
+
+    this.attendanceEngine = new AttendanceDecisionEngine(
+      this.prisma,
+      this.redisPubSub,
+      this.notificationEvents,
+    );
+
+    this.subscribeToTemplateChanges();
+    this.startHealthPersistence();
+
+    await this.startEnabledCameras();
+  }
 
   /**
-   * ioredis options for the coordination clients.
-   *
-   * Production keeps ioredis' default "retry forever with backoff" so a Redis
-   * restart is transparent: the lock is skipped while the connection is down
-   * and coordination resumes on reconnect.
-   *
-   * Tests must terminate deterministically even when nothing is listening on
-   * the Redis port: retries stop after a bounded number of attempts, ioredis
-   * reaches `end`, and its socket/timers are released instead of keeping the
-   * Vitest worker alive forever (`[ioredis] Unhandled error event` /
-   * `AggregateError` timeouts).
-   *
-   * `enableOfflineQueue: false` applies in both environments: a command issued
-   * while the connection is down fails fast rather than being buffered in a
-   * queue that never flushes (which used to stall worker start-up).
+   * Shutdown order matters: clear timers → stop workers (releases Redis
+   * locks while the connection is still alive) → close Redis. The previous
+   * order closed Redis first, so every `releaseCameraLock` was a no-op and
+   * the lock lingered for its full TTL after a clean shutdown.
    */
+  async onModuleDestroy(): Promise<void> {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    if (this.healthPersistInterval) {
+      clearInterval(this.healthPersistInterval);
+      this.healthPersistInterval = null;
+    }
+
+    const workers = Array.from(this.workers.values());
+
+    if (workers.length > 0) {
+      this.logger.info(
+        'Stopping camera workers during application shutdown',
+        { workerCount: workers.length },
+      );
+
+      await Promise.allSettled(
+        workers.map(async (worker) => {
+          try {
+            await this.stopWorkerInternal(worker.cameraId);
+          } catch (err: unknown) {
+            this.logger.error(
+              'Failed to stop camera worker during shutdown',
+              {
+                cameraId: worker.cameraId,
+                organizationId: worker.organizationId,
+                error: getErrorMessage(err),
+              },
+            );
+          }
+        }),
+      );
+
+      this.logger.info('Camera worker shutdown completed');
+    }
+
+    for (const client of [this.redis, this.pubRedis, this.subRedis]) {
+      try {
+        client?.disconnect();
+      } catch {
+        // Already closed / never connected.
+      }
+    }
+    this.redis = null;
+    this.pubRedis = null;
+    this.subRedis = null;
+  }
+
+  // =====================================================================
+  // REDIS
+  // =====================================================================
+
   private redisClientOptions(): Record<string, unknown> {
-    const isTest = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+    const isTest =
+      process.env.VITEST === 'true' || process.env[ENV.NODE_ENV] === 'test';
 
     if (isTest) {
       return {
@@ -166,32 +291,26 @@ export class CameraWorkerManagerService
     };
   }
 
-  /**
-   * Build an ioredis client that can never take the process down.
-   *
-   * A client without an `'error'` listener reports connection failures as
-   * `[ioredis] Unhandled error event` and crashes Node. An unreachable server
-   * emits a continuous stream of errors, so they are logged at most once every
-   * 30s.
-   */
   private createRedisClient(
     RedisCtor: new (url: string, options: Record<string, unknown>) => Redis,
     url: string,
   ): Redis {
     const client = new RedisCtor(url, this.redisClientOptions());
     let lastErrorLogAt = 0;
+
     client.on('error', (err: unknown) => {
       const now = Date.now();
-      if (now - lastErrorLogAt < 30_000) return;
+      if (now - lastErrorLogAt < REDIS_ERROR_LOG_THROTTLE_MS) return;
       lastErrorLogAt = now;
       this.logger.warn('Redis coordination client unavailable', {
         error: getErrorMessage(err),
       });
     });
+
     return client;
   }
 
-  private async initializeRedis() {
+  private async initializeRedis(): Promise<void> {
     try {
       const mod = await import('ioredis');
       const RedisCtor = (mod.default ||
@@ -200,52 +319,37 @@ export class CameraWorkerManagerService
         url: string,
         options: Record<string, unknown>,
       ) => Redis;
-      const url = process.env.REDIS_URL || 'redis://localhost:6379';
+
+      const url =
+        process.env[ENV.REDIS_URL] || 'redis://localhost:6379';
+
+      // `pub` shares the general-purpose client — publishing never needs a
+      // dedicated connection. Only `sub` requires its own socket (RESP2
+      // subscriber mode is exclusive).
       this.redis = this.createRedisClient(RedisCtor, url);
-      this.pubRedis = this.createRedisClient(RedisCtor, url);
+      this.pubRedis = this.redis;
       this.subRedis = this.createRedisClient(RedisCtor, url);
 
-      // A failed SUBSCRIBE is the same condition the client's own 'error'
-      // listener already reports (and rate-limits), so it is logged at debug
-      // level to keep one outage to one warning.
-      this.subRedis?.subscribe('camera-commands').catch((err: unknown) => {
-        this.logger.debug('Failed to subscribe to camera-commands', {
-          error: getErrorMessage(err),
+      this.subRedis
+        .subscribe(CAMERA_COMMANDS_CHANNEL)
+        .catch((err: unknown) => {
+          this.logger.debug('Failed to subscribe to camera-commands', {
+            error: getErrorMessage(err),
+          });
         });
-      });
-      this.subRedis?.on('message', (channel, message) => {
-        if (channel !== 'camera-commands') return;
-        // A malformed payload must never crash the process (previously an
-        // unguarded JSON.parse inside an async listener could reject
-        // unhandled).
-        void (async () => {
-          try {
-            const { action, cameraId, sender } = JSON.parse(message) as {
-              action?: string;
-              cameraId?: string;
-              sender?: string;
-            };
-            if (!cameraId || sender === this.replicaId) return;
-            if (action === 'STOP') {
-              const worker = this.workers.get(cameraId);
-              if (worker) {
-                this.logger.info(`Received distributed STOP for camera ${cameraId}`);
-                await this.stopWorker(worker.organizationId, cameraId, true).catch(() => {});
-              }
-            }
-          } catch (err: unknown) {
-            this.logger.warn('Ignoring malformed camera-commands payload', {
-              error: getErrorMessage(err),
-            });
-          }
-        })();
+
+      this.subRedis.on('message', (channel, message) => {
+        if (channel !== CAMERA_COMMANDS_CHANNEL) return;
+        void this.handleCameraCommand(message);
       });
 
       this.heartbeatInterval = setInterval(() => {
         void this.renewLocks().catch((err: unknown) => {
-          this.logger.warn('renewLocks failed', { error: getErrorMessage(err) });
+          this.logger.warn('renewLocks failed', {
+            error: getErrorMessage(err),
+          });
         });
-      }, 5000);
+      }, CAMERA_LOCK_RENEW_INTERVAL_MS);
       this.heartbeatInterval.unref?.();
     } catch (err: unknown) {
       this.logger.warn(
@@ -255,66 +359,81 @@ export class CameraWorkerManagerService
     }
   }
 
-  private async renewLocks() {
-    if (!this.redis) return;
-    for (const [cameraId, worker] of this.workers.entries()) {
-      try {
-        const renewed = await this.renewCameraLock(cameraId);
-        if (!renewed) {
-          this.logger.warn(`Lost lock for camera ${cameraId}, stopping local worker`);
-          await this.stopWorker(worker.organizationId, cameraId, true).catch(() => {});
-        }
-      } catch (err: unknown) {
-        this.logger.warn(`Failed to renew lock for camera ${cameraId}`, {
-          error: getErrorMessage(err),
+  private async handleCameraCommand(message: string): Promise<void> {
+    try {
+      const { action, cameraId, sender } = JSON.parse(message) as {
+        action?: string;
+        cameraId?: string;
+        sender?: string;
+      };
+
+      if (!cameraId || sender === this.replicaId) return;
+
+      if (action === 'STOP') {
+        const worker = this.workers.get(cameraId);
+        if (!worker) return;
+
+        this.logger.info(`Received distributed STOP for camera ${cameraId}`);
+
+        // A peer owns the camera now — stop locally WITHOUT re-broadcasting,
+        // otherwise two replicas ping-pong STOPs forever.
+        await this.stopWorkerInternal(cameraId).catch((err: unknown) => {
+          this.logger.warn(
+            `Failed to apply distributed STOP for camera ${cameraId}`,
+            { error: getErrorMessage(err) },
+          );
         });
       }
+    } catch (err: unknown) {
+      this.logger.warn('Ignoring malformed camera-commands payload', {
+        error: getErrorMessage(err),
+      });
     }
   }
 
-  // ============================================================
+  /**
+   * Renew every owned camera lock in parallel. The previous sequential loop
+   * could exceed the 10s lock TTL when Redis is slow and it holds 10 workers.
+   */
+  private async renewLocks(): Promise<void> {
+    if (!this.redis) return;
+
+    const entries = Array.from(this.workers.entries());
+
+    await Promise.allSettled(
+      entries.map(async ([cameraId, worker]) => {
+        try {
+          const renewed = await this.renewCameraLock(cameraId);
+          if (renewed) return;
+
+          this.logger.warn(
+            `Lost lock for camera ${cameraId}, stopping local worker`,
+          );
+
+          // Peer replica took ownership — stop only locally.
+          await this.stopWorkerInternal(cameraId).catch(() => {});
+        } catch (err: unknown) {
+          this.logger.warn(`Failed to renew lock for camera ${cameraId}`, {
+            error: getErrorMessage(err),
+          });
+        }
+      }),
+    );
+  }
+
+  // =====================================================================
   // DISTRIBUTED CAMERA LOCK (owner-aware)
-  //
-  // One lock per camera, owned by exactly one replica. Every mutation is
-  // atomic and verifies ownership, so a replica can never release or extend
-  // a peer's lock:
-  //
-  //   acquire : SET key <replicaId> EX 10 NX
-  //   renew   : Lua "if get(key)==me then expire(key,10)"
-  //   release : Lua "if get(key)==me then del(key)"
-  //
-  // When Redis is unavailable the lock is skipped, and a single-replica
-  // deployment keeps working; multi-replica coordination is then the caller's
-  // explicit responsibility (see config validation for production).
-  // ============================================================
+  // =====================================================================
 
   private cameraLockKey(cameraId: string): string {
     return `camera:${cameraId}:lock`;
   }
 
-  /**
-   * True only when the coordination client can actually talk to Redis.
-   *
-   * The clients run with `enableOfflineQueue: false`, so a command issued
-   * while the connection is down rejects immediately instead of buffering —
-   * but there is no reason to pay for that rejection when no lock can be
-   * acquired anyway. Skipping here degrades to single-replica behaviour and is
-   * surfaced as a warning; production additionally fails fast on a missing
-   * Redis configuration (config.validate).
-   */
   private isRedisReady(): boolean {
     const redis = this.redis;
     return redis !== null && redis.status === 'ready';
   }
 
-  /**
-   * Try to take ownership of a camera. Returns true when this replica holds
-   * the lock (either freshly acquired or already owned by us — an idempotent
-   * re-start must not be mistaken for "another replica owns it").
-   *
-   * A Redis failure degrades to `true` (single-replica semantics) rather than
-   * failing the whole start: losing coordination must never take cameras down.
-   */
   private async acquireCameraLock(cameraId: string): Promise<boolean> {
     if (!this.isRedisReady()) {
       const redis = this.redis;
@@ -326,45 +445,57 @@ export class CameraWorkerManagerService
       }
       return true;
     }
+
     const redis = this.redis;
     if (!redis) return true;
+
     try {
       const key = this.cameraLockKey(cameraId);
-      const acquired = await redis.set(key, this.replicaId, 'EX', 10, 'NX');
+      const acquired = await redis.set(
+        key,
+        this.replicaId,
+        'EX',
+        CAMERA_LOCK_TTL_SECONDS,
+        'NX',
+      );
       if (acquired) return true;
 
       const owner = await redis.get(key);
       if (owner === this.replicaId) return true;
 
-      this.logger.info(`Camera ${cameraId} is already running on another replica`, { owner });
+      this.logger.info(
+        `Camera ${cameraId} is already running on another replica`,
+        { owner },
+      );
       return false;
     } catch (err: unknown) {
-      this.logger.warn('Redis lock acquire failed — proceeding without coordination', {
-        cameraId,
-        error: getErrorMessage(err),
-      });
+      this.logger.warn(
+        'Redis lock acquire failed — proceeding without coordination',
+        { cameraId, error: getErrorMessage(err) },
+      );
       return true;
     }
   }
 
-  /** Atomically extend the lock only while this replica still owns it. */
   private async renewCameraLock(cameraId: string): Promise<boolean> {
     const redis = this.redis;
     if (!redis || redis.status !== 'ready') return true;
+
     const result = await redis.eval(
       'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("EXPIRE", KEYS[1], ARGV[2]) else return 0 end',
       1,
       this.cameraLockKey(cameraId),
       this.replicaId,
-      10,
+      CAMERA_LOCK_TTL_SECONDS,
     );
+
     return result === 1;
   }
 
-  /** Atomically release the lock only if this replica owns it. */
   private async releaseCameraLock(cameraId: string): Promise<void> {
     const redis = this.redis;
     if (!redis || redis.status !== 'ready') return;
+
     try {
       const result = await redis.eval(
         'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end',
@@ -372,8 +503,11 @@ export class CameraWorkerManagerService
         this.cameraLockKey(cameraId),
         this.replicaId,
       );
+
       if (result !== 1) {
-        this.logger.warn(`Camera ${cameraId} lock was not owned by this replica; not released`);
+        this.logger.warn(
+          `Camera ${cameraId} lock was not owned by this replica; not released`,
+        );
       }
     } catch (err: unknown) {
       this.logger.warn(`Failed to release camera lock for ${cameraId}`, {
@@ -382,87 +516,199 @@ export class CameraWorkerManagerService
     }
   }
 
+  // =====================================================================
+  // TEMPLATE INVALIDATION
+  // =====================================================================
 
-  async onModuleInit(): Promise<void> {
-    await this.initializeRedis();
-    this.initializeCredentialVault();
-
-    await this.initializeFaceEngine();
-
-    this.attendanceEngine =
-      new AttendanceDecisionEngine(this.prisma, this.redisPubSub);
-
-    await this.startEnabledCameras();
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-    for (const client of [this.redis, this.pubRedis, this.subRedis]) {
-      try {
-        client?.disconnect();
-      } catch {
-        // Already closed / never connected — nothing to release.
-      }
-    }
-    this.redis = null;
-    this.pubRedis = null;
-    this.subRedis = null;
-    const workers = Array.from(
-      this.workers.values(),
-    );
-
-    if (workers.length === 0) {
+  private subscribeToTemplateChanges(): void {
+    if (typeof this.redisPubSub?.subscribe !== 'function') {
       return;
     }
 
-    this.logger.info(
-      'Stopping camera workers during application shutdown',
-      {
-        workerCount: workers.length,
-      },
-    );
-
-    await Promise.allSettled(
-      workers.map(async (worker) => {
+    void this.redisPubSub.subscribe(
+      FACE_TEMPLATES_CHANGED_CHANNEL,
+      (rawPayload: string) => {
         try {
-          await this.stopWorkerInternal(worker.cameraId);
-        } catch (err: unknown) {
-          this.logger.error(
-            'Failed to stop camera worker during shutdown',
+          const payload = JSON.parse(
+            rawPayload,
+          ) as FaceTemplatesChangedPayload;
+
+          if (!payload?.organizationId) return;
+
+          let invalidated = 0;
+
+          for (const worker of this.workers.values()) {
+            if (worker.organizationId === payload.organizationId) {
+              worker.session.invalidateTemplateCache();
+              invalidated += 1;
+            }
+          }
+
+          this.logger.debug(
+            'Invalidated camera template caches after enrollment change',
             {
-              cameraId: worker.cameraId,
-              organizationId: worker.organizationId,
-              error: getErrorMessage(err),
+              organizationId: payload.organizationId,
+              invalidated,
             },
           );
+        } catch (err: unknown) {
+          this.logger.warn(
+            'Ignoring malformed face-templates-changed payload',
+            { error: getErrorMessage(err) },
+          );
         }
-      }),
-    );
-
-    this.logger.info(
-      'Camera worker shutdown completed',
+      },
     );
   }
 
-  // ============================================================
+  // =====================================================================
+  // HEALTH PERSISTENCE
+  // =====================================================================
+
+  private startHealthPersistence(): void {
+    if (this.healthPersistInterval) return;
+
+    this.healthPersistInterval = setInterval(() => {
+      void this.persistRunningCameraHealth();
+    }, HEALTH_PERSIST_INTERVAL_MS);
+
+    this.healthPersistInterval.unref?.();
+  }
+
+  private async persistRunningCameraHealth(): Promise<void> {
+    // DEGRADED workers are still alive and trying — their lastSeenAt must
+    // advance, otherwise the dashboard shows a stale "last seen" for a
+    // camera that is actively reconnecting.
+    const activeWorkers = [...this.workers.values()].filter(
+      (worker) =>
+        worker.state === 'RUNNING' ||
+        worker.state === 'CONNECTING' ||
+        worker.state === 'DEGRADED',
+    );
+
+    if (activeWorkers.length === 0) return;
+
+    // Group by org so the WHERE clause can be tenant-scoped — defence in
+    // depth against ever mutating a row outside this worker's org.
+    const byOrg = new Map<string, string[]>();
+
+    for (const worker of activeWorkers) {
+      const ids = byOrg.get(worker.organizationId) ?? [];
+      ids.push(worker.cameraId);
+      byOrg.set(worker.organizationId, ids);
+    }
+
+    try {
+      await Promise.all(
+        Array.from(byOrg.entries()).map(([organizationId, cameraIds]) =>
+          this.prisma.camera.updateMany({
+            where: { id: { in: cameraIds }, organizationId },
+            data: { status: 'ONLINE', lastSeenAt: new Date() },
+          }),
+        ),
+      );
+    } catch (err: unknown) {
+      this.logger.debug('Failed to persist camera health heartbeat', {
+        error: getErrorMessage(err),
+      });
+    }
+  }
+
+  private persistCameraOnline(
+    organizationId: string,
+    cameraId: string,
+  ): void {
+    void this.prisma.camera
+      .updateMany({
+        where: { id: cameraId, organizationId },
+        data: { status: 'ONLINE', lastSeenAt: new Date() },
+      })
+      .catch((err: unknown) => {
+        this.logger.debug('Failed to persist camera ONLINE status', {
+          cameraId,
+          error: getErrorMessage(err),
+        });
+      });
+  }
+
+  private persistCameraError(
+    organizationId: string,
+    cameraId: string,
+    error: string,
+    errorCode: string = 'STREAM_ERROR',
+  ): void {
+    const now = Date.now();
+    const last = this.lastHealthErrorPersist.get(cameraId) ?? 0;
+
+    if (now - last < HEALTH_ERROR_PERSIST_MIN_INTERVAL_MS) return;
+
+    this.lastHealthErrorPersist.set(cameraId, now);
+
+    void this.prisma.camera
+      .updateMany({
+        where: { id: cameraId, organizationId },
+        data: {
+          status: 'ERROR',
+          lastErrorAt: new Date(),
+          lastErrorCode: errorCode,
+          lastErrorMessage: error.slice(0, 500),
+          reconnectCount: { increment: 1 },
+        },
+      })
+      .catch((err: unknown) => {
+        this.logger.debug('Failed to persist camera ERROR status', {
+          cameraId,
+          error: getErrorMessage(err),
+        });
+      });
+  }
+
+  private persistCameraStopped(
+    organizationId: string,
+    cameraId: string,
+  ): void {
+    this.lastHealthErrorPersist.delete(cameraId);
+
+    void this.prisma.camera
+      .updateMany({
+        where: {
+          id: cameraId,
+          organizationId,
+          status: { in: ['ONLINE', 'ERROR', 'CONNECTING'] },
+        },
+        data: { status: 'CONFIGURED' },
+      })
+      .catch((err: unknown) => {
+        this.logger.debug('Failed to persist camera stop status', {
+          cameraId,
+          error: getErrorMessage(err),
+        });
+      });
+  }
+
+  // =====================================================================
   // INITIALIZATION
-  // ============================================================
+  // =====================================================================
 
   private initializeCredentialVault(): void {
     const encryptionKey =
-      process.env.BIOMETRIC_ENCRYPTION_KEY ||
-      process.env.CAMERA_ENCRYPTION_KEY;
+      process.env[ENV.BIOMETRIC_ENCRYPTION_KEY] ||
+      process.env[ENV.CAMERA_ENCRYPTION_KEY];
 
-    // Fail-closed: never use a hardcoded fallback key regardless of NODE_ENV.
-    // The previous implementation allowed the well-known dev key to be used
-    // whenever NODE_ENV was not 'production'.
-    if (!encryptionKey || encryptionKey.length < 32) {
+    if (!encryptionKey) {
       throw new Error(
-        'BIOMETRIC_ENCRYPTION_KEY or CAMERA_ENCRYPTION_KEY must be ' +
-          'configured with at least 32 characters in all non-test environments.',
+        `${ENV.BIOMETRIC_ENCRYPTION_KEY} or ${ENV.CAMERA_ENCRYPTION_KEY} must be configured`,
+      );
+    }
+
+    // AES-256 needs 32 BYTES, not 32 UTF-16 code units. A 32-char multibyte
+    // string encodes to 33+ bytes and would silently fail at cipher time.
+    const byteLength = Buffer.byteLength(encryptionKey, 'utf8');
+
+    if (byteLength < AES_256_KEY_BYTES) {
+      throw new Error(
+        `${ENV.BIOMETRIC_ENCRYPTION_KEY} / ${ENV.CAMERA_ENCRYPTION_KEY} must be at least ` +
+          `${AES_256_KEY_BYTES} bytes (UTF-8); got ${byteLength}`,
       );
     }
 
@@ -471,97 +717,91 @@ export class CameraWorkerManagerService
 
   private async initializeFaceEngine(): Promise<void> {
     try {
-      const { getSharedFaceEngine } = await import('../face/face-engine.factory.js');
-      this.faceEngine = await getSharedFaceEngine() as any;
-      this.logger.info('Face engine initialized via shared factory for camera workers');
+      const { getSharedFaceEngine } = await import(
+        '../face/face-engine.factory.js'
+      );
+      // No `as any`: getSharedFaceEngine already returns an initialized,
+      // ready-to-use FaceEngine — the previous cast implied an unused
+      // initialize() contract.
+      this.faceEngine = await getSharedFaceEngine();
+      this.logger.info(
+        'Face engine initialized via shared factory for camera workers',
+      );
     } catch (err: unknown) {
       const message = getErrorMessage(err);
-      this.logger.error('Face engine initialization failed: ' + message, { error: message });
-      // Fail-closed in production: a broken face engine must abort startup
-      // rather than silently continuing without biometric recognition.
-      if (process.env.NODE_ENV === 'production') {
+      this.logger.error(
+        'Face engine initialization failed: ' + message,
+        { error: message },
+      );
+
+      if (process.env[ENV.NODE_ENV] === 'production') {
         throw new Error(
           `Face engine initialization failed in production: ${message}`,
         );
       }
-      this.logger.warn('Face engine initialization failed in development', { error: message });
+
+      this.logger.warn('Face engine initialization failed in development', {
+        error: message,
+      });
     }
   }
+
   private async startEnabledCameras(): Promise<void> {
-    const cameras =
-      await this.prisma.camera.findMany({
-        where: {
-          enabled: true,
-          recognitionEnabled: true,
-        },
-
-        select: {
-          id: true,
-          organizationId: true,
-        },
-
-        orderBy: {
-          id: 'asc',
-        },
-      });
+    const cameras = await this.prisma.camera.findMany({
+      where: { enabled: true, recognitionEnabled: true },
+      select: { id: true, organizationId: true },
+      orderBy: { id: 'asc' },
+    });
 
     if (cameras.length === 0) {
-      this.logger.info(
-        'No enabled recognition cameras found',
-      );
+      this.logger.info('No enabled recognition cameras found');
       return;
     }
 
+    // Group by org and start at most N in parallel so a single slow RTSP
+    // endpoint cannot stall startup for every other tenant. Sequential
+    // iteration over hundreds of cameras was previously a startup bottleneck.
+    const byOrg = new Map<string, string[]>();
     for (const camera of cameras) {
-      if (
-        this.workers.size >=
-        this.maxConcurrentWorkers
-      ) {
-        this.logger.warn(
-          'Global camera worker capacity reached',
-          {
-            limit: this.maxConcurrentWorkers,
-          },
-        );
+      const ids = byOrg.get(camera.organizationId) ?? [];
+      ids.push(camera.id);
+      byOrg.set(camera.organizationId, ids);
+    }
 
-        break;
-      }
+    for (const [organizationId, cameraIds] of byOrg.entries()) {
+      const slice = cameraIds.slice(0, this.maxWorkersPerOrg);
 
-      try {
-        await this.startWorker(
-          camera.organizationId,
-          camera.id,
-        );
-      } catch (err: unknown) {
-        this.logger.error(
-          'Failed to start configured camera worker',
-          {
-            cameraId: camera.id,
-            organizationId: camera.organizationId,
-            error: getErrorMessage(err),
-          },
-        );
-      }
+      await Promise.allSettled(
+        slice.map(async (cameraId) => {
+          if (this.workers.size >= this.maxConcurrentWorkers) return;
+
+          try {
+            await this.startWorker(organizationId, cameraId);
+          } catch (err: unknown) {
+            this.logger.error(
+              'Failed to start configured camera worker',
+              {
+                cameraId,
+                organizationId,
+                error: getErrorMessage(err),
+              },
+            );
+          }
+        }),
+      );
     }
   }
 
-  // ============================================================
+  // =====================================================================
   // START WORKER
-  // ============================================================
+  // =====================================================================
 
   async startWorker(
     organizationId: string,
     cameraId: string,
   ): Promise<void> {
-    this.assertNonEmptyIdentifier(
-      organizationId,
-      'organizationId',
-    );
-
-    this.assertNonEmptyIdentifier(
-      cameraId,
-      'cameraId',
-    );
+    this.assertNonEmptyIdentifier(organizationId, 'organizationId');
+    this.assertNonEmptyIdentifier(cameraId, 'cameraId');
 
     if (this.lifecycleLocks.has(cameraId)) {
       throw new HttpException(
@@ -570,106 +810,93 @@ export class CameraWorkerManagerService
       );
     }
 
-    // Idempotent start: a worker for this camera already runs here.
-    if (this.workers.has(cameraId)) {
-      return;
-    }
+    if (this.workers.has(cameraId)) return;
 
-    /**
-     * P0: take the lifecycle lock SYNCHRONOUSLY before any await. The old
-     * order (check → await acquireCameraLock → add lock) let two concurrent
-     * same-replica startWorker(A) calls both pass the checks: the second
-     * SET NX failed but the owner check saw our own replicaId and returned
-     * true, spawning a duplicate session and orphaning an FFmpeg child.
-     */
     this.lifecycleLocks.add(cameraId);
     let started = false;
     let lockHeld = false;
+    let capacityReserved = false;
 
     try {
-      // Re-check after acquiring the in-process lock (another start may have
-      // completed while we were still in the synchronous prologue — cheap
-      // defence in depth).
-      if (this.workers.has(cameraId)) {
-        return;
-      }
+      if (this.workers.has(cameraId)) return;
 
-      // Capacity is checked BEFORE taking the distributed lock so a rejected
-      // start can never leave a stale Redis lock behind for the next 10s.
-      this.assertWorkerCapacity(organizationId);
+      /*
+       * Reserve BEFORE the first `await`. Two rounds of `assertWorkerCapacity`
+       * split by `await acquireCameraLock(...)` still left a window in which
+       * several starts for the SAME org read the same count and all passed.
+       */
+      this.reserveWorkerCapacity(organizationId);
+      capacityReserved = true;
 
       lockHeld = await this.acquireCameraLock(cameraId);
-      if (!lockHeld) {
-        return;
-      }
-      const camera =
-        await this.findOwnedCamera(
-          organizationId,
-          cameraId,
-        );
+      if (!lockHeld) return;
 
+      const camera = await this.findOwnedCamera(organizationId, cameraId);
       this.validateCameraCanStart(camera);
 
-      const credentials =
-        await this.decryptCredentials(camera);
+      const credentials = await this.decryptCredentials(camera);
+      const streamUri = await this.buildStreamUri(camera, credentials);
+      const config = this.buildWorkerConfig(camera, streamUri);
 
-      const streamUri =
-        await this.buildStreamUri(
-          camera,
-          credentials,
-        );
-
-      const config =
-        this.buildWorkerConfig(
-          camera,
-          streamUri,
-        );
-
-      const session =
-        new CameraWorkerSession(
-          config,
-          this.faceEngine,
-          this.attendanceEngine,
-          this.prisma,
-          this.credentialVault.encryption,
-        );
+      const session = new CameraWorkerSession(
+        config,
+        this.faceEngine,
+        this.attendanceEngine,
+        this.prisma,
+        this.credentialVault.encryption,
+      );
 
       const worker: WorkerRecord = {
         cameraId: camera.id,
         organizationId: camera.organizationId,
+        cameraName: camera.name,
         state: 'STARTING',
         session,
         startedAt: new Date(),
       };
 
-      /**
-       * Register worker only after the complete object exists.
-       */
-      this.workers.set(
-        camera.id,
-        worker,
-      );
-
-      this.addOrgWorker(
-        camera.organizationId,
-        camera.id,
-      );
+      this.workers.set(camera.id, worker);
+      this.addOrgWorker(camera.organizationId, camera.id);
+      // The reservation is now represented by a real record — hand the slot
+      // back so a concurrently starting camera is not double-counted.
+      if (capacityReserved) {
+        this.releaseWorkerCapacity(camera.organizationId);
+        capacityReserved = false;
+      }
 
       try {
         worker.state = 'CONNECTING';
 
-        await session.start();
+        await this.withTimeout(
+          session.start(),
+          this.startTimeoutMs,
+          `session.start() timed out after ${this.startTimeoutMs}ms`,
+        );
 
-        // FIX-4: wire camera alerting events (offline/recovered/frozen)
+        // Flip `started` BEFORE attaching event handlers: if any handler
+        // wiring throws, we must NOT release the Redis lock while a live
+        // session is running.
+        started = true;
+
         session.on('camera-offline', (evt) => {
+          worker.state = 'DEGRADED';
+          this.persistCameraError(
+            worker.organizationId,
+            evt.cameraId,
+            evt.error,
+            evt.errorCode ?? 'STREAM_ERROR',
+          );
           void this.alerting.sendOfflineAlert({
             cameraId: evt.cameraId,
             organizationId: evt.organizationId,
             error: evt.error,
-            cameraName: worker.session?.getHealth?.()?.cameraId ?? evt.cameraId,
+            cameraName: worker.cameraName,
           });
         });
+
         session.on('camera-recovered', () => {
+          worker.state = 'RUNNING';
+          this.persistCameraOnline(worker.organizationId, worker.cameraId);
           void this.alerting.sendRecoveredAlert({
             cameraId: worker.cameraId,
             organizationId: worker.organizationId,
@@ -677,71 +904,70 @@ export class CameraWorkerManagerService
         });
 
         worker.state = 'RUNNING';
-        started = true;
+        this.persistCameraOnline(camera.organizationId, camera.id);
 
-        this.logger.info(
-          'Camera worker started successfully',
-          {
-            cameraId: camera.id,
-            organizationId:
-              camera.organizationId,
-            name: camera.name,
-          },
-        );
+        this.logger.info('Camera worker started successfully', {
+          cameraId: camera.id,
+          organizationId: camera.organizationId,
+          name: camera.name,
+        });
       } catch (err: unknown) {
         worker.state = 'ERROR';
 
-        this.logger.error(
-          'Camera worker failed during startup',
-          {
-            cameraId: camera.id,
-            organizationId:
-              camera.organizationId,
-            error: getErrorMessage(err),
-          },
-        );
+        this.logger.error('Camera worker failed during startup', {
+          cameraId: camera.id,
+          organizationId: camera.organizationId,
+          error: getErrorMessage(err),
+        });
 
-        /**
-         * Never leave a failed worker registered as active.
-         */
-        await this.cleanupFailedWorker(
-          camera.id,
-          worker,
-        );
-
+        await this.cleanupFailedWorker(camera.id, worker);
         throw err;
       }
     } finally {
       this.lifecycleLocks.delete(cameraId);
-      // Never keep ownership of a camera whose worker failed to start —
-      // otherwise the camera could not be retried until the lock TTL.
+
+      if (capacityReserved) {
+        this.releaseWorkerCapacity(organizationId);
+      }
+
       if (!started && lockHeld) {
         await this.releaseCameraLock(cameraId);
       }
     }
   }
 
-  // ============================================================
+  // =====================================================================
   // STOP WORKER
-  // ============================================================
+  // =====================================================================
 
   async stopWorker(
     organizationId: string,
     cameraId: string,
-    localOnly = false
+    localOnly = false,
   ): Promise<void> {
     await this.assertCameraOwnership(organizationId, cameraId);
+
+    // Refuse to broadcast a distributed STOP when this replica cannot even
+    // perform the local stop — otherwise peers kill their workers while the
+    // API returns an error and the local worker is still running.
+    if (this.lifecycleLocks.has(cameraId)) {
+      throw new HttpException(
+        'Camera worker lifecycle operation already in progress',
+        HttpStatus.CONFLICT,
+      );
+    }
+
     if (!localOnly && this.pubRedis) {
       try {
-        // Fire-and-forget on purpose: a broadcast must never delay (or block)
-        // the local teardown of the worker. The client runs with
-        // `enableOfflineQueue: false`, so a broadcast attempted while Redis is
-        // down rejects instead of being flushed — possibly much later — after
-        // the camera has already been restarted elsewhere.
         const published = this.pubRedis.publish(
-          'camera-commands',
-          JSON.stringify({ action: 'STOP', cameraId, sender: this.replicaId }),
+          CAMERA_COMMANDS_CHANNEL,
+          JSON.stringify({
+            action: 'STOP',
+            cameraId,
+            sender: this.replicaId,
+          }),
         );
+
         void Promise.resolve(published).catch((err: unknown) => {
           this.logger.warn('Failed to broadcast distributed STOP', {
             cameraId,
@@ -755,20 +981,13 @@ export class CameraWorkerManagerService
         });
       }
     }
-    // The lock is released by stopWorkerInternal (owner-aware), and never by a
-    // blind DEL: a peer replica may have taken ownership meanwhile.
+
     await this.stopWorkerInternal(cameraId);
   }
 
-  private async stopWorkerInternal(
-    cameraId: string,
-  ): Promise<void> {
-    const worker =
-      this.workers.get(cameraId);
-
-    if (!worker) {
-      return;
-    }
+  private async stopWorkerInternal(cameraId: string): Promise<void> {
+    const worker = this.workers.get(cameraId);
+    if (!worker) return;
 
     if (this.lifecycleLocks.has(cameraId)) {
       throw new HttpException(
@@ -778,72 +997,41 @@ export class CameraWorkerManagerService
     }
 
     this.lifecycleLocks.add(cameraId);
-
     worker.state = 'STOPPING';
 
     try {
       await worker.session.stop();
     } catch (err: unknown) {
       worker.state = 'ERROR';
-
       this.logger.error(
         'Camera worker session failed to stop cleanly',
         {
           cameraId,
-          organizationId:
-            worker.organizationId,
+          organizationId: worker.organizationId,
           error: getErrorMessage(err),
         },
       );
-
       throw err;
     } finally {
       this.workers.delete(cameraId);
-
-      this.removeOrgWorker(
-        worker.organizationId,
-        cameraId,
-      );
-
-      // Release ownership so the camera can be started again immediately
-      // (restart, failover). Owner-aware: a peer's lock is never touched.
+      this.removeOrgWorker(worker.organizationId, cameraId);
+      this.persistCameraStopped(worker.organizationId, cameraId);
       await this.releaseCameraLock(cameraId);
-
-      this.lifecycleLocks.delete(
-        cameraId,
-      );
+      this.lifecycleLocks.delete(cameraId);
     }
 
-    this.logger.info(
-      'Camera worker stopped',
-      {
-        cameraId,
-        organizationId:
-          worker.organizationId,
-      },
-    );
+    this.logger.info('Camera worker stopped', {
+      cameraId,
+      organizationId: worker.organizationId,
+    });
   }
 
-  // ============================================================
+  // =====================================================================
   // RESTART
-  // ============================================================
+  // =====================================================================
 
-  /**
-   * Restart = stop (releasing this replica's ownership) then start.
-   *
-   * Previously the stop path kept the Redis lock, so the following `SET NX`
-   * failed and the camera silently stayed down while the API reported
-   * "RESTARTED" (F-003). Ownership is now released inside the stop path and
-   * the caller receives the *actual* resulting worker status.
-   */
-  async restartWorker(
-    organizationId: string,
-    cameraId: string,
-  ) {
-    await this.assertCameraOwnership(
-      organizationId,
-      cameraId,
-    );
+  async restartWorker(organizationId: string, cameraId: string) {
+    await this.assertCameraOwnership(organizationId, cameraId);
 
     if (this.lifecycleLocks.has(cameraId)) {
       throw new HttpException(
@@ -852,160 +1040,115 @@ export class CameraWorkerManagerService
       );
     }
 
-    await this.stopWorkerInternal(cameraId);
+    // Broadcast distributed STOP so a peer-owned worker is torn down too —
+    // previously restart only affected the local replica.
+    await this.stopWorker(organizationId, cameraId);
 
     await this.startWorker(organizationId, cameraId);
 
     return this.getWorkerStatus(organizationId, cameraId);
   }
 
-  // ============================================================
+  // =====================================================================
   // STATUS
-  // ============================================================
+  // =====================================================================
 
-  async getWorkerStatus(
-    organizationId: string,
-    cameraId: string,
-  ) {
-    await this.assertCameraOwnership(
-      organizationId,
-      cameraId,
-    );
+  async getWorkerStatus(organizationId: string, cameraId: string) {
+    await this.assertCameraOwnership(organizationId, cameraId);
 
-    const worker =
-      this.workers.get(cameraId);
+    const worker = this.workers.get(cameraId);
 
     if (!worker) {
+      // Distinguish "this replica does not own the camera" from "the camera
+      // is truly not running" — dashboards must not tell an operator to
+      // restart a camera that a peer replica is actively driving.
+      const remoteOwner =
+        this.isRedisReady() && this.redis
+          ? await this.redis.get(this.cameraLockKey(cameraId)).catch(() => null)
+          : null;
+
       return {
         cameraId,
         state: null,
         health: null,
         running: false,
+        ownedByThisReplica: false,
+        remoteOwnerReplicaId:
+          remoteOwner && remoteOwner !== this.replicaId ? remoteOwner : null,
       };
     }
 
     return {
       cameraId,
       state: worker.state,
-      health:
-        worker.session.getHealth(),
+      health: worker.session.getHealth(),
       running: true,
-      startedAt:
-        worker.startedAt,
+      startedAt: worker.startedAt,
+      ownedByThisReplica: true,
     };
   }
 
-  getWorkerState(
-    cameraId: string,
-  ): WorkerState | null {
-    return (
-      this.workers.get(cameraId)
-        ?.state ?? null
-    );
+  getWorkerState(cameraId: string): WorkerState | null {
+    return this.workers.get(cameraId)?.state ?? null;
   }
 
-  getWorkerHealth(
-    cameraId: string,
-  ) {
-    const worker =
-      this.workers.get(cameraId);
-
-    if (!worker) {
-      return null;
-    }
-
-    return worker.session.getHealth();
+  getWorkerHealth(cameraId: string) {
+    return this.workers.get(cameraId)?.session.getHealth() ?? null;
   }
 
   /**
-   * INTERNAL ONLY.
-   *
-   * Never expose this directly to a normal tenant-facing endpoint.
-   * An admin/system endpoint must explicitly filter by organization.
+   * INTERNAL ONLY — admin/system endpoint must scope by organization.
    */
   getAllWorkersStatus() {
-    return Array.from(
-      this.workers.values(),
-    ).map((worker) => ({
+    return Array.from(this.workers.values()).map((worker) => ({
       cameraId: worker.cameraId,
-      organizationId:
-        worker.organizationId,
+      organizationId: worker.organizationId,
       state: worker.state,
-      health:
-        worker.session.getHealth(),
-      startedAt:
-        worker.startedAt,
+      health: worker.session.getHealth(),
+      startedAt: worker.startedAt,
     }));
   }
 
-  /**
-   * Tenant-safe version for organization dashboards.
-   */
-  async getOrganizationWorkersStatus(
-    organizationId: string,
-  ) {
+  async getOrganizationWorkersStatus(organizationId: string) {
     const cameraIds =
-      this.orgWorkerCounts.get(
-        organizationId,
-      ) ?? new Set<string>();
+      this.orgWorkerCounts.get(organizationId) ?? new Set<string>();
 
     return Array.from(cameraIds)
       .map((cameraId) => {
-        const worker =
-          this.workers.get(cameraId);
-
-        if (!worker) {
-          return null;
-        }
+        const worker = this.workers.get(cameraId);
+        if (!worker) return null;
 
         return {
           cameraId,
           organizationId,
           state: worker.state,
-          health:
-            worker.session.getHealth(),
-          startedAt:
-            worker.startedAt,
+          health: worker.session.getHealth(),
+          startedAt: worker.startedAt,
         };
       })
       .filter(
-        (
-          worker,
-        ): worker is NonNullable<
-          typeof worker
-        > => worker !== null,
+        (worker): worker is NonNullable<typeof worker> => worker !== null,
       );
   }
 
-  // ============================================================
+  // =====================================================================
   // CAPACITY
-  // ============================================================
+  // =====================================================================
 
-  private assertWorkerCapacity(
+  /** Effective occupancy = registered workers + not-yet-registered starts. */
+  private assertWorkerCapacityFor(
     organizationId: string,
+    orgCount: number,
+    orgPending: number,
   ): void {
-    const orgWorkers =
-      this.orgWorkerCounts.get(
-        organizationId,
-      );
-
-    const orgCount =
-      orgWorkers?.size ?? 0;
-
-    if (
-      orgCount >=
-      this.maxWorkersPerOrg
-    ) {
+    if (orgCount + orgPending >= this.maxWorkersPerOrg) {
       throw new HttpException(
         `Maximum concurrent camera workers (${this.maxWorkersPerOrg}) reached for this organization`,
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 
-    if (
-      this.workers.size >=
-      this.maxConcurrentWorkers
-    ) {
+    if (this.workers.size + this.pendingGlobalStarts >= this.maxConcurrentWorkers) {
       throw new HttpException(
         `Maximum concurrent camera workers (${this.maxConcurrentWorkers}) reached globally`,
         HttpStatus.TOO_MANY_REQUESTS,
@@ -1013,46 +1156,64 @@ export class CameraWorkerManagerService
     }
   }
 
-  // ============================================================
-  // CAMERA LOOKUP / VALIDATION
-  // ============================================================
+  /**
+   * Atomically (in JS terms — no `await` between read and write) take one
+   * capacity slot for `organizationId`. Throws 429 when either cap is full.
+   */
+  private reserveWorkerCapacity(organizationId: string): void {
+    this.assertWorkerCapacityFor(
+      organizationId,
+      this.orgWorkerCounts.get(organizationId)?.size ?? 0,
+      this.pendingOrgStarts.get(organizationId) ?? 0,
+    );
 
-  private async findOwnedCamera(
-    organizationId: string,
-    cameraId: string,
-  ) {
-    const camera =
-      await this.prisma.camera.findFirst({
-        where: {
-          id: cameraId,
-          organizationId,
-        },
+    this.pendingOrgStarts.set(
+      organizationId,
+      (this.pendingOrgStarts.get(organizationId) ?? 0) + 1,
+    );
+    this.pendingGlobalStarts += 1;
+  }
 
-        select: {
-          id: true,
-          organizationId: true,
-          name: true,
-          host: true,
-          port: true,
-          protocol: true,
-          streamPath: true,
-          metadata: true,
-          rtspTransport: true,
-          encryptedCredentials: true,
-          processingFps: true,
-          location: true,
-          credentialConfigured: true,
-          enabled: true,
-          recognitionEnabled: true,
-          attendanceEnabled: true,
-        },
-      });
-
-    if (!camera) {
-      throw new NotFoundException(
-        'Camera not found',
-      );
+  /** Give a reserved slot back (paired with {@link reserveWorkerCapacity}). */
+  private releaseWorkerCapacity(organizationId: string): void {
+    const pending = this.pendingOrgStarts.get(organizationId) ?? 0;
+    if (pending > 1) {
+      this.pendingOrgStarts.set(organizationId, pending - 1);
+    } else {
+      this.pendingOrgStarts.delete(organizationId);
     }
+
+    if (this.pendingGlobalStarts > 0) this.pendingGlobalStarts -= 1;
+  }
+
+  // =====================================================================
+  // CAMERA LOOKUP / VALIDATION
+  // =====================================================================
+
+  private async findOwnedCamera(organizationId: string, cameraId: string) {
+    const camera = await this.prisma.camera.findFirst({
+      where: { id: cameraId, organizationId },
+      select: {
+        id: true,
+        organizationId: true,
+        name: true,
+        host: true,
+        port: true,
+        protocol: true,
+        streamPath: true,
+        metadata: true,
+        rtspTransport: true,
+        encryptedCredentials: true,
+        processingFps: true,
+        location: true,
+        credentialConfigured: true,
+        enabled: true,
+        recognitionEnabled: true,
+        attendanceEnabled: true,
+      },
+    });
+
+    if (!camera) throw new NotFoundException('Camera not found');
 
     return camera;
   }
@@ -1061,23 +1222,12 @@ export class CameraWorkerManagerService
     organizationId: string,
     cameraId: string,
   ): Promise<void> {
-    const camera =
-      await this.prisma.camera.findFirst({
-        where: {
-          id: cameraId,
-          organizationId,
-        },
+    const camera = await this.prisma.camera.findFirst({
+      where: { id: cameraId, organizationId },
+      select: { id: true },
+    });
 
-        select: {
-          id: true,
-        },
-      });
-
-    if (!camera) {
-      throw new NotFoundException(
-        'Camera not found',
-      );
-    }
+    if (!camera) throw new NotFoundException('Camera not found');
   }
 
   private validateCameraCanStart(
@@ -1091,9 +1241,7 @@ export class CameraWorkerManagerService
     >,
   ): void {
     if (!camera.enabled) {
-      throw new BadRequestException(
-        'Camera is disabled',
-      );
+      throw new BadRequestException('Camera is disabled');
     }
 
     if (!camera.recognitionEnabled) {
@@ -1103,33 +1251,22 @@ export class CameraWorkerManagerService
     }
 
     if (!camera.host?.trim()) {
-      throw new BadRequestException(
-        'Camera host is not configured',
-      );
+      throw new BadRequestException('Camera host is not configured');
     }
 
     if (!camera.protocol) {
-      throw new BadRequestException(
-        'Camera protocol is not configured',
-      );
+      throw new BadRequestException('Camera protocol is not configured');
     }
   }
 
-  // ============================================================
+  // =====================================================================
   // CREDENTIALS
-  // ============================================================
+  // =====================================================================
 
   private async decryptCredentials(
-    camera: Pick<
-      Camera,
-      'credentialConfigured' |
-      'encryptedCredentials'
-    >,
+    camera: Pick<Camera, 'credentialConfigured' | 'encryptedCredentials'>,
   ): Promise<VaultCredentials> {
-    if (
-      !camera.credentialConfigured ||
-      !camera.encryptedCredentials
-    ) {
+    if (!camera.credentialConfigured || !camera.encryptedCredentials) {
       return {};
     }
 
@@ -1138,12 +1275,9 @@ export class CameraWorkerManagerService
         camera.encryptedCredentials,
       );
     } catch (err: unknown) {
-      this.logger.error(
-        'Failed to decrypt camera credentials',
-        {
-          error: getErrorMessage(err),
-        },
-      );
+      this.logger.error('Failed to decrypt camera credentials', {
+        error: getErrorMessage(err),
+      });
 
       throw new BadRequestException(
         'Camera credentials could not be decrypted',
@@ -1151,9 +1285,9 @@ export class CameraWorkerManagerService
     }
   }
 
-  // ============================================================
+  // =====================================================================
   // WORKER CONFIG
-  // ============================================================
+  // =====================================================================
 
   private buildWorkerConfig(
     camera: Pick<
@@ -1169,152 +1303,85 @@ export class CameraWorkerManagerService
     >,
     streamUri: string,
   ): CameraWorkerConfig {
-    const processingFps =
-      this.normalizeProcessingFps(
-        camera.processingFps,
-      );
-
-    const rtspTransport =
-      camera.rtspTransport === 'udp'
-        ? 'udp'
-        : 'tcp';
-
     return {
       cameraId: camera.id,
-      organizationId:
-        camera.organizationId,
+      organizationId: camera.organizationId,
       name: camera.name,
       streamUri,
-      processingFps,
-      rtspTransport,
-      location:
-        camera.location?.trim() || null,
-      recognitionEnabled:
-        camera.recognitionEnabled,
-      attendanceEnabled:
-        camera.attendanceEnabled,
-      similarityThreshold:
+      processingFps: this.normalizeProcessingFps(camera.processingFps),
+      rtspTransport: camera.rtspTransport === 'udp' ? 'udp' : 'tcp',
+      location: camera.location?.trim() || null,
+      recognitionEnabled: camera.recognitionEnabled,
+      attendanceEnabled: camera.attendanceEnabled,
+      // Same env-tunable thresholds FaceService uses — a single operator
+      // calibration must apply to BOTH pipelines.
+      similarityThreshold: this.readNumberEnv(
+        ENV.FACE_SIMILARITY_THRESHOLD,
         DEFAULT_SIMILARITY_THRESHOLD,
-      minAmbiguityMargin: 0.05,
+        0,
+        1,
+      ),
+      minAmbiguityMargin: this.readNumberEnv(
+        ENV.FACE_AMBIGUITY_MARGIN,
+        DEFAULT_AMBIGUITY_MARGIN,
+        0,
+        1,
+      ),
     };
   }
 
-  private normalizeProcessingFps(
-    value: unknown,
-  ): number {
-    const parsed =
-      typeof value === 'number'
-        ? value
-        : Number(value);
+  private normalizeProcessingFps(value: unknown): number {
+    const parsed = typeof value === 'number' ? value : Number(value);
 
-    if (
-      !Number.isFinite(parsed) ||
-      parsed <= 0
-    ) {
+    if (!Number.isFinite(parsed) || parsed <= 0) {
       return DEFAULT_PROCESSING_FPS;
     }
 
-    /**
-     * Protect CPU/GPU from accidental configuration such as:
-     *
-     * processingFps = 100000
-     */
     return Math.min(
-      Math.max(parsed, 0.5),
-      30,
+      Math.max(parsed, PROCESSING_FPS_MIN),
+      PROCESSING_FPS_MAX,
     );
   }
 
-  // ============================================================
+  // =====================================================================
   // STREAM URI
-  // ============================================================
+  // =====================================================================
 
   private async buildStreamUri(
     camera: Pick<
       Camera,
-      | 'host'
-      | 'port'
-      | 'protocol'
-      | 'streamPath'
-      | 'metadata'
+      'host' | 'port' | 'protocol' | 'streamPath' | 'metadata'
     >,
     credentials: VaultCredentials,
   ): Promise<string> {
-    const rawHost =
-      camera.host?.trim();
-
-    if (!rawHost) {
-      throw new BadRequestException(
-        'Camera host is missing',
-      );
-    }
-
-    /**
-     * DNS REBINDING (TOCTOU): FFmpeg must never be given a host NAME — it
-     * would resolve it again at connect time and could be pointed at an
-     * internal address after the check passed. `resolveStreamHost()` always
-     * returns the IP literal that passed validation, so the address written
-     * into the URI is the address that was validated.
-     */
-    const host = await this.resolveStreamHost(
-      rawHost,
-      camera.metadata,
-    );
-
-    /**
-     * IPv6 literals must be bracketed inside a URI authority, otherwise the
-     * port would be parsed as extra hextets (`rtsp://2001:db8::1:554/...`).
-     */
-    const hostInUri =
-      host.includes(':') && !host.startsWith('[')
-        ? `[${host}]`
-        : host;
-
-    /**
-     * The worker currently consumes RTSP.
-     *
-     * ONVIF is normally used for discovery/control and must not
-     * silently be treated as an RTSP protocol.
-     */
-    if (
-      camera.protocol !== 'RTSP' &&
-      camera.protocol !== 'ONVIF'
-    ) {
+    // Protocol check FIRST — no point resolving DNS for an unsupported one.
+    if (camera.protocol !== 'RTSP' && camera.protocol !== 'ONVIF') {
       throw new BadRequestException(
         `Unsupported camera protocol: ${camera.protocol}`,
       );
     }
 
-    const port =
-      camera.port ??
-      (camera.protocol === 'ONVIF'
-        ? 80
-        : 554);
-
-    if (
-      !Number.isInteger(port) ||
-      port < 1 ||
-      port > 65_535
-    ) {
-      throw new BadRequestException(
-        'Invalid camera port',
-      );
+    const rawHost = camera.host?.trim();
+    if (!rawHost) {
+      throw new BadRequestException('Camera host is missing');
     }
 
-    const path =
-      this.normalizeStreamPath(
-        camera.streamPath,
-      );
+    const host = await this.resolveStreamHost(rawHost, camera.metadata);
 
-    const username =
-      this.encodeCredential(
-        credentials.username,
-      );
+    const hostInUri =
+      host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
 
-    const password =
-      this.encodeCredential(
-        credentials.password,
-      );
+    const port =
+      camera.port ?? (camera.protocol === 'ONVIF' ? 80 : 554);
+
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+      throw new BadRequestException('Invalid camera port');
+    }
+
+    const path = this.normalizeStreamPath(camera.streamPath);
+
+    const username = this.encodeCredential(credentials.username);
+    const password = this.encodeCredential(credentials.password);
 
     const auth =
       username && password
@@ -1323,22 +1390,9 @@ export class CameraWorkerManagerService
           ? `${username}@`
           : '';
 
-    /**
-     * ONVIF cameras may still expose an RTSP stream.
-     *
-     * The protocol field identifies camera capability;
-     * the actual worker transport remains RTSP.
-     */
     return `rtsp://${auth}${hostInUri}:${port}${path}`;
   }
 
-  /**
-   * Read the SSRF destination pin written by `CameraService`.
-   *
-   * Returns `null` for legacy rows (no pin) or for a pin whose `validatedIp`
-   * is not an IP literal — in both cases the caller must fall back to a fresh
-   * resolve-and-validate.
-   */
   private readAddressPin(
     metadata: unknown,
   ): { validatedIp: string; validatedHost: string } | null {
@@ -1357,9 +1411,7 @@ export class CameraWorkerManagerService
         ? record.validatedIp.trim()
         : '';
 
-    if (!validatedIp) {
-      return null;
-    }
+    if (!validatedIp) return null;
 
     return {
       validatedIp,
@@ -1370,22 +1422,6 @@ export class CameraWorkerManagerService
     };
   }
 
-  /**
-   * Resolve the single destination this worker is allowed to connect to.
-   *
-   * 1. Preferred: the pin (`metadata.validatedIp`) recorded when the camera
-   *    host passed SSRF validation. It is re-checked with `validateIp()`,
-   *    which performs **no DNS lookup**, so nothing here can be poisoned by a
-   *    rebinding DNS record. The pin is only honoured when it was recorded for
-   *    the host currently configured on the camera.
-   * 2. Fallback (legacy rows, tampered/unusable pin): `validateHost(rawHost)`
-   *    resolves the name, validates EVERY returned address and hands back the
-   *    first validated IP.
-   *
-   * Both paths return an IP literal. The FFmpeg URI is built from that literal,
-   * so the address that passed validation is exactly the address used at
-   * connect time.
-   */
   private async resolveStreamHost(
     rawHost: string,
     metadata: unknown,
@@ -1394,105 +1430,58 @@ export class CameraWorkerManagerService
 
     if (
       pin &&
-      (pin.validatedHost === '' ||
-        pin.validatedHost === rawHost)
+      (pin.validatedHost === '' || pin.validatedHost === rawHost)
     ) {
       try {
-        return this.networkSecurity.validateIp(
-          pin.validatedIp,
-        );
+        return this.networkSecurity.validateIp(pin.validatedIp);
       } catch (err: unknown) {
         this.logger.warn(
           'Pinned camera destination failed re-validation; falling back to resolving the host',
-          {
-            host: rawHost,
-            error: getErrorMessage(err),
-          },
+          { host: rawHost, error: getErrorMessage(err) },
         );
       }
     }
 
-    // Throws (fail-closed) when the host resolves to a forbidden range.
-    return this.networkSecurity.validateHost(
-      rawHost,
-    );
+    return this.networkSecurity.validateHost(rawHost);
   }
 
-  private normalizeStreamPath(
-    streamPath: string | null,
-  ): string {
-    if (!streamPath?.trim()) {
-      return '/';
-    }
+  private normalizeStreamPath(streamPath: string | null): string {
+    if (!streamPath?.trim()) return '/';
 
     const normalized = streamPath.trim();
 
-    // Reject control characters and newlines in the stream path. A path with
-    // embedded newlines or other non-printable characters could be interpreted
-    // as multiple arguments by FFmpeg's CLI parser (`-i` followed by a line
-    // break and another option), allowing option injection.
+    // Client-input error, not a server fault — must be a 400, not a 500.
     if (/[\r\n\x00-\x1F]/.test(normalized)) {
-      throw new Error(
-        'Stream path contains invalid control characters.',
+      throw new BadRequestException(
+        'Stream path contains invalid control characters',
       );
     }
 
-    return normalized.startsWith('/')
-      ? normalized
-      : `/${normalized}`;
+    return normalized.startsWith('/') ? normalized : `/${normalized}`;
   }
 
-  private encodeCredential(
-    value: string | undefined,
-  ): string {
-    if (!value) {
-      return '';
-    }
-
+  private encodeCredential(value: string | undefined): string {
+    if (!value) return '';
     return encodeURIComponent(value);
   }
 
-  // ============================================================
+  // =====================================================================
   // WORKER REGISTRY
-  // ============================================================
+  // =====================================================================
 
-  private addOrgWorker(
-    organizationId: string,
-    cameraId: string,
-  ): void {
+  private addOrgWorker(organizationId: string, cameraId: string): void {
     const workers =
-      this.orgWorkerCounts.get(
-        organizationId,
-      ) ?? new Set<string>();
-
+      this.orgWorkerCounts.get(organizationId) ?? new Set<string>();
     workers.add(cameraId);
-
-    this.orgWorkerCounts.set(
-      organizationId,
-      workers,
-    );
+    this.orgWorkerCounts.set(organizationId, workers);
   }
 
-  private removeOrgWorker(
-    organizationId: string,
-    cameraId: string,
-  ): void {
-    const workers =
-      this.orgWorkerCounts.get(
-        organizationId,
-      );
-
-    if (!workers) {
-      return;
-    }
+  private removeOrgWorker(organizationId: string, cameraId: string): void {
+    const workers = this.orgWorkerCounts.get(organizationId);
+    if (!workers) return;
 
     workers.delete(cameraId);
-
-    if (workers.size === 0) {
-      this.orgWorkerCounts.delete(
-        organizationId,
-      );
-    }
+    if (workers.size === 0) this.orgWorkerCounts.delete(organizationId);
   }
 
   private async cleanupFailedWorker(
@@ -1506,51 +1495,30 @@ export class CameraWorkerManagerService
         'Failed to cleanup camera worker after startup failure',
         {
           cameraId,
-          organizationId:
-            worker.organizationId,
+          organizationId: worker.organizationId,
           error: getErrorMessage(err),
         },
       );
     } finally {
-      this.workers.delete(
-        cameraId,
-      );
-
-      this.removeOrgWorker(
-        worker.organizationId,
-        cameraId,
-      );
+      this.workers.delete(cameraId);
+      this.removeOrgWorker(worker.organizationId, cameraId);
     }
   }
 
-  // ============================================================
-  // CONFIGURATION HELPERS
-  // ============================================================
+  // =====================================================================
+  // HELPERS
+  // =====================================================================
 
-  private readPositiveIntEnv(
-    name: string,
-    fallback: number,
-  ): number {
-    const raw =
-      process.env[name]?.trim();
+  private readPositiveIntEnv(name: string, fallback: number): number {
+    const raw = process.env[name]?.trim();
+    if (!raw) return fallback;
 
-    if (!raw) {
-      return fallback;
-    }
+    const value = Number.parseInt(raw, 10);
 
-    const value =
-      Number.parseInt(raw, 10);
-
-    if (
-      !Number.isInteger(value) ||
-      value <= 0
-    ) {
+    if (!Number.isInteger(value) || value <= 0) {
       this.logger.warn(
         'Invalid positive integer environment value; using default',
-        {
-          variable: name,
-          fallback,
-        },
+        { variable: name, fallback, raw },
       );
 
       return fallback;
@@ -1559,32 +1527,54 @@ export class CameraWorkerManagerService
     return value;
   }
 
-  private assertNonEmptyIdentifier(
-    value: string,
+  private readNumberEnv(
     name: string,
-  ): void {
-    if (
-      typeof value !== 'string' ||
-      !value.trim()
-    ) {
-      throw new BadRequestException(
-        `${name} is required`,
-      );
+    fallback: number,
+    min: number,
+    max: number,
+  ): number {
+    const raw = process.env[name];
+    if (!raw) return fallback;
+
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < min || value > max) {
+      return fallback;
+    }
+
+    return value;
+  }
+
+  private assertNonEmptyIdentifier(value: string, name: string): void {
+    if (typeof value !== 'string' || !value.trim()) {
+      throw new BadRequestException(`${name} is required`);
     }
   }
 
-  private sleep(
-    milliseconds: number,
-  ): Promise<void> {
-    return new Promise(
-      (resolve) =>
-        setTimeout(
-          resolve,
-          milliseconds,
-        ),
-    );
+  /**
+   * Race a promise against a timeout. The underlying operation keeps running
+   * on timeout (Node has no cancellation primitive), but the CALLER is
+   * released — the lifecycle lock and Redis lock are no longer held hostage
+   * by a hung RTSP handshake.
+   */
+  private withTimeout<T>(
+    promise: Promise<T>,
+    ms: number,
+    message: string,
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(message)), ms);
+      timer.unref?.();
+
+      promise.then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      );
+    });
   }
 }
-
-
-

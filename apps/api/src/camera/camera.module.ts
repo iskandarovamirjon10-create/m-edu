@@ -11,6 +11,7 @@ import { AttendanceDecisionEngine } from './attendance-decision.engine';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisPubSubModule } from '../common/redis/redis-pubsub.module';
+import { NotificationEventsModule } from '../notifications/events/notification-events.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { RedisPubSubModule } from '../common/redis/redis-pubsub.module';
     ApiKeysModule,
     PrismaModule,
     RedisPubSubModule,
+    NotificationEventsModule,
   ],
 
   controllers: [

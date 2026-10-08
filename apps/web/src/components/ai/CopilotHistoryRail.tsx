@@ -38,6 +38,7 @@ import { useConversations } from '@/hooks/useConversations';
 import type { AiConversationSummary } from '@/lib/ai';
 import { useAiHealth } from '@/hooks/useAiHealth';
 import { AI_FLAGS } from '@/lib/ai/flags';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 /* ------------------------------------------------------------------ */
 /*  Motion system — as VALUES, applied via inline style                */
@@ -66,11 +67,12 @@ const FOCUS =
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(() =>
-    typeof window !== 'undefined'
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
       : false,
   );
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
     const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
     mq.addEventListener('change', handler);
@@ -150,6 +152,7 @@ const CopilotHistoryRailInner = memo(function CopilotHistoryRailInner({
 }: CopilotHistoryRailProps) {
   const { conversations, isLoading, isError, refetch } = useConversations();
   const { isOnline, isLoading: isHealthLoading } = useAiHealth();
+  const { t } = useSafeI18n();
   const reduced = usePrefersReducedMotion();
 
   /* Reveal on next frame so the entrance actually paints. */
@@ -201,7 +204,7 @@ const CopilotHistoryRailInner = memo(function CopilotHistoryRailInner({
 
   return (
     <aside
-      aria-label="Conversation history"
+      aria-label={t('ai.conversationHistory')}
       className={[
         'flex h-full shrink-0 flex-col overflow-hidden',
         'border-r border-[var(--border)] bg-[var(--bg-surface)]',
@@ -228,7 +231,7 @@ const CopilotHistoryRailInner = memo(function CopilotHistoryRailInner({
         <button
           type="button"
           onClick={onNew}
-          aria-label="New conversation"
+          aria-label={t('ai.newConversation')}
           title="New conversation"
           className={[
             'flex items-center justify-center rounded-[9px] text-[var(--text-secondary)]',
@@ -315,7 +318,7 @@ const CopilotHistoryRailInner = memo(function CopilotHistoryRailInner({
           <button
             type="button"
             onClick={onToggleCollapse}
-            aria-label="Expand history"
+            aria-label={t('ai.expandHistory')}
             title="Expand history"
             className={[
               'flex h-9 w-9 items-center justify-center rounded-[9px]',
@@ -354,7 +357,7 @@ const CopilotHistoryRailInner = memo(function CopilotHistoryRailInner({
             <button
               type="button"
               onClick={onToggleCollapse}
-              aria-label="Collapse history"
+              aria-label={t('ai.collapseHistory')}
               title="Collapse history"
               className={[
                 'flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px]',
@@ -562,7 +565,7 @@ function StatusLine({ isOnline, isLoading }: { isOnline: boolean; isLoading: boo
 
 /** Synchronous reduced-motion probe for micro-decisions. */
 function reducedMotionGlobal(): boolean {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
@@ -656,13 +659,14 @@ function RailError({
   collapsed: boolean;
   onRetry: () => void;
 }) {
+  const { t } = useSafeI18n();
   if (collapsed) {
     return (
       <button
         type="button"
         onClick={onRetry}
-        title="Retry loading conversations"
-        aria-label="Retry loading conversations"
+        title={t('ai.retryConversations')}
+        aria-label={t('ai.retryConversations')}
         className={[
           'flex h-9 w-9 items-center justify-center rounded-[9px]',
           'text-[var(--danger)] hover:bg-[var(--danger-soft)]',

@@ -27,7 +27,17 @@ export class AiController {
   @Get('health')
   @AllowPublic()
   health() {
-    return { ok: true, model: process.env.AI_MODEL ?? 'gpt-4o-mini', uptime: process.uptime() };
+    // Report the ACTUAL resolved provider/model state. The previous
+    // `AI_MODEL ?? 'gpt-4o-mini'` referenced an env var nothing else reads
+    // and a model that is never used (regression: F-13).
+    const model = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+    return {
+      ok: true,
+      model,
+      provider: 'gemini',
+      configured: Boolean(process.env.GEMINI_API_KEY),
+      uptime: process.uptime(),
+    };
   }
 
   @Get('conversations')

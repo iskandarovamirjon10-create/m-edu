@@ -1,4 +1,4 @@
-import { Controller, ForbiddenException, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Type } from 'class-transformer';
@@ -140,7 +140,34 @@ export class GamificationController {
     return this.gamification.getOrgStats(organizationId);
   }
 
+  
+  /** GET /api/gamification/rewards — catalog of available items in coin shop */
+  @AllowAnyRole()
+  @Get('rewards')
+  @ApiOperation({ summary: 'M-Coins reward shop catalog' })
+  async getRewards() {
+    const items = await this.gamification.getRewards();
+    return { items };
+  }
+
+  /** POST /api/gamification/rewards/:id/claim — redeem a reward */
+  @AllowAnyRole()
+  @Post('rewards/:id/claim')
+  @ApiOperation({ summary: 'Redeem an item using M-Coins' })
+  async claimReward(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Param('id') rewardId: string,
+  ) {
+    const studentId = await this.resolveStudentId(organizationId, userId);
+    if (!studentId) {
+      throw new ForbiddenException('Student profile not found for this account');
+    }
+    return this.gamification.claimReward(studentId, organizationId, rewardId);
+  }
+
   /** Resolve the Student profile row for the authenticated account. */
+
   private async resolveStudentId(
     organizationId: string,
     userId: string,

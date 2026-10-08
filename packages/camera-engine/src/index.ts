@@ -22,6 +22,7 @@ export {
 export type { CameraHealthSnapshot, CameraHealthStatus } from './streaming';
 export {
   perceptualHash,
+  perceptualHashSync,
   hammingDistance,
   isSameScene,
   FrozenFrameTracker,

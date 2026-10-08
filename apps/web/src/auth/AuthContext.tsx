@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { authApi, userStore, setUnauthorizedHandler } from '@/lib/api';
+import { purgeSessionCaches } from '@/lib/sessionCleanup';
 import type { User } from '@/lib/types';
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -286,6 +287,10 @@ export function AuthProvider({
 
   const signOutLocally = useCallback(() => {
     wipe();
+    // Tenant/account boundary: drop every cached query (and any SW caches)
+    // so the next user — possibly in a different organization — can never
+    // observe this account's data, even stale-while-revalidate.
+    purgeSessionCaches();
     dispatch({ type: 'SIGNED_OUT' });
   }, [wipe]);
 
@@ -362,6 +367,12 @@ export function AuthProvider({
           redirectToLogin();
         }
       } else if (msg.type === 'SIGNED_IN') {
+        // Another tab just authenticated — possibly as a different user.
+        // Purge first so this tab cannot render the previous account's
+        // cached queries during the refetch.
+        if (stateRef.current.user?.id && msg.user?.id !== stateRef.current.user.id) {
+          purgeSessionCaches();
+        }
         userStore.set(msg.user);
         dispatch({ type: 'SIGNED_IN', user: msg.user });
       }
@@ -463,6 +474,10 @@ export function AuthProvider({
       try {
         const res = await authApi.register({ ...data, email: data.email.trim() });
         const user = res.user as User;
+        if ((res as any)?.pendingApproval) {
+          dispatch({ type: 'PENDING', pending: null });
+          return { ...user, pendingApproval: true, message: (res as any).message } as any;
+        }
         persist(user);
         dispatch({ type: 'SIGNED_IN', user });
         broadcast({ type: 'SIGNED_IN', user });

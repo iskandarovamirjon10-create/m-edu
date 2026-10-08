@@ -57,13 +57,13 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -644,7 +644,7 @@ export function StudentDetailPage() {
   const [editCanViewAttendance, setEditCanViewAttendance] = useState(true);
 
   const parentsQuery = useQuery({
-    queryKey: ['student-parents', id],
+    queryKey: queryKeys.students.parents(id!),
     queryFn: () => studentsApi.getParents(id!),
     enabled: !!id,
   });
@@ -672,7 +672,7 @@ export function StudentDetailPage() {
       setParentModalOpen(false);
       setParentFirstName(''); setParentLastName(''); setParentEmail('');
       setParentPhone(''); setParentPassword(''); setIsPrimary(false);
-      qc.invalidateQueries({ queryKey: ['student-parents', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.students.parents(id!) });
       qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
@@ -693,7 +693,7 @@ export function StudentDetailPage() {
       push('success', 'Parent permissions updated successfully');
       setEditLinkModalOpen(false);
       setEditingLink(null);
-      qc.invalidateQueries({ queryKey: ['student-parents', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.students.parents(id!) });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -703,7 +703,7 @@ export function StudentDetailPage() {
     onSuccess: () => {
       push('success', 'Parent unlinked successfully');
       setUnlinkParentTarget(null);
-      qc.invalidateQueries({ queryKey: ['student-parents', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.students.parents(id!) });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -807,6 +807,18 @@ export function StudentDetailPage() {
   const handleEdit = useCallback(() => navigate(`/students/${id}/edit`), [navigate, id]);
   const handleEnrollFace = useCallback(() => navigate('/face/enroll'), [navigate]);
 
+  const studentName = fullName(studentData?.user?.firstName, studentData?.user?.lastName);
+
+  const handleAiAnalyze = useCallback(() => {
+    window.dispatchEvent(
+      new CustomEvent('open-ai-copilot', {
+        detail: {
+          prompt: `${studentName}ning davomati (${stats.attendanceRate}%), to'lovlari (${stats.totalPaid.toLocaleString()} so'm) va guruhlar bo'yicha to'liq tahlilini ber.`,
+        },
+      }),
+    );
+  }, [studentName, stats]);
+
   /* ---------------------------------------------------------------
      LOADING
   --------------------------------------------------------------- */
@@ -838,7 +850,6 @@ export function StudentDetailPage() {
   }
 
   const studentStatus = formatStudentStatus(studentData.user?.isActive);
-  const studentName = fullName(studentData.user?.firstName, studentData.user?.lastName);
 
   /* ---------------------------------------------------------------
      MAIN
@@ -891,6 +902,19 @@ export function StudentDetailPage() {
             </div>
 
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={handleAiAnalyze}
+                  className="!border-purple-500/30 hover:!border-purple-500/50"
+                >
+                  <span className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium">
+                    <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
+                    AI Tahlil
+                  </span>
+                </GlassButton>
+              </motion.div>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                 <GlassButton type="button" variant="secondary" onClick={handleEdit}>
                   <span className="inline-flex items-center gap-2">
@@ -945,8 +969,8 @@ export function StudentDetailPage() {
           PROFILE + PARENTS ROW
       ============================================================ */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        {/* Profile */}
-        <motion.div variants={cardVariants} className="lg:col-span-1">
+        {/* Profile & AI Copilot */}
+        <motion.div variants={cardVariants} className="lg:col-span-1 space-y-5">
           <GlassCard className="overflow-hidden p-0" interactive>
             <div className="flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
@@ -991,6 +1015,102 @@ export function StudentDetailPage() {
                   </p>
                 </div>
               )}
+            </div>
+          </GlassCard>
+
+          {/* AI Copilot Insights Card */}
+          <GlassCard className="overflow-hidden p-5 border-purple-500/20 bg-gradient-to-br from-purple-500/[0.04] via-blue-500/[0.02] to-transparent" interactive>
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 text-white shadow-md shadow-purple-500/20">
+                  <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
+                </div>
+                <div>
+                  <h2 className="text-[13.5px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    AI Copilot Tahlili
+                  </h2>
+                  <p className="text-[11px] font-medium text-[#86868B]">
+                    Aqlli assistent yordamchi vositalari
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                Live Dossier
+              </span>
+            </div>
+
+            <div className="mt-3.5 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('open-ai-copilot', {
+                      detail: {
+                        prompt: `${studentName}ning dars qoldirish sabablari, umumiy davomat darajasi (${stats.attendanceRate}%) va surunkali kechikishlarini tahlil qilib ber.`,
+                      },
+                    }),
+                  );
+                }}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-glass)] hover:border-purple-500/30 hover:bg-purple-500/[0.05] transition-all text-left group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-500/10 text-[#007AFF]">
+                    <Icon paths={I.calendarCheck} size={12} strokeWidth={2.2} />
+                  </span>
+                  <span className="text-[12px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    Davomat tahlili va sabablari
+                  </span>
+                </div>
+                <Icon paths={I.arrowRight} size={12} strokeWidth={2.5} className="text-[#86868B] group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('open-ai-copilot', {
+                      detail: {
+                        prompt: `${studentName}ning to'lovlar intizomi (${stats.totalPaid.toLocaleString()} so'm to'langan), joriy balansi va qarzdorliklarini tahlil qil.`,
+                      },
+                    }),
+                  );
+                }}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-glass)] hover:border-purple-500/30 hover:bg-purple-500/[0.05] transition-all text-left group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-[#34C759]">
+                    <Icon paths={I.creditCard} size={12} strokeWidth={2.2} />
+                  </span>
+                  <span className="text-[12px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    Moliyaviy intizom & qarz hisoboti
+                  </span>
+                </div>
+                <Icon paths={I.arrowRight} size={12} strokeWidth={2.5} className="text-[#86868B] group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('open-ai-copilot', {
+                      detail: {
+                        prompt: `${studentName}ning ota-onasi uchun o'zlashtirish va davomat bo'yicha xushmuomala, professional Telegram xabarnomasi loyihasini tayyorla.`,
+                      },
+                    }),
+                  );
+                }}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-glass)] hover:border-purple-500/30 hover:bg-purple-500/[0.05] transition-all text-left group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-purple-500/10 text-[#AF52DE]">
+                    <Icon paths={I.mail} size={12} strokeWidth={2.2} />
+                  </span>
+                  <span className="text-[12px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    Ota-onaga bildirishnoma tayyorlash
+                  </span>
+                </div>
+                <Icon paths={I.arrowRight} size={12} strokeWidth={2.5} className="text-[#86868B] group-hover:translate-x-0.5 transition-transform" />
+              </button>
             </div>
           </GlassCard>
         </motion.div>
@@ -1081,11 +1201,11 @@ export function StudentDetailPage() {
                                 className="inline-flex items-center gap-1 rounded-full bg-[#FF9500]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FF9500] ring-1 ring-[#FF9500]/30"
                               >
                                 <Icon paths={I.award} size={9} strokeWidth={2.5} />
-                                Primary
+                                {t('student.parents.primaryBadge')}
                               </motion.span>
                             )}
                             <span className="text-[11px] font-bold uppercase tracking-wider text-[#86868B]">
-                              {link.relationship || 'Parent'}
+                              {link.relationship ? (t(`student.relationship.${link.relationship.toLowerCase()}`) || link.relationship) : t('student.relationship.parent')}
                             </span>
                           </div>
 
@@ -1109,19 +1229,19 @@ export function StudentDetailPage() {
                             {link.canViewGrades && (
                               <span className="inline-flex items-center gap-1 rounded-full bg-[#007AFF]/10 px-2 py-0.5 text-[10px] font-bold text-[#007AFF]">
                                 <Icon paths={I.checkCircle} size={9} strokeWidth={3} />
-                                Grades
+                                {t('student.parents.gradesBadge')}
                               </span>
                             )}
                             {link.canViewAttendance && (
                               <span className="inline-flex items-center gap-1 rounded-full bg-[#34C759]/10 px-2 py-0.5 text-[10px] font-bold text-[#34C759]">
                                 <Icon paths={I.checkCircle} size={9} strokeWidth={3} />
-                                Attendance
+                                {t('student.parents.attendanceBadge')}
                               </span>
                             )}
                             {link.canViewPayments && (
                               <span className="inline-flex items-center gap-1 rounded-full bg-[#AF52DE]/10 px-2 py-0.5 text-[10px] font-bold text-[#AF52DE]">
                                 <Icon paths={I.checkCircle} size={9} strokeWidth={3} />
-                                Payments
+                                {t('student.parents.paymentsBadge')}
                               </span>
                             )}
                           </div>
@@ -1130,7 +1250,7 @@ export function StudentDetailPage() {
                         {/* Status + actions */}
                         <div className="flex flex-col items-end gap-2">
                           <GlassBadge color={p?.isActive ? 'green' : 'slate'}>
-                            {p?.isActive ? 'Active' : 'Inactive'}
+                            {p?.isActive ? t('common.active') : t('common.inactive')}
                           </GlassBadge>
                           {canManageParents && (
                             <div className="flex gap-1.5">
@@ -1140,8 +1260,8 @@ export function StudentDetailPage() {
                                 whileHover={{ scale: 1.08 }}
                                 whileTap={{ scale: 0.92 }}
                                 transition={SPRING.snappy}
-                                aria-label="Edit"
-                                title="Edit"
+                                aria-label={t('common.edit')}
+                                title={t('common.edit')}
                                 className="flex h-7 w-7 items-center justify-center rounded-lg outline-none"
                                 style={{
                                   background: 'rgba(0,122,255,0.10)',
@@ -1157,8 +1277,8 @@ export function StudentDetailPage() {
                                 whileHover={{ scale: 1.08 }}
                                 whileTap={{ scale: 0.92 }}
                                 transition={SPRING.snappy}
-                                aria-label="Unlink"
-                                title="Unlink"
+                                aria-label={t('student.unlinkParent')}
+                                title={t('student.unlinkParent')}
                                 className="flex h-7 w-7 items-center justify-center rounded-lg outline-none"
                                 style={{
                                   background: 'rgba(255,59,48,0.10)',
@@ -1335,7 +1455,7 @@ export function StudentDetailPage() {
                             color: '#FF3B30',
                             border: '1px solid rgba(255,59,48,0.2)',
                           }}
-                          aria-label="Remove"
+                          aria-label={t('common.remove')}
                           title="Remove from group"
                         >
                           {isRemoving ? (
@@ -1594,7 +1714,7 @@ export function StudentDetailPage() {
       <GlassModal
         open={parentModalOpen}
         onClose={() => setParentModalOpen(false)}
-        title="Add or Link Parent Account"
+        title={t('student.parents.addTitle')}
         wide
       >
         <div className="space-y-5">
@@ -1604,39 +1724,39 @@ export function StudentDetailPage() {
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Link a parent or guardian to grant secure access to this student's records.
+              {t('student.parents.linkHint')}
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <GlassField label="First Name" required>
+            <GlassField label={t('common.firstName')} required>
               <GlassInput type="text" placeholder="e.g. John" value={parentFirstName} onChange={(e) => setParentFirstName(e.target.value)} />
             </GlassField>
-            <GlassField label="Last Name" required>
+            <GlassField label={t('common.lastName')} required>
               <GlassInput type="text" placeholder="e.g. Doe" value={parentLastName} onChange={(e) => setParentLastName(e.target.value)} />
             </GlassField>
           </div>
 
-          <GlassField label="Parent Email Address" required>
+          <GlassField label={t('student.parents.emailLabel')} required>
             <GlassInput type="email" placeholder="e.g. parent@example.com" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} />
           </GlassField>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <GlassField label="Phone Number">
+            <GlassField label={t('common.phone')}>
               <GlassInput type="tel" placeholder="+998..." value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} />
             </GlassField>
-            <GlassField label="Relationship">
+            <GlassField label={t('student.parents.relationshipLabel')}>
               <GlassSelect value={parentRelationship} onChange={(e) => setParentRelationship(e.target.value)}>
-                <option value="parent">Parent</option>
-                <option value="father">Father</option>
-                <option value="mother">Mother</option>
-                <option value="guardian">Guardian</option>
-                <option value="other">Other</option>
+                <option value="parent">{t('student.relationship.parent')}</option>
+                <option value="father">{t('student.relationship.father')}</option>
+                <option value="mother">{t('student.relationship.mother')}</option>
+                <option value="guardian">{t('student.relationship.guardian')}</option>
+                <option value="other">{t('student.relationship.other')}</option>
               </GlassSelect>
             </GlassField>
           </div>
 
-          <GlassField label="Temporary Password" hint="Optional. Auto-generated if left blank.">
+          <GlassField label={t('student.parents.tempPassword')} hint={t('student.parents.tempPasswordHint')}>
             <GlassInput type="password" placeholder="Minimum 6 characters" value={parentPassword} onChange={(e) => setParentPassword(e.target.value)} />
           </GlassField>
 
@@ -1645,7 +1765,7 @@ export function StudentDetailPage() {
             <div className="flex items-center gap-2">
               <Icon paths={I.shield} size={13} strokeWidth={2} className="text-[#86868B]" />
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                Access & Permissions
+                {t('student.parents.permissionsTitle')}
               </p>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1653,32 +1773,32 @@ export function StudentDetailPage() {
                 checked={isPrimary}
                 onChange={setIsPrimary}
                 icon={I.award}
-                label="Primary Guardian"
-                description="Mark as main contact"
+                label={t('student.parents.primaryGuardian')}
+                description={t('student.parents.primaryGuardianDesc')}
                 tone="purple"
               />
               <PermissionToggle
                 checked={canViewGrades}
                 onChange={setCanViewGrades}
                 icon={I.book}
-                label="Academic Grades"
-                description="View report cards"
+                label={t('student.parents.academicGrades')}
+                description={t('student.parents.academicGradesDesc')}
                 tone="blue"
               />
               <PermissionToggle
                 checked={canViewAttendance}
                 onChange={setCanViewAttendance}
                 icon={I.calendarCheck}
-                label="Attendance Logs"
-                description="See check-in history"
+                label={t('student.parents.attendanceLogs')}
+                description={t('student.parents.attendanceLogsDesc')}
                 tone="green"
               />
               <PermissionToggle
                 checked={canViewPayments}
                 onChange={setCanViewPayments}
                 icon={I.creditCard}
-                label="Tuition & Invoices"
-                description="View payment status"
+                label={t('student.parents.tuitionInvoices')}
+                description={t('student.parents.attendanceLogsDesc')}
                 tone="purple"
               />
             </div>
@@ -1687,7 +1807,7 @@ export function StudentDetailPage() {
           <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton type="button" variant="secondary" onClick={() => setParentModalOpen(false)} disabled={addParentMutation.isPending}>
-                Cancel
+                {t('common.cancel')}
               </GlassButton>
             </motion.div>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
@@ -1704,12 +1824,12 @@ export function StudentDetailPage() {
                       animate={{ rotate: 360 }}
                       transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
                     />
-                    Linking...
+                    {t('common.saving')}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-2">
                     <Icon paths={I.link} size={15} strokeWidth={2} />
-                    Link Parent
+                    {t('student.parents.addTitle')}
                   </span>
                 )}
               </GlassButton>
@@ -1722,7 +1842,7 @@ export function StudentDetailPage() {
       <GlassModal
         open={editLinkModalOpen}
         onClose={() => setEditLinkModalOpen(false)}
-        title="Edit Parent Permissions"
+        title={t('student.parents.editPermissionsTitle')}
         wide
       >
         <div className="space-y-5">
@@ -1731,17 +1851,17 @@ export function StudentDetailPage() {
               <Icon paths={I.shield} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Adjust relationship and permissions for this parent link.
+              {t('student.parents.linkHint')}
             </p>
           </div>
 
-          <GlassField label="Relationship">
+          <GlassField label={t('student.parents.relationshipLabel')}>
             <GlassSelect value={editRelationship} onChange={(e) => setEditRelationship(e.target.value)}>
-              <option value="parent">Parent</option>
-              <option value="father">Father</option>
-              <option value="mother">Mother</option>
-              <option value="guardian">Guardian</option>
-              <option value="other">Other</option>
+              <option value="parent">{t('student.relationship.parent')}</option>
+              <option value="father">{t('student.relationship.father')}</option>
+              <option value="mother">{t('student.relationship.mother')}</option>
+              <option value="guardian">{t('student.relationship.guardian')}</option>
+              <option value="other">{t('student.relationship.other')}</option>
             </GlassSelect>
           </GlassField>
 
@@ -1749,7 +1869,7 @@ export function StudentDetailPage() {
             <div className="flex items-center gap-2">
               <Icon paths={I.shield} size={13} strokeWidth={2} className="text-[#86868B]" />
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                Access & Permissions
+                {t('student.parents.permissionsTitle')}
               </p>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1757,32 +1877,32 @@ export function StudentDetailPage() {
                 checked={editIsPrimary}
                 onChange={setEditIsPrimary}
                 icon={I.award}
-                label="Primary Guardian"
-                description="Main contact"
+                label={t('student.parents.primaryGuardian')}
+                description={t('student.parents.primaryGuardianDesc')}
                 tone="purple"
               />
               <PermissionToggle
                 checked={editCanViewGrades}
                 onChange={setEditCanViewGrades}
                 icon={I.book}
-                label="Academic Grades"
-                description="Report cards"
+                label={t('student.parents.academicGrades')}
+                description={t('student.parents.academicGradesDesc')}
                 tone="blue"
               />
               <PermissionToggle
                 checked={editCanViewAttendance}
                 onChange={setEditCanViewAttendance}
                 icon={I.calendarCheck}
-                label="Attendance Logs"
-                description="Check-in history"
+                label={t('student.parents.attendanceLogs')}
+                description={t('student.parents.attendanceLogsDesc')}
                 tone="green"
               />
               <PermissionToggle
                 checked={editCanViewPayments}
                 onChange={setEditCanViewPayments}
                 icon={I.creditCard}
-                label="Tuition & Invoices"
-                description="Payment status"
+                label={t('student.parents.tuitionInvoices')}
+                description={t('student.parents.attendanceLogsDesc')}
                 tone="purple"
               />
             </div>
@@ -1791,12 +1911,12 @@ export function StudentDetailPage() {
           <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton type="button" variant="secondary" onClick={() => setEditLinkModalOpen(false)} disabled={updateParentLinkMutation.isPending}>
-                Cancel
+                {t('common.cancel')}
               </GlassButton>
             </motion.div>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton type="button" variant="primary" disabled={updateParentLinkMutation.isPending} onClick={() => updateParentLinkMutation.mutate()}>
-                {updateParentLinkMutation.isPending ? 'Saving...' : 'Save Changes'}
+                {updateParentLinkMutation.isPending ? t('common.saving') : t('common.save')}
               </GlassButton>
             </motion.div>
           </div>
@@ -1808,9 +1928,9 @@ export function StudentDetailPage() {
         open={unlinkParentTarget !== null}
         onClose={() => setUnlinkParentTarget(null)}
         onConfirm={() => unlinkParentTarget && unlinkParentMutation.mutate(unlinkParentTarget.id)}
-        title="Unlink Parent Account"
+        title={t('student.parents.unlinkTitle')}
         description={`Are you sure you want to unlink ${unlinkParentTarget?.name || 'this parent'} from this student? The parent account will remain in the system, but will no longer have access to this student.`}
-        confirmLabel="Unlink"
+        confirmLabel={t('student.parents.unlinkAction')}
         loading={unlinkParentMutation.isPending}
       />
 

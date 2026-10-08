@@ -58,6 +58,7 @@ export interface MonthlyRevenue {
   month: string;
   total: number;
   count?: number;
+  bucket?: string;
 }
 
 /**

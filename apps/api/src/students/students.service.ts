@@ -1,7 +1,8 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { hashPassword } from '../auth/auth.config';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { SecurityEventService, SecurityEventType } from '../common/security/security-event.service';
 import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
 import { CreateStudentDto, UpdateStudentDto, CreateParentLinkDto, UpdateParentLinkDto } from '../common/dto';
@@ -10,7 +11,7 @@ import { userPublicSelect } from '../common/selects/user.select';
 
 @Injectable()
 export class StudentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, @Optional() private readonly security?: SecurityEventService) {}
 
   async findAll(organizationId: string, query: StudentQuery) {
     const { page, limit, skip } = parsePagination(query);
@@ -70,7 +71,13 @@ export class StudentsService {
         attendance: { orderBy: { date: 'desc' }, take: 10 },
       },
     });
-    if (!student) throw new NotFoundException('Student not found');
+    if (!student) {
+      const exists = await this.prisma.student.findFirst({ where: { id } });
+      if (exists && exists.organizationId !== organizationId) {
+        this.security?.logEvent({ eventType: SecurityEventType.CROSS_TENANT_ACCESS_ATTEMPT, organizationId, resourceType: 'Student', resourceId: id, success: false, reason: 'IDOR_ATTEMPT' });
+      }
+      throw new NotFoundException('Student not found');
+    }
     return student;
   }
 
@@ -80,7 +87,7 @@ export class StudentsService {
       if (existing) throw new BadRequestException('Email already registered');
     }
 
-    const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : null;
+    const passwordHash = data.password ? await hashPassword(data.password) : null;
     const email = data.email || `student-${randomUUID()}@placeholder.local`;
 
     try {
@@ -110,7 +117,7 @@ export class StudentsService {
         include: { user: userPublicSelect },
       });
     } catch (error: unknown) {
-      // User.email is globally unique — the org-scoped pre-check above can
+      // User.email is globally unique â€” the org-scoped pre-check above can
       // race a concurrent create (in this or another tenant) and surface as
       // Prisma P2002 instead of a clean 409.
       if ((error as { code?: string })?.code === 'P2002') {
@@ -156,7 +163,7 @@ export class StudentsService {
    *
    * Mirror of the UsersService.delete pattern with FK-aware guards:
    *  - Rejects students that own historical records (payments, attendance,
-   *    grades, face enrollments/attempts, camera events) — those rows are
+   *    grades, face enrollments/attempts, camera events) â€” those rows are
    *    RESTRICT/SET-NULL protected, so deletion would silently destroy or
    *    orphan history. Deactivation is the correct path for those accounts.
    *  - When the student has no history, removes StudentGroup memberships
@@ -180,7 +187,7 @@ export class StudentsService {
       0
     ) {
       throw new BadRequestException(
-        'This student has historical records (invoices, payments, attendance, or grades) — deactivate the student instead of deleting them',
+        'This student has historical records (invoices, payments, attendance, or grades) â€” deactivate the student instead of deleting them',
       );
     }
 
@@ -233,12 +240,18 @@ export class StudentsService {
       where: { id: studentId, organizationId },
       include: { user: { select: { isActive: true } } },
     });
-    if (!student) throw new NotFoundException('Student not found');
+    if (!student) {
+      const exists = await this.prisma.student.findFirst({ where: { id: studentId } });
+      if (exists && exists.organizationId !== organizationId) {
+        this.security?.logEvent({ eventType: SecurityEventType.CROSS_TENANT_ACCESS_ATTEMPT, organizationId, resourceType: 'Student', resourceId: studentId, success: false, reason: 'IDOR_ATTEMPT' });
+      }
+      throw new NotFoundException('Student not found');
+    }
     if (student.user?.isActive === false) {
       throw new BadRequestException('Cannot assign a deactivated student to a group');
     }
 
-    // Enforce group capacity BEFORE adding — check within a transaction so two
+    // Enforce group capacity BEFORE adding â€” check within a transaction so two
     // concurrent requests cannot both pass when only 1 slot remains.
     return this.prisma.$transaction(async (tx) => {
       // Serialize access to this group to prevent TOCTOU race condition
@@ -249,7 +262,7 @@ export class StudentsService {
         where: { groupId, isActive: true },
       });
 
-      // If the student is already an active member, upsert is safe — they are
+      // If the student is already an active member, upsert is safe â€” they are
       // already counted, capacity is not exceeded.
       const alreadyActive = await tx.studentGroup.findUnique({
         where: { studentId_groupId: { studentId, groupId } },
@@ -262,7 +275,7 @@ export class StudentsService {
         }
       }
 
-      // Upsert handles the re-activation case (inactive → active) without
+      // Upsert handles the re-activation case (inactive â†’ active) without
       // double-counting; concurrent composite-PK error is impossible inside
       // this transaction because the unique constraint is enforced by the DB.
       return tx.studentGroup.upsert({
@@ -321,7 +334,7 @@ export class StudentsService {
 
     if (!parent) {
       const password = data.password || randomUUID().slice(0, 12) + '!Aa1';
-      const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
       parent = await this.prisma.parentAccount.create({
         data: {
           organizationId,
@@ -438,4 +451,8 @@ export class StudentsService {
     return { success: true };
   }
 }
+
+
+
+
 

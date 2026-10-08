@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsArray, IsUUID, IsNumber, IsString } from 'class-validator';
+import { IsDateString, IsOptional, IsArray, IsUUID, IsNumber, IsString, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class GeneratePayrollDto {
@@ -23,6 +23,7 @@ export class PayrollDeductionDto {
 
   @Type(() => Number)
   @IsNumber()
+  @Min(0.01)
   amount: number;
 
   @IsString()
@@ -35,6 +36,7 @@ export class PayrollBonusDto {
 
   @Type(() => Number)
   @IsNumber()
+  @Min(0.01)
   amount: number;
 
   @IsString()
@@ -46,28 +48,31 @@ export class CreatePayrollRunDto {
   teacherId: string;
 
   @IsNumber()
+  @Min(2000)
   periodYear: number;
 
   @IsNumber()
+  @Min(1)
+  @Max(12)
   periodMonth: number;
 
   @IsOptional() @IsString() salaryType?: string;
-  @IsOptional() @IsNumber() baseAmount?: number;
-  @IsOptional() @IsNumber() lessonsCount?: number;
-  @IsOptional() @IsNumber() hoursWorked?: number;
-  @IsOptional() @IsNumber() overtimeHours?: number;
-  @IsOptional() @IsNumber() bonus?: number;
-  @IsOptional() @IsNumber() absenceDays?: number;
-  @IsOptional() @IsNumber() lateCount?: number;
-  @IsOptional() @IsNumber() latePenaltyPerEvent?: number;
-  @IsOptional() @IsNumber() otherDeduction?: number;
-  @IsOptional() @IsNumber() taxBasisPoints?: number;
-  @IsOptional() @IsNumber() workdaysInMonth?: number;
-  @IsOptional() @IsNumber() overtimeMultiplier?: number;
+  @IsOptional() @IsNumber() @Min(0) baseAmount?: number;
+  @IsOptional() @IsNumber() @Min(0) lessonsCount?: number;
+  @IsOptional() @IsNumber() @Min(0) hoursWorked?: number;
+  @IsOptional() @IsNumber() @Min(0) overtimeHours?: number;
+  @IsOptional() @IsNumber() @Min(0) bonus?: number;
+  @IsOptional() @IsNumber() @Min(0) absenceDays?: number;
+  @IsOptional() @IsNumber() @Min(0) lateCount?: number;
+  @IsOptional() @IsNumber() @Min(0) latePenaltyPerEvent?: number;
+  @IsOptional() @IsNumber() @Min(0) otherDeduction?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(10000) taxBasisPoints?: number;
+  @IsOptional() @IsNumber() @Min(1) @Max(31) workdaysInMonth?: number;
+  @IsOptional() @IsNumber() @Min(0) overtimeMultiplier?: number;
 }
 
 export class AdjustPayrollRunDto {
-  @IsOptional() @IsNumber() bonus?: number;
-  @IsOptional() @IsNumber() otherDeduction?: number;
-  @IsOptional() @IsNumber() taxBasisPoints?: number;
+  @IsOptional() @IsNumber() @Min(0) bonus?: number;
+  @IsOptional() @IsNumber() @Min(0) otherDeduction?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(10000) taxBasisPoints?: number;
 }

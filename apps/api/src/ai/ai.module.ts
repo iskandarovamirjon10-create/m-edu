@@ -7,12 +7,16 @@ import { AttendanceModule } from '../attendance/attendance.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { AuditModule } from '../audit/audit.module';
+import { GroupsModule } from '../groups/groups.module';
+import { CoursesModule } from '../courses/courses.module';
 
 import { StudentsService } from '../students/students.service';
 import { TeachersService } from '../teachers/teachers.service';
 import { AttendanceService } from '../attendance/attendance.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { InvoicesService } from '../payments/invoices.service';
+import { GroupsService } from '../groups/groups.service';
+import { CoursesService } from '../courses/courses.service';
 
 // ── Legacy single-channel adapter (Telegram `/copilot` still depends on
 //    `AiService.chat`; removed once Telegram is migrated to the gateway) ────
@@ -45,6 +49,8 @@ import { GeminiProvider } from './infrastructure/providers/gemini.provider';
     PaymentsModule,
     ScheduleModule,
     AuditModule,
+    GroupsModule,
+    CoursesModule,
   ],
   controllers: [AiController, AiWorkspaceController],
   providers: [
@@ -69,6 +75,8 @@ import { GeminiProvider } from './infrastructure/providers/gemini.provider';
         AttendanceService,
         ScheduleService,
         InvoicesService,
+        GroupsService,
+        CoursesService,
       ],
     },
   ],

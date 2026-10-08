@@ -52,13 +52,13 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -920,7 +920,7 @@ export function SchedulePage() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#00000008] bg-[#ffffff80] text-[#86868B] outline-none transition-colors hover:text-[#1D1D1F] disabled:opacity-40 dark:border-[#ffffff08] dark:bg-[#1c1c1e80] dark:hover:text-[#F5F5F7]"
-                    aria-label="Previous page"
+                    aria-label={t('common.prevPage')}
                   >
                     <Icon paths={I.arrowLeft} size={14} strokeWidth={2.2} />
                   </motion.button>
@@ -974,7 +974,7 @@ export function SchedulePage() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#00000008] bg-[#ffffff80] text-[#86868B] outline-none transition-colors hover:text-[#1D1D1F] disabled:opacity-40 dark:border-[#ffffff08] dark:bg-[#1c1c1e80] dark:hover:text-[#F5F5F7]"
-                    aria-label="Next page"
+                    aria-label={t('common.nextPage')}
                   >
                     <Icon paths={I.arrowRight} size={14} strokeWidth={2.2} />
                   </motion.button>

@@ -24,6 +24,7 @@ model Organization {
   website                 String?
   subscriptionId          String?                   @db.Uuid
   settings                Json?
+  accessWhitelists        AccessWhitelist[]
   AiAction                AiAction[]
   AiConversation          AiConversation[]
   AiMessage               AiMessage[]
@@ -134,7 +135,7 @@ model User {
   telegramLinkToken                                              String?                  @unique
   /// @deprecated See `telegramLinkToken`.
   telegramLinkExpiresAt                                          DateTime?
-  /// Audit P0-2 — account-model opt-in for Google sign-in.
+  /// Audit P0-2 â€” account-model opt-in for Google sign-in.
   ///
   /// Automatic Google linking on a verified-email match is disabled for every
   /// privileged role regardless of this flag. For non-privileged accounts
@@ -142,6 +143,7 @@ model User {
   /// true, i.e. "explicitly allowed by the account model".
   googleLinkAllowed                                              Boolean                  @default(false)
   status                                                         UserStatus               @default(ACTIVE)
+  accessWhitelistsAdded                                          AccessWhitelist[]
   AccessRequest                                                  AccessRequest[]
   AiAction                                                       AiAction[]
   AiConversation                                                 AiConversation[]
@@ -200,6 +202,7 @@ model PasswordResetToken {
 model AuthorizationCode {
   id          String    @id @default(uuid()) @db.Uuid
   code        String    @unique
+  state       String?
   /// @deprecated Legacy column that used to persist the issued JWT verbatim.
   /// Kept readable for rows created before the session-binding migration, but
   /// no longer written: a bearer token at rest is a usable credential for its
@@ -252,6 +255,10 @@ model Session {
   revokedAt      DateTime?
   revokedReason  String?
   createdAt      DateTime     @default(now())
+  userAgent      String?
+  ipAddress      String?
+  deviceInfo     String?
+  lastActiveAt   DateTime?
   organization   Organization @relation(fields: [organizationId], references: [id])
   user           User         @relation(fields: [userId], references: [id])
 
@@ -446,6 +453,7 @@ model Attendance {
   cameraId             String?
   recognitionAttemptId String?
   createdAt            DateTime         @default(now())
+  markedAt             DateTime?        @default(now())
   updatedAt            DateTime         @updatedAt
   lessonId             String?          @db.Uuid
   group                Group            @relation(fields: [groupId], references: [id])
@@ -704,6 +712,9 @@ model RecognitionAttempt {
   similarityScore     Decimal?                 @db.Decimal(6, 4)
   processingTimeMs    Int?
   metadata            Json?
+  clientAttemptId     String?                  @unique
+  attendanceDecision  String?
+  attendanceId        String?                  @db.Uuid
   occurredAt          DateTime                 @default(now())
   createdAt           DateTime                 @default(now())
   student             Student?                 @relation(fields: [identifiedStudentId], references: [id])
@@ -1995,7 +2006,7 @@ model TelegramLinkLog {
 /// This is a mapping of an EXTERNAL identity onto an existing M-EDU principal,
 /// not a source of business truth and not an authorization grant. Every
 /// request that arrives from Telegram re-resolves `organizationId` / role /
-/// permissions from the M-EDU tables — the Telegram side is never trusted.
+/// permissions from the M-EDU tables â€” the Telegram side is never trusted.
 ///
 /// Bot secrets and message payloads are never stored here. `telegramUserId`
 /// and `chatId` are Telegram int64 values persisted as strings (they overflow
@@ -2043,7 +2054,7 @@ model TelegramLinkToken {
   organizationId  String       @db.Uuid
   /// SHA-256 hex of the opaque token handed to the user. Never the raw value.
   tokenHash       String       @unique
-  /// 'USER' | 'PARENT_ACCOUNT' — which principal table the link targets.
+  /// 'USER' | 'PARENT_ACCOUNT' â€” which principal table the link targets.
   targetType      String
   userId          String?      @db.Uuid
   parentAccountId String?      @db.Uuid
@@ -2185,7 +2196,7 @@ model NotificationDelivery {
   entityType        String
   entityId          String
   channel           String                     @default("TELEGRAM")
-  /// 'USER' | 'PARENT_ACCOUNT' — which principal table owns the delivery.
+  /// 'USER' | 'PARENT_ACCOUNT' â€” which principal table owns the delivery.
   principalType     String
   principalId       String                     @db.Uuid
   telegramAccountId String?                    @db.Uuid
@@ -2270,6 +2281,30 @@ model AccessRequest {
 
   @@index([createdAt])
   @@index([status])
+}
+
+model AccessWhitelist {
+  id             String        @id @default(uuid()) @db.Uuid
+  email          String        @unique
+  role           Role?         @default(ORG_ADMIN)
+  note           String?
+  addedBy        String?       @db.Uuid
+  organizationId String?       @db.Uuid
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  addedByUser    User?         @relation(fields: [addedBy], references: [id], onDelete: SetNull)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([organizationId])
+}
+
+model AccessControlConfig {
+  id              String   @id @default("global")
+  inviteOnly      Boolean  @default(true)
+  requireApproval Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+  updatedBy       String?  @db.Uuid
 }
 
 model AiAction {
@@ -2835,6 +2870,7 @@ model Topic {
 }
 
 enum Role {
+  PLATFORM_OWNER
   PARENT
   SUPER_ADMIN
   ORG_ADMIN
@@ -3272,4 +3308,40 @@ enum UserStatus {
   SUSPENDED
   REVOKED
   DEACTIVATED
+}
+
+model PlatformInvitation {
+  id             String    @id @default(uuid()) @db.Uuid
+  codeHash       String    @unique
+  metadata       Json?
+  maxUses        Int       @default(1)
+  useCount       Int       @default(0)
+  expiresAt      DateTime
+  createdBy      String?   @db.Uuid
+  usedAt         DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([createdAt])
+}
+
+model SecurityEvent {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @db.Uuid
+  userId         String?   @db.Uuid
+  eventType      String
+  resourceType   String?
+  resourceId     String?
+  correlationId  String?
+  ipAddress      String?
+  userAgent      String?
+  success        Boolean
+  reason         String?
+  metadata       Json?
+  timestamp      DateTime  @default(now())
+
+  @@index([timestamp])
+  @@index([organizationId])
+  @@index([eventType])
 }

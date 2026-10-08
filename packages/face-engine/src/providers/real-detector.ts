@@ -38,6 +38,17 @@ const DEFAULT_CONFIG: DetectorConfig = {
 
 const YUNET_STRIDES = [8, 16, 32];
 
+/**
+ * Hard ceiling on decoded candidates handed to NMS.
+ *
+ * NMS is O(n^2) over the candidate list. A noisy or adversarial frame can
+ * push a large number of anchors above the confidence threshold, and without
+ * a cap a single frame could monopolise the CPU for the worker's whole frame
+ * budget. Decoded candidates are score-sorted inside `nms` anyway, so
+ * keeping the highest-scoring window costs nothing operationally.
+ */
+const MAX_PRE_NMS_CANDIDATES = 256;
+
 export class RealDetector {
   private session: InferenceSession | null = null;
   private config: DetectorConfig;
@@ -126,14 +137,31 @@ export class RealDetector {
       throw new Error('Invalid image: could not read dimensions');
     }
 
-    // Resize to model input size, convert to BGR float32 tensor
-    // YuNet expects raw 0-255 pixel values (NO normalization)
+    // Letterbox resize: preserve the source aspect ratio and pad to the model
+    // canvas. The previous `fit: 'fill'` stretched a 640x480 (or any
+    // non-square) frame into a 640x640 square, distorting every face and
+    // shifting YuNet's landmarks — which then degraded the SFace embedding.
+    // OpenCV's FaceDetectorYN likewise runs at the source resolution
+    // (padded to a multiple of 32) instead of stretching.
+    const scale = Math.min(inputSize / origWidth, inputSize / origHeight);
+    const scaledW = Math.max(1, Math.round(origWidth * scale));
+    const scaledH = Math.max(1, Math.round(origHeight * scale));
+    const padX = Math.floor((inputSize - scaledW) / 2);
+    const padY = Math.floor((inputSize - scaledH) / 2);
+
     const { data, info } = await sharp(input.imageBuffer)
       // Auto-apply EXIF orientation — photos from phones/webcams are often
       // stored rotated (orientation=6 etc.); skipping this rotates the face
       // sideways and destroys detection.
       .rotate()
-      .resize(inputSize, inputSize, { fit: 'fill' })
+      .resize(scaledW, scaledH, { fit: 'fill' })
+      .extend({
+        top: padY,
+        bottom: inputSize - scaledH - padY,
+        left: padX,
+        right: inputSize - scaledW - padX,
+        background: { r: 0, g: 0, b: 0 },
+      })
       .removeAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
@@ -167,29 +195,29 @@ export class RealDetector {
     // Decode YuNet output
     const rawFaces = this.decodeYuNetOutput(results, inputSize, inputSize);
 
-    // Scale coordinates back to original image dimensions
-    const scaleX = origWidth / inputSize;
-    const scaleY = origHeight / inputSize;
+    // Map canvas coordinates (letterboxed) back to the oriented source image.
+    const toOrigX = (v: number) => (v - padX) / scale;
+    const toOrigY = (v: number) => (v - padY) / scale;
 
     const faces: DetectedFace[] = [];
     for (const raw of rawFaces) {
       if (raw.score < this.config.confidenceThreshold) continue;
 
       const box: BoundingBox = {
-        x: Math.max(0, Math.round(raw.x * scaleX)),
-        y: Math.max(0, Math.round(raw.y * scaleY)),
-        width: Math.max(1, Math.round(raw.w * scaleX)),
-        height: Math.max(1, Math.round(raw.h * scaleY)),
+        x: Math.max(0, Math.round(toOrigX(raw.x))),
+        y: Math.max(0, Math.round(toOrigY(raw.y))),
+        width: Math.max(1, Math.round(raw.w / scale)),
+        height: Math.max(1, Math.round(raw.h / scale)),
       };
 
       let landmarks: Point2D[] | undefined;
       if (raw.landmarks && raw.landmarks.length === 10) {
         landmarks = [
-          { x: Math.round(raw.landmarks[0] * scaleX), y: Math.round(raw.landmarks[1] * scaleY) },
-          { x: Math.round(raw.landmarks[2] * scaleX), y: Math.round(raw.landmarks[3] * scaleY) },
-          { x: Math.round(raw.landmarks[4] * scaleX), y: Math.round(raw.landmarks[5] * scaleY) },
-          { x: Math.round(raw.landmarks[6] * scaleX), y: Math.round(raw.landmarks[7] * scaleY) },
-          { x: Math.round(raw.landmarks[8] * scaleX), y: Math.round(raw.landmarks[9] * scaleY) },
+          { x: Math.round(toOrigX(raw.landmarks[0])), y: Math.round(toOrigY(raw.landmarks[1])) },
+          { x: Math.round(toOrigX(raw.landmarks[2])), y: Math.round(toOrigY(raw.landmarks[3])) },
+          { x: Math.round(toOrigX(raw.landmarks[4])), y: Math.round(toOrigY(raw.landmarks[5])) },
+          { x: Math.round(toOrigX(raw.landmarks[6])), y: Math.round(toOrigY(raw.landmarks[7])) },
+          { x: Math.round(toOrigX(raw.landmarks[8])), y: Math.round(toOrigY(raw.landmarks[9])) },
         ];
       }
 
@@ -289,15 +317,14 @@ export class RealDetector {
       }
     }
 
+    // Cap the candidate list before the quadratic pass (see the constant above).
+    if (faces.length > MAX_PRE_NMS_CANDIDATES) {
+      faces.sort((a, b) => b.score - a.score);
+      faces.length = MAX_PRE_NMS_CANDIDATES;
+    }
+
     // Apply NMS
     return this.nms(faces, this.config.nmsThreshold);
-  }
-
-  /**
-   * Sigmoid activation function.
-   */
-  private sigmoid(x: number): number {
-    return 1 / (1 + Math.exp(-x));
   }
 
   /**

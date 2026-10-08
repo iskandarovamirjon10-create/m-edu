@@ -17,6 +17,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { progressApi } from '../lib/api';
+import { useI18n } from '../i18n/I18nProvider';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -36,13 +37,13 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -92,12 +93,6 @@ const RISK_TONE: Record<RiskLevel, Tone> = {
   CRITICAL: 'red',
 };
 
-const RISK_LABEL: Record<RiskLevel, string> = {
-  LOW:      'Low Risk',
-  MEDIUM:   'Medium Risk',
-  HIGH:     'High Risk',
-  CRITICAL: 'Critical',
-};
 
 /* ============================================================================
  * CUSTOM ICONS (SF Symbols proportions)
@@ -471,6 +466,7 @@ function ProfileSkeleton() {
  * ========================================================================== */
 
 export default function Student360Page() {
+  const { t } = useI18n();
   const { id } = useParams<{ id: string }>();
 
   const {
@@ -505,10 +501,10 @@ export default function Student360Page() {
             </div>
             <div>
               <h3 className="text-[17px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                Profilni yuklab bo'lmadi
+                {t('student360.loadErrorTitle')}
               </h3>
               <p className="mt-1 text-[13px] font-medium text-[#86868B]">
-                Tarmoqda muammo bo'lishi mumkin
+                {t('student360.loadErrorHint')}
               </p>
             </div>
             <motion.button
@@ -524,7 +520,7 @@ export default function Student360Page() {
               }}
             >
               <Icon paths={I.refresh} size={14} strokeWidth={2.4} />
-              Qayta urinish
+              {t('common.retry')}
             </motion.button>
           </div>
         </div>
@@ -587,11 +583,11 @@ export default function Student360Page() {
                   }}
                 >
                   <Icon paths={I.shieldAlert} size={10} strokeWidth={2.5} />
-                  {RISK_LABEL[risk.level]} · {risk.score}/100
+                  {t(`student360.risk.${risk.level.toLowerCase()}`)} · {risk.score}/100
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-[#00000008] bg-[#00000004] px-2.5 py-1 text-[11px] font-semibold text-[#86868B] dark:border-[#ffffff10] dark:bg-[#ffffff06]">
                   <Icon paths={I.userCircle} size={10} strokeWidth={2.5} />
-                  Student 360
+                  {t('student360.badge')}
                 </span>
               </div>
 
@@ -599,7 +595,7 @@ export default function Student360Page() {
                 {student.name}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
-                Holistic Pedagogical Dashboard — attendance, mastery va risk tahlili
+                {t('student360.subtitle')}
               </p>
             </div>
           </div>
@@ -614,28 +610,28 @@ export default function Student360Page() {
         className="grid grid-cols-1 gap-3 sm:grid-cols-3"
       >
         <StatTile
-          label="Attendance"
+          label={t('student360.stat.attendance')}
           value={attendance.rate}
           suffix="%"
           icon={I.calendarCheck}
           tone={attendance.rate >= 85 ? 'green' : attendance.rate >= 70 ? 'blue' : 'orange'}
-          footNote={`${attendance.present} present · ${attendance.absent} absent`}
+          footNote={t('student360.stat.attendanceFoot', { present: attendance.present, absent: attendance.absent })}
         />
         <StatTile
-          label="Curriculum Mastery"
+          label={t('student360.stat.mastery')}
           value={academic.overallMastery}
           suffix="%"
           icon={I.target}
           tone={masteryTone(academic.overallMastery)}
-          footNote="Across all enrolled objectives"
+          footNote={t('student360.stat.masteryFoot')}
         />
         <StatTile
-          label="Quizzes & Tests"
+          label={t('student360.stat.quizzes')}
           value={academic.quizzes.avgScore}
           suffix="%"
           icon={I.fileText}
           tone={masteryTone(academic.quizzes.avgScore)}
-          footNote={`${academic.quizzes.passedAttempts} of ${academic.quizzes.totalAttempts} passed`}
+          footNote={t('student360.stat.quizzesFoot', { passed: academic.quizzes.passedAttempts, total: academic.quizzes.totalAttempts })}
         />
       </motion.div>
 
@@ -645,9 +641,9 @@ export default function Student360Page() {
       <AnimatePresence>
         {risk.signals.length > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: 12, filter: 'blur(8px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -12, filter: 'blur(8px)' }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
             transition={SPRING.smooth}
             className="relative overflow-hidden rounded-2xl border p-5"
             style={{
@@ -682,10 +678,10 @@ export default function Student360Page() {
                   className="text-[10px] font-bold uppercase tracking-[0.14em]"
                   style={{ color: riskC.fg }}
                 >
-                  Early Pedagogical Risk Signals
+                  {t('student360.risk.title')}
                 </div>
                 <h3 className="mt-1 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {risk.signals.length} signal{risk.signals.length > 1 ? 's' : ''} detected
+                  {t(risk.signals.length > 1 ? 'student360.risk.detectedMany' : 'student360.risk.detectedOne', { count: risk.signals.length })}
                 </h3>
 
                 <ul className="mt-3 space-y-2">
@@ -733,10 +729,10 @@ export default function Student360Page() {
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                Objective Mastery by Subject
+                {t('student360.mastery.title')}
               </h2>
               <p className="text-[11px] font-medium text-[#86868B]">
-                {academic.subjectsMastery?.length || 0} subject{academic.subjectsMastery?.length === 1 ? '' : 's'}
+                {t((academic.subjectsMastery?.length || 0) === 1 ? 'student360.mastery.countOne' : 'student360.mastery.countMany', { count: academic.subjectsMastery?.length || 0 })}
               </p>
             </div>
           </div>
@@ -750,10 +746,10 @@ export default function Student360Page() {
                 <Icon paths={I.book} size={22} strokeWidth={2} />
               </div>
               <p className="text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                No objectives tracked yet
+                {t('student360.mastery.emptyTitle')}
               </p>
               <p className="text-[12px] font-medium text-[#86868B]">
-                Objective mastery will appear once quizzes are graded
+                {t('student360.mastery.emptyHint')}
               </p>
             </div>
           ) : (
@@ -809,7 +805,7 @@ export default function Student360Page() {
                           <span className="font-bold tabular-nums text-[#1D1D1F] dark:text-[#F5F5F7]">
                             {sm.masteredObjectives}
                           </span>
-                          {' '}of {sm.totalObjectives} objectives mastered
+                          {' '}{t('student360.mastery.objectives', { total: sm.totalObjectives })}
                         </span>
                       </div>
                     </div>
@@ -823,7 +819,7 @@ export default function Student360Page() {
                         {sm.masteryPercentage}%
                       </span>
                       <span className="mt-1 text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
-                        Mastery
+                        {t('student360.mastery.label')}
                       </span>
                     </div>
                   </motion.li>

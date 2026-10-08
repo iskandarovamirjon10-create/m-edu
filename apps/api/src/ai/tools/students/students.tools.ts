@@ -44,5 +44,29 @@ export function createStudentsTools(students: StudentsService): AiToolDefinition
         };
       },
     },
+    {
+      name: 'students.create',
+      description: 'Create a new student in the current organization.',
+      inputSchema: z.object({
+        firstName: z.string().min(1).max(100),
+        lastName: z.string().min(1).max(100),
+        email: z.string().email(),
+        phone: z.string().max(20).optional(),
+      }),
+      riskLevel: AiToolRiskLevel.MEDIUM,
+      requiresConfirmation: true, // Must confirm user creation
+      permission: AiPermission.STUDENTS_WRITE,
+      execute: async (input: any, context) => {
+        // We rely on service validation for CreateStudentDto
+        const result = await students.create(context.organizationId, {
+          firstName: input.firstName,
+          lastName: input.lastName,
+          email: input.email,
+          phone: input.phone,
+          role: 'STUDENT',
+        } as any);
+        return { success: true, studentId: result.id };
+      },
+    }
   ];
 }

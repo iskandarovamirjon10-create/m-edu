@@ -155,6 +155,18 @@ export class AttendanceQuery extends PaginationQuery {
   @ApiPropertyOptional() @IsOptional() @IsString()
   groupId?: string;
 
+  /** Restrict to records belonging to one lesson. */
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  lessonId?: string;
+
+  /**
+   * Restrict to records produced by a specific pipeline decision
+   * (e.g. RECORDED, DUPLICATE_PREVENTED). Matches both face-session and
+   * camera-path outcomes.
+   */
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  decision?: string;
+
   /** Restrict to one student's records (used for self-service reads). */
   @ApiPropertyOptional() @IsOptional() @IsString()
   studentId?: string;

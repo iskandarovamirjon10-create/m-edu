@@ -19,7 +19,7 @@ describe('CurriculumService', () => {
         update: vi.fn(),
       },
       curriculumModule: { create: vi.fn() },
-      topic: { create: vi.fn(), findUnique: vi.fn() },
+      topic: { create: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn() },
       learningObjective: { create: vi.fn() },
     };
 
@@ -61,5 +61,50 @@ describe('CurriculumService', () => {
     await expect(
       service.create('org-1', { name: 'Invalid Math', subjectId: 'sub-none' }),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  describe('addObjective tenant isolation', () => {
+    beforeEach(() => {
+      // The curriculum belongs to org-1 (findOne verifies this).
+      prisma.curriculum.findFirst.mockResolvedValue({
+        id: 'cur-1',
+        organizationId: 'org-1',
+        CurriculumModule: [{ id: 'mod-1', Topic: [{ id: 'top-1' }] }],
+      });
+    });
+
+    it('scopes the topic lookup to the curriculum + organization', async () => {
+      prisma.topic.findFirst.mockResolvedValue({ id: 'top-1' });
+      prisma.learningObjective.create.mockResolvedValue({ id: 'obj-1', topicId: 'top-1' });
+
+      await service.addObjective('org-1', 'cur-1', 'top-1', {
+        code: 'obj-1',
+        description: 'Count to ten',
+      } as never);
+
+      // The query must constrain the topic to THIS curriculum and org, not
+      // merely match on id.
+      expect(prisma.topic.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: 'top-1',
+          CurriculumModule: { curriculumId: 'cur-1', Curriculum: { organizationId: 'org-1' } },
+        },
+      });
+    });
+
+    it('rejects a topic that does not belong to this curriculum/organization', async () => {
+      // A foreign topic (or one in another curriculum) resolves to null under
+      // the tenant-scoped filter and must NOT be written to.
+      prisma.topic.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.addObjective('org-1', 'cur-1', 'foreign-topic', {
+          code: 'obj-x',
+          description: 'Injected objective',
+        } as never),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prisma.learningObjective.create).not.toHaveBeenCalled();
+    });
   });
 });

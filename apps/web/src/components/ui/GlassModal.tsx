@@ -69,21 +69,32 @@ export function GlassModal({
     prevFocus.current = document.activeElement as HTMLElement;
     const el = dialogRef.current;
     if (!el) return;
-    const focusable = Array.from(
+    const initialFocusable = Array.from(
       el.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       ),
     );
-    focusable[0]?.focus();
+    initialFocusable[0]?.focus();
 
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !persistent) { onClose(); return; }
-      if (e.key !== 'Tab' || focusable.length === 0) return;
+      if (e.key !== 'Tab') return;
+      const focusable = Array.from(
+        el.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) {
+        e.preventDefault();
+        return;
+      }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       if (e.shiftKey && document.activeElement === first) {
         e.preventDefault(); last.focus();
       } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      } else if (!e.shiftKey && !focusable.includes(document.activeElement as HTMLElement)) {
         e.preventDefault(); first.focus();
       }
     };
@@ -98,7 +109,11 @@ export function GlassModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 flex items-center justify-center p-4"
+      // Mobile safety: safe-area padding on notched devices, a smaller gutter
+      // on phones (p-3 instead of p-4) so a 320px viewport keeps usable width,
+      // and `items-end` on phones turns the dialog into a bottom sheet that the
+      // thumb can reach. Desktop keeps the centred dialog.
+      className="fixed inset-0 flex items-end justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.75rem,env(safe-area-inset-top,0px))] sm:items-center sm:p-4"
       style={{ zIndex: 'var(--z-modal)' } as React.CSSProperties}
       role="dialog"
       aria-modal="true"
@@ -117,14 +132,17 @@ export function GlassModal({
       <div
         ref={dialogRef}
         className={[
-          'relative z-10 w-full',
+          'relative z-10 w-full min-w-0 max-w-full',
           SIZE_CLASSES[size],
           'bg-[var(--bg-card)]',
           'backdrop-blur-[24px] [-webkit-backdrop-filter:blur(24px)_saturate(1.6)]',
           'border border-[var(--border)]',
           'rounded-[var(--radius-2xl)]',
           'shadow-[var(--shadow-xl)]',
-          'max-h-[90dvh] flex flex-col',
+          // 100dvh - gutters, so the panel never extends under the browser UI
+          // or off the top of a short landscape viewport.
+          'max-h-[min(88dvh,100%)] flex flex-col',
+          'overflow-hidden',
         ].join(' ')}
         style={{ animation: 'modal-in var(--duration-slow) var(--ease-enter) both' }}
       >
@@ -137,20 +155,20 @@ export function GlassModal({
 
         {/* Header */}
         {title && (
-          <div className="relative flex items-start justify-between px-6 pt-6 pb-4 flex-shrink-0">
+          <div className="relative flex flex-shrink-0 items-start justify-between gap-3 px-4 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4">
             <div>
               <h2 id="modal-title" className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] leading-tight">
                 {title}
               </h2>
               {description && (
-                <p id="modal-description" className="mt-1 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
+                <p id="modal-description" className="mt-1 text-[var(--text-body-sm)] text-[var(--text-primary)] opacity-80">
                   {description}
                 </p>
               )}
             </div>
             <GlassButton
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               onClick={onClose}
               aria-label={t('a11y.closeModal')}
               className="flex-shrink-0 ml-4"
@@ -161,13 +179,18 @@ export function GlassModal({
         )}
 
         {/* Body */}
-        <div className={['relative overflow-y-auto flex-1', title ? 'px-6 pb-4' : 'px-6 py-6'].join(' ')}>
+        <div
+          className={[
+            'relative min-w-0 flex-1 overflow-y-auto overscroll-contain',
+            title ? 'px-4 pb-4 sm:px-6' : 'px-4 py-5 sm:px-6 sm:py-6',
+          ].join(' ')}
+        >
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="relative flex items-center justify-end gap-3 px-6 pb-6 pt-4 mt-2 flex-shrink-0 border-t border-[var(--border-subtle)]">
+          <div className="relative mt-2 flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[var(--border-subtle)] px-4 pb-4 pt-3 sm:gap-3 sm:px-6 sm:pb-6 sm:pt-4">
             {footer}
           </div>
         )}

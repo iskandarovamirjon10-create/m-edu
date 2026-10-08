@@ -31,15 +31,50 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    chunkSizeWarningLimit: 800,
+    chunkSizeWarningLimit: 600,
+    cssCodeSplit: true,
+    target: 'es2022',
+    minify: 'esbuild',
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router')) {
-            return 'react';
+          if (
+            id.includes('node_modules/react-dom') ||
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-router')
+          ) {
+            return 'react-vendor';
           }
           if (id.includes('node_modules/@tanstack/react-query')) {
-            return 'query';
+            return 'query-vendor';
+          }
+          if (id.includes('node_modules/framer-motion')) {
+            return 'motion-vendor';
+          }
+          if (
+            id.includes('node_modules/recharts') ||
+            id.includes('node_modules/d3-') ||
+            id.includes('node_modules/victory-vendor')
+          ) {
+            return 'charts-vendor';
+          }
+          if (id.includes('node_modules/lucide-react')) {
+            return 'icons-vendor';
+          }
+          if (
+            id.includes('node_modules/socket.io-client') ||
+            id.includes('node_modules/engine.io-client')
+          ) {
+            return 'socket-vendor';
+          }
+          if (id.includes('src/i18n/locales/ru')) {
+            return 'locale-ru';
+          }
+          if (id.includes('src/i18n/locales/uz')) {
+            return 'locale-uz';
+          }
+          if (id.includes('src/i18n/locales/en')) {
+            return 'locale-en';
           }
         },
       },

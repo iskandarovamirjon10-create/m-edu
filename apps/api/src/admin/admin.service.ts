@@ -1,12 +1,17 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecureLogger } from '@medu/face-security';
+import { EmailService } from '../notifications/email.service';
+import { resolveFrontendUrl } from '../auth/auth.utils';
 
 @Injectable()
 export class AdminService {
   private readonly logger = new SecureLogger('info');
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   async getAccessRequests() {
     return this.prisma.accessRequest.findMany({
@@ -24,12 +29,8 @@ export class AdminService {
     }
 
     // Generate a secure random token for the invitation
-    const { randomBytes } = await import('crypto');
+    const { randomBytes, createHash } = await import('crypto');
     const token = randomBytes(32).toString('hex');
-    // In a real app we'd hash the token before storing, and send the plain token via email
-    // For now, storing plainly as requested simplified tokenHash (in production must hash)
-    // The prompt says "plaintext database'da saqlanmasin; imkon qadar hash qilinsin"
-    const { createHash } = await import('crypto');
     const tokenHash = createHash('sha256').update(token).digest('hex');
 
     // Create an invitation
@@ -58,8 +59,22 @@ export class AdminService {
 
     this.logger.info('Access request approved and invitation created', { requestId: id, invitationId: invitation.id });
 
-    // We would normally send an email with `token` here.
-    // TODO: Send email with the plain `token` using an email provider (e.g. SMTP/Nodemailer)
+    const inviteLink = `${resolveFrontendUrl()}/register?token=${token}`;
+    await this.emailService.sendRawEmail({
+      to: request.email,
+      subject: 'M-EDU Platformasiga Taklifnoma',
+      html: `
+        <h2>Assalomu alaykum!</h2>
+        <p>Sizga M-EDU tizimidan foydalanish huquqi berildi. Iltimos, quyidagi havola orqali ro'yxatdan o'ting:</p>
+        <p><a href="${inviteLink}">Ro'yxatdan o'tish</a></p>
+        <p>Havola 7 kun davomida amal qiladi.</p>
+        <br />
+        <p>M-EDU Ma'muriyati</p>
+      `,
+      text: `Assalomu alaykum! M-EDU tizimiga taklif qilindingiz. Ro'yxatdan o'tish uchun quyidagi havolaga o'ting: ${inviteLink} (7 kun davomida faol).`,
+      organizationId,
+    });
+
     // The plain token MUST NOT be returned in the API response in production.
     return { message: 'Access request approved', invitationId: invitation.id };
   }

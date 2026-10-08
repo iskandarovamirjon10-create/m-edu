@@ -40,5 +40,28 @@ export function createTeachersTools(teachers: TeachersService): AiToolDefinition
         };
       },
     },
+    {
+      name: 'teachers.create',
+      description: 'Create a new teacher in the current organization.',
+      inputSchema: z.object({
+        firstName: z.string().min(1).max(100),
+        lastName: z.string().min(1).max(100),
+        email: z.string().email(),
+        phone: z.string().max(20).optional(),
+      }),
+      riskLevel: AiToolRiskLevel.MEDIUM,
+      requiresConfirmation: true, // Must confirm user creation
+      permission: AiPermission.TEACHERS_WRITE,
+      execute: async (input: any, context) => {
+        const result = await teachers.create(context.organizationId, {
+          firstName: input.firstName,
+          lastName: input.lastName,
+          email: input.email,
+          phone: input.phone,
+          role: 'TEACHER',
+        } as any);
+        return { success: true, teacherId: result.id };
+      },
+    }
   ];
 }

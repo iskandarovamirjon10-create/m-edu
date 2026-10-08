@@ -50,7 +50,11 @@ export function computeSimilarityTransform(
   srcPts: Point2D[],
   dstPts: readonly [number, number][] = CANONICAL_112_LANDMARKS
 ): SimilarityTransformResult {
-  const n = srcPts.length;
+  // Correspondences are PAIRED BY INDEX, so both sets must be walked in
+  // lock-step. A detector emitting more keypoints than the canonical set
+  // indexed past the end of `dstPts` and crashed embedding generation for
+  // an otherwise valid face. Clamp to the shorter side; still require 3.
+  const n = Math.min(srcPts.length, dstPts.length);
   if (n < 3) {
     throw new Error(`At least 3 point correspondences required for similarity transform (got ${n})`);
   }

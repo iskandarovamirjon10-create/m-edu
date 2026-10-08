@@ -101,6 +101,7 @@ interface PrismaMock {
   camera: {
     findMany: MockFn;
     findFirst: MockFn;
+    updateMany: MockFn;
   };
 }
 
@@ -132,6 +133,7 @@ function createPrismaMock(): PrismaMock {
     camera: {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
   };
 }

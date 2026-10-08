@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
+  Logger
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
@@ -12,6 +13,8 @@ import { Request } from 'express';
 
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(AuditInterceptor.name);
+
   constructor(private readonly auditService: AuditService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -32,7 +35,10 @@ export class AuditInterceptor implements NestInterceptor {
   private logEvent(context: ExecutionContext, request: Request & { user?: any }, responseData: unknown, statusCode: number) {
     const { method, path, ip, user, headers } = request;
     const userAgent = headers['user-agent'];
-    const organizationId = user?.organizationId || headers['x-organization-id'];
+    // SECURITY: the tenant MUST come from the authenticated principal.
+    // Honoring a client-supplied x-organization-id header would let any
+    // caller poison the audit trail used for forensics.
+    const organizationId = user?.organizationId;
 
     if (!organizationId) {
       return;
@@ -59,7 +65,7 @@ export class AuditInterceptor implements NestInterceptor {
       statusCode,
     }).catch((err) => {
       // Ignore errors for now to not break the flow
-      console.error('Audit log failed', err);
+      this.logger.error('Audit log failed', err);
     });
   }
 }

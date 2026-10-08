@@ -230,7 +230,9 @@ export class AssessmentService {
     const student = await this.prisma.student.findUnique({
       where: { userId: studentUserId },
     });
-    if (!student) throw new NotFoundException('Student profile not found');
+    if (!student || student.organizationId !== organizationId) {
+      throw new NotFoundException('Student profile not found');
+    }
 
     const attemptCount = await this.prisma.quizAttempt.count({
       where: { quizId, studentId: student.id },
@@ -293,7 +295,9 @@ export class AssessmentService {
     const student = await this.prisma.student.findUnique({
       where: { userId: studentUserId },
     });
-    if (!student) throw new NotFoundException('Student profile not found');
+    if (!student || student.organizationId !== organizationId) {
+      throw new NotFoundException('Student profile not found');
+    }
 
     const attempt = await this.prisma.quizAttempt.findFirst({
       where: { id: attemptId, studentId: student.id, organizationId },

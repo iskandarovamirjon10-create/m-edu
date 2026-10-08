@@ -307,6 +307,7 @@ describe('Tenant Isolation (e2e)', () => {
     const parentAccountA = await prisma.parentAccount.create({
       data: {
         organizationId: orgAId,
+        email: `parent-${Date.now()}@medu.test`,
         phone: `+99890${Math.floor(1000000 + Math.random() * 9000000)}`,
         passwordHash: 'hashed',
         firstName: 'Parent',

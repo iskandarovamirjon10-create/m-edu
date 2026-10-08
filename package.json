@@ -56,8 +56,5 @@
       "qs": "^6.16.0",
       "body-parser": "^1.20.8"
     }
-  },
-  "dependencies": {
-    "chart.js": "^4.5.1"
   }
 }

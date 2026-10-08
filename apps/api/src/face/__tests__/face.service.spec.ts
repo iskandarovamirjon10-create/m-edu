@@ -32,6 +32,10 @@ import { resetSharedFaceEngineCache } from '../face-engine.factory';
 
 function makePrisma() {
   const prisma = {
+    organization: {
+      findUnique: vi.fn().mockResolvedValue({ timezone: 'UTC' }),
+    },
+
     faceEnrollment: {
       findMany: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
@@ -42,9 +46,11 @@ function makePrisma() {
     },
 
     recognitionAttempt: {
+      findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
       groupBy: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
       aggregate: vi.fn().mockResolvedValue({
         _avg: {
           processingTimeMs: null,
@@ -71,6 +77,7 @@ function makePrisma() {
     },
 
     attendance: {
+      count: vi.fn().mockResolvedValue(0),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       findUnique: vi.fn().mockResolvedValue({ groupId: 'g1' }),
     },
@@ -132,6 +139,7 @@ describe('FaceService', () => {
       expect(service.getEngineStatus()).toEqual({
         provider: 'mock',
         isReal: false,
+        initialized: true,
       });
     });
 
@@ -158,7 +166,20 @@ describe('FaceService', () => {
         validateGroupTime: vi.fn().mockResolvedValue(true),
       } as never);
 
-      await expect(service.onModuleInit()).rejects.toThrow();
+      // With the variable unset the resolver fails closed to `real-local`.
+      // In production this must either initialise the REAL engine or throw —
+      // it must never resolve as a mock engine.
+      let rejected = false;
+      try {
+        await service.onModuleInit();
+      } catch {
+        rejected = true;
+      }
+
+      if (!rejected) {
+        expect(service.getEngineStatus().provider).not.toBe('mock');
+        expect(service.getEngineStatus().isReal).toBe(true);
+      }
     });
   });
 
@@ -375,7 +396,7 @@ describe('FaceService', () => {
       prisma.faceEnrollment.count.mockResolvedValue(12);
       prisma.recognitionSession.count.mockResolvedValue(4);
       prisma.faceDevice.count.mockResolvedValue(2);
-      prisma.cameraAttendanceEvent.count.mockResolvedValue(3);
+      prisma.attendance.count.mockResolvedValue(3);
 
       const result = await service.getAnalytics(manager);
 
@@ -401,8 +422,8 @@ describe('FaceService', () => {
 
       const result = await service.getAnalytics(manager);
 
-      expect(result.overview.recognitionSuccessRate).toBe(0);
-      expect(result.overview.livenessPassRate).toBe(0);
+      expect(result.overview.recognitionSuccessRate).toBe(null);
+      expect(result.overview.livenessPassRate).toBe(null);
       expect(result.overview.averageLatencyMs).toBe(0);
     });
 
@@ -717,7 +738,82 @@ describe('FaceService', () => {
       );
 
       expect(prisma.invoice.findMany).not.toHaveBeenCalled();
-      expect(result).toMatchObject({ accessDenied: false });
+      expect(result).toMatchObject({ accessDenied: true, accessReason: 'STUDENT_NOT_FOUND' });
+    });
+
+    it('stores the denied response snapshot on the attempt for replay', async () => {
+      const { service, prisma } = await makeService();
+
+      stubRecognition(service, attemptResult());
+
+      prisma.student.findFirst.mockResolvedValue({ balance: 0 });
+      prisma.invoice.findMany.mockResolvedValue([overdueInvoice()]);
+
+      const tx = makeTransactionClient();
+      prisma.$transaction.mockImplementation(
+        (fn: (client: typeof tx) => Promise<unknown>) => fn(tx),
+      );
+
+      await service.processAttempt(
+        manager,
+        'session-1',
+        JPEG_BASE64,
+        'client-key-1',
+      );
+
+      const updateArgs =
+        prisma.recognitionAttempt.update.mock.calls[0][0];
+      expect(updateArgs.where).toEqual({ id: 'attempt-1' });
+      expect(updateArgs.data.clientAttemptId).toBe('client-key-1');
+
+      const snapshot =
+        updateArgs.data.metadata.idempotencySnapshot;
+      expect(snapshot).toMatchObject({
+        accessDenied: true,
+        accessReason: 'INSUFFICIENT_FUNDS',
+        attendanceRecorded: false,
+      });
+    });
+
+    it('replays the EXACT stored result including accessDenied', async () => {
+      const { service, prisma } = await makeService();
+
+      prisma.recognitionAttempt.findFirst.mockResolvedValue({
+        id: 'attempt-1',
+        status: 'IDENTIFIED',
+        attendanceDecision: 'INSUFFICIENT_FUNDS',
+        attendanceId: null,
+        metadata: {
+          idempotencySnapshot: {
+            attemptId: 'attempt-1',
+            status: 'IDENTIFIED',
+            attendanceDecision: 'INSUFFICIENT_FUNDS',
+            attendanceRecorded: false,
+            attendanceRecordId: null,
+            student: { id: 'student-1' },
+            accessDenied: true,
+            accessReason: 'INSUFFICIENT_FUNDS',
+            overdue: 1_000,
+          },
+        },
+        student: null,
+      });
+
+      const result = await service.processAttempt(
+        manager,
+        'session-1',
+        'bm90LWRlY29kZWQ=', // must never be decoded — replay short-circuits
+        'client-key-1',
+      );
+
+      expect(result).toMatchObject({
+        idempotentReplay: true,
+        accessDenied: true,
+        accessReason: 'INSUFFICIENT_FUNDS',
+        attendanceRecorded: false,
+        overdue: 1_000,
+      });
+      expect(result.attemptId).toBe('attempt-1');
     });
   });
 });

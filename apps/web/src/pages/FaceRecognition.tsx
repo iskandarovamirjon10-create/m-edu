@@ -40,6 +40,9 @@ import type {
   FaceEngineStatus,
 } from '@/lib/types';
 import { useAttendanceSocket } from '@/hooks/useAttendanceSocket';
+import { useHaptics } from '@/hooks/useHaptics';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { useVoiceFeedback } from '@/hooks/useVoiceFeedback';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -57,13 +60,13 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, x: -8 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -103,6 +106,21 @@ function useT(): (key: string, vars?: Record<string, string | number>) => string
 const ICON_STROKE = 1.75;
 
 const I: Record<string, string[]> = {
+  maximize: [
+    'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3',
+  ],
+  minimize: [
+    'M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3',
+  ],
+  volume: [
+    'M11 5L6 9H2v6h4l5 4V5z',
+    'M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07',
+  ],
+  volumeX: [
+    'M11 5L6 9H2v6h4l5 4V5z',
+    'M23 9l-6 6',
+    'M17 9l6 6',
+  ],
   scan: [
     'M9 3H5a2 2 0 0 0-2 2v4',
     'M15 3h4a2 2 0 0 1 2 2v4',
@@ -258,6 +276,7 @@ interface RecognitionFormState {
 
 interface RecognitionResult {
   student?: {
+    id?: string;
     firstName?: string;
     lastName?: string;
     user?: {
@@ -265,9 +284,16 @@ interface RecognitionResult {
       lastName?: string;
     };
   };
+  group?: {
+    id?: string;
+    name?: string;
+  };
   status: string;
   confidence?: number | string;
   livenessResult?: string;
+  attendanceDecision?: string;
+  accessDenied?: boolean;
+  accessReason?: string;
 }
 
 const INITIAL_FORM: RecognitionFormState = {
@@ -327,6 +353,48 @@ function truncateSessionId(id: string, maxLength = 10): string {
 function formatRecognitionResult(result: unknown): RecognitionResult | null {
   if (!result || typeof result !== 'object') return null;
   return result as RecognitionResult;
+}
+
+/**
+ * Terminal attempt statuses returned by the API (RecognitionAttemptStatus)
+ * that mean "no identity" — plus legacy spellings for older servers.
+ */
+const NON_IDENTIFIED_STATUSES = new Set<string>([
+  'UNIDENTIFIED',
+  'MATCH_NOT_FOUND',
+  'MATCH_UNCERTAIN',
+  'QUALITY_FAILED',
+  'LIVENESS_FAILED',
+  'LIVENESS_UNCERTAIN',
+  'LIVENESS_UNAVAILABLE',
+  'ERROR',
+  'UNKNOWN',
+  'SPOOF_DETECTED',
+  'BLOCKED',
+]);
+
+export type RecognitionOutcome =
+  | 'DENIED'
+  | 'DUPLICATE'
+  | 'SUCCESS'
+  | 'UNKNOWN'
+  | 'NEUTRAL';
+
+/**
+ * Classify a recognition response for UI feedback. Order of precedence is
+ * intentional: an entry gate (accessDenied) and duplicate prevention must win
+ * over a bare IDENTIFIED status, otherwise a refused student would be shown as
+ * a successful match.
+ */
+export function resolveRecognitionOutcome(
+  parsed: RecognitionResult | null | undefined,
+): RecognitionOutcome {
+  if (!parsed) return 'NEUTRAL';
+  if (parsed.accessDenied) return 'DENIED';
+  if (parsed.attendanceDecision === 'DUPLICATE_PREVENTED') return 'DUPLICATE';
+  if (parsed.status === 'IDENTIFIED') return 'SUCCESS';
+  if (NON_IDENTIFIED_STATUSES.has(parsed.status)) return 'UNKNOWN';
+  return 'NEUTRAL';
 }
 
 function getInitials(name: string): string {
@@ -422,8 +490,7 @@ function AmbientOrbs() {
         style={{
           background:
             'radial-gradient(closest-side, rgba(0,122,255,0.14), transparent 70%)',
-          filter: 'blur(70px)',
-        }}
+          }}
         animate={{ x: [0, 24, 0], y: [0, 18, 0], opacity: [0.85, 1, 0.85] }}
         transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
       />
@@ -432,8 +499,7 @@ function AmbientOrbs() {
         style={{
           background:
             'radial-gradient(closest-side, rgba(175,82,222,0.12), transparent 70%)',
-          filter: 'blur(80px)',
-        }}
+          }}
         animate={{ x: [0, -28, 0], y: [0, -22, 0], opacity: [0.8, 1, 0.8] }}
         transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
       />
@@ -671,11 +737,79 @@ export function FaceRecognitionPage() {
 
   const { push, toastNode } = useToasts();
   const queryClient = useQueryClient();
+  const {
+    playTick,
+    playError,
+    playFaceIdMatch,
+    playFaceIdDenied,
+    playFaceIdDuplicate,
+  } = usePremiumSound();
+  const haptics = useHaptics();
+  const voice = useVoiceFeedback();
   useAttendanceSocket();
 
   const [form, setForm] = useState<RecognitionFormState>(INITIAL_FORM);
   const [result, setResult] = useState<unknown>(null);
   const [rawExpanded, setRawExpanded] = useState(false);
+  const [isKioskMode, setIsKioskMode] = useState(false);
+  const [autoScan, setAutoScan] = useState(true);
+  const [clockTime, setClockTime] = useState('');
+  const [liveBanner, setLiveBanner] = useState<{
+    type: 'success' | 'warning' | 'error';
+    studentName: string;
+    groupName?: string;
+    time: string;
+    confidence?: string;
+  } | null>(null);
+  const [liveFeed, setLiveFeed] = useState<
+    Array<{
+      id: string;
+      studentName: string;
+      time: string;
+      groupName?: string;
+      status: string;
+      confidence?: string;
+    }>
+  >([]);
+
+  const lastCaptureTimeRef = useRef<number>(0);
+  const cooldownMapRef = useRef<Map<string, number>>(new Map());
+
+  // Real-time digital clock
+  useEffect(() => {
+    const updateClock = () => {
+      setClockTime(
+        new Date().toLocaleTimeString('uz-UZ', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }),
+      );
+    };
+    updateClock();
+    const interval = setInterval(updateClock, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Escape key to exit Kiosk Mode
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isKioskMode) {
+        setIsKioskMode(false);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isKioskMode]);
+
+  // Auto-dismiss live recognition banner after 4 seconds
+  useEffect(() => {
+    if (!liveBanner) return;
+    const timer = setTimeout(() => {
+      setLiveBanner(null);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [liveBanner]);
 
   /* ── Queries ──────────────────────────────────────────────────────── */
   const engine = useQuery({
@@ -722,9 +856,13 @@ export function FaceRecognitionPage() {
         sessionId: session.sessionId ?? session.id,
       }));
       setResult(null);
+      playTick();
+      haptics.light();
       push('success', t('faceRecognition.sessionStarted'));
     },
     onError: (error: Error) => {
+      playError();
+      haptics.error();
       push('error', friendlyFaceError(error));
     },
   });
@@ -733,13 +871,127 @@ export function FaceRecognitionPage() {
     mutationFn: (base64: string) => faceApi.submitAttempt(form.sessionId, base64),
     onSuccess: (response) => {
       setResult(response);
+      const parsed = formatRecognitionResult(response);
+      const studentName = formatStudentName(parsed?.student) || "O'quvchi";
+      const timeStr = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+
+      // The API returns RecognitionAttemptStatus (IDENTIFIED / UNIDENTIFIED /
+      // MATCH_NOT_FOUND / …), NOT the legacy RECOGNIZED / UNKNOWN strings this
+      // branch used to test — so the success and unknown branches were dead and
+      // every outcome fell through to the neutral tick. `accessDenied` and
+      // DUPLICATE_PREVENTED take precedence over a bare IDENTIFIED.
+      const outcome = resolveRecognitionOutcome(parsed);
+
+      if (outcome === 'SUCCESS') {
+        const studentId = parsed?.student?.id || studentName;
+        const lastSeen = cooldownMapRef.current.get(studentId) || 0;
+        const now = Date.now();
+
+        if (now - lastSeen < 18000) {
+          playFaceIdDuplicate();
+          haptics.light();
+          return;
+        }
+
+        cooldownMapRef.current.set(studentId, now);
+        playFaceIdMatch();
+        haptics.heavy();
+        voice.speakSuccess(studentName, parsed?.group?.name);
+
+        const newFeedItem = {
+          id: Math.random().toString(),
+          studentName,
+          time: timeStr,
+          groupName: parsed?.group?.name,
+          status: 'RECOGNIZED',
+          confidence: formatConfidence(parsed?.confidence),
+        };
+        setLiveFeed((prev) => [newFeedItem, ...prev.slice(0, 9)]);
+        setLiveBanner({
+          type: 'success',
+          studentName,
+          groupName: parsed?.group?.name,
+          time: timeStr,
+          confidence: formatConfidence(parsed?.confidence),
+        });
+      } else if (outcome === 'DUPLICATE') {
+        playFaceIdDuplicate();
+        haptics.medium();
+        voice.speakDuplicate(studentName);
+        const newFeedItem = {
+          id: Math.random().toString(),
+          studentName,
+          time: timeStr,
+          groupName: parsed?.group?.name,
+          status: 'DUPLICATE',
+          confidence: 'Qayta',
+        };
+        setLiveFeed((prev) => [newFeedItem, ...prev.slice(0, 9)]);
+        setLiveBanner({
+          type: 'warning',
+          studentName,
+          groupName: parsed?.group?.name,
+          time: timeStr,
+        });
+      } else if (outcome === 'DENIED') {
+        playFaceIdDenied();
+        haptics.error();
+        voice.speakAccessDenied(parsed?.accessReason);
+        const reasonText = parsed?.accessReason === 'INSUFFICIENT_FUNDS' ? "To'lov qarzi" : "Darsdan tashqari";
+        const newFeedItem = {
+          id: Math.random().toString(),
+          studentName,
+          time: timeStr,
+          groupName: parsed?.group?.name,
+          status: 'DENIED',
+          confidence: reasonText,
+        };
+        setLiveFeed((prev) => [newFeedItem, ...prev.slice(0, 9)]);
+        setLiveBanner({
+          type: 'error',
+          studentName,
+          groupName: parsed?.accessReason === 'INSUFFICIENT_FUNDS' ? "To'lov qarzi mavjud" : "Darsdan tashqari",
+          time: timeStr,
+        });
+      } else if (outcome === 'UNKNOWN') {
+        playFaceIdDenied();
+        haptics.error();
+        voice.speakUnknown();
+        const statusLabel =
+          parsed?.status === 'SPOOF_DETECTED'
+            ? 'Soxta'
+            : parsed?.status === 'BLOCKED'
+            ? 'Bloklangan'
+            : "Noma'lum";
+        const newFeedItem = {
+          id: Math.random().toString(),
+          studentName: "Noma'lum shaxs",
+          time: timeStr,
+          groupName: undefined,
+          status: parsed?.status || 'UNKNOWN',
+          confidence: statusLabel,
+        };
+        setLiveFeed((prev) => [newFeedItem, ...prev.slice(0, 9)]);
+        setLiveBanner({
+          type: 'error',
+          studentName: "Yuz tanilmadi",
+          time: timeStr,
+        });
+      } else {
+        playTick();
+        haptics.medium();
+      }
+
       push('success', t('faceRecognition.attemptProcessed'));
       queryClient.invalidateQueries({ queryKey: queryKeys.face.history() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.face.all() });
       queryClient.invalidateQueries({ queryKey: queryKeys.attendance.all() });
-      queryClient.invalidateQueries({ queryKey: ['attendance-analytics'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attendance.analyticsAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
     },
     onError: (error: Error) => {
+      playError();
+      haptics.error();
       push('error', friendlyFaceError(error));
     },
   });
@@ -747,15 +999,22 @@ export function FaceRecognitionPage() {
   const finish = useMutation({
     mutationFn: () => faceApi.finishSession(form.sessionId, 'operator_finished'),
     onSuccess: () => {
+      playTick();
+      haptics.light();
       push('success', t('faceRecognition.sessionFinished'));
       setForm((previous) => ({ ...previous, sessionId: '' }));
       setResult(null);
       queryClient.invalidateQueries({ queryKey: queryKeys.face.history() });
+      queryClient.invalidateQueries({ queryKey: ['face-history'] });
+      queryClient.invalidateQueries({ queryKey: ['face', 'history'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.attendance.all() });
+      queryClient.invalidateQueries({ queryKey: ['attendance'] });
       queryClient.invalidateQueries({ queryKey: ['attendance-analytics'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
     },
     onError: (error: Error) => {
+      playError();
+      haptics.error();
       push('error', friendlyFaceError(error));
     },
   });
@@ -782,6 +1041,10 @@ export function FaceRecognitionPage() {
         push('error', t('faceRecognition.noSession'));
         return;
       }
+      const now = Date.now();
+      if (now - lastCaptureTimeRef.current < 1600) return;
+      lastCaptureTimeRef.current = now;
+
       submit.mutate(base64);
     },
     [form.sessionId, push, submit, t],
@@ -821,6 +1084,386 @@ export function FaceRecognitionPage() {
     >
       <AmbientOrbs />
       {toastNode}
+
+      {/* Floating Celebratory Recognition Toast */}
+      <AnimatePresence>
+        {liveBanner && !isKioskMode && (
+          <motion.div
+            initial={{ opacity: 0, y: -24, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={SPRING.snappy}
+            className="fixed top-6 right-6 z-50 max-w-md w-full shadow-2xl"
+          >
+            <div
+              className={`flex items-center gap-3.5 rounded-2xl border p-4 backdrop-blur-2xl ${
+                liveBanner.type === 'success'
+                  ? 'border-[#34C759]/40 bg-[#34C759]/15 text-[#1D1D1F] dark:text-white shadow-[#34C759]/20'
+                  : liveBanner.type === 'warning'
+                  ? 'border-[#FF9500]/40 bg-[#FF9500]/15 text-[#1D1D1F] dark:text-white shadow-[#FF9500]/20'
+                  : 'border-[#FF3B30]/40 bg-[#FF3B30]/15 text-[#1D1D1F] dark:text-white shadow-[#FF3B30]/20'
+              }`}
+            >
+              <div
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
+                  liveBanner.type === 'success'
+                    ? 'bg-[#34C759] text-white'
+                    : liveBanner.type === 'warning'
+                    ? 'bg-[#FF9500] text-white'
+                    : 'bg-[#FF3B30] text-white'
+                } shadow-md`}
+              >
+                <Icon
+                  paths={
+                    liveBanner.type === 'success'
+                      ? I.checkCircle
+                      : liveBanner.type === 'warning'
+                      ? I.alertCircle
+                      : I.xCircle
+                  }
+                  size={24}
+                  strokeWidth={2.4}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
+                    {liveBanner.type === 'success'
+                      ? 'Davomat qayd etildi'
+                      : liveBanner.type === 'warning'
+                      ? 'Ogohlantirish'
+                      : 'Rad etildi / Nomaʼlum'}
+                  </span>
+                  <span className="font-mono text-[11px] text-[#86868B]">{liveBanner.time}</span>
+                </div>
+                <h4 className="truncate text-[15px] font-bold mt-0.5">{liveBanner.studentName}</h4>
+                {liveBanner.groupName && (
+                  <p className="text-[12px] font-semibold opacity-90 mt-0.5">
+                    {liveBanner.groupName}
+                    {liveBanner.confidence && ` • Ishonch: ${liveBanner.confidence}`}
+                  </p>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fullscreen Kiosk Mode Turnstile View */}
+      <AnimatePresence>
+        {isKioskMode && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={SPRING.smooth}
+            className="fixed inset-0 z-[100] flex flex-col bg-[#07090E] text-white overflow-hidden select-none"
+          >
+            {/* Ambient biometric glow */}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div
+                className="absolute -top-[20%] left-1/2 -translate-x-1/2 h-[500px] w-[800px] rounded-full"
+                style={{
+                  background:
+                    'radial-gradient(circle, rgba(0,122,255,0.18) 0%, rgba(175,82,222,0.12) 40%, transparent 70%)',
+                  }}
+              />
+              <div
+                className="absolute -bottom-[20%] right-[-10%] h-[500px] w-[600px] rounded-full"
+                style={{
+                  background: 'radial-gradient(circle, rgba(52,199,89,0.14) 0%, transparent 60%)',
+                  }}
+              />
+            </div>
+
+            {/* TOP BAR */}
+            <header className="relative z-10 flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-6 py-4 backdrop-blur-2xl">
+              {/* Left Brand */}
+              <div className="flex items-center gap-3">
+                <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#007AFF] to-[#34C759] shadow-lg shadow-[#007AFF]/25">
+                  <Icon paths={I.scan} size={22} strokeWidth={2.4} className="text-white" />
+                  <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#34C759] opacity-75" />
+                    <span className="relative inline-flex h-3 w-3 rounded-full bg-[#34C759]" />
+                  </span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-base font-bold tracking-tight text-white">M-EDU Face ID Kiosk</h1>
+                    <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold tracking-widest text-emerald-400">
+                      LIVE TURNIKET
+                    </span>
+                  </div>
+                  <p className="text-xs text-white/50">Aqlli Yuz Tanish va Davomat Qayd Etish Terminali</p>
+                </div>
+              </div>
+
+              {/* Center Digital Clock */}
+              <div className="hidden sm:flex flex-col items-center">
+                <div className="font-mono text-2xl font-black tracking-wider text-white">
+                  {clockTime}
+                </div>
+                <div className="text-[11px] font-medium tracking-wide text-white/60">
+                  {new Date().toLocaleDateString('uz-UZ', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </div>
+              </div>
+
+              {/* Right Controls */}
+              <div className="flex items-center gap-2.5">
+                {/* Voice toggle */}
+                <button
+                  type="button"
+                  onClick={() => voice.toggleVoice()}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold backdrop-blur-md transition-all ${
+                    voice.enabled
+                      ? 'border border-cyan-500/30 bg-cyan-500/15 text-cyan-300'
+                      : 'border border-white/10 bg-white/5 text-white/50'
+                  }`}
+                  title="Ovozli yordamchi"
+                >
+                  <Icon paths={voice.enabled ? I.volume : I.volumeX} size={15} strokeWidth={2.2} />
+                  <span className="hidden md:inline">{voice.enabled ? 'Ovoz Yoqiq' : "Ovoz O'chiq"}</span>
+                </button>
+
+                {/* AutoScan toggle */}
+                <button
+                  type="button"
+                  onClick={() => setAutoScan((s) => !s)}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold backdrop-blur-md transition-all ${
+                    autoScan
+                      ? 'border border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+                      : 'border border-white/10 bg-white/5 text-white/50'
+                  }`}
+                >
+                  <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
+                  <span className="hidden md:inline">{autoScan ? 'Avto-Skan: Faol' : "Avto-Skan: Qo'lda"}</span>
+                </button>
+
+                {/* Session status */}
+                {isSessionActive ? (
+                  <span className="hidden lg:inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-300">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                    Sessiya: {truncateSessionId(form.sessionId)}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartSession}
+                    disabled={startSession.isPending}
+                    className="flex items-center gap-2 rounded-xl border border-blue-500/40 bg-blue-600/30 px-3 py-2 text-xs font-bold text-white shadow-lg shadow-blue-500/20"
+                  >
+                    <Icon paths={I.play} size={13} strokeWidth={2.4} />
+                    <span>Sessiyani Boshlash</span>
+                  </button>
+                )}
+
+                {/* Exit Kiosk button */}
+                <button
+                  type="button"
+                  onClick={() => setIsKioskMode(false)}
+                  className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 text-xs font-bold text-white transition-all hover:bg-white/20 hover:border-white/30"
+                  title="Kioskdan chiqish (ESC)"
+                >
+                  <Icon paths={I.minimize} size={15} strokeWidth={2.2} />
+                  <span>Chiqish</span>
+                  <kbd className="hidden sm:inline-block rounded bg-black/40 px-1.5 py-0.5 text-[10px] text-white/60">ESC</kbd>
+                </button>
+              </div>
+            </header>
+
+            {/* MAIN KIOSK BODY */}
+            <main className="relative z-10 flex-1 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 p-6 overflow-hidden">
+              {/* Left / Center Camera Turnstile Stage */}
+              <div className="flex flex-col items-center justify-center relative min-h-0">
+                {isSessionActive ? (
+                  <div className="relative w-full max-w-2xl flex flex-col items-center">
+                    {/* Camera view with glowing frame */}
+                    <div className="relative w-full overflow-hidden rounded-3xl border border-white/20 bg-black/40 shadow-2xl shadow-black/80 backdrop-blur-xl">
+                      <WebcamCapture
+                        onCapture={handleCapture}
+                        busy={submit.isPending}
+                        autoScan={autoScan}
+                        onAutoScanToggle={() => setAutoScan((s) => !s)}
+                        showAutoScanToggle={true}
+                        isKiosk={true}
+                        label="Yuzni tanish"
+                      />
+
+                      {/* Holographic scanner reticle corners */}
+                      <div className="pointer-events-none absolute inset-4 border border-white/10 rounded-2xl">
+                        <div className="absolute top-0 left-0 h-6 w-6 border-t-2 border-l-2 border-cyan-400 rounded-tl-lg" />
+                        <div className="absolute top-0 right-0 h-6 w-6 border-t-2 border-r-2 border-cyan-400 rounded-tr-lg" />
+                        <div className="absolute bottom-0 left-0 h-6 w-6 border-b-2 border-l-2 border-cyan-400 rounded-bl-lg" />
+                        <div className="absolute bottom-0 right-0 h-6 w-6 border-b-2 border-r-2 border-cyan-400 rounded-br-lg" />
+                      </div>
+                    </div>
+
+                    {/* Status Guide Footer */}
+                    <div className="mt-4 flex items-center justify-center gap-3">
+                      <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-white/80 backdrop-blur-lg">
+                        <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
+                        <span>
+                          {submit.isPending
+                            ? 'Yuz tahlil qilinmoqda, kuting...'
+                            : "Kameraga to'g'ri qarang — Tizim avtomatik taniydi"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Pop-up Celebration Recognition Banner */}
+                    <AnimatePresence>
+                      {liveBanner && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.85, y: 30 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.9, y: -20 }}
+                          transition={SPRING.snappy}
+                          className="absolute inset-x-6 top-6 z-30"
+                        >
+                          <div
+                            className={`flex items-center gap-4 rounded-3xl p-5 shadow-2xl backdrop-blur-2xl border ${
+                              liveBanner.type === 'success'
+                                ? 'border-emerald-400/40 bg-emerald-950/80 text-white shadow-emerald-500/20'
+                                : liveBanner.type === 'warning'
+                                ? 'border-amber-400/40 bg-amber-950/80 text-white shadow-amber-500/20'
+                                : 'border-rose-400/40 bg-rose-950/80 text-white shadow-rose-500/20'
+                            }`}
+                          >
+                            <div
+                              className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${
+                                liveBanner.type === 'success'
+                                  ? 'bg-emerald-500 text-white'
+                                  : liveBanner.type === 'warning'
+                                  ? 'bg-amber-500 text-white'
+                                  : 'bg-rose-500 text-white'
+                              } shadow-lg`}
+                            >
+                              <Icon
+                                paths={
+                                  liveBanner.type === 'success'
+                                    ? I.checkCircle
+                                    : liveBanner.type === 'warning'
+                                    ? I.alertCircle
+                                    : I.xCircle
+                                }
+                                size={32}
+                                strokeWidth={2.4}
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-white/70">
+                                  {liveBanner.type === 'success'
+                                    ? 'Davomat Muvaffaqiyatli Qayd Etildi'
+                                    : liveBanner.type === 'warning'
+                                    ? 'Ogohlantirish'
+                                    : 'Rad Etildi / Nomaʼlum'}
+                                </span>
+                                <span className="font-mono text-xs text-white/70">{liveBanner.time}</span>
+                              </div>
+                              <h3 className="truncate text-xl font-extrabold text-white mt-0.5">
+                                {liveBanner.studentName}
+                              </h3>
+                              {liveBanner.groupName && (
+                                <p className="text-sm font-semibold text-white/80 mt-0.5">
+                                  {liveBanner.groupName}
+                                  {liveBanner.confidence && ` • Ishonch: ${liveBanner.confidence}`}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center p-8 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl max-w-md">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-400 mb-4">
+                      <Icon paths={I.camera} size={32} strokeWidth={2} />
+                    </div>
+                    <h3 className="text-lg font-bold text-white">Sessiya Faollashtirilmagan</h3>
+                    <p className="text-sm text-white/60 mt-1 mb-5">
+                      Kiosk rejimida yuzlarni avtomatik qabul qilish uchun tanish sessiyasini boshlang.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleStartSession}
+                      disabled={startSession.isPending}
+                      className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/30 transition-all"
+                    >
+                      <Icon paths={I.play} size={16} strokeWidth={2.4} />
+                      <span>Sessiyani Boshlash</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Side: Live Attendance Feed */}
+              <div className="flex flex-col rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl overflow-hidden min-h-0">
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <h2 className="text-sm font-bold text-white tracking-wide">Jonli Davomat Oqimi</h2>
+                  </div>
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-bold text-white/70">
+                    {liveFeed.length}
+                  </span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto divide-y divide-white/5 p-2 space-y-1">
+                  {liveFeed.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full p-6 text-center text-white/40">
+                      <Icon paths={I.empty} size={28} strokeWidth={1.6} className="mb-2 opacity-50" />
+                      <p className="text-xs">Hali hech kim kirmadi</p>
+                      <p className="text-[11px] text-white/30 mt-0.5">O'quvchi tanilganda bu yerda real vaqtda paydo bo'ladi</p>
+                    </div>
+                  ) : (
+                    liveFeed.map((item) => (
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.02] hover:bg-white/[0.06] transition-colors"
+                      >
+                        <div
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white"
+                          style={{ background: avatarGradient(item.studentName) }}
+                        >
+                          {getInitials(item.studentName)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold text-white">{item.studentName}</p>
+                          <div className="flex items-center gap-2 text-[10.5px] text-white/50">
+                            {item.groupName && <span className="truncate">{item.groupName}</span>}
+                            <span>•</span>
+                            <span className="font-mono">{item.time}</span>
+                          </div>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                            item.status === 'RECOGNIZED' || item.status === 'ATTENDANCE_RECORDED'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : item.status === 'DUPLICATE'
+                              ? 'bg-amber-500/20 text-amber-300'
+                              : 'bg-rose-500/20 text-rose-300'
+                          }`}
+                        >
+                          {item.confidence || (item.status === 'RECOGNIZED' ? '100%' : item.status)}
+                        </span>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </main>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ============================================================
           HERO HEADER
@@ -886,6 +1529,35 @@ export function FaceRecognitionPage() {
               <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
                 {t('faceRecognition.subtitle')}
               </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 sm:self-center">
+              <motion.button
+                type="button"
+                onClick={() => voice.toggleVoice()}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
+                  voice.enabled
+                    ? 'border border-[#007AFF]/30 bg-[#007AFF]/10 text-[#007AFF]'
+                    : 'border border-gray-300/40 bg-gray-200/30 text-gray-500 dark:border-white/10 dark:bg-white/5 dark:text-gray-400'
+                }`}
+                title="Ovozli qutlov va e'lonlar"
+              >
+                <Icon paths={voice.enabled ? I.volume : I.volumeX} size={15} strokeWidth={2.2} />
+                <span>{voice.enabled ? "Ovoz: Yoqiq" : "Ovoz: O'chiq"}</span>
+              </motion.button>
+
+              <motion.button
+                type="button"
+                onClick={() => setIsKioskMode(true)}
+                whileHover={{ scale: 1.03, y: -1 }}
+                whileTap={{ scale: 0.97 }}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#AF52DE]/30 bg-gradient-to-r from-[#007AFF]/15 via-[#AF52DE]/15 to-[#34C759]/15 px-3.5 py-2 text-xs font-bold text-[#1D1D1F] shadow-sm backdrop-blur-xl dark:border-[#AF52DE]/40 dark:text-white"
+              >
+                <Icon paths={I.maximize} size={15} strokeWidth={2.2} className="text-[#AF52DE]" />
+                <span>Kiosk / Turniket Rejimi</span>
+              </motion.button>
             </div>
           </div>
         </div>
@@ -1153,6 +1825,10 @@ export function FaceRecognitionPage() {
                   onCapture={handleCapture}
                   busy={submit.isPending}
                   label={t('faceRecognition.recognizeFace')}
+                  autoScan={autoScan}
+                  onAutoScanToggle={() => setAutoScan((s) => !s)}
+                  showAutoScanToggle={isSessionActive}
+                  isKiosk={false}
                 />
                 {isMockEngine && (
                   <div className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-[#F59E0B] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-md">
@@ -1184,13 +1860,57 @@ export function FaceRecognitionPage() {
 
             {recognitionResult && (
               <motion.div
-                initial={{ opacity: 0, y: 12, filter: 'blur(6px)' }}
-                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={SPRING.smooth}
                 className="mt-5 rounded-2xl border border-[#00000008] bg-[#00000002] p-4 dark:border-[#ffffff08] dark:bg-[#ffffff04]"
                 role="status"
                 aria-live="polite"
               >
+                {/* Visual Biometric Result Banner */}
+                {(recognitionResult.status === 'RECOGNIZED' ||
+                  recognitionResult.status === 'ATTENDANCE_RECORDED') ? (
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={SPRING.snappy}
+                    className="mb-4 flex items-center gap-3.5 rounded-2xl border border-[#34C759]/30 bg-[#34C759]/10 p-3.5 backdrop-blur-xl"
+                  >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#34C759] text-white shadow-md shadow-[#34C759]/30">
+                      <Icon paths={I.checkCircle} size={22} strokeWidth={2.4} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="truncate text-[14.5px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        {formatStudentName(recognitionResult.student)}
+                      </h4>
+                      <p className="text-[12px] font-semibold text-[#34C759] dark:text-[#30D158]">
+                        Face ID orqali aniqlandi • Davomat belgilandi
+                      </p>
+                    </div>
+                  </motion.div>
+                ) : (recognitionResult.status === 'UNKNOWN' ||
+                    recognitionResult.status === 'SPOOF_DETECTED' ||
+                    recognitionResult.status === 'BLOCKED') ? (
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={SPRING.snappy}
+                    className="mb-4 flex items-center gap-3.5 rounded-2xl border border-[#FF3B30]/30 bg-[#FF3B30]/10 p-3.5 backdrop-blur-xl"
+                  >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FF3B30] text-white shadow-md shadow-[#FF3B30]/30">
+                      <Icon paths={I.xCircle} size={22} strokeWidth={2.4} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="truncate text-[14px] font-bold text-[#FF3B30] dark:text-[#FF453A]">
+                        Yuz aniqlanmadi yoki mos kelmadi
+                      </h4>
+                      <p className="text-[11.5px] font-medium text-[#86868B]">
+                        Yuzingizni kameraga to'g'rilang yoki avval yuzni ro'yxatdan o'tkazing
+                      </p>
+                    </div>
+                  </motion.div>
+                ) : null}
+
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
                     {t('faceRecognition.resultTitle')}
@@ -1255,6 +1975,63 @@ export function FaceRecognitionPage() {
                       </motion.pre>
                     )}
                   </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+
+            {liveFeed.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={SPRING.smooth}
+                className="mt-5 rounded-2xl border border-[#00000008] bg-[#00000002] p-4 dark:border-[#ffffff08] dark:bg-[#ffffff04]"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2 w-2 rounded-full bg-[#34C759] animate-pulse" />
+                    <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                      Sessiyadagi soʻnggi tanishlar
+                    </h3>
+                  </div>
+                  <span className="rounded-full bg-[#34C759]/10 px-2 py-0.5 text-[10px] font-bold text-[#34C759]">
+                    {liveFeed.length}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {liveFeed.slice(0, 5).map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between rounded-xl bg-white/70 p-2.5 backdrop-blur-md dark:bg-white/5"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-white shadow-sm"
+                          style={{ background: avatarGradient(item.studentName) }}
+                        >
+                          {getInitials(item.studentName)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-[12.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                            {item.studentName}
+                          </p>
+                          <p className="truncate text-[10.5px] text-[#86868B]">
+                            {item.groupName || 'Guruh'} • {item.time}
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                          item.status === 'RECOGNIZED' || item.status === 'ATTENDANCE_RECORDED'
+                            ? 'bg-[#34C759]/10 text-[#34C759]'
+                            : item.status === 'DUPLICATE'
+                            ? 'bg-[#FF9500]/10 text-[#FF9500]'
+                            : 'bg-[#FF3B30]/10 text-[#FF3B30]'
+                        }`}
+                      >
+                        {item.confidence || (item.status === 'RECOGNIZED' ? '100%' : item.status)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </motion.div>
             )}

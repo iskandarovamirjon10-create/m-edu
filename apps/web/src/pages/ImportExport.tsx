@@ -45,9 +45,13 @@ export function ImportExportPage() {
         body: form,
       });
     },
-    onSuccess: (data) => {
-      push('success', t('importExport.jobStarted', { id: data?.id ?? '' }));
+    onSuccess: (data: any) => {
+      const msg = data?.message || t('importExport.jobStarted', { id: data?.id ?? '' });
+      push('success', msg);
       queryClient.invalidateQueries({ queryKey: ['import-jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
     onError: (e) => push('error', getErrorMessage(e)),
   });

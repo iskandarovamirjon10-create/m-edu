@@ -35,6 +35,7 @@ type MockFn = ReturnType<typeof vi.fn>;
 interface PrismaMock {
   camera: {
     findMany: MockFn;
+    updateMany: MockFn;
   };
 }
 
@@ -42,6 +43,7 @@ function createPrismaMock(): PrismaMock {
   return {
     camera: {
       findMany: vi.fn().mockResolvedValue([]),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
   };
 }

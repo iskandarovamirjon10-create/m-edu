@@ -46,13 +46,13 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -810,12 +810,12 @@ export function TelegramPage() {
       >
         <KpiTile
           label={t('common.status') || 'Status'}
-          stringValue={isLinked ? 'Active' : 'Idle'}
+          stringValue={isLinked ? t('common.active') : t('common.idle')}
           icon={isLinked ? I.checkCircle : I.alertCircle}
           tone={isLinked ? 'emerald' : 'orange'}
         />
         <KpiTile
-          label="Account"
+          label={t('telegram.kpi.account')}
           stringValue={
             isLinked && statusData?.username ? `@${statusData.username}` : '—'
           }
@@ -824,14 +824,14 @@ export function TelegramPage() {
         />
         {isAdmin ? (
           <KpiTile
-            label="Linked accounts"
+            label={t('telegram.kpi.linkedAccounts')}
             value={adminOverviewQ.data?.accounts?.total ?? 0}
             icon={I.users}
             tone="blue"
           />
         ) : (
           <KpiTile
-            label="Features"
+            label={t('telegram.kpi.features')}
             value={4}
             icon={I.sparkles}
             tone="purple"
@@ -839,14 +839,14 @@ export function TelegramPage() {
         )}
         {isAdmin ? (
           <KpiTile
-            label="Delivered 24h"
+            label={t('telegram.kpi.delivered24h')}
             value={adminOverviewQ.data?.deliveries?.last24h?.sent ?? 0}
             icon={I.activity}
             tone="emerald"
           />
         ) : (
           <KpiTile
-            label="Reminders"
+            label={t('telegram.kpi.reminders')}
             stringValue="15m"
             icon={I.bell}
             tone="orange"
@@ -867,9 +867,9 @@ export function TelegramPage() {
       <AnimatePresence mode="wait">
         <motion.div
           key={activeTab}
-          initial={{ opacity: 0, y: 12, filter: 'blur(6px)' }}
-          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, y: -8, filter: 'blur(6px)' }}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
           transition={SPRING.smooth}
           className="space-y-5"
         >
@@ -1082,7 +1082,7 @@ export function TelegramPage() {
                               whileHover={{ scale: 1.08 }}
                               whileTap={{ scale: 0.92 }}
                               transition={SPRING.snappy}
-                              aria-label="Copy link"
+                              aria-label={t('common.copyLink')}
                               title="Copy link"
                               className="flex h-10 w-10 items-center justify-center rounded-xl outline-none"
                               style={{
@@ -1237,26 +1237,26 @@ export function TelegramPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               <FeatureCard
                 icon={I.bell}
-                title="Instant Alerts"
-                desc="Get notified immediately about schedule changes or cancellations."
+                title={t('telegram.feature.alertsTitle')}
+                desc={t('telegram.feature.alertsDesc')}
                 tone="telegram"
               />
               <FeatureCard
                 icon={I.message}
-                title="Quick Replies"
-                desc="Reply to messages directly from your Telegram app."
+                title={t('telegram.feature.repliesTitle')}
+                desc={t('telegram.feature.repliesDesc')}
                 tone="purple"
               />
               <FeatureCard
                 icon={I.shieldCheck}
-                title="Secure Login"
-                desc="Use Telegram as an alternative secure login method."
+                title={t('telegram.feature.loginTitle')}
+                desc={t('telegram.feature.loginDesc')}
                 tone="emerald"
               />
               <FeatureCard
                 icon={I.bolt}
-                title="Automated Reminders"
-                desc="Never miss a class with automated 15-minute reminders."
+                title={t('telegram.feature.remindersTitle')}
+                desc={t('telegram.feature.remindersDesc')}
                 tone="orange"
               />
             </div>
@@ -1267,8 +1267,8 @@ export function TelegramPage() {
             <SectionPanel
               icon={I.shieldCheck}
               tone="emerald"
-              title="Admin Overview"
-              subtitle="Aggregate Telegram integration metrics"
+              title={t('telegram.adminOverviewTitle')}
+              subtitle={t('telegram.adminOverviewSubtitle')}
             >
               {adminOverviewQ.isLoading ? (
                 <div className="p-5 space-y-2.5">
@@ -1279,7 +1279,7 @@ export function TelegramPage() {
               ) : adminOverviewQ.isError ? (
                 <div className="p-8">
                   <GlassErrorState
-                    title="Failed to load admin stats"
+                    title={t('telegram.adminStatsError')}
                     message={getErrorMessage(adminOverviewQ.error as Error)}
                     onRetry={() => void adminOverviewQ.refetch()}
                   />
@@ -1287,19 +1287,19 @@ export function TelegramPage() {
               ) : (
                 <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-3">
                   <AdminStat
-                    label="Total Linked Accounts"
+                    label={t('telegram.totalLinkedAccounts')}
                     value={adminOverviewQ.data?.accounts?.total ?? 0}
                     icon={I.users}
                     tone="blue"
                   />
                   <AdminStat
-                    label="Active Bots"
+                    label={t('telegram.activeBots')}
                     value={adminOverviewQ.data?.accounts?.active ?? 0}
                     icon={I.bot}
                     tone="emerald"
                   />
                   <AdminStat
-                    label="Messages Sent (24h)"
+                    label={t('telegram.messagesSent24h')}
                     value={adminOverviewQ.data?.deliveries?.last24h?.sent ?? 0}
                     icon={I.activity}
                     tone="telegram"
@@ -1316,8 +1316,8 @@ export function TelegramPage() {
         open={confirmUnlinkOpen}
         onClose={() => setConfirmUnlinkOpen(false)}
         onConfirm={() => unlinkMut.mutate()}
-        title="Disconnect Telegram"
-        description="Are you sure you want to unlink your Telegram account? You will no longer receive notifications."
+        title={t('telegram.disconnectTitle')}
+        description={t('telegram.disconnectDesc')}
         loading={unlinkMut.isPending}
       />
     </motion.div>

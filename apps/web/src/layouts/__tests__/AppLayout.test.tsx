@@ -61,6 +61,16 @@ describe('AppLayout navigation by role', () => {
   beforeEach(() => {
     logoutMock.mockReset();
     currentUser.role = 'SUPER_ADMIN';
+    // These assertions target the *desktop* sidebar (full labels + the
+    // Administration section header). jsdom defaults to a 1024px viewport,
+    // which renders the compact tablet rail instead, so pin the desktop
+    // viewport explicitly — the expectations below are desktop-only.
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 1440,
+    });
+    window.localStorage.clear();
   });
 
   it('renders primary + administration nav for an admin', () => {

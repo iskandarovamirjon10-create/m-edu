@@ -1,4 +1,4 @@
-import { IsString, IsUUID, IsNumber, IsOptional, IsDateString, IsEnum } from 'class-validator';
+import { IsString, IsUUID, IsNumber, IsOptional, IsDateString, IsEnum, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateEmployeeDto {
@@ -19,6 +19,7 @@ export class CreateEmployeeDto {
 
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
   salary: number;
 
   @IsEnum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN'])
@@ -45,6 +46,7 @@ export class UpdateEmployeeDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0)
   salary?: number;
 
   @IsOptional()

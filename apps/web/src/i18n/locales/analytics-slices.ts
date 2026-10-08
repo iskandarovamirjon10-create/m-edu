@@ -27,6 +27,18 @@ export const analyticsEn = {
   'a11y.aiAssistant': 'AI Assistant',
   'a11y.close': 'Close',
   'a11y.cameraPreview': 'Camera preview',
+  // Shell / navigation strings that were referenced with a `t(key) || fallback`
+  // pattern. `t()` returns the KEY when a dictionary entry is missing, so that
+  // pattern never falls back — screen readers were announcing raw keys
+  // ("a11y.openMenu", "a11y.navigatedTo"). These entries fix that.
+  'a11y.openMenu': 'Open navigation menu',
+  'a11y.primaryNav': 'Primary navigation',
+  'a11y.navigatedTo': 'Navigated to',
+  'a11y.newPage': 'new page',
+  'nav.more': 'More',
+  'nav.recent': 'Recent',
+  'nav.noMatches': 'No matches',
+  'common.offline': "You're offline — changes may not save",
   'a11y.mainNav': 'Main navigation',
   'a11y.closeMenu': 'Close menu',
   'a11y.select': 'Select…',

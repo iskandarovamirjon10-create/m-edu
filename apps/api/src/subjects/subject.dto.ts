@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Min, Max } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateSubjectDto {
@@ -67,6 +67,7 @@ export class UpdateSubjectDto {
 
   @ApiPropertyOptional()
   @IsInt()
+  @Min(1)
   @IsOptional()
   credits?: number;
 
@@ -104,9 +105,14 @@ export class QuerySubjectDto {
 
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()
+  @IsInt()
+  @Min(1)
   page?: number;
 
   @ApiPropertyOptional({ default: 20 })
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
   limit?: number;
 }

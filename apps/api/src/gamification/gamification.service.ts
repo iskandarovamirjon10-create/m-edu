@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** XP/coin rewards per gamified event. */
@@ -30,6 +30,59 @@ export interface LeaderboardEntry {
   coins: number;
   level: number;
 }
+
+
+export interface RewardItem {
+  id: string;
+  title: string;
+  description: string;
+  costCoins: number;
+  category: 'MERCH' | 'DISCOUNT' | 'BOOK' | 'PERK';
+  icon: string;
+}
+
+export const REWARD_CATALOG: RewardItem[] = [
+  {
+    id: 'merch-tshirt',
+    title: 'M-EDU Brend Futbolka',
+    description: 'Maxsus paxtali premium sifatli futbolka',
+    costCoins: 150,
+    category: 'MERCH',
+    icon: '👕',
+  },
+  {
+    id: 'discount-10',
+    title: 'Keyingi oy to‘loviga 10% chegirma',
+    description: 'Ota-onangiz uchun to‘lovga maxsus vaucher',
+    costCoins: 250,
+    category: 'DISCOUNT',
+    icon: '🎟️',
+  },
+  {
+    id: 'merch-thermos',
+    title: 'M-EDU Smart Termos',
+    description: 'Haroratni ko‘rsatuvchi zanglamas metall termos',
+    costCoins: 200,
+    category: 'MERCH',
+    icon: '☕',
+  },
+  {
+    id: 'book-programming',
+    title: 'Dasturlash / IT Qo‘llanma Kitobi',
+    description: 'Mualliflik amaliy qo‘llanmasi',
+    costCoins: 100,
+    category: 'BOOK',
+    icon: '📚',
+  },
+  {
+    id: 'perk-vip-mentor',
+    title: 'Bosh Mentor bilan 1 soatlik VIP sessiya',
+    description: 'Karyera va xalqaro imtihonlar bo‘yicha maslahat',
+    costCoins: 300,
+    category: 'PERK',
+    icon: '⭐',
+  },
+];
 
 /** Levels advance every 100 XP: level = floor(totalXp / 100) + 1. */
 export function levelForXp(totalXp: number): number {
@@ -362,6 +415,45 @@ export class GamificationService {
         level: row.level,
         students: row._count.level,
       })),
+    };
+  }
+  /** Get all redeemable items in the M-Coins reward store. */
+  async getRewards(): Promise<RewardItem[]> {
+    return REWARD_CATALOG;
+  }
+
+  /** Spend M-Coins to claim a reward item. */
+  async claimReward(studentId: string, organizationId: string, rewardId: string) {
+    const reward = REWARD_CATALOG.find((r) => r.id === rewardId);
+    if (!reward) {
+      throw new BadRequestException('Bunday mukofot do‘konda topilmadi');
+    }
+
+    const current = await this.prisma.studentGamification.findUnique({
+      where: { studentId },
+    });
+
+    if (!current || current.coins < reward.costCoins) {
+      throw new BadRequestException(
+        `Coinlar yetarli emas. Sizda: ${current?.coins ?? 0}, kerak: ${reward.costCoins}`,
+      );
+    }
+
+    const updated = await this.prisma.studentGamification.update({
+      where: { studentId },
+      data: {
+        coins: { decrement: reward.costCoins },
+      },
+      select: { coins: true, xp: true, level: true },
+    });
+
+    this.logger.log(`Student ${studentId} claimed reward ${reward.title} for ${reward.costCoins} coins.`);
+
+    return {
+      success: true,
+      reward,
+      remainingCoins: updated.coins,
+      message: `Tabriklaymiz! "${reward.title}" xarid qilindi. Administrator sizga yetkazib beradi.`,
     };
   }
 }

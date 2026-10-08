@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { AuthorizationPort, Permission } from '@medu/core/src/ports/authorization.port';
 import { BiometricAccessDeniedError } from '@medu/core';
-import { RolePermissions, Permission as ContractsPermission } from '@medu/contracts';
+import { rolePermissionsForRole, Permission as ContractsPermission } from '@medu/contracts';
 
 /**
  * Production RBAC adapter — resolves permissions from the user's role
@@ -15,7 +15,7 @@ import { RolePermissions, Permission as ContractsPermission } from '@medu/contra
 export class SimpleAuthorizationAdapter implements AuthorizationPort {
   async hasPermission(permission: Permission, role?: string): Promise<boolean> {
     if (!role) return false;
-    const permissions = RolePermissions[role] ?? [];
+    const permissions = rolePermissionsForRole(role);
     return permissions.includes(permission as ContractsPermission);
   }
 
@@ -28,7 +28,7 @@ export class SimpleAuthorizationAdapter implements AuthorizationPort {
 
   async hasAnyPermission(permissions: Permission[], role?: string): Promise<boolean> {
     if (!role) return false;
-    const userPermissions = RolePermissions[role] ?? [];
+    const userPermissions = rolePermissionsForRole(role);
     return permissions.some((p) => userPermissions.includes(p as ContractsPermission));
   }
 }

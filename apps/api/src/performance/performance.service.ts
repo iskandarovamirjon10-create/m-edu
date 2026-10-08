@@ -279,11 +279,11 @@ export class PerformanceService {
 
   private async checkIndexExists(model: string, fields: string[]): Promise<boolean> {
     try {
-      const result = await this.prisma.$queryRawUnsafe<{ count: bigint }[]>(
-        `SELECT COUNT(*) as count FROM pg_indexes WHERE tablename = $1 AND indexdef LIKE $2`,
-        model.toLowerCase(),
-        `%${fields[0]}%`,
-      );
+      const pattern = `%${fields[0]}%`;
+      const tablename = model.toLowerCase();
+      const result = await this.prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT COUNT(*) as count FROM pg_indexes WHERE tablename = ${tablename} AND indexdef LIKE ${pattern}
+      `;
       return Number(result[0]?.count ?? 0) > 0;
     } catch {
       return false;

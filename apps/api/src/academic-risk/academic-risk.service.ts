@@ -23,6 +23,9 @@ export interface AcademicRiskItem {
   lastGrade: number | null;
   attendanceRate: number;
   homeworkCompletion: number;
+  phone?: string | null;
+  parentPhone?: string | null;
+  suggestedAction?: string;
 }
 
 export interface AcademicRiskSummary {
@@ -92,7 +95,7 @@ export class AcademicRiskService {
     const students = await this.prisma.student.findMany({
       where: { organizationId: orgId },
       include: {
-        user: { select: { firstName: true, lastName: true } },
+        user: { select: { firstName: true, lastName: true, phone: true } },
         groups: {
           where: { isActive: true },
           include: { group: { select: { id: true, name: true } } },
@@ -245,6 +248,21 @@ export class AcademicRiskService {
       const riskScore = Math.round(rawScore * 100) / 100;
       const riskLevel = this.scoreToLevel(riskScore);
 
+      let suggestedAction = 'Holat barqaror';
+      if (riskLevel === 'HIGH') {
+        if (consecutiveAbsences >= 3) {
+          suggestedAction = '📞 Ota-onasiga shoshilinch qo‘ng‘iroq (3+ kun kelmadi)';
+        } else if (attendanceRate < 70) {
+          suggestedAction = '⚠️ Davomat kritik past, 1-on-1 suhbat kerak';
+        } else if (gradeTrendScore > 60) {
+          suggestedAction = '📖 O‘zlashtirish pasaygan, ustoz yordami kerak';
+        } else {
+          suggestedAction = '🤝 Administrator va mentor bilan uchrashuv';
+        }
+      } else if (riskLevel === 'MEDIUM') {
+        suggestedAction = '👀 Keyingi darslarda faolligini nazoratga olish';
+      }
+
       items.push({
         studentId: student.id,
         studentName,
@@ -262,9 +280,13 @@ export class AcademicRiskService {
         lastGrade,
         attendanceRate,
         homeworkCompletion,
+        phone: (student as any).user?.phone ?? null,
+        parentPhone: (student as any).parentPhone ?? null,
+        suggestedAction,
       });
     }
 
+    items.sort((a, b) => b.riskScore - a.riskScore);
     return items;
   }
 
@@ -334,6 +356,8 @@ export class AcademicRiskService {
     return 'HIGH';
   }
 }
+
+
 
 
 

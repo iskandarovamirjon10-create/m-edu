@@ -84,4 +84,26 @@ describe('SecureLogger — sensitive data redaction (P0 biometric exposure)', ()
     expect(output.context.password).toBe('[REDACTED]');
     expect(output.error).toBe('boom');
   });
+
+  it('redacts secrets interpolated into free-form messages (regression: FS-1)', () => {
+    const logger = new SecureLogger('info');
+    logger.info('auth failed for user admin with password hunter2');
+    logger.info('connecting with token=abc123secret');
+    logger.info('apikey fp_deadbeefdeadbeef');
+    const outputs = consoleLogSpy.mock.calls.map((c) => JSON.parse(c[0]).message as string);
+    expect(outputs[0]).not.toMatch(/hunter2/);
+    expect(outputs[0]).toContain('[REDACTED]');
+    expect(outputs[1]).not.toMatch(/abc123secret/);
+    expect(outputs[1]).toContain('[REDACTED]');
+    expect(outputs[2]).not.toMatch(/fp_deadbeefdeadbeef/);
+    expect(outputs[2]).toContain('[REDACTED]');
+  });
+
+  it('redacts Authorization: Bearer tokens in messages (regression: FS-1)', () => {
+    const logger = new SecureLogger('info');
+    logger.info('Authorization: Bearer eyJhbGciOiJIUzI1NiJ9');
+    const msg = JSON.parse(consoleLogSpy.mock.calls[0][0]).message as string;
+    expect(msg).not.toContain('eyJhbGciOiJIUzI1NiJ9');
+    expect(msg).toContain('[REDACTED]');
+  });
 });

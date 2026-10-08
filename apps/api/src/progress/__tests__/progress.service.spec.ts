@@ -13,6 +13,7 @@ describe('ProgressService (Student 360 Aggregation & Risk Engine)', () => {
       student: { findFirst: vi.fn() },
       studentObjectiveMastery: { upsert: vi.fn() },
       studentProgressSnapshot: { create: vi.fn() },
+      parentStudent: { findUnique: vi.fn() },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -57,5 +58,91 @@ describe('ProgressService (Student 360 Aggregation & Risk Engine)', () => {
     await expect(
       service.getStudent360('org-1', 'nonexistent'),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  // ---- Anti-IDOR regression: family roles may only read OWN data ----
+  it('STUDENT cannot read another student 360 profile (IDOR regression)', async () => {
+    prisma.student.findFirst.mockResolvedValue({
+      id: 'stu-2',
+      organizationId: 'org-1',
+      userId: 'other-user-id',
+      user: { firstName: 'Bob', lastName: 'Smith', email: 'b@x.com' },
+      groups: [],
+      attendance: [],
+      grades: [],
+      assignmentSubmissions: [],
+      quizAttempts: [],
+      objectiveMasteries: [],
+    });
+
+    await expect(
+      service.getStudent360('org-1', 'stu-2', { id: 'student-me', role: 'STUDENT' }),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('STUDENT can read their OWN 360 profile', async () => {
+    prisma.student.findFirst.mockResolvedValue({
+      id: 'stu-1',
+      organizationId: 'org-1',
+      userId: 'student-me',
+      user: { firstName: 'Ali', lastName: 'Valiyev', email: 'ali@test.com' },
+      groups: [],
+      attendance: [],
+      grades: [],
+      assignmentSubmissions: [],
+      quizAttempts: [],
+      objectiveMasteries: [],
+    });
+
+    const p = await service.getStudent360('org-1', 'stu-1', {
+      id: 'student-me',
+      role: 'STUDENT',
+    });
+    expect(p.student.id).toBe('stu-1');
+  });
+
+  it('PARENT without a link to the student cannot read their 360 profile (IDOR regression)', async () => {
+    prisma.student.findFirst.mockResolvedValue({
+      id: 'stu-3',
+      organizationId: 'org-1',
+      userId: 'some-user',
+      user: { firstName: 'A', lastName: 'B', email: 'a@b.com' },
+      groups: [],
+      attendance: [],
+      grades: [],
+      assignmentSubmissions: [],
+      quizAttempts: [],
+      objectiveMasteries: [],
+    });
+    prisma.parentStudent.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.getStudent360('org-1', 'stu-3', { id: 'parent-x', role: 'PARENT' }),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('PARENT linked to the student can read their 360 profile', async () => {
+    prisma.student.findFirst.mockResolvedValue({
+      id: 'stu-4',
+      organizationId: 'org-1',
+      userId: 'some-user',
+      user: { firstName: 'A', lastName: 'B', email: 'a@b.com' },
+      groups: [],
+      attendance: [],
+      grades: [],
+      assignmentSubmissions: [],
+      quizAttempts: [],
+      objectiveMasteries: [],
+    });
+    prisma.parentStudent.findUnique.mockResolvedValue({
+      parentId: 'parent-y',
+      studentId: 'stu-4',
+    });
+
+    const p = await service.getStudent360('org-1', 'stu-4', {
+      id: 'parent-y',
+      role: 'PARENT',
+    });
+    expect(p.student.id).toBe('stu-4');
   });
 });

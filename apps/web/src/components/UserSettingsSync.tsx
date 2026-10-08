@@ -3,6 +3,7 @@ import { useAuthState } from '@/auth/AuthContext';
 import { useI18n, isLocale } from '@/i18n/I18nProvider';
 import { useTheme } from '@/hooks/useTheme';
 import { usePersistSettings } from '@/hooks/usePersistSettings';
+import { useDeviceSyncSocket } from '@/hooks/useDeviceSyncSocket';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -42,6 +43,7 @@ function readStorage(key: string): string | null {
  * inside `ThemeProvider` + `I18nProvider`).
  */
 export function UserSettingsSync() {
+  useDeviceSyncSocket();
   const { user } = useAuthState();
   const { setLocale, locale } = useI18n();
   const { setTheme, theme } = useTheme();

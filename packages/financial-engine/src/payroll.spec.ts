@@ -226,3 +226,95 @@ describe('computePayroll — validation (negative testing)', () => {
     expect(PAYROLL_ENGINE_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
+
+describe('computePayroll — input robustness (regression: NaN must never become money)', () => {
+  it('rejects non-numeric / NaN inputs instead of returning NaN amounts', () => {
+    expect(() =>
+      computePayroll({ salaryType: 'MONTHLY', baseAmount: 1_000_000, bonus: 'abc' }),
+    ).toThrow(PayrollValidationError);
+    expect(() =>
+      computePayroll({ salaryType: 'HOURLY', baseAmount: 50_000, hoursWorked: NaN }),
+    ).toThrow(PayrollValidationError);
+    expect(() =>
+      computePayroll({ salaryType: 'MONTHLY', baseAmount: 1_000_000, lateCount: NaN as never }),
+    ).toThrow(PayrollValidationError);
+    expect(() =>
+      computePayroll({ salaryType: 'MONTHLY', baseAmount: 1_000_000, absenceDays: NaN as never }),
+    ).toThrow(PayrollValidationError);
+    expect(() =>
+      computePayroll({ salaryType: 'PER_LESSON', baseAmount: 50_000, lessonsCount: NaN as never }),
+    ).toThrow(PayrollValidationError);
+    expect(() =>
+      computePayroll({ salaryType: 'MONTHLY', baseAmount: Infinity }),
+    ).toThrow(PayrollValidationError);
+  });
+});
+
+describe('computePayroll — deduction reconciliation (regression)', () => {
+  it('capped over-deduction keeps totals internally consistent', () => {
+    const r = computePayroll({
+      salaryType: 'MONTHLY',
+      baseAmount: 100_000,
+      otherDeduction: 999_999,
+      lateCount: 10,
+      latePenaltyPerEvent: 50_000,
+      absenceDays: 20,
+    });
+    const t = r.breakdown.totals;
+    expect(r.netAmount).toBe(0);
+    expect(t.taxMinor).toBe(0);
+    expect(t.deductionsMinor).toBeLessThanOrEqual(t.grossMinor);
+    // The invariant the UI/reporting layer relies on:
+    expect(t.grossMinor - t.deductionsMinor - t.taxMinor).toBe(t.netMinor);
+  });
+
+  it('ordinary runs satisfy gross − deductions − tax === net', () => {
+    const r = computePayroll({
+      salaryType: 'MONTHLY',
+      baseAmount: 5_000_000,
+      bonus: 500_000,
+      absenceDays: 2,
+      lateCount: 3,
+      latePenaltyPerEvent: 10_000,
+      otherDeduction: 100_000,
+      overtimeHours: 4,
+    });
+    const t = r.breakdown.totals;
+    expect(t.grossMinor - t.deductionsMinor - t.taxMinor).toBe(t.netMinor);
+  });
+});
+
+describe('computePayroll — social contributions (opt-in, default 0)', () => {
+  it('employee contribution is withheld after tax and counted in deductions', () => {
+    const r = computePayroll({
+      salaryType: 'MONTHLY',
+      baseAmount: 1_000_000,
+      employeeContributionBasisPoints: 1000, // 10%
+      employerContributionBasisPoints: 2250, // 22.5%
+    });
+    const t = r.breakdown.totals;
+    expect(t.employeeContributionMinor).toBe(10_000_000); // 100,000 UZS
+    expect(t.employerContributionMinor).toBe(22_500_000); // 225,000 UZS (employer cost)
+    // net = gross − tax(12%) − employee contribution
+    expect(r.netAmount).toBe(1_000_000 - 120_000 - 100_000);
+    expect(t.grossMinor - t.deductionsMinor - t.taxMinor).toBe(t.netMinor);
+  });
+
+  it('defaults keep historical behaviour (no contribution withheld)', () => {
+    const plain = computePayroll({ salaryType: 'MONTHLY', baseAmount: 1_000_000 });
+    expect(plain.breakdown.totals.employeeContributionMinor).toBe(0);
+    expect(plain.breakdown.totals.employerContributionMinor).toBe(0);
+    expect(plain.netAmount).toBe(880_000);
+  });
+
+  it('absenceDays is reported as 0 for non-MONTHLY salary types (was echoed but never applied)', () => {
+    const hourly = computePayroll({
+      salaryType: 'HOURLY',
+      baseAmount: 50_000,
+      hoursWorked: 10,
+      absenceDays: 5,
+    });
+    expect(hourly.absenceDays).toBe(0);
+    expect(hourly.breakdown.totals.absenceMinor).toBe(0);
+  });
+});

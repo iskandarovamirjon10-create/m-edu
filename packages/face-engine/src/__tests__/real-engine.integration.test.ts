@@ -111,13 +111,13 @@ describe('Real Face Engine Integration', () => {
     let embedder: RealEmbedder;
 
     beforeAll(async () => {
+      // Defaults reproduce the OpenCV SFace contract (raw BGR [0,255],
+      // mean=0, std=1). Do not override mean/std here.
       embedder = new RealEmbedder({
         modelPath: EMBEDDER_PATH,
         inputSize: 112,
         embeddingDimension: 128,
         normalize: true,
-        mean: [127.5, 127.5, 127.5],
-        std: [128.0, 128.0, 128.0],
       });
       await embedder.initialize();
     });

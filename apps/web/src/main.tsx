@@ -31,7 +31,10 @@ if (import.meta.env.DEV) {
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch((error) => {
-      console.error('ServiceWorker registration failed:', error);
+      if (import.meta.env.DEV) {
+        console.error('ServiceWorker registration failed:', error);
+      }
+      // Do not surface SW internals in the production browser console.
     });
   });
 }
@@ -58,11 +61,14 @@ if (import.meta.env.DEV) {
 // Add global error handlers for better error tracking
 if (import.meta.env.PROD) {
   window.addEventListener('error', (event) => {
-    console.error('Global error:', event.error);
+    // Production telemetry should go through a real error-reporting service
+    // (Sentry/LogRocket/DataDog). Logging to the end-user console leaks
+    // internals and PII — see product-readiness audit F-WEB-1.
+    void event;
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled promise rejection:', event.reason);
+    void event;
   });
 }
 

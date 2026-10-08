@@ -262,6 +262,7 @@ export class FaceController {
       req.tenantContext,
       id,
       dto.imageBase64,
+      dto.clientAttemptId,
     );
   }
 

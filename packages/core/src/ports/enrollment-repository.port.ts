@@ -155,10 +155,44 @@ export interface EnrollmentRepository {
   streamActiveTemplates(
     organizationId: string,
     batchSize?: number,
+    groupId?: string,
   ): AsyncGenerator<Array<TemplateEntity & { student: { id: string; firstName: string; lastName: string } }>>;
 
   /** Revoke all templates for an enrollment */
   revokeTemplates(organizationId: string, enrollmentId: string): Promise<void>;
+
+  /**
+   * Atomically revoke an enrollment AND its active templates in a single
+   * DB transaction. A crash between revokeTemplates() + updateStatus()
+   * used to leave a REVOKED enrollment with ACTIVE biometric templates
+   * (or vice versa) — the exact partial state this method eliminates.
+   */
+  revokeEnrollmentAndTemplates(
+    organizationId: string,
+    enrollmentId: string,
+    metadata?: {
+      revokedAt?: Date;
+      revokedBy?: string;
+      revocationReason?: string;
+    }
+  ): Promise<EnrollmentEntity>;
+
+  /**
+   * Atomically revoke an existing enrollment AND create its replacement in
+   * a single DB transaction. Re-enrollment previously ran
+   * revokeTemplates → updateStatus → create as three independent writes;
+   * a failure between them left either a revoked enrollment with no
+   * replacement OR an active template on a revoked enrollment.
+   */
+  atomicReenroll(
+    organizationId: string,
+    oldEnrollmentId: string,
+    metadata: {
+      revokedAt: Date;
+      revokedBy?: string;
+      revocationReason?: string;
+    }
+  ): Promise<{ old: EnrollmentEntity; enrolled: EnrollmentEntity }>;
 
   /** Count active enrollments */
   countActive(organizationId: string): Promise<number>;

@@ -12,6 +12,7 @@ export const NOTIFICATION_EVENTS_QUEUE = 'notification-events';
 export const NOTIFICATION_EVENTS_DLQ = 'notification-events-dlq';
 
 export type NotificationEventType =
+  | 'ATTENDANCE_MARKED_PRESENT'
   | 'ATTENDANCE_MARKED_ABSENT'
   | 'ATTENDANCE_MARKED_LATE'
   | 'PAYMENT_RECORDED'

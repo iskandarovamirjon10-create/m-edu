@@ -3,6 +3,7 @@
  */
 
 export type Role =
+  | 'PLATFORM_OWNER'
   | 'SUPER_ADMIN'
   | 'ORG_ADMIN'
   | 'MANAGER'
@@ -53,13 +54,19 @@ export interface AuthResponse {
 
 export interface ActiveSession {
   id: string;
-  userId: string;
-  userName: string;
+  userId?: string;
+  userName?: string;
+  deviceName?: string;
+  deviceType?: 'desktop' | 'mobile' | 'tablet' | 'unknown' | string;
+  browser?: string;
+  os?: string;
   ipAddress: string;
-  userAgent: string;
+  userAgent?: string;
   device?: string;
   location?: string;
   lastActiveAt: string;
   createdAt: string;
+  expiresAt?: string;
   isCurrent?: boolean;
+  isCurrentSession?: boolean;
 }

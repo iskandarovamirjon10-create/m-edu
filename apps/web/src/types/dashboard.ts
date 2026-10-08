@@ -21,6 +21,7 @@ export interface DashboardStats {
   wonLeads: number;
   newLeadsThisMonth: number;
   conversionRate: number;
+  attendanceRate: number;
   upcomingFollowUps: FollowUp[];
   attendanceStats: AttendanceStat[];
   leadByStage: { stage: LeadStage; count: number }[];

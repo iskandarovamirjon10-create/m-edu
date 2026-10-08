@@ -58,13 +58,13 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, x: -8 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
@@ -875,18 +875,45 @@ export function PaymentsPage() {
               </p>
             </div>
 
-            <motion.div
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              transition={SPRING.snappy}
-            >
-              <GlassButton type="button" variant="primary" onClick={handleOpenModal}>
-                <span className="inline-flex items-center gap-2">
-                  <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                  {t('payments.add')}
-                </span>
-              </GlassButton>
-            </motion.div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <motion.div
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
+              >
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('open-ai-copilot', {
+                        detail: {
+                          prompt: "Qarzdor o'quvchilar, kechikkan to'lovlar va umumiy kassa intizomi bo'yicha tahliliy hisobot ber.",
+                        },
+                      }),
+                    );
+                  }}
+                  className="!border-purple-500/30 hover:!border-purple-500/50"
+                >
+                  <span className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium">
+                    <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
+                    AI Tahlil
+                  </span>
+                </GlassButton>
+              </motion.div>
+              <motion.div
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
+              >
+                <GlassButton type="button" variant="primary" onClick={handleOpenModal}>
+                  <span className="inline-flex items-center gap-2">
+                    <Icon paths={I.plus} size={15} strokeWidth={2.5} />
+                    {t('payments.add')}
+                  </span>
+                </GlassButton>
+              </motion.div>
+            </div>
           </div>
         </div>
       </motion.div>

@@ -983,6 +983,7 @@ describe(
             organizationId: 'org-1',
             studentId: 'stu-1',
             status: 'ACTIVE',
+            enrollment: { status: 'ACTIVE' },
           },
           orderBy: {
             version: 'desc',
@@ -1645,12 +1646,14 @@ describe(
       expect(prisma.faceTemplate.findMany.mock.calls[0][0].where).toEqual({
         organizationId: 'org-1',
         status: 'ACTIVE',
+        enrollment: { status: 'ACTIVE' },
       });
 
       // Second call: cursor advances to last id of first batch
       expect(prisma.faceTemplate.findMany.mock.calls[1][0].where).toEqual({
         organizationId: 'org-1',
         status: 'ACTIVE',
+        enrollment: { status: 'ACTIVE' },
         id: { gt: 'tpl-3' },
       });
     });

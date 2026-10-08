@@ -39,7 +39,7 @@ describe('AnalyticsService.getOverview daily attendance', () => {
         { date: new Date('2026-09-06T00:00:00Z'), status: 'PRESENT', count: 4 },
       ]); // daily attendance
 
-    const svc = new AnalyticsService(prisma);
+    const svc = new AnalyticsService(prisma, { get: vi.fn(), set: vi.fn() } as any);
     const result = await svc.getOverview('org-1');
 
     const daily = result.attendance.daily;
@@ -52,3 +52,4 @@ describe('AnalyticsService.getOverview daily attendance', () => {
     expect(sep5!.late).toBe(1);
   });
 });
+

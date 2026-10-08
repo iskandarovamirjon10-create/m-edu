@@ -43,10 +43,30 @@ export const STAFF_ROLES: readonly Role[] = [
 /** Accounts restricted to their own data only. */
 export const FAMILY_ROLES: readonly Role[] = [Role.PARENT, Role.STUDENT];
 
+/**
+ * Roles that may change PLATFORM-WIDE policy — rows shared by every tenant
+ * (the global access-control configuration, platform invitations …).
+ *
+ * Deliberately NOT the same as {@link ADMIN_ROLES}: an ORG_ADMIN administers
+ * ONE organization. Handing them a write handle on a row keyed
+ * `id: 'global'` would let tenant A change tenant B's registration policy —
+ * a cross-tenant privilege escalation.
+ */
+export const PLATFORM_ROLES: readonly Role[] = [
+  Role.SUPER_ADMIN,
+  Role.PLATFORM_OWNER,
+];
+
 /** Teaching + administration (used for read-only rosters the staff needs). */
 export const TEACHING_ROLES: readonly Role[] = [Role.TEACHER, Role.ASSISTANT];
 
 const FAMILY_ROLE_SET: ReadonlySet<string> = new Set<string>(FAMILY_ROLES);
+const PLATFORM_ROLE_SET: ReadonlySet<string> = new Set<string>(PLATFORM_ROLES);
+
+/** True when the role may mutate platform-wide (non-tenant) policy. */
+export function isPlatformRole(role: string | undefined | null): boolean {
+  return typeof role === 'string' && PLATFORM_ROLE_SET.has(role);
+}
 
 /** True when the role belongs to the restricted self-service surface. */
 export function isFamilyRole(role: string | undefined | null): boolean {

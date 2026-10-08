@@ -57,8 +57,17 @@ export class ProgressService {
 
   /**
    * High performance, single-query Student 360 profile avoiding N+1 bottlenecks.
+   *
+   * SECURITY: when `requester` is provided, FAMILY roles (STUDENT/PARENT) may
+   * only read their own / linked-child profile. Without this check any
+   * authenticated student could read any other student's balance, parent
+   * phone, grades and risk signals (IDOR).
    */
-  async getStudent360(organizationId: string, studentId: string): Promise<Student360Profile> {
+  async getStudent360(
+    organizationId: string,
+    studentId: string,
+    requester?: { id: string; role: string },
+  ): Promise<Student360Profile> {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, organizationId },
       include: {
@@ -100,6 +109,15 @@ export class ProgressService {
     });
 
     if (!student) throw new NotFoundException('Student not found');
+
+    if (requester?.role === 'STUDENT') {
+      if (student.userId !== requester.id) throw new NotFoundException('Student not found');
+    } else if (requester?.role === 'PARENT') {
+      const link = await this.prisma.parentStudent.findUnique({
+        where: { parentId_studentId: { parentId: requester.id, studentId: student.id } },
+      });
+      if (!link) throw new NotFoundException('Student not found');
+    }
 
     // 1. Attendance aggregation
     const attendanceList = student.attendance ?? [];

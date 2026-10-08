@@ -58,7 +58,7 @@ describe('AssessmentService (Server-Authoritative Test Engine)', () => {
         },
       ],
     });
-    prisma.student.findUnique.mockResolvedValue({ id: 'stu-1' });
+    prisma.student.findUnique.mockResolvedValue({ id: 'stu-1', organizationId: 'org-1' });
     prisma.quizAttempt.count.mockResolvedValue(0);
     prisma.quizAttempt.create.mockResolvedValue({ id: 'att-1', attemptNumber: 1 });
 
@@ -74,7 +74,7 @@ describe('AssessmentService (Server-Authoritative Test Engine)', () => {
       isPublished: true,
       maxAttempts: 1,
     });
-    prisma.student.findUnique.mockResolvedValue({ id: 'stu-1' });
+    prisma.student.findUnique.mockResolvedValue({ id: 'stu-1', organizationId: 'org-1' });
     prisma.quizAttempt.count.mockResolvedValue(1);
 
     await expect(

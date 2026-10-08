@@ -396,6 +396,47 @@ describe('AuthService', () => {
       expect(code).not.toContain('secret');
       expect(code).not.toContain('jwt');
     });
+
+    it('stores state nonce when provided during auth code generation', async () => {
+      prisma.authorizationCode.create.mockResolvedValue(codeRow());
+      await svc.generateAuthCode('jwt:sess-1', 'u1', 'state-nonce-abc');
+      expect(prisma.authorizationCode.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ state: 'state-nonce-abc' }),
+      });
+    });
+
+    it('successfully redeems code when matching state is provided', async () => {
+      prisma.authorizationCode.findUnique.mockResolvedValue(
+        codeRow({ sessionId: 'sess-1', state: 'expected-state-nonce' }),
+      );
+      prisma.authorizationCode.updateMany.mockResolvedValue({ count: 1 });
+      prisma.user.findUnique.mockResolvedValue(activeUser);
+      prisma.session.findUnique.mockResolvedValue({
+        id: 'sess-1',
+        userId: 'u1',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 600000),
+      });
+
+      const token = await svc.exchangeAuthCode('test-code', 'expected-state-nonce');
+      expect(token).toBe('signed.u1.token');
+    });
+
+    it('rejects exchange when state is required but not provided', async () => {
+      prisma.authorizationCode.findUnique.mockResolvedValue(
+        codeRow({ sessionId: 'sess-1', state: 'expected-state-nonce' }),
+      );
+      await expect(svc.exchangeAuthCode('test-code')).rejects.toThrow(/OAuth exchange state is required/);
+    });
+
+    it('rejects exchange when state does not match', async () => {
+      prisma.authorizationCode.findUnique.mockResolvedValue(
+        codeRow({ sessionId: 'sess-1', state: 'expected-state-nonce' }),
+      );
+      await expect(svc.exchangeAuthCode('test-code', 'attacker-state')).rejects.toThrow(
+        /Invalid or expired OAuth exchange state/,
+      );
+    });
   });
 
   describe('expired session purge', () => {

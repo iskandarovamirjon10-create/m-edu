@@ -74,6 +74,18 @@ export interface ScheduleGate {
     groupId: string,
     options?: { cameraLocation?: string | null; at?: Date }
   ): Promise<boolean>;
+
+  /**
+   * Optional (LATE parity): the same evaluation as validateGroupTime but
+   * returning the LATE detail too, so face-session rows get the SAME
+   * PRESENT/LATE semantics the camera path applies.
+   */
+  describeGroupTime?(
+    organizationId: string,
+    studentId: string,
+    groupId: string,
+    options?: { cameraLocation?: string | null; at?: Date }
+  ): Promise<{ valid: boolean; isLate: boolean }>;
 }
 
 @Injectable()
@@ -165,10 +177,13 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
       identifiedStudentId: row.identifiedStudentId,
       actorId: row.actorId,
       status: row.status as RecognitionAttemptStatus,
-      confidence: row.confidence ? Number(row.confidence) : null,
-      qualityScore: row.qualityScore ? Number(row.qualityScore) : null,
+      // `0` is a legitimate score (orthogonal embedding / zero quality), so
+      // only null/undefined may be mapped to null. The previous truthiness
+      // check (`row.confidence ? … : null`) silently turned a real 0 into null.
+      confidence: row.confidence !== null && row.confidence !== undefined ? Number(row.confidence) : null,
+      qualityScore: row.qualityScore !== null && row.qualityScore !== undefined ? Number(row.qualityScore) : null,
       livenessResult: row.livenessResult,
-      similarityScore: row.similarityScore ? Number(row.similarityScore) : null,
+      similarityScore: row.similarityScore !== null && row.similarityScore !== undefined ? Number(row.similarityScore) : null,
       processingTimeMs: row.processingTimeMs,
       metadata: row.metadata as Record<string, unknown> | null,
       occurredAt: row.occurredAt,
@@ -233,8 +248,19 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
   }
 
   async countActiveSessions(organizationId: string): Promise<number> {
+    // ACTIVE = any session that has NOT reached a terminal state.
+    // STARTED and IN_PROGRESS both consume the concurrent-session budget;
+    // counting only STARTED let IN_PROGRESS sessions bypass the limit
+    // (they transition to IN_PROGRESS on the first attempt).
+    //
+    // Per the business rule: FINISHED and CANCELLED are the ONLY terminal
+    // states that release budget. ERROR is still counted so a crashed
+    // session cannot silently free a slot while its camera is reconnecting.
     return this.prisma.recognitionSession.count({
-      where: { organizationId, status: 'STARTED' },
+      where: {
+        organizationId,
+        status: { notIn: ['FINISHED', 'CANCELLED'] },
+      },
     });
   }
 
@@ -252,6 +278,7 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
     similarityScore?: number;
     processingTimeMs?: number;
     metadata?: Record<string, unknown>;
+    clientAttemptId?: string | null;
   }): Promise<RecognitionAttemptEntity> {
     const row = await this.prisma.recognitionAttempt.create({
       data: {
@@ -266,9 +293,31 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
         similarityScore: data.similarityScore,
         processingTimeMs: data.processingTimeMs,
         metadata: (data.metadata || {}) as Prisma.InputJsonValue,
+        clientAttemptId: data.clientAttemptId ?? null,
       },
     });
     return this.mapAttemptEntity(row);
+  }
+
+  async updateAttemptOutcome(
+    organizationId: string,
+    attemptId: string,
+    outcome: {
+      attendanceDecision?: string | null;
+      attendanceId?: string | null;
+    },
+  ): Promise<void> {
+    await this.prisma.recognitionAttempt.updateMany({
+      where: { id: attemptId, organizationId },
+      data: {
+        ...(outcome.attendanceDecision !== undefined && {
+          attendanceDecision: outcome.attendanceDecision,
+        }),
+        ...(outcome.attendanceId !== undefined && {
+          attendanceId: outcome.attendanceId,
+        }),
+      },
+    });
   }
 
   async listAttempts(organizationId: string, filters: AttemptListFilters): Promise<{ items: RecognitionAttemptEntity[]; total: number }> {
@@ -305,15 +354,66 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
     };
   }
 
-  async getSessionAttempts(organizationId: string, sessionId: string): Promise<RecognitionAttemptEntity[]> {
-    const rows = await this.prisma.recognitionAttempt.findMany({
-      where: { organizationId, sessionId },
-      orderBy: { occurredAt: 'desc' },
-    });
-    return rows.map(r => this.mapAttemptEntity(r));
+  async getSessionAttempts(
+    organizationId: string,
+    sessionId: string,
+    pagination?: { page?: number | string; limit?: number | string },
+  ): Promise<{ items: RecognitionAttemptEntity[]; total: number }> {
+    const page = Math.max(1, Number(pagination?.page) || 1);
+    const limit = Math.min(Math.max(1, Number(pagination?.limit) || 20), 100);
+    const skip = (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
+      this.prisma.recognitionAttempt.findMany({
+        where: { organizationId, sessionId },
+        orderBy: { occurredAt: 'desc' },
+        take: limit,
+        skip,
+      }),
+      this.prisma.recognitionAttempt.count({
+        where: { organizationId, sessionId },
+      }),
+    ]);
+
+    return {
+      items: rows.map(r => this.mapAttemptEntity(r)),
+      total,
+    };
   }
 
   // ---- Attendance ----
+
+  /**
+   * P2 (LATE parity): the camera path marks LATE when a student arrives
+   * beyond the schedule grace window, while the face-session path used to
+   * hardcode PRESENT for every row. Both now ask the SAME engine.
+   *
+   * Fails open to PRESENT: a gate hiccup must never block recording an
+   * attendance the schedule gate has already approved.
+   */
+  private async resolveAttendanceStatus(
+    organizationId: string,
+    studentId: string,
+    groupId: string,
+  ): Promise<AttendanceStatus> {
+    if (typeof this.scheduleGate?.describeGroupTime !== 'function') {
+      return AttendanceStatus.PRESENT;
+    }
+
+    try {
+      const evaluation = await this.scheduleGate.describeGroupTime(
+        organizationId,
+        studentId,
+        groupId,
+      );
+
+      return evaluation?.valid && evaluation.isLate
+        ? AttendanceStatus.LATE
+        : AttendanceStatus.PRESENT;
+    } catch {
+      return AttendanceStatus.PRESENT;
+    }
+  }
 
   async createAttendance(data: {
     organizationId: string;
@@ -326,6 +426,11 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
     metadata?: Record<string, unknown>;
   }): Promise<AttendanceRecordEntity> {
     const attendanceDate = await this.getOrganizationLocalDate(data.organizationId);
+    const status = await this.resolveAttendanceStatus(
+      data.organizationId,
+      data.studentId,
+      data.groupId,
+    );
 
     let row: Attendance;
     try {
@@ -336,7 +441,7 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
           groupId: data.groupId,
           lessonId: data.lessonId ?? null,
           date: attendanceDate,
-          status: AttendanceStatus.PRESENT,
+          status,
           source: 'FACE',
           recognitionAttemptId: data.recognitionAttemptId,
           note: JSON.stringify({
@@ -419,6 +524,35 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
     const where: Record<string, unknown> = { organizationId };
     if (filters.studentId) where.studentId = filters.studentId;
     if (filters.groupId) where.groupId = filters.groupId;
+    if (filters.lessonId) where.lessonId = filters.lessonId;
+    if (filters.decision) {
+      // `decision` is the pipeline outcome stored on CameraAttendanceEvent,
+      // NOT a column on Attendance. Resolve matching attendance rows through
+      // the event table so this filter is REAL (never silently ignored),
+      // scoped by the caller's organization for tenant isolation.
+      const eventRows = await this.prisma.cameraAttendanceEvent.findMany({
+        where: {
+          organizationId,
+          decision: filters.decision as string,
+          attendanceId: { not: null },
+        },
+        select: { attendanceId: true },
+        take: 1000,
+      });
+
+      const attendanceIds = [
+        ...new Set(
+          eventRows
+            .map((r) => r.attendanceId)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+
+      if (attendanceIds.length === 0) {
+        return { items: [], total: 0 };
+      }
+      where.id = { in: attendanceIds };
+    }
     if (filters.dateFrom || filters.dateTo) {
       where.date = {};
       if (filters.dateFrom) (where.date as Record<string, Date>).gte = startOfDay(filters.dateFrom);

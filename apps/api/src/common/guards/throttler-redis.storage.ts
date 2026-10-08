@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ThrottlerStorage } from '@nestjs/throttler';
 import { ThrottlerStorageRecord } from '@nestjs/throttler/dist/throttler-storage-record.interface';
 import { Redis } from 'ioredis';
@@ -10,7 +10,38 @@ export class ResilientRedisThrottlerStorage implements ThrottlerStorage {
   private isRedisConnected = false;
   private memoryStorage = new Map<string, { totalHits: number; expiresAt: number }>();
 
-  constructor(redisUrl: string) {
+  /**
+   * Whether the credential-endpoint bucket must REFUSE traffic instead of
+   * degrading to the in-process limiter while Redis is unavailable.
+   *
+   * Previously this decision existed in the code (`isSecurityCritical`) but
+   * could never fire, because only a throttler named `default` was registered
+   * — so the documented fail-closed posture was unreachable. It is now wired
+   * to a `security` throttler and defaults to ON in production (override with
+   * `RATE_LIMIT_FAIL_CLOSED=false`), OFF everywhere else so a missing Redis in
+   * development never turns every login into a 500.
+   */
+  private readonly failClosedSecurity: boolean;
+
+  static readonly MAX_MEMORY_ENTRIES = 10_000;
+
+  private static readonly ATOMIC_SCRIPT = `
+local hits = redis.call('INCR', KEYS[1])
+local ttl = redis.call('PTTL', KEYS[1])
+if ttl == -1 or ttl == -2 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+  ttl = tonumber(ARGV[1])
+end
+return {hits, ttl}
+`;
+
+  constructor(redisUrl: string, options?: { failClosedSecurity?: boolean }) {
+    this.failClosedSecurity =
+      options?.failClosedSecurity ??
+      (process.env.RATE_LIMIT_FAIL_CLOSED !== undefined
+        ? process.env.RATE_LIMIT_FAIL_CLOSED === 'true'
+        : process.env.NODE_ENV === 'production');
+
     this.redis = new Redis(redisUrl, {
       maxRetriesPerRequest: null,
       enableOfflineQueue: false,
@@ -32,26 +63,34 @@ export class ResilientRedisThrottlerStorage implements ThrottlerStorage {
     });
   }
 
-  async increment(key: string, ttl: number, limit: number, blockDuration: number, throttlerName: string): Promise<ThrottlerStorageRecord> {
+  async increment(
+    key: string,
+    ttl: number,
+    limit: number,
+    blockDuration: number,
+    throttlerName: string,
+  ): Promise<ThrottlerStorageRecord> {
+    const isSecurityCritical = throttlerName === 'security' || throttlerName === 'auth';
+    // Only the credential bucket is allowed to take the API down; everything
+    // else degrades to the bounded in-process limiter.
+    const mustFailClosed = isSecurityCritical && this.failClosedSecurity;
+
     if (this.isRedisConnected) {
+      const fullKey = `throttler:${throttlerName}:${key}`;
       try {
-        const fullKey = `throttler:${throttlerName}:${key}`;
-        const multi = this.redis.multi();
-        multi.incr(fullKey);
-        multi.pttl(fullKey);
-        const results = await multi.exec();
-        
-        if (!results) {
-            throw new Error('Redis multi failed');
+        const results = await (this.redis.eval as any)(
+          ResilientRedisThrottlerStorage.ATOMIC_SCRIPT,
+          1,
+          fullKey,
+          ttl,
+        );
+
+        if (!results || !Array.isArray(results) || results.length !== 2) {
+          throw new Error('Redis eval returned invalid response');
         }
 
-        const hits = results[0][1] as number;
-        let timeToLive = results[1][1] as number;
-
-        if (timeToLive === -1 || timeToLive === -2) {
-          await this.redis.pexpire(fullKey, ttl);
-          timeToLive = ttl;
-        }
+        const hits = Number(results[0]);
+        const timeToLive = Number(results[1]);
 
         return {
           totalHits: hits,
@@ -59,21 +98,35 @@ export class ResilientRedisThrottlerStorage implements ThrottlerStorage {
           isBlocked: hits > limit,
           timeToBlockExpire: hits > limit ? Math.ceil(blockDuration / 1000) : 0,
         };
-      } catch (err) {
-        this.logger.warn(`Redis throttling failed, falling back to memory: ${err.message}`);
+      } catch (err: unknown) {
         this.isRedisConnected = false;
+        const message = err instanceof Error ? err.message : String(err);
+        if (mustFailClosed) {
+          this.logger.error(`Redis throttler failed on security endpoint: ${message}`);
+          throw new InternalServerErrorException('Security infrastructure unavailable. Please try again later.');
+        }
+        this.logger.warn(`Redis throttling failed, falling back to memory: ${message}`);
       }
+    }
+
+    if (mustFailClosed) {
+      this.logger.warn('Redis is offline. Security throttler failing closed to protect endpoints.');
+      throw new InternalServerErrorException('Security infrastructure unavailable. Please try again later.');
     }
 
     return this.memoryIncrement(key, ttl, limit, blockDuration, throttlerName);
   }
 
-  static readonly MAX_MEMORY_ENTRIES = 10_000;
-
-  private memoryIncrement(key: string, ttl: number, limit: number, blockDuration: number, throttlerName: string): ThrottlerStorageRecord {
+  private memoryIncrement(
+    key: string,
+    ttl: number,
+    limit: number,
+    blockDuration: number,
+    throttlerName: string,
+  ): ThrottlerStorageRecord {
     const fullKey = `throttler:${throttlerName}:${key}`;
     const now = Date.now();
-    
+
     let record = this.memoryStorage.get(fullKey);
     if (!record || record.expiresAt < now) {
       record = { totalHits: 0, expiresAt: now + ttl };

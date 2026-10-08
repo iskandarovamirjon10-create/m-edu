@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { toDateToInclusive, startOfDay, getOrganizationDate } from '../common/date-range';
+import { canonicalMembershipWhere } from '../common/student-membership';
 import { parsePagination } from '../lib/pagination';
 import { DayOfWeek, LessonStatus, Prisma } from '@prisma/client';
 import { MarkAttendanceDto, UpdateAttendanceDto } from '../common/dto';
@@ -26,9 +27,17 @@ export class AttendanceService {
       where: { id: data.groupId, organizationId },
     });
     if (!group) throw new NotFoundException('Group not found');
+    // A soft-deleted (archived) group must not receive attendance — the same
+    // rule the face/camera pipeline enforces, so both paths agree.
+    if (group.isActive === false) {
+      throw new BadRequestException('Group is inactive and cannot receive attendance');
+    }
 
     const org = await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });
-    const rawDate = new Date(data.date);
+    const rawDate =
+      typeof data.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.date.trim())
+        ? new Date(`${data.date.trim()}T12:00:00.000Z`)
+        : new Date(data.date);
     const date = getOrganizationDate(rawDate, org?.timezone);
 
     // Deduplicate by studentId within the payload — a repeated student would
@@ -42,9 +51,19 @@ export class AttendanceService {
     // The group is already verified to belong to `organizationId`, and
     // memberships are created org-scoped, so this is provably equivalent —
     // but it makes the tenant invariant explicit and self-documenting.
-    const _startOfDay = date;
+    //
+    // The membership rule itself lives in `common/student-membership.ts` so
+    // the manual, face and camera paths can never drift apart again. Note the
+    // org-local window: `joinedAt <= END of the day` is what makes a student
+    // assigned earlier TODAY eligible today (previously `joinedAt <= dayStart`
+    // rejected every same-day assignment with
+    // "Student ... is not enrolled in group ...").
     const enrollments = await this.prisma.studentGroup.findMany({
-      where: { groupId: data.groupId, organizationId, joinedAt: { lte: date }, OR: [{ leftAt: null }, { leftAt: { gte: date } }], student: { status: { notIn: ['PAUSED', 'DROPPED'] } } },
+      where: canonicalMembershipWhere({
+        organizationId,
+        groupId: data.groupId,
+        dayStart: date,
+      }),
       select: { studentId: true },
     });
     const enrolledStudentIds = new Set(enrollments.map((e) => e.studentId));
@@ -322,6 +341,7 @@ export class AttendanceService {
     const where: Prisma.AttendanceWhereInput = { organizationId };
 
     if (query.groupId) where.groupId = query.groupId;
+    if (query.lessonId) where.lessonId = query.lessonId;
     // Self-service scoping: the caller (controller) only passes ids it has
     // already authorized; the filter itself is tenant-scoped by organizationId
     // above, so a foreign id can never widen the result set.
@@ -329,6 +349,35 @@ export class AttendanceService {
     // Teacher scoping: attendance rows of the groups this teacher owns.
     if (query.teacherId) where.group = { teacherId: query.teacherId };
     if (query.status) where.status = query.status as Prisma.AttendanceWhereInput['status'];
+    // Pipeline-decision filter: the Attendance row does not carry the
+    // pipeline decision directly — it lives on CameraAttendanceEvent (camera
+    // path) / RecognitionAttempt.attendanceDecision (face path). Resolve the
+    // matching attendance ids through the event table (org-scoped) so the
+    // filter is REAL and never widens the result set across tenants.
+    if (query.decision) {
+      const eventRows = await this.prisma.cameraAttendanceEvent.findMany({
+        where: {
+          organizationId,
+          decision: query.decision,
+          attendanceId: { not: null },
+        },
+        select: { attendanceId: true },
+        take: 1000,
+      });
+
+      const attendanceIds = [
+        ...new Set(
+          eventRows
+            .map((r) => r.attendanceId)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+
+      if (attendanceIds.length === 0) {
+        return { items: [], total: 0, page, limit, totalPages: 0 };
+      }
+      where.id = { in: attendanceIds };
+    }
     if (query.dateFrom || query.dateTo) {
       where.date = {};
       if (query.dateFrom) where.date.gte = startOfDay(query.dateFrom);

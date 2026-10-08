@@ -2,10 +2,9 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateApiKeyDto, RotateApiKeyDto, API_KEY_SCOPES } from './dto/api-key.dto';
 import { randomBytes } from 'crypto';
-import * as bcrypt from 'bcryptjs';
+import { hashPassword } from '../auth/auth.config';
 
 const KEY_PREFIX = 'medu';
-const BCRYPT_ROUNDS = 12;
 
 const API_KEY_SELECT = {
   id: true,
@@ -29,7 +28,7 @@ export class ApiKeysService {
     this.validateScopes(dto.scopes);
 
     const rawKey = `${KEY_PREFIX}_${randomBytes(24).toString('hex')}`;
-    const keyHash = await bcrypt.hash(rawKey, BCRYPT_ROUNDS);
+    const keyHash = await hashPassword(rawKey);
     const keyPrefix = rawKey.substring(0, 11);
 
     const apiKey = await this.prisma.apiKey.create({

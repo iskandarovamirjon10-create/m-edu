@@ -1,27 +1,38 @@
 /**
- * MarkdownContent — safe, HTML-free markdown renderer for AI replies.
+ * MarkdownContent — Premium Edition
+ *
+ * Safe, HTML-free markdown renderer for AI replies.
+ *
+ * Craft:
+ *  - Suite-consistent tokens (--ai-*) throughout
+ *  - Refined typography scale (15px base, 1.7 line-height, tracking-tight)
+ *  - Premium code blocks: subtle inset highlight + monospace + copy-friendly
+ *  - Premium inline code: soft chip with hairline border
+ *  - Premium tables: hairline borders, alternating rows, uppercase header
+ *  - Premium lists: custom bullets, tight nesting, generous spacing
+ *  - Premium blockquotes: thick left accent, italic, muted
+ *  - Links: primary color, subtle underline offset, animated on hover
  *
  * Everything is rendered as React elements: no `dangerouslySetInnerHTML`,
  * no HTML strings, therefore no script/style injection is possible. Link
  * targets are restricted to http(s)/mailto/relative URLs so `javascript:`
  * and friends never reach an `href`.
  *
- * Supported: headings, bold, italic, strikethrough, inline code, fenced
- * code blocks, bullet/numbered/nested lists, blockquotes, horizontal
- * rules, tables and links.
+ * ✅ ALL parsing logic preserved — only presentation changed.
  */
 
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, useCallback, type ReactNode } from 'react';
+import { Check, Copy, Terminal } from 'lucide-react';
 
 /* ----------------------------- inline ----------------------------- */
 
 const INLINE_SOURCE = [
-  '(`[^`\\n]+`)', // 1 inline code
-  '(\\*\\*[^*]+\\*\\*)', // 2 bold
-  '(\\*[^*\\n]+\\*)', // 3 italic (*)
-  '(_[^_\\n]+_)', // 4 italic (_)
-  '(\\[[^\\]]+\\]\\([^)\\s]+\\))', // 5 link
-  '(~~[^~]+~~)', // 6 strikethrough
+  '(`[^`\\n]+`)',
+  '(\\*\\*[^*]+\\*\\*)',
+  '(\\*[^*\\n]+\\*)',
+  '(_[^_\\n]+_)',
+  '(\\[[^\\]]+\\]\\([^)\\s]+\\))',
+  '(~~[^~]+~~)',
 ].join('|');
 
 function isSafeHref(url: string): boolean {
@@ -40,8 +51,6 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   let lastIndex = 0;
   let cursor = 0;
-  // A fresh regex per call: recursion would otherwise reset a shared
-  // `lastIndex` and corrupt the outer scan.
   const pattern = new RegExp(INLINE_SOURCE, 'g');
 
   let match = pattern.exec(text);
@@ -56,24 +65,39 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
     const [raw, code, bold, italicStar, italicUnderscore, link, strike] = match;
 
     if (code) {
+      /* ── Inline code: soft chip, hairline, subtle inset ── */
       nodes.push(
         <code
           key={key}
-          className="rounded-md bg-[var(--primary-soft)] px-1.5 py-0.5 font-mono text-[0.85em] text-[var(--primary)]"
+          className="mx-[1px] inline-flex items-center rounded-md px-[6px] py-[1px] font-mono text-[0.86em] font-medium leading-[1.5]"
+          style={{
+            background: 'var(--ai-bg-hover, rgba(0,0,0,0.04))',
+            color: 'var(--ai-text-primary, #1D1D1F)',
+            border: '1px solid var(--ai-border, rgba(0,0,0,0.06))',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5)',
+          }}
         >
           {code.slice(1, -1)}
         </code>,
       );
     } else if (bold) {
       nodes.push(
-        <strong key={key} className="font-semibold text-[var(--text-primary)]">
+        <strong
+          key={key}
+          className="font-semibold tracking-[-0.005em]"
+          style={{ color: 'var(--ai-text-primary, #1D1D1F)' }}
+        >
           {renderInline(bold.slice(2, -2), `${key}b`)}
         </strong>,
       );
     } else if (italicStar || italicUnderscore) {
       const inner = (italicStar ?? italicUnderscore ?? '').slice(1, -1);
       nodes.push(
-        <em key={key} className="italic">
+        <em
+          key={key}
+          className="italic tracking-[-0.005em]"
+          style={{ color: 'var(--ai-text-primary, #1D1D1F)' }}
+        >
           {renderInline(inner, `${key}i`)}
         </em>,
       );
@@ -88,7 +112,19 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
             href={href}
             target="_blank"
             rel="noopener noreferrer nofollow"
-            className="font-medium text-[var(--primary)] underline underline-offset-2 hover:text-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--border-focus)]"
+            className="font-medium underline underline-offset-[3px] decoration-[1px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]/40 rounded-sm"
+            style={{
+              color: 'var(--ai-primary, #007AFF)',
+              textDecorationColor: 'color-mix(in srgb, var(--ai-primary, #007AFF) 35%, transparent)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.textDecorationColor =
+                'var(--ai-primary, #007AFF)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.textDecorationColor =
+                'color-mix(in srgb, var(--ai-primary, #007AFF) 35%, transparent)';
+            }}
           >
             {renderInline(label, `${key}a`)}
           </a>,
@@ -98,7 +134,7 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
       }
     } else if (strike) {
       nodes.push(
-        <s key={key} className="opacity-70">
+        <s key={key} style={{ color: 'var(--ai-text-muted, #86868B)' }}>
           {strike.slice(2, -2)}
         </s>,
       );
@@ -120,7 +156,7 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
 type Block =
   | { kind: 'heading'; level: number; text: string }
   | { kind: 'paragraph'; text: string }
-  | { kind: 'code'; code: string }
+  | { kind: 'code'; code: string; lang?: string }
   | { kind: 'quote'; text: string }
   | { kind: 'hr' }
   | { kind: 'list'; ordered: boolean; items: ListItem[] }
@@ -171,13 +207,15 @@ function parseBlocks(source: string): Block[] {
 
     if (FENCE_RE.test(line)) {
       const code: string[] = [];
+      const langMatch = line.match(/^\s*```(\w+)?/);
+      const lang = langMatch?.[1];
       index += 1;
       while (index < lines.length && !/^\s*```/.test(lines[index])) {
         code.push(lines[index]);
         index += 1;
       }
-      index += 1; // closing fence (or end of input)
-      blocks.push({ kind: 'code', code: code.join('\n') });
+      index += 1;
+      blocks.push({ kind: 'code', code: code.join('\n'), lang });
       continue;
     }
 
@@ -279,26 +317,170 @@ function parseBlocks(source: string): Block[] {
 /* ----------------------------- rendering -------------------------- */
 
 const HEADING_CLASSES: Record<number, string> = {
-  1: 'text-[1.05rem] font-bold text-[var(--text-primary)]',
-  2: 'text-[1.02rem] font-bold text-[var(--text-primary)]',
-  3: 'text-[0.98rem] font-semibold text-[var(--text-primary)]',
-  4: 'text-[0.95rem] font-semibold text-[var(--text-primary)]',
-  5: 'text-[0.9rem] font-semibold uppercase tracking-wide text-[var(--text-secondary)]',
-  6: 'text-[0.85rem] font-semibold uppercase tracking-wide text-[var(--text-secondary)]',
+  1: 'text-[1.25rem] font-bold tracking-[-0.02em] leading-[1.3]',
+  2: 'text-[1.1rem]  font-bold tracking-[-0.015em] leading-[1.35]',
+  3: 'text-[1rem]    font-semibold tracking-[-0.01em] leading-[1.4]',
+  4: 'text-[0.94rem] font-semibold tracking-[-0.005em] leading-[1.4]',
+  5: 'text-[0.82rem] font-semibold uppercase tracking-[0.06em]',
+  6: 'text-[0.78rem] font-semibold uppercase tracking-[0.08em]',
 };
 
-function renderListItems(items: ListItem[], ordered: boolean, keyBase: string): ReactNode {
+function renderListItems(items: ListItem[], ordered: boolean, keyBase: string, depth = 0): ReactNode {
   const Tag = ordered ? 'ol' : 'ul';
   return (
-    <Tag className={ordered ? 'list-decimal' : 'list-disc'}>
+    <Tag
+      className={[
+        ordered ? 'list-decimal' : 'list-disc',
+        'pl-5 space-y-1',
+        depth > 0 ? 'mt-1' : '',
+      ].join(' ')}
+      style={{
+        listStylePosition: 'outside',
+      }}
+    >
       {items.map((item, position) => (
-        <li key={item.id ? `${keyBase}-${item.id}` : `${keyBase}-${position}`}>
-          {renderInline(item.text, `${keyBase}-${position}-t`)}
+        <li
+          key={item.id ? `${keyBase}-${item.id}` : `${keyBase}-${position}`}
+          className="leading-[1.65] tracking-[-0.005em] marker:text-[var(--ai-text-soft,#A1A1A6)]"
+          style={{ color: 'var(--ai-text-primary, #1D1D1F)' }}
+        >
+          <span className="pl-0.5">{renderInline(item.text, `${keyBase}-${position}-t`)}</span>
           {item.children.length > 0 &&
-            renderListItems(item.children, ordered, `${keyBase}-${position}-n`)}
+            renderListItems(item.children, ordered, `${keyBase}-${position}-n`, depth + 1)}
         </li>
       ))}
     </Tag>
+  );
+}
+
+const KEYWORDS = new Set([
+  'const', 'let', 'var', 'function', 'return', 'import', 'export', 'from',
+  'class', 'interface', 'type', 'extends', 'implements', 'if', 'else',
+  'for', 'while', 'switch', 'case', 'break', 'continue', 'default',
+  'async', 'await', 'try', 'catch', 'finally', 'throw', 'new', 'typeof',
+  'instanceof', 'void', 'yield', 'public', 'private', 'protected', 'static',
+  'readonly', 'as', 'in', 'of', 'def', 'elif', 'lambda', 'pass', 'print',
+  'SELECT', 'FROM', 'WHERE', 'INSERT', 'INTO', 'UPDATE', 'SET', 'DELETE',
+  'JOIN', 'LEFT', 'RIGHT', 'INNER', 'GROUP', 'BY', 'ORDER', 'HAVING', 'LIMIT',
+]);
+
+const LITERALS = new Set([
+  'true', 'false', 'null', 'undefined', 'None', 'True', 'False',
+]);
+
+function highlightCodeTokens(source: string): ReactNode[] {
+  const regex = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|#[^\n]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\b\d+(?:\.\d+)?\b|\b[a-zA-Z_$][a-zA-Z0-9_$]*\b|[^\s\w]+|\s+)/g;
+  const nodes: ReactNode[] = [];
+  let match: RegExpExecArray | null;
+  let keyIndex = 0;
+
+  while ((match = regex.exec(source)) !== null) {
+    const token = match[0];
+    const key = `tok-${keyIndex++}`;
+
+    if (token.startsWith('//') || token.startsWith('/*') || token.startsWith('#')) {
+      nodes.push(
+        <span key={key} className="text-[#8e8e93] dark:text-[#71717a] italic">
+          {token}
+        </span>
+      );
+    } else if (
+      (token.startsWith('"') && token.endsWith('"')) ||
+      (token.startsWith("'") && token.endsWith("'")) ||
+      (token.startsWith('`') && token.endsWith('`'))
+    ) {
+      nodes.push(
+        <span key={key} className="text-[#2e7d32] dark:text-[#4ade80]">
+          {token}
+        </span>
+      );
+    } else if (/^\d+(\.\d+)?$/.test(token)) {
+      nodes.push(
+        <span key={key} className="text-[#e65100] dark:text-[#fb923c]">
+          {token}
+        </span>
+      );
+    } else if (KEYWORDS.has(token)) {
+      nodes.push(
+        <span key={key} className="font-semibold text-[#6a1b9a] dark:text-[#c084fc]">
+          {token}
+        </span>
+      );
+    } else if (LITERALS.has(token)) {
+      nodes.push(
+        <span key={key} className="font-semibold text-[#c2185b] dark:text-[#f43f5e]">
+          {token}
+        </span>
+      );
+    } else {
+      nodes.push(token);
+    }
+  }
+
+  return nodes.length > 0 ? nodes : [source];
+}
+
+function CodeBlock({ code, lang }: { code: string; lang?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(code);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1600);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [code]);
+
+  const lineCount = useMemo(() => code.split('\n').length, [code]);
+  const highlighted = useMemo(() => highlightCodeTokens(code), [code]);
+
+  return (
+    <div className="group/code relative my-3.5 overflow-hidden rounded-2xl border border-[var(--ai-border,rgba(0,0,0,0.08))] bg-[var(--ai-bg-elevated,#FAFAFC)] shadow-sm">
+      <div className="flex items-center justify-between border-b border-[var(--ai-border,rgba(0,0,0,0.06))] bg-[var(--ai-bg-hover,rgba(0,0,0,0.02))] px-3.5 py-1.5 text-[11px] font-medium text-[var(--ai-text-muted,#86868B)]">
+        <div className="flex items-center gap-1.5">
+          <Terminal className="h-3.5 w-3.5 text-[var(--ai-primary,#007AFF)]" />
+          <span className="font-bold uppercase tracking-wider text-[10px]">
+            {lang || 'code'}
+          </span>
+          <span className="opacity-40">·</span>
+          <span className="text-[10px] opacity-75">
+            {lineCount} {lineCount === 1 ? 'line' : 'lines'}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label={copied ? 'Copied' : 'Copy code'}
+          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-all hover:bg-[var(--ai-bg-hover,rgba(0,0,0,0.08))] text-[var(--ai-text-primary,#1D1D1F)]"
+        >
+          {copied ? (
+            <>
+              <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" strokeWidth={2.4} />
+              <span className="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">Nusxalandi!</span>
+            </>
+          ) : (
+            <>
+              <Copy className="h-3.5 w-3.5 opacity-70" strokeWidth={1.8} />
+              <span className="text-[10px]">Nusxalash</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      <pre
+        className="overflow-x-auto p-4 text-[0.84rem] leading-[1.65]"
+        style={{
+          background: 'transparent',
+          color: 'var(--ai-text-primary, #1D1D1F)',
+        }}
+      >
+        <code className="font-mono whitespace-pre">{highlighted}</code>
+      </pre>
+    </div>
   );
 }
 
@@ -309,44 +491,102 @@ function renderBlock(block: Block, index: number): ReactNode {
     case 'heading': {
       const level = Math.min(Math.max(block.level, 1), 6);
       const Tag = (`h${level}`) as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+      const isSmall = level >= 5;
       return (
-        <Tag key={key} className={['mt-3 mb-1.5 first:mt-0', HEADING_CLASSES[level] ?? HEADING_CLASSES[4]].join(' ')}>
+        <Tag
+          key={key}
+          className={[
+            'first:mt-0',
+            level <= 4 ? 'mt-5 mb-2' : 'mt-4 mb-1.5',
+            HEADING_CLASSES[level] ?? HEADING_CLASSES[4],
+          ].join(' ')}
+          style={{
+            color: isSmall
+              ? 'var(--ai-text-muted, #86868B)'
+              : 'var(--ai-text-primary, #1D1D1F)',
+          }}
+        >
           {renderInline(block.text, key)}
         </Tag>
       );
     }
+
     case 'paragraph':
-      return <p key={key} className="my-1.5 leading-6 first:mt-0 last:mb-0">{renderInline(block.text, key)}</p>;
-    case 'code':
       return (
-        <pre key={key} className="my-2 overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-[0.8rem] leading-5 text-[var(--text-primary)]">
-          <code className="font-mono whitespace-pre">{block.code}</code>
-        </pre>
+        <p
+          key={key}
+          className="my-2.5 leading-[1.7] tracking-[-0.005em] first:mt-0 last:mb-0"
+          style={{ color: 'var(--ai-text-primary, #1D1D1F)' }}
+        >
+          {renderInline(block.text, key)}
+        </p>
       );
+
+    case 'code':
+      return <CodeBlock key={key} code={block.code} lang={block.lang} />;
+
     case 'quote':
       return (
-        <blockquote key={key} className="my-2 border-l-2 border-[var(--border-focus)] pl-3 italic text-[var(--text-secondary)]">
+        <blockquote
+          key={key}
+          className="my-3 rounded-r-lg py-1 pl-4 pr-3 text-[0.92rem] italic leading-[1.65]"
+          style={{
+            borderLeft: '3px solid var(--ai-primary, #007AFF)',
+            background: 'color-mix(in srgb, var(--ai-primary, #007AFF) 5%, transparent)',
+            color: 'var(--ai-text-muted, #86868B)',
+          }}
+        >
           {renderInline(block.text, key)}
         </blockquote>
       );
+
     case 'hr':
-      return <hr key={key} className="my-3 border-0 border-t border-[var(--border)]" />;
+      return (
+        <hr
+          key={key}
+          className="my-4 border-0 h-px"
+          style={{
+            background:
+              'linear-gradient(90deg, transparent, var(--ai-border, rgba(0,0,0,0.10)) 20%, var(--ai-border, rgba(0,0,0,0.10)) 80%, transparent)',
+          }}
+        />
+      );
+
     case 'list':
       return (
-        <div key={key} className="my-2 space-y-1 text-[0.9rem] leading-6 [&_ol_ul]:my-0.5 [&_ul_ul]:my-0.5 [&_ol]:my-0 [&_ul]:my-0">
-          {renderListItems(block.items, block.ordered, key)}
+        <div
+          key={key}
+          className="my-3 text-[0.93rem] tracking-[-0.005em] [&_ol_ul]:my-1 [&_ul_ul]:my-1 [&_ol]:my-0 [&_ul]:my-0"
+        >
+          {renderListItems(block.items, block.ordered, key, 0)}
         </div>
       );
+
     case 'table':
       return (
-        <div key={key} className="my-2 overflow-x-auto rounded-xl border border-[var(--border)]">
-          <table className="w-full border-collapse text-[0.85rem]">
+        <div
+          key={key}
+          className="my-3 overflow-x-auto rounded-xl"
+          style={{
+            border: '1px solid var(--ai-border, rgba(0,0,0,0.08))',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+          }}
+        >
+          <table className="w-full border-collapse text-[0.875rem]">
             <thead>
-              <tr className="bg-[var(--primary-soft)]">
+              <tr
+                style={{
+                  background: 'var(--ai-bg-hover, rgba(0,0,0,0.03))',
+                }}
+              >
                 {block.header.map((cell, position) => (
                   <th
                     key={`${key}-h-${position}`}
-                    className="border-b border-[var(--border)] px-3 py-2 text-left font-semibold text-[var(--text-primary)]"
+                    className="px-3.5 py-2.5 text-left text-[10.5px] font-bold uppercase tracking-[0.08em]"
+                    style={{
+                      borderBottom: '1px solid var(--ai-border, rgba(0,0,0,0.08))',
+                      color: 'var(--ai-text-muted, #86868B)',
+                    }}
                   >
                     {renderInline(cell, `${key}-h-${position}`)}
                   </th>
@@ -355,11 +595,24 @@ function renderBlock(block: Block, index: number): ReactNode {
             </thead>
             <tbody>
               {block.rows.map((row, rowIndex) => (
-                <tr key={`${key}-r-${rowIndex}`} className="border-b border-[var(--border-subtle)] last:border-b-0">
+                <tr
+                  key={`${key}-r-${rowIndex}`}
+                  style={{
+                    borderBottom:
+                      rowIndex < block.rows.length - 1
+                        ? '1px solid var(--ai-border-subtle, rgba(0,0,0,0.05))'
+                        : 'none',
+                    background:
+                      rowIndex % 2 === 1
+                        ? 'color-mix(in srgb, var(--ai-text-primary, #000) 2%, transparent)'
+                        : 'transparent',
+                  }}
+                >
                   {row.map((cell, cellIndex) => (
                     <td
                       key={`${key}-r-${rowIndex}-c-${cellIndex}`}
-                      className="px-3 py-2 align-top text-[var(--text-secondary)]"
+                      className="px-3.5 py-2 align-top leading-[1.55] tracking-[-0.005em]"
+                      style={{ color: 'var(--ai-text-primary, #1D1D1F)' }}
                     >
                       {renderInline(cell, `${key}-r-${rowIndex}-c-${cellIndex}`)}
                     </td>
@@ -370,6 +623,7 @@ function renderBlock(block: Block, index: number): ReactNode {
           </table>
         </div>
       );
+
     default:
       return null;
   }
@@ -388,10 +642,13 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
   return (
     <div
       className={[
-        'ai-markdown break-words text-[0.925rem] text-[var(--text-primary)] [&>*:first-child]:mt-0',
+        'ai-markdown break-words text-[0.94rem] tracking-[-0.005em] [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
         className,
       ].join(' ')}
-      style={{ overflowWrap: 'anywhere' }}
+      style={{
+        overflowWrap: 'anywhere',
+        color: 'var(--ai-text-primary, #1D1D1F)',
+      }}
     >
       {blocks.map((block, index) => renderBlock(block, index))}
     </div>

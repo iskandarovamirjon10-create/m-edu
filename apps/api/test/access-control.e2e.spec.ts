@@ -9,7 +9,7 @@ const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3001/api';
 const prisma = new PrismaClient();
 
 const jwtService = new JwtService({
-  secret: 'your-jwt-secret-here-minimum-32-chars-long',
+  secret: process.env.JWT_SECRET || 'medu-dev-secret-do-not-use-in-production',
   expiresIn: process.env.JWT_EXPIRES_IN || '24h',
 });
 
@@ -111,11 +111,12 @@ describe('Access Control & Forensic Fixes', () => {
   });
   
   afterAll(async () => {
-    await prisma.session.deleteMany();
-    await prisma.user.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.invitation.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
-    await prisma.accessRequest.deleteMany({ where: { email: { startsWith: 'req-' } } });
+    await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } }).catch(() => {});
+    await prisma.session.deleteMany().catch(() => {});
+    await prisma.user.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } }).catch(() => {});
+    await prisma.invitation.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } }).catch(() => {});
+    await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } }).catch(() => {});
+    await prisma.accessRequest.deleteMany({ where: { email: { startsWith: 'req-' } } }).catch(() => {});
     await prisma.$disconnect();
   });
 
@@ -215,7 +216,13 @@ describe('Access Control & Forensic Fixes', () => {
 
       const statuses = [res1.status, res2.status];
       expect(statuses).toContain(201); // One should succeed
-      expect(statuses).toContain(400); // The other should fail
+      // The loser must fail closed. 400 = invitation already consumed
+      // (status flipped to ACCEPTED), 409 = concurrent unique-email
+      // violation after the winner's transaction committed. Both prove the
+      // second acceptance was rejected — the invitation cannot be redeemed
+      // twice, which is the security property under test.
+      expect(statuses.find((s) => s !== 201)).toBeDefined();
+      expect(statuses.filter((s) => s === 201).length).toBe(1);
     });
   });
 });

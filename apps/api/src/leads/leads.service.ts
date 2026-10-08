@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
+import { hashPassword } from '../auth/auth.config';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
@@ -115,7 +115,7 @@ export class LeadsService {
     const existing = await this.prisma.user.findFirst({ where: { email, organizationId } });
     if (existing) throw new BadRequestException('Email already registered');
 
-    const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : null;
+    const passwordHash = data.password ? await hashPassword(data.password) : null;
 
     try {
       return await this.prisma.$transaction(async (tx) => {

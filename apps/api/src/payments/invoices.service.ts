@@ -537,7 +537,7 @@ export class InvoicesService {
 
       const fresh = await tx.invoice.findUniqueOrThrow({ where: { id: invoice.id } });
       const netPaidMinor = toMinor(fresh.paidAmount) - toMinor(fresh.refundedAmount ?? 0);
-      const newStatus: PaymentStatus = netPaidMinor >= toMinor(fresh.total) ? 'PAID' : 'PARTIALLY_PAID';
+      const newStatus: InvoiceStatus = netPaidMinor >= toMinor(fresh.total) ? 'PAID' : 'PARTIALLY_PAID';
       await tx.invoice.update({
         where: { id: invoice.id },
         data: {

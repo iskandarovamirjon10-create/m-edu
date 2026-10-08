@@ -39,6 +39,7 @@ export type AiStatus =
   | 'idle'
   | 'sending'
   | 'thinking'
+  | 'streaming'
   | 'confirming'
   | 'awaiting_confirmation';
 
@@ -161,7 +162,9 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
   const [status, setStatus] = useState<AiStatus>('idle');
   const [error, setError] = useState<AiErrorInfo | null>(null);
   const [lastPrompt, setLastPrompt] = useState('');
+  const [conversationId, setConversationId] = useState<string | undefined>(options.conversationId);
 
+  const conversationIdRef = useRef<string | undefined>(options.conversationId);
   const historyRef = useRef<AiWireMessage[]>(initial.history);
   const messagesRef = useRef<AiUiMessage[]>(initial.messages);
   const statusRef = useRef<AiStatus>('idle');
@@ -171,6 +174,17 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (options.conversationId !== undefined) {
+      setConversationId(options.conversationId);
+      conversationIdRef.current = options.conversationId;
+    }
+  }, [options.conversationId]);
 
   /** Persist on every visible change; an empty conversation clears the key. */
   useEffect(() => {
@@ -210,6 +224,8 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
       abortRef.current = controller;
       cancelReasonRef.current = 'none';
 
+      const activeConvId = conversationIdRef.current || options.conversationId;
+
       try {
         let response;
         if (AI_FLAGS.streaming) {
@@ -225,8 +241,11 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
           
           const streamRes = await aiChatStream(wire, {
             signal: controller.signal,
-            conversationId: options.conversationId,
+            conversationId: activeConvId,
             onDelta: (chunk) => {
+              if (statusRef.current !== 'streaming') {
+                updateStatus('streaming');
+              }
               setMessages(prev => {
                 const newMessages = [...prev];
                 const lastIdx = newMessages.length - 1;
@@ -241,6 +260,11 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
             }
           });
           
+          if (streamRes.conversationId) {
+            setConversationId(streamRes.conversationId);
+            conversationIdRef.current = streamRes.conversationId;
+          }
+
           setMessages(prev => {
             const newMessages = [...prev];
             const lastIdx = newMessages.length - 1;
@@ -261,7 +285,11 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
           updateStatus('idle');
           return;
         } else {
-          response = await aiChat(wire, { signal: controller.signal, conversationId: options.conversationId });
+          response = await aiChat(wire, { signal: controller.signal, conversationId: activeConvId });
+          if ((response as any)?.conversationId) {
+            setConversationId((response as any).conversationId);
+            conversationIdRef.current = (response as any).conversationId;
+          }
         }
         if (controller.signal.aborted) return;
 
@@ -474,6 +502,8 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
     setMessages([]);
     setError(null);
     setLastPrompt('');
+    setConversationId(undefined);
+    conversationIdRef.current = undefined;
     updateStatus('idle');
     if (typeof window !== 'undefined') {
       try {
@@ -484,7 +514,7 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
     }
   }, [updateStatus]);
 
-  const hydrate = useCallback((newMessages: AiUiMessage[], newHistory: AiWireMessage[] = []) => {
+  const hydrate = useCallback((newMessages: AiUiMessage[], newHistory: AiWireMessage[] = [], newConversationId?: string) => {
     cancelReasonRef.current = 'reset';
     abortRef.current?.abort();
     abortRef.current = null;
@@ -493,10 +523,14 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
     setMessages(newMessages);
     setError(null);
     setLastPrompt('');
+    if (newConversationId !== undefined) {
+      setConversationId(newConversationId);
+      conversationIdRef.current = newConversationId;
+    }
     updateStatus('idle');
   }, [updateStatus]);
 
-  const busy = status === 'sending' || status === 'thinking' || status === 'confirming';
+  const busy = status === 'sending' || status === 'thinking' || status === 'streaming' || status === 'confirming';
 
   return {
     messages,
@@ -505,6 +539,8 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
     busy,
     canSend: status === 'idle',
     lastPrompt,
+    conversationId,
+    setConversationId,
     send,
     retry,
     stop,

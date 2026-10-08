@@ -1,11 +1,13 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Logger, forwardRef, Inject, Optional } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { hashPassword } from '../auth/auth.config';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePagination } from '../lib/pagination';
 import { Prisma, Role } from '@prisma/client';
 import { CreateUserDto, UpdateUserDto, UpdateUserSettingsDto } from '../common/dto';
 import { CLOCK_PATTERN } from '../notifications/quiet-hours';
 import { UserQuery } from '../common/dto/query';
+import { SyncGateway } from '../auth/sync.gateway';
 
 /**
  * Service for managing user accounts and RBAC access across multi-tenant environments.
@@ -14,7 +16,10 @@ import { UserQuery } from '../common/dto/query';
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @Inject(forwardRef(() => SyncGateway)) private readonly syncGateway?: SyncGateway,
+  ) {}
 
   /**
    * List all users within an organization with pagination and filters.
@@ -105,7 +110,7 @@ export class UsersService {
     const existing = await this.prisma.user.findFirst({ where: { email: data.email, organizationId } });
     if (existing) throw new BadRequestException('Email already registered');
 
-    const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : null;
+    const passwordHash = data.password ? await hashPassword(data.password) : null;
 
     try {
       const user = await this.prisma.user.create({
@@ -237,7 +242,7 @@ export class UsersService {
     const valid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!valid) throw new BadRequestException('Current password is incorrect');
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await hashPassword(newPassword);
     
     await this.prisma.$transaction(async (tx) => {
       await tx.user.updateMany({
@@ -254,6 +259,7 @@ export class UsersService {
       });
     });
     this.logger.log(`Password changed for user ${userId}`);
+    this.syncGateway?.emitSessionRevoked(userId, null, 'password_changed', currentSessionId || undefined);
     return { message: 'Password changed successfully' };
   }
 
@@ -287,9 +293,15 @@ export class UsersService {
 
     const existing = await this.prisma.userSettings.findUnique({ where: { userId: target.id } });
     if (!existing) {
-      return this.prisma.userSettings.create({ data: { userId: target.id, ...data } });
+      return this.prisma.userSettings.create({ data: { userId: target.id, ...data } }).then(async (updated) => {
+        this.syncGateway?.emitUserSync(target.id, { type: 'SETTINGS_UPDATED', payload: updated });
+        return updated;
+      });
     }
-    return this.prisma.userSettings.update({ where: { userId: target.id }, data });
+    return this.prisma.userSettings.update({ where: { userId: target.id }, data }).then(async (updated) => {
+      this.syncGateway?.emitUserSync(target.id, { type: 'SETTINGS_UPDATED', payload: updated });
+      return updated;
+    });
   }
 
   /**

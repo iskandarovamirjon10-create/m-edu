@@ -412,4 +412,62 @@ describe('Refresh token: session-type distinction (real PostgreSQL)', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe(userAId);
   });
+
+  // ── 11 ───────────────────────────────────────────────────────────────────
+  it('11. CONCURRENT refresh of one token mints exactly one live session', async () => {
+    const login = await authService.login(userEmail, USER_PASSWORD);
+    const sid = sidOf(login.accessToken);
+
+    // Race three parallel rotations of the SAME session id. Sequential replay
+    // was already covered (test 8); this pins the CONCURRENT case, where a
+    // read-then-revoke implementation would let every caller issue a token.
+    const results = await Promise.allSettled([
+      authService.refreshToken(userAId, sid, 'STUDENT'),
+      authService.refreshToken(userAId, sid, 'STUDENT'),
+      authService.refreshToken(userAId, sid, 'STUDENT'),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(2);
+    for (const r of rejected) {
+      expect(r.reason).toBeInstanceOf(UnauthorizedException);
+    }
+
+    // The spent session is revoked and stayed revoked — no second live session
+    // was minted from the same refresh token.
+    const spent = await prisma.session.findUnique({ where: { id: sid } });
+    expect(spent?.revokedAt).not.toBeNull();
+    expect(spent?.revokedReason).toBe('token_refresh');
+  });
+
+  // ── 12 ───────────────────────────────────────────────────────────────────
+  // ULTRA-DEEP CONCURRENCY STRESS SUITE (1, 2, 10, 50, 100 parallel requests)
+  for (const concurrency of [2, 10, 50, 100]) {
+    it(`12.${concurrency}. CONCURRENT refresh of one token with ${concurrency} parallel requests mints exactly one live session`, async () => {
+      const login = await authService.login(userEmail, USER_PASSWORD);
+      const sid = sidOf(login.accessToken);
+
+      const requests = Array.from({ length: concurrency }, () =>
+        authService.refreshToken(userAId, sid, 'STUDENT'),
+      );
+
+      const results = await Promise.allSettled(requests);
+      const fulfilled = results.filter((r) => r.status === 'fulfilled');
+      const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(concurrency - 1);
+      for (const r of rejected) {
+        expect(r.reason).toBeInstanceOf(UnauthorizedException);
+      }
+
+      const spent = await prisma.session.findUnique({ where: { id: sid } });
+      expect(spent?.revokedAt).not.toBeNull();
+      expect(spent?.revokedReason).toBe('token_refresh');
+    }, 45000);
+  }
 });
+

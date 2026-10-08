@@ -5,7 +5,11 @@
     <link rel="icon" type="image/png" href="/medu-logo.png" />
     <link rel="apple-touch-icon" href="/medu-logo.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover makes env(safe-area-inset-*) report real values on
+         notched iPhones; interactive-widget keeps the Android keyboard from
+         resizing the whole app shell. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="color-scheme" content="light dark" />
 
     <!-- Primary meta -->
     <title>M-EDU — Education Center Management Platform</title>

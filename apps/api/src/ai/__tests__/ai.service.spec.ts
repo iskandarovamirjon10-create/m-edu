@@ -73,7 +73,7 @@ function attachFakeClient(service: AiService) {
 }
 
 function createService(prisma: MockPrisma) {
-  return new AiService(prisma as any, createConfig());
+  return new AiService(prisma as any, createConfig(), { get: vi.fn(), set: vi.fn() } as any);
 }
 
 const ORG = 'org-1';
@@ -184,3 +184,4 @@ describe('AiService', () => {
     });
   });
 });
+

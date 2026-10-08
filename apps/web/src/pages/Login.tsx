@@ -241,7 +241,7 @@ function friendlyMessage(err: unknown, t: TranslateFn): string {
       case 'VALIDATION':
         return err.message || t('login.checkDetails');
       case 'FORBIDDEN':
-        return t('login.noAccess');
+        return err.message || t('login.noAccess');
       default:
         return err.message || t('login.genericError');
     }
@@ -353,7 +353,7 @@ export function LoginPage() {
               className="mt-2 text-[15px] leading-snug tracking-[-0.01em]"
               style={{ color: 'var(--text-secondary)' }}
             >
-              {isParent ? 'Sign in to access your child’s academic and attendance records' : t('login.subtitle')}
+              {isParent ? (t('login.parentSubtitle') || 'Sign in to access your child’s academic and attendance records') : t('login.subtitle')}
             </p>
           </header>
 
@@ -368,7 +368,7 @@ export function LoginPage() {
                   : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
               }`}
             >
-              Staff & Students
+              {t('login.tabStaff') || 'Staff & Students'}
             </button>
             <button
               type="button"
@@ -379,7 +379,7 @@ export function LoginPage() {
                   : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
               }`}
             >
-              Parents
+              {t('login.tabParents') || 'Parents'}
             </button>
           </div>
 
@@ -500,7 +500,7 @@ export function LoginPage() {
                   </>
                 ) : (
                   <>
-                    {isParent ? 'Sign In to Parent Portal' : t('login.continue')}
+                    {isParent ? (t('login.parentContinue') || 'Sign In to Parent Portal') : t('login.continue')}
                     <Arrow />
                   </>
                 )}

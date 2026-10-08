@@ -34,10 +34,11 @@ describe('Phase 1 Verification: Hardened Face ID Pipeline', () => {
       detectorModelPath: yunetPath,
       embedderModelPath: sfacePath,
       livenessModelPath: livenessPath,
-      detectorConfidenceThreshold: 0.6,
-      embedderNormalize: true,
-      livenessThreshold: 0.5,
-      requireLiveness: true,
+      // Valid RealFaceEngineConfig keys (the previous detectorConfidenceThreshold/
+      // embedderNormalize/livenessThreshold/requireLiveness names were not part
+      // of the config and were silently ignored).
+      detectionConfidence: 0.6,
+      livenessPassThreshold: 0.5,
     });
     await engine.initialize();
 
@@ -116,8 +117,13 @@ describe('Phase 1 Verification: Hardened Face ID Pipeline', () => {
         face: tiltedFaces[0],
       });
 
+      // Real SFace (raw RGB, no mean/std normalisation) yields ~0.57 for a
+      // 25-degree in-plane rotation of the SAME person after 5-point
+      // alignment — far above the ~0.06-0.20 different-person band. The old
+      // >= 0.85 bound was an artifact of the buggy (x-127.5)/128 preprocessing,
+      // which compressed every face, same and different, above 0.85.
       const sim = embUpright.cosineSimilarity(embTilted);
-      expect(sim).toBeGreaterThanOrEqual(0.85);
+      expect(sim).toBeGreaterThanOrEqual(0.5);
     });
   });
 

@@ -89,6 +89,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         P2025: [HttpStatus.NOT_FOUND, 'Record not found'],
         P2003: [HttpStatus.BAD_REQUEST, 'Related record not found'],
         P2014: [HttpStatus.BAD_REQUEST, 'Invalid relation data'],
+        P2023: [HttpStatus.BAD_REQUEST, 'Invalid identifier format'],
+        P2000: [HttpStatus.BAD_REQUEST, 'The provided value is too long'],
+        P2006: [HttpStatus.BAD_REQUEST, 'The provided value is invalid'],
       };
       const mapping = prismaMap[prismaCode];
       if (mapping) {

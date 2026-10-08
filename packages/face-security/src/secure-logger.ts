@@ -20,6 +20,15 @@ interface LogEntry {
   error?: string;
 }
 
+/**
+ * Keyword forms (free-form messages) whose adjacent value must be redacted.
+ * A secret interpolated into a plain message — "password hunter2",
+ * "token=abc123", "apikey fp_deadbeef" — never matched the quoted-style
+ * patterns below and leaked straight to stdout before these were added.
+ */
+const SENSITIVE_KEYWORD =
+  '(?:password|passwd|pwd|access[_-]?token|refresh[_-]?token|token|secret|api[_-]?key|apikey|client[_-]?secret|private[_-]?key|authorization)';
+
 /** Patterns that should be redacted from log output */
 const SENSITIVE_PATTERNS = [
   /password[^"]*"[^"]*"/gi,
@@ -30,6 +39,15 @@ const SENSITIVE_PATTERNS = [
   /templateData/gi,
   /face_encoding/gi,
   /biometric/gi,
+  // Authorization: Bearer <token> — the keyword pattern alone would only
+  // redact the word "Bearer" and leave the token visible.
+  /\b(?:authorization|Authorization)\s*[:=]\s*Bearer\s+\S+/gi,
+  // key=value / key: value assignments in free-form text.
+  new RegExp(`\\b${SENSITIVE_KEYWORD}\\b\\s*[:=]\\s*\\S+`, 'gi'),
+  // key value (whitespace) — "password hunter2", "apikey fp_...".
+  // Slightly over-redacts ("token stored"), which we accept: readability is
+  // cheaper than a credential leak.
+  new RegExp(`\\b${SENSITIVE_KEYWORD}\\b\\s+\\S+`, 'gi'),
 ];
 
 function redactSensitiveData(data: unknown): unknown {

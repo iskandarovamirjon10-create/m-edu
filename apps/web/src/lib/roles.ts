@@ -18,3 +18,16 @@ export const STAFF_ROLES: readonly Role[] = [
 export function isStaffRole(role: string | null | undefined): boolean {
   return typeof role === 'string' && (STAFF_ROLES as readonly string[]).includes(role);
 }
+
+/**
+ * Mirrors `PLATFORM_ROLES` in `apps/api/src/auth/authorization.policy.ts`.
+ *
+ * Platform-wide policy rows (the global access-control configuration) are
+ * only writable by these roles — an ORG_ADMIN administers one tenant, not the
+ * registration policy of every other tenant.
+ */
+export const PLATFORM_ROLES: readonly Role[] = ['SUPER_ADMIN', 'PLATFORM_OWNER'];
+
+export function isPlatformRole(role: string | null | undefined): boolean {
+  return typeof role === 'string' && (PLATFORM_ROLES as readonly string[]).includes(role);
+}

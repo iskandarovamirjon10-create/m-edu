@@ -22,7 +22,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 @ApiTags('Import / Export')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ORG_ADMIN, Role.SUPER_ADMIN)
+@Roles(Role.ORG_ADMIN, Role.SUPER_ADMIN, Role.MANAGER)
 @Controller()
 export class ImportExportController {
   constructor(private readonly importExportService: ImportExportService) {}

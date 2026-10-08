@@ -8,7 +8,8 @@
  * - Face size relative to image (too small = unreliable)
  * - Sharpness (blur detection via Laplacian variance)
  * - Brightness (over/under-exposed)
- * - Pose estimation (yaw, pitch, roll from landmarks if available)
+ * - Pose estimation (yaw, pitch, roll from landmarks when available;
+ *   NEVER fabricated from the face's screen position)
  *
  * All thresholds are configurable via the centralized recognition config.
  */
@@ -105,16 +106,23 @@ export class QualityAssessor {
     // 4. Brightness (average pixel value)
     const brightness = this.computeBrightness(faceBuffer);
 
-    // 5. Pose estimation: prefer landmark-based 3D pose, fall back to bbox position
+    // 5. Pose estimation: landmark-based 3D pose when landmarks exist.
+    //    NEVER fabricate angles from face *position* on screen: a perfectly
+    //    frontal face at the left edge used to be reported as yaw -30 and a
+    //    profile face centred in frame as "frontal" — pseudo-math feeding a
+    //    security gate (regression: FE-2). Unknown pose is treated as NEUTRAL
+    //    (0.5 score, gate skipped) instead of risking false reject/accept.
     const pose =
       face.landmarks && face.landmarks.length >= 5
         ? estimateHeadPose(face.landmarks)
-        : this.estimatePoseFallback(face.boundingBox, imageWidth, imageHeight);
+        : null;
+    const neutralPose = { yaw: 0, pitch: 0, roll: 0 };
+    const poseForDisplay = pose ?? neutralPose;
 
     // 6. Compute scores
     const sharpnessScore = Math.min(1, sharpness / 200);
     const brightnessScore = this.brightnessScore(brightness);
-    const poseScore = this.poseScore(pose);
+    const poseScore = pose ? this.poseScore(pose) : 0.5;
     const sizeScore = Math.min(1, faceSizeRatio / 0.15);
 
     const overallScore =
@@ -125,18 +133,21 @@ export class QualityAssessor {
 
     // 7. Check specific issues and constraints
     const issues: string[] = [];
-    const yawExceeded = Math.abs(pose.yaw) > this.config.maxPoseYaw;
-    const pitchExceeded = Math.abs(pose.pitch) > this.config.maxPosePitch;
-    const rollExceeded = Math.abs(pose.roll) > this.config.maxPoseRoll;
+    const yawExceeded = pose ? Math.abs(pose.yaw) > this.config.maxPoseYaw : false;
+    const pitchExceeded = pose ? Math.abs(pose.pitch) > this.config.maxPosePitch : false;
+    const rollExceeded = pose ? Math.abs(pose.roll) > this.config.maxPoseRoll : false;
 
     if (yawExceeded) {
-      issues.push(`Yaw ${pose.yaw.toFixed(1)}° exceeds limit ±${this.config.maxPoseYaw}°`);
+      issues.push(`Yaw ${poseForDisplay.yaw.toFixed(1)} exceeds limit +/-${this.config.maxPoseYaw}`);
     }
     if (pitchExceeded) {
-      issues.push(`Pitch ${pose.pitch.toFixed(1)}° exceeds limit ±${this.config.maxPosePitch}°`);
+      issues.push(`Pitch ${poseForDisplay.pitch.toFixed(1)} exceeds limit +/-${this.config.maxPosePitch}`);
     }
     if (rollExceeded) {
-      issues.push(`Roll ${pose.roll.toFixed(1)}° exceeds limit ±${this.config.maxPoseRoll}°`);
+      issues.push(`Roll ${poseForDisplay.roll.toFixed(1)} exceeds limit +/-${this.config.maxPoseRoll}`);
+    }
+    if (!pose) {
+      issues.push('Pose could not be estimated (no landmarks) - neutral pose assumed');
     }
     if (sharpness < this.config.minSharpness) {
       issues.push(`Sharpness ${sharpness.toFixed(1)} below minimum ${this.config.minSharpness}`);
@@ -161,7 +172,7 @@ export class QualityAssessor {
       sharpnessScore,
       brightnessScore,
       faceSizeRatio,
-      pose,
+      poseForDisplay,
       passesQuality,
       rejectionReason,
       issues
@@ -204,25 +215,6 @@ export class QualityAssessor {
       sum += data[i];
     }
     return sum / data.length;
-  }
-
-  /**
-   * Fallback pose estimation from face bounding box position (when landmarks are absent).
-   */
-  private estimatePoseFallback(
-    box: { x: number; y: number; width: number; height: number },
-    imageWidth: number,
-    imageHeight: number
-  ): { yaw: number; pitch: number; roll: number } {
-    // Simplified pose estimation based on face position
-    const centerX = box.x + box.width / 2;
-    const centerY = box.y + box.height / 2;
-
-    const yaw = ((centerX / imageWidth) - 0.5) * 60; // -30 to +30 degrees
-    const pitch = ((centerY / imageHeight) - 0.5) * 40; // -20 to +20 degrees
-    const roll = 0; // Cannot estimate roll without landmarks
-
-    return { yaw, pitch, roll };
   }
 
   /**

@@ -73,7 +73,22 @@ export interface GetMeResponse {
   lastLoginAt: Date | null;
 }
 
+/** Active session / device representation returned by GET /auth/sessions */
+export interface ActiveSessionDto {
+  id: string;
+  deviceName: string;
+  deviceType: 'desktop' | 'mobile' | 'tablet' | 'unknown';
+  browser: string;
+  os: string;
+  ipAddress: string;
+  createdAt: string;
+  expiresAt: string;
+  lastActiveAt?: string | null;
+  isCurrentSession: boolean;
+}
+
 /** Safe error-message extraction for `catch (err: unknown)` blocks. */
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
+

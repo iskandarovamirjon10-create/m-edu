@@ -15,12 +15,20 @@ describe('format helpers', () => {
     expect(out).toContain('Sep');
   });
 
-  it('formats currency', () => {
-    expect(formatCurrency('120.5')).toBe('$120.50');
-    expect(formatCurrency(1000)).toBe('$1,000.00');
+  it('formats currency in UZS by default', () => {
+    // formatCurrency is UZS-first (uz-UZ locale, 0 fraction digits) — the
+    // previous '$1,200.50' expectation predates the UZS default.
+    expect(formatCurrency('120.5')).toContain('121');
+    expect(formatCurrency('120.5')).toMatch(/so.m/);
+    expect(formatCurrency(1000)).toMatch(/1[^0-9]{1,3}000/);
     expect(formatCurrency(null)).toBe('—');
     expect(formatCurrency('')).toBe('—');
     expect(formatCurrency('abc')).toBe('—');
+  });
+
+  it('formats currency honoring an explicit USD locale', () => {
+    expect(formatCurrency('120.5', { currency: 'USD', locale: 'en-US' })).toBe('$120.50');
+    expect(formatCurrency(1000, { currency: 'USD', locale: 'en-US' })).toBe('$1,000.00');
   });
 
   it('joins names', () => {

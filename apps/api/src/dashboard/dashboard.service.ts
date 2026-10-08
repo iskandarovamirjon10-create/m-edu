@@ -29,6 +29,9 @@ export class DashboardService {
       attendanceStats,
       debt,
       monthlyRevenue,
+      allTimePayments,
+      allTimeRefunds,
+      newLeadsThisMonth,
     ] = await Promise.all([
       this.prisma.student.count({ where: { organizationId } }),
       this.prisma.student.count({ where: { organizationId, status: 'ACTIVE', user: { isActive: true } } }),
@@ -40,7 +43,7 @@ export class DashboardService {
           student: { include: { user: { select: { firstName: true, lastName: true } } } },
         },
         orderBy: { createdAt: 'desc' },
-        take: 5,
+        take: 8,
       }),
       this.prisma.lead.groupBy({
         by: ['stage'],
@@ -48,10 +51,10 @@ export class DashboardService {
         _count: { stage: true },
       }),
       this.prisma.followUp.findMany({
-        where: { organizationId, isCompleted: false, scheduledAt: { gte: now } },
-        include: { lead: { select: { firstName: true, lastName: true } } },
+        where: { organizationId, isCompleted: false },
+        include: { lead: { select: { id: true, firstName: true, lastName: true, phone: true } } },
         orderBy: { scheduledAt: 'asc' },
-        take: 5,
+        take: 8,
       }),
       this.prisma.attendance.groupBy({
         by: ['status'],
@@ -60,15 +63,13 @@ export class DashboardService {
       }),
       this.finance.getDebtAndReceivables(organizationId),
       this.finance.getMonthlyRevenueSeries(organizationId),
-    ]);
-
-    // Compute total paid (all-time) from cash flow service by not restricting dates
-    // Since getCashFlow expects dates, we'll run a quick all-time aggregate here,
-    // but using the exact same logic as cash flow (PAID payments - PROCESSED refunds).
-    const [allTimePayments, allTimeRefunds] = await Promise.all([
       this.prisma.payment.aggregate({ where: { organizationId, status: 'PAID' }, _sum: { amount: true } }),
       this.prisma.refund.aggregate({ where: { organizationId, status: 'PROCESSED' }, _sum: { amount: true } }),
+      this.prisma.lead.count({
+        where: { organizationId, createdAt: { gte: thisMonthStart } },
+      }),
     ]);
+
     const totalPaid = Number(allTimePayments._sum.amount || 0) - Number(allTimeRefunds._sum.amount || 0);
 
     const totalOverdue = debt.overdueDebt;
@@ -76,10 +77,6 @@ export class DashboardService {
 
     const totalLeads = leadStats.reduce((sum, s) => sum + s._count.stage, 0);
     const wonLeads = leadStats.find((s) => s.stage === 'WON')?._count.stage || 0;
-
-    const newLeadsThisMonth = await this.prisma.lead.count({
-      where: { organizationId, createdAt: { gte: thisMonthStart } },
-    });
 
     const conversionRate = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0;
 
@@ -113,6 +110,10 @@ export class DashboardService {
       })),
       upcomingFollowUps,
     };
+  }
+
+  async getMonthlyRevenue(organizationId: string, period?: string) {
+    return this.finance.getRevenueSeries(organizationId, period);
   }
 }
 

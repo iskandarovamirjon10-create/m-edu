@@ -163,6 +163,51 @@ describe('CsrfMiddleware', () => {
     expect(next).toHaveBeenCalled();
   });
 
+  it('protects /api/ai/chat/stream against cookie-authenticated CSRF', () => {
+    const { res } = makeRes();
+    const next = vi.fn() as unknown as NextFunction;
+    // Missing header on /api/ai/chat/stream with cookie -> 403 Forbidden
+    expect(() =>
+      middleware.use(
+        makeReq({
+          method: 'POST',
+          originalUrl: '/api/ai/chat/stream',
+          cookies: { 'XSRF-TOKEN': 'xsrf-ai-secret' },
+        }),
+        res,
+        next,
+      ),
+    ).toThrow(ForbiddenException);
+
+    // Mismatched header on /api/ai/chat/stream -> 403 Forbidden
+    expect(() =>
+      middleware.use(
+        makeReq({
+          method: 'POST',
+          originalUrl: '/api/ai/chat/stream',
+          cookies: { 'XSRF-TOKEN': 'xsrf-ai-secret' },
+          headers: { 'x-xsrf-token': 'attacker-forged-token' },
+        }),
+        res,
+        next,
+      ),
+    ).toThrow(ForbiddenException);
+
+    // Matching header on /api/ai/chat/stream -> next() called
+    const nextValid = vi.fn() as unknown as NextFunction;
+    middleware.use(
+      makeReq({
+        method: 'POST',
+        originalUrl: '/api/ai/chat/stream',
+        cookies: { 'XSRF-TOKEN': 'xsrf-ai-secret' },
+        headers: { 'x-xsrf-token': 'xsrf-ai-secret' },
+      }),
+      res,
+      nextValid,
+    );
+    expect(nextValid).toHaveBeenCalled();
+  });
+
   it('never throws on safe methods', () => {
     const { res } = makeRes();
     const next = vi.fn() as unknown as NextFunction;
@@ -170,3 +215,4 @@ describe('CsrfMiddleware', () => {
     expect(next).toHaveBeenCalled();
   });
 });
+

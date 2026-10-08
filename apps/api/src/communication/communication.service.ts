@@ -70,6 +70,11 @@ export class CommunicationService {
     studentId: string,
     requester: { id: string; role: string },
   ) {
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, organizationId },
+    });
+    if (!student) throw new NotFoundException('Student not found');
+
     if (requester.role === 'PARENT') {
       const link = await this.prisma.parentStudent.findUnique({
         where: { parentId_studentId: { parentId: requester.id, studentId } },
@@ -80,8 +85,8 @@ export class CommunicationService {
     const messages = await this.prisma.parentTeacherMessage.findMany({
       where: { organizationId, studentId },
       include: {
-        User_ParentTeacherMessage_senderUserIdToUser: { select: { firstName: true, lastName: true, role: true } },
-        ParentAccount_ParentTeacherMessage_senderParentIdToParentAccount: { select: { firstName: true, lastName: true } },
+        senderUser: { select: { firstName: true, lastName: true, role: true } },
+        senderParent: { select: { firstName: true, lastName: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -90,8 +95,8 @@ export class CommunicationService {
       ...m,
       body: m.content ?? m.body,
       content: m.content ?? m.body,
-      senderUser: m.User_ParentTeacherMessage_senderUserIdToUser ?? m.senderUser,
-      senderParent: m.ParentAccount_ParentTeacherMessage_senderParentIdToParentAccount ?? m.senderParent,
+      senderUser: m.senderUser,
+      senderParent: m.senderParent,
     }));
   }
 
@@ -109,7 +114,7 @@ export class CommunicationService {
         ],
       },
       include: {
-        User: { select: { firstName: true, lastName: true } },
+        author: { select: { firstName: true, lastName: true } },
         Group: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -118,7 +123,7 @@ export class CommunicationService {
 
     return announcements.map((a) => ({
       ...a,
-      author: a.User,
+      author: a.author,
       group: a.Group,
       expiresAt: a.expireAt,
       scheduledAt: a.publishAt,

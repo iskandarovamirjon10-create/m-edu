@@ -16,6 +16,7 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { curriculumApi, subjectsApi } from '../lib/api';
+import { useI18n } from '../i18n/I18nProvider';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -33,14 +34,14 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 16, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
-  exit:   { opacity: 0, x: 20, filter: 'blur(6px)', transition: { duration: 0.22 } },
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
+  exit:   { opacity: 0, x: 20, transition: { duration: 0.22 } },
 };
 
 /* ============================================================================
@@ -334,11 +335,15 @@ function StatTile({
  * ========================================================================== */
 
 function CurriculumRow({ curriculum }: { curriculum: Curriculum }) {
+  const { t } = useI18n();
   const tone = curriculumTone(curriculum.name);
   const c = TONE[tone];
   const st = statusTone(curriculum.status);
   const sc = TONE[st];
   const moduleCount = curriculum._count?.modules || 0;
+  const statusKey = `curriculum.status.${(curriculum.status || '').toUpperCase()}`;
+  const statusLabel = t(statusKey);
+  const statusText = statusLabel === statusKey ? curriculum.status : statusLabel;
 
   return (
     <motion.div
@@ -404,7 +409,7 @@ function CurriculumRow({ curriculum }: { curriculum: Curriculum }) {
               className="h-1.5 w-1.5 rounded-full"
               style={{ background: sc.fg, boxShadow: `0 0 6px ${sc.glow}` }}
             />
-            {curriculum.status}
+            {statusText}
           </span>
         </div>
 
@@ -423,7 +428,7 @@ function CurriculumRow({ curriculum }: { curriculum: Curriculum }) {
           ) : (
             <span className="inline-flex items-center gap-1 italic opacity-70">
               <Icon paths={I.graduationCap} size={11} strokeWidth={2} />
-              No subject linked
+              {t('curriculum.noSubject')}
             </span>
           )}
 
@@ -436,7 +441,7 @@ function CurriculumRow({ curriculum }: { curriculum: Curriculum }) {
             }}
           >
             <Icon paths={I.layers} size={9} strokeWidth={2.5} />
-            {moduleCount} {moduleCount === 1 ? 'module' : 'modules'}
+            {t(moduleCount === 1 ? 'curriculum.moduleOne' : 'curriculum.moduleMany', { count: moduleCount })}
           </span>
         </div>
       </div>
@@ -462,6 +467,7 @@ function CurriculumRow({ curriculum }: { curriculum: Curriculum }) {
  * ========================================================================== */
 
 export default function CurriculumPage() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const reduced = usePrefersReducedMotion();
 
@@ -515,11 +521,11 @@ export default function CurriculumPage() {
   /* ---------------- Handlers ---------------- */
   const validate = useCallback(() => {
     const errors: { name?: string; subject?: string } = {};
-    if (!name.trim()) errors.name = 'Name is required';
-    if (!selectedSubject) errors.subject = 'Please select a subject';
+    if (!name.trim()) errors.name = t('curriculum.validation.nameRequired');
+    if (!selectedSubject) errors.subject = t('curriculum.validation.subjectRequired');
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [name, selectedSubject]);
+  }, [name, selectedSubject, t]);
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -564,10 +570,10 @@ export default function CurriculumPage() {
           </div>
           <div>
             <h3 className="text-[17px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Failed to load curriculums
+              {t('curriculum.loadErrorTitle')}
             </h3>
             <p className="mt-1 text-[13px] font-medium text-[#86868B]">
-              {(error as Error)?.message || 'Something went wrong'}
+              {(error as Error)?.message || t('common.error')}
             </p>
           </div>
           <motion.button
@@ -583,7 +589,7 @@ export default function CurriculumPage() {
             }}
           >
             <Icon paths={I.refresh} size={14} strokeWidth={2.4} />
-            Try again
+            {t('common.retry')}
           </motion.button>
         </motion.div>
       </div>
@@ -668,11 +674,11 @@ export default function CurriculumPage() {
                     className="h-1.5 w-1.5 rounded-full"
                     style={{ background: TONE.green.fg, boxShadow: `0 0 6px ${TONE.green.glow}` }}
                   />
-                  {stats.published} Published
+                  {t('curriculum.badge.published', { count: stats.published })}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-[#00000008] bg-[#00000004] px-2.5 py-1 text-[11px] font-semibold text-[#86868B] dark:border-[#ffffff10] dark:bg-[#ffffff06]">
                   <Icon paths={I.layers} size={10} strokeWidth={2.5} />
-                  {stats.total} Total
+                  {t('curriculum.badge.total', { count: stats.total })}
                 </span>
                 {stats.modules > 0 && (
                   <span
@@ -684,16 +690,16 @@ export default function CurriculumPage() {
                     }}
                   >
                     <Icon paths={I.bookOpen} size={10} strokeWidth={2.5} />
-                    {stats.modules} Modules
+                    {t('curriculum.badge.modules', { count: stats.modules })}
                   </span>
                 )}
               </div>
 
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
-                Syllabus Studio
+                {t('curriculum.heroTitle')}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
-                Design curriculums, version them, and structure learning modules
+                {t('curriculum.heroSubtitle')}
               </p>
             </div>
 
@@ -710,7 +716,7 @@ export default function CurriculumPage() {
                   }}
                 >
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                  Create Curriculum
+                  {t('curriculum.create')}
                 </button>
               </motion.div>
             </div>
@@ -720,10 +726,10 @@ export default function CurriculumPage() {
 
       {/* STATS */}
       <motion.div variants={containerVariants} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Total Curriculums" value={stats.total} icon={I.clipboard} tone="purple" />
-        <StatTile label="Published" value={stats.published} icon={I.checkCircle} tone="green" />
-        <StatTile label="Drafts" value={stats.drafts} icon={I.pencil} tone="orange" />
-        <StatTile label="Total Modules" value={stats.modules} icon={I.layers} tone="blue" />
+        <StatTile label={t('curriculum.stat.total')} value={stats.total} icon={I.clipboard} tone="purple" />
+        <StatTile label={t('curriculum.stat.published')} value={stats.published} icon={I.checkCircle} tone="green" />
+        <StatTile label={t('curriculum.stat.drafts')} value={stats.drafts} icon={I.pencil} tone="orange" />
+        <StatTile label={t('curriculum.stat.modules')} value={stats.modules} icon={I.layers} tone="blue" />
       </motion.div>
 
       {/* FILTER */}
@@ -739,9 +745,9 @@ export default function CurriculumPage() {
             value={selectedSubject}
             onChange={(e) => setSelectedSubject(e.target.value)}
             className="bg-transparent text-[13px] font-semibold text-[#1D1D1F] outline-none dark:text-[#F5F5F7]"
-            aria-label="Filter by subject"
+            aria-label={t('curriculum.filterAria')}
           >
-            <option value="">All Subjects</option>
+            <option value="">{t('curriculum.allSubjects')}</option>
             {subjects?.items?.map((s: any) => (
               <option key={s.id} value={s.id}>
                 {s.name} ({s.code})
@@ -762,7 +768,7 @@ export default function CurriculumPage() {
             transition={SPRING.snappy}
             className="inline-flex items-center gap-1.5 rounded-xl border border-[#00000010] bg-[#00000004] px-3 py-2 text-[12px] font-semibold text-[#86868B] outline-none transition-colors hover:bg-[#00000008] hover:text-[#1D1D1F] dark:border-[#ffffff10] dark:bg-[#ffffff06] dark:hover:text-[#F5F5F7]"
           >
-            Clear filter
+            {t('curriculum.clearFilter')}
           </motion.button>
         )}
       </motion.div>
@@ -785,10 +791,10 @@ export default function CurriculumPage() {
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                Curriculums
+                {t('curriculum.listTitle')}
               </h2>
               <p className="text-[11px] font-medium text-[#86868B]">
-                {list.length} {list.length === 1 ? 'curriculum' : 'curriculums'}
+                {t(list.length === 1 ? 'curriculum.countOne' : 'curriculum.countMany', { count: list.length })}
               </p>
             </div>
           </div>
@@ -800,12 +806,12 @@ export default function CurriculumPage() {
                   <Icon paths={I.clipboard} size={26} strokeWidth={2} />
                 </div>
                 <p className="text-[14px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {selectedSubject ? 'No curriculums for this subject' : 'No curriculums yet'}
+                  {selectedSubject ? t('curriculum.emptyFilteredTitle') : t('curriculum.emptyTitle')}
                 </p>
                 <p className="max-w-sm text-[12px] font-medium text-[#86868B]">
                   {selectedSubject
-                    ? 'Try a different subject or create the first curriculum for this one'
-                    : 'Create your first curriculum to start structuring learning modules'}
+                    ? t('curriculum.emptyFilteredHint')
+                    : t('curriculum.emptyHint')}
                 </p>
                 <motion.button
                   type="button"
@@ -820,7 +826,7 @@ export default function CurriculumPage() {
                   }}
                 >
                   <Icon paths={I.plus} size={13} strokeWidth={2.5} />
-                  Create Curriculum
+                  {t('curriculum.create')}
                 </motion.button>
               </div>
             ) : (
@@ -868,7 +874,7 @@ export default function CurriculumPage() {
               }}
               role="dialog"
               aria-modal="true"
-              aria-label="Create curriculum"
+              aria-label={t('curriculum.createAria')}
             >
               {/* Top sheen */}
               <span
@@ -883,14 +889,14 @@ export default function CurriculumPage() {
                   <Icon paths={I.sparkles} size={18} strokeWidth={2} />
                 </div>
                 <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  Create a new curriculum. You can add modules and version it later.
+                  {t('curriculum.createHint')}
                 </p>
               </div>
 
               <form onSubmit={handleCreate} className="mt-5 space-y-4" noValidate>
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                    Subject <span className="text-[#FF3B30]">*</span>
+                    {t('curriculum.form.subject')} <span className="text-[#FF3B30]">*</span>
                   </label>
                   <select
                     required
@@ -905,7 +911,7 @@ export default function CurriculumPage() {
                       borderColor: formErrors.subject ? '#FF3B30' : 'rgba(0,0,0,0.10)',
                     }}
                   >
-                    <option value="">— Choose a subject —</option>
+                    <option value="">{t('curriculum.form.chooseSubject')}</option>
                     {subjects?.items?.map((s: any) => (
                       <option key={s.id} value={s.id}>
                         {s.name} ({s.code})
@@ -919,7 +925,7 @@ export default function CurriculumPage() {
 
                 <div>
                   <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                    Curriculum Name <span className="text-[#FF3B30]">*</span>
+                    {t('curriculum.form.name')} <span className="text-[#FF3B30]">*</span>
                   </label>
                   <input
                     type="text"
@@ -929,7 +935,7 @@ export default function CurriculumPage() {
                       setName(e.target.value);
                       setFormErrors((p) => ({ ...p, name: undefined }));
                     }}
-                    placeholder="e.g. Cambridge Primary Year 4"
+                    placeholder={t('curriculum.form.namePlaceholder')}
                     aria-invalid={Boolean(formErrors.name)}
                     className="w-full rounded-xl border bg-white/80 px-3.5 py-2.5 text-[13.5px] font-medium text-[#1D1D1F] outline-none transition-all placeholder:text-[#86868B] focus:border-[#AF52DE]/40 focus:shadow-[0_0_0_4px_rgba(175,82,222,0.1)] dark:bg-[#1c1c1e80] dark:text-[#F5F5F7]"
                     style={{
@@ -951,7 +957,7 @@ export default function CurriculumPage() {
                     disabled={createMutation.isPending}
                     className="rounded-xl border border-[#00000010] bg-[#00000004] px-4 py-2.5 text-[13px] font-semibold text-[#1D1D1F] outline-none transition-colors hover:bg-[#00000008] disabled:opacity-50 dark:border-[#ffffff10] dark:bg-[#ffffff06] dark:text-[#F5F5F7]"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </motion.button>
                   <motion.button
                     type="submit"
@@ -972,12 +978,12 @@ export default function CurriculumPage() {
                           animate={{ rotate: 360 }}
                           transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
                         />
-                        Saving…
+                        {t('common.saving')}
                       </>
                     ) : (
                       <>
                         <Icon paths={I.plus} size={14} strokeWidth={2.5} />
-                        Create Curriculum
+                        {t('curriculum.create')}
                       </>
                     )}
                   </motion.button>

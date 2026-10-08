@@ -103,7 +103,16 @@ export class LessonsService {
     const lesson = await this.findOne(organizationId, id);
 
     if (dto.topicId) {
-      const topic = await this.prisma.topic.findUnique({ where: { id: dto.topicId } });
+      // Tenant isolation: only a topic that resolves back to the caller's
+      // organization (Topic → CurriculumModule → Curriculum) may be linked.
+      // A bare `findUnique({ id })` let one tenant attach another tenant's
+      // topic to its own lesson.
+      const topic = await this.prisma.topic.findFirst({
+        where: {
+          id: dto.topicId,
+          CurriculumModule: { Curriculum: { organizationId } },
+        },
+      });
       if (!topic) throw new NotFoundException('Topic not found');
     }
 

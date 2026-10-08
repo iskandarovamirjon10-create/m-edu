@@ -79,6 +79,12 @@ export class GeminiProvider implements AiProvider {
         return this.toGenerateResponse(parsed);
       } catch (error) {
         if (error instanceof AiProviderError) {
+          // A configuration/auth error (bad API key, invalid model name) is
+          // PERMANENT — the fallback list should not burn through every model
+          // on a broken credential (regression: F-14).
+          if (error.code === AiErrorCode.AI_PROVIDER_CONFIG_ERROR) {
+            throw error;
+          }
           lastError = error;
           this.logger.warn(`Model ${model} failed: ${error.code}`);
           continue;
@@ -173,11 +179,15 @@ export class GeminiProvider implements AiProvider {
       if (!response.ok) {
         const detail = await response.text().catch(() => '');
         this.logger.error(`Gemini ${response.status}: ${detail.slice(0, 300)}`);
-        // 5xx / 429 are transient; 4xx (bad key, bad request) are not.
+        // 429 rates and 5xx are transient → retryable via fallback models.
+        // Other 4xx (bad API key 400/403, unknown model 404, malformed
+        // request) indicate a configuration problem that no fallback can fix.
         throw new AiProviderError(
-          response.status >= 500 || response.status === 429
-            ? AiErrorCode.AI_PROVIDER_UNAVAILABLE
-            : AiErrorCode.AI_PROVIDER_UNAVAILABLE,
+          response.status === 429
+            ? AiErrorCode.AI_RATE_LIMITED
+            : response.status >= 500
+              ? AiErrorCode.AI_PROVIDER_UNAVAILABLE
+              : AiErrorCode.AI_PROVIDER_CONFIG_ERROR,
           `Gemini responded ${response.status}`,
         );
       }

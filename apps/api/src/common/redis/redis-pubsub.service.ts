@@ -53,6 +53,23 @@ export class RedisPubSubService implements OnModuleInit, OnModuleDestroy {
     this.subClient = null;
   }
 
+  /**
+   * Liveness of the Redis connection, for readiness/health probes.
+   *
+   * Returns `true` when Redis is disabled for this process (development
+   * escape hatch — Redis is not a dependency then), otherwise performs a
+   * bounded PING and returns whether Redis answered. Never throws.
+   */
+  async ping(): Promise<boolean> {
+    if (!isRedisEnabled()) return true;
+    if (!this.pubClient) return false;
+    try {
+      return (await this.pubClient.ping()) === 'PONG';
+    } catch {
+      return false;
+    }
+  }
+
   async publish(channel: string, payload: any): Promise<void> {
     if (!this.pubClient) return;
     try {
@@ -60,6 +77,24 @@ export class RedisPubSubService implements OnModuleInit, OnModuleDestroy {
       await this.pubClient.publish(channel, message);
     } catch (err) {
       this.logger.warn(`Failed to publish to ${channel}: ${getErrorMessage(err)}`);
+    }
+  }
+
+  async get(key: string): Promise<string | null> {
+    if (!this.pubClient) return null;
+    try {
+      return await this.pubClient.get(key);
+    } catch {
+      return null;
+    }
+  }
+
+  async set(key: string, value: string, ttlMs: number): Promise<void> {
+    if (!this.pubClient) return;
+    try {
+      await this.pubClient.set(key, value, 'PX', ttlMs);
+    } catch (err) {
+      this.logger.warn(`Failed to set Redis key ${key}: ${getErrorMessage(err)}`);
     }
   }
 
@@ -79,3 +114,4 @@ export class RedisPubSubService implements OnModuleInit, OnModuleDestroy {
     handlers.push(handler);
   }
 }
+

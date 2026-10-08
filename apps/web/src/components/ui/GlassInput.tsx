@@ -10,6 +10,7 @@ import {
   useId,
   useState,
 } from 'react';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 type InputStatus = 'default' | 'error' | 'warning' | 'success';
 
@@ -185,10 +186,9 @@ export const GlassPasswordInput = forwardRef<HTMLInputElement, GlassInputProps>(
           />
           <button
             type="button"
-            tabIndex={-1}
             onClick={() => setVisible(v => !v)}
             className={[
-              'absolute right-3 flex items-center justify-center',
+              'absolute right-3 flex items-center justify-center min-w-[44px] min-h-[44px]',
               'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
               'transition-colors duration-[var(--duration-fast)]',
               'focus-visible:outline-2 focus-visible:outline-[var(--border-focus)] rounded',
@@ -219,6 +219,7 @@ interface GlassSearchInputProps extends GlassInputProps {
 export const GlassSearchInput = forwardRef<HTMLInputElement, GlassSearchInputProps>(
   ({ label, error, hint, required, onClear, className = '', id, value, ...rest }, ref) => {
     const generatedId = useId();
+    const { t: ti } = useSafeI18n();
     const inputId = id ?? generatedId;
 
     return (
@@ -247,8 +248,8 @@ export const GlassSearchInput = forwardRef<HTMLInputElement, GlassSearchInputPro
             <button
               type="button"
               onClick={onClear}
-              className="absolute right-3 flex items-center text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors duration-[var(--duration-fast)]"
-              aria-label="Clear search"
+              className="absolute right-3 flex items-center justify-center min-w-[44px] min-h-[44px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors duration-[var(--duration-fast)]"
+              aria-label={ti('common.clear')}
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M6 18 18 6M6 6l12 12" />

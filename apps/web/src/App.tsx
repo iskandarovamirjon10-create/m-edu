@@ -20,7 +20,8 @@ import { Suspense, useState, useEffect, type ReactNode } from 'react';
 import {
   BrowserRouter, useNavigate,
 } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
 import { motion, type Variants } from 'framer-motion';
 import { AuthProvider } from '@/auth/AuthContext';
 import { I18nProvider, useI18n } from '@/i18n/I18nProvider';
@@ -28,6 +29,9 @@ import { ThemeProvider } from '@/hooks/useTheme';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { UserSettingsSync } from '@/components/UserSettingsSync';
 import { ToastHost } from '@/components/ui';
+import { OfflineIndicator } from '@/components/OfflineIndicator';
+import { QuickPaymentModal } from '@/components/QuickPaymentModal';
+import { QuickAttendanceModal } from '@/components/QuickAttendanceModal';
 import { AppRoutes } from './routes';
 import { DocumentTitleManager } from './routes/DocumentTitle';
 import { Protected, PublicOnly } from './routes/guards';
@@ -214,42 +218,8 @@ function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; r
  * QUERY CLIENT
  * ========================================================================== */
 
-function getErrorStatus(error: unknown): number | undefined {
-  if (!error || typeof error !== 'object') return undefined;
-  const e = error as {
-    status?: unknown;
-    response?: { status?: unknown };
-    cause?: { status?: unknown };
-  };
-  if (typeof e.status === 'number') return e.status;
-  if (typeof e.response?.status === 'number') return e.response.status;
-  if (typeof e.cause?.status === 'number') return e.cause.status;
-  return undefined;
-}
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: (failureCount, error) => {
-        const status = getErrorStatus(error);
-        if (
-          typeof status === 'number' &&
-          status >= 400 &&
-          status < 500 &&
-          status !== 408 &&
-          status !== 429
-        ) {
-          return false;
-        }
-        return failureCount < 1;
-      },
-      refetchOnWindowFocus: false,
-      staleTime: 60_000,
-      gcTime: 5 * 60 * 1000,
-    },
-    mutations: { retry: 0 },
-  },
-});
+/* QueryClient lives in `lib/queryClient.ts` — single instance, registered
+ * with `purgeSessionCaches()` so logout/account switches wipe the cache. */
 
 /* ============================================================================
  * PAGE FALLBACK — dual label support (label / labelKey)
@@ -633,6 +603,9 @@ export default function App() {
                 <DocumentTitleManager />
                 <UserSettingsSync />
                 <AppRoutes />
+                <OfflineIndicator />
+                <QuickPaymentModal />
+                <QuickAttendanceModal />
                 <ToastHost />
               </AuthProvider>
             </ThemeProvider>

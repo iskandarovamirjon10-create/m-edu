@@ -5,7 +5,7 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-import { UseGuards, Logger, Injectable, OnModuleInit } from '@nestjs/common';
+import { UseGuards, Logger, Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { WsJwtGuard, AuthenticatedSocket } from '../chat/ws-jwt.guard';
 import { RedisPubSubService } from '../common/redis/redis-pubsub.service';
 import { JwtService } from '@nestjs/jwt';
@@ -28,22 +28,24 @@ export class AttendanceGateway implements OnGatewayConnection, OnGatewayDisconne
   private readonly logger = new Logger(AttendanceGateway.name);
 
   constructor(
-    private readonly redisPubSub: RedisPubSubService,
-    private readonly jwtService: JwtService,
+    @Optional() private readonly redisPubSub?: RedisPubSubService,
+    private readonly jwtService?: JwtService,
   ) {}
 
   onModuleInit() {
-    this.redisPubSub.subscribe(ATTENDANCE_CREATED_EVENT, (payload) => {
-      try {
-        const data = JSON.parse(payload);
-        if (data && data.organizationId) {
-          // Broadcase ONLY to the room matching organizationId
-          this.server.to(`org:${data.organizationId}`).emit(ATTENDANCE_CREATED_EVENT, data);
+    if (this.redisPubSub) {
+      this.redisPubSub.subscribe(ATTENDANCE_CREATED_EVENT, (payload) => {
+        try {
+          const data = JSON.parse(payload);
+          if (data && data.organizationId) {
+            // Broadcase ONLY to the room matching organizationId
+            this.server.to(`org:${data.organizationId}`).emit(ATTENDANCE_CREATED_EVENT, data);
+          }
+        } catch (err) {
+          this.logger.error('Failed to parse attendance event payload', err);
         }
-      } catch (err) {
-        this.logger.error('Failed to parse attendance event payload', err);
-      }
-    });
+      });
+    }
   }
 
   private extractToken(client: AuthenticatedSocket): string | null {
@@ -56,7 +58,7 @@ export class AttendanceGateway implements OnGatewayConnection, OnGatewayDisconne
     try {
       const token = this.extractToken(client);
       if (!token) throw new Error('No token');
-      
+      if (!this.jwtService) throw new Error('JWT service not available');
       const payload = this.jwtService.verify(token);
       client.user = payload;
       

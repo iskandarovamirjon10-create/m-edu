@@ -15,21 +15,33 @@ export class RbacService implements AuthorizationPort {
     private readonly getPermissions: () => Promise<Permission[]>
   ) {}
 
-  async hasPermission(permission: Permission, _role?: string): Promise<boolean> {
+  async hasPermission(permission: Permission, role?: string): Promise<boolean> {
+    // SECURITY FIX: the `role` argument used to be ignored — every caller in
+    // @medu/core passes the tenant role and previously got a check against
+    // whatever the closure captured instead. Authorization is now a union:
+    // the dynamic permission list (DB/tenant interceptor) OR the static
+    // role matrix, so a caller that passes `role` is really checked against
+    // that role.
     const permissions = await this.getPermissions();
-    return permissions.includes(permission);
+    if (permissions.includes(permission)) return true;
+    if (role) {
+      return RbacService.getPermissionsForRole(role).includes(permission);
+    }
+    return false;
   }
 
-  async requirePermission(permission: Permission, _role?: string): Promise<void> {
-    const hasIt = await this.hasPermission(permission);
+  async requirePermission(permission: Permission, role?: string): Promise<void> {
+    const hasIt = await this.hasPermission(permission, role);
     if (!hasIt) {
       throw new BiometricAccessDeniedError('permission', permission);
     }
   }
 
-  async hasAnyPermission(permissions: Permission[], _role?: string): Promise<boolean> {
-    const userPermissions = await this.getPermissions();
-    return permissions.some((p) => userPermissions.includes(p));
+  async hasAnyPermission(permissions: Permission[], role?: string): Promise<boolean> {
+    for (const permission of permissions) {
+      if (await this.hasPermission(permission, role)) return true;
+    }
+    return false;
   }
 
   /**
@@ -37,6 +49,14 @@ export class RbacService implements AuthorizationPort {
    * This is a static lookup — no DB query needed.
    */
   static getPermissionsForRole(role: string): Permission[] {
-    return RolePermissions[role] || [];
+    // Prototype-key safety: `RolePermissions['constructor']` / `['toString']`
+    // resolve to Functions via the prototype chain; `.includes()` would then
+    // throw (500) on a poisoned / legacy `role` claim.
+    return (
+      typeof role === 'string' &&
+      Object.prototype.hasOwnProperty.call(RolePermissions, role)
+        ? RolePermissions[role]
+        : []
+    );
   }
 }

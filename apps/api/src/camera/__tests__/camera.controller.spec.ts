@@ -29,6 +29,7 @@ interface CameraServiceMock {
   listCameras: ReturnType<typeof vi.fn>;
   getCamera: ReturnType<typeof vi.fn>;
   updateCamera: ReturnType<typeof vi.fn>;
+  assertCameraDeletable: ReturnType<typeof vi.fn>;
   enableCamera: ReturnType<typeof vi.fn>;
   disableCamera: ReturnType<typeof vi.fn>;
   deleteCamera: ReturnType<typeof vi.fn>;
@@ -66,6 +67,10 @@ function makeController(): {
     listCameras: vi.fn(),
     getCamera: vi.fn(),
     updateCamera: vi.fn(),
+
+    assertCameraDeletable: vi
+      .fn()
+      .mockResolvedValue(undefined),
 
     enableCamera: vi.fn().mockResolvedValue({
       id: 'cam-1',

@@ -4,6 +4,11 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      // App-shell layout tiers: phone < 768 (md), tablet 768–1279, desktop >= 1280 (xl).
+      // `xs` (480px) targets large phones where a two-column card grid fits.
+      screens: {
+        xs: '480px',
+      },
       colors: {
         brand: {
           50: '#EAFBFF',

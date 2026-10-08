@@ -449,17 +449,21 @@ export class CameraService {
   // DELETE
   // ---------------------------------------------------------------------------
 
-  async deleteCamera(
+  /**
+   * Every precondition that must hold BEFORE a camera may disappear.
+   *
+   * Deliberately side-effect free so the controller can run it *before* it
+   * stops the running worker. Stopping first and then failing the delete used
+   * to leave an enabled camera with no worker — dead until the next API boot.
+   */
+  async assertCameraDeletable(
     organizationId: string,
     cameraId: string,
-  ) {
+  ): Promise<Camera> {
     this.assertOrganizationId(organizationId);
     this.assertCameraId(cameraId);
 
-    const camera = await this.findCamera(
-      organizationId,
-      cameraId,
-    );
+    const camera = await this.findCamera(organizationId, cameraId);
 
     const eventCount =
       await this.prisma.cameraAttendanceEvent.count({
@@ -474,6 +478,20 @@ export class CameraService {
         'This camera has recognition events. Disable it instead of deleting it to preserve event history.',
       );
     }
+
+    return camera;
+  }
+
+  async deleteCamera(
+    organizationId: string,
+    cameraId: string,
+  ) {
+    // Re-runs the same checks so the service stays safe for callers that do
+    // not go through the controller's pre-check.
+    const camera = await this.assertCameraDeletable(
+      organizationId,
+      cameraId,
+    );
 
     try {
       await this.prisma.camera.delete({
@@ -1405,10 +1423,18 @@ export class CameraService {
     // under a hardcoded fallback key regardless of NODE_ENV. The previous guard
     // used a non-strict check that allowed the well-known development key to
     // be used whenever NODE_ENV was not exactly 'production'.
-    if (!encryptionKey || encryptionKey.length < 32) {
+    //
+    // Count UTF-8 BYTES, not UTF-16 code units (`String.length`): a 32-char
+    // multibyte string encodes to 33+ bytes — it would pass the old check
+    // and fail at cipher time. Matches CameraWorkerManagerService and
+    // FaceService, which both validate byte length.
+    if (
+      !encryptionKey ||
+      Buffer.byteLength(encryptionKey, 'utf8') < 32
+    ) {
       throw new Error(
         'BIOMETRIC_ENCRYPTION_KEY or CAMERA_ENCRYPTION_KEY must be ' +
-          'configured with at least 32 characters in all non-test environments.',
+          'configured with at least 32 bytes (UTF-8) in all non-test environments.',
       );
     }
 
