@@ -297,8 +297,23 @@ export class ImportExportService {
   // ---- Exports -------------------------------------------------------------
 
   async listExports(_orgId: string, _query: ExportListQuery) {
-    // Mock — empty list for now
-    return { items: [], total: 0 };
+    // M3: the mock empty-list has been replaced by a real query so the
+    // exports history UI reflects actual export runs.
+    const page = Math.max(1, Number((_query as { page?: string | number }).page) || 1);
+    const takeRaw = Number((_query as { limit?: string | number }).limit ?? 20);
+    const take = Math.min(Number.isFinite(takeRaw) && takeRaw > 0 ? Math.trunc(takeRaw) : 20, 100);
+    const skip = (page - 1) * take;
+    const where = { organizationId: _orgId };
+    const [items, total] = await Promise.all([
+      this.prisma.dataExportLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.dataExportLog.count({ where }),
+    ]);
+    return { items, total, page, limit: take };
   }
 
   async downloadTemplate(orgId: string, entityType: string): Promise<Buffer> {

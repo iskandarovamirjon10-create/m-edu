@@ -18,6 +18,36 @@ import { TerminalAuthGuard } from './terminal-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { AllowPublic } from '../auth/public.decorator';
 import { RequireApiKeyScopes } from '../api-keys/api-keys.guard';
+import {
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  Max,
+  Min,
+} from 'class-validator';
+
+/** Body contract for the PUBLIC terminal webhook (body-validated). */
+export class TerminalEventDto {
+  @IsString()
+  @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+  deviceId: string;
+
+  @IsString()
+  @IsUUID()
+  userId: string;
+
+  @IsOptional()
+  @IsString()
+  timestamp?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  confidence?: number;
+}
 
 /** Postgres `uuid` literal — rejects malformed ids before they reach Prisma. */
 const UUID_PATTERN =
@@ -86,12 +116,7 @@ export class TerminalWebhookController {
   @ApiResponse({ status: 403, description: 'Terminal token lacks the `attendance:write` scope' })
   async handleTerminalEvent(
     @Req() req: Request & { user?: { organizationId?: string } },
-    @Body() payload: {
-      deviceId: string; // The MAC or Serial Number of the terminal
-      userId: string; // The matched student's ID (or Face ID)
-      timestamp: string; // ISO8601 or unix timestamp
-      confidence?: number; // Recognition confidence if provided
-    },
+    @Body() payload: TerminalEventDto,
   ) {
     // Bound to the API key by ApiKeyGuard; absent only if the guard was bypassed.
     const organizationId = req.user?.organizationId;

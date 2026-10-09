@@ -124,16 +124,18 @@ describe('EarlyWarningService', () => {
       prisma.attendance.findMany.mockResolvedValue([]);
 
       const res = await svc.runScan('org-1');
-      expect(res.created).toBe(2);
+      expect(res.detected).toBe(2);
       expect(res.scanned).toBe(2);
+      expect(res.created).toBe(0);
       expect(res.fixed).toBe(0);
     });
   });
 
   describe('resolve', () => {
-    it('returns ok: true', async () => {
-      const res = await svc.resolve('org-1', 'payment-1', 'user-1', 'Handled');
-      expect(res).toEqual({ ok: true });
+    it('fails loudly instead of faking success (M2)', async () => {
+      await expect(
+        svc.resolve('org-1', 'payment-1', 'user-1', 'Handled'),
+      ).rejects.toThrow('EarlyWarning model');
     });
   });
 });

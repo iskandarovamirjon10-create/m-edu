@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotImplementedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EarlyWarningQueryDto } from './dto/early-warning.dto';
 
@@ -27,6 +27,9 @@ export interface ScanResult {
   created: number;
   scanned: number;
   fixed: number;
+  /** Real candidate count found by the scan (persistence = 0 until model). */
+  detected: number;
+  message?: string;
 }
 
 @Injectable()
@@ -231,9 +234,18 @@ export class EarlyWarningService {
       this.getLowAttendanceStudents(orgId, fourteenDaysAgo),
     ]);
 
-    const created =
+    // M2: these were presented as "created/fixed" counters while NOTHING was
+    // persisted (no EarlyWarning model exists). Report honest semantics:
+    // `detected` = real candidates found in the scan, persistence count 0.
+    const detected =
       overduePayments.length + staleLeads.length + lowAttendance.length;
-    return { created, scanned: created, fixed: 0 };
+    return {
+      scanned: detected,
+      detected,
+      created: 0,
+      fixed: 0,
+      message: 'Scan completed. Persistence requires the EarlyWarning model (not yet implemented).',
+    };
   }
 
   async resolve(
@@ -242,7 +254,15 @@ export class EarlyWarningService {
     _userId: string,
     _note?: string,
   ): Promise<{ ok: boolean }> {
-    return { ok: true };
+    void _orgId;
+    void _id;
+    void _userId;
+    void _note;
+    // M2: resolving derived findings without a persistence model is a fake
+    // success. Fail honestly until the EarlyWarning model lands.
+    throw new NotImplementedException(
+      'Early-warning persistence requires the EarlyWarning model (not yet implemented).',
+    );
   }
 
   private async getLowAttendanceStudents(

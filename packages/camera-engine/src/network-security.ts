@@ -117,10 +117,15 @@ function parseIp(ip: string): ParsedIp | null {
     // IPv4-compatible IPv6 addresses are 96 bits of zeros followed by 32 bits of IPv4.
     // Ensure we don't catch `::1` (loopback) or `::` (unspecified) as IPv4-compatible,
     // though `::` would map to `0.0.0.0` which is also loopback/blocked.
+    // `::` (unspecified) and `::1` (loopback): unspecified must resolve to a
+    // blocked address too (some stacks reach localhost through it) - C9.
+    const isUnspecified = bytes.every((b) => b === 0);
     const isIpv4Compatible =
-      bytes.slice(0, 12).every((b) => b === 0) && (bytes[12] !== 0 || bytes[13] !== 0 || bytes[14] !== 0 || bytes[15] > 1);
+      (isUnspecified ||
+        (bytes.slice(0, 12).every((b) => b === 0) &&
+          (bytes[12] !== 0 || bytes[13] !== 0 || bytes[14] !== 0 || bytes[15] > 1)));
 
-    if (isIpv4Mapped || isIpv4Compatible) {
+    if (isIpv4Mapped || isIpv4Compatible || isUnspecified) {
       const v4 = ((bytes[12] << 24) | (bytes[13] << 16) | (bytes[14] << 8) | bytes[15]) >>> 0;
       return { value: BigInt(v4), bits: 32 };
     }

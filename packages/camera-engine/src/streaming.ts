@@ -19,7 +19,11 @@ export class BoundedFrameQueue {
   private readonly capacity: number;
 
   constructor(capacity: number) {
-    this.capacity = Math.max(1, Math.floor(capacity));
+    // Reject non-finite capacity: `floor(NaN)` produced NaN and the queue
+    // stopped dropping frames (unbounded growth) - C8.
+    this.capacity = Number.isFinite(capacity)
+      ? Math.max(1, Math.floor(capacity))
+      : 64;
   }
 
   get size(): number {
@@ -56,7 +60,8 @@ export class FrameSampler {
   private processing = false;
 
   constructor(fps: number) {
-    this.intervalMs = Math.max(1000 / Math.max(0.5, fps), 33);
+    const safeFps = Number.isFinite(fps) && fps > 0 ? fps : 1;
+    this.intervalMs = Math.max(1000 / Math.max(0.5, safeFps), 33);
   }
 
   /** Whether this frame should be sampled (rate-limited). */

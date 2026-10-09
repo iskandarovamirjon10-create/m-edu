@@ -14,4 +14,3 @@ export * from './analytics.dto';
 export * from './settings.dto';
 
 // Events
-export * from './events';

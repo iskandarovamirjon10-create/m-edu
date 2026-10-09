@@ -1,12 +1,12 @@
 /**
  * Real Face Embedder — production face embedding using ONNX Runtime.
  *
- * Generates 512-dimensional face embeddings using an ArcFace-compatible ONNX model.
+ * Generates 128-dimensional face embeddings using an SFace-compatible ONNX model.
  * The embedding is a normalized vector that uniquely represents a face.
  *
  * Model requirements:
  * - Input: NCHW float32 tensor (112x112 or 128x128 depending on model)
- * - Output: L2-normalized embedding vector (512-dim for ArcFace-R100)
+ * - Output: L2-normalized embedding vector (128-dim for SFace)
  *
  * IMPORTANT: Enrollment and recognition MUST use the same model and
  * preprocessing pipeline. Mismatched models produce incompatible embeddings.

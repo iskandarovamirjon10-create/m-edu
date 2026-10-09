@@ -36,7 +36,11 @@ export function readBoundedEnv(
 /** Minimum face quality score (0-1) required before a face is matched. */
 export const MIN_QUALITY_SCORE = readBoundedEnv(
   'FACE_QUALITY_THRESHOLD',
-  0.3,
+  // X3: must match the engine/default recognition policy (core
+  // DEFAULT_FACE_RECOGNITION_CONFIG.qualityThreshold = 0.4). Previously the
+  // camera pipeline accepted 0.3 while the API rejected 0.4 — one control,
+  // two thresholds.
+  0.4,
   0,
   1,
 );
