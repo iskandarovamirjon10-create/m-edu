@@ -51,8 +51,8 @@ const ICON_NAV = <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke
 const QUICK_ACTIONS: CommandItemWithRoles[] = [
   {
     id: 'quick-payment',
-    label: "⚡ Tezkor To‘lov (3 soniya)",
-    description: "O‘quvchidan zudlik bilan to‘lov qabul qilish [Alt+P]",
+    label: "⚡ Tezkor To’lov (3 soniya)",
+    description: "O’quvchidan zudlik bilan to’lov qabul qilish [Alt+P]",
     category: "Tezkor Amallar (Fast Actions)",
     keywords: ['payment', 'tolov', 'pul', 'kassa', 'chek', 'payme', 'click', 'naqd'],
     icon: <span className="text-base">💵</span>,
@@ -74,7 +74,7 @@ const QUICK_ACTIONS: CommandItemWithRoles[] = [
   {
     id: 'quick-import',
     label: "📥 Excel / CSV Bazasini Yuklash",
-    description: "Markaz o‘quvchilarini 2 soniyada tizimga o‘tkazish",
+    description: "Markaz o’quvchilarini 2 soniyada tizimga o’tkazish",
     category: "Tezkor Amallar (Fast Actions)",
     keywords: ['import', 'excel', 'csv', 'baza', 'upload', 'yuklash'],
     href: '/import-export',
@@ -83,7 +83,7 @@ const QUICK_ACTIONS: CommandItemWithRoles[] = [
   },
   {
     id: 'quick-new-student',
-    label: "➕ Yangi O‘quvchi Qo‘shish",
+    label: "➕ Yangi O’quvchi Qo’shish",
     description: "Yangi talaba anketasini ochish",
     category: "Tezkor Amallar (Fast Actions)",
     keywords: ['new', 'student', 'oquvchi', 'talaba', 'qoshish'],
@@ -94,7 +94,7 @@ const QUICK_ACTIONS: CommandItemWithRoles[] = [
   {
     id: 'quick-gamification',
     label: "🏆 M-Coins & Gamifikatsiya",
-    description: "Reyting peshqadami va mukofotlar do‘koni",
+    description: "Reyting peshqadami va mukofotlar do’koni",
     category: "Tezkor Amallar (Fast Actions)",
     keywords: ['gamification', 'coins', 'xp', 'tangalar', 'sovrin', 'leaderboard', 'podium'],
     href: '/gamification',
@@ -103,7 +103,7 @@ const QUICK_ACTIONS: CommandItemWithRoles[] = [
   {
     id: 'quick-tg-app',
     label: "📱 Telegram WebApp Hub",
-    description: "Ota-ona (Face ID, invoys) & O‘qituvchi (jadval, davomat)",
+    description: "Ota-ona (Face ID, invoys) & O’qituvchi (jadval, davomat)",
     category: "Tezkor Amallar (Fast Actions)",
     keywords: ['telegram', 'tg', 'bot', 'webapp', 'ota-ona', 'mobil', 'davomat'],
     href: '/tg-app',
@@ -330,10 +330,10 @@ export function CommandPalette() {
             let icon = '🔍';
             const desc = item.subtitle || item.description || '';
             if (item.type === 'STUDENT') {
-              cat = 'O‘quvchilar (Students)';
+              cat = 'O’quvchilar (Students)';
               icon = '🎓';
             } else if (item.type === 'TEACHER') {
-              cat = 'O‘qituvchilar (Teachers)';
+              cat = 'O’qituvchilar (Teachers)';
               icon = '👨‍🏫';
             } else if (item.type === 'GROUP') {
               cat = 'Guruhlar (Groups)';
@@ -720,7 +720,7 @@ export function CommandPalette() {
           </div>
           <div className="flex items-center gap-2">
             <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-600 dark:border-white/10 dark:bg-white/5 dark:text-emerald-400">
-              Alt+P: To‘lov
+              Alt+P: To’lov
             </span>
             <span className="rounded-md border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-indigo-400">
               Alt+A: Davomat

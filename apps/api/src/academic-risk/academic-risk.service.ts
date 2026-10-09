@@ -251,11 +251,11 @@ export class AcademicRiskService {
       let suggestedAction = 'Holat barqaror';
       if (riskLevel === 'HIGH') {
         if (consecutiveAbsences >= 3) {
-          suggestedAction = '📞 Ota-onasiga shoshilinch qo‘ng‘iroq (3+ kun kelmadi)';
+          suggestedAction = '📞 Ota-onasiga shoshilinch qo’ng’iroq (3+ kun kelmadi)';
         } else if (attendanceRate < 70) {
           suggestedAction = '⚠️ Davomat kritik past, 1-on-1 suhbat kerak';
         } else if (gradeTrendScore > 60) {
-          suggestedAction = '📖 O‘zlashtirish pasaygan, ustoz yordami kerak';
+          suggestedAction = '📖 O’zlashtirish pasaygan, ustoz yordami kerak';
         } else {
           suggestedAction = '🤝 Administrator va mentor bilan uchrashuv';
         }

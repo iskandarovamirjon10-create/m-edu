@@ -2,7 +2,7 @@
  * M-EDU AI Copilot — Premium Edition v4 "Aurora Studio"
  *
  * Layout (from sketch):
- *   Top:    [âœï¸] [ðŸ”] [ðŸ—‘ï¸] [âš™ï¸] ......... M-EDU AI  [status pill]
+ *   Top:    [âœï¸] [ðŸ”] [ðŸ—’ï¸] [âš™ï¸] ......... M-EDU AI  [status pill]
  *   Center: conversation / welcome hub
  *   Bottom: [ðŸ“Ž] [ðŸŽ¤] [ Ask... (â†’) ]   [model chip]
  *

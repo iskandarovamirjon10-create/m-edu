@@ -123,7 +123,7 @@ describe('AiCopilot empty state', () => {
     const prompts = screen.getAllByRole('button', { name: /— / });
     expect(prompts).toHaveLength(6);
     expect(screen.getByRole('button', { name: /^Davomat — / })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /^To‘lovlar — / })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^To’lovlar — / })).toBeInTheDocument();
   });
 
   it('sends a quick prompt straight to the API', async () => {
@@ -136,7 +136,7 @@ describe('AiCopilot empty state', () => {
     expect(await screen.findByText('Davomat tayyor.')).toBeInTheDocument();
     expect(aiChatMock).toHaveBeenCalledTimes(1);
     expect(aiChatMock.mock.calls[0][0]).toEqual([
-      { role: 'user', content: 'Bugungi davomatni ko‘rsat' },
+      { role: 'user', content: 'Bugungi davomatni ko’rsat' },
     ]);
   });
 });
@@ -154,12 +154,12 @@ describe('AiCopilot sending and replies', () => {
     const user = userEvent.setup();
     renderCopilot();
 
-    await typeAndSend(user, 'Bugungi davomatni ko‘rsat');
+    await typeAndSend(user, 'Bugungi davomatni ko’rsat');
 
-    expect(await screen.findByText('Bugungi davomatni ko‘rsat')).toBeInTheDocument();
+    expect(await screen.findByText('Bugungi davomatni ko’rsat')).toBeInTheDocument();
     expect(aiChatMock).toHaveBeenCalledTimes(1);
     expect(aiChatMock.mock.calls[0][0]).toEqual([
-      { role: 'user', content: 'Bugungi davomatni ko‘rsat' },
+      { role: 'user', content: 'Bugungi davomatni ko’rsat' },
     ]);
 
     const thinking = within(messageList()).getByRole('status');
@@ -221,14 +221,14 @@ describe('AiCopilot errors and retry', () => {
     const user = userEvent.setup();
     renderCopilot();
 
-    await typeAndSend(user, 'Bugungi davomatni ko‘rsat');
+    await typeAndSend(user, 'Bugungi davomatni ko’rsat');
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(
-      'AI bilan bog‘lanib bo‘lmadi. Internet aloqasini tekshirib, qayta urinib ko‘ring.',
+      'AI bilan bog’lanib bo’lmadi. Internet aloqasini tekshirib, qayta urinib ko’ring.',
     );
-    expect(alert).toHaveTextContent('So‘rov:');
-    expect(alert).toHaveTextContent('Bugungi davomatni ko‘rsat');
+    expect(alert).toHaveTextContent('So’rov:');
+    expect(alert).toHaveTextContent('Bugungi davomatni ko’rsat');
     expect(screen.getByTestId('ai-retry')).toBeInTheDocument();
     expect(composer()).toBeEnabled();
   });

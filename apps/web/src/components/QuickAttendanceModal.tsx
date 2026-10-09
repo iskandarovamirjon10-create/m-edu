@@ -57,7 +57,7 @@ export function QuickAttendanceModal() {
         .map((item: any) => {
           const student = item.student || item;
           const user = student.user || {};
-          const name = user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (student.name || 'O‘quvchi');
+          const name = user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (student.name || 'O’quvchi');
           return {
             studentId: student.id,
             name,
@@ -92,7 +92,7 @@ export function QuickAttendanceModal() {
   const saveAttendance = useMutation({
     mutationFn: async () => {
       if (!selectedGroupId) throw new Error('Iltimos, guruhni tanlang');
-      if (records.length === 0) throw new Error('Bu guruhda faol o‘quvchilar yo‘q');
+      if (records.length === 0) throw new Error('Bu guruhda faol o’quvchilar yo’q');
 
       // Local ISO string prevents UTC-midnight timezone shift in Uzbekistan (UTC+5)
       const todayStr = toLocalISOString();
@@ -235,7 +235,7 @@ export function QuickAttendanceModal() {
         {/* Batch Actions Bar */}
         <div className="flex items-center justify-between bg-black/[0.03] border border-black/10 rounded-2xl p-2.5 mb-3 shrink-0 dark:bg-white/5 dark:border-white/10">
           <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-            Jami: <strong className="text-slate-900 dark:text-white">{records.length}</strong> o‘quvchi
+            Jami: <strong className="text-slate-900 dark:text-white">{records.length}</strong> o’quvchi
           </span>
           <div className="flex items-center gap-1.5">
             <button
@@ -260,11 +260,11 @@ export function QuickAttendanceModal() {
           {loadingStudents ? (
             <div className="flex items-center justify-center py-12 text-slate-500 dark:text-slate-400 text-sm">
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent mr-2" />
-              O‘quvchilar yuklanmoqda...
+              O’quvchilar yuklanmoqda...
             </div>
           ) : records.length === 0 ? (
             <div className="text-center py-12 text-slate-500 dark:text-slate-400 text-sm">
-              Bu guruhda o‘quvchilar topilmadi
+              Bu guruhda o’quvchilar topilmadi
             </div>
           ) : (
             records.map((r, i) => (
@@ -284,7 +284,7 @@ export function QuickAttendanceModal() {
                 {/* Status Toggle Badge */}
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-slate-400 hidden sm:inline">
-                    (bosing o‘zgartirish uchun)
+                    (bosing o’zgartirish uchun)
                   </span>
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${

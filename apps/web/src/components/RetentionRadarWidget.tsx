@@ -52,7 +52,7 @@ export function RetentionRadarWidget() {
               </span>
             </div>
             <p className="mt-0.5 text-[12px] font-medium text-[#86868B] dark:text-[#98989D]">
-              Davomat va baholar asosida kursni tark etish ehtimoli yuqori bo‘lgan o‘quvchilar
+              Davomat va baholar asosida kursni tark etish ehtimoli yuqori bo’lgan o’quvchilar
             </p>
           </div>
         </div>
@@ -68,7 +68,7 @@ export function RetentionRadarWidget() {
             to="/academic-risk"
             className="text-[12px] font-semibold text-[#007AFF] hover:underline dark:text-[#0A84FF]"
           >
-            Barchasini ko‘rish →
+            Barchasini ko’rish →
           </Link>
         </div>
       </div>
@@ -81,7 +81,7 @@ export function RetentionRadarWidget() {
           </div>
         ) : students.length === 0 ? (
           <div className="py-8 text-center text-[13px] font-semibold text-[#34C759] dark:text-[#30D158]">
-            ✅ Ajoyib! Hozirda chiqib ketish xavfi ostidagi o‘quvchilar yo‘q.
+            ✅ Ajoyib! Hozirda chiqib ketish xavfi ostidagi o’quvchilar yo’q.
           </div>
         ) : (
           students.map((student) => {
@@ -134,7 +134,7 @@ export function RetentionRadarWidget() {
                       className="inline-flex items-center gap-1.5 rounded-xl bg-black/[0.05] border border-black/[0.08] px-3 py-1.5 text-[11.5px] font-semibold text-[#1D1D1F] hover:bg-emerald-500/15 hover:border-emerald-500/30 hover:text-emerald-600 transition-all dark:bg-white/[0.08] dark:border-white/10 dark:text-white dark:hover:text-emerald-400"
                     >
                       <span>📞</span>
-                      <span>Qo‘ng‘iroq</span>
+                      <span>Qo’ng’iroq</span>
                     </a>
                   )}
                   <button
@@ -148,7 +148,7 @@ export function RetentionRadarWidget() {
                     }}
                     className="inline-flex items-center gap-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 px-3 py-1.5 text-[11.5px] font-bold text-indigo-600 hover:bg-indigo-500/25 transition-all dark:text-indigo-300"
                   >
-                    <span>⚡ To‘lov</span>
+                    <span>⚡ To’lov</span>
                   </button>
                 </div>
               </motion.div>

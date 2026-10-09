@@ -357,7 +357,7 @@ const CATALOGUE: Catalogue = {
     'menu.teacher.title': "👨‍🏫 O'qituvchi menyusi",
     'menu.student.title': '👨‍🎓 Student menyusi',
     'menu.parent.title': '👨‍👩‍👧 Ota-ona menyusi',
-    'menu.subtitle': 'Salom, {name}. Nimani ko‘rmoqchisiz?',
+    'menu.subtitle': 'Salom, {name}. Nimani ko’rmoqchisiz?',
 
     'btn.menu': '🏠 Menyu',
     'btn.back': '⬅️ Orqaga',
@@ -391,7 +391,7 @@ const CATALOGUE: Catalogue = {
     'profile.role': 'Rol: {role}',
     'profile.balance': 'Balans: {balance}',
     'profile.groups': 'Guruhlar: {groups}',
-    'profile.children': 'Bog‘langan farzandlar: {count}',
+    'profile.children': 'Bog’langan farzandlar: {count}',
 
     'schedule.title': '📅 Jadval',
     'schedule.empty': 'Jadval yozuvlari topilmadi.',
@@ -408,7 +408,7 @@ const CATALOGUE: Catalogue = {
     'payments.balance': 'Qarz: {balance}',
 
     'notifications.title': '🔔 Bildirishnomalar',
-    'notifications.empty': 'Sizda bildirishnomalar yo‘q.',
+    'notifications.empty': 'Sizda bildirishnomalar yo’q.',
     'notifications.unread': "O'qilmagan: {count}",
     'notifications.line': '{date} {title}',
 
@@ -422,10 +422,10 @@ const CATALOGUE: Catalogue = {
     'settings.quietHoursOff': "O'chiq",
     'settings.categories': 'Bildirishnoma toifalari',
     'settings.categoriesTitle': '🔔 Bildirishnoma toifalari',
-    'settings.categoriesHint': "Toifani bosib, Telegram bildirishnomalarini yoqing yoki o‘chiring.",
+    'settings.categoriesHint': "Toifani bosib, Telegram bildirishnomalarini yoqing yoki o’chiring.",
     'settings.unavailable': 'Bu sozlamalar ushbu hisob turi uchun mavjud emas.',
     'settings.saved': '✅ Sozlamalar yangilandi.',
-    'settings.hint': "O‘zgarishlar M-EDU hisobingizda saqlanadi va darhol qo‘llanadi.",
+    'settings.hint': "O’zgarishlar M-EDU hisobingizda saqlanadi va darhol qo’llanadi.",
     'settings.testNotification': '🔔 M-EDU dan sinov bildirishnomasi. Telegram integratsiyasi ishlayapti.',
 
     'category.ATTENDANCE': 'Davomat',
@@ -438,18 +438,18 @@ const CATALOGUE: Catalogue = {
     'category.EVENT': 'Tadbirlar',
 
     'language.title': '🌐 Tilni tanlang',
-    'language.changed': 'Til {language} ga o‘zgartirildi.',
-    'language.unsupported': 'Bu turdagi hisob uchun tilni o‘zgartirish mumkin emas.',
+    'language.changed': 'Til {language} ga o’zgartirildi.',
+    'language.unsupported': 'Bu turdagi hisob uchun tilni o’zgartirish mumkin emas.',
 
     'children.title': '👨‍👩‍👧 Farzandlarim',
     'children.select': 'Farzandni tanlang:',
-    'children.empty': 'Bu hisobga farzand bog‘lanmagan.',
+    'children.empty': 'Bu hisobga farzand bog’lanmagan.',
 
     'unlink.title': '🔌 Telegramni uzish',
     'unlink.warning':
-      'Telegramda M-EDU bildirishnomalarini olishni to‘xtatasiz. M-EDU hisobingiz faol qoladi.',
+      'Telegramda M-EDU bildirishnomalarini olishni to’xtatasiz. M-EDU hisobingiz faol qoladi.',
     'unlink.confirm': 'Uzish',
-    'unlink.cancelled': 'Bekor qilindi — hech narsa o‘zgarmadi.',
+    'unlink.cancelled': 'Bekor qilindi — hech narsa o’zgarmadi.',
     'unlink.done': '✅ Telegram M-EDU hisobingizdan uzildi.',
 
     // Identity sentence is intentionally identical in all catalogues.
@@ -460,7 +460,7 @@ const CATALOGUE: Catalogue = {
       "Men M-EDU bo'yicha yordam beraman: studentlar, guruhlar, dars jadvali, davomat va to'lovlar. Savolingizni yuboring.",
     'copilot.usage': 'Foydalanish: /copilot <savolingiz>',
     'copilot.throttled': "⏳ Copilot so'rovi juda ko'p. Biroz kuting va qayta urinib ko'ring.",
-    'copilot.error': '⚠️ Copilot hozircha mavjud emas. Keyinroq urinib koʻring.',
+    'copilot.error': '⚠️ Copilot hozircha mavjud emas. Keyinroq urinib ko’ring.',
     'btn.copilot': '🤖 Copilot',
 
     'help.title': '❓ Mavjud buyruqlar',
@@ -474,23 +474,23 @@ const CATALOGUE: Catalogue = {
     'day.SATURDAY': 'Sh',
     'day.SUNDAY': 'Ya',
 
-    'error.generic': '⚠️ Nimadir xato ketdi. Qayta urinib ko‘ring.',
-    'error.unauthorized': '⛔ Sizda bunga ruxsat yo‘q.',
+    'error.generic': '⚠️ Nimadir xato ketdi. Qayta urinib ko’ring.',
+    'error.unauthorized': '⛔ Sizda bunga ruxsat yo’q.',
     'error.not_found': '🔍 Topilmadi.',
-    'error.notLinked': '🔗 Bu chat M-EDU ga bog‘lanmagan.',
+    'error.notLinked': '🔗 Bu chat M-EDU ga bog’lanmagan.',
     'error.notLinkedHint': 'M-EDU → Sozlamalar → Integratsiyalar → Telegram orqali ulan.',
     'error.disconnected': '🔌 Bu Telegram hisobi uzilgan.',
     'error.blocked': '⛔ Bu Telegram hisobi bloklangan. Administratorga murojaat qiling.',
     'error.suspended': "⛔ Bu Telegram hisobi to'xtatilgan. Administratorga murojaat qiling.",
-    'error.rateLimited': '⏳ Juda ko‘p so‘rov. Birozdan so‘ng urinib ko‘ring.',
+    'error.rateLimited': '⏳ Juda ko’p so’rov. Birozdan so’ng urinib ko’ring.',
     'error.invalidCallback': '⚠️ Bu tugma endi amal qilmaydi. /menu yuboring.',
     'error.staleCallback': '⌛ Amal muddati tugadi. /menu yuborib qayta urining.',
     'error.unsupported': 'ℹ️ Bu buyruq sizning rolingiz uchun mavjud emas.',
 
-    'start.linked': '✅ Telegram hisobingiz M-EDU ga bog‘landi.',
+    'start.linked': '✅ Telegram hisobingiz M-EDU ga bog’landi.',
     'start.invalidToken': '❌ Havola yaroqsiz yoki muddati tugagan. M-EDU da yangisini yarating.',
-    'start.conflict': '⚠️ Bu Telegram boshqa M-EDU hisobiga bog‘langan.',
-    'start.rateLimited': '⏳ Juda ko‘p urinish. Keyinroq urinib ko‘ring.',
+    'start.conflict': '⚠️ Bu Telegram boshqa M-EDU hisobiga bog’langan.',
+    'start.rateLimited': '⏳ Juda ko’p urinish. Keyinroq urinib ko’ring.',
   },
 };
 

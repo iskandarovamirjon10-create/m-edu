@@ -53,7 +53,7 @@ export function AiThinking({ label, step: externalStep }: AiThinkingProps) {
   const steps = [
     {
       id: 1,
-      title: t('ai.thinking.step1') || 'So‘rov va sahifa konteksti tahlil qilinmoqda…',
+      title: t('ai.thinking.step1') || 'So’rov va sahifa konteksti tahlil qilinmoqda…',
       icon: Search,
       tag: 'Context',
     },

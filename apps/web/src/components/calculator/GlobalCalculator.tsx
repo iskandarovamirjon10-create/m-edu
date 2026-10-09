@@ -480,8 +480,8 @@ export function GlobalCalculator() {
                 <button
                   type="button"
                   onClick={toggleSound}
-                  aria-label={soundEnabled ? 'Ovozni o‘chirish' : 'Ovozni yoqish'}
-                  title={soundEnabled ? 'Ovozni o‘chirish' : 'Ovozni yoqish'}
+                  aria-label={soundEnabled ? 'Ovozni o’chirish' : 'Ovozni yoqish'}
+                  title={soundEnabled ? 'Ovozni o’chirish' : 'Ovozni yoqish'}
                   className="rounded-xl p-1.5 text-slate-500 hover:bg-black/5 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
                 >
                   {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} className="text-slate-400 dark:text-slate-500" />}
@@ -589,7 +589,7 @@ export function GlobalCalculator() {
                       <CalcBtn
                         onClick={() => { playClick('pop'); backspace(); }}
                         variant="secondary"
-                        label="O‘chirish"
+                        label="O’chirish"
                       >
                         ⌫
                       </CalcBtn>
@@ -604,7 +604,7 @@ export function GlobalCalculator() {
                         onClick={() => { playClick('tick'); performOperation('÷'); }}
                         variant="primary"
                         active={operator === '÷'}
-                        label="Bo‘lish"
+                        label="Bo’lish"
                       >
                         <Divide size={18} />
                       </CalcBtn>
@@ -616,7 +616,7 @@ export function GlobalCalculator() {
                         onClick={() => { playClick('tick'); performOperation('×'); }}
                         variant="primary"
                         active={operator === '×'}
-                        label="Ko‘paytirish"
+                        label="Ko’paytirish"
                       >
                         <MultiplyIcon size={18} />
                       </CalcBtn>
@@ -640,7 +640,7 @@ export function GlobalCalculator() {
                         onClick={() => { playClick('tick'); performOperation('+'); }}
                         variant="primary"
                         active={operator === '+'}
-                        label="Qo‘shish"
+                        label="Qo’shish"
                       >
                         <Plus size={18} />
                       </CalcBtn>
@@ -705,7 +705,7 @@ export function GlobalCalculator() {
                           className="flex items-center justify-center gap-2 rounded-2xl border border-black/10 bg-black/[0.02] p-3 text-xs font-bold text-slate-800 hover:bg-black/[0.05] active:scale-95 disabled:opacity-40 transition-all dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08]"
                         >
                           <Tag size={14} className="text-amber-500" />
-                          <span>Chegirma qo‘llash</span>
+                          <span>Chegirma qo’llash</span>
                         </button>
 
                         <button
@@ -725,7 +725,7 @@ export function GlobalCalculator() {
                           className="flex items-center justify-center gap-2 rounded-2xl border border-black/10 bg-black/[0.02] p-3 text-xs font-bold text-slate-800 hover:bg-black/[0.05] active:scale-95 disabled:opacity-40 transition-all dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08]"
                         >
                           <Clock size={14} className="text-cyan-600 dark:text-cyan-400" />
-                          <span>Bo‘lib to‘lash (Oy)</span>
+                          <span>Bo’lib to’lash (Oy)</span>
                         </button>
 
                         <button
@@ -743,7 +743,7 @@ export function GlobalCalculator() {
                       <div className="mt-auto flex gap-2.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 p-3 text-blue-700 dark:text-blue-300">
                         <Info size={16} className="mt-0.5 shrink-0" aria-hidden />
                         <p className="text-xs leading-relaxed">
-                          Hozirgi summa: <strong className="text-slate-900 dark:text-white">{formattedDisplay} so‘m</strong>. Yuqorida foiz yoki muddatni tanlab, hisob-kitob qiling.
+                          Hozirgi summa: <strong className="text-slate-900 dark:text-white">{formattedDisplay} so’m</strong>. Yuqorida foiz yoki muddatni tanlab, hisob-kitob qiling.
                         </p>
                       </div>
                     </div>

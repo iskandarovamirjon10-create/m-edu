@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- *  M-EDU Telegram WebApp — Premium Ota-ona / O‘qituvchi / O‘quvchi portali
+ *  M-EDU Telegram WebApp — Premium Ota-ona / O’qituvchi / O’quvchi portali
  * ============================================================================
  *
  *  Dizayn qoidalari:
@@ -470,9 +470,9 @@ const RELATION_LABELS: Record<string, string> = {
 
 const INVOICE_STATUS: Record<string, { label: string; tone: Tone }> = {
   ISSUED: { label: 'Chiqarilgan', tone: 'blue' },
-  PARTIALLY_PAID: { label: 'Qisman toʻlangan', tone: 'orange' },
-  PAID: { label: 'Toʻlangan', tone: 'green' },
-  OVERDUE: { label: 'Muddati oʻtgan', tone: 'red' },
+  PARTIALLY_PAID: { label: 'Qisman to’langan', tone: 'orange' },
+  PAID: { label: 'To’langan', tone: 'green' },
+  OVERDUE: { label: 'Muddati o’tgan', tone: 'red' },
   REFUNDED: { label: 'Qaytarilgan', tone: 'slate' },
 };
 
@@ -501,10 +501,10 @@ const ROLE_LABELS: Record<string, string> = {
   PLATFORM_OWNER: 'Platforma egasi',
   ORG_ADMIN: 'Markaz admini',
   MANAGER: 'Menejer',
-  TEACHER: 'O‘qituvchi',
+  TEACHER: 'O’qituvchi',
   ASSISTANT: 'Yordamchi',
   PARENT: 'Ota-ona',
-  STUDENT: 'O‘quvchi',
+  STUDENT: 'O’quvchi',
 };
 
 /* ============================================================================
@@ -868,7 +868,7 @@ function TodayCard({
     return (
       <Surface className="p-2">
         <ErrorState
-          message="Davomat maʼlumotlarini yuklab boʻlmadi."
+          message="Davomat maʼlumotlarini yuklab bo’lmadi."
           onRetry={() => {
             attendanceQ.refetch();
             summaryQ.refetch();
@@ -936,7 +936,7 @@ function TodayCard({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#0A84FF' }}>
-              {lesson.startTime && `${lesson.startTime}  •  `}Joriy mashgʻulot
+              {lesson.startTime && `${lesson.startTime}  •  `}Joriy mashg’ulot
             </p>
             <p className="truncate text-[13.5px] font-bold" style={{ color: 'var(--text-primary)' }}>
               {lesson.topic || groupName}
@@ -991,7 +991,7 @@ function TodayCard({
             })}
             {total === 0 && (
               <span className="text-[11.5px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-                Hozircha davomat statistikasi yoʻq.
+                Hozircha davomat statistikasi yo’q.
               </span>
             )}
           </div>
@@ -1031,7 +1031,7 @@ function GradesCard({
   if (gradesQ.isError) {
     return (
       <Surface className="p-2">
-        <ErrorState message="Baholar yuklab boʻlmadi." onRetry={() => gradesQ.refetch()} />
+        <ErrorState message="Baholar yuklab bo’lmadi." onRetry={() => gradesQ.refetch()} />
       </Surface>
     );
   }
@@ -1052,7 +1052,7 @@ function GradesCard({
         }
       />
       {grades.length === 0 && exams.length === 0 ? (
-        <EmptyState icon={I.star} tone="orange" title="Hozircha baholar yoʻq" message="Ustoz baho qoʻyganida shu yerda koʻrinadi." />
+        <EmptyState icon={I.star} tone="orange" title="Hozircha baholar yo’q" message="Ustoz baho qo’yganida shu yerda ko’rinadi." />
       ) : (
         <div className="space-y-2.5">
           {grades.map((g) => (
@@ -1107,7 +1107,7 @@ function GradesCard({
                       </p>
                     </div>
                     <Pill tone={ex.isPassed ? 'green' : 'red'} icon={ex.isPassed ? I.checkCircle : I.xCircle}>
-                      {ex.isPassed ? 'Topshirildi' : 'Oʻtmagani'} • {formatNum(ex.marksObtained)}
+                      {ex.isPassed ? 'Topshirildi' : 'O’tmagani'} • {formatNum(ex.marksObtained)}
                     </Pill>
                   </div>
                 ))}
@@ -1144,7 +1144,7 @@ function AssignmentsCard({ child, groupId }: { child: ParentChild; groupId: stri
           icon={I.bookOpen}
           tone="blue"
           title="Vazifalar topilmadi"
-          message="Farzandingiz hali guruh yoki davomat maʼlumotiga ega emas. Vazifalar koʻrsatilganda shu yerda chiqadi."
+          message="Farzandingiz hali guruh yoki davomat maʼlumotiga ega emas. Vazifalar ko’rsatilganda shu yerda chiqadi."
         />
       ) : assignQ.isLoading ? (
         <div className="space-y-2">
@@ -1152,9 +1152,9 @@ function AssignmentsCard({ child, groupId }: { child: ParentChild; groupId: stri
           <Skeleton height={58} />
         </div>
       ) : assignQ.isError ? (
-        <ErrorState message="Vazifalar yuklab boʻlmadi." onRetry={() => assignQ.refetch()} />
+        <ErrorState message="Vazifalar yuklab bo’lmadi." onRetry={() => assignQ.refetch()} />
       ) : (assignQ.data ?? []).length === 0 ? (
-        <EmptyState icon={I.bookOpen} tone="blue" title="Yangi vazifalar yoʻq" message="Ustoz vazifa biriktirganda shu yerda koʻrinadi." />
+        <EmptyState icon={I.bookOpen} tone="blue" title="Yangi vazifalar yo’q" message="Ustoz vazifa biriktirganda shu yerda ko’rinadi." />
       ) : (
         <div className="space-y-2">
           {(assignQ.data ?? []).map((a) => {
@@ -1170,7 +1170,7 @@ function AssignmentsCard({ child, groupId }: { child: ParentChild; groupId: stri
                     {a.title}
                   </p>
                   <Pill tone={overdue ? 'red' : 'green'} icon={overdue ? I.alertCircle : I.clock}>
-                    {overdue ? 'Muddati oʻtgan' : ASSIGNMENT_LABELS[a.status] ?? a.status}
+                    {overdue ? 'Muddati o’tgan' : ASSIGNMENT_LABELS[a.status] ?? a.status}
                   </Pill>
                 </div>
                 {a.description && (
@@ -1196,7 +1196,7 @@ function AssignmentsCard({ child, groupId }: { child: ParentChild; groupId: stri
 }
 
 /* ============================================================================
- * OTA-ONA: TOʻLOV KARTASI VA SHEET
+ * OTA-ONA: TO’LOV KARTASI VA SHEET
  * ========================================================================== */
 
 function PaymentsCard({
@@ -1216,7 +1216,7 @@ function PaymentsCard({
   if (invoicesQ.isError) {
     return (
       <Surface className="p-2">
-        <ErrorState message="Toʻlov holati yuklab boʻlmadi." onRetry={() => invoicesQ.refetch()} />
+        <ErrorState message="To’lov holati yuklab bo’lmadi." onRetry={() => invoicesQ.refetch()} />
       </Surface>
     );
   }
@@ -1238,17 +1238,17 @@ function PaymentsCard({
           </div>
           <div>
             <p className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-              Oylik toʻlov holati
+              Oylik to’lov holati
             </p>
             <h4 className="mt-0.5 text-[15.5px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              {isClear ? 'Qarzdorlik yoʻq' : 'Toʻlov kutilmoqda'}
+              {isClear ? 'Qarzdorlik yo’q' : 'To’lov kutilmoqda'}
             </h4>
             <div className="mt-0.5 flex items-center gap-1.5">
               <span className="text-[15px] font-black tabular-nums" style={{ color: isClear ? '#34C759' : TONE_COLORS.red.fg }}>
-                {isClear ? '0 soʻm' : formatUZS(outstanding)}
+                {isClear ? '0 so’m' : formatUZS(outstanding)}
               </span>
               {overdue > 0 && (
-                <Pill tone="red">{formatUZS(overdue)} muddati oʻtgan</Pill>
+                <Pill tone="red">{formatUZS(overdue)} muddati o’tgan</Pill>
               )}
             </div>
           </div>
@@ -1326,7 +1326,7 @@ function PaymentSheet({
             <div className="flex items-start justify-between px-6 pt-3">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                  Oylik toʻlovlar
+                  Oylik to’lovlar
                 </p>
                 <h3 id="payment-sheet-title" className="mt-1 text-[19px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
                   {childName}
@@ -1351,7 +1351,7 @@ function PaymentSheet({
                     Qoldiq summa
                   </p>
                   <p className="mt-0.5 text-[20px] font-black tabular-nums" style={{ color: outstanding > 0 ? '#FF3B30' : '#34C759' }}>
-                    {outstanding > 0 ? formatUZS(outstanding) : `0 soʻm`}
+                    {outstanding > 0 ? formatUZS(outstanding) : `0 so’m`}
                   </p>
                 </div>
                 <Pill tone={outstanding > 0 ? 'red' : 'green'} icon={outstanding > 0 ? I.alertCircle : I.checkCircle}>
@@ -1361,7 +1361,7 @@ function PaymentSheet({
 
               {payments.length > 0 && (
                 <p className="mb-1.5 mt-4 text-[10.5px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                  Soʻnggi toʻlovlar
+                  So’nggi to’lovlar
                 </p>
               )}
               <div className="space-y-2">
@@ -1369,7 +1369,7 @@ function PaymentSheet({
                   <div key={p.id} className="flex items-center justify-between gap-3 rounded-2xl p-3" style={{ background: 'color-mix(in srgb, var(--text-primary) 4%, transparent)', border: '1px solid var(--border-subtle)' }}>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[12.5px] font-bold" style={{ color: 'var(--text-primary)' }}>
-                        {p.receiptNumber || p.method || 'Toʻlov'}
+                        {p.receiptNumber || p.method || 'To’lov'}
                       </p>
                       <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
                         {formatDateShort(p.paidAt)}
@@ -1386,7 +1386,7 @@ function PaymentSheet({
                   >
                     <Icon paths={I.wallet} size={18} strokeWidth={2.1} style={{ color: 'var(--text-tertiary)' }} />
                     <p className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>
-                      Hozircha toʻlovlar qayd etilmagan.
+                      Hozircha to’lovlar qayd etilmagan.
                     </p>
                   </div>
                 )}
@@ -1420,7 +1420,7 @@ function PaymentSheet({
 
               <div className="mt-4 rounded-2xl p-3.5 tg-note">
                 <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                  Onlayn toʻlov shlyuzi (Payme / Click) hozircha ulanmagan. Toʻlovni markaz kassasi orqali amalga oshirasiz, tafsilot uchun adminstratsiyaga yozing.
+                  Onlayn to’lov shlyuzi (Payme / Click) hozircha ulanmagan. To’lovni markaz kassasi orqali amalga oshirasiz, tafsilot uchun adminstratsiyaga yozing.
                 </p>
               </div>
 
@@ -1496,7 +1496,7 @@ function ChildSection({
       <EmptyState
         icon={I.shieldCheck}
         tone="slate"
-        title="Koʻrish huquqi yoʻq"
+        title="Ko’rish huquqi yo’q"
         message="Bu farzand uchun maʼlumotlar markaz tomonidan bloklangan. Ruxsat olish uchun adminstratsiyaga murojaat qiling."
       >
         <Btn onClick={contactAdmin}>
@@ -1560,7 +1560,7 @@ function ParentView({ contactAdmin, haptic }: { contactAdmin: () => void; haptic
     return (
       <div className="pt-6">
         <ErrorState
-          message="Farzandlar roʻyxatini yuklab boʻlmadi."
+          message="Farzandlar ro’yxatini yuklab bo’lmadi."
           onRetry={() => childrenQ.refetch()}
         />
       </div>
@@ -1575,11 +1575,11 @@ function ParentView({ contactAdmin, haptic }: { contactAdmin: () => void; haptic
           icon={I.graduationCap}
           tone="blue"
           title="Farzand biriktirilmagan"
-          message="Sizning hisobingizga hali oʻquvchi biriktirilmagan. Farzandingizni ulash uchun markaz maʼmuriyatiga murojaat qiling."
+          message="Sizning hisobingizga hali o’quvchi biriktirilmagan. Farzandingizni ulash uchun markaz maʼmuriyatiga murojaat qiling."
         >
           <Btn onClick={contactAdmin}>
             <Icon paths={I.send} size={14} strokeWidth={2.2} />
-            Maʼmuriyat bilan bogʻlanish
+            Maʼmuriyat bilan bog’lanish
           </Btn>
           <Btn tone="ghost" onClick={() => childrenQ.refetch()}>
             <Icon paths={I.refresh} size={14} strokeWidth={2.2} />
@@ -1621,7 +1621,7 @@ function ParentView({ contactAdmin, haptic }: { contactAdmin: () => void; haptic
                     {c.name}
                   </span>
                   <span className="block truncate text-[10.5px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-                    {RELATION_LABELS[c.relationship ?? ''] ?? 'Oʻquvchi'}
+                    {RELATION_LABELS[c.relationship ?? ''] ?? 'O’quvchi'}
                   </span>
                 </span>
               </motion.button>
@@ -1635,7 +1635,7 @@ function ParentView({ contactAdmin, haptic }: { contactAdmin: () => void; haptic
 }
 
 /* ============================================================================
- * O‘QITUVCHI VIEW — bugungi jadval + davomat belgilash (REAL)
+ * O’QITUVCHI VIEW — bugungi jadval + davomat belgilash (REAL)
  * ========================================================================== */
 
 const ATT_CYCLE: (AttendanceStatus | null)[] = [null, 'PRESENT', 'LATE', 'ABSENT', 'EXCUSED'];
@@ -1739,7 +1739,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     try {
       await attendanceApi.create({ groupId: group.id, date: today, records });
       haptic('success');
-      success('Davomat saqlandi', `${group.name} — ${records.length} oʻquvchi belgilandi`);
+      success('Davomat saqlandi', `${group.name} — ${records.length} o’quvchi belgilandi`);
       setOverrides((prev) => {
         const next = { ...prev };
         delete next[lesson.id];
@@ -1763,7 +1763,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     );
   }
   if (groupsQ.isError) {
-    return <ErrorState message="Guruhlar roʻyxatini yuklab boʻlmadi." onRetry={() => groupsQ.refetch()} />;
+    return <ErrorState message="Guruhlar ro’yxatini yuklab bo’lmadi." onRetry={() => groupsQ.refetch()} />;
   }
   if ((groupsQ.data ?? []).length === 0) {
     return (
@@ -1771,7 +1771,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
         icon={I.users}
         tone="blue"
         title="Guruhlar topilmadi"
-        message="Hisobingizga biriktirilgan guruhlar aniqlanmadi. Agar bu xato boʻlsa, markaz adminiga murojaat qiling."
+        message="Hisobingizga biriktirilgan guruhlar aniqlanmadi. Agar bu xato bo’lsa, markaz adminiga murojaat qiling."
       />
     );
   }
@@ -1784,14 +1784,14 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     );
   }
   if (schedQ.isError) {
-    return <ErrorState message="Bugungi darslar yuklab boʻlmadi." onRetry={() => schedQ.refetch()} />;
+    return <ErrorState message="Bugungi darslar yuklab bo’lmadi." onRetry={() => schedQ.refetch()} />;
   }
   if (lessons.length === 0) {
     return (
       <EmptyState
         icon={I.calendar}
         tone="blue"
-        title="Bugun darslar yoʻq"
+        title="Bugun darslar yo’q"
         message={new Date().toLocaleDateString('uz-UZ', { weekday: 'long', day: 'numeric', month: 'long' })}
       />
     );
@@ -1831,7 +1831,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
                 </div>
               </div>
               <Pill tone="blue">
-                {groupLoading ? '…' : `${students.length} oʻquvchi`}
+                {groupLoading ? '…' : `${students.length} o’quvchi`}
               </Pill>
             </div>
 
@@ -1848,7 +1848,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
                     const current = statusOf(lesson.id, st.student.id, serverByStudent.get(st.student.id)?.status ?? null);
                     const row = serverByStudent.get(st.student.id);
                     const isBiometric = Boolean(row?.source && row.source !== 'MANUAL' && row.source !== 'EXCUSED');
-                    const name = `${st.student.user?.firstName ?? ''} ${st.student.user?.lastName ?? ''}`.trim() || 'Oʻquvchi';
+                    const name = `${st.student.user?.firstName ?? ''} ${st.student.user?.lastName ?? ''}`.trim() || 'O’quvchi';
                     return (
                       <button
                         key={st.student.id}
@@ -1906,7 +1906,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
 }
 
 /* ============================================================================
- * O‘QUVCHI VIEW — gamification (REAL)
+ * O’QUVCHI VIEW — gamification (REAL)
  * ========================================================================== */
 
 function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
@@ -1963,7 +1963,7 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   if (meQ.isError) {
     return (
       <ErrorState
-        message="Oʻquvchi statistikasi yuklab boʻlmadi."
+        message="O’quvchi statistikasi yuklab bo’lmadi."
         onRetry={() => {
           meQ.refetch();
           eventsQ.refetch();
@@ -1999,7 +1999,7 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
             </p>
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               <Pill tone="blue" icon={I.award}>
-                {me.rank != null ? `${me.rank}-oʻrin` : 'Reytingsiz'}
+                {me.rank != null ? `${me.rank}-o’rin` : 'Reytingsiz'}
               </Pill>
               <Pill tone="purple" icon={I.star}>
                 {me.level}-daraja
@@ -2026,7 +2026,7 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
 
       {/* XP feed */}
       <Surface className="p-5 slide-up stagger-1">
-        <CardHead icon={I.sparkles} tone="purple" title="Soʻnggi yutuqlar" meta={<span className="text-[11px] font-bold" style={{ color: '#AF52DE' }}>{me.xp} XP</span>} />
+        <CardHead icon={I.sparkles} tone="purple" title="So’nggi yutuqlar" meta={<span className="text-[11px] font-bold" style={{ color: '#AF52DE' }}>{me.xp} XP</span>} />
         {eventsQ.isLoading ? (
           <div className="space-y-2">
             <Skeleton height={46} />
@@ -2034,11 +2034,11 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
           </div>
         ) : eventsQ.isError ? (
           <p className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
-            Yutuqlar yuklab boʻlmadi.
+            Yutuqlar yuklab bo’lmadi.
           </p>
         ) : events.length === 0 ? (
           <p className="text-[12.5px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-            Hozircha yutuqlar yoʻq. Darsga vaqtida kelish va vazifalarni bajarish XP olib keladi!
+            Hozircha yutuqlar yo’q. Darsga vaqtida kelish va vazifalarni bajarish XP olib keladi!
           </p>
         ) : (
           <div className="space-y-1">
@@ -2076,11 +2076,11 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
 
       {/* Reward shop */}
       <Surface className="p-5 slide-up stagger-2">
-        <CardHead icon={I.gift} tone="orange" title="M-Coin doʻkoni" meta={<span className="inline-flex items-center gap-1 text-[11.5px] font-bold" style={{ color: '#E08A00' }}><Icon paths={I.coins} size={12} strokeWidth={2.5} />{me.coins}</span>} />
+        <CardHead icon={I.gift} tone="orange" title="M-Coin do’koni" meta={<span className="inline-flex items-center gap-1 text-[11.5px] font-bold" style={{ color: '#E08A00' }}><Icon paths={I.coins} size={12} strokeWidth={2.5} />{me.coins}</span>} />
         {rewardsQ.isError ? (
           <div className="tg-note rounded-2xl p-3.5">
             <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-              Mukofot doʻkoni hozircha ochilmagan. Xodimlarga murojaat qiling — tez orada paydo boʻladi.
+              Mukofot do’koni hozircha ochilmagan. Xodimlarga murojaat qiling — tez orada paydo bo’ladi.
             </p>
           </div>
         ) : (
@@ -2125,8 +2125,8 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
 
 const TAB_META: Record<TabId, { label: string; icon: string[] }> = {
   parent: { label: 'Ota-ona', icon: I.heart },
-  student: { label: 'Oʻquvchi', icon: I.graduationCap },
-  teacher: { label: 'Oʻqituvchi', icon: I.users },
+  student: { label: 'O’quvchi', icon: I.graduationCap },
+  teacher: { label: 'O’qituvchi', icon: I.users },
 };
 
 function BottomDock({
@@ -2156,7 +2156,7 @@ function BottomDock({
               type="button"
               role="tab"
               aria-selected={isActive}
-              aria-label={`${TAB_META[id].label} boʻlimi`}
+              aria-label={`${TAB_META[id].label} bo’limi`}
               onClick={() => onChange(id)}
               className="relative flex flex-1 flex-col items-center gap-0.5 rounded-full py-2 text-[10.5px] font-bold transition-colors"
               style={{ color: isActive ? '#34C759' : 'var(--text-tertiary)' }}
@@ -2191,7 +2191,7 @@ function GateScreen() {
       icon={I.graduationCap}
       tone="blue"
       title="M-EDU Telegram Portali"
-      message="Portalda koʻrish uchun M-EDU hisobingizga kiring. Bu sizning va farzandlaringiz maʼlumotlarini himoya qiladi."
+      message="Portalda ko’rish uchun M-EDU hisobingizga kiring. Bu sizning va farzandlaringiz maʼlumotlarini himoya qiladi."
     >
       <Btn onClick={() => window.location.assign('/login')}>
         Hisobga kirish
@@ -2205,8 +2205,8 @@ function NoAccessScreen({ role }: { role?: string | null }) {
     <EmptyState
       icon={I.shieldCheck}
       tone="slate"
-      title="Boʻlim topilmadi"
-      message={`Sizning profilingiz uchun (${ROLE_LABELS[role ?? ''] ?? role ?? 'nomaʼlum rol'}) ushbu portalda ochiq boʻlim yoʻq. Markaz adminstratsiyasiga murojaat qiling.`}
+      title="Bo’lim topilmadi"
+      message={`Sizning profilingiz uchun (${ROLE_LABELS[role ?? ''] ?? role ?? 'nomaʼlum rol'}) ushbu portalda ochiq bo’lim yo’q. Markaz adminstratsiyasiga murojaat qiling.`}
     />
   );
 }
@@ -2322,7 +2322,7 @@ export function TelegramWebAppPage() {
             style={{ background: 'rgba(255,149,0,.10)', borderColor: 'rgba(255,149,0,.28)', color: '#B86A00' }}
           >
             <Icon paths={I.wifiOff} size={15} strokeWidth={2.2} />
-            Internet aloqasi yoʻq — maʼlumotlar yangilanmaydi.
+            Internet aloqasi yo’q — maʼlumotlar yangilanmaydi.
           </div>
         </div>
       )}

@@ -611,7 +611,7 @@ function WorkloadRow({ teacher, index }: { teacher: TeacherWorkload; index: numb
                   Fiksa Oklad
                 </span>
                 <span className="tabular-nums font-bold text-[#1D1D1F] dark:text-white">
-                  {baseSalary.toLocaleString()} so‘m
+                  {baseSalary.toLocaleString()} so’m
                 </span>
               </div>
               <div>
@@ -619,7 +619,7 @@ function WorkloadRow({ teacher, index }: { teacher: TeacherWorkload; index: numb
                   Dars soatlari ({teacher.hoursPerWeek}h/h)
                 </span>
                 <span className="tabular-nums font-bold text-[#1D1D1F] dark:text-white">
-                  {Math.round(teacher.hoursPerWeek * 4.2 * hourlyRate).toLocaleString()} so‘m
+                  {Math.round(teacher.hoursPerWeek * 4.2 * hourlyRate).toLocaleString()} so’m
                 </span>
               </div>
               <div>
@@ -627,7 +627,7 @@ function WorkloadRow({ teacher, index }: { teacher: TeacherWorkload; index: numb
                   KPI Bonuslari
                 </span>
                 <span className="tabular-nums font-bold text-emerald-600 dark:text-emerald-400">
-                  +{bonusSalary.toLocaleString()} so‘m
+                  +{bonusSalary.toLocaleString()} so’m
                 </span>
               </div>
               <div>
@@ -635,7 +635,7 @@ function WorkloadRow({ teacher, index }: { teacher: TeacherWorkload; index: numb
                   Jami Hisoblangan
                 </span>
                 <span className="text-sm font-black tabular-nums text-emerald-600 dark:text-emerald-300">
-                  {estimatedSalary.toLocaleString()} so‘m
+                  {estimatedSalary.toLocaleString()} so’m
                 </span>
               </div>
             </div>
@@ -813,7 +813,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
           <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
             <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-[#1D1D1F] dark:text-slate-300">
               <span>💵 Soatlik stavka:</span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">{hourlyRate.toLocaleString()} so‘m</span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">{hourlyRate.toLocaleString()} so’m</span>
             </div>
             <input
               type="range"
@@ -825,9 +825,9 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
               className="w-full accent-emerald-500 cursor-pointer"
             />
             <div className="mt-1 flex justify-between text-[10px] text-[#86868B]">
-              <span>50k so‘m</span>
+              <span>50k so’m</span>
               <span>Stavka</span>
-              <span>300k so‘m</span>
+              <span>300k so’m</span>
             </div>
           </div>
 
@@ -855,7 +855,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
 
           <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
             <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-[#1D1D1F] dark:text-slate-300">
-              <span>📋 Davomat ko‘rsatkichi:</span>
+              <span>📋 Davomat ko’rsatkichi:</span>
               <span className={`font-bold ${attendanceRate >= 85 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}`}>
                 {attendanceRate}% {attendanceRate >= 85 ? '⭐ Bonus bor!' : ''}
               </span>
@@ -888,14 +888,14 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
                 <span className="h-2 w-2 rounded-full bg-blue-400" />
                 Asosiy oklad (Fiksa):
               </span>
-              <span className="font-semibold text-white">{baseSalary.toLocaleString()} so‘m</span>
+              <span className="font-semibold text-white">{baseSalary.toLocaleString()} so’m</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
                 Dars soatlari ({Math.round(hoursPerWeek * 4.2)} soat):
               </span>
-              <span className="font-semibold text-white">{hoursEarnings.toLocaleString()} so‘m</span>
+              <span className="font-semibold text-white">{hoursEarnings.toLocaleString()} so’m</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span className="flex items-center gap-1.5">
@@ -903,7 +903,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
                 Retention Bonusi (≥90%):
               </span>
               <span className={`font-semibold ${retentionBonus > 0 ? 'text-amber-300' : 'text-slate-500 line-through'}`}>
-                {retentionBonus > 0 ? `+${retentionBonus.toLocaleString()} so‘m` : '0 so‘m'}
+                {retentionBonus > 0 ? `+${retentionBonus.toLocaleString()} so’m` : '0 so’m'}
               </span>
             </div>
             <div className="flex justify-between text-slate-300">
@@ -912,7 +912,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
                 Davomat Bonusi (≥85%):
               </span>
               <span className={`font-semibold ${attendanceBonus > 0 ? 'text-purple-300' : 'text-slate-500 line-through'}`}>
-                {attendanceBonus > 0 ? `+${attendanceBonus.toLocaleString()} so‘m` : '0 so‘m'}
+                {attendanceBonus > 0 ? `+${attendanceBonus.toLocaleString()} so’m` : '0 so’m'}
               </span>
             </div>
           </div>
@@ -925,7 +925,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
               <span className="bg-gradient-to-r from-emerald-300 via-teal-200 to-white bg-clip-text text-2xl font-black tracking-tight text-transparent">
                 {totalSalary.toLocaleString()}
               </span>
-              <span className="ml-1 text-xs font-semibold text-slate-400">so‘m</span>
+              <span className="ml-1 text-xs font-semibold text-slate-400">so’m</span>
             </div>
             <div className="text-right">
               <span className="inline-block rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-2.5 py-1 text-[11px] font-bold text-emerald-300">

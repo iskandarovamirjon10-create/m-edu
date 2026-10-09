@@ -2006,7 +2006,7 @@ export function FaceRecognitionPage() {
                   <div className="flex items-center gap-2">
                     <span className="flex h-2 w-2 rounded-full bg-[#34C759] animate-pulse" />
                     <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                      Sessiyadagi soʻnggi tanishlar
+                      Sessiyadagi so’nggi tanishlar
                     </h3>
                   </div>
                   <span className="rounded-full bg-[#34C759]/10 px-2 py-0.5 text-[10px] font-bold text-[#34C759]">

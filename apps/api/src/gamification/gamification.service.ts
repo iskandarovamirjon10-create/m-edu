@@ -52,8 +52,8 @@ export const REWARD_CATALOG: RewardItem[] = [
   },
   {
     id: 'discount-10',
-    title: 'Keyingi oy to‘loviga 10% chegirma',
-    description: 'Ota-onangiz uchun to‘lovga maxsus vaucher',
+    title: 'Keyingi oy to’loviga 10% chegirma',
+    description: 'Ota-onangiz uchun to’lovga maxsus vaucher',
     costCoins: 250,
     category: 'DISCOUNT',
     icon: '🎟️',
@@ -61,15 +61,15 @@ export const REWARD_CATALOG: RewardItem[] = [
   {
     id: 'merch-thermos',
     title: 'M-EDU Smart Termos',
-    description: 'Haroratni ko‘rsatuvchi zanglamas metall termos',
+    description: 'Haroratni ko’rsatuvchi zanglamas metall termos',
     costCoins: 200,
     category: 'MERCH',
     icon: '☕',
   },
   {
     id: 'book-programming',
-    title: 'Dasturlash / IT Qo‘llanma Kitobi',
-    description: 'Mualliflik amaliy qo‘llanmasi',
+    title: 'Dasturlash / IT Qo’llanma Kitobi',
+    description: 'Mualliflik amaliy qo’llanmasi',
     costCoins: 100,
     category: 'BOOK',
     icon: '📚',
@@ -77,7 +77,7 @@ export const REWARD_CATALOG: RewardItem[] = [
   {
     id: 'perk-vip-mentor',
     title: 'Bosh Mentor bilan 1 soatlik VIP sessiya',
-    description: 'Karyera va xalqaro imtihonlar bo‘yicha maslahat',
+    description: 'Karyera va xalqaro imtihonlar bo’yicha maslahat',
     costCoins: 300,
     category: 'PERK',
     icon: '⭐',
@@ -426,7 +426,7 @@ export class GamificationService {
   async claimReward(studentId: string, organizationId: string, rewardId: string) {
     const reward = REWARD_CATALOG.find((r) => r.id === rewardId);
     if (!reward) {
-      throw new BadRequestException('Bunday mukofot do‘konda topilmadi');
+      throw new BadRequestException('Bunday mukofot do’konda topilmadi');
     }
 
     const current = await this.prisma.studentGamification.findUnique({

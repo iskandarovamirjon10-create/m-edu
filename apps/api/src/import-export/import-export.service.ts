@@ -214,7 +214,7 @@ export class ImportExportService {
                 create: {
                   organization: { connect: { id: orgId } },
                   email,
-                  firstName: firstName || 'O‘quvchi',
+                  firstName: firstName || 'O’quvchi',
                   lastName: lastName || '',
                   phone,
                   role: 'STUDENT',
@@ -261,7 +261,7 @@ export class ImportExportService {
                 create: {
                   organization: { connect: { id: orgId } },
                   email,
-                  firstName: firstName || 'O‘qituvchi',
+                  firstName: firstName || 'O’qituvchi',
                   lastName: lastName || '',
                   phone,
                   role: 'TEACHER',

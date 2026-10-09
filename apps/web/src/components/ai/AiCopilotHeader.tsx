@@ -161,7 +161,7 @@ export function AiCopilotHeader({
           </div>
 
           <p className="mt-0.5 truncate text-xs text-[var(--text-secondary)]">
-            {t('ai.header.tagline') || 'Savol bering, hisobot oling yoki amal bajarishni so‘rang'}
+            {t('ai.header.tagline') || 'Savol bering, hisobot oling yoki amal bajarishni so’rang'}
           </p>
         </div>
       </div>

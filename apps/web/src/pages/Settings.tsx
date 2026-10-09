@@ -253,7 +253,7 @@ const TIMEZONES = [
 
 const LANGUAGES = [
   { value: 'en', label: 'English' },
-  { value: 'uz', label: 'Oʻzbekcha' },
+  { value: 'uz', label: 'O’zbekcha' },
   { value: 'ru', label: 'Русский' },
 ];
 

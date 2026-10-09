@@ -84,7 +84,7 @@ describe('telegram message formatting safety', () => {
 
   it('preserves unicode, Uzbek and Russian characters', () => {
     expect(escapeHtml('Алишер Навои')).toBe('Алишер Навои');
-    expect(escapeHtml("G'ulom & O‘zbek")).toBe("G'ulom &amp; O‘zbek");
+    expect(escapeHtml("G'ulom & O’zbek")).toBe("G'ulom &amp; O’zbek");
   });
 
   it('handles null/undefined without emitting "undefined"', () => {
