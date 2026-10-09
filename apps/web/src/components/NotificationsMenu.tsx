@@ -451,7 +451,13 @@ export function NotificationsMenu() {
               </div>
             )}
 
-            {!notifications.isLoading && items.length === 0 && (
+            {!notifications.isLoading && notifications.isError && items.length === 0 && (
+              <div className="px-4 py-6 text-center text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                Xabarlarni yuklab bo'lmadi. Yangilashni sinab ko'ring.
+              </div>
+            )}
+
+            {!notifications.isLoading && !notifications.isError && items.length === 0 && (
               <EmptyNotifications />
             )}
 

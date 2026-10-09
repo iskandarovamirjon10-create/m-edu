@@ -170,7 +170,7 @@ export class DataGovernanceService {
     const actorIds = Array.from(new Set(rows.map((r) => r.userId).filter((id): id is string => !!id)));
     const actors = actorIds.length
       ? await this.prisma.user.findMany({
-          where: { id: { in: actorIds } },
+          where: { id: { in: actorIds }, organizationId },
           select: { id: true, firstName: true, lastName: true, email: true },
         })
       : [];

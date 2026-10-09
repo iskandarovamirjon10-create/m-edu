@@ -7,8 +7,9 @@ export async function fetchAllPaginated<T = unknown>(
   const limit = baseParams.limit || 100;
   let page = 1;
   let allItems: T[] = [];
+  const MAX_PAGES = 100; // safety valve against a misbehaving paginated API
   
-  while (true) {
+  while (page <= MAX_PAGES) {
     const response = (await fetchFn({ ...baseParams, page, limit })) as Paginated<T>;
     const items = response?.items || [];
     allItems = allItems.concat(items);

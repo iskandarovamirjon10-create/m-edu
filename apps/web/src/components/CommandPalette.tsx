@@ -204,7 +204,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     description: 'Reports, charts and performance metrics',
     category: 'Reports',
     keywords: ['reports', 'charts', 'metrics', 'statistics'],
-    href: '/analytics',
+    href: '/financial-analytics',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
     icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 3v18h18M7 16l4-4 4 4 5-5"/></svg></Icon>,
   },
@@ -271,7 +271,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     description: 'View and edit your profile',
     category: 'System',
     keywords: ['account', 'me', 'user'],
-    href: '/profile',
+    href: '/settings',
     icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0"/></svg></Icon>,
   },
   {

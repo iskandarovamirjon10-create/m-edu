@@ -607,6 +607,10 @@ ${debtorsBlock}
       message.slice(0, 30) + '...',
     );
 
+    // Bound the history that reaches the model (was unbounded via the
+    // interface-typed body — M1/H3).
+    const boundedHistory = (history ?? []).slice(-50);
+
     // Persist user message
     await this.prisma.aiMessage.create({
       data: {
@@ -628,7 +632,7 @@ ${debtorsBlock}
     let assistantContent = '';
 
     if (client) {
-      const contents = (history || []).map((h) => ({
+      const contents = boundedHistory.map((h) => ({
         role: h.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: h.content }],
       }));

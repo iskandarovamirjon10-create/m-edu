@@ -6,6 +6,7 @@ import {
   Param,
   Query,
   ParseUUIDPipe,
+  BadRequestException,
   UseGuards,
 } from '@nestjs/common';
 import { PayrollService } from './payroll.service';
@@ -51,7 +52,15 @@ export class PayrollRunController {
     @Query('year') year: string,
     @Query('month') month: string,
   ) {
-    return this.payrollService.getPeriodSummary(orgId, Number(year), Number(month));
+    const y = year ? Number(year) : new Date().getFullYear();
+    const m = month ? Number(month) : new Date().getMonth() + 1;
+    if (!Number.isInteger(y) || y < 2000 || y > 2100) {
+      throw new BadRequestException('year must be an integer in 2000..2100');
+    }
+    if (!Number.isInteger(m) || m < 1 || m > 12) {
+      throw new BadRequestException('month must be an integer in 1..12');
+    }
+    return this.payrollService.getPeriodSummary(orgId, y, m);
   }
 
   @AllowAnyRole()

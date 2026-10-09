@@ -49,7 +49,7 @@ export class AnalyticsController {
     @Query('endDate') endDate?: string,
   ) {
     this.orgLimiter.assert(orgId, 'analytics-profitability', 60, 60_000);
-    const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1);
+    const start = (() => { const d = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1); return Number.isNaN(d.getTime()) ? new Date(new Date().getFullYear(), 0, 1) : d; })();
     const end = endDate ? new Date(endDate) : new Date();
     return this.financialBrainService.getGroupContribution(orgId, groupId, start, end);
   }
@@ -178,7 +178,7 @@ export class AnalyticsController {
     @Query('endDate') endDate?: string,
   ) {
     this.orgLimiter.assert(orgId, 'analytics-financial', 30, 60_000);
-    const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1);
+    const start = (() => { const d = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1); return Number.isNaN(d.getTime()) ? new Date(new Date().getFullYear(), 0, 1) : d; })();
     const end = endDate ? new Date(endDate) : new Date();
     return this.financialBrainService.getCashFlow(orgId, start, end);
   }
@@ -201,7 +201,7 @@ export class AnalyticsController {
     @Query('endDate') endDate?: string,
   ) {
     this.orgLimiter.assert(orgId, 'analytics-financial', 30, 60_000);
-    const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1);
+    const start = (() => { const d = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1); return Number.isNaN(d.getTime()) ? new Date(new Date().getFullYear(), 0, 1) : d; })();
     const end = endDate ? new Date(endDate) : new Date();
     return this.financialBrainService.detectAnomalies(orgId, start, end);
   }
@@ -217,7 +217,7 @@ export class AnalyticsController {
     @Query('payrollIncrease') payrollIncrease?: string,
   ) {
     this.orgLimiter.assert(orgId, 'analytics-financial', 30, 60_000);
-    const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1);
+    const start = (() => { const d = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1); return Number.isNaN(d.getTime()) ? new Date(new Date().getFullYear(), 0, 1) : d; })();
     const end = endDate ? new Date(endDate) : new Date();
     const baseCashFlow = await this.financialBrainService.getCashFlow(orgId, start, end);
     return this.financialBrainService.simulateWhatIf(baseCashFlow as any, {
@@ -235,7 +235,7 @@ export class AnalyticsController {
     @Query('month') month?: string,
   ) {
     this.orgLimiter.assert(orgId, 'analytics-financial', 30, 60_000);
-    const y = year ? Number(year) : new Date().getFullYear();
+    const y = (year ? Number(year) : new Date().getFullYear()) || new Date().getFullYear();
     const m = month ? Number(month) : new Date().getMonth() + 1;
     return this.financialBrainService.reconcilePeriod(orgId, y, m);
   }
@@ -250,7 +250,7 @@ export class AnalyticsController {
     @Query('month') month?: string,
   ) {
     this.orgLimiter.assert(orgId, 'analytics-reconciliation', 30, 60_000);
-    const y = year ? Number(year) : new Date().getFullYear();
+    const y = (year ? Number(year) : new Date().getFullYear()) || new Date().getFullYear();
     const m = month ? Number(month) : new Date().getMonth() + 1;
     return this.reconciliationService.getReconciliationReport(orgId, y, m);
   }
@@ -263,7 +263,7 @@ export class AnalyticsController {
     @Query('month') month?: string,
   ) {
     this.orgLimiter.assert(orgId, 'analytics-reconciliation', 30, 60_000);
-    const y = year ? Number(year) : new Date().getFullYear();
+    const y = (year ? Number(year) : new Date().getFullYear()) || new Date().getFullYear();
     const m = month ? Number(month) : new Date().getMonth() + 1;
     return this.reconciliationService.detectDiscrepancies(orgId, y, m);
   }
