@@ -28,6 +28,11 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      # Fresh `npm ci` installs the @prisma/client *stub* (no enums, throws on
+      # `new PrismaClient()`). Every job that typechecks/builds/runs the API
+      # needs the generated client first, or `import { Role }` fails TS2305.
+      - name: Prisma generate
+        run: npx prisma generate --schema apps/api/prisma/schema.prisma
       - name: Typecheck
         run: npm run typecheck
 
@@ -42,6 +47,8 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      - name: Prisma generate
+        run: npx prisma generate --schema apps/api/prisma/schema.prisma
       - name: Lint
         run: npm run lint
 
@@ -95,6 +102,8 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      - name: Prisma generate
+        run: npx prisma generate --schema apps/api/prisma/schema.prisma
       - name: Unit tests
         run: npm run test
       - name: Prisma validate
@@ -146,5 +155,7 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      - name: Prisma generate
+        run: npx prisma generate --schema apps/api/prisma/schema.prisma
       - name: Build
         run: npm run build

@@ -301,6 +301,19 @@ export class RealLivenessChecker {
     // values before they poison softmax.
     let logits: Float32Array;
     if (rawLogits instanceof Float32Array) {
+      // onnxruntime-node returns Float32Array on the common path - run the
+      // same finite check here, otherwise NaN/Inf poisons softmax and yields
+      // a false UNCERTAIN (E2).
+      if (
+        rawLogits.length > 0 &&
+        Array.from(rawLogits).some((v: number) => !Number.isFinite(v))
+      ) {
+        return {
+          decision: 'UNAVAILABLE',
+          confidence: 0,
+          details: { provider: 'real', reason: 'Liveness output contains non-finite values' },
+        };
+      }
       logits = rawLogits;
     } else {
       const values = Array.from(rawLogits as ArrayLike<number>);

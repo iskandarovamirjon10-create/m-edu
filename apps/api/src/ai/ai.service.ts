@@ -788,36 +788,41 @@ ${debtorsBlock}
     res.end();
   }
 
-  async importConversations(organizationId: string, userId: string, data: any) {
-    if (!data || !data.conversations || !Array.isArray(data.conversations)) {
-      return { success: false };
-    }
-    
-    for (const conv of data.conversations) {
-      const newConv = await this.prisma.aiConversation.create({
-        data: {
-          organizationId,
-          createdBy: userId,
-          title: conv.title || 'Imported conversation',
-          preview: '',
-          messageCount: Array.isArray(conv.messages) ? conv.messages.length : 0,
-        },
-      });
-      
-      if (Array.isArray(conv.messages)) {
-        for (const msg of conv.messages) {
-          await this.prisma.aiMessage.create({
-            data: {
+  async importConversations(
+    organizationId: string,
+    userId: string,
+    conversations: Array<{ title?: string; messages?: Array<{ role?: string; content: string }> }>,
+  ) {
+    // H3: bounded, transactional, batched writes (was an `any` unbounded
+    // N+1 loop that could persist millions of rows in one request).
+    const imported = await this.prisma.$transaction(async (tx) => {
+      const created: unknown[] = [];
+      for (const conv of (conversations ?? []).slice(0, 100)) {
+        const messages = (conv.messages ?? []).slice(0, 500);
+        const newConv = await tx.aiConversation.create({
+          data: {
+            organizationId,
+            createdBy: userId,
+            title: (conv.title || 'Imported conversation').slice(0, 200),
+            preview: '',
+            messageCount: messages.length,
+          },
+        });
+        if (messages.length > 0) {
+          await tx.aiMessage.createMany({
+            data: messages.map((msg) => ({
               organizationId,
               conversationId: newConv.id,
               role: msg.role === 'assistant' ? 'assistant' : 'user',
-              content: msg.content || '',
-            },
+              content: msg.content.slice(0, 4000),
+            })),
           });
         }
+        created.push(newConv);
       }
-    }
-    return { success: true };
+      return created;
+    });
+    return { success: true, imported: imported.length };
   }
 
   private buildSystemInstruction(snapshot: OrgDataSnapshot, entityDossier?: string): string {
@@ -859,12 +864,10 @@ ${entityDossier ? `\n${entityDossier}\n` : ''}`;
 
     // 1. Quick Tool: Attendance summary generator
     if (/(davomat|attendance|посещаемост|kelmagan|absent|пропуск)/i.test(raw)) {
-      const presentDisplay = snapshot.presentToday > 0 
-        ? snapshot.presentToday 
-        : Math.max(1, Math.round(snapshot.studentsCount * 0.92));
+      const presentDisplay = snapshot.presentToday;
       const presentPct = snapshot.studentsCount > 0 
         ? Math.round((presentDisplay / snapshot.studentsCount) * 100) 
-        : 92;
+        : 0;
       const lateDisplay = snapshot.lateToday;
       const absentDisplay = snapshot.absentToday;
 
@@ -912,8 +915,8 @@ ${debtorsBlock}
 
     // 3. Quick Tool: Student performance & risk analyzer (Retention Radar)
     if (/(xavf|risk|orqada|pasayish|риск|отстающ|qoloq|baholar|retention|churn|dropout)/i.test(raw)) {
-      const highRisk = Math.max(1, Math.round(snapshot.studentsCount * 0.04));
-      const midRisk = Math.max(2, Math.round(snapshot.studentsCount * 0.08));
+      const highRisk = 0; // FABRICATED-risk removal (H2): invented percentages were presented as live DB data
+      const midRisk = 0;
       const stable = Math.max(0, snapshot.studentsCount - highRisk - midRisk);
 
       return `### 🚨 O'quvchilar chiqib ketish xavfi (Retention Radar)

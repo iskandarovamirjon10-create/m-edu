@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DataQualityService } from './data-quality.service';
+import { DataQualityQueryDto, ResolveIssueDto } from './dto/data-quality.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -23,7 +24,7 @@ export class DataQualityController {
 
   @Get('issues')
   @ApiOperation({ summary: 'List data quality issues' })
-  async getIssues(@CurrentUser('organizationId') orgId: string, @Query() query: any) {
+  async getIssues(@CurrentUser('organizationId') orgId: string, @Query() query: DataQualityQueryDto) {
     return this.dataQualityService.getIssues(orgId, query);
   }
 
@@ -41,8 +42,8 @@ export class DataQualityController {
     @CurrentUser('organizationId') orgId: string,
     @CurrentUser('sub') userId: string,
     @Param('id') id: string,
-    @Body() body: { note?: string }
+    @Body() body: ResolveIssueDto
   ) {
-    return this.dataQualityService.resolveIssue(orgId, id, userId, body.note);
+    return this.dataQualityService.resolveIssue(orgId, id, userId, body?.note);
   }
 }

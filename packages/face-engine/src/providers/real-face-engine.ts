@@ -96,12 +96,16 @@ export class RealFaceEngine implements FaceEngine {
       modelFamily: 'YuNet',
       license: 'MIT',
       commercialUse: 'verified',
+      // SHA-256 of face_detection_yunet_2023mar.onnx (opencv_zoo); a swapped detector must fail closed.
+      sha256: '8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4',
     });
 
     const embedderValidation = validateModel('embedder', this.config.embedderModelPath, {
       modelFamily: 'SFace',
       license: 'Apache-2.0',
       commercialUse: 'verified',
+      // SHA-256 of face_recognition_sface_2021dec.onnx (opencv_zoo) - the embedder decides every match (E1).
+      sha256: '0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79',
     });
 
     const livenessValidation = this.config.livenessModelPath
@@ -218,6 +222,7 @@ export class RealFaceEngine implements FaceEngine {
   }
 
   async compareEmbeddings(input: ComparisonInput): Promise<number> {
+    await this.ensureInitialized();
     return input.embeddingA.cosineSimilarity(input.embeddingB);
   }
 

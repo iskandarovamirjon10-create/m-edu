@@ -288,7 +288,6 @@ export const routeConfig: RouteConfig[] = [
       { path: 'ai-copilot', element: <AiCopilotPage />, title: 'AI Copilot', titleKey: 'nav.aiCopilot', roles: STAFF_ROLES },
       { path: 'parent-portal', element: <ParentPortalPage />, title: 'Parent Portal', titleKey: 'parentPortal.title' },
       { path: 'telegram', element: <TelegramPage />, title: 'Telegram', titleKey: 'nav.telegram' },
-      { path: 'tg-app', element: <TelegramWebAppPage />, title: 'Telegram WebApp Hub' },
       { path: 'executive-dashboard', element: <ExecutiveDashboardPage />, title: 'Executive Dashboard', titleKey: 'nav.executiveDashboard', roles: STAFF_ROLES },
       { path: 'automation', element: <AutomationEnginePage />, title: 'Automation', titleKey: 'nav.automation', roles: STAFF_ROLES },
       { path: 'payroll', element: <PayrollPage />, title: 'Payroll', titleKey: 'nav.payrollRuns', roles: STAFF_ROLES },

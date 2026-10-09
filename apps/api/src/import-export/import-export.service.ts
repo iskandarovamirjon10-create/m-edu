@@ -561,16 +561,24 @@ export class ImportExportService {
 
     // Default to CSV stream
     res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", "attachment; filename=\"" + entityType.toLowerCase() + "_export.csv\"");
-    
+    // CWE-1236: prefix formula-injection cells (leading =,+,-,@,\t,\r) with a
+    // single quote, exactly like report-builder.service.ts — a student/lead
+    // name starting with "=" would otherwise execute in Excel/LibreOffice.
+    const csvCell = (v: unknown) => {
+      const s = String(v ?? '');
+      return "\"" + (/^[=+\-@\t\r]/.test(s) ? "'" : "") + s.replace(/"/g, '""') + "\"";
+    };
+    const safeName = entityType.toLowerCase().replace(/[^a-z0-9-]/gi, '_');
+    res.setHeader("Content-Disposition", "attachment; filename=\"" + safeName + "_export.csv\"");
+
     // Write CSV header
-    res.write(headers.map(h => "\"" + h + "\"").join(",") + "\n");
-    
+    res.write(headers.map(csvCell).join(",") + "\n");
+
     // Write chunks
     for await (const chunk of this.streamEntityForExport(orgId, upper)) {
       let csvData = "";
       for (const row of chunk) {
-        csvData += headers.map(h => "\"" + String(row[h] || "").replace(/"/g, '""') + "\"").join(",") + "\n";
+        csvData += headers.map((h) => csvCell(row[h])).join(",") + "\n";
       }
       res.write(csvData);
     }

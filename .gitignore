@@ -1,8 +1,8 @@
-# Environment variables
-.env
-.env.local
-.env.*.local
-.env.docker
+# Environment variables (all variants — .env.production must never slip in)
+.env*
+!.env.example
+!apps/**/.env.example
+!.npmrc
 
 # Node dependencies
 node_modules/

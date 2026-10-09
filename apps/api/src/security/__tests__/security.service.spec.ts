@@ -126,30 +126,15 @@ describe('SecurityService', () => {
   });
 
   describe('resolve', () => {
-    it('persists the resolution on the matching security issue', async () => {
-      mockPrisma.dataQualityIssue.updateMany.mockResolvedValue({ count: 1 });
-
-      const result = await service.resolve('org-1', 'evt-1', 'admin-1', 'handled');
-
-      expect(mockPrisma.dataQualityIssue.updateMany).toHaveBeenCalledWith({
-        where: { id: 'evt-1', organizationId: 'org-1' },
-        data: {
-          resolvedAt: expect.any(Date),
-          resolvedBy: 'admin-1',
-          resolutionNote: 'handled',
-        },
-      });
-      expect(result).toEqual({ ok: true });
-    });
-
-    it('stores a null note when none is given', async () => {
-      mockPrisma.dataQualityIssue.updateMany.mockResolvedValue({ count: 0 });
-
-      await service.resolve('org-1', 'evt-1', 'admin-1');
-
-      expect(mockPrisma.dataQualityIssue.updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ resolutionNote: null }) }),
-      );
+    it('fails loudly instead of writing to the wrong table (H1)', async () => {
+      // Security alerts are DERIVED from AuditLog at read time; the previous
+      // implementation "resolved" them by mutating DataQualityIssue (a
+      // different module) — success was fake. Only a real persistence model
+      // can make this endpoint honest.
+      await expect(
+        service.resolve('org-1', 'evt-1', 'admin-1', 'handled'),
+      ).rejects.toThrow('persistence is not implemented yet');
+      expect(mockPrisma.dataQualityIssue.updateMany).not.toHaveBeenCalled();
     });
   });
 });

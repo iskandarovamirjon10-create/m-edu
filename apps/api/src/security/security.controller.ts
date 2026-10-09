@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SecurityService } from './security.service';
+import { ResolveSecurityAlertDto } from './dto/security.dto';
 import { SecurityAlertQueryDto } from './dto/security.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -37,8 +38,8 @@ export class SecurityController {
     @CurrentUser('organizationId') orgId: string,
     @CurrentUser('sub') userId: string,
     @Param('id') id: string,
-    @Body() body: { note?: string },
+    @Body() body: ResolveSecurityAlertDto,
   ) {
-    return this.securityService.resolve(orgId, id, userId, body.note);
+    return this.securityService.resolve(orgId, id, userId, body?.note);
   }
 }

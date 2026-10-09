@@ -294,14 +294,17 @@ export function computePayroll(inputs: PayrollInputs): PayrollComputation {
   let appliedOtherMinor = 0;
   if (otherDeductionMinor > 0) {
     appliedOtherMinor = applyDeduction(otherDeductionMinor);
-    lines.push({
-      key: 'OTHER_DEDUCTION',
-      label: 'Other deductions',
-      amountMinor: -appliedOtherMinor,
-      ...(appliedOtherMinor < otherDeductionMinor
-        ? { detail: `Requested ${fromMinor(otherDeductionMinor)}, capped at remaining gross pay` }
-        : {}),
-    });
+    // Never emit a `-0` line (amountMinor of zero is noise, not a deduction).
+    if (appliedOtherMinor > 0) {
+      lines.push({
+        key: 'OTHER_DEDUCTION',
+        label: 'Other deductions',
+        amountMinor: -appliedOtherMinor,
+        ...(appliedOtherMinor < otherDeductionMinor
+          ? { detail: `Requested ${fromMinor(otherDeductionMinor)}, capped at remaining gross pay` }
+          : {}),
+      });
+    }
   }
 
   // --- Income tax ------------------------------------------------------------

@@ -12,6 +12,26 @@
 /** Number of minor units per major unit. UZS uses 2 (tiyin). */
 export const MINOR_UNITS_PER_UNIT = 100;
 
+const PLAIN_DECIMAL = /^-?\d+\.?\d*$/;
+
+/**
+ * Exact decimal-string → minor units (round-half-up at the third decimal).
+ * BigInt-based: "1.005" → 101, "8.165" → 817. The old `Number * 100` path
+ * truncated such values (1.005*100 === 100.499…) and silently mis-rounded
+ * three-decimal money (regression find F1).
+ */
+function decimalStringToMinor(raw: string): number {
+  const neg = raw.startsWith('-');
+  const unsigned = raw.slice(Number(neg));
+  const [intPart = '', fracPart = ''] = unsigned.split('.');
+  const frac = (fracPart + '00').slice(0, 3); // minor digits + rounding digit
+  const third = frac.length >= 3 ? Number(frac[2]) : 0;
+  const minor = BigInt(intPart || '0') * 100n + BigInt(frac.slice(0, 2) || '0');
+  const rounded = minor + (third >= 5 ? 1n : 0n);
+  const result = Number(rounded);
+  return neg ? -result : result;
+}
+
 export type DecimalLike = string | number | { toNumber(): number } | null | undefined;
 
 export function asNumber(value: DecimalLike): number {
@@ -27,6 +47,9 @@ export function asNumber(value: DecimalLike): number {
  * Applied once per external input so later math stays purely integral.
  */
 export function toMinor(value: DecimalLike): number {
+  if (typeof value === 'string' && PLAIN_DECIMAL.test(value.trim())) {
+    return decimalStringToMinor(value.trim());
+  }
   const scaled = asNumber(value) * MINOR_UNITS_PER_UNIT;
   // Round-half-up on the magnitude, then restore sign — avoids
   // Math.round's "round half towards +Infinity" asymmetry.

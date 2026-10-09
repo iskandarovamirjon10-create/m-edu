@@ -41,7 +41,9 @@ export class FaceEmbedding {
 
   /** Get the raw embedding data */
   getData(): Float32Array {
-    return this.data;
+    // Return a COPY: the backing Float32Array is the value object's internal
+    // state — handing it out lets callers mutate cached templates (K9).
+    return new Float32Array(this.data);
   }
 
   /** Get embedding dimension */
@@ -61,7 +63,16 @@ export class FaceEmbedding {
   /** Deserialize from JSON format */
   static deserialize(base64: string): FaceEmbedding {
     const buffer = Buffer.from(base64, 'base64');
+    if (buffer.length < 4) {
+      throw new Error('FaceEmbedding.deserialize: payload too short for the length prefix');
+    }
     const length = buffer.readUInt32LE(0);
+    if (!Number.isFinite(length) || length <= 0 || buffer.length !== 4 + length * 4) {
+      throw new Error(
+        `FaceEmbedding.deserialize: malformed payload ` +
+          `(declared length ${length}, buffer ${buffer.length} bytes)`,
+      );
+    }
     const floatBuffer = buffer.slice(4, 4 + length * 4);
     return new FaceEmbedding(new Float32Array(floatBuffer.buffer, floatBuffer.byteOffset, length));
   }
@@ -101,7 +112,7 @@ export class SimilarityScore {
     public readonly value: number,
     public readonly threshold: number
   ) {
-    if (value < -1 || value > 1) {
+    if (!Number.isFinite(value) || value < -1 || value > 1) {
       throw new Error(`Similarity score must be between -1 and 1, got ${value}`);
     }
   }

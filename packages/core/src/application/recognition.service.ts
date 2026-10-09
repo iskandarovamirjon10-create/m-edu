@@ -164,7 +164,7 @@ export class RecognitionService {
       // Stage 2: Quality Assessment
       const quality = await this.faceEngine.assessQuality({ imageBuffer, face: primaryFace });
       qualityScore = quality.overallScore;
-      if (!quality.passesThreshold) {
+      if (!quality.passesThreshold || qualityScore < config.qualityThreshold) {
         attemptStatus = RecognitionAttemptStatus.QUALITY_FAILED;
         throw new FaceQualityTooLowError(qualityScore, config.qualityThreshold);
       }

@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { EarlyWarningService } from './early-warning.service';
+import { EarlyWarningQueryDto, ResolveEarlyWarningDto } from './dto/early-warning.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -23,7 +24,7 @@ export class EarlyWarningController {
 
   @Get()
   @ApiOperation({ summary: 'List early warnings' })
-  async findAll(@CurrentUser('organizationId') orgId: string, @Query() query: any) {
+  async findAll(@CurrentUser('organizationId') orgId: string, @Query() query: EarlyWarningQueryDto) {
     return this.earlyWarningService.findAll(orgId, query);
   }
 
@@ -39,8 +40,8 @@ export class EarlyWarningController {
     @CurrentUser('organizationId') orgId: string,
     @CurrentUser('sub') userId: string,
     @Param('id') id: string,
-    @Body() body: { note?: string },
+    @Body() body: ResolveEarlyWarningDto,
   ) {
-    return this.earlyWarningService.resolve(orgId, id, userId, body.note);
+    return this.earlyWarningService.resolve(orgId, id, userId, body?.note);
   }
 }

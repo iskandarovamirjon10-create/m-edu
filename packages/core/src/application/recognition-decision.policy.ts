@@ -257,6 +257,14 @@ export class RecognitionDecisionPolicy {
 
   /** Get the current configuration (for settings display) */
   getConfig(): FaceRecognitionConfig {
-    return { ...this.config };
+    // Deep-clone the nested policy objects so a caller cannot mutate the
+    // live policy through the returned config (K7).
+    return {
+      ...this.config,
+      matching: { ...this.config.matching },
+      livenessPolicy: { ...this.config.livenessPolicy },
+      sessions: { ...this.config.sessions },
+      duplicatePrevention: { ...this.config.duplicatePrevention },
+    };
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotImplementedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecurityAlertQueryDto } from './dto/security.dto';
 
@@ -126,16 +126,18 @@ export class SecurityService {
     userId: string,
     note?: string,
   ): Promise<{ ok: true }> {
-    const now = new Date();
-    await this.prisma.dataQualityIssue.updateMany({
-      where: { id, organizationId: orgId },
-      data: {
-        resolvedAt: now,
-        resolvedBy: userId,
-        resolutionNote: note ?? null,
-      },
-    });
-    return { ok: true };
+    // H1: security alerts are DERIVED from the AuditLog at read time — there
+    // is no SecurityAlert row to update. The previous implementation wrote to
+    // DataQualityIssue (a different module's table), so "Resolve" displayed
+    // success while the incident stayed open. Fail honestly until a
+    // SecurityAlertResolution model lands.
+    void orgId;
+    void id;
+    void userId;
+    void note;
+    throw new NotImplementedException(
+      'Security alert resolution is derived from the audit log; persistence is not implemented yet.',
+    );
   }
 
   private async buildAlertsFromAuditLog(orgId: string): Promise<SecurityAlert[]> {

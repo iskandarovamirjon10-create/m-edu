@@ -1,6 +1,6 @@
 import { useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -38,16 +38,15 @@ export function DashboardPage() {
 
   const role = user?.role?.toUpperCase();
 
-  // Role-based landing: Non-executive roles route gracefully to their home page without triggering 403 Forbidden
-  if (role === 'PARENT') {
-    return <Navigate to="/parent-portal" replace />;
-  }
-  if (role === 'TEACHER') {
-    return <Navigate to="/attendance" replace />;
-  }
-  if (role === 'STUDENT') {
-    return <Navigate to="/schedule" replace />;
-  }
+  // Role-based landing. MUST be a hook (not an early return above other
+  // hooks): an `if (role...) return <Navigate/>` before useEffect/useQuery
+  // violated the Rules of Hooks and threw "rendered fewer hooks" whenever
+  // the role changed while mounted (cross-tab sign-in / account switch).
+  useEffect(() => {
+    if (role === 'PARENT') navigate('/parent-portal', { replace: true });
+    else if (role === 'TEACHER') navigate('/attendance', { replace: true });
+    else if (role === 'STUDENT') navigate('/schedule', { replace: true });
+  }, [role, navigate]);
 
   // Keyboard shortcut: ⌘N / Ctrl+N to create student (safe inside inputs)
   useEffect(() => {

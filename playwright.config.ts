@@ -39,13 +39,13 @@ export default defineConfig({
     {
       command: 'node apps/api/dist/main.js',
       url: `${API_ORIGIN}/api/health`,
-      reuseExistingServer: true,
+      reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
     {
       command: `npm run preview -w @medu/web -- --port ${WEB_PORT} --strictPort`,
       url: WEB_ORIGIN,
-      reuseExistingServer: true,
+      reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
   ],

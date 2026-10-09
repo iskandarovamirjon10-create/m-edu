@@ -8,6 +8,16 @@ import { STAFF_ROLES, isAdminRole } from '../auth/authorization.policy';
 import { AllowPublic } from '../auth/public.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { Request, Response } from 'express';
+import { Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
 
 interface ChatHistoryItem {
   role: string;
@@ -18,6 +28,38 @@ interface ChatBody {
   message: string;
   history?: ChatHistoryItem[];
   conversationId?: string;
+}
+
+export class ImportMessageDto {
+  @IsString()
+  @MaxLength(4000)
+  content: string;
+
+  @IsOptional()
+  @IsIn(['user', 'assistant'])
+  role?: 'user' | 'assistant';
+}
+
+export class ImportConversationDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  title?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => ImportMessageDto)
+  messages?: ImportMessageDto[];
+}
+
+export class ImportConversationsBodyDto {
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => ImportConversationDto)
+  conversations: ImportConversationDto[];
 }
 
 @Controller('ai')
@@ -182,9 +224,9 @@ export class AiController {
   async importConversations(
     @CurrentUser('organizationId') organizationId: string,
     @CurrentUser('sub') userId: string,
-    @Body() body: { data: any },
+    @Body() body: ImportConversationsBodyDto,
   ) {
     if (!organizationId) throw new HttpException('Tenant context required', HttpStatus.FORBIDDEN);
-    return this.aiService.importConversations(organizationId, userId, body.data);
+    return this.aiService.importConversations(organizationId, userId, body.conversations);
   }
 }

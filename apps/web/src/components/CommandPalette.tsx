@@ -449,11 +449,11 @@ export function CommandPalette() {
     };
 
     document.addEventListener('keydown', handleShortcut);
-    window.addEventListener('open-command-palette', handleCustomOpen);
+    window.addEventListener('medu:open-command-palette', handleCustomOpen);
 
     return () => {
       document.removeEventListener('keydown', handleShortcut);
-      window.removeEventListener('open-command-palette', handleCustomOpen);
+    window.removeEventListener('medu:open-command-palette', handleCustomOpen);
     };
   }, [open, openPalette, closePalette]);
 

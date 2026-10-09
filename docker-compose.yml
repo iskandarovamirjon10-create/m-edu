@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-medu}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medu_pass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?put a strong POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-medu}
     ports:
       - "127.0.0.1:5432:5432"
