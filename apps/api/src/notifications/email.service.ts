@@ -5,6 +5,7 @@ import type { Transporter } from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmailTemplateDto, UpdateEmailTemplateDto, SendEmailDto } from './dto/email.dto';
 import { EmailTemplate } from '@prisma/client';
+import { escapeHtml } from '../auth/auth.utils';
 
 /**
  * Real SMTP email delivery via Nodemailer.
@@ -160,8 +161,11 @@ export class EmailService {
         // Escape the key to prevent ReDoS or unintended regex behavior
         const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp(`{{${escapedKey}}}`, 'g');
-        htmlBody = htmlBody.replace(regex, String(value));
-        textBody = textBody.replace(regex, String(value));
+        const raw = String(value);
+        // HTML-escape values interpolated into the markup to prevent stored
+        // XSS from user-controlled fields. The plain-text body stays raw.
+        htmlBody = htmlBody.replace(regex, () => escapeHtml(raw));
+        textBody = textBody.replace(regex, () => raw);
       }
     }
 

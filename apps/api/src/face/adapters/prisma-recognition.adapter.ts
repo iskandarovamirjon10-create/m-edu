@@ -6,7 +6,8 @@ import type {
   RecognitionAttemptEntity, 
   AttendanceRecordEntity 
 } from '@medu/core/src/ports/recognition-repository.port';
-import type { RecognitionSessionStatus, RecognitionAttemptStatus, AttendanceDecision } from '@medu/contracts';
+import type { RecognitionSessionStatus, RecognitionAttemptStatus } from '@medu/contracts';
+import { AttendanceDecision } from '@medu/contracts';
 import type { RecognitionSession, RecognitionAttempt, Prisma, Attendance } from '@prisma/client';
 import { AttendanceStatus } from '@prisma/client';
 import { startOfDay, endOfDayInclusive } from '../../common/date-range';
@@ -20,11 +21,14 @@ interface AttendanceRowInput {
   sessionId?: string | null;
   decision?: string;
   status?: string;
+  note?: string | null;
   recordedAt?: Date;
   date?: Date;
   metadata?: Record<string, unknown> | null;
   createdAt: Date;
 }
+
+const VALID_ATTENDANCE_DECISIONS = new Set<string>(Object.values(AttendanceDecision));
 
 // Allowlist of columns that may be used in ORDER BY for recognition attempt
 // queries. Without this, a caller-controlled `sortBy` flows into Prisma's
@@ -192,6 +196,9 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
   }
 
   private mapAttendanceEntity(row: AttendanceRowInput): AttendanceRecordEntity {
+    // `Attendance.status` is an AttendanceStatus (PRESENT/LATE/...), NOT an
+    // AttendanceDecision. Never alias it — resolve a genuine decision instead.
+    const decision = this.resolveAttendanceDecision(row);
     return {
       id: row.id,
       organizationId: row.organizationId,
@@ -199,11 +206,36 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
       groupId: row.groupId,
       lessonId: row.lessonId ?? null,
       sessionId: row.sessionId ?? null,
-      decision: (row.decision ?? row.status) as AttendanceDecision,
+      decision,
       recordedAt: row.recordedAt ?? row.date ?? row.createdAt,
       metadata: row.metadata as Record<string, unknown> | null,
       createdAt: row.createdAt,
     };
+  }
+
+  /**
+   * Resolve a valid AttendanceDecision for an Attendance row. FACE writes
+   * persist the pipeline decision both explicitly (createAttendance) and in
+   * the `note` JSON; anything else that produced a real attendance row is by
+   * definition RECORDED.
+   */
+  private resolveAttendanceDecision(row: AttendanceRowInput): AttendanceDecision {
+    if (row.decision && VALID_ATTENDANCE_DECISIONS.has(row.decision)) {
+      return row.decision as AttendanceDecision;
+    }
+
+    if (row.note) {
+      try {
+        const parsed = JSON.parse(row.note) as { decision?: unknown };
+        if (typeof parsed?.decision === 'string' && VALID_ATTENDANCE_DECISIONS.has(parsed.decision)) {
+          return parsed.decision as AttendanceDecision;
+        }
+      } catch {
+        // Malformed / non-JSON note — fall through to the default.
+      }
+    }
+
+    return AttendanceDecision.RECORDED;
   }
 
   // ---- Sessions ----
@@ -626,20 +658,30 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
       createdAt: { gte: startOfDay(dateFrom), lte: endOfDayInclusive(dateTo) },
     };
 
-    const [_total, recorded] = await Promise.all([
-      this.prisma.attendance.count({ where }),
+    const [recorded, duplicatePrevented, notInGroup, lessonInvalid] = await Promise.all([
       // Accept both the canonical 'FACE' source and the legacy
       // 'FACE_RECOGNITION' rows written by older builds.
       this.prisma.attendance.count({
         where: { ...where, source: { in: ['FACE', 'FACE_RECOGNITION'] } },
       }),
+      // Non-recorded outcomes never create an Attendance row: they live on the
+      // CameraAttendanceEvent pipeline, so count them from `decision`.
+      this.prisma.cameraAttendanceEvent.count({
+        where: { ...where, decision: AttendanceDecision.DUPLICATE_PREVENTED },
+      }),
+      this.prisma.cameraAttendanceEvent.count({
+        where: { ...where, decision: AttendanceDecision.STUDENT_NOT_IN_GROUP },
+      }),
+      this.prisma.cameraAttendanceEvent.count({
+        where: { ...where, decision: AttendanceDecision.LESSON_INVALID },
+      }),
     ]);
 
     return {
       recorded,
-      duplicatePrevented: 0,
-      notInGroup: 0,
-      lessonInvalid: 0,
+      duplicatePrevented,
+      notInGroup,
+      lessonInvalid,
     };
   }
 }

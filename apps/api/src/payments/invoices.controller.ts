@@ -21,7 +21,9 @@ import {
   CreateInvoiceDto,
   CreateRefundDto,
   RecordPaymentDto,
+  ProrateInvoiceDto,
 } from './dto/invoice.dto';
+import { Idempotent } from '../common/idempotency';
 
 @ApiTags('Invoices')
 @ApiBearerAuth()
@@ -71,6 +73,54 @@ export class InvoicesController {
   }
 
   @AllowAnyRole()
+  @Get('students/:studentId/debtor-status')
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
+  @ApiOperation({ summary: 'Check if student has overdue unpaid debt (debtor lockout policy)' })
+  debtorStatus(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Query('graceDays') graceDays?: string,
+  ) {
+    return this.invoicesService.checkStudentDebtorStatus(
+      orgId,
+      studentId,
+      graceDays ? Number(graceDays) : 5,
+    );
+  }
+
+  @Post('prorate-preview')
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER)
+  @ApiOperation({ summary: 'Preview prorated tuition calculation for mid-month enrollment' })
+  proratePreview(
+    @CurrentUser('organizationId') orgId: string,
+    @Body() dto: ProrateInvoiceDto,
+  ) {
+    return this.invoicesService.proratePreview(orgId, dto);
+  }
+
+  @Post('prorate')
+  @Idempotent({ ttlSeconds: 86400 })
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
+  @ApiOperation({ summary: 'Create and issue a prorated tuition invoice' })
+  createProrated(
+    @CurrentUser() user: { organizationId: string; id: string },
+    @Body() dto: ProrateInvoiceDto,
+  ) {
+    return this.invoicesService.createProratedInvoice(user.organizationId, user.id, dto);
+  }
+
+  @AllowAnyRole()
+  @Get(':id/payment-links')
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER, Role.STUDENT)
+  @ApiOperation({ summary: 'Generate Payme and Click payment deep links and QR codes' })
+  paymentLinks(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.invoicesService.getPaymentLinks(orgId, id);
+  }
+
+  @AllowAnyRole()
   @Get(':id')
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER, Role.STUDENT)
   @ApiOperation({ summary: 'Invoice detail with payments and refunds' })
@@ -85,6 +135,7 @@ export class InvoicesController {
   }
 
   @Post()
+  @Idempotent({ ttlSeconds: 86400 })
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
   @ApiOperation({ summary: 'Create a DRAFT invoice with line items' })
   create(
@@ -127,6 +178,7 @@ export class InvoicesController {
   }
 
   @Post(':id/payments')
+  @Idempotent({ ttlSeconds: 86400 })
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER)
   @ApiOperation({ summary: 'Record a payment against an invoice (issues receipt)' })
   recordPayment(
@@ -141,6 +193,7 @@ export class InvoicesController {
   }
 
   @Post('refunds')
+  @Idempotent({ ttlSeconds: 86400 })
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER)
   @ApiOperation({ summary: 'Request a refund against a paid payment' })
   requestRefund(
@@ -151,6 +204,7 @@ export class InvoicesController {
   }
 
   @Post('refunds/:id/process')
+  @Idempotent({ ttlSeconds: 86400 })
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
   @ApiOperation({ summary: 'Process (approve + execute) a requested refund' })
   processRefund(

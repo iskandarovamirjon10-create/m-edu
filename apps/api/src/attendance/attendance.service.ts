@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { toDateToInclusive, startOfDay, getOrganizationDate } from '../common/date-range';
 import { canonicalMembershipWhere } from '../common/student-membership';
@@ -76,73 +76,43 @@ export class AttendanceService {
       }
     }
 
-    // [BUSINESS LOGIC FIX]: Validate that a planned/conducted Lesson exists for this date.
-    // Also attach the lessonId to the attendance record for accurate payroll and history.
-    const startOfDay = date;
-    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+    // [ATT-002 FIX]: If a specific lessonId is provided, validate it strictly.
+    // Otherwise fallback to finding or materializing the scheduled lesson for the day.
+    let lesson: { id: string; status: LessonStatus; groupId: string; date?: Date } | null = null;
 
-    // P0: deterministic lesson selection — never rely on unordered findFirst().
-    // Prefer a non-cancelled lesson for the day; fall back to the first ordered
-    // lesson so an all-cancelled day still blocks attendance below.
-    const dayLessons = await this.prisma.lesson.findMany({
-      where: {
-        groupId: data.groupId,
-        organizationId,
-        date: { gte: startOfDay, lt: endOfDay },
-      },
-      orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { id: 'asc' }],
-    });
-    let lesson =
-      dayLessons.find((candidate) => candidate.status !== 'CANCELLED') ??
-      dayLessons[0];
-
-    if (!lesson) {
-      // P0-2: On-demand lesson materialization from group schedule.
-      // If a group has an active schedule for this day-of-week, materialize the
-      // required Lesson row(s) idempotently so manual attendance succeeds immediately
-      // on newly created groups without requiring batch background generation.
-      const dayOfWeek = INDEX_TO_DAY[date.getUTCDay()];
-      const schedules = await this.prisma.schedule.findMany({
+    if (data.lessonId) {
+      const specifiedLesson = await this.prisma.lesson.findFirst({
         where: {
-          groupId: data.groupId,
-          dayOfWeek,
-          isActive: true,
+          id: data.lessonId,
+          organizationId,
         },
-        orderBy: [{ startTime: 'asc' }, { id: 'asc' }],
       });
-
-      if (schedules.length === 0) {
-        throw new BadRequestException(
-          `Bu sana uchun guruh jadvali mavjud emas. Avval guruh jadvalini belgilang.`,
-        );
+      if (!specifiedLesson) {
+        throw new NotFoundException(`Lesson ${data.lessonId} not found`);
       }
-
-      for (const s of schedules) {
-        try {
-          await this.prisma.lesson.create({
-            data: {
-              organizationId,
-              scheduleId: s.id,
-              groupId: data.groupId,
-              teacherId: group.teacherId ?? null,
-              date,
-              startTime: s.startTime,
-              endTime: s.endTime,
-              room: s.room ?? group.room ?? null,
-              status: LessonStatus.PLANNED,
-              updatedAt: new Date(),
-            },
-          });
-        } catch (err: unknown) {
-          // Concurrency safety: if another worker created this lesson concurrently,
-          // ignore the P2002 unique constraint violation on (groupId, date, startTime).
-          if ((err as { code?: string })?.code !== 'P2002') {
-            throw err;
-          }
+      if (specifiedLesson.groupId !== data.groupId) {
+        throw new BadRequestException(`Lesson ${data.lessonId} does not belong to group ${data.groupId}`);
+      }
+      if (specifiedLesson.status === 'CANCELLED') {
+        throw new BadRequestException(`Ushbu dars bekor qilingan (CANCELLED). Bekor qilingan darsga davomat qilib bo'lmaydi.`);
+      }
+      if (specifiedLesson.date) {
+        const lessonDate = getOrganizationDate(specifiedLesson.date, org?.timezone);
+        if (lessonDate.getTime() !== date.getTime()) {
+          throw new BadRequestException(`Lesson date does not match the provided attendance date`);
         }
       }
+      lesson = specifiedLesson;
+    }
 
-      const refreshedLessons = await this.prisma.lesson.findMany({
+    if (!lesson) {
+      const startOfDay = date;
+      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+      // P0: deterministic lesson selection — never rely on unordered findFirst().
+      // Prefer a non-cancelled lesson for the day; fall back to the first ordered
+      // lesson so an all-cancelled day still blocks attendance below.
+      const dayLessons = await this.prisma.lesson.findMany({
         where: {
           groupId: data.groupId,
           organizationId,
@@ -150,20 +120,79 @@ export class AttendanceService {
         },
         orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { id: 'asc' }],
       });
-
       lesson =
-        refreshedLessons.find((candidate) => candidate.status !== 'CANCELLED') ??
-        refreshedLessons[0];
+        dayLessons.find((candidate) => candidate.status !== 'CANCELLED') ??
+        dayLessons[0];
 
       if (!lesson) {
-        throw new BadRequestException(
-          `Siz davomat yozmoqchi bo'lgan kunda ushbu guruh uchun dars (Lesson) rejalashtirilmagan.`,
-        );
-      }
-    }
+        // P0-2: On-demand lesson materialization from group schedule.
+        // If a group has an active schedule for this day-of-week, materialize the
+        // required Lesson row(s) idempotently so manual attendance succeeds immediately
+        // on newly created groups without requiring batch background generation.
+        const dayOfWeek = INDEX_TO_DAY[date.getUTCDay()];
+        const schedules = await this.prisma.schedule.findMany({
+          where: {
+            groupId: data.groupId,
+            dayOfWeek,
+            isActive: true,
+          },
+          orderBy: [{ startTime: 'asc' }, { id: 'asc' }],
+        });
 
-    if (lesson.status === 'CANCELLED') {
-      throw new BadRequestException(`Ushbu dars bekor qilingan (CANCELLED). Bekor qilingan darsga davomat qilib bo'lmaydi.`);
+        if (schedules.length === 0) {
+          throw new BadRequestException(
+            `Bu sana uchun guruh jadvali mavjud emas. Avval guruh jadvalini belgilang.`,
+          );
+        }
+
+        for (const s of schedules) {
+          try {
+            await this.prisma.lesson.create({
+              data: {
+                organizationId,
+                scheduleId: s.id,
+                groupId: data.groupId,
+                teacherId: group.teacherId ?? null,
+                date,
+                startTime: s.startTime,
+                endTime: s.endTime,
+                room: s.room ?? group.room ?? null,
+                status: LessonStatus.PLANNED,
+                updatedAt: new Date(),
+              },
+            });
+          } catch (err: unknown) {
+            // Concurrency safety: if another worker created this lesson concurrently,
+            // ignore the P2002 unique constraint violation on (groupId, date, startTime).
+            if ((err as { code?: string })?.code !== 'P2002') {
+              throw err;
+            }
+          }
+        }
+
+        const refreshedLessons = await this.prisma.lesson.findMany({
+          where: {
+            groupId: data.groupId,
+            organizationId,
+            date: { gte: startOfDay, lt: endOfDay },
+          },
+          orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { id: 'asc' }],
+        });
+
+        lesson =
+          refreshedLessons.find((candidate) => candidate.status !== 'CANCELLED') ??
+          refreshedLessons[0];
+
+        if (!lesson) {
+          throw new BadRequestException(
+            `Siz davomat yozmoqchi bo'lgan kunda ushbu guruh uchun dars (Lesson) rejalashtirilmagan.`,
+          );
+        }
+      }
+
+      if (lesson.status === 'CANCELLED') {
+        throw new BadRequestException(`Ushbu dars bekor qilingan (CANCELLED). Bekor qilingan darsga davomat qilib bo'lmaydi.`);
+      }
     }
 
     /**
@@ -174,19 +203,20 @@ export class AttendanceService {
     const commitAttendance = async (allowCreate: boolean) =>
       this.prisma.$transaction(
         async (tx) => {
-          let lessonStatus = lesson.status;
+          let lessonStatus = lesson!.status;
           if (lessonStatus === 'PLANNED') {
             await tx.lesson.update({
-              where: { id: lesson.id },
+              where: { id: lesson!.id },
               data: { status: 'CONDUCTED' },
             });
             lessonStatus = 'CONDUCTED';
           }
 
+          // [ATT-002 FIX]: Scope existing records to the targeted lessonId.
+          // Multiple lessons on the same day in the same group must remain independent.
           const existingRecords = await tx.attendance.findMany({
             where: {
-              groupId: data.groupId,
-              date,
+              lessonId: lesson!.id,
               studentId: { in: data.records.map((r) => r.studentId) },
             },
           });
@@ -199,7 +229,7 @@ export class AttendanceService {
             const payload = {
               status: record.status,
               note: record.note,
-              lessonId: lesson.id,
+              lessonId: lesson!.id,
             };
             const existing = existingMap.get(record.studentId);
 
@@ -215,16 +245,22 @@ export class AttendanceService {
 
             if (!allowCreate) {
               // P2002 recovery pass: a concurrent request already inserted
-              // this row — re-read and update instead of creating.
-              const row = await tx.attendance.findUnique({
-                where: {
-                  studentId_groupId_date: {
-                    studentId: record.studentId,
-                    groupId: data.groupId,
-                    date,
-                  },
-                },
-              });
+              // this row for this lesson — re-read and update instead of creating.
+              const row = await (tx.attendance.findUnique
+                ? tx.attendance.findUnique({
+                    where: {
+                      studentId_lessonId: {
+                        studentId: record.studentId,
+                        lessonId: lesson!.id,
+                      },
+                    },
+                  })
+                : tx.attendance.findFirst({
+                    where: {
+                      studentId: record.studentId,
+                      lessonId: lesson!.id,
+                    },
+                  }));
               if (row) {
                 updatedRecords.push(
                   await tx.attendance.update({
@@ -241,7 +277,7 @@ export class AttendanceService {
                 organizationId,
                 studentId: record.studentId,
                 groupId: data.groupId,
-                lessonId: lesson.id,
+                lessonId: lesson!.id,
                 date,
                 status: record.status,
                 note: record.note,
@@ -263,8 +299,8 @@ export class AttendanceService {
         total: data.records.length,
       };
     } catch (err: unknown) {
-      // P2002 = unique constraint (studentId, groupId, date) — a concurrent
-      // request already recorded attendance. The failed transaction rolled
+      // P2002 = unique constraint (studentId, lessonId) — a concurrent
+      // request already recorded attendance for this lesson. The failed transaction rolled
       // back completely (including any lesson auto-conduct); retry once with
       // create disabled so only the current operation's missing rows are
       // reconciled as updates.
@@ -280,12 +316,31 @@ export class AttendanceService {
     }
   }
 
-  async update(user: RequestUser | { organizationId: string; sub?: string; id?: string }, id: string, dto: UpdateAttendanceDto) {
-    const organizationId = user.organizationId;
+  async update(user: RequestUser | { organizationId: string; sub?: string; id?: string; role?: string }, id: string, dto: UpdateAttendanceDto) {
+    const organizationId = typeof user === 'string' ? user : user.organizationId;
     const existing = await this.prisma.attendance.findFirst({
       where: { id, organizationId },
+      include: {
+        group: { select: { teacherId: true } },
+        lesson: { select: { teacherId: true } },
+      },
     });
     if (!existing) throw new NotFoundException('Attendance record not found');
+
+    const userRole = typeof user === 'object' && user ? (user as RequestUser).role : undefined;
+    const userId = typeof user === 'object' && user ? ((user as { sub?: string }).sub || (user as { id?: string }).id) : undefined;
+
+    if (userRole === 'TEACHER' && userId) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId, organizationId },
+        select: { id: true },
+      });
+      const isGroupTeacher = Boolean(teacher && existing.group?.teacherId === teacher.id);
+      const isLessonTeacher = Boolean(teacher && existing.lesson?.teacherId === teacher.id);
+      if (!isGroupTeacher && !isLessonTeacher) {
+        throw new ForbiddenException('Teachers can only update attendance for their assigned groups or lessons');
+      }
+    }
 
     const data: Prisma.AttendanceUpdateInput = {};
     if (dto.status !== undefined) data.status = dto.status;

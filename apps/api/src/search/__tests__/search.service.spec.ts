@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Unit tests for SearchService — universal search across 10 entity types.
  * Tests input validation, entity filtering, scoring, and result merging.
  */
@@ -135,6 +135,56 @@ describe('SearchService', () => {
       ]);
       const r = await svc.search('org-1', { q: 'ali', types: ['STUDENT'] });
       expect(r.results[0].id).toBe('s2');
+    });
+
+    it('generates reachable routes for all entity types without dead detail URLs (M-EDU-FE-001)', async () => {
+      prisma.teacher.findMany.mockResolvedValue([
+        { id: 't1', user: { firstName: 'Farhod', lastName: 'Ali' }, specializations: ['Math'] },
+      ]);
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'c1', name: 'Algebra 101', description: 'Basics' },
+      ]);
+      prisma.lead.findMany.mockResolvedValue([
+        { id: 'l1', firstName: 'Jasur', lastName: 'Ali', stage: 'NEW', source: 'Web' },
+      ]);
+      prisma.payment.findMany.mockResolvedValue([
+        { id: 'p1', amount: 500000, status: 'PAID', description: 'Tuition', student: { user: { firstName: 'A', lastName: 'B' } } },
+      ]);
+      prisma.employee.findMany.mockResolvedValue([
+        { id: 'e1', user: { firstName: 'Nodir', lastName: 'Ali' }, position: 'Admin' },
+      ]);
+      prisma.libraryBook.findMany.mockResolvedValue([
+        { id: 'b1', title: 'Calculus', author: 'Stewart', isbn: '123' },
+      ]);
+      prisma.certificate.findMany.mockResolvedValue([
+        { id: 'cert1', certificateNumber: 'CERT-001', student: { user: { firstName: 'A', lastName: 'B' } } },
+      ]);
+      prisma.user.findMany.mockResolvedValue([
+        { id: 'u1', firstName: 'Ali', lastName: 'K', email: 'ali@k.com', role: 'STUDENT' },
+      ]);
+
+      const r = await svc.search('org-1', {
+        q: 'ali',
+        types: ['TEACHER', 'COURSE', 'LEAD', 'PAYMENT', 'EMPLOYEE', 'BOOK', 'CERTIFICATE', 'USER'],
+      });
+
+      const teacher = r.results.find((item) => item.type === 'TEACHER');
+      const course = r.results.find((item) => item.type === 'COURSE');
+      const lead = r.results.find((item) => item.type === 'LEAD');
+      const payment = r.results.find((item) => item.type === 'PAYMENT');
+      const employee = r.results.find((item) => item.type === 'EMPLOYEE');
+      const book = r.results.find((item) => item.type === 'BOOK');
+      const cert = r.results.find((item) => item.type === 'CERTIFICATE');
+      const user = r.results.find((item) => item.type === 'USER');
+
+      expect(teacher?.href).toBe('/teachers?search=Farhod');
+      expect(course?.href).toBe('/courses?search=Algebra%20101');
+      expect(lead?.href).toBe('/leads?search=Jasur');
+      expect(payment?.href).toBe('/payments');
+      expect(employee?.href).toBe('/hr');
+      expect(book?.href).toBe('/library');
+      expect(cert?.href).toBe('/certificates');
+      expect(user?.href).toBe('/users');
     });
   });
 

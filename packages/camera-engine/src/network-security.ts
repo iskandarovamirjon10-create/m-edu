@@ -25,15 +25,23 @@ const LOOPBACK_RANGES: Array<[string, number]> = [
   ['255.255.255.255', 32],
 ];
 
+/**
+ * Link-local, multicast, and cloud metadata addresses are ALWAYS blocked,
+ * even when `allowPrivateIps` is true, to prevent SSRF against AWS/GCP/Azure
+ * instance metadata endpoints (169.254.169.254) and link-local interfaces (M-EDU-CAM-002).
+ */
+const LINK_LOCAL_METADATA_RANGES: Array<[string, number]> = [
+  ['169.254.0.0', 16], // IPv4 link-local (includes 169.254.169.254 cloud metadata)
+  ['fe80::', 10],      // IPv6 link-local
+  ['224.0.0.0', 4],    // Multicast
+];
+
 const PRIVATE_RANGES: Array<[string, number]> = [
   ['10.0.0.0', 8],
   ['172.16.0.0', 12],
   ['192.168.0.0', 16],
-  ['169.254.0.0', 16], // link-local
   ['100.64.0.0', 10], // CGNAT
-  ['224.0.0.0', 4], // Multicast
-  ['fe80::', 10],
-  ['fc00::', 7], // ULA
+  ['fc00::', 7],      // ULA
 ];
 
 interface ParsedIp {
@@ -229,6 +237,11 @@ export class NetworkSecurity {
     const isLoopback = LOOPBACK_RANGES.some(([r, p]) => inRange(parsed, r, p));
     if (isLoopback && !this.allowLoopback) {
       throw new Error(`Loopback address not allowed: ${ip}`);
+    }
+
+    const isLinkLocalOrMetadata = LINK_LOCAL_METADATA_RANGES.some(([r, p]) => inRange(parsed, r, p));
+    if (isLinkLocalOrMetadata) {
+      throw new Error(`Private link-local / cloud metadata address not allowed: ${ip}`);
     }
 
     const isPrivate = PRIVATE_RANGES.some(([r, p]) => inRange(parsed, r, p));

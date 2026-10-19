@@ -66,6 +66,10 @@ export class UpdateLibraryBookDto {
 
   @IsOptional()
   @IsString()
+  barcode?: string;
+
+  @IsOptional()
+  @IsString()
   category?: string;
 
   @IsOptional()

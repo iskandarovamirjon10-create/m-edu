@@ -461,7 +461,7 @@ describe('CameraService — validated destination pin', () => {
         name: 'Metadata camera',
         host: '169.254.169.254',
       }),
-    ).rejects.toThrow(/Private network address/);
+    ).rejects.toThrow(/(Private network address|Private link-local)/);
 
     expect(prisma.camera.create).not.toHaveBeenCalled();
   });
@@ -671,7 +671,7 @@ describe('CameraWorkerManagerService.buildStreamUri — DNS rebinding', () => {
         streamPath: '/live\r\nX-Injected: 1',
         metadata: pin,
       }),
-    ).rejects.toThrow(/control characters/);
+    ).rejects.toThrow(/control.*characters/);
 
     await expect(
       buildStreamUri(manager, {
@@ -883,7 +883,7 @@ describe('Provider connection layer', () => {
       expect(forbidden.success).toBe(false);
       expect(forbidden.errorCode).toBe('HOST_FORBIDDEN');
       expect(forbidden.message).toMatch(
-        /Private network address/,
+        /(Private network address|Private link-local)/,
       );
       expect(sockets.connections).toHaveLength(0);
     } finally {

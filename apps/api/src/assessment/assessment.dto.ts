@@ -1,4 +1,4 @@
-import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { QuestionDifficulty, QuestionType } from '@prisma/client';
@@ -119,6 +119,8 @@ export class CreateQuizDto {
 
   @ApiPropertyOptional({ type: [String], example: ['q123e456-e89b-12d3-a456-426614174000'] })
   @IsArray()
+  @IsUUID('all', { each: true })
+  @ArrayMaxSize(200)
   @IsOptional()
   questionIds?: string[];
 }

@@ -21,19 +21,35 @@ export class LessonsService {
     const where: any = { organizationId };
 
     if (query.groupId) where.groupId = query.groupId;
-    if (query.teacherId) where.teacherId = query.teacherId;
+    if (query.teacherId) {
+      where.OR = [
+        { teacherId: query.teacherId },
+        { teacher: { userId: query.teacherId } },
+      ];
+    }
     if (query.status) where.status = query.status;
     if (query.date) {
       const d = new Date(query.date);
-      d.setUTCHours(0, 0, 0, 0);
-      where.date = d;
+      if (!Number.isNaN(d.getTime())) {
+        const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+        const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+        where.date = { gte: start, lt: end };
+      }
     }
 
     const [items, total] = await Promise.all([
       this.prisma.lesson.findMany({
         where,
         include: {
-          Group: { select: { id: true, name: true, courseId: true } },
+          Group: {
+            select: {
+              id: true,
+              name: true,
+              courseId: true,
+              room: true,
+              course: { select: { id: true, name: true } },
+            },
+          },
           teacher: { include: { user: { select: { firstName: true, lastName: true } } } },
           Topic: { select: { id: true, title: true } },
           _count: { select: { attendances: true, LessonMaterial: true, Assignment: true } },
@@ -52,7 +68,25 @@ export class LessonsService {
     const lesson = await this.prisma.lesson.findFirst({
       where: { id, organizationId },
       include: {
-        Group: { select: { id: true, name: true } },
+        Group: {
+          select: {
+            id: true,
+            name: true,
+            courseId: true,
+            room: true,
+            course: { select: { id: true, name: true } },
+            enrollments: {
+              where: { isActive: true },
+              include: {
+                student: {
+                  include: {
+                    user: { select: { firstName: true, lastName: true, phone: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
         teacher: { include: { user: { select: { firstName: true, lastName: true } } } },
         Topic: {
           include: {

@@ -1,4 +1,4 @@
-﻿import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { normalizeEmail } from '../auth.utils';
@@ -34,10 +34,11 @@ export class ParentLoginDto {
 
 
 export class RegisterDto {
-  @ApiProperty({ description: 'Platform invitation code required to register' })
+  @ApiPropertyOptional({ description: 'Platform invitation code (optional)' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  inviteCode: string;
+  @MaxLength(100)
+  inviteCode?: string;
 
   @ApiProperty()
   @IsEmail()

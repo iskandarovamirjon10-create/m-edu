@@ -1,11 +1,57 @@
-import { useState, useRef } from 'react';
+/**
+ * M-EDU ImportExportPage — Apple Design Award V2 Edition
+ *
+ * Ultra Premium Bulk Data Exchange Substrate:
+ *  - Apple SF Pro visual hierarchy with ambient backdrop
+ *  - Tactile File Ingestion zone with squircle geometry
+ *  - Live KPI strip (Total Jobs, Succeeded, Running, Failed)
+ *  - Spring physics with Framer Motion (smooth staggered rows)
+ *  - Preserves 100% of real API contracts, file download logic, and i18n
+ */
+
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { GlassPageHeader, GlassBadge, GlassPageLoader, GlassEmptyState, GlassErrorState, GlassButton, GlassSelect } from '@/components/ui';
+import { motion, type Variants } from 'framer-motion';
+import {
+  GlassPageHeader,
+  GlassBadge,
+  GlassPageLoader,
+  GlassEmptyState,
+  GlassErrorState,
+  GlassButton,
+  GlassSelect,
+} from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
+import { openSidecar } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import request, { downloadFile } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useI18n } from '@/i18n/I18nProvider';
+
+const SPRING = {
+  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
+  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
+  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
+} as const;
+
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05, delayChildren: 0.04 },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 12, scale: 0.99 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: 'spring', stiffness: 360, damping: 28 },
+  },
+};
 
 interface ImportJob {
   id: string;
@@ -27,6 +73,7 @@ export function ImportExportPage() {
   usePageTitle(t('importExport.title'));
   const queryClient = useQueryClient();
   const { push } = useToast();
+  const { playTick, playPop, playSuccess, playError } = usePremiumSound();
   const fileInput = useRef<HTMLInputElement>(null);
   const [entity, setEntity] = useState('STUDENT');
 
@@ -34,6 +81,41 @@ export function ImportExportPage() {
     queryKey: ['import-jobs'],
     queryFn: () => request('/imports') as Promise<{ items: ImportJob[]; total: number }>,
   });
+
+  const handleOpenJobSidecar = (job: ImportJob) => {
+    playPop();
+    openSidecar({
+      title: `${job.entityType} Importi`,
+      subtitle: job.fileName,
+      badge: job.status,
+      status: {
+        label: job.status === 'COMPLETED' ? 'Muvaffaqiyatli' : job.status === 'FAILED' ? 'Xatolik' : 'Jarayonda',
+        tone: job.status === 'COMPLETED' ? 'emerald' : job.status === 'FAILED' ? 'rose' : 'amber',
+      },
+      metrics: [
+        { label: 'Jami qatorlar', value: job.total },
+        { label: 'Muvaffaqiyatli', value: job.succeeded },
+        { label: 'Xatolar', value: job.failed },
+        { label: 'Qayta ishlangan', value: job.processed },
+      ],
+      details: [
+        { label: 'Topshiriq ID', value: job.id },
+        { label: 'Fayl nomi', value: job.fileName },
+        { label: 'Entiti turi', value: job.entityType },
+        { label: 'Boshlangan sana', value: new Date(job.startedAt).toLocaleString() },
+        { label: 'Tugallangan sana', value: job.finishedAt ? new Date(job.finishedAt).toLocaleString() : 'Davom etmoqda' },
+        { label: 'Ijrochi', value: job.startedByName || 'Tizim' },
+        { label: 'Xatolar soni', value: `${job.errors?.length || 0} ta` },
+      ],
+      actions: [
+        {
+          label: 'Shablonni qayta yuklash',
+          variant: 'secondary',
+          onClick: () => downloadTemplate(job.entityType),
+        },
+      ],
+    });
+  };
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File): Promise<{ id?: string }> => {
@@ -46,6 +128,7 @@ export function ImportExportPage() {
       });
     },
     onSuccess: (data: any) => {
+      playSuccess();
       const msg = data?.message || t('importExport.jobStarted', { id: data?.id ?? '' });
       push('success', msg);
       queryClient.invalidateQueries({ queryKey: ['import-jobs'] });
@@ -53,100 +136,260 @@ export function ImportExportPage() {
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
-    onError: (e) => push('error', getErrorMessage(e)),
+    onError: (e) => {
+      playError();
+      push('error', getErrorMessage(e));
+    },
   });
 
   const downloadTemplate = async (e: string) => {
+    playTick();
     try {
       await downloadFile(`/template?entityType=${encodeURIComponent(e)}`, {
-        defaultFilename: `${e.toLowerCase()}-template.csv`
+        defaultFilename: `${e.toLowerCase()}-template.csv`,
       });
+      playSuccess();
     } catch {
+      playError();
       push('error', t('importExport.templateUnavailable'));
     }
   };
 
   const exportData = async (e: string) => {
+    playTick();
     push('info', t('importExport.preparing', { entity: e.toLowerCase() }));
     try {
       await downloadFile(`/export?entityType=${encodeURIComponent(e)}&format=csv`, {
-        defaultFilename: `${e.toLowerCase()}-export.csv`
+        defaultFilename: `${e.toLowerCase()}-export.csv`,
       });
+      playSuccess();
       push('success', t('importExport.exportDownloaded'));
     } catch {
+      playError();
       push('error', t('importExport.exportFailed'));
     }
   };
 
+  /* ── Keyboard shortcuts ── */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === 'u' || e.key === 'U') {
+        e.preventDefault();
+        playTick();
+        fileInput.current?.click();
+      } else if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        playTick();
+        downloadTemplate(entity);
+      } else if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        playTick();
+        exportData(entity);
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        playTick();
+        jobsQuery.refetch();
+        push('info', 'Import/Eksport ma\'lumotlari yangilandi');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playTick, entity, jobsQuery, push]);
+
   const jobs: ImportJob[] = jobsQuery.data?.items ?? [];
+  const completedJobs = jobs.filter((j) => j.status === 'COMPLETED').length;
+  const runningJobs = jobs.filter((j) => j.status === 'RUNNING' || j.status === 'PENDING').length;
+  const failedJobs = jobs.filter((j) => j.status === 'FAILED').length;
 
   return (
-    <div style={{ display: "contents" }}>
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-indigo-1" />
-      <div className="page-container space-y-4">
-        <GlassPageHeader
-          title={t('importExport.title')}
-          subtitle={t('importExport.pageSubtitle')}
-        />
+    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+      {/* Ambient background lighting */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
+        <div className="absolute top-[5%] left-[-5%] w-[45%] h-[40%] rounded-full bg-blue-400/5 blur-[120px]" />
+        <div className="absolute bottom-[10%] right-[-5%] w-[40%] h-[45%] rounded-full bg-indigo-400/5 blur-[120px]" />
+      </div>
 
-        <div className="glass-card p-4 space-y-3">
-          <h3 className="font-semibold text-[var(--text-primary)]">{t('importExport.uploadCsv')}</h3>
- <div className="flex flex-wrap items-center gap-2">
- <GlassSelect
- value={entity}
- onChange={(e) => setEntity(e.target.value)}
- aria-label={t('importExport.uploadCsv')}
- className="w-auto"
- >
- {['STUDENT', 'TEACHER'].map((e) => (
- <option key={e} value={e}>{t(`enum.badge.${e}`)}</option>
- ))}
- </GlassSelect>
-            <input
-              ref={fileInput}
-              type="file"
-              accept=".csv"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) uploadMutation.mutate(f);
-                e.target.value = '';
-              }}
-              className="hidden"
-            />
-            <GlassButton
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="relative z-10 w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6"
+      >
+        <motion.div variants={itemVariants}>
+          <GlassPageHeader
+            title={t('importExport.title')}
+            subtitle={t('importExport.pageSubtitle')}
+          />
+        </motion.div>
+
+        {/* ── KPI Metrics Bar ────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <motion.div
+            variants={itemVariants}
+            whileHover={{ y: -2, transition: SPRING.snappy }}
+            className="liquid-glass-card liquid-glass-surface p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm"
+          >
+            <p className="text-[0.68rem] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+              {t('importExport.total') || 'Total Jobs'}
+            </p>
+            <p className="text-2xl sm:text-3xl font-extrabold text-[var(--text-primary)] tabular-nums">
+              {jobs.length}
+            </p>
+          </motion.div>
+
+          <motion.div
+            variants={itemVariants}
+            whileHover={{ y: -2, transition: SPRING.snappy }}
+            className="liquid-glass-card liquid-glass-surface p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm"
+          >
+            <p className="text-[0.68rem] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+              {t('importExport.ok') || 'Succeeded'}
+            </p>
+            <p className="text-2xl sm:text-3xl font-extrabold text-emerald-500 tabular-nums">
+              {completedJobs}
+            </p>
+          </motion.div>
+
+          <motion.div
+            variants={itemVariants}
+            whileHover={{ y: -2, transition: SPRING.snappy }}
+            className="liquid-glass-card liquid-glass-surface p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm"
+          >
+            <p className="text-[0.68rem] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+              {t('importExport.processed') || 'In Progress'}
+            </p>
+            <p className="text-2xl sm:text-3xl font-extrabold text-amber-500 tabular-nums">
+              {runningJobs}
+            </p>
+          </motion.div>
+
+          <motion.div
+            variants={itemVariants}
+            whileHover={{ y: -2, transition: SPRING.snappy }}
+            className="liquid-glass-card liquid-glass-surface p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm"
+          >
+            <p className="text-[0.68rem] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+              {t('importExport.failed') || 'Failed'}
+            </p>
+            <p className="text-2xl sm:text-3xl font-extrabold text-rose-500 tabular-nums">
+              {failedJobs}
+            </p>
+          </motion.div>
+        </div>
+
+        {/* ── Upload & Action Card ────────────────────────────────────────── */}
+        <motion.div
+          variants={itemVariants}
+          className="liquid-glass-card liquid-glass-surface relative overflow-hidden rounded-3xl p-6 sm:p-7 border border-slate-200/80 dark:border-slate-800/80 shadow-sm"
+        >
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div>
+              <h3 className="text-base font-bold text-[var(--text-primary)] mb-1 flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                </div>
+                {t('importExport.uploadCsv')}
+              </h3>
+              <p className="text-xs text-[var(--text-muted)]">
+                {t('importExport.csvHint')}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <GlassSelect
+                value={entity}
+                onChange={(e) => {
+                  playTick();
+                  setEntity(e.target.value);
+                }}
+                aria-label={t('importExport.uploadCsv')}
+                className="w-auto"
+              >
+                {['STUDENT', 'TEACHER'].map((e) => (
+                  <option key={e} value={e}>
+                    {t(`enum.badge.${e}`)}
+                  </option>
+                ))}
+              </GlassSelect>
+
+              <input
+                ref={fileInput}
+                type="file"
+                accept=".csv"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadMutation.mutate(f);
+                  e.target.value = '';
+                }}
+                className="hidden"
+              />
+
+              <GlassButton
                 variant="primary"
                 onClick={() => fileInput.current?.click()}
+                disabled={uploadMutation.isPending}
+                loading={uploadMutation.isPending}
+                icon={
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                }
               >
                 {t('importExport.uploadCsv')}
               </GlassButton>
-            <GlassButton variant="ghost" onClick={() => downloadTemplate(entity)}>
-              {t('importExport.downloadTemplate')}
-            </GlassButton>
-            <GlassButton variant="ghost" onClick={() => exportData(entity)}>
-              {t('importExport.exportEntity', { entity: t(`enum.badge.${entity}`) })}
-            </GlassButton>
+
+              <GlassButton variant="secondary" onClick={() => downloadTemplate(entity)}>
+                {t('importExport.downloadTemplate')}
+              </GlassButton>
+
+              <GlassButton variant="ghost" onClick={() => exportData(entity)}>
+                {t('importExport.exportEntity', { entity: t(`enum.badge.${entity}`) })}
+              </GlassButton>
+            </div>
           </div>
-          <p className="text-xs text-muted">
-            {t('importExport.csvHint')}
-          </p>
-        </div>
+        </motion.div>
 
-        <div className="glass-card p-4 space-y-2">
-          <h3 className="font-semibold text-[var(--text-primary)]">{t('importExport.howItWorks')}</h3>
-          <ul className="text-sm space-y-1.5 text-muted">
-            <li>• {t('importExport.howValidation')}</li>
-            <li>• {t('importExport.howTenant')}</li>
-            <li>• {t('importExport.howAudit')}</li>
-            <li>• {t('importExport.howNoAi')}</li>
-          </ul>
-        </div>
+        {/* ── Guidelines Info Card ────────────────────────────────────────── */}
+        <motion.div
+          variants={itemVariants}
+          className="liquid-glass-surface relative overflow-hidden rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800/80 space-y-2 text-xs"
+        >
+          <h4 className="font-bold text-xs text-[var(--text-primary)] uppercase tracking-wider">
+            {t('importExport.howItWorks')}
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-[var(--text-muted)]">
+            <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+              • {t('importExport.howValidation')}
+            </div>
+            <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+              • {t('importExport.howTenant')}
+            </div>
+            <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+              • {t('importExport.howAudit')}
+            </div>
+            <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+              • {t('importExport.howNoAi')}
+            </div>
+          </div>
+        </motion.div>
 
-        <div className="glass-card overflow-hidden">
+        {/* ── Jobs Ledger ─────────────────────────────────────────────────── */}
+        <motion.div
+          variants={itemVariants}
+          className="liquid-glass-card liquid-glass-surface relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm"
+        >
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
+
           {jobsQuery.isLoading ? (
-            <div className="p-8"><GlassPageLoader label={t('importExport.loading')} /></div>
+            <div className="p-16">
+              <GlassPageLoader label={t('importExport.loading')} />
+            </div>
           ) : jobsQuery.isError ? (
-            <div className="p-8">
+            <div className="p-12">
               <GlassErrorState
                 title={t('importExport.loadError')}
                 message={getErrorMessage(jobsQuery.error)}
@@ -154,55 +397,89 @@ export function ImportExportPage() {
               />
             </div>
           ) : jobs.length === 0 ? (
-            <div className="p-8">
+            <div className="p-16">
               <GlassEmptyState
                 title={t('importExport.emptyTitle')}
                 message={t('importExport.emptyMessage')}
               />
             </div>
           ) : (
-            <ul className="divide-y divide-[var(--border-subtle)]">
+            <motion.ul
+              variants={containerVariants}
+              className="divide-y divide-black/5 dark:divide-white/5"
+            >
               {jobs.map((j) => (
-                <li key={j.id} className="px-4 py-3">
+                <motion.li
+                  key={j.id}
+                  variants={itemVariants}
+                  whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.4)', transition: SPRING.snappy }}
+                  onClick={() => handleOpenJobSidecar(j)}
+                  className="px-6 py-4.5 transition-colors cursor-pointer"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-medium text-sm text-[var(--text-primary)]">
+                      <h4 className="font-bold text-sm text-[var(--text-primary)] truncate">
                         {j.entityType} · {j.fileName}
                       </h4>
-                      <p className="text-xs text-muted">
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">
                         {j.startedByName ?? t('common.system')} · {new Date(j.startedAt).toLocaleString()}
                       </p>
                     </div>
-                    <GlassBadge
-                      color={
-                        j.status === 'COMPLETED' ? 'success' :
-                        j.status === 'FAILED' ? 'error' :
-                        j.status === 'RUNNING' ? 'warning' :
-                        'muted'
-                      }
-                    >
-                      {t(`importExport.status.${j.status}`)}
-                    </GlassBadge>
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenJobSidecar(j)}
+                        className="rounded-lg border border-slate-200/80 bg-white/60 px-2 py-1 text-[11px] font-bold text-slate-700 shadow-sm transition-all hover:bg-white dark:border-slate-700/80 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:bg-slate-800"
+                        title="Tafsilotlar (Sidecar)"
+                      >
+                        ◨ Sidecar
+                      </button>
+                      <GlassBadge
+                        color={
+                          j.status === 'COMPLETED'
+                            ? 'success'
+                            : j.status === 'FAILED'
+                            ? 'error'
+                            : j.status === 'RUNNING'
+                            ? 'warning'
+                            : 'muted'
+                        }
+                      >
+                        {t(`importExport.status.${j.status}`)}
+                      </GlassBadge>
+                    </div>
                   </div>
-                  <div className="mt-2 grid grid-cols-4 gap-2 text-xs text-muted">
-                    <div>{t('importExport.total')}: <span className="text-[var(--text-primary)]">{j.total}</span></div>
-                    <div>{t('importExport.ok')}: <span className="text-emerald-500">{j.succeeded}</span></div>
-                    <div>{t('importExport.failed')}: <span className="text-red-500">{j.failed}</span></div>
-                    <div>{t('importExport.processed')}: <span className="text-[var(--text-primary)]">{j.processed}</span></div>
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-[var(--text-muted)] tabular-nums">
+                    <div className="p-2 rounded-xl bg-black/5 dark:bg-white/5">
+                      {t('importExport.total')}: <span className="font-bold text-[var(--text-primary)]">{j.total}</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      {t('importExport.ok')}: <span className="font-bold">{j.succeeded}</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                      {t('importExport.failed')}: <span className="font-bold">{j.failed}</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-black/5 dark:bg-white/5">
+                      {t('importExport.processed')}: <span className="font-bold text-[var(--text-primary)]">{j.processed}</span>
+                    </div>
                   </div>
                   {j.errors?.length > 0 && (
-                    <ul className="mt-2 max-h-32 overflow-y-auto rounded-md bg-red-500/5 px-2 py-1 text-[11px] text-red-500">
+                    <ul className="mt-3 max-h-32 overflow-y-auto rounded-xl bg-rose-500/5 border border-rose-500/15 p-2.5 text-[11px] text-rose-600 dark:text-rose-400 space-y-1">
                       {j.errors.slice(0, 20).map((e, i) => (
-                        <li key={i}>{t('importExport.rowError', { row: e.row })}: {e.message}</li>
+                        <li key={i}>
+                          {t('importExport.rowError', { row: e.row })}: {e.message}
+                        </li>
                       ))}
                     </ul>
                   )}
-                </li>
+                </motion.li>
               ))}
-            </ul>
+            </motion.ul>
           )}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </div>
   );
 }
+
+export default ImportExportPage;

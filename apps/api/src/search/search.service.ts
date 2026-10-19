@@ -94,14 +94,20 @@ export class SearchService {
     const students = await prisma.student.findMany({
       where: {
         organizationId: orgId,
-        user: {
-          OR: [
-            { firstName: { contains: q, mode: 'insensitive' } },
-            { lastName: { contains: q, mode: 'insensitive' } },
-            { email: { contains: q, mode: 'insensitive' } },
-            { phone: { contains: q, mode: 'insensitive' } },
-          ],
-        },
+        OR: [
+          {
+            user: {
+              OR: [
+                { firstName: { contains: q, mode: 'insensitive' } },
+                { lastName: { contains: q, mode: 'insensitive' } },
+                { email: { contains: q, mode: 'insensitive' } },
+                { phone: { contains: q, mode: 'insensitive' } },
+              ],
+            },
+          },
+          { parentName: { contains: q, mode: 'insensitive' } },
+          { parentPhone: { contains: q, mode: 'insensitive' } },
+        ],
       },
       include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } } },
       take: limit,
@@ -111,10 +117,10 @@ export class SearchService {
       id: s.id,
       type: 'STUDENT',
       title: `${s.user?.firstName ?? ''} ${s.user?.lastName ?? ''}`.trim(),
-      subtitle: s.user?.email ?? undefined,
+      subtitle: s.user?.phone ?? s.user?.email ?? undefined,
       href: `/students/${s.id}`,
-      relevanceScore: this.score(q, s.user?.firstName ?? '', s.user?.lastName ?? ''),
-      metadata: { email: s.user?.email, phone: s.user?.phone },
+      relevanceScore: this.score(q, s.user?.firstName ?? '', s.user?.lastName ?? '', s.parentName ?? ''),
+      metadata: { email: s.user?.email, phone: s.user?.phone, parentName: s.parentName, parentPhone: s.parentPhone },
     }));
   }
 
@@ -128,10 +134,11 @@ export class SearchService {
           { user: { firstName: { contains: q, mode: 'insensitive' } } },
           { user: { lastName: { contains: q, mode: 'insensitive' } } },
           { user: { email: { contains: q, mode: 'insensitive' } } },
+          { user: { phone: { contains: q, mode: 'insensitive' } } },
           { specializations: { has: q } },
         ],
       },
-      include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+      include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } } },
       take: limit,
     });
 
@@ -139,10 +146,10 @@ export class SearchService {
       id: t.id,
       type: 'TEACHER',
       title: `${t.user?.firstName ?? ''} ${t.user?.lastName ?? ''}`.trim(),
-      subtitle: t.specializations.join(', ') || undefined,
-      href: `/teachers/${t.id}`,
+      subtitle: t.user?.phone ?? (t.specializations.join(', ') || undefined),
+      href: `/teachers?search=${encodeURIComponent(t.user?.firstName || t.user?.lastName || '')}`,
       relevanceScore: this.score(q, t.user?.firstName ?? '', t.user?.lastName ?? ''),
-      metadata: { specializations: t.specializations },
+      metadata: { specializations: t.specializations, phone: t.user?.phone },
     }));
   }
 
@@ -188,7 +195,7 @@ export class SearchService {
       type: 'COURSE',
       title: c.name,
       subtitle: c.description ?? undefined,
-      href: `/courses/${c.id}`,
+      href: `/courses?search=${encodeURIComponent(c.name)}`,
       relevanceScore: this.score(q, c.name, c.description ?? ''),
     }));
   }
@@ -214,7 +221,7 @@ export class SearchService {
       type: 'LEAD',
       title: `${l.firstName} ${l.lastName ?? ''}`.trim(),
       subtitle: `${l.stage} · ${l.source ?? 'unknown source'}`,
-      href: `/leads/${l.id}`,
+      href: `/leads?search=${encodeURIComponent(l.firstName || '')}`,
       relevanceScore: this.score(q, l.firstName, l.lastName ?? ''),
       metadata: { stage: l.stage, source: l.source },
     }));
@@ -242,7 +249,7 @@ export class SearchService {
       type: 'PAYMENT',
       title: `${p.amount} — ${p.student?.user?.firstName ?? ''} ${p.student?.user?.lastName ?? ''}`.trim(),
       subtitle: `${p.status} · ${p.description ?? ''}`,
-      href: `/payments/${p.id}`,
+      href: '/payments',
       relevanceScore: this.score(q, p.description ?? '', p.reference ?? ''),
       metadata: { status: p.status, amount: p.amount },
     }));
@@ -270,7 +277,7 @@ export class SearchService {
       type: 'EMPLOYEE',
       title: `${e.user?.firstName ?? ''} ${e.user?.lastName ?? ''}`.trim(),
       subtitle: `${e.position} · ${e.department ?? 'N/A'}`,
-      href: `/hr/employees/${e.id}`,
+      href: '/hr',
       relevanceScore: this.score(q, e.user?.firstName ?? '', e.user?.lastName ?? '', e.position ?? ''),
     }));
   }
@@ -296,7 +303,7 @@ export class SearchService {
       type: 'BOOK',
       title: b.title,
       subtitle: `${b.author ?? 'Unknown'} · ISBN: ${b.isbn ?? b.barcode}`,
-      href: `/library/books/${b.id}`,
+      href: '/library',
       relevanceScore: this.score(q, b.title, b.author ?? ''),
       metadata: { available: b.available, isbn: b.isbn },
     }));
@@ -327,7 +334,7 @@ export class SearchService {
       type: 'CERTIFICATE',
       title: `Certificate · ${c.course?.name ?? c.certificateNumber}`,
       subtitle: `${c.student?.user?.firstName ?? ''} ${c.student?.user?.lastName ?? ''} · ${c.certificateNumber}`,
-      href: `/certificates/${c.id}`,
+      href: '/certificates',
       relevanceScore: this.score(q, c.course?.name ?? '', c.certificateNumber, c.verificationCode),
       metadata: { number: c.certificateNumber, verified: !!c.pdfUrl },
     }));
@@ -353,7 +360,7 @@ export class SearchService {
       type: 'USER',
       title: `${u.firstName} ${u.lastName}`.trim(),
       subtitle: u.email,
-      href: `/users/${u.id}`,
+      href: '/users',
       relevanceScore: this.score(q, u.firstName, u.lastName),
       metadata: { email: u.email, role: u.role },
     }));

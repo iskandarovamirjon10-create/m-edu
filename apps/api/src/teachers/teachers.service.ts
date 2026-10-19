@@ -21,6 +21,7 @@ export class TeachersService {
         { user: { firstName: { contains: query.search, mode: 'insensitive' } } },
         { user: { lastName: { contains: query.search, mode: 'insensitive' } } },
         { user: { email: { contains: query.search, mode: 'insensitive' } } },
+        { user: { phone: { contains: query.search, mode: 'insensitive' } } },
       ];
     }
 
@@ -138,14 +139,19 @@ export class TeachersService {
   async remove(organizationId: string, id: string) {
     const teacher = await this.findOne(organizationId, id);
 
-    const groupCount = await this.prisma.group.count({ where: { teacherId: id, organizationId } });
-    if (groupCount > 0) {
-      throw new BadRequestException(
-        'This teacher is assigned to groups — deactivate the teacher instead of deleting them',
-      );
-    }
-
     await this.prisma.$transaction(async (tx) => {
+      await tx.group.updateMany({
+        where: { teacherId: id, organizationId },
+        data: { teacherId: null },
+      });
+      await tx.lesson.updateMany({
+        where: { teacherId: id },
+        data: { teacherId: null },
+      });
+      await tx.payrollRun.deleteMany({
+        where: { teacherId: id, organizationId },
+      });
+
       await tx.teacher.delete({ where: { id, organizationId } });
 
       // Remove the linked login account so a deleted teacher cannot sign in.

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { NotFoundException, ConflictException } from '@nestjs/common';
+import { NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { CertificatesService } from '../certificates.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCertificateDto } from '../dto/certificate.dto';
@@ -50,6 +51,8 @@ describe('CertificatesService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPrisma.certificate.findFirst.mockReset();
+    mockPrisma.certificate.create.mockReset();
     service = new CertificatesService(mockPrisma as unknown as PrismaService);
   });
 
@@ -286,6 +289,171 @@ describe('CertificatesService', () => {
 
       await service.setDefaultTemplate(orgId, 't1');
       expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('DB-002: Tenant-scoped Certificate.certificateNumber uniqueness and isolation', () => {
+    const dto = { studentId: 's1', courseId: 'cr1' };
+
+    it('rejects duplicate certificateNumber within the same organization (intra-tenant rejection)', async () => {
+      mockPrisma.student.findUnique.mockResolvedValueOnce({ id: 's1' });
+      mockPrisma.course.findUnique.mockResolvedValueOnce({ id: 'cr1' });
+      mockPrisma.studentGroup.findFirst.mockResolvedValueOnce({ id: 'sg1' });
+      mockPrisma.certificate.findFirst.mockImplementation(async ({ where }: { where: { certificateNumber?: string; studentId?: string } }) => {
+        if (where.certificateNumber) {
+          return { id: 'dup-cert', organizationId: orgId, certificateNumber: where.certificateNumber };
+        }
+        return null;
+      });
+
+      await expect(service.generateCertificate(orgId, dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('allows same certificateNumber in a different organization (cross-tenant allow)', async () => {
+      const org2Id = 'org-2-uuid';
+      mockPrisma.student.findUnique.mockResolvedValueOnce({ id: 's2' });
+      mockPrisma.course.findUnique.mockResolvedValueOnce({ id: 'cr2' });
+      mockPrisma.studentGroup.findFirst.mockResolvedValueOnce({ id: 'sg2' });
+      mockPrisma.certificate.findFirst
+        .mockResolvedValueOnce(null) // no existing cert for student+course in org-2
+        .mockResolvedValueOnce(null); // certificateNumber is unique within org-2
+
+      mockPrisma.certificate.create.mockResolvedValueOnce({
+        id: 'cert-org2',
+        organizationId: org2Id,
+        certificateNumber: 'CERT-SHARED-001',
+      });
+
+      const res = await service.generateCertificate(org2Id, { studentId: 's2', courseId: 'cr2' });
+      expect(res).toBeDefined();
+      expect(mockPrisma.certificate.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            organizationId: org2Id,
+          }),
+        }),
+      );
+    });
+
+    it('prohibits cross-tenant access to certificates belonging to another organization', async () => {
+      mockPrisma.certificate.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.findCertificateById('org-2', 'cert-org-1', 'u1', 'ORG_ADMIN'),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(mockPrisma.certificate.findFirst).toHaveBeenCalledWith({
+        where: { id: 'cert-org-1', organizationId: 'org-2' },
+        include: expect.any(Object),
+      });
+    });
+
+    it('retries and succeeds when first attempt hits certificateNumber P2002 collision', async () => {
+      mockPrisma.student.findUnique.mockResolvedValue({ id: 's1' });
+      mockPrisma.course.findUnique.mockResolvedValue({ id: 'cr1' });
+      mockPrisma.studentGroup.findFirst.mockResolvedValue({ id: 'sg1' });
+      mockPrisma.certificate.findFirst.mockResolvedValue(null);
+
+      const p2002Error = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+        meta: { target: ['organizationId', 'certificateNumber'] },
+      });
+      const successfulCert = { id: 'cert-retry-success', certificateNumber: 'CERT-RETRY-001' };
+
+      mockPrisma.certificate.create
+        .mockRejectedValueOnce(p2002Error)
+        .mockResolvedValueOnce(successfulCert);
+
+      const res = await service.generateCertificate(orgId, dto);
+      expect(res).toEqual(successfulCert);
+      expect(mockPrisma.certificate.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('exhausts MAX_RETRIES (3 attempts) on persistent certificateNumber collision and throws BadRequestException', async () => {
+      mockPrisma.student.findUnique.mockResolvedValue({ id: 's1' });
+      mockPrisma.course.findUnique.mockResolvedValue({ id: 'cr1' });
+      mockPrisma.studentGroup.findFirst.mockResolvedValue({ id: 'sg1' });
+      mockPrisma.certificate.findFirst.mockResolvedValue(null);
+
+      const p2002Error = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+        meta: { target: ['organizationId', 'certificateNumber'] },
+      });
+
+      mockPrisma.certificate.create.mockRejectedValue(p2002Error);
+
+      await expect(service.generateCertificate(orgId, dto)).rejects.toThrow(
+        new BadRequestException('Certificate number already exists in this organization'),
+      );
+      expect(mockPrisma.certificate.create).toHaveBeenCalledTimes(3);
+    });
+
+    it('retries and succeeds when first attempt hits verificationCode P2002 collision', async () => {
+      mockPrisma.student.findUnique.mockResolvedValue({ id: 's1' });
+      mockPrisma.course.findUnique.mockResolvedValue({ id: 'cr1' });
+      mockPrisma.studentGroup.findFirst.mockResolvedValue({ id: 'sg1' });
+      mockPrisma.certificate.findFirst.mockResolvedValue(null);
+
+      const p2002Verification = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+        meta: { target: ['verificationCode'] },
+      });
+      const successfulCert = { id: 'cert-code-success', verificationCode: 'V999' };
+
+      mockPrisma.certificate.create
+        .mockRejectedValueOnce(p2002Verification)
+        .mockResolvedValueOnce(successfulCert);
+
+      const res = await service.generateCertificate(orgId, dto);
+      expect(res).toEqual(successfulCert);
+      expect(mockPrisma.certificate.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry when P2002 error target is an unrelated constraint and throws immediately', async () => {
+      mockPrisma.student.findUnique.mockResolvedValue({ id: 's1' });
+      mockPrisma.course.findUnique.mockResolvedValue({ id: 'cr1' });
+      mockPrisma.studentGroup.findFirst.mockResolvedValue({ id: 'sg1' });
+      mockPrisma.certificate.findFirst.mockResolvedValue(null);
+
+      const p2002Other = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+        meta: { target: ['organizationId', 'otherConstraint'] },
+      });
+
+      mockPrisma.certificate.create.mockRejectedValue(p2002Other);
+
+      await expect(service.generateCertificate(orgId, dto)).rejects.toThrow(
+        new BadRequestException('Certificate unique constraint violation: organizationId,otherConstraint'),
+      );
+      expect(mockPrisma.certificate.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles concurrent certificate generation requests independently', async () => {
+      mockPrisma.student.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({ id: where.id }));
+      mockPrisma.course.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({ id: where.id }));
+      mockPrisma.studentGroup.findFirst.mockResolvedValue({ id: 'sg1' });
+      mockPrisma.certificate.findFirst.mockResolvedValue(null);
+
+      mockPrisma.certificate.create.mockImplementation(async ({ data }: { data: { studentId: string; certificateNumber: string; verificationCode: string } }) => ({
+        id: `cert-${data.studentId}`,
+        ...data,
+      }));
+
+      const [cert1, cert2] = await Promise.all([
+        service.generateCertificate(orgId, { studentId: 'student-A', courseId: 'cr1' }),
+        service.generateCertificate(orgId, { studentId: 'student-B', courseId: 'cr1' }),
+      ]);
+
+      expect(cert1).toBeDefined();
+      expect(cert2).toBeDefined();
+      expect((cert1 as { id: string }).id).toBe('cert-student-A');
+      expect((cert2 as { id: string }).id).toBe('cert-student-B');
+      expect((cert1 as { certificateNumber: string }).certificateNumber).not.toBe((cert2 as { certificateNumber: string }).certificateNumber);
+      expect((cert1 as { verificationCode: string }).verificationCode).not.toBe((cert2 as { verificationCode: string }).verificationCode);
     });
   });
 });

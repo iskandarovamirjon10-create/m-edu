@@ -48,20 +48,20 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
   const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col justify-between rounded-[var(--radius-2xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)] sm:p-6">
+    <div className="relative overflow-hidden flex flex-col justify-between rounded-2xl border border-subtle/80 bg-card/85 backdrop-blur-xl p-5 shadow-card before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent dark:before:via-white/10 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold tracking-tight text-[var(--text-primary)]">
+          <h2 className="text-base font-semibold tracking-tight text-primary">
             {t('dashboard.upcomingFollowUps') || 'Scheduled Follow-ups'}
           </h2>
-          <p className="text-xs text-[var(--text-muted)]">
+          <p className="text-xs text-secondary">
             {t('dashboard.viewLeads') || 'Pending inquiries & calls'}
           </p>
         </div>
 
         <Link
           to="/leads"
-          className="items-center gap-1 text-xs font-semibold text-[var(--primary)] transition-colors hover:underline inline-flex"
+          className="items-center gap-1 text-xs font-semibold text-primary transition-colors hover:underline inline-flex"
         >
           <span>{t('leads.title') || 'View pipeline'}</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -79,7 +79,7 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
             />
           </div>
         ) : (
-          <div className="divide-y divide-[var(--border-subtle)] overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)]">
+          <div className="divide-y divide-subtle/60 overflow-hidden rounded-xl border border-subtle/70 bg-card/50 backdrop-blur-sm">
             {followUps.slice(0, 6).map((item) => {
               const name = getLeadName(item.lead, t('dashboard.lead') || 'Lead');
               const urgency = getUrgency(item.scheduledAt, t);
@@ -96,17 +96,17 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
                       navigate('/leads');
                     }
                   }}
-                  className="group flex cursor-pointer items-center justify-between gap-3 p-3 transition-colors hover:bg-[var(--bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                  className="group flex cursor-pointer items-center justify-between gap-3 p-3 transition-colors hover:bg-surface/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {/* Left: Contact Info */}
                   <div className="flex min-w-0 items-center gap-3">
                     <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-semibold ${
                         urgency.level === 'overdue'
-                          ? 'bg-[var(--danger-soft)] text-[var(--danger)]'
+                          ? 'bg-apple-red/10 text-apple-red'
                           : urgency.level === 'today'
-                            ? 'bg-[var(--warning-soft)] text-[var(--warning)]'
-                            : 'bg-[var(--primary-soft)] text-[var(--primary)]'
+                            ? 'bg-apple-orange/10 text-apple-orange'
+                            : 'bg-apple-blue/10 text-apple-blue'
                       }`}
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -115,10 +115,10 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
                     </div>
 
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)]">
+                      <p className="truncate text-xs font-semibold text-primary group-hover:text-apple-blue transition-colors">
                         {name}
                       </p>
-                      <p className="truncate text-[11px] text-[var(--text-muted)]">
+                      <p className="truncate text-[11px] text-tertiary">
                         {item.note || leadPhone || t('dashboard.viewLeads') || 'Scheduled call'}
                       </p>
                     </div>
@@ -129,19 +129,19 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-tight ${
                         urgency.level === 'overdue'
-                          ? 'bg-[var(--danger-soft)] text-[var(--danger)]'
+                          ? 'bg-apple-red/10 text-apple-red'
                           : urgency.level === 'today'
-                            ? 'bg-[var(--warning-soft)] text-[var(--warning)]'
-                            : 'bg-[var(--neutral-soft)] text-[var(--text-secondary)]'
+                            ? 'bg-apple-orange/10 text-apple-orange'
+                            : 'bg-black/[0.05] dark:bg-white/[0.08] text-secondary'
                       }`}
                     >
                       <span
                         className={`h-1.5 w-1.5 rounded-full ${
                           urgency.level === 'overdue'
-                            ? 'bg-[var(--danger)] animate-pulse'
+                            ? 'bg-apple-red animate-pulse'
                             : urgency.level === 'today'
-                              ? 'bg-[var(--warning)]'
-                              : 'bg-[var(--text-tertiary)]'
+                              ? 'bg-apple-orange'
+                              : 'bg-tertiary'
                         }`}
                       />
                       {urgency.label}
@@ -156,7 +156,7 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
                       strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="hidden sm:block text-[var(--text-tertiary)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--primary)]"
+                      className="hidden sm:block text-tertiary transition-transform group-hover:translate-x-0.5 group-hover:text-apple-blue"
                     >
                       <path d="m9 18 6-6-6-6" />
                     </svg>

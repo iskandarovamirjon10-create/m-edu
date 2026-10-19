@@ -429,21 +429,25 @@ export class GamificationService {
       throw new BadRequestException('Bunday mukofot do’konda topilmadi');
     }
 
-    const current = await this.prisma.studentGamification.findUnique({
-      where: { studentId },
+    // Atomic debit: the conditional update only lands while the balance still
+    // covers the cost, so two concurrent claims can never go negative.
+    const debit = await this.prisma.studentGamification.updateMany({
+      where: { studentId, coins: { gte: reward.costCoins } },
+      data: { coins: { decrement: reward.costCoins } },
     });
 
-    if (!current || current.coins < reward.costCoins) {
+    if (debit.count === 0) {
+      const current = await this.prisma.studentGamification.findUnique({
+        where: { studentId },
+        select: { coins: true },
+      });
       throw new BadRequestException(
         `Coinlar yetarli emas. Sizda: ${current?.coins ?? 0}, kerak: ${reward.costCoins}`,
       );
     }
 
-    const updated = await this.prisma.studentGamification.update({
+    const updated = await this.prisma.studentGamification.findUniqueOrThrow({
       where: { studentId },
-      data: {
-        coins: { decrement: reward.costCoins },
-      },
       select: { coins: true, xp: true, level: true },
     });
 

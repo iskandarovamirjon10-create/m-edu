@@ -50,5 +50,33 @@ export class GroupsController {
   remove(@CurrentUser('organizationId') orgId: string, @Param('id') id: string) {
     return this.groupsService.remove(orgId, id);
   }
+
+  @AllowAnyRole()
+  @Get(':id/capacity')
+  @ApiOperation({ summary: 'Get real-time group capacity, occupancy rate and available seats' })
+  getCapacity(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') id: string,
+  ) {
+    return this.groupsService.getGroupCapacityAndOccupancy(orgId, id);
+  }
+
+  @Post(':id/graduate')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
+  @ApiOperation({ summary: 'Batch graduate students and promote to next level group' })
+  graduate(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') id: string,
+    @Body()
+    body: {
+      studentIds: string[];
+      targetGroupId?: string;
+      targetGroupName?: string;
+      targetCourseId?: string;
+      archiveOldGroup?: boolean;
+    },
+  ) {
+    return this.groupsService.graduateAndPromote(orgId, id, body);
+  }
 }
 

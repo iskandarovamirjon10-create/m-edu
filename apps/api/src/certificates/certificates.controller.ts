@@ -25,6 +25,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { Response } from 'express';
 import type { RequestUser } from '../auth/types';
 import { AllowAnyRole } from '../auth/roles.decorator';
+import { AllowPublic } from '../auth/public.decorator';
 
 @Controller('certificates')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -54,7 +55,7 @@ export class CertificatesController {
     return this.certificatesService.getStudentCertificates(user.organizationId, studentId, user.sub, user.role);
   }
 
-  @AllowAnyRole()
+  @AllowPublic()
   @Get('verify/:code')
   async verifyCertificate(@Param('code') code: string) {
     return this.certificatesService.verifyCertificate(code);

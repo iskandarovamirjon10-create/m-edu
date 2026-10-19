@@ -6,7 +6,7 @@ import { AllowPublic } from '../auth/public.decorator';
 @ApiTags('Root')
 // Excluded from Swagger UI — the root endpoint is a navigation hint, not an
 // API surface. main.ts also excludes this route from the /api global prefix
-// so GET / returns a friendly banner instead of a 404.
+// so GET / and GET /api return a friendly banner instead of a 404.
 @ApiExcludeController()
 @AllowPublic()
 @Controller()
@@ -17,7 +17,7 @@ export class RootController {
   getRoot() {
     return {
       name: 'M-EDU API',
-      version: '1.0.0',
+      version: '2.0.0',
       docs: '/api/docs',
       health: '/api/health',
       readiness: '/api/readiness',

@@ -6,6 +6,7 @@ function createMockPrisma() {
     student: { count: vi.fn() },
     teacher: { count: vi.fn() },
     group: { count: vi.fn() },
+    course: { count: vi.fn() },
     payment: {
       findMany: vi.fn(),
       aggregate: vi.fn(),
@@ -42,6 +43,7 @@ describe('DashboardService.getStats', () => {
     prisma.student.count.mockResolvedValue(0);
     prisma.teacher.count.mockResolvedValue(0);
     prisma.group.count.mockResolvedValue(0);
+    prisma.course.count.mockResolvedValue(0);
     prisma.payment.findMany.mockResolvedValue([]);
     prisma.payment.aggregate.mockResolvedValue({ _sum: { amount: null } });
     prisma.refund.aggregate.mockResolvedValue({ _sum: { amount: null } });
@@ -59,6 +61,7 @@ describe('DashboardService.getStats', () => {
     expect(stats.totalStudents).toBe(0);
     expect(stats.totalTeachers).toBe(0);
     expect(stats.activeGroups).toBe(0);
+    expect(stats.totalCourses).toBe(0);
     expect(stats.totalPaid).toBe(0);
     expect(stats.conversionRate).toBe(0);
     expect(stats.attendanceRate).toBe(0);
@@ -118,16 +121,40 @@ describe('DashboardService.getStats', () => {
     expect(stats.monthlyRevenue).toEqual(series);
   });
 
-  it('includes counts for students, teachers and active groups', async () => {
+  it('includes counts for students, teachers, active groups and courses', async () => {
     prisma.student.count
       .mockResolvedValueOnce(42) // totalStudents
       .mockResolvedValueOnce(30); // activeStudents
     prisma.teacher.count.mockResolvedValue(5);
     prisma.group.count.mockResolvedValue(4);
+    prisma.course.count.mockResolvedValue(3);
     const stats = await svc.getStats('org-1');
     expect(stats.totalStudents).toBe(42);
     expect(stats.activeStudents).toBe(30);
     expect(stats.totalTeachers).toBe(5);
     expect(stats.activeGroups).toBe(4);
+    expect(stats.totalCourses).toBe(3);
+  });
+
+  it('aggregates today revenue and today attendance within the organization timezone', async () => {
+    // Return mock today payments aggregate and today attendance grouping
+    prisma.payment.aggregate
+      .mockResolvedValueOnce({ _sum: { amount: 5000000 } }) // all-time
+      .mockResolvedValueOnce({ _sum: { amount: 750000 }, _count: { id: 3 } }); // today
+
+    prisma.attendance.groupBy
+      .mockResolvedValueOnce([{ status: 'PRESENT', _count: { status: 10 } }]) // 30-day
+      .mockResolvedValueOnce([
+        { status: 'PRESENT', _count: { status: 15 } },
+        { status: 'ABSENT', _count: { status: 2 } },
+      ]); // today
+
+    const stats = await svc.getStats('org-1');
+    expect(stats.todayRevenue).toBe(750000);
+    expect(stats.todayPaymentsCount).toBe(3);
+    expect(stats.todayAttendanceStats).toEqual([
+      { status: 'PRESENT', count: 15 },
+      { status: 'ABSENT', count: 2 },
+    ]);
   });
 });

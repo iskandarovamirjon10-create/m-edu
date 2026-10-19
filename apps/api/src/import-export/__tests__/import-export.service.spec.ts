@@ -119,7 +119,7 @@ describe('ImportExportService', () => {
       ],
     }).compile();
 
-    service = module.get<ImportExportService>(ImportExportService);
+    service = new ImportExportService(prisma as unknown as PrismaService);
   });
 
   it('should be defined', () => {
@@ -194,6 +194,36 @@ describe('ImportExportService', () => {
         expect(cellOf('lastName')).toBe('Doe');
         expect(cellOf('email')).toBe('jane@example.com');
       }
+    });
+
+    it('sanitizes formula injection in XLSX cells (M-EDU-API-002)', async () => {
+      const maliciousStudent = {
+        ...MOCK_STUDENT,
+        user: {
+          ...MOCK_STUDENT.user,
+          firstName: '=cmd|\'/C calc\'!A0',
+          lastName: '+1+1',
+        },
+      };
+      prisma.student.findMany.mockResolvedValue([maliciousStudent]);
+      const res = createMockRes();
+
+      await service.exportDataStream('org1', 'STUDENT', 'xlsx', res);
+      await new Promise((r) => setTimeout(r, 150));
+      if (!res.endedFlag()) res.end();
+
+      const buffer = res.collected();
+      const ExcelJS = await import('exceljs');
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+
+      const sheet = wb.getWorksheet('STUDENT');
+      const dataRow = sheet!.getRow(2);
+      const cellOf = (header: string) =>
+        dataRow.getCell(STUDENT_HEADERS.indexOf(header) + 1).value;
+
+      expect(cellOf('firstName')).toBe("'=cmd|'/C calc'!A0");
+      expect(cellOf('lastName')).toBe("'+1+1");
     });
   });
 
@@ -273,6 +303,49 @@ describe('ImportExportService', () => {
       expect(result.totalRows).toBe(1);
       expect(result.importedCount).toBe(1);
       expect(prisma.student.create).toHaveBeenCalled();
+    });
+
+    it('rejects files exceeding 10MB file size limit (M-EDU-API-003)', async () => {
+      const hugeBuffer = Buffer.alloc(10 * 1024 * 1024 + 1);
+      const file = {
+        buffer: hugeBuffer,
+        originalname: 'huge.csv',
+        mimetype: 'text/csv',
+      };
+
+      await expect(
+        service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file),
+      ).rejects.toThrow('Import file size exceeds maximum limit of 10MB');
+    });
+
+    it('rejects CSV files exceeding 5000 rows limit (M-EDU-API-003)', async () => {
+      let csv = 'firstName,lastName\n';
+      for (let i = 0; i < 5002; i++) {
+        csv += `User${i},Test${i}\n`;
+      }
+      const file = {
+        buffer: Buffer.from(csv, 'utf-8'),
+        originalname: 'bomb.csv',
+        mimetype: 'text/csv',
+      };
+
+      await expect(
+        service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file),
+      ).rejects.toThrow('CSV file exceeds maximum allowed limit of 5000 rows');
+    });
+
+    it('rejects files exceeding 50 columns (M-EDU-API-003)', async () => {
+      const wideHeaders = Array.from({ length: 55 }, (_, i) => `col${i}`).join(',');
+      const csv = `${wideHeaders}\n${Array.from({ length: 55 }, () => 'val').join(',')}`;
+      const file = {
+        buffer: Buffer.from(csv, 'utf-8'),
+        originalname: 'wide.csv',
+        mimetype: 'text/csv',
+      };
+
+      await expect(
+        service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file),
+      ).rejects.toThrow('CSV file exceeds maximum limit of 50 columns');
     });
   });
 });

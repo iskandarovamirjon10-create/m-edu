@@ -19,6 +19,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
 import { groupsApi, coursesApi, teachersApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
+import { openQuickLook, openSidecar } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import {
   GlassErrorState,
   GlassModal,
@@ -26,9 +28,11 @@ import {
   GlassInput,
   GlassSelect,
   GlassButton,
+  FloatingActionIsland,
   useToasts,
   ConfirmDialog,
 } from '@/components/ui';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { fullName } from '@/lib/format';
 import type { Paginated, Group, Course, Teacher } from '@/lib/types';
@@ -147,6 +151,32 @@ const I: Record<string, string[]> = {
     'M19 21V11l-6-4',
     'M9 9v.01', 'M9 12v.01', 'M9 15v.01', 'M9 18v.01',
   ],
+  eye: [
+    'M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z',
+    'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
+  ],
+  search: [
+    'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z',
+    'M21 21l-4.35-4.35',
+  ],
+  x: [
+    'M18 6 6 18',
+    'M6 6l12 12',
+  ],
+  grid: [
+    'M3 3h7v7H3z',
+    'M14 3h7v7h-7z',
+    'M14 14h7v7h-7z',
+    'M3 14h7v7H3z',
+  ],
+  list: [
+    'M8 6h13',
+    'M8 12h13',
+    'M8 18h13',
+    'M3 6h.01',
+    'M3 12h.01',
+    'M3 18h.01',
+  ],
 };
 
 function Icon({
@@ -183,23 +213,23 @@ function Icon({
 }
 
 /* ============================================================================
- * TONES
+ * TONES (Apple HIG Calibrated System)
  * ========================================================================== */
 
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
-  emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
+  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.08)',  glow: 'rgba(0,122,255,0.14)', border: 'rgba(0,122,255,0.20)' },
+  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.08)',  glow: 'rgba(52,199,89,0.14)', border: 'rgba(52,199,89,0.20)' },
+  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.08)',  glow: 'rgba(255,149,0,0.14)', border: 'rgba(255,149,0,0.20)' },
+  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.08)',  glow: 'rgba(255,59,48,0.14)', border: 'rgba(255,59,48,0.20)' },
+  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.08)', glow: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.20)' },
+  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.08)', glow: 'rgba(50,173,230,0.14)', border: 'rgba(50,173,230,0.20)' },
+  gray:    { fg: '#8E8E93', bg: 'rgba(142,142,147,0.08)', glow: 'rgba(142,142,147,0.14)', border: 'rgba(142,142,147,0.20)' },
+  emerald: { fg: '#34C759', bg: 'rgba(52,199,89,0.08)',  glow: 'rgba(52,199,89,0.14)', border: 'rgba(52,199,89,0.20)' },
 };
 
-const GROUP_PALETTES: Tone[] = ['blue', 'purple', 'emerald', 'orange', 'cyan', 'red', 'green', 'gray'];
+const GROUP_PALETTES: Tone[] = ['blue', 'purple', 'emerald', 'orange', 'cyan', 'gray'];
 
 /* ============================================================================
  * TYPES + CONSTANTS
@@ -260,14 +290,12 @@ function nameHash(str: string): number {
 }
 
 const AVATAR_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
-  ['#FF2D55', '#FF9500'],
-  ['#30D158', '#34C759'],
+  ['#2563EB', '#1D4ED8'],
+  ['#475569', '#334155'],
+  ['#059669', '#047857'],
+  ['#0D9488', '#0F766E'],
+  ['#4F46E5', '#4338CA'],
+  ['#1E293B', '#0F172A'],
 ];
 
 function avatarGradient(name: string): string {
@@ -305,11 +333,11 @@ function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; r
 function GroupsSkeleton() {
   return (
     <div className="space-y-5">
-      <Shimmer className="h-28 w-full" radius="1.75rem" />
+      <Shimmer className="h-28 w-full" radius="1rem" />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[88px]" radius="1rem" />)}
+        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[88px]" radius="0.75rem" />)}
       </div>
-      <Shimmer className="h-96 w-full" radius="1.75rem" />
+      <Shimmer className="h-96 w-full" radius="1rem" />
     </div>
   );
 }
@@ -341,7 +369,7 @@ function CountUp({
   return <span className="tabular-nums">{Math.round(n).toLocaleString('uz-UZ')}</span>;
 }
 
-/** Premium KPI tile */
+/** Apple Pro KPI tile */
 function KpiTile({
   label,
   value,
@@ -357,40 +385,25 @@ function KpiTile({
   return (
     <motion.div
       variants={rowVariants}
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -2 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-surface-900/80 px-4 py-3.5 backdrop-blur-xl shadow-card hover:shadow-card-hover transition-all"
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
-      />
       <div
-        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-xs transition-transform group-hover:scale-105"
         style={{
           background: c.bg,
           color: c.fg,
           border: `1px solid ${c.border}`,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
         }}
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-xl"
-          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent)' }}
-        />
         <Icon paths={icon} size={18} strokeWidth={2} className="relative" />
       </div>
       <div className="relative min-w-0 flex-1">
-        <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
+        <div className="text-2xl font-bold tracking-tight tabular-nums leading-none text-[var(--text-primary)] dark:text-white">
           <CountUp value={value} />
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-1.5 truncate text-xs font-medium text-[var(--text-secondary)] dark:text-zinc-400">
           {label}
         </div>
       </div>
@@ -398,13 +411,13 @@ function KpiTile({
   );
 }
 
-/** Status badge with tone-aware pulse */
+/** Status badge */
 function StatusBadge({ isActive, label }: { isActive: boolean; label: string }) {
   const tone: Tone = isActive ? 'emerald' : 'gray';
   const c = TONES[tone];
   return (
     <span
-      className="relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em]"
+      className="relative inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium tracking-tight"
       style={{
         background: c.bg,
         color: c.fg,
@@ -413,11 +426,9 @@ function StatusBadge({ isActive, label }: { isActive: boolean; label: string }) 
     >
       <span className="relative flex h-1.5 w-1.5">
         {isActive && (
-          <motion.span
-            className="absolute inset-0 rounded-full"
-            style={{ background: c.fg, opacity: 0.6 }}
-            animate={{ scale: [1, 2.4, 1], opacity: [0.6, 0, 0.6] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+          <span
+            className="absolute inset-0 rounded-full animate-ping opacity-75"
+            style={{ background: c.fg }}
           />
         )}
         <span className="relative h-1.5 w-1.5 rounded-full" style={{ background: c.fg }} />
@@ -435,11 +446,11 @@ function CapacityBar({ group }: { group: Group }) {
   const c = TONES[tone];
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[12.5px] font-semibold tabular-nums tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+      <span className="text-[12.5px] font-semibold tabular-nums tracking-tight text-[var(--text-primary)] dark:text-white">
         {formatCapacity(group)}
       </span>
       {cap > 0 && (
-        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.10]">
           <motion.div
             className="h-full rounded-full"
             style={{ background: c.fg }}
@@ -458,14 +469,14 @@ function CourseChip({ name }: { name: string }) {
   const c = TONES.blue;
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.10em]"
+      className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium tracking-tight"
       style={{
         background: c.bg,
         color: c.fg,
         border: `1px solid ${c.border}`,
       }}
     >
-      <Icon paths={I.book} size={10} strokeWidth={2.2} />
+      <Icon paths={I.book} size={11} strokeWidth={2} />
       {name}
     </span>
   );
@@ -511,6 +522,7 @@ export function GroupsPage() {
   const { t } = useI18n();
   usePageTitle(t('groups.title'));
   const navigate = useNavigate();
+  const sound = usePremiumSound();
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
@@ -523,6 +535,29 @@ export function GroupsPage() {
   const [formErrors, setFormErrors] = useState<
     Partial<Record<keyof GroupFormState, string>>
   >({});
+
+  const [graduateTarget, setGraduateTarget] = useState<Group | null>(null);
+  const [graduateForm, setGraduateForm] = useState({
+    targetGroupId: '',
+    completionNote: 'Guruh bitirildi va talabalar keyingi bosqichga muvaffaqiyatli o\'tkazildi',
+  });
+
+  const graduateMutation = useMutation({
+    mutationFn: () => {
+      if (!graduateTarget) return Promise.reject(new Error('No group target'));
+      return groupsApi.graduate(graduateTarget.id, {
+        targetGroupId: graduateForm.targetGroupId || undefined,
+        completionNote: graduateForm.completionNote,
+      });
+    },
+    onSuccess: (res: any) => {
+      push('success', `Guruh bitirildi! ${res?.graduatedCount || ''} ta talaba keyingi bosqichga o'tkazildi`);
+      setGraduateTarget(null);
+      qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+    },
+    onError: (e: any) => push('error', getErrorMessage(e)),
+  });
 
   /* ── Queries ──────────────────────────────────────────────────────── */
   const groups = useQuery({
@@ -650,6 +685,116 @@ export function GroupsPage() {
     [navigate],
   );
 
+  const handleOpenGroupSidecar = useCallback(
+    (group: Group) => {
+      sound.playTick();
+      const teacherName = formatTeacherName(group.teacher);
+      const capacityStr = formatCapacity(group);
+      openSidecar({
+        id: group.id,
+        type: 'group',
+        title: group.name,
+        subtitle: group.course?.name || 'Guruh',
+        badge: {
+          text: group.isActive !== false ? 'Faol' : 'Nofaol',
+          tone: group.isActive !== false ? 'emerald' : 'slate',
+        },
+        avatar: {
+          text: group.name.slice(0, 2).toUpperCase(),
+          color: group.isActive !== false ? '#34C759' : '#8E8E93',
+        },
+        metrics: [
+          {
+            label: 'O\'quvchilar',
+            value: formatCapacity(group),
+            subtext: group.room ? `Xona: ${group.room}` : 'Xona belgilanmagan',
+          },
+          {
+            label: 'O\'qituvchi',
+            value: teacherName,
+            subtext: 'Asosiy murabbiy',
+          },
+          {
+            label: 'Boshlanish',
+            value: group.startDate ? new Date(group.startDate).toLocaleDateString() : '—',
+            subtext: 'Guruh start sanasi',
+          },
+        ],
+        details: [
+          { label: 'Guruh nomi', value: group.name },
+          { label: 'Kurs', value: group.course?.name || '—' },
+          { label: 'O\'qituvchi', value: teacherName },
+          { label: 'Xona', value: group.room || '—' },
+          { label: 'Sig\'im', value: capacityStr },
+          { label: 'Boshlanish sanasi', value: group.startDate ? new Date(group.startDate).toLocaleDateString() : '—' },
+          { label: 'Guruh ID', value: group.id, copyable: true },
+        ],
+        tags: [group.course?.name || 'Kurs', group.room ? `Xona ${group.room}` : ''].filter(Boolean),
+        primaryAction: {
+          label: 'Batafsil guruhga o\'tish',
+          onExecute: () => navigate(`/groups/${group.id}`),
+        },
+        secondaryAction: {
+          label: 'Tahrirlash',
+          onExecute: () => navigate(`/groups/${group.id}/edit`),
+        },
+      });
+    },
+    [sound, navigate],
+  );
+
+  const handleQuickLook = useCallback(
+    (group: Group) => {
+      const teacherName = formatTeacherName(group.teacher);
+      const capacityStr = formatCapacity(group);
+      openQuickLook({
+        id: group.id,
+        type: 'group',
+        title: group.name,
+        subtitle: group.course?.name || 'Guruh',
+        badge: {
+          text: group.isActive !== false ? 'Faol' : 'Nofaol',
+          tone: group.isActive !== false ? 'emerald' : 'slate',
+        },
+        avatar: {
+          text: group.name.slice(0, 2).toUpperCase(),
+        },
+        metrics: [
+          {
+            label: 'O\'quvchilar',
+            value: formatCapacity(group),
+            subtext: group.room ? `Xona: ${group.room}` : 'Xona belgilanmagan',
+          },
+          {
+            label: 'O\'qituvchi',
+            value: teacherName,
+            subtext: 'Asosiy murabbiy',
+          },
+          {
+            label: 'Boshlanish',
+            value: group.startDate ? new Date(group.startDate).toLocaleDateString() : '—',
+            subtext: 'Guruh start sanasi',
+          },
+        ],
+        details: [
+          { label: 'Guruh nomi', value: group.name },
+          { label: 'Kurs', value: group.course?.name || '—' },
+          { label: 'O\'qituvchi', value: teacherName },
+          { label: 'Xona', value: group.room || '—' },
+          { label: 'Sig\'im', value: capacityStr },
+          { label: 'Boshlanish sanasi', value: group.startDate ? new Date(group.startDate).toLocaleDateString() : '—' },
+          { label: 'Guruh ID', value: group.id },
+        ],
+        tags: [group.course?.name || 'Kurs', group.room ? `Xona ${group.room}` : ''].filter(Boolean),
+        primaryAction: {
+          label: 'Batafsil guruhga o\'tish',
+          onExecute: () => navigate(`/groups/${group.id}`),
+        },
+      });
+    },
+    [navigate],
+  );
+
   const handleDelete = useCallback((id: string) => {
     setDeleteTarget(id);
   }, []);
@@ -665,11 +810,90 @@ export function GroupsPage() {
     void refetchGroups();
   }, [refetchGroups]);
 
+  /* ── Search & Filter State ────────────────────────────────────────── */
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [courseFilter, setCourseFilter] = useState<string>('ALL');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+
+  const filteredGroups = useMemo(() => {
+    let list = groupList;
+    if (statusFilter === 'ACTIVE') list = list.filter((g) => g.isActive !== false);
+    else if (statusFilter === 'INACTIVE') list = list.filter((g) => g.isActive === false);
+    if (courseFilter !== 'ALL') list = list.filter((g) => g.courseId === courseFilter);
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (g) =>
+          g.name.toLowerCase().includes(q) ||
+          (g.course?.name || '').toLowerCase().includes(q) ||
+          (g.room || '').toLowerCase().includes(q) ||
+          formatTeacherName(g.teacher).toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [groupList, statusFilter, courseFilter, search]);
+
+  /* ── Superhuman Keyboard-First Navigation ─────────────────────────── */
+  const {
+    focusedIndex,
+    selectedIds,
+    selectedCount,
+    isSelected,
+    toggleSelection,
+    clearSelection,
+  } = useListKeyboardNavigation<Group>({
+    items: filteredGroups,
+    getItemId: (g) => g.id,
+    rowIdPrefix: 'group-row-',
+    onSelect: (g) => handleGroupClick(g.id),
+    onQuickLook: (g) => handleOpenGroupSidecar(g),
+    onEdit: (g) => navigate(`/groups/${g.id}/edit`),
+  });
+
+  /* ── Batch actions ────────────────────────────────────────────────── */
+  const handleExportSelectedGroupsCSV = () => {
+    const selectedRows = filteredGroups.filter((g) => isSelected(g.id));
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      ['ID,Name,Course,Teacher,Room,Capacity']
+        .concat(
+          selectedRows.map(
+            (g) =>
+              `"${g.id}","${g.name}","${g.course?.name || ''}","${formatTeacherName(g.teacher)}","${g.room || ''}","${g.capacity || ''}"`
+          )
+        )
+        .join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `groups_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    push('success', `${selectedRows.length} ta guruh CSV formatida yuklandi`);
+  };
+
+  const handleBatchDeleteGroups = async () => {
+    let count = 0;
+    for (const id of selectedIds) {
+      try {
+        await groupsApi.remove(id);
+        count++;
+      } catch {
+        // continue
+      }
+    }
+    qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+    clearSelection();
+    push('success', `${count} ta guruh o'chirildi`);
+  };
+
   /* ── Loading ──────────────────────────────────────────────────────── */
   if (groups.isLoading && !data) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80" />
         <GroupsSkeleton />
       </div>
     );
@@ -704,74 +928,42 @@ export function GroupsPage() {
           HERO HEADER
       ============================================================ */}
       <motion.div variants={cardVariants}>
-        <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-24"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-            }}
-          />
-          <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-            {/* Gradient groups tile */}
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, rotate: -6 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              transition={SPRING.smooth}
-              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
-              style={{
-                background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
-                boxShadow:
-                  '0 12px 28px -10px rgba(0,122,255,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
-              }}
-            >
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0 rounded-2xl"
-                style={{
-                  background:
-                    'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
-                }}
-              />
-              <Icon paths={I.groups} size={28} strokeWidth={2} className="relative" />
-            </motion.div>
+        <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-5 sm:p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+          <div className="relative flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            {/* Apple Icon squircle */}
+            <div className="relative flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#007AFF] to-[#0051D5] text-white shadow-[0_8px_20px_rgba(0,122,255,0.25)] ring-1 ring-white/20">
+              <Icon paths={I.groups} size={24} strokeWidth={2.2} className="relative" />
+            </div>
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
-                  <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-brand-600 dark:text-brand-400 border border-brand-500/15">
+                  <Icon paths={I.sparkles} size={11} strokeWidth={2.2} />
                   {t('groups.title')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#00000006] px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B] dark:bg-[#ffffff08]">
-                  <Icon paths={I.layers} size={11} strokeWidth={2.5} />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)] tabular-nums border border-black/[0.04] dark:border-white/[0.06]">
+                  <Icon paths={I.layers} size={11} strokeWidth={2.2} />
                   {stats.total} total
                 </span>
                 {stats.active > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#28A745] dark:text-[#34C759] tabular-nums border border-[#34C759]/20">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] animate-pulse" />
                     {stats.active} active
                   </span>
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-[var(--text-primary)] sm:text-3xl font-display">
                 {t('groups.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-0.5 text-[13px] text-[var(--text-secondary)]">
                 {t('groups.pageSubtitle')}
               </p>
             </div>
 
             <motion.div
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               transition={SPRING.snappy}
             >
               <GlassButton
@@ -786,7 +978,7 @@ export function GroupsPage() {
                     e.currentTarget.click();
                   }
                 }}>
-                <span className="inline-flex items-center gap-2">
+                <span className="inline-flex items-center gap-2 font-medium">
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                   {t('groups.create')}
                 </span>
@@ -812,174 +1004,392 @@ export function GroupsPage() {
       )}
 
       {/* ============================================================
-          GROUPS LIST
+          APPLE SPOTLIGHT FILTER & TOOLBAR
       ============================================================ */}
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-        style={{
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-        }}
+        className="relative flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm"
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-16"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-          }}
-        />
+        {/* Left: Spotlight Search */}
+        <div className="relative flex-1 min-w-[240px]">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-tertiary)]">
+            <Icon paths={I.search} size={15} strokeWidth={2.2} />
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Guruh nomi, kurs, xona yoki o'qituvchi bo'yicha qidirish..."
+            className="w-full h-10 pl-9 pr-9 text-[13px] font-medium rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 focus:border-[#007AFF] transition-all"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Tozalash"
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              <Icon paths={I.x} size={14} strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
 
-        {groupList.length === 0 ? (
-          <div className="relative p-10">
-            <div className="flex flex-col items-center text-center">
-              <div
-                className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#007AFF]/10 text-[#007AFF]"
-                style={{
-                  boxShadow:
-                    'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(0,122,255,0.4)',
-                }}
-              >
-                <Icon paths={I.empty} size={26} strokeWidth={1.8} />
-              </div>
-              <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                {t('groups.empty')}
-              </p>
-              <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
-                {t('groups.emptyMessage')}
-              </p>
-              <div className="mt-5">
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  <GlassButton
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    onClick={handleOpenModal}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e: any) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        e.currentTarget.click();
-                      }
-                    }}>
-                    <span className="inline-flex items-center gap-2">
-                      <Icon paths={I.plus} size={14} strokeWidth={2.5} />
-                      {t('groups.create')}
-                    </span>
-                  </GlassButton>
-                </motion.div>
-              </div>
+        {/* Right: Filters & View Switcher */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Course dropdown */}
+          {courseList.length > 0 && (
+            <select
+              value={courseFilter}
+              onChange={(e) => setCourseFilter(e.target.value)}
+              className="h-10 px-3 text-[12.5px] font-medium rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
+              aria-label="Kurs bo'yicha saralash"
+            >
+              <option value="ALL">Barcha kurslar</option>
+              {courseList.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Apple Segmented Control for Status */}
+          <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
+            <button
+              type="button"
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
+                statusFilter === 'ALL'
+                  ? 'bg-white text-[var(--text-primary)] shadow-sm dark:bg-surface-800 font-semibold'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              Hammasi <span className="ml-1 text-[10.5px] opacity-70">({stats.total})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('ACTIVE')}
+              className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
+                statusFilter === 'ACTIVE'
+                  ? 'bg-white text-[#28A745] dark:text-[#34C759] shadow-sm dark:bg-surface-800 font-semibold'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              Faol <span className="ml-1 text-[10.5px] opacity-70">({stats.active})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('INACTIVE')}
+              className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
+                statusFilter === 'INACTIVE'
+                  ? 'bg-white text-[var(--text-primary)] shadow-sm dark:bg-surface-800 font-semibold'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              Nofaol <span className="ml-1 text-[10.5px] opacity-70">({stats.total - stats.active})</span>
+            </button>
+          </div>
+
+          {/* View Switcher: List vs Grid */}
+          <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              aria-label="Ro'yxat ko'rinishi"
+              title="Ro'yxat ko'rinishi"
+              className={`p-1.5 rounded-lg transition-all ${
+                viewMode === 'list'
+                  ? 'bg-white text-[#007AFF] shadow-sm dark:bg-surface-800'
+                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Icon paths={I.list} size={15} strokeWidth={2.2} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              aria-label="Kataklar (Grid) ko'rinishi"
+              title="Kataklar ko'rinishi"
+              className={`p-1.5 rounded-lg transition-all ${
+                viewMode === 'grid'
+                  ? 'bg-white text-[#007AFF] shadow-sm dark:bg-surface-800'
+                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Icon paths={I.grid} size={15} strokeWidth={2.2} />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ============================================================
+          GROUPS CONTENT (EMPTY / LIST / GRID)
+      ============================================================ */}
+      {groupList.length === 0 ? (
+        <motion.div
+          variants={cardVariants}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-10 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card text-center"
+        >
+          <div className="flex flex-col items-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-400">
+              <Icon paths={I.empty} size={24} strokeWidth={1.8} />
+            </div>
+            <p className="mt-4 text-[15px] font-bold tracking-tight text-[var(--text-primary)] font-display">
+              {t('groups.empty')}
+            </p>
+            <p className="mt-1 max-w-sm text-[13px] text-[var(--text-secondary)]">
+              {t('groups.emptyMessage')}
+            </p>
+            <div className="mt-5">
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <GlassButton
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={handleOpenModal}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}>
+                  <span className="inline-flex items-center gap-2 font-medium">
+                    <Icon paths={I.plus} size={14} strokeWidth={2.5} />
+                    {t('groups.create')}
+                  </span>
+                </GlassButton>
+              </motion.div>
             </div>
           </div>
-        ) : (
-          <div className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]">
-            {groupList.map((group, idx) => {
-              const tone = groupTone(group.name);
-              const c = TONES[tone];
-              const isDeleting = remove.isPending && remove.variables === group.id;
-              const teacherName = formatTeacherName(group.teacher);
-              const teacherInitials = getInitials(teacherName);
-              const teacherGradient = avatarGradient(teacherName);
-              const active = group.isActive !== false;
+        </motion.div>
+      ) : filteredGroups.length === 0 ? (
+        <motion.div
+          variants={cardVariants}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-10 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card text-center"
+        >
+          <div className="flex flex-col items-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/[0.04] dark:bg-white/[0.06] text-[var(--text-tertiary)]">
+              <Icon paths={I.search} size={20} strokeWidth={2} />
+            </div>
+            <p className="mt-3 text-[14px] font-bold text-[var(--text-primary)]">
+              Mos keluvchi guruh topilmadi
+            </p>
+            <p className="mt-1 text-[12.5px] text-[var(--text-secondary)]">
+              Qidiruv so'zini yoki tanlangan filtrlarni o'zgartirib ko'ring
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                setStatusFilter('ALL');
+                setCourseFilter('ALL');
+              }}
+              className="mt-4 px-4 py-2 text-[12.5px] font-semibold rounded-xl bg-black/[0.04] hover:bg-black/[0.08] dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-[var(--text-primary)] transition-colors"
+            >
+              Filtrlarni tozalash
+            </button>
+          </div>
+        </motion.div>
+      ) : viewMode === 'list' ? (
+        <motion.div
+          variants={cardVariants}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card divide-y divide-black/[0.05] dark:divide-white/[0.05]"
+        >
+          {filteredGroups.map((group, idx) => {
+            const tone = groupTone(group.name);
+            const c = TONES[tone];
+            const teacherName = formatTeacherName(group.teacher);
+            const teacherInitials = getInitials(teacherName);
+            const teacherGradient = avatarGradient(teacherName);
+            const active = group.isActive !== false;
+            const isDeleting = remove.isPending && remove.variables === group.id;
+            const isRowSelected = isSelected(group.id);
+            const isRowFocused = focusedIndex === idx;
 
-              return (
-                <motion.div
-                  key={group.id}
-                  role="link"
-                  tabIndex={0}
-                  aria-label={t('groups.viewAria', { name: group.name })}
-                  onClick={() => handleGroupClick(group.id)}
-                  onKeyDown={(e: React.KeyboardEvent) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleGroupClick(group.id);
-                    }
-                  }}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                  className="group flex cursor-pointer flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#007AFF]/[0.03]"
-                >
-                  {/* Gradient group tile */}
+            return (
+              <motion.div
+                key={group.id}
+                id={`group-row-${group.id}`}
+                role="link"
+                tabIndex={0}
+                aria-label={t('groups.viewAria', { name: group.name })}
+                onClick={() => handleGroupClick(group.id)}
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === ' ') {
+                    e.preventDefault();
+                    handleQuickLook(group);
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleGroupClick(group.id);
+                  }
+                }}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ ...SPRING.smooth, delay: idx * 0.015 }}
+                className={`group flex cursor-pointer flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-3.5 transition-all ${
+                  isRowFocused
+                    ? 'ring-2 ring-[#007AFF] bg-brand-500/[0.06]'
+                    : isRowSelected
+                    ? 'bg-brand-500/[0.04]'
+                    : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
+                }`}
+              >
+                {/* Left: Selection + Icon Squircle + Details */}
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSelection(group.id);
+                    }}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
+                      isRowSelected
+                        ? 'border-[#007AFF] bg-[#007AFF] text-white'
+                        : 'border-black/20 dark:border-white/20 bg-white/50 dark:bg-surface-800/50 hover:border-black/40 dark:hover:border-white/40'
+                    }`}
+                    aria-label={isRowSelected ? "Tanlovni bekor qilish" : "Tanlash"}
+                  >
+                    {isRowSelected && (
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </button>
+
                   <div
-                    className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+                    className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
                     style={{
-                      background: `linear-gradient(135deg, ${c.fg} 0%, ${c.glow} 100%)`,
-                      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px ${c.glow}`,
+                      background: c.bg,
+                      color: c.fg,
+                      border: `1px solid ${c.border}`,
                     }}
                   >
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute inset-0 rounded-2xl"
-                      style={{
-                        background:
-                          'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
-                      }}
-                    />
-                    <Icon paths={I.groups} size={20} strokeWidth={2} className="relative" />
+                    <Icon paths={I.groups} size={18} strokeWidth={2.2} className="relative" />
                   </div>
 
-                  {/* Name + chips */}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    <p className="truncate text-[13.5px] font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[#007AFF] transition-colors">
                       {group.name}
                     </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       {group.course?.name && <CourseChip name={group.course.name} />}
                       {group.room && <RoomChip name={group.room} />}
                       {group.startDate && (
-                        <span className="inline-flex items-center gap-1 text-[10.5px] font-medium tabular-nums text-[#86868B]">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium tabular-nums text-[var(--text-tertiary)]">
                           <Icon paths={I.calendar} size={10} strokeWidth={2.2} className="opacity-60" />
                           {new Date(group.startDate).toLocaleDateString()}
                         </span>
                       )}
                     </div>
                   </div>
+                </div>
 
-                  {/* Teacher */}
-                  <div className="hidden flex-col items-end sm:flex">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                {/* Middle Columns: Teacher + Capacity */}
+                <div className="hidden items-center gap-5 sm:flex shrink-0">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
                       {t('groups.col.teacher')}
                     </span>
                     <div className="mt-0.5 flex items-center gap-1.5">
                       <div
-                        className="relative flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white ring-1 ring-white/50 dark:ring-black/30"
-                        style={{
-                          background: teacherGradient,
-                        }}
+                        className="relative flex h-5 w-5 items-center justify-center rounded-full text-[8.5px] font-bold text-white ring-1 ring-white/50 dark:ring-black/50"
+                        style={{ background: teacherGradient }}
                       >
-                        <span className="relative">{teacherInitials}</span>
+                        {teacherInitials}
                       </div>
-                      <span className="text-[12px] font-semibold tabular-nums text-[#1D1D1F] dark:text-[#F5F5F7]">
+                      <span className="text-[12px] font-semibold text-[var(--text-primary)]">
                         {teacherName}
                       </span>
                     </div>
                   </div>
 
-                  {/* Capacity */}
                   <div className="hidden flex-col items-end md:flex">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
                       {t('groups.col.capacity')}
                     </span>
                     <div className="mt-0.5">
                       <CapacityBar group={group} />
                     </div>
                   </div>
+                </div>
 
-                  {/* Status */}
+                {/* Right: Status & Actions */}
+                <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0 shrink-0">
                   <StatusBadge
                     isActive={active}
                     label={t(active ? 'enum.status.ACTIVE' : 'enum.status.INACTIVE')}
                   />
 
-                  {/* Actions */}
                   <div
-                    className="flex gap-1.5"
+                    className="flex items-center gap-1.5 shrink-0"
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e: React.KeyboardEvent) => e.stopPropagation()}
                   >
+                    {/* Sidecar Split-View trigger */}
+                    <motion.button
+                      type="button"
+                      onClick={() => handleOpenGroupSidecar(group)}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      aria-label="Sidecar tafsilotlarini ochish"
+                      title="Sidecar tafsilotlari (Split-View · Space)"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-brand-500/40 transition-colors"
+                    >
+                      <span className="text-[13px] leading-none">◨</span>
+                    </motion.button>
+
+                    {/* Quick Look */}
+                    <motion.button
+                      type="button"
+                      onClick={() => handleQuickLook(group)}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      transition={SPRING.snappy}
+                      aria-label="Quick Look (Space)"
+                      title="Tezkor ko'rish (Space)"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#007AFF]/20 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/15 transition-colors"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleQuickLook(group);
+                        }
+                      }}
+                    >
+                      <Icon paths={I.eye} size={13} strokeWidth={2.2} />
+                    </motion.button>
+
+                    {/* Graduate */}
+                    <motion.button
+                      type="button"
+                      onClick={() => {
+                        setGraduateTarget(group);
+                        setGraduateForm({
+                          targetGroupId: '',
+                          completionNote: 'Guruh bitirildi va talabalar keyingi bosqichga muvaffaqiyatli o\'tkazildi',
+                        });
+                      }}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      transition={SPRING.snappy}
+                      aria-label="Bosqichdan o'tkazish (Graduate & Promote)"
+                      title="Guruhni bitirish & Talabalarni keyingi bosqichga o'tkazish"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#34C759]/20 bg-[#34C759]/10 text-[#28A745] dark:text-[#34C759] hover:bg-[#34C759]/15 transition-colors"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e: any) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}>
+                      <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
+                    </motion.button>
+
+                    {/* Edit */}
                     <motion.div
                       whileHover={{ scale: 1.08 }}
                       whileTap={{ scale: 0.92 }}
@@ -989,16 +1399,13 @@ export function GroupsPage() {
                         to={`/groups/${group.id}/edit`}
                         aria-label={t('common.edit')}
                         title={t('common.edit')}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
-                        style={{
-                          background: 'rgba(0,122,255,0.10)',
-                          color: '#007AFF',
-                          border: '1px solid rgba(0,122,255,0.2)',
-                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-[#007AFF]/30 transition-colors"
                       >
                         <Icon paths={I.edit} size={13} strokeWidth={2} />
                       </Link>
                     </motion.div>
+
+                    {/* Delete */}
                     <motion.button
                       type="button"
                       onClick={() => handleDelete(group.id)}
@@ -1008,12 +1415,7 @@ export function GroupsPage() {
                       transition={SPRING.snappy}
                       aria-label={t('common.delete')}
                       title={t('common.delete')}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg outline-none disabled:opacity-50"
-                      style={{
-                        background: 'rgba(255,59,48,0.10)',
-                        color: '#FF3B30',
-                        border: '1px solid rgba(255,59,48,0.2)',
-                      }}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/15 disabled:opacity-50 transition-colors"
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e: any) => {
@@ -1032,19 +1434,247 @@ export function GroupsPage() {
                         <Icon paths={I.trash} size={13} strokeWidth={2} />
                       )}
                     </motion.button>
-                    <span
-                      className="hidden items-center text-[#86868B]/60 transition-transform group-hover:translate-x-0.5 sm:flex"
-                      aria-hidden
-                    >
-                      <Icon paths={I.arrowRight} size={14} strokeWidth={2.2} />
-                    </span>
                   </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
-      </motion.div>
+
+                  <span
+                    className="hidden items-center text-[var(--text-tertiary)] transition-transform group-hover:translate-x-0.5 sm:flex"
+                    aria-hidden
+                  >
+                    <Icon paths={I.arrowRight} size={14} strokeWidth={2.2} />
+                  </span>
+                </div>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      ) : (
+        /* GRID VIEW */
+        <motion.div
+          variants={containerVariants}
+          className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+        >
+          {filteredGroups.map((group, idx) => {
+            const tone = groupTone(group.name);
+            const c = TONES[tone];
+            const teacherName = formatTeacherName(group.teacher);
+            const teacherInitials = getInitials(teacherName);
+            const teacherGradient = avatarGradient(teacherName);
+            const active = group.isActive !== false;
+            const isDeleting = remove.isPending && remove.variables === group.id;
+            const isRowSelected = isSelected(group.id);
+            const isRowFocused = focusedIndex === idx;
+
+            return (
+              <motion.div
+                key={group.id}
+                id={`group-card-${group.id}`}
+                role="link"
+                tabIndex={0}
+                onClick={() => handleGroupClick(group.id)}
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === ' ') {
+                    e.preventDefault();
+                    handleQuickLook(group);
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleGroupClick(group.id);
+                  }
+                }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileHover={{ y: -2 }}
+                transition={{ ...SPRING.smooth, delay: idx * 0.02 }}
+                className={`group relative flex flex-col justify-between rounded-2xl border border-black/[0.06] bg-white/80 p-5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card hover:shadow-card-hover transition-all cursor-pointer ${
+                  isRowFocused
+                    ? 'ring-2 ring-[#007AFF] bg-brand-500/[0.05]'
+                    : isRowSelected
+                    ? 'ring-2 ring-[#007AFF]/60 bg-brand-500/[0.03]'
+                    : ''
+                }`}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelection(group.id);
+                        }}
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
+                          isRowSelected
+                            ? 'border-[#007AFF] bg-[#007AFF] text-white'
+                            : 'border-black/20 dark:border-white/20 bg-white/60 dark:bg-surface-800/60 hover:border-black/40 dark:hover:border-white/40'
+                        }`}
+                        aria-label={isRowSelected ? "Tanlovni bekor qilish" : "Tanlash"}
+                      >
+                        {isRowSelected && (
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </button>
+                      <div
+                        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                        style={{
+                          background: c.bg,
+                          color: c.fg,
+                          border: `1px solid ${c.border}`,
+                        }}
+                      >
+                        <Icon paths={I.groups} size={18} strokeWidth={2.2} />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-[14px] font-bold text-[var(--text-primary)] group-hover:text-[#007AFF] transition-colors">
+                          {group.name}
+                        </h3>
+                        <span className="text-[11px] font-medium text-[var(--text-tertiary)]">
+                          {group.startDate ? new Date(group.startDate).toLocaleDateString() : 'Boshlanish sanasi yo\'q'}
+                        </span>
+                      </div>
+                    </div>
+                    <StatusBadge
+                      isActive={active}
+                      label={t(active ? 'enum.status.ACTIVE' : 'enum.status.INACTIVE')}
+                    />
+                  </div>
+
+                  {/* Chips */}
+                  <div className="mt-3.5 flex flex-wrap items-center gap-1.5">
+                    {group.course?.name && <CourseChip name={group.course.name} />}
+                    {group.room && <RoomChip name={group.room} />}
+                  </div>
+
+                  {/* Teacher info */}
+                  <div className="mt-4 flex items-center justify-between border-t border-black/[0.04] dark:border-white/[0.04] pt-3">
+                    <span className="text-[11px] font-semibold text-[var(--text-tertiary)]">
+                      {t('groups.col.teacher')}:
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <div
+                        className="relative flex h-5 w-5 items-center justify-center rounded-full text-[8.5px] font-bold text-white ring-1 ring-white/50 dark:ring-black/50"
+                        style={{ background: teacherGradient }}
+                      >
+                        {teacherInitials}
+                      </div>
+                      <span className="text-[12px] font-semibold text-[var(--text-primary)]">
+                        {teacherName}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Capacity */}
+                  <div className="mt-3">
+                    <CapacityBar group={group} />
+                  </div>
+                </div>
+
+                {/* Card Footer: Actions */}
+                <div
+                  className="mt-4 flex items-center justify-between border-t border-black/[0.04] dark:border-white/[0.04] pt-3"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-1.5">
+                    {/* Sidecar pill */}
+                    <motion.button
+                      type="button"
+                      onClick={() => handleOpenGroupSidecar(group)}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      title="Sidecar tafsilotlari (Split-View · Space)"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      <span className="text-[13px] leading-none">◨</span>
+                    </motion.button>
+                    {/* Quick look */}
+                    <motion.button
+                      type="button"
+                      onClick={() => handleQuickLook(group)}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      title="Tezkor ko'rish (Space)"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#007AFF]/20 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/15 transition-colors"
+                    >
+                      <Icon paths={I.eye} size={13} strokeWidth={2.2} />
+                    </motion.button>
+                    {/* Graduate */}
+                    <motion.button
+                      type="button"
+                      onClick={() => {
+                        setGraduateTarget(group);
+                        setGraduateForm({
+                          targetGroupId: '',
+                          completionNote: 'Guruh bitirildi va talabalar keyingi bosqichga muvaffaqiyatli o\'tkazildi',
+                        });
+                      }}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      title="Guruhni bitirish & Talabalarni keyingi bosqichga o'tkazish"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#34C759]/20 bg-[#34C759]/10 text-[#28A745] dark:text-[#34C759] hover:bg-[#34C759]/15 transition-colors"
+                    >
+                      <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
+                    </motion.button>
+                    {/* Edit */}
+                    <motion.div whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }}>
+                      <Link
+                        to={`/groups/${group.id}/edit`}
+                        title={t('common.edit')}
+                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] transition-colors"
+                      >
+                        <Icon paths={I.edit} size={13} strokeWidth={2} />
+                      </Link>
+                    </motion.div>
+                  </div>
+
+                  {/* Delete */}
+                  <motion.button
+                    type="button"
+                    onClick={() => handleDelete(group.id)}
+                    disabled={isDeleting}
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
+                    title={t('common.delete')}
+                    className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/15 disabled:opacity-50 transition-colors"
+                  >
+                    {isDeleting ? (
+                      <motion.span
+                        className="h-3.5 w-3.5 rounded-full border-2 border-current/30 border-t-current"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                      />
+                    ) : (
+                      <Icon paths={I.trash} size={13} strokeWidth={2} />
+                    )}
+                  </motion.button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      )}
+
+      {/* Superhuman Floating Action Island */}
+      <FloatingActionIsland
+        selectedCount={selectedCount}
+        onClearSelection={clearSelection}
+        entityName="guruh"
+        actions={[
+          {
+            label: 'CSV Eksport',
+            shortcut: 'C',
+            icon: <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />,
+            variant: 'primary',
+            onClick: handleExportSelectedGroupsCSV,
+          },
+          {
+            label: "O'chirish",
+            shortcut: 'D',
+            icon: <Icon paths={I.trash} size={13} strokeWidth={2} />,
+            variant: 'destructive',
+            onClick: handleBatchDeleteGroups,
+          },
+        ]}
+      />
 
       {/* ============================================================
           CREATE MODAL
@@ -1057,8 +1687,8 @@ export function GroupsPage() {
       >
         <form className="space-y-5" onSubmit={handleSubmit} noValidate>
           {/* Hint banner */}
-          <div className="flex items-center gap-3 rounded-2xl border border-[#007AFF33] bg-[#007AFF]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#007AFF]/15 text-[#007AFF]">
+          <div className="flex items-center gap-3 rounded-2xl border border-[#2563EB33] bg-[#2563EB]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#2563EB]/15 text-[#2563EB]">
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -1194,7 +1824,7 @@ export function GroupsPage() {
             </GlassField>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"
@@ -1235,6 +1865,67 @@ export function GroupsPage() {
             </motion.div>
           </div>
         </form>
+      </GlassModal>
+
+      {/* ============================================================
+          GRADUATE & PROMOTE MODAL (Bosqichdan bosqichga o'tkazish)
+      ============================================================ */}
+      <GlassModal
+        open={graduateTarget !== null}
+        onClose={() => setGraduateTarget(null)}
+        title="Guruhni bitirish & Keyingi bosqichga o'tkazish"
+      >
+        {graduateTarget && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              graduateMutation.mutate();
+            }}
+            className="space-y-4"
+          >
+            <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-3.5 text-xs text-emerald-800 dark:text-emerald-200">
+              <p className="font-semibold">
+                «{graduateTarget.name}» guruhi talabalarini yangi bosqichga o'tkazish
+              </p>
+              <p className="mt-1 text-[11px] opacity-80">
+                Guruh yakunlanadi, faol talabalarga bitirganlik maqomi beriladi va tanlangan yangi guruhga (masalan: Elementary dan Pre-Intermediate ga) ommaviy o'tkaziladi.
+              </p>
+            </div>
+
+            <GlassField label="Keyingi bosqich guruhi (ixtiyoriy)">
+              <GlassSelect
+                value={graduateForm.targetGroupId}
+                onChange={(e) => setGraduateForm({ ...graduateForm, targetGroupId: e.target.value })}
+              >
+                <option value="">Yangi guruhga o'tkazmasdan faqat bitirish...</option>
+                {groupList
+                  .filter((g) => g.id !== graduateTarget.id)
+                  .map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} {g.course?.name ? `(${g.course.name})` : ''}
+                    </option>
+                  ))}
+              </GlassSelect>
+            </GlassField>
+
+            <GlassField label="Bitiruv xulosasi / Izoh">
+              <GlassInput
+                value={graduateForm.completionNote}
+                onChange={(e) => setGraduateForm({ ...graduateForm, completionNote: e.target.value })}
+                placeholder="Guruh dasturni muvaffaqiyatli tugatdi..."
+              />
+            </GlassField>
+
+            <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
+              <GlassButton type="button" variant="secondary" onClick={() => setGraduateTarget(null)}>
+                {t('common.cancel')}
+              </GlassButton>
+              <GlassButton type="submit" variant="primary" disabled={graduateMutation.isPending}>
+                {graduateMutation.isPending ? 'O\'tkazilmoqda...' : 'Bitirish va O\'tkazish'}
+              </GlassButton>
+            </div>
+          </form>
+        )}
       </GlassModal>
 
       {/* Delete confirm */}

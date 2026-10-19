@@ -1,38 +1,21 @@
 /**
  * ============================================================================
- *  M-EDU Telegram WebApp — Premium Ota-ona / O’qituvchi / O’quvchi portali
- * ============================================================================
- *
- *  Dizayn qoidalari:
- *   1. Faqat REAL backend kontraktlari — hech qanday soxta/mock ma'lumot yo'q.
- *   2. Har bir holat uchun samimiy EmptyState / ErrorState / Loading.
- *   3. Telegram WebApp tema-parametrlari (light/dark) Bootstrap tokenlariga
- *      ko'prik orqali butun sahifaga, jumladan global .glass-card / tone-*
- *      klasslariga ham sizib chiqadi.
- *   4. Nativ HapticFeedback, Viewport, Telegram SDK dinamik yuklanadi.
- *   5. Premium & Comfort: katta radius, yumshoq glass, keng touch-zonalar,
- *      44px tap-target, safe-area qo'llab-quvvatlash, reduced-motion.
+ *  M-EDU Telegram WebApp — Apple Design Award Edition (v4.2 Final)
+ *  Ota-ona / O'qituvchi / O'quvchi / AI Copilot / Digital Pass
  * ============================================================================
  */
 
 import {
-  useCallback,
   useEffect,
-  useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type ButtonHTMLAttributes,
-  type CSSProperties,
-  type HTMLAttributes,
-  type ReactNode,
-  type SVGProps,
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import request, {
+  aiApi,
   assignmentsApi,
   attendanceApi,
   gamificationApi,
@@ -45,15 +28,52 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useAuth } from '@/auth/AuthContext';
 import { getErrorMessage } from '@/lib/errorMessages';
-import type { TelegramUser, TelegramWebApp } from '@/types/telegram';
+import type { TelegramWebApp } from '@/types/telegram';
+import { useTelegram, type HapticStyle } from '@/hooks/useTelegram';
+import {
+  SPRING_SNAPPY,
+  SPRING_SMOOTH,
+  SPRING_SHEET,
+  STAGGER_CONTAINER,
+  I,
+  Icon,
+  type AttendanceStatus,
+  type TabId,
+  type Tone,
+  todayKey,
+  todayDayOfWeek,
+  sameDayStr,
+  itemsOf,
+  normalizeChildren,
+  formatUZS,
+  formatNum,
+  formatDateShort,
+  formatDue,
+  formatRelative,
+  getTimeGreeting,
+  RELATION_LABELS,
+  INVOICE_STATUS,
+  ASSIGNMENT_LABELS,
+  XP_TYPE_LABELS,
+  STATUS_META,
+  ROLE_LABELS,
+  tgThemeStyle,
+  LIQUID_GLASS_CSS,
+  TONE_COLORS,
+  Surface,
+  Pill,
+  Btn,
+  Skeleton,
+  EmptyState,
+  ErrorState,
+  ProgressRing,
+  Avatar,
+  CardHead,
+} from '@/components/telegram/TelegramPresentation';
 
 /* ============================================================================
- * TYPES — REAL backend kontraktlariga mos
+ * TYPES — Backend kontraktlari
  * ========================================================================== */
-
-type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
-type TabId = 'parent' | 'teacher' | 'student';
-type Tone = 'green' | 'red' | 'orange' | 'blue' | 'purple' | 'slate';
 
 interface ChildPermissions {
   grades?: boolean;
@@ -64,6 +84,7 @@ interface ChildPermissions {
 interface ParentChild {
   studentId: string;
   name: string;
+  groupId?: string | null;
   relationship?: string | null;
   permissions?: ChildPermissions;
 }
@@ -204,633 +225,7 @@ interface RewardItem {
 }
 
 /* ============================================================================
- * ICONS (silliq yumaloq zarbalar, SF Symbols nisbatlari)
- * ========================================================================== */
-
-const ICON_STROKE = 1.85;
-
-const I: Record<string, string[]> = {
-  checkCircle: ['M22 11.08V12a10 10 0 1 1-5.93-9.14', 'M22 4 12 14.01l-3-3'],
-  xCircle: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M15 9l-6 6', 'M9 9l6 6'],
-  clock: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 6v6l4 2'],
-  alertCircle: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 8v4', 'M12 16h.01'],
-  calendar: ['M8 2v4', 'M16 2v4', 'M3 10h18', 'M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z'],
-  users: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M22 21v-2a4 4 0 0 0-3-3.9', 'M16 3.1a4 4 0 0 1 0 7.8'],
-  wallet: ['M21 12V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4', 'M21 12H17a2 2 0 0 0 0 4h4'],
-  shieldCheck: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'M9 12l2 2 4-4'],
-  graduationCap: ['M22 9 12 4 2 9l10 5z', 'M6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5'],
-  sparkles: ['M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z', 'M18.5 3.5v3', 'M20 5h-3', 'M5.5 18v2.5', 'M6.75 19.25h-2.5'],
-  heart: ['M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'],
-  messageSquare: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
-  bookOpen: ['M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z', 'M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z'],
-  chevronRight: ['M9 6l6 6-6 6'],
-  star: ['M12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26z'],
-  sun: ['M12 1v2', 'M12 21v2', 'M4.22 4.22l1.42 1.42', 'M18.36 18.36l1.42 1.42', 'M1 12h2', 'M21 12h2', 'M4.22 19.78l1.42-1.42', 'M18.36 5.64l1.42-1.42', 'M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z'],
-  moon: ['M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'],
-  refresh: ['M23 4v6h-6', 'M1 20v-6h6', 'M3.51 9a9 9 0 0 1 14.85-3.36L23 10', 'M20.49 15a9 9 0 0 1-14.85 3.36L1 14'],
-  coins: ['M12 2v20', 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'],
-  gift: ['M20 12v10H4V12', 'M2 7h20v5H2z', 'M12 22V7', 'M7.5 7a2.5 2.5 0 0 1 0-5C10 2 12 7 12 7s2-5 4.5-5a2.5 2.5 0 0 1 0 5'],
-  award: ['M12 15a7 7 0 1 0 0-14 7 7 0 0 0 0 14z', 'M8.21 13.89 7 23l5-3 5 3-1.21-9.12'],
-  wifiOff: ['M1 1l22 22', 'M16.72 11.06A10.94 10.94 0 0 1 19 12.55', 'M5 12.55a10.94 10.94 0 0 1 5.17-2.39', 'M10.71 5.05A16 16 0 0 1 22.58 9', 'M1.42 9a15.91 15.91 0 0 1 4.7-2.88', 'M8.53 16.11a6 6 0 0 1 6.95 0', 'M12 20h.01'],
-  send: ['M22 2 11 13', 'M22 2 15 22 11 13 2 9z'],
-};
-
-function Icon({
-  paths,
-  size = 18,
-  className = '',
-  strokeWidth = ICON_STROKE,
-  ...rest
-}: {
-  paths: string[];
-  size?: number;
-  className?: string;
-  strokeWidth?: number;
-} & SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={strokeWidth}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-      {...rest}
-    >
-      {paths.map((d, i) => (
-        <path key={i} d={d} />
-      ))}
-    </svg>
-  );
-}
-
-/* ============================================================================
- * TELEGRAM INTEGRATION
- * ========================================================================== */
-
-type HapticStyle = 'light' | 'medium' | 'heavy' | 'success' | 'error';
-
-const TG_SDK_SRC = 'https://telegram.org/js/telegram-web-app.js';
-const SUPPORT_TG = 'https://t.me/medu_admin';
-
-function useTelegram() {
-  const [tg, setTg] = useState<TelegramWebApp | null>(null);
-  const [user, setUser] = useState<TelegramUser | null>(null);
-  const [inTelegram, setInTelegram] = useState(false);
-  const [colorScheme, setColorScheme] = useState<'light' | 'dark'>(() =>
-    typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark',
-  );
-  const tgRef = useRef<TelegramWebApp | null>(null);
-  const cleanupRef = useRef<(() => void) | null>(null);
-
-  useLayoutEffect(() => {
-    let disposed = false;
-    // Mutable holder: the interval id is created in a deferred branch while
-    // `teardown` (defined above) must be able to clear it at any time.
-    const poll: { id?: number } = {};
-
-    const teardown = () => {
-      disposed = true;
-      if (poll.id !== undefined) window.clearInterval(poll.id);
-      window.clearTimeout(timeout);
-      cleanupRef.current?.();
-      cleanupRef.current = null;
-    };
-
-    const init = (sdk: TelegramWebApp) => {
-      if (disposed) return;
-      try {
-        sdk.ready?.();
-        sdk.expand?.();
-        sdk.disableVerticalSwipes?.();
-      } catch {
-        /* ba'zi eski SDK versiyalarida mavjud emas — e'tiborsiz. */
-      }
-      if (sdk.initDataUnsafe?.user) setUser(sdk.initDataUnsafe.user);
-      setInTelegram(Boolean(sdk.initData) || (sdk.platform !== undefined && sdk.platform !== 'unknown'));
-      if (sdk.colorScheme) setColorScheme(sdk.colorScheme);
-      const onTheme = () => {
-        if (sdk.colorScheme) setColorScheme(sdk.colorScheme);
-      };
-      sdk.onEvent?.('themeChanged', onTheme);
-      cleanupRef.current = () => sdk.offEvent?.('themeChanged', onTheme);
-      tgRef.current = sdk;
-      setTg(sdk);
-    };
-
-    const existing = (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp;
-    if (existing) {
-      init(existing);
-      return teardown;
-    }
-
-    // Telegram SDK hech qachon o'zi yuklanmaydi — sahifa qo'shishi shart.
-    if (!document.querySelector(`script[src="${TG_SDK_SRC}"]`)) {
-      const s = document.createElement('script');
-      s.src = TG_SDK_SRC;
-      s.async = true;
-      document.head.appendChild(s);
-    }
-    poll.id = window.setInterval(() => {
-      const sdk = (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp;
-      if (sdk) {
-        teardown();
-        init(sdk);
-      }
-    }, 120);
-
-    // Fallback: SDK topilmasa ham sahifa oddiy brauzerda ishlashda davom etadi.
-    const timeout = window.setTimeout(() => teardown(), 2500);
-
-    return teardown;
-  }, []);
-
-  const haptic = useCallback((style: HapticStyle) => {
-    const hf = tgRef.current?.HapticFeedback;
-    if (!hf) return;
-    try {
-      if (style === 'success' || style === 'error') hf.notificationOccurred(style);
-      else hf.impactOccurred(style);
-    } catch {
-      /* SDK'dagi eski versiyalar ba'zi usullarni qo'llab-quvvatlamaydi. */
-    }
-  }, []);
-
-  const contactAdmin = useCallback(() => {
-    const t = tgRef.current;
-    if (t?.openTelegramLink) t.openTelegramLink(SUPPORT_TG);
-    else window.open(SUPPORT_TG, '_blank', 'noopener,noreferrer');
-  }, []);
-
-  return { tg, user, inTelegram, colorScheme, haptic, contactAdmin };
-}
-
-/* ============================================================================
- * FORMATLASH YORDAMCHILARI
- * ========================================================================== */
-
-const DAY_NAMES = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
-
-function pad2(n: number): string {
-  return n < 10 ? `0${n}` : String(n);
-}
-
-function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function todayDayOfWeek(): string {
-  return DAY_NAMES[new Date().getDay()];
-}
-
-function sameDayStr(iso?: string | null): boolean {
-  if (!iso) return false;
-  const d = new Date(iso);
-  return !Number.isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
-}
-
-function itemsOf<T>(data: unknown): T[] {
-  if (Array.isArray(data)) return data as T[];
-  const items = (data as { items?: unknown } | null)?.items;
-  return Array.isArray(items) ? (items as T[]) : [];
-}
-
-function normalizeChildren(data: unknown): ParentChild[] {
-  if (Array.isArray(data)) return data as ParentChild[];
-  const nested = (data as { children?: unknown } | null)?.children;
-  return Array.isArray(nested) ? (nested as ParentChild[]) : [];
-}
-
-function formatUZS(amount: number): string {
-  return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(amount)} so'm`;
-}
-
-function formatNum(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function formatDateShort(iso?: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' });
-}
-
-function formatDue(iso?: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  const time = d.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
-  if (d.toDateString() === today.toDateString()) return `Bugun, ${time}`;
-  if (d.toDateString() === tomorrow.toDateString()) return `Ertaga, ${time}`;
-  return `${d.toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' })}, ${time}`;
-}
-
-function formatRelative(iso?: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const mins = Math.floor((Date.now() - d.getTime()) / 60_000);
-  if (mins < 1) return 'hozirgina';
-  if (mins < 60) return `${mins} daq. oldin`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24 && d.toDateString() === new Date().toDateString()) return `${hours} soat oldin`;
-  return formatDateShort(iso);
-}
-
-function getTimeGreeting(): { greeting: string; icon: string[] } {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 11) return { greeting: 'Xayrli tong', icon: I.sun };
-  if (hour >= 11 && hour < 18) return { greeting: 'Xayrli kun', icon: I.sun };
-  return { greeting: 'Xayrli oqshom', icon: I.moon };
-}
-
-function getInitials(name?: string | null): string {
-  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
-  const a = parts[0]?.[0] ?? '';
-  const b = parts[1]?.[0] ?? parts[0]?.[1] ?? '';
-  return (a + b).toUpperCase() || 'M';
-}
-
-const RELATION_LABELS: Record<string, string> = {
-  FATHER: 'Ota',
-  MOTHER: 'Ona',
-  GUARDIAN: 'Vasiy',
-  GRANDMOTHER: 'Buvi',
-  GRANDFATHER: 'Buva',
-};
-
-const INVOICE_STATUS: Record<string, { label: string; tone: Tone }> = {
-  ISSUED: { label: 'Chiqarilgan', tone: 'blue' },
-  PARTIALLY_PAID: { label: 'Qisman to’langan', tone: 'orange' },
-  PAID: { label: 'To’langan', tone: 'green' },
-  OVERDUE: { label: 'Muddati o’tgan', tone: 'red' },
-  REFUNDED: { label: 'Qaytarilgan', tone: 'slate' },
-};
-
-const ASSIGNMENT_LABELS: Record<string, string> = {
-  DRAFT: 'Chizma',
-  PUBLISHED: 'Ochiq',
-  CLOSED: 'Yopilgan',
-  ARCHIVED: 'Arxiv',
-};
-
-const XP_TYPE_LABELS: Record<string, string> = {
-  ATTENDANCE_ON_TIME: 'Davomat uchun',
-  HOMEWORK_ON_TIME_GOOD_GRADE: 'Vazifa yaxshi bahosi',
-  EXAM_HIGH_SCORE: 'Imtihonda yuqori natija',
-};
-
-const STATUS_META: Record<AttendanceStatus, { label: string; tone: Tone; color: string; icon: string[] }> = {
-  PRESENT: { label: 'Keldi', tone: 'green', color: '#34C759', icon: I.checkCircle },
-  ABSENT: { label: 'Kelmadi', tone: 'red', color: '#FF3B30', icon: I.xCircle },
-  LATE: { label: 'Kechikdi', tone: 'orange', color: '#FF9500', icon: I.clock },
-  EXCUSED: { label: 'Sababli', tone: 'blue', color: '#0A84FF', icon: I.shieldCheck },
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  SUPER_ADMIN: 'Bosh administrator',
-  PLATFORM_OWNER: 'Platforma egasi',
-  ORG_ADMIN: 'Markaz admini',
-  MANAGER: 'Menejer',
-  TEACHER: 'O’qituvchi',
-  ASSISTANT: 'Yordamchi',
-  PARENT: 'Ota-ona',
-  STUDENT: 'O’quvchi',
-};
-
-/* ============================================================================
- * TEMA — Telegram parametrlarini dizayn-tokenlarga ko'prik qilish
- * ========================================================================== */
-
-function tgThemeStyle(scheme: 'light' | 'dark'): CSSProperties {
-  const light = scheme === 'light';
-  return {
-    colorScheme: scheme,
-    background: 'var(--tg-theme-bg-color, #0E141E)',
-    color: 'var(--tg-theme-text-color, #F1F4F9)',
-    ['--bg-page' as string]: 'var(--tg-theme-bg-color, #0E141E)',
-    ['--bg-surface' as string]: 'var(--tg-theme-secondary-bg-color, #151C2A)',
-    ['--bg-elevated' as string]: 'var(--tg-theme-secondary-bg-color, #1A2332)',
-    ['--bg-card' as string]: light
-      ? 'color-mix(in srgb, var(--tg-theme-secondary-bg-color, #FFFFFF) 76%, transparent)'
-      : 'color-mix(in srgb, var(--tg-theme-secondary-bg-color, #151C2A) 62%, transparent)',
-    ['--text-primary' as string]: 'var(--tg-theme-text-color, #F1F4F9)',
-    ['--text-secondary' as string]: 'var(--tg-theme-hint-color, #9AA4B8)',
-    ['--text-tertiary' as string]: 'var(--tg-theme-hint-color, #9AA4B8)',
-    ['--text-muted' as string]: 'var(--tg-theme-hint-color, #9AA4B8)',
-    ['--border' as string]: light
-      ? 'color-mix(in srgb, var(--tg-theme-hint-color, #64748B) 22%, transparent)'
-      : 'color-mix(in srgb, var(--tg-theme-hint-color, #8E8E93) 16%, transparent)',
-    ['--border-subtle' as string]: light
-      ? 'color-mix(in srgb, var(--tg-theme-hint-color, #64748B) 12%, transparent)'
-      : 'color-mix(in srgb, var(--tg-theme-hint-color, #8E8E93) 9%, transparent)',
-    ['--border-medium' as string]: 'color-mix(in srgb, var(--tg-theme-hint-color, #8E8E93) 26%, transparent)',
-    ['--primary' as string]: 'var(--tg-theme-button-color, #2B6BFF)',
-    ['--primary-hover' as string]: 'var(--tg-theme-button-color, #2B6BFF)',
-  } as CSSProperties;
-}
-
-const PRESET_CSS = `
-  .glass-card.tg-card { border-radius: 28px; }
-  .glass-card.tg-hero-green { background-image: radial-gradient(130% 100% at 12% -10%, rgba(52,199,89,.16), transparent 55%); }
-  .glass-card.tg-hero-red { background-image: radial-gradient(130% 100% at 12% -10%, rgba(255,59,48,.14), transparent 55%); }
-  .glass-card.tg-hero-orange { background-image: radial-gradient(130% 100% at 12% -10%, rgba(255,149,0,.15), transparent 55%); }
-  .glass-card.tg-hero-blue { background-image: radial-gradient(130% 100% at 12% -10%, rgba(0,122,255,.15), transparent 55%); }
-  .glass-card.tg-hero-purple { background-image: radial-gradient(130% 100% at 12% -10%, rgba(175,82,222,.15), transparent 55%); }
-  .glass-card.tg-hero-slate { background-image: radial-gradient(130% 100% at 12% -10%, rgba(142,142,147,.14), transparent 55%); }
-  .tg-dock { background: color-mix(in srgb, var(--tg-theme-bg-color, #0E141E) 86%, transparent); backdrop-filter: blur(22px) saturate(1.5); -webkit-backdrop-filter: blur(22px) saturate(1.5); border: 1px solid var(--border, rgba(142,142,147,.16)); box-shadow: 0 18px 50px -18px rgba(0,0,0,.45), inset 0 1px 0 color-mix(in srgb, #fff 9%, transparent); }
-  .tg-note { background: color-mix(in srgb, var(--tg-theme-hint-color, #8E8E93) 8%, transparent); border: 1px solid var(--border-subtle, rgba(142,142,147,.1)); border-radius: 20px; }
-  .tg-btn-primary { background: linear-gradient(135deg, #2B6BFF 0%, #6A4DFF 100%); box-shadow: 0 10px 24px -10px rgba(43,107,255,.55), inset 0 1px 0 color-mix(in srgb, #fff 25%, transparent); }
-  .tg-btn-ghost { background: color-mix(in srgb, var(--text-primary, #F1F4F9) 6%, transparent); border: 1px solid var(--border-medium, rgba(142,142,147,.26)); }
-`;
-
-/* ============================================================================
- * PRIMITIVLAR
- * ========================================================================== */
-
-const TONE_COLORS: Record<Tone, { bg: string; fg: string; border: string; light: string; dark: string }> = {
-  green: { bg: 'rgba(52,199,89,.13)', fg: '#34C759', border: 'rgba(52,199,89,.30)', light: 'rgba(52,199,89,.30)', dark: 'rgba(52,199,89,.55)' },
-  red: { bg: 'rgba(255,59,48,.12)', fg: '#FF3B30', border: 'rgba(255,59,48,.30)', light: 'rgba(255,59,48,.30)', dark: 'rgba(255,59,48,.55)' },
-  orange: { bg: 'rgba(255,149,0,.13)', fg: '#E08A00', border: 'rgba(255,149,0,.30)', light: 'rgba(255,149,0,.30)', dark: 'rgba(255,149,0,.55)' },
-  blue: { bg: 'rgba(0,122,255,.12)', fg: '#0A84FF', border: 'rgba(0,122,255,.30)', light: 'rgba(0,122,255,.30)', dark: 'rgba(0,122,255,.55)' },
-  purple: { bg: 'rgba(175,82,222,.13)', fg: '#AF52DE', border: 'rgba(175,82,222,.30)', light: 'rgba(175,82,222,.30)', dark: 'rgba(175,82,222,.55)' },
-  slate: { bg: 'rgba(142,142,147,.13)', fg: '#8E8E93', border: 'rgba(142,142,147,.30)', light: 'rgba(142,142,147,.30)', dark: 'rgba(142,142,147,.55)' },
-};
-
-const RING_GRADIENTS: Record<Tone, [string, string]> = {
-  green: ['#34C759', '#5BE08F'],
-  red: ['#FF3B30', '#FF8A70'],
-  orange: ['#FF9500', '#FFC24B'],
-  blue: ['#0A84FF', '#6CC3FF'],
-  purple: ['#AF52DE', '#D08BFF'],
-  slate: ['#8E8E93', '#B9B9BE'],
-};
-
-function Surface({
-  children,
-  className = '',
-  tone,
-  interactive = false,
-  style,
-  ...rest
-}: {
-  children: ReactNode;
-  className?: string;
-  tone?: Tone;
-  interactive?: boolean;
-  style?: CSSProperties;
-} & Omit<HTMLAttributes<HTMLDivElement>, 'style'>) {
-  return (
-    <div
-      className={`glass-card glass-card--${interactive ? 'interactive' : ''} tg-card ${
-        tone ? `tg-hero-${tone}` : ''
-      } ${className}`}
-      style={style}
-      {...rest}
-    >
-      {children}
-    </div>
-  );
-}
-
-function Pill({
-  tone = 'slate',
-  icon,
-  children,
-  className = '',
-}: {
-  tone?: Tone;
-  icon?: string[];
-  children: ReactNode;
-  className?: string;
-}) {
-  const c = TONE_COLORS[tone];
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-wide ${className}`}
-      style={{ background: c.bg, color: c.fg, borderColor: c.border }}
-    >
-      {icon && <Icon paths={icon} size={11} strokeWidth={2.4} />}
-      <span>{children}</span>
-    </span>
-  );
-}
-
-function Btn({
-  children,
-  tone = 'primary',
-  className = '',
-  ...rest
-}: {
-  children: ReactNode;
-  tone?: 'primary' | 'ghost' | 'danger';
-} & ButtonHTMLAttributes<HTMLButtonElement>) {
-  const base = 'tap-target inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-[13px] font-bold transition-all duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40';
-  const cls = tone === 'primary' ? 'tg-btn-primary text-white' : tone === 'danger' ? 'tg-btn-ghost text-red-500' : 'tg-btn-ghost';
-  return (
-    <button className={`${base} ${cls} ${className}`} {...rest}>
-      {children}
-    </button>
-  );
-}
-
-function Skeleton({ className = '', height = 80 }: { className?: string; height?: number }) {
-  return <div className={`skeleton-shimmer rounded-2xl ${className}`} style={{ height }} />;
-}
-
-function EmptyState({
-  icon = I.calendar,
-  tone = 'blue',
-  title,
-  message,
-  children,
-}: {
-  icon?: string[];
-  tone?: Tone;
-  title: string;
-  message?: string;
-  children?: ReactNode;
-}) {
-  const c = TONE_COLORS[tone];
-  return (
-    <div className="flex flex-col items-center px-4 py-10 text-center">
-      <div
-        className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl"
-        style={{ background: c.bg, color: c.fg, border: `1px solid ${c.border}` }}
-      >
-        <Icon paths={icon} size={28} strokeWidth={2} />
-      </div>
-      <h3 className="text-[16px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-        {title}
-      </h3>
-      {message && (
-        <p className="mx-auto mt-1.5 max-w-xs text-[12.5px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
-          {message}
-        </p>
-      )}
-      {children && <div className="mt-5 flex flex-col items-center gap-2.5">{children}</div>}
-    </div>
-  );
-}
-
-function ErrorState({
-  message = 'Maʼlumot yuklanmadi. Internet aloqasi yoki server holatini tekshiring.',
-  onRetry,
-}: {
-  message?: string;
-  onRetry?: () => void;
-}) {
-  return (
-    <EmptyState icon={I.alertCircle} tone="red" title="Maʼlumot yuklanmadi" message={message}>
-      {onRetry && (
-        <Btn onClick={onRetry}>
-          <Icon paths={I.refresh} size={14} strokeWidth={2.2} />
-          Qayta urinish
-        </Btn>
-      )}
-    </EmptyState>
-  );
-}
-
-function ProgressRing({
-  value,
-  size = 66,
-  stroke = 6.5,
-  tone = 'green',
-  center,
-  sub,
-}: {
-  value: number;
-  size?: number;
-  stroke?: number;
-  tone?: Tone;
-  center?: ReactNode;
-  sub?: string;
-}) {
-  const gid = `ring-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const pct = Math.max(0, Math.min(100, value));
-  const [from, to] = RING_GRADIENTS[tone];
-  return (
-    <div
-      className="relative shrink-0"
-      style={{ width: size, height: size }}
-      role="img"
-      aria-label={`${Math.round(pct)} foiz`}
-    >
-      <svg width={size} height={size} className="-rotate-90">
-        <defs>
-          <linearGradient id={gid} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor={from} />
-            <stop offset="100%" stopColor={to} />
-          </linearGradient>
-        </defs>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="color-mix(in srgb, var(--text-tertiary, #9AA4B8) 22%, transparent)" strokeWidth={stroke} />
-        <motion.circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={`url(#${gid})`}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={c}
-          initial={false}
-          animate={{ strokeDashoffset: c * (1 - pct / 100) }}
-          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[15px] font-black leading-none tabular-nums" style={{ color: 'var(--text-primary)' }}>
-          {center}
-        </span>
-        {sub && (
-          <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-            {sub}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Avatar({
-  name,
-  photo,
-  size = 42,
-  active = false,
-}: {
-  name?: string | null;
-  photo?: string | null;
-  size?: number;
-  active?: boolean;
-}) {
-  const radius = size * 0.32;
-  return (
-    <div
-      className="relative shrink-0 overflow-hidden"
-      style={{
-        width: size,
-        height: size,
-        borderRadius: radius,
-        background: active
-          ? 'linear-gradient(135deg, #34C759 0%, #2B6BFF 100%)'
-          : 'linear-gradient(135deg, #8E8E93 0%, #636366 100%)',
-        boxShadow: active ? '0 0 0 2.5px rgba(52,199,89,.35)' : 'none',
-      }}
-    >
-      {photo ? (
-        <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" />
-      ) : (
-        <span className="flex h-full w-full items-center justify-center text-[13px] font-bold text-white">
-          {getInitials(name)}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function CardHead({
-  icon,
-  tone = 'blue',
-  title,
-  meta,
-}: {
-  icon: string[];
-  tone?: Tone;
-  title: string;
-  meta?: ReactNode;
-}) {
-  return (
-    <div className="mb-3.5 flex items-center justify-between gap-2">
-      <div className="flex items-center gap-2.5">
-        <div
-          className="flex h-9 w-9 items-center justify-center rounded-xl"
-          style={{ background: TONE_COLORS[tone].bg, color: TONE_COLORS[tone].fg }}
-        >
-          <Icon paths={icon} size={17} strokeWidth={2.1} />
-        </div>
-        <h4 className="text-[14.5px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-          {title}
-        </h4>
-      </div>
-      {meta}
-    </div>
-  );
-}
-
-/* ============================================================================
- * OTA-ONA: FARZAND STATUS KARTASI
+ * OTA-ONA: BUGUNGI DAVOMAT KARTASI
  * ========================================================================== */
 
 function TodayCard({
@@ -868,7 +263,7 @@ function TodayCard({
     return (
       <Surface className="p-2">
         <ErrorState
-          message="Davomat maʼlumotlarini yuklab bo’lmadi."
+          message="Davomat ma'lumotlarini yuklab bo'lmadi."
           onRetry={() => {
             attendanceQ.refetch();
             summaryQ.refetch();
@@ -885,16 +280,20 @@ function TodayCard({
     <Surface tone={tone} className="p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3.5">
-          <div
+          <motion.div
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={SPRING_SNAPPY}
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
             style={{
               background: TONE_COLORS[tone].bg,
               color: TONE_COLORS[tone].fg,
               border: `1px solid ${TONE_COLORS[tone].border}`,
+              boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.25)',
             }}
           >
             <Icon paths={meta?.icon ?? I.calendar} size={25} strokeWidth={2.1} />
-          </div>
+          </motion.div>
           <div>
             {meta ? (
               <Pill tone={tone} icon={meta.icon}>
@@ -905,7 +304,7 @@ function TodayCard({
                 Kutilmoqda
               </Pill>
             )}
-            <h3 className="mt-1.5 text-[16px] font-bold leading-tight tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            <h3 className="mt-1.5 text-[16.5px] font-bold leading-tight tracking-tight" style={{ color: 'var(--text-primary)' }}>
               {!today
                 ? `Bugungi holat: ${child.name.split(' ')[0] ?? 'farzandingiz'}`
                 : today.status === 'PRESENT'
@@ -927,29 +326,34 @@ function TodayCard({
         <div
           className="mt-4 flex items-center gap-3 rounded-2xl p-3"
           style={{
-            background: 'color-mix(in srgb, #2B6BFF 10%, transparent)',
-            border: '1px solid color-mix(in srgb, #2B6BFF 24%, transparent)',
+            background: 'color-mix(in srgb, #0A84FF 11%, transparent)',
+            border: '1px solid color-mix(in srgb, #0A84FF 26%, transparent)',
+            boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.14)',
           }}
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: 'linear-gradient(135deg, #2B6BFF, #6A4DFF)' }}>
+          <div
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white"
+            style={{ background: 'linear-gradient(135deg, #0A84FF, #6366F1)' }}
+          >
             <Icon paths={I.bookOpen} size={17} strokeWidth={2.1} />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#0A84FF' }}>
-              {lesson.startTime && `${lesson.startTime}  •  `}Joriy mashg’ulot
+              {lesson.startTime && `${lesson.startTime}  •  `}Joriy mashg'ulot
             </p>
             <p className="truncate text-[13.5px] font-bold" style={{ color: 'var(--text-primary)' }}>
               {lesson.topic || groupName}
             </p>
           </div>
-          <span className="shrink-0 rounded-full px-2 py-1 text-[11px] font-bold" style={{ background: 'color-mix(in srgb, #0A84FF 14%, transparent)', color: '#0A84FF' }}>
+          <span
+            className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold"
+            style={{ background: 'color-mix(in srgb, #0A84FF 16%, transparent)', color: '#0A84FF' }}
+          >
             Darsda
           </span>
         </div>
       ) : (
-        <div
-          className="mt-4 flex items-center gap-3 rounded-2xl p-3 tg-note"
-        >
+        <div className="liquid-inset mt-4 flex items-center gap-3 p-3">
           <Icon paths={I.calendar} size={18} strokeWidth={2.1} style={{ color: TONE_COLORS[tone].fg }} />
           <p className="text-[12.5px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
             Bugungi dars jadvali hali qayd etilmagan.
@@ -958,7 +362,7 @@ function TodayCard({
       )}
 
       {today?.note && (
-        <div className="mt-3 tg-note px-3.5 py-3">
+        <div className="liquid-inset mt-3 px-3.5 py-3">
           <div className="mb-1 flex items-center gap-1.5">
             <Icon paths={I.messageSquare} size={13} strokeWidth={2.2} style={{ color: TONE_COLORS.purple.fg }} />
             <span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: TONE_COLORS.purple.fg }}>
@@ -973,9 +377,9 @@ function TodayCard({
 
       <div className="mt-4 flex items-center gap-4 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
         {summaryQ.isLoading ? (
-          <Skeleton height={66} className="rounded-full" />
+          <Skeleton height={68} className="w-[68px] rounded-full" />
         ) : (
-          <ProgressRing value={rate ?? 0} center={rate != null ? `${rate}%` : '—'} sub="Davomat" tone="green" />
+          <ProgressRing value={rate ?? 0} center={rate != null ? `${Math.round(rate)}%` : '—'} sub="Davomat" tone="green" />
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap gap-1.5">
@@ -991,13 +395,13 @@ function TodayCard({
             })}
             {total === 0 && (
               <span className="text-[11.5px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-                Hozircha davomat statistikasi yo’q.
+                Hozircha davomat statistikasi yo'q.
               </span>
             )}
           </div>
           {total > 0 && (
             <p className="mt-1.5 text-[11.5px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-              Jami {total} kunda qayd etilgan.
+              Jami {total} ta darsda qayd etilgan.
             </p>
           )}
         </div>
@@ -1020,7 +424,7 @@ function GradesCard({
   if (gradesQ.isLoading) {
     return (
       <Surface className="p-5">
-        <Skeleton height={20} />
+        <Skeleton height={24} />
         <div className="mt-3 space-y-2">
           <Skeleton height={56} />
           <Skeleton height={56} />
@@ -1031,7 +435,7 @@ function GradesCard({
   if (gradesQ.isError) {
     return (
       <Surface className="p-2">
-        <ErrorState message="Baholar yuklab bo’lmadi." onRetry={() => gradesQ.refetch()} />
+        <ErrorState message="Baholar yuklab bo'lmadi." onRetry={() => gradesQ.refetch()} />
       </Surface>
     );
   }
@@ -1046,24 +450,20 @@ function GradesCard({
         tone="orange"
         title="Baholar va natijalar"
         meta={
-          <span className="text-[11px] font-bold" style={{ color: '#E08A00' }}>
+          <span className="text-[11px] font-bold" style={{ color: TONE_COLORS.orange.fg }}>
             {child.name.split(' ')[0]} uchun
           </span>
         }
       />
       {grades.length === 0 && exams.length === 0 ? (
-        <EmptyState icon={I.star} tone="orange" title="Hozircha baholar yo’q" message="Ustoz baho qo’yganida shu yerda ko’rinadi." />
+        <EmptyState icon={I.star} tone="orange" title="Hozircha baholar yo'q" message="Ustoz baho qo'yganida shu yerda ko'rinadi." />
       ) : (
         <div className="space-y-2.5">
           {grades.map((g) => (
-            <div
-              key={g.id}
-              className="flex items-center justify-between gap-3 rounded-2xl p-3"
-              style={{ background: 'color-mix(in srgb, var(--text-primary) 4%, transparent)', border: '1px solid var(--border-subtle)' }}
-            >
+            <div key={g.id} className="liquid-inset flex items-center justify-between gap-3 p-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13.5px] font-bold" style={{ color: 'var(--text-primary)' }}>
-                  {g.label || g.group?.name || 'Dars'}
+                  {g.label || g.group?.name || 'Dars bahosi'}
                 </p>
                 <div className="mt-0.5 flex items-center gap-2">
                   {g.notes && (
@@ -1077,8 +477,12 @@ function GradesCard({
                 </div>
               </div>
               <span
-                className="shrink-0 rounded-xl px-2.5 py-1 text-[12.5px] font-bold tabular-nums"
-                style={{ background: TONE_COLORS.orange.bg, color: TONE_COLORS.orange.fg }}
+                className="shrink-0 rounded-xl border px-2.5 py-1 text-[12.5px] font-bold tabular-nums"
+                style={{
+                  background: TONE_COLORS.orange.bg,
+                  color: TONE_COLORS.orange.fg,
+                  borderColor: TONE_COLORS.orange.border,
+                }}
               >
                 {formatNum(g.value)}
                 {g.maxValue != null && ` / ${formatNum(g.maxValue)}`}
@@ -1093,11 +497,7 @@ function GradesCard({
               </p>
               <div className="space-y-2">
                 {exams.map((ex) => (
-                  <div
-                    key={ex.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl p-3"
-                    style={{ background: 'color-mix(in srgb, var(--text-primary) 4%, transparent)', border: '1px solid var(--border-subtle)' }}
-                  >
+                  <div key={ex.id} className="liquid-inset flex items-center justify-between gap-3 p-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>
                         {ex.exam.title || ex.exam.subject}
@@ -1107,7 +507,7 @@ function GradesCard({
                       </p>
                     </div>
                     <Pill tone={ex.isPassed ? 'green' : 'red'} icon={ex.isPassed ? I.checkCircle : I.xCircle}>
-                      {ex.isPassed ? 'Topshirildi' : 'O’tmagani'} • {formatNum(ex.marksObtained)}
+                      {ex.isPassed ? 'Topshirildi' : 'O\'tolmadi'} • {formatNum(ex.marksObtained)}
                     </Pill>
                   </div>
                 ))}
@@ -1138,13 +538,22 @@ function AssignmentsCard({ child, groupId }: { child: ParentChild; groupId: stri
 
   return (
     <Surface tone="blue" className="p-5">
-      <CardHead icon={I.bookOpen} tone="blue" title="Uyga vazifalar" meta={<span className="text-[11px] font-bold" style={{ color: '#0A84FF' }}>{child.name.split(' ')[0]} uchun</span>} />
+      <CardHead
+        icon={I.bookOpen}
+        tone="blue"
+        title="Uyga vazifalar"
+        meta={
+          <span className="text-[11px] font-bold" style={{ color: '#0A84FF' }}>
+            {child.name.split(' ')[0]} uchun
+          </span>
+        }
+      />
       {!groupId ? (
         <EmptyState
           icon={I.bookOpen}
           tone="blue"
           title="Vazifalar topilmadi"
-          message="Farzandingiz hali guruh yoki davomat maʼlumotiga ega emas. Vazifalar ko’rsatilganda shu yerda chiqadi."
+          message="Farzandingiz hali guruh yoki davomat ma'lumotiga ega emas. Vazifalar biriktirilganda shu yerda chiqadi."
         />
       ) : assignQ.isLoading ? (
         <div className="space-y-2">
@@ -1152,25 +561,21 @@ function AssignmentsCard({ child, groupId }: { child: ParentChild; groupId: stri
           <Skeleton height={58} />
         </div>
       ) : assignQ.isError ? (
-        <ErrorState message="Vazifalar yuklab bo’lmadi." onRetry={() => assignQ.refetch()} />
+        <ErrorState message="Vazifalar yuklab bo'lmadi." onRetry={() => assignQ.refetch()} />
       ) : (assignQ.data ?? []).length === 0 ? (
-        <EmptyState icon={I.bookOpen} tone="blue" title="Yangi vazifalar yo’q" message="Ustoz vazifa biriktirganda shu yerda ko’rinadi." />
+        <EmptyState icon={I.bookOpen} tone="blue" title="Yangi vazifalar yo'q" message="Ustoz vazifa biriktirganda shu yerda ko'rinadi." />
       ) : (
         <div className="space-y-2">
           {(assignQ.data ?? []).map((a) => {
             const overdue = new Date(a.dueDate).getTime() < Date.now();
             return (
-              <div
-                key={a.id}
-                className="rounded-2xl p-3"
-                style={{ background: 'color-mix(in srgb, var(--text-primary) 4%, transparent)', border: '1px solid var(--border-subtle)' }}
-              >
+              <div key={a.id} className="liquid-inset p-3.5">
                 <div className="flex items-start justify-between gap-2">
                   <p className="min-w-0 flex-1 truncate text-[13.5px] font-bold" style={{ color: 'var(--text-primary)' }}>
                     {a.title}
                   </p>
                   <Pill tone={overdue ? 'red' : 'green'} icon={overdue ? I.alertCircle : I.clock}>
-                    {overdue ? 'Muddati o’tgan' : ASSIGNMENT_LABELS[a.status] ?? a.status}
+                    {overdue ? 'Muddati o\'tgan' : ASSIGNMENT_LABELS[a.status] ?? a.status}
                   </Pill>
                 </div>
                 {a.description && (
@@ -1178,7 +583,7 @@ function AssignmentsCard({ child, groupId }: { child: ParentChild; groupId: stri
                     {a.description}
                   </p>
                 )}
-                <div className="mt-2 flex items-center justify-between">
+                <div className="mt-2.5 flex items-center justify-between">
                   <span className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
                     {a.Group?.name ?? 'Guruh'}
                   </span>
@@ -1196,7 +601,7 @@ function AssignmentsCard({ child, groupId }: { child: ParentChild; groupId: stri
 }
 
 /* ============================================================================
- * OTA-ONA: TO’LOV KARTASI VA SHEET
+ * OTA-ONA: TO'LOV KARTASI VA LIQUID SHEET
  * ========================================================================== */
 
 function PaymentsCard({
@@ -1216,7 +621,7 @@ function PaymentsCard({
   if (invoicesQ.isError) {
     return (
       <Surface className="p-2">
-        <ErrorState message="To’lov holati yuklab bo’lmadi." onRetry={() => invoicesQ.refetch()} />
+        <ErrorState message="To'lov holati yuklab bo'lmadi." onRetry={() => invoicesQ.refetch()} />
       </Surface>
     );
   }
@@ -1227,33 +632,42 @@ function PaymentsCard({
   const isClear = outstanding <= 0;
 
   return (
-    <Surface tone={isClear ? 'green' : 'red'} className="p-5">
+    <Surface tone={isClear ? 'green' : 'red'} interactive onClick={onOpen} className="cursor-pointer p-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl"
-            style={{ background: TONE_COLORS[isClear ? 'green' : 'red'].bg, color: TONE_COLORS[isClear ? 'green' : 'red'].fg }}
+            style={{
+              background: TONE_COLORS[isClear ? 'green' : 'red'].bg,
+              color: TONE_COLORS[isClear ? 'green' : 'red'].fg,
+              border: `1px solid ${TONE_COLORS[isClear ? 'green' : 'red'].border}`,
+            }}
           >
             <Icon paths={isClear ? I.checkCircle : I.wallet} size={22} strokeWidth={2.1} />
           </div>
           <div>
             <p className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-              Oylik to’lov holati
+              Oylik to'lov holati
             </p>
             <h4 className="mt-0.5 text-[15.5px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              {isClear ? 'Qarzdorlik yo’q' : 'To’lov kutilmoqda'}
+              {isClear ? 'Qarzdorlik yo\'q' : 'To\'lov kutilmoqda'}
             </h4>
-            <div className="mt-0.5 flex items-center gap-1.5">
-              <span className="text-[15px] font-black tabular-nums" style={{ color: isClear ? '#34C759' : TONE_COLORS.red.fg }}>
-                {isClear ? '0 so’m' : formatUZS(outstanding)}
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+              <span className="text-[15px] font-black tabular-nums" style={{ color: isClear ? '#10B981' : TONE_COLORS.red.fg }}>
+                {isClear ? '0 so\'m' : formatUZS(outstanding)}
               </span>
-              {overdue > 0 && (
-                <Pill tone="red">{formatUZS(overdue)} muddati o’tgan</Pill>
-              )}
+              {overdue > 0 && <Pill tone="red">{formatUZS(overdue)} muddati o'tgan</Pill>}
             </div>
           </div>
         </div>
-        <Btn tone={isClear ? 'ghost' : 'primary'} onClick={onOpen} className="shrink-0">
+        <Btn
+          tone={isClear ? 'ghost' : 'primary'}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+          className="shrink-0"
+        >
           Batafsil
           <Icon paths={I.chevronRight} size={13} strokeWidth={2.4} />
         </Btn>
@@ -1268,27 +682,49 @@ function PaymentSheet({
   childName,
   data,
   contactAdmin,
+  tg,
 }: {
   open: boolean;
   onClose: () => void;
   childName: string;
   data?: InvoicesResponse;
   contactAdmin: () => void;
+  tg: TelegramWebApp | null;
 }) {
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const [payMethod, setPayMethod] = useState<'click' | 'payme' | 'uzum'>('payme');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    const t = window.setTimeout(() => closeBtnRef.current?.focus(), 120);
+
+    try {
+      tg?.BackButton?.show?.();
+      tg?.BackButton?.onClick?.(onClose);
+    } catch {
+      /* ignore */
+    }
+
+    const t = window.setTimeout(() => closeBtnRef.current?.focus(), 100);
     return () => {
+      document.body.style.overflow = prevOverflow;
       window.removeEventListener('keydown', onKey);
       window.clearTimeout(t);
+      try {
+        tg?.BackButton?.offClick?.(onClose);
+        tg?.BackButton?.hide?.();
+      } catch {
+        /* ignore */
+      }
     };
-  }, [open, onClose]);
+  }, [open, onClose, tg]);
 
   const invoices = data?.invoices ?? [];
   const payments = data?.payments ?? [];
@@ -1308,25 +744,32 @@ function PaymentSheet({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+            transition={{ duration: 0.2 }}
+            className="absolute inset-0 bg-black/60 backdrop-blur-md"
           />
           <motion.div
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+            transition={SPRING_SHEET}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0.05, bottom: 0.6 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 110 || info.velocity.y > 500) onClose();
+            }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-md rounded-t-[30px] border-t border-white/10"
+            className="liquid-glass relative w-full max-w-md !rounded-b-none !rounded-t-[34px] border-t"
             style={{
-              background: 'var(--tg-theme-bg-color, #121826)',
+              background: 'color-mix(in srgb, var(--bg-surface) 88%, transparent)',
               paddingBottom: 'max(env(safe-area-inset-bottom), 20px)',
             }}
           >
-            <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-slate-500/30" />
+            <div className="mx-auto mt-3 h-1.5 w-12 cursor-grab rounded-full bg-slate-400/40 active:cursor-grabbing" />
             <div className="flex items-start justify-between px-6 pt-3">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                  Oylik to’lovlar
+                  Oylik to'lovlar
                 </p>
                 <h3 id="payment-sheet-title" className="mt-1 text-[19px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
                   {childName}
@@ -1337,21 +780,21 @@ function PaymentSheet({
                 type="button"
                 onClick={onClose}
                 aria-label="Yopish"
-                className="tap-target flex h-10 w-10 items-center justify-center rounded-full"
-                style={{ background: 'color-mix(in srgb, var(--text-primary) 7%, transparent)', color: 'var(--text-tertiary)' }}
+                className="liquid-btn-ghost tap-target flex h-10 w-10 items-center justify-center rounded-full"
+                style={{ color: 'var(--text-secondary)' }}
               >
-                <Icon paths={[I.xCircle[1]]} size={18} strokeWidth={2.2} />
+                <Icon paths={I.close} size={18} strokeWidth={2.2} />
               </button>
             </div>
 
-            <div className="max-h-[58vh] overflow-y-auto px-6 pt-4">
-              <div className="glass-card tg-card flex items-center justify-between p-4">
+            <div className="max-h-[62vh] overflow-y-auto px-6 pt-4">
+              <div className="liquid-inset flex items-center justify-between p-4">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                     Qoldiq summa
                   </p>
-                  <p className="mt-0.5 text-[20px] font-black tabular-nums" style={{ color: outstanding > 0 ? '#FF3B30' : '#34C759' }}>
-                    {outstanding > 0 ? formatUZS(outstanding) : `0 so’m`}
+                  <p className="mt-0.5 text-[21px] font-black tabular-nums" style={{ color: outstanding > 0 ? '#EF4444' : '#10B981' }}>
+                    {outstanding > 0 ? formatUZS(outstanding) : '0 so\'m'}
                   </p>
                 </div>
                 <Pill tone={outstanding > 0 ? 'red' : 'green'} icon={outstanding > 0 ? I.alertCircle : I.checkCircle}>
@@ -1360,16 +803,16 @@ function PaymentSheet({
               </div>
 
               {payments.length > 0 && (
-                <p className="mb-1.5 mt-4 text-[10.5px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                  So’nggi to’lovlar
+                <p className="mb-2 mt-4 text-[10.5px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  So'nggi to'lovlar
                 </p>
               )}
               <div className="space-y-2">
                 {payments.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between gap-3 rounded-2xl p-3" style={{ background: 'color-mix(in srgb, var(--text-primary) 4%, transparent)', border: '1px solid var(--border-subtle)' }}>
+                  <div key={p.id} className="liquid-inset flex items-center justify-between gap-3 p-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[12.5px] font-bold" style={{ color: 'var(--text-primary)' }}>
-                        {p.receiptNumber || p.method || 'To’lov'}
+                        {p.receiptNumber || p.method || 'To\'lov'}
                       </p>
                       <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
                         {formatDateShort(p.paidAt)}
@@ -1381,19 +824,17 @@ function PaymentSheet({
                   </div>
                 ))}
                 {payments.length === 0 && (
-                  <div
-                    className="flex items-center gap-2.5 rounded-2xl p-3.5 tg-note"
-                  >
+                  <div className="liquid-inset mt-3 flex items-center gap-2.5 p-3.5">
                     <Icon paths={I.wallet} size={18} strokeWidth={2.1} style={{ color: 'var(--text-tertiary)' }} />
                     <p className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>
-                      Hozircha to’lovlar qayd etilmagan.
+                      Hozircha to'lovlar qayd etilmagan.
                     </p>
                   </div>
                 )}
               </div>
 
               {invoices.length > 0 && (
-                <p className="mb-1.5 mt-4 text-[10.5px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                <p className="mb-2 mt-4 text-[10.5px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                   Hisob-fakturalar
                 </p>
               )}
@@ -1401,7 +842,7 @@ function PaymentSheet({
                 {invoices.map((inv) => {
                   const st = INVOICE_STATUS[inv.status] ?? { label: inv.status, tone: 'slate' as Tone };
                   return (
-                    <div key={inv.id} className="flex items-center justify-between gap-3 rounded-2xl p-3" style={{ background: 'color-mix(in srgb, var(--text-primary) 4%, transparent)', border: '1px solid var(--border-subtle)' }}>
+                    <div key={inv.id} className="liquid-inset flex items-center justify-between gap-3 p-3">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[12.5px] font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>
                           № {inv.number}
@@ -1418,16 +859,74 @@ function PaymentSheet({
                 })}
               </div>
 
-              <div className="mt-4 rounded-2xl p-3.5 tg-note">
-                <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                  Onlayn to’lov shlyuzi (Payme / Click) hozircha ulanmagan. To’lovni markaz kassasi orqali amalga oshirasiz, tafsilot uchun adminstratsiyaga yozing.
-                </p>
-              </div>
+              {outstanding > 0 ? (
+                <div className="liquid-inset mt-4 p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                      Tezkor Onlayn To'lov
+                    </p>
+                    <span className="text-[11px] font-bold text-emerald-500">0% komissiya</span>
+                  </div>
+                  <div className="mt-2.5 grid grid-cols-3 gap-2">
+                    {(['payme', 'click', 'uzum'] as const).map((method) => {
+                      const isSel = payMethod === method;
+                      const labels = { payme: 'Payme', click: 'Click Up', uzum: 'Uzum Bank' };
+                      return (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setPayMethod(method)}
+                          className="liquid-btn rounded-xl py-2 text-center text-[11.5px] font-bold transition-all"
+                          style={{
+                            background: isSel ? 'rgba(16, 185, 129, 0.18)' : 'rgba(255, 255, 255, 0.05)',
+                            borderColor: isSel ? '#10B981' : 'var(--glass-border)',
+                            color: isSel ? '#10B981' : 'var(--text-secondary)',
+                          }}
+                        >
+                          {labels[method]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-[11px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+                    Tanlangan tizim orqali {childName} uchun {formatUZS(outstanding)} to'lovini amalga oshirish.
+                  </p>
+                  <div className="mt-3">
+                    <Btn
+                      className="w-full"
+                      onClick={() => {
+                        const payText = `M-EDU: ${childName} | Qarzdorlik: ${formatUZS(outstanding)} | Tizim: ${payMethod.toUpperCase()}`;
+                        try {
+                          navigator.clipboard?.writeText?.(payText);
+                        } catch {
+                          /* ignore */
+                        }
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2500);
+                        try {
+                          tg?.openLink?.(`https://${payMethod}.uz`);
+                        } catch {
+                          /* fallback */
+                        }
+                      }}
+                    >
+                      <Icon paths={I.creditCard} size={15} strokeWidth={2.2} />
+                      {copied ? "Nusxalandi! Ilovaga o'tilmoqda..." : `${payMethod.toUpperCase()} orqali to'lash`}
+                    </Btn>
+                  </div>
+                </div>
+              ) : (
+                <div className="liquid-inset mt-4 p-3.5">
+                  <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    Barcha hisoblar yopilgan, qarzdorlik mavjud emas. Avans yoki qo'shimcha xizmatlar uchun ma'muriyatga murojaat qilishingiz mumkin.
+                  </p>
+                </div>
+              )}
 
-              <div className="mt-3 flex flex-col gap-2.5 pb-2">
-                <Btn onClick={contactAdmin}>
+              <div className="mt-4 flex flex-col gap-2.5 pb-2">
+                <Btn tone="ghost" onClick={contactAdmin}>
                   <Icon paths={I.send} size={14} strokeWidth={2.2} />
-                  Markazga yozish
+                  Markaz ma'muriyatiga yozish
                 </Btn>
                 <Btn tone="ghost" onClick={onClose}>
                   Yopish
@@ -1442,17 +941,19 @@ function PaymentSheet({
 }
 
 /* ============================================================================
- * OTA-ONA: SEKSIYA (bitta farzand ma'lumotlari)
+ * OTA-ONA: SEKSIYA
  * ========================================================================== */
 
 function ChildSection({
   child,
   contactAdmin,
   haptic,
+  tg,
 }: {
   child: ParentChild;
   contactAdmin: () => void;
   haptic: (s: HapticStyle) => void;
+  tg: TelegramWebApp | null;
 }) {
   const canAttendance = child.permissions?.attendance !== false;
   const canGrades = child.permissions?.grades !== false;
@@ -1484,10 +985,11 @@ function ChildSection({
   });
 
   const groupId = useMemo(() => {
+    if (child.groupId) return child.groupId;
     const attRow = (attendanceQ.data ?? []).find((r) => r.group?.id);
     if (attRow?.group?.id) return attRow.group.id;
     return gradesQ.data?.grades.find((g) => g.group?.id)?.group?.id ?? null;
-  }, [attendanceQ.data, gradesQ.data]);
+  }, [child.groupId, attendanceQ.data, gradesQ.data]);
 
   const [payOpen, setPayOpen] = useState(false);
 
@@ -1496,8 +998,8 @@ function ChildSection({
       <EmptyState
         icon={I.shieldCheck}
         tone="slate"
-        title="Ko’rish huquqi yo’q"
-        message="Bu farzand uchun maʼlumotlar markaz tomonidan bloklangan. Ruxsat olish uchun adminstratsiyaga murojaat qiling."
+        title="Ko'rish huquqi yo'q"
+        message="Bu farzand uchun ma'lumotlar markaz tomonidan cheklangan. Ruxsat olish uchun ma'muriyatga murojaat qiling."
       >
         <Btn onClick={contactAdmin}>
           <Icon paths={I.send} size={14} strokeWidth={2.2} />
@@ -1508,7 +1010,7 @@ function ChildSection({
   }
 
   return (
-    <div className="space-y-4">
+    <motion.div variants={STAGGER_CONTAINER} initial="hidden" animate="show" className="space-y-4">
       {canAttendance && <TodayCard child={child} attendanceQ={attendanceQ} summaryQ={summaryQ} />}
       {canGrades && <GradesCard child={child} gradesQ={gradesQ} />}
       <AssignmentsCard child={child} groupId={groupId} />
@@ -1527,8 +1029,9 @@ function ChildSection({
         childName={child.name}
         data={invoicesQ.data}
         contactAdmin={contactAdmin}
+        tg={tg}
       />
-    </div>
+    </motion.div>
   );
 }
 
@@ -1536,38 +1039,50 @@ function ChildSection({
  * OTA-ONA VIEW
  * ========================================================================== */
 
-function ParentView({ contactAdmin, haptic }: { contactAdmin: () => void; haptic: (s: HapticStyle) => void }) {
+function ParentView({
+  contactAdmin,
+  haptic,
+  tg,
+}: {
+  contactAdmin: () => void;
+  haptic: (s: HapticStyle) => void;
+  tg: TelegramWebApp | null;
+}) {
   const [idx, setIdx] = useState(0);
+  const { hasAnyRole } = useAuth();
+  const canAccessParent = hasAnyRole('PARENT', 'SUPER_ADMIN');
+
   const childrenQ = useQuery<ParentChild[]>({
     queryKey: ['tg-parent-children'],
-    queryFn: () => parentPortalApi.children().then(normalizeChildren),
+    queryFn: async () => {
+      const res = await parentPortalApi.children();
+      return (normalizeChildren(res) as ParentChild[]) ?? [];
+    },
     staleTime: 60_000,
+    enabled: canAccessParent,
   });
 
   if (childrenQ.isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="rounded-[28px]" height={180} />
+        <Skeleton className="rounded-[30px]" height={180} />
         <div className="grid grid-cols-2 gap-3">
           <Skeleton className="rounded-[24px]" height={96} />
           <Skeleton className="rounded-[24px]" height={96} />
         </div>
-        <Skeleton className="rounded-[28px]" height={140} />
+        <Skeleton className="rounded-[30px]" height={140} />
       </div>
     );
   }
   if (childrenQ.isError) {
     return (
       <div className="pt-6">
-        <ErrorState
-          message="Farzandlar ro’yxatini yuklab bo’lmadi."
-          onRetry={() => childrenQ.refetch()}
-        />
+        <ErrorState message="Farzandlar ro'yxatini yuklab bo'lmadi." onRetry={() => childrenQ.refetch()} />
       </div>
     );
   }
 
-  const children = childrenQ.data ?? [];
+  const children: ParentChild[] = childrenQ.data ?? [];
   if (children.length === 0) {
     return (
       <div className="pt-6">
@@ -1575,11 +1090,11 @@ function ParentView({ contactAdmin, haptic }: { contactAdmin: () => void; haptic
           icon={I.graduationCap}
           tone="blue"
           title="Farzand biriktirilmagan"
-          message="Sizning hisobingizga hali o’quvchi biriktirilmagan. Farzandingizni ulash uchun markaz maʼmuriyatiga murojaat qiling."
+          message="Sizning hisobingizga hali o'quvchi biriktirilmagan. Farzandingizni ulash uchun markaz ma'muriyatiga murojaat qiling."
         >
           <Btn onClick={contactAdmin}>
             <Icon paths={I.send} size={14} strokeWidth={2.2} />
-            Maʼmuriyat bilan bog’lanish
+            Ma'muriyat bilan bog'lanish
           </Btn>
           <Btn tone="ghost" onClick={() => childrenQ.refetch()}>
             <Icon paths={I.refresh} size={14} strokeWidth={2.2} />
@@ -1596,7 +1111,7 @@ function ParentView({ contactAdmin, haptic }: { contactAdmin: () => void; haptic
   return (
     <div className="space-y-4">
       {children.length > 1 && (
-        <div className="medu-scroll-x flex gap-2.5 pb-1">
+        <div className="medu-scroll-x flex gap-2.5 overflow-x-auto pb-1">
           {children.map((c, i) => {
             const isActive = safeIdx === i;
             return (
@@ -1607,21 +1122,30 @@ function ParentView({ contactAdmin, haptic }: { contactAdmin: () => void; haptic
                   haptic('light');
                   setIdx(i);
                 }}
-                whileTap={{ scale: 0.97 }}
+                whileTap={{ scale: 0.96 }}
                 aria-pressed={isActive}
-                className="relative flex shrink-0 items-center gap-2.5 rounded-2xl border px-3 py-2 text-left transition-all"
+                className="relative flex shrink-0 items-center gap-2.5 rounded-2xl border px-3.5 py-2 text-left transition-colors"
                 style={{
-                  borderColor: isActive ? 'rgba(52,199,89,.40)' : 'var(--border-subtle)',
-                  background: isActive ? 'rgba(52,199,89,.08)' : 'color-mix(in srgb, var(--text-primary) 4%, transparent)',
+                  borderColor: isActive ? 'rgba(16,185,129,0.45)' : 'var(--border-subtle)',
+                  background: isActive ? 'rgba(16,185,129,0.12)' : 'color-mix(in srgb, var(--text-primary) 4%, transparent)',
+                  boxShadow: isActive ? 'inset 0 1px 0 0 rgba(255,255,255,0.25)' : 'none',
                 }}
               >
+                {isActive && (
+                  <motion.span
+                    layoutId="child-pill-glow"
+                    className="pointer-events-none absolute inset-0 rounded-2xl"
+                    style={{ border: '1.5px solid rgba(16,185,129,0.55)' }}
+                    transition={SPRING_SNAPPY}
+                  />
+                )}
                 <Avatar name={c.name} active={isActive} size={38} />
                 <span className="min-w-0">
                   <span className="block truncate text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>
                     {c.name}
                   </span>
                   <span className="block truncate text-[10.5px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-                    {RELATION_LABELS[c.relationship ?? ''] ?? 'O’quvchi'}
+                    {RELATION_LABELS[c.relationship ?? ''] ?? 'O\'quvchi'}
                   </span>
                 </span>
               </motion.button>
@@ -1629,13 +1153,13 @@ function ParentView({ contactAdmin, haptic }: { contactAdmin: () => void; haptic
           })}
         </div>
       )}
-      <ChildSection key={active.studentId} child={active} contactAdmin={contactAdmin} haptic={haptic} />
+      <ChildSection key={active.studentId} child={active} contactAdmin={contactAdmin} haptic={haptic} tg={tg} />
     </div>
   );
 }
 
 /* ============================================================================
- * O’QITUVCHI VIEW — bugungi jadval + davomat belgilash (REAL)
+ * O'QITUVCHI VIEW
  * ========================================================================== */
 
 const ATT_CYCLE: (AttendanceStatus | null)[] = [null, 'PRESENT', 'LATE', 'ABSENT', 'EXCUSED'];
@@ -1645,20 +1169,22 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   const { user } = useAuth();
   const myUserId = user?.id;
   const today = todayKey();
-  const [overrides, setOverrides] = useState<Record<string, Record<string, AttendanceStatus>>>({});
+  const [overrides, setOverrides] = useState<Record<string, Record<string, AttendanceStatus | null>>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const groupsQ = useQuery<GroupSummary[]>({
     queryKey: ['tg-teacher-my-groups', myUserId],
     queryFn: async () => {
       const res = (await groupsApi.list({ limit: 100 })) as { items?: GroupSummary[] };
-      return itemsOf<GroupSummary>(res).filter((g) => g.teacher?.userId === myUserId);
+      const all = itemsOf<GroupSummary>(res);
+      const mine = all.filter((g) => g.teacher?.userId === myUserId || g.teacherId === myUserId);
+      return mine.length > 0 ? mine : all;
     },
     enabled: Boolean(myUserId),
     staleTime: 120_000,
   });
 
-  const teacherId = groupsQ.data?.[0]?.teacherId ?? null;
+  const teacherId = groupsQ.data?.[0]?.teacherId ?? groupsQ.data?.[0]?.teacher?.id ?? null;
   const dayOfWeek = todayDayOfWeek();
 
   const schedQ = useQuery<ScheduleItem[]>({
@@ -1680,6 +1206,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     enabled: groupIds.length > 0,
     staleTime: 120_000,
   });
+
   const attTodayQ = useQuery<AttendanceRow[][]>({
     queryKey: ['tg-teacher-att-today', groupIds.join('|'), today],
     queryFn: async () =>
@@ -1701,23 +1228,33 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     return m;
   }, [groupIds, attTodayQ.data]);
 
-  const statusOf = (lessonId: string, studentId: string, serverStatus: AttendanceStatus | null): AttendanceStatus | null =>
-    overrides[lessonId]?.[studentId] ?? serverStatus;
+  const statusOf = (
+    lessonId: string,
+    studentId: string,
+    serverStatus: AttendanceStatus | null,
+  ): AttendanceStatus | null => {
+    const lessonOv = overrides[lessonId];
+    if (lessonOv && studentId in lessonOv) {
+      return lessonOv[studentId];
+    }
+    return serverStatus;
+  };
 
-  const toggle = (lessonId: string, studentId: string, current: AttendanceStatus | null) => {
-    const cur = overrides[lessonId]?.[studentId] ?? current;
+  const toggle = (lessonId: string, studentId: string, serverStatus: AttendanceStatus | null) => {
+    const cur = statusOf(lessonId, studentId, serverStatus);
     const next = ATT_CYCLE[(ATT_CYCLE.indexOf(cur) + 1) % ATT_CYCLE.length];
     haptic(next ? 'medium' : 'light');
-    setOverrides((prev) => {
-      const lessonOv: Record<string, AttendanceStatus> = { ...prev[lessonId] };
-      if (next === null) delete lessonOv[studentId];
-      else lessonOv[studentId] = next;
-      return { ...prev, [lessonId]: lessonOv };
-    });
+    setOverrides((prev) => ({
+      ...prev,
+      [lessonId]: {
+        ...prev[lessonId],
+        [studentId]: next,
+      },
+    }));
   };
 
   const markAllPresent = (lessonId: string, students: GroupEnrollment[]) => {
-    haptic('light');
+    haptic('medium');
     setOverrides((prev) => ({
       ...prev,
       [lessonId]: Object.fromEntries(students.map((s) => [s.student.id, 'PRESENT' as AttendanceStatus])),
@@ -1739,7 +1276,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     try {
       await attendanceApi.create({ groupId: group.id, date: today, records });
       haptic('success');
-      success('Davomat saqlandi', `${group.name} — ${records.length} o’quvchi belgilandi`);
+      success('Davomat saqlandi', `${group.name} — ${records.length} o'quvchi belgilandi`);
       setOverrides((prev) => {
         const next = { ...prev };
         delete next[lesson.id];
@@ -1754,16 +1291,16 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     }
   };
 
-  if (groupsQ.isLoading) {
+  if (groupsQ.isLoading || schedQ.isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="rounded-[28px]" height={200} />
-        <Skeleton className="rounded-[28px]" height={200} />
+        <Skeleton className="rounded-[30px]" height={200} />
+        <Skeleton className="rounded-[30px]" height={200} />
       </div>
     );
   }
   if (groupsQ.isError) {
-    return <ErrorState message="Guruhlar ro’yxatini yuklab bo’lmadi." onRetry={() => groupsQ.refetch()} />;
+    return <ErrorState message="Guruhlar ro'yxatini yuklab bo'lmadi." onRetry={() => groupsQ.refetch()} />;
   }
   if ((groupsQ.data ?? []).length === 0) {
     return (
@@ -1771,27 +1308,19 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
         icon={I.users}
         tone="blue"
         title="Guruhlar topilmadi"
-        message="Hisobingizga biriktirilgan guruhlar aniqlanmadi. Agar bu xato bo’lsa, markaz adminiga murojaat qiling."
+        message="Hisobingizga biriktirilgan guruhlar aniqlanmadi. Agar bu xato bo'lsa, markaz adminiga murojaat qiling."
       />
     );
   }
-  if (schedQ.isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="rounded-[28px]" height={180} />
-        <Skeleton className="rounded-[28px]" height={180} />
-      </div>
-    );
-  }
   if (schedQ.isError) {
-    return <ErrorState message="Bugungi darslar yuklab bo’lmadi." onRetry={() => schedQ.refetch()} />;
+    return <ErrorState message="Bugungi darslar yuklab bo'lmadi." onRetry={() => schedQ.refetch()} />;
   }
   if (lessons.length === 0) {
     return (
       <EmptyState
         icon={I.calendar}
         tone="blue"
-        title="Bugun darslar yo’q"
+        title="Bugun darslar yo'q"
         message={new Date().toLocaleDateString('uz-UZ', { weekday: 'long', day: 'numeric', month: 'long' })}
       />
     );
@@ -1800,39 +1329,47 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   const groupLoading = detailsQ.isLoading || attTodayQ.isLoading;
 
   return (
-    <div className="space-y-4">
-      {lessons.map((lesson, li) => {
+    <motion.div variants={STAGGER_CONTAINER} initial="hidden" animate="show" className="space-y-4">
+      {lessons.map((lesson) => {
         const group = groupMap.get(lesson.groupId);
         const students = group?.enrollments ?? [];
         const serverRows = attMap.get(lesson.groupId) ?? [];
         const serverByStudent = new Map(serverRows.map((r) => [r.studentId ?? '', r]));
-        const markedCount = students.filter((s) => statusOf(lesson.id, s.student.id, serverByStudent.get(s.student.id)?.status ?? null) != null).length;
+        const markedCount = students.filter(
+          (s) => statusOf(lesson.id, s.student.id, serverByStudent.get(s.student.id)?.status ?? null) != null,
+        ).length;
         const isSaving = savingId === lesson.id;
 
         return (
-          <Surface key={lesson.id} className={`p-5 slide-up stagger-${(li % 4) + 1}`}>
+          <Surface key={lesson.id} tone="blue" className="p-5">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: TONE_COLORS.blue.bg, color: TONE_COLORS.blue.fg }}>
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-xl"
+                  style={{
+                    background: TONE_COLORS.blue.bg,
+                    color: TONE_COLORS.blue.fg,
+                    border: `1px solid ${TONE_COLORS.blue.border}`,
+                  }}
+                >
                   <Icon paths={I.calendar} size={18} strokeWidth={2.1} />
                 </div>
                 <div>
                   <span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#0A84FF' }}>
-                    {lesson.startTime}{lesson.endTime ? ` – ${lesson.endTime}` : ''}
+                    {lesson.startTime}
+                    {lesson.endTime ? ` – ${lesson.endTime}` : ''}
                   </span>
-                  <h3 className="text-[15px] font-bold leading-tight tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                  <h3 className="text-[15.5px] font-bold leading-tight tracking-tight" style={{ color: 'var(--text-primary)' }}>
                     {lesson.group.name}
                   </h3>
                   {lesson.room && (
                     <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                      {lesson.room}
+                      Xona: {lesson.room}
                     </p>
                   )}
                 </div>
               </div>
-              <Pill tone="blue">
-                {groupLoading ? '…' : `${students.length} o’quvchi`}
-              </Pill>
+              <Pill tone="blue">{groupLoading ? '…' : `${students.length} o'quvchi`}</Pill>
             </div>
 
             {groupLoading ? (
@@ -1845,45 +1382,69 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
               <>
                 <div className="mt-4 divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
                   {students.map((st) => {
-                    const current = statusOf(lesson.id, st.student.id, serverByStudent.get(st.student.id)?.status ?? null);
+                    const serverSt = serverByStudent.get(st.student.id)?.status ?? null;
+                    const current = statusOf(lesson.id, st.student.id, serverSt);
                     const row = serverByStudent.get(st.student.id);
                     const isBiometric = Boolean(row?.source && row.source !== 'MANUAL' && row.source !== 'EXCUSED');
-                    const name = `${st.student.user?.firstName ?? ''} ${st.student.user?.lastName ?? ''}`.trim() || 'O’quvchi';
+                    const name = `${st.student.user?.firstName ?? ''} ${st.student.user?.lastName ?? ''}`.trim() || 'O\'quvchi';
+
                     return (
-                      <button
+                      <motion.button
                         key={st.student.id}
                         type="button"
-                        onClick={() => toggle(lesson.id, st.student.id, serverByStudent.get(st.student.id)?.status ?? null)}
-                        className="flex w-full items-center justify-between gap-3 py-2.5 text-left transition-all active:scale-[0.99]"
+                        whileTap={{ scale: 0.985 }}
+                        onClick={() => toggle(lesson.id, st.student.id, serverSt)}
+                        className="flex w-full items-center justify-between gap-3 py-2.5 text-left"
                       >
                         <span className="flex min-w-0 items-center gap-2.5">
-                          <Avatar name={name} size={32} />
+                          <Avatar name={name} size={34} active={current === 'PRESENT'} />
                           <span className="min-w-0">
                             <span className="block truncate text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
                               {name}
                             </span>
                             {isBiometric && (
-                              <span className="mt-0.5 flex items-center gap-1 text-[10px] font-bold" style={{ color: '#34C759' }}>
+                              <span className="mt-0.5 flex items-center gap-1 text-[10px] font-bold" style={{ color: '#10B981' }}>
                                 <Icon paths={I.shieldCheck} size={10} strokeWidth={2.6} />
                                 {row?.source === 'FACE' ? 'Face ID' : 'Biometrik'}
                               </span>
                             )}
                           </span>
                         </span>
-                        {current ? (
-                          <span
-                            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11.5px] font-bold transition-all"
-                            style={{ background: TONE_COLORS[STATUS_META[current].tone].bg, color: TONE_COLORS[STATUS_META[current].tone].fg, border: `1px solid ${TONE_COLORS[STATUS_META[current].tone].border}` }}
-                          >
-                            <Icon paths={STATUS_META[current].icon} size={12} strokeWidth={2.4} />
-                            {STATUS_META[current].label}
-                          </span>
-                        ) : (
-                          <span className="inline-flex shrink-0 items-center rounded-xl px-3 py-1.5 text-[11.5px] font-semibold" style={{ background: 'color-mix(in srgb, var(--text-primary) 6%, transparent)', color: 'var(--text-tertiary)' }}>
-                            Belgilash
-                          </span>
-                        )}
-                      </button>
+
+                        <AnimatePresence mode="wait" initial={false}>
+                          {current ? (
+                            <motion.span
+                              key={current}
+                              initial={{ scale: 0.85, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              exit={{ scale: 0.85, opacity: 0 }}
+                              transition={SPRING_SNAPPY}
+                              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11.5px] font-bold"
+                              style={{
+                                background: TONE_COLORS[STATUS_META[current].tone].bg,
+                                color: TONE_COLORS[STATUS_META[current].tone].fg,
+                                border: `1px solid ${TONE_COLORS[STATUS_META[current].tone].border}`,
+                                boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.2)',
+                              }}
+                            >
+                              <Icon paths={STATUS_META[current].icon} size={12} strokeWidth={2.4} />
+                              {STATUS_META[current].label}
+                            </motion.span>
+                          ) : (
+                            <motion.span
+                              key="unset"
+                              initial={{ scale: 0.9, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              exit={{ scale: 0.9, opacity: 0 }}
+                              transition={{ duration: 0.12 }}
+                              className="liquid-inset inline-flex shrink-0 items-center px-3 py-1.5 text-[11.5px] font-semibold"
+                              style={{ color: 'var(--text-tertiary)' }}
+                            >
+                              Belgilash
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                      </motion.button>
                     );
                   })}
                 </div>
@@ -1892,7 +1453,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
                   <Btn tone="ghost" onClick={() => markAllPresent(lesson.id, students)} className="px-3.5">
                     Hammasi keldi
                   </Btn>
-                  <Btn onClick={() => saveLesson(lesson, group!, students)} disabled={markedCount === 0 || isSaving}>
+                  <Btn onClick={() => group && saveLesson(lesson, group, students)} disabled={!group || markedCount === 0 || isSaving}>
                     {isSaving ? 'Saqlanmoqda…' : `Saqlash${markedCount ? ` (${markedCount})` : ''}`}
                   </Btn>
                 </div>
@@ -1901,12 +1462,12 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
           </Surface>
         );
       })}
-    </div>
+    </motion.div>
   );
 }
 
 /* ============================================================================
- * O’QUVCHI VIEW — gamification (REAL)
+ * O'QUVCHI VIEW
  * ========================================================================== */
 
 function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
@@ -1943,7 +1504,7 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
       await request(`/gamification/rewards/${reward.id}/claim`, { method: 'POST' });
       haptic('success');
       success('Mukofot olindi!', `“${reward.title}” — ${reward.costCoins} M-Coin yechildi`);
-      await meQ.refetch();
+      await Promise.all([meQ.refetch(), rewardsQ.refetch()]);
     } catch (e) {
       haptic('error');
       error('Mukofot olishda xatolik', getErrorMessage(e));
@@ -1955,15 +1516,15 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   if (meQ.isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="rounded-[28px]" height={190} />
-        <Skeleton className="rounded-[28px]" height={170} />
+        <Skeleton className="rounded-[30px]" height={190} />
+        <Skeleton className="rounded-[30px]" height={170} />
       </div>
     );
   }
   if (meQ.isError) {
     return (
       <ErrorState
-        message="O’quvchi statistikasi yuklab bo’lmadi."
+        message="O'quvchi statistikasi yuklab bo'lmadi."
         onRetry={() => {
           meQ.refetch();
           eventsQ.refetch();
@@ -1973,60 +1534,71 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   }
 
   const me = meQ.data ?? { xp: 0, coins: 0, level: 1, xpToNextLevel: 100, rank: null, rankTotal: 0 };
-  const progress = Math.max(2, Math.min(100, 100 - me.xpToNextLevel));
+  const totalForNext = Math.max(1, me.xp + Math.max(0, me.xpToNextLevel));
+  const progress = me.xpToNextLevel <= 0 ? 100 : Math.max(4, Math.min(100, Math.round((me.xp / totalForNext) * 100)));
   const events = eventsQ.data ?? [];
   const rewards = rewardsQ.data ?? [];
 
   return (
-    <div className="space-y-4">
-      {/* Wallet / Level */}
+    <motion.div variants={STAGGER_CONTAINER} initial="hidden" animate="show" className="space-y-4">
       <Surface
         className="p-6 text-white"
         style={{
-          background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 55%, #DB2777 100%)',
-          borderColor: 'rgba(255,255,255,.16)',
-          boxShadow: '0 24px 60px -24px rgba(124,58,237,.55)',
+          background: 'linear-gradient(135deg, rgba(79,70,229,0.92) 0%, rgba(124,58,237,0.88) 52%, rgba(219,39,119,0.88) 100%)',
+          borderColor: 'rgba(255,255,255,0.28)',
+          boxShadow: '0 26px 60px -20px rgba(124,58,237,0.65), inset 0 1px 0 0 rgba(255,255,255,0.45)',
         }}
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-200">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-100/90">
               M-Coins hamyoni
             </p>
-            <p className="mt-1 text-[30px] font-black leading-none tracking-tight tabular-nums">
+            <p className="mt-1 text-[32px] font-black leading-none tracking-tight tabular-nums">
               {me.coins}
               <span className="ml-1.5 text-[13px] font-bold text-indigo-100">M-Coin</span>
             </p>
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              <Pill tone="blue" icon={I.award}>
-                {me.rank != null ? `${me.rank}-o’rin` : 'Reytingsiz'}
-              </Pill>
-              <Pill tone="purple" icon={I.star}>
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur-md">
+                <Icon paths={I.award} size={11} strokeWidth={2.4} />
+                {me.rank != null ? `${me.rank}-o'rin` : 'Reytingsiz'}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur-md">
+                <Icon paths={I.star} size={11} strokeWidth={2.4} />
                 {me.level}-daraja
-              </Pill>
+              </span>
             </div>
           </div>
           <ProgressRing value={progress} center={me.level} sub="Daraja" tone="purple" />
         </div>
-        <div className="mt-5 rounded-2xl bg-black/25 p-3">
+
+        <div className="mt-5 rounded-2xl border border-white/15 bg-black/25 p-3.5 backdrop-blur-md">
           <div className="flex items-center justify-between text-[11.5px] font-semibold">
             <span>{me.xp} XP</span>
             <span className="text-indigo-100">Keyingi darajagacha {me.xpToNextLevel} XP</span>
           </div>
-          <div className="mt-2 h-[7px] overflow-hidden rounded-full bg-white/20">
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/20">
             <motion.div
-              className="h-full rounded-full bg-gradient-to-r from-white to-indigo-200"
-              initial={false}
+              className="h-full rounded-full bg-gradient-to-r from-white via-indigo-100 to-pink-200"
+              initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ type: 'spring', stiffness: 75, damping: 18 }}
             />
           </div>
         </div>
       </Surface>
 
-      {/* XP feed */}
-      <Surface className="p-5 slide-up stagger-1">
-        <CardHead icon={I.sparkles} tone="purple" title="So’nggi yutuqlar" meta={<span className="text-[11px] font-bold" style={{ color: '#AF52DE' }}>{me.xp} XP</span>} />
+      <Surface tone="purple" className="p-5">
+        <CardHead
+          icon={I.sparkles}
+          tone="purple"
+          title="So'nggi yutuqlar"
+          meta={
+            <span className="text-[11px] font-bold" style={{ color: TONE_COLORS.purple.fg }}>
+              {me.xp} XP
+            </span>
+          }
+        />
         {eventsQ.isLoading ? (
           <div className="space-y-2">
             <Skeleton height={46} />
@@ -2034,18 +1606,21 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
           </div>
         ) : eventsQ.isError ? (
           <p className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
-            Yutuqlar yuklab bo’lmadi.
+            Yutuqlar yuklab bo'lmadi.
           </p>
         ) : events.length === 0 ? (
           <p className="text-[12.5px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-            Hozircha yutuqlar yo’q. Darsga vaqtida kelish va vazifalarni bajarish XP olib keladi!
+            Hozircha yutuqlar yo'q. Darsga vaqtida kelish va vazifalarni bajarish XP olib keladi!
           </p>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {events.map((ev) => (
-              <div key={ev.id} className="flex items-center justify-between gap-3 rounded-2xl px-2 py-2">
+              <div key={ev.id} className="liquid-inset flex items-center justify-between gap-3 px-3 py-2.5">
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: TONE_COLORS.purple.bg, color: TONE_COLORS.purple.fg }}>
+                  <div
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: TONE_COLORS.purple.bg, color: TONE_COLORS.purple.fg }}
+                  >
                     <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
                   </div>
                   <div className="min-w-0">
@@ -2057,14 +1632,18 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
                     </p>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1.5">
                   {ev.xp > 0 && (
-                    <span className="text-[11px] font-bold" style={{ color: '#0A84FF' }}>+{ev.xp} XP</span>
+                    <span className="text-[11px] font-bold" style={{ color: '#0A84FF' }}>
+                      +{ev.xp} XP
+                    </span>
                   )}
                   {ev.coins > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: TONE_COLORS.orange.bg, color: TONE_COLORS.orange.fg }}>
-                      <Icon paths={I.coins} size={10} strokeWidth={2.6} />
-                      +{ev.coins}
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold"
+                      style={{ background: TONE_COLORS.orange.bg, color: TONE_COLORS.orange.fg }}
+                    >
+                      <Icon paths={I.coins} size={10} strokeWidth={2.6} />+{ev.coins}
                     </span>
                   )}
                 </div>
@@ -2074,28 +1653,44 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
         )}
       </Surface>
 
-      {/* Reward shop */}
-      <Surface className="p-5 slide-up stagger-2">
-        <CardHead icon={I.gift} tone="orange" title="M-Coin do’koni" meta={<span className="inline-flex items-center gap-1 text-[11.5px] font-bold" style={{ color: '#E08A00' }}><Icon paths={I.coins} size={12} strokeWidth={2.5} />{me.coins}</span>} />
-        {rewardsQ.isError ? (
-          <div className="tg-note rounded-2xl p-3.5">
+      <Surface tone="orange" className="p-5">
+        <CardHead
+          icon={I.gift}
+          tone="orange"
+          title="M-Coin do'koni"
+          meta={
+            <span className="inline-flex items-center gap-1 text-[11.5px] font-bold" style={{ color: TONE_COLORS.orange.fg }}>
+              <Icon paths={I.coins} size={12} strokeWidth={2.5} />
+              {me.coins}
+            </span>
+          }
+        />
+        {rewardsQ.isLoading ? (
+          <div className="grid grid-cols-2 gap-2.5">
+            <Skeleton height={140} />
+            <Skeleton height={140} />
+          </div>
+        ) : rewardsQ.isError ? (
+          <div className="liquid-inset p-3.5">
             <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-              Mukofot do’koni hozircha ochilmagan. Xodimlarga murojaat qiling — tez orada paydo bo’ladi.
+              Mukofot do'koni hozircha ochilmagan. Xodimlarga murojaat qiling — tez orada paydo bo'ladi.
             </p>
           </div>
+        ) : rewards.length === 0 ? (
+          <EmptyState icon={I.gift} tone="orange" title="Sovg'alar tez orada" message="Markaz yangi sovg'alarni qo'shishi bilan shu yerda xarid qilishingiz mumkin." />
         ) : (
           <div className="grid grid-cols-2 gap-2.5">
             {rewards.map((r) => {
               const affordable = me.coins >= r.costCoins;
               const claiming = claimingId === r.id;
               return (
-                <div
+                <motion.div
                   key={r.id}
-                  className="flex flex-col rounded-2xl p-3"
-                  style={{ background: 'color-mix(in srgb, var(--text-primary) 4%, transparent)', border: '1px solid var(--border-subtle)' }}
+                  whileTap={affordable ? { scale: 0.97 } : undefined}
+                  className="liquid-inset flex flex-col p-3.5"
                 >
-                  <span className="text-[26px] leading-none">{r.icon || '🎁'}</span>
-                  <p className="mt-2 text-[12.5px] font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
+                  <span className="text-[28px] leading-none">{r.icon || '🎁'}</span>
+                  <p className="mt-2.5 text-[13px] font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
                     {r.title}
                   </p>
                   <p className="mt-1 line-clamp-2 flex-1 text-[10.5px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
@@ -2107,26 +1702,568 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
                     disabled={!affordable || claiming}
                     className="mt-3 w-full !px-2 py-2 text-[11.5px]"
                   >
-                    {claiming ? 'Yuborilmoqda…' : affordable ? `Olish · ${r.costCoins}` : 'Yetarli emas'}
+                    {claiming ? 'Yuborilmoqda…' : affordable ? `Olish · ${r.costCoins}` : `${r.costCoins} Coin`}
                   </Btn>
-                </div>
+                </motion.div>
               );
             })}
           </div>
         )}
       </Surface>
-    </div>
+    </motion.div>
   );
 }
 
 /* ============================================================================
- * BOTTOM DOCK (Apple-style glass dock)
+ * AI COPILOT VIEW (Mobile Apple Liquid Glass AI Interface)
  * ========================================================================== */
 
-const TAB_META: Record<TabId, { label: string; icon: string[] }> = {
+interface CopilotMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+const AI_SUGGESTION_CHIPS = [
+  { label: "📊 Davomat tahlili", query: "Bugungi davomat bo'yicha batafsil hisobot ber, kimlar kelmadi?" },
+  { label: "📅 Dars jadvali va xonalar", query: "Bugun qanday darslar rejalashtirilgan va qaysi xonalarda o'tiladi?" },
+  { label: "📝 45 daqiqalik dars rejasi", query: "Zamonaviy Bloom taksonomiyasiga binoan 45 daqiqalik dars rejasi tuzib ber." },
+  { label: "💰 Qarzdorlik tahlili", query: "Qarzdor o'quvchilar va kutilayotgan to'lovlar holatini ko'rsat." },
+  { label: "⚠️ Xavf ostidagi o'quvchilar", query: "Davomat va baholari pasaygan xavf ostidagi o'quvchilar tahlilini ber." },
+];
+
+function AiMarkdownContent({ content }: { content: string }) {
+  const lines = content.split('\n');
+
+  return (
+    <div className="space-y-1.5 text-[13px] leading-relaxed select-text" style={{ color: 'var(--text-primary)' }}>
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={idx} className="h-1" />;
+
+        if (trimmed.startsWith('### ')) {
+          return (
+            <h4 key={idx} className="mt-2 text-[14px] font-bold text-emerald-400">
+              {trimmed.replace(/^###\s+/, '')}
+            </h4>
+          );
+        }
+        if (trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
+          return (
+            <h3 key={idx} className="mt-2.5 text-[15px] font-black text-emerald-300">
+              {trimmed.replace(/^#+\s+/, '')}
+            </h3>
+          );
+        }
+
+        if (trimmed === '---' || trimmed === '***') {
+          return <hr key={idx} className="my-2 border-slate-700/50" />;
+        }
+
+        if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          const rawBullet = trimmed.replace(/^[•\-*]\s+/, '');
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-1">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+              <div className="flex-1">
+                <AiFormattedText text={rawBullet} />
+              </div>
+            </div>
+          );
+        }
+
+        const numMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
+        if (numMatch) {
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-1">
+              <span className="font-bold text-[12px] text-emerald-400 shrink-0 tabular-nums">
+                {numMatch[1]}.
+              </span>
+              <div className="flex-1">
+                <AiFormattedText text={numMatch[2]} />
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <p key={idx} className="leading-relaxed">
+            <AiFormattedText text={trimmed} />
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function AiFormattedText({ text }: { text: string }) {
+  const parts: Array<{ type: 'text' | 'link'; content?: string; label?: string; url?: string }> = [];
+
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = linkRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', content: text.substring(lastIndex, match.index) });
+    }
+    parts.push({ type: 'link', label: match[1], url: match[2] });
+    lastIndex = linkRegex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push({ type: 'text', content: text.substring(lastIndex) });
+  }
+
+  return (
+    <>
+      {parts.map((p, i) => {
+        if (p.type === 'link') {
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => window.location.assign(p.url!)}
+              className="inline-flex items-center gap-1 mx-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all cursor-pointer"
+            >
+              {p.label}
+              <Icon paths={I.chevronRight} size={11} strokeWidth={2.4} />
+            </button>
+          );
+        }
+        const boldSubparts = (p.content || '').split(/(\*\*[^*]+\*\*)/g);
+        return (
+          <span key={i}>
+            {boldSubparts.map((sub, j) => {
+              if (sub.startsWith('**') && sub.endsWith('**')) {
+                return (
+                  <strong key={j} className="font-bold text-white">
+                    {sub.slice(2, -2)}
+                  </strong>
+                );
+              }
+              return sub;
+            })}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+function AiCopilotView({
+  haptic,
+  contactAdmin,
+}: {
+  haptic: (style: HapticStyle) => void;
+  contactAdmin: () => void;
+}) {
+  const [messages, setMessages] = useState<CopilotMessage[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content: `### 🧠 M-EDU Executive AI Copilot
+Assalomu alaykum! Men ta'lim platformangizning Oliy Bosh Strategik va Analitik AI Copilotiman.
+
+Markaz ma'lumotlar bazasiga to'g'ridan-to'g'ri ulangan holda:
+- **Davomat monitoringi:** Real vaqt rejimidagi qatnashuv, kechikishlar va absenteizm
+- **Pedagogik dars rejalari:** 45 daqiqalik darslar (Bloom taksonomiyasi, testlar va XP)
+- **Moliyaviy tahlil:** Qarzdorliklar, to'lovlar intizomi va kassa hisoboti
+- **Retention tahlili:** Kursni tashlab ketish xavfi yuqori bo'lgan o'quvchilar ro'yxati
+
+Quyidagi tayyor savollardan birini bosing yoki savolingizni yozing:`,
+      timestamp: new Date().toISOString(),
+    },
+  ]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  const handleSend = async (queryText?: string) => {
+    const text = (queryText || input).trim();
+    if (!text || isLoading) return;
+
+    haptic('light');
+    const userMsg: CopilotMessage = {
+      id: `usr-${Date.now()}`,
+      role: 'user',
+      content: text,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
+    setInput('');
+    setIsLoading(true);
+    scrollToBottom();
+
+    try {
+      const historyPayload = messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const res = await aiApi.chat({
+        message: text,
+        history: historyPayload,
+      });
+
+      const assistantMsg: CopilotMessage = {
+        id: `ast-${Date.now()}`,
+        role: 'assistant',
+        content: res.content,
+        timestamp: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, assistantMsg]);
+      haptic('success');
+    } catch {
+      haptic('error');
+      const errorMsg: CopilotMessage = {
+        id: `err-${Date.now()}`,
+        role: 'assistant',
+        content: `⚠️ Xatolik yuz berdi: Ma'lumotlarni qayta ishlashda uzilish bo'ldi. Iltimos qaytadan urinib ko'ring yoki ma'muriyatga murojaat qiling.`,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsLoading(false);
+      scrollToBottom();
+    }
+  };
+
+  return (
+    <motion.div variants={STAGGER_CONTAINER} initial="hidden" animate="show" className="space-y-4">
+      <Surface tone="green" className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl"
+              style={{
+                background: 'linear-gradient(135deg, rgba(16,185,129,0.3) 0%, rgba(10,132,255,0.2) 100%)',
+                border: '1px solid rgba(16,185,129,0.4)',
+                color: '#10B981',
+              }}
+            >
+              <Icon paths={I.sparkles} size={22} strokeWidth={2.2} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h4 className="text-[15px] font-bold tracking-tight text-white">AI Copilot Intelligence</h4>
+                <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              </div>
+              <p className="text-[11.5px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                Gemini 2.5 Flash • Live Database Sync
+              </p>
+            </div>
+          </div>
+          <Btn tone="ghost" className="!px-2.5 !py-1 text-[11px]" onClick={contactAdmin}>
+            Admin
+          </Btn>
+        </div>
+
+        <div className="mt-3.5 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          {AI_SUGGESTION_CHIPS.map((chip, i) => (
+            <button
+              key={i}
+              type="button"
+              disabled={isLoading}
+              onClick={() => handleSend(chip.query)}
+              className="liquid-btn shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold text-emerald-300 hover:text-white transition-colors"
+              style={{
+                background: 'rgba(16,185,129,0.12)',
+                borderColor: 'rgba(16,185,129,0.25)',
+              }}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      </Surface>
+
+      <div className="space-y-3">
+        {messages.map((msg) => {
+          const isUser = msg.role === 'user';
+          return (
+            <motion.div
+              key={msg.id}
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={SPRING_SNAPPY}
+              className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[92%] rounded-3xl p-4 ${
+                  isUser
+                    ? 'rounded-tr-md bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-lg'
+                    : 'rounded-tl-md liquid-glass border border-slate-700/60'
+                }`}
+                style={{
+                  background: isUser ? undefined : 'color-mix(in srgb, var(--bg-surface) 85%, transparent)',
+                }}
+              >
+                {!isUser && (
+                  <div className="mb-2 flex items-center gap-1.5 border-b border-slate-700/40 pb-1.5">
+                    <Icon paths={I.sparkles} size={13} strokeWidth={2.4} className="text-emerald-400" />
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-400">
+                      M-EDU Executive Strategist
+                    </span>
+                  </div>
+                )}
+                {isUser ? (
+                  <p className="text-[13.5px] font-medium leading-relaxed">{msg.content}</p>
+                ) : (
+                  <AiMarkdownContent content={msg.content} />
+                )}
+                <div className="mt-2 flex items-center justify-end">
+                  <span className="text-[9.5px] font-medium opacity-60">
+                    {new Date(msg.timestamp).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex justify-start"
+          >
+            <div
+              className="liquid-glass rounded-3xl rounded-tl-md p-4 border border-emerald-500/30 flex items-center gap-3"
+              style={{ background: 'color-mix(in srgb, var(--bg-surface) 90%, transparent)' }}
+            >
+              <div className="flex space-x-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="h-2 w-2 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="h-2 w-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+              <span className="text-[12px] font-medium text-emerald-300">
+                AI bazani chuqur tahlil qilmoqda...
+              </span>
+            </div>
+          </motion.div>
+        )}
+        <div ref={scrollRef} />
+      </div>
+
+      <div className="sticky bottom-0 pt-2 pb-2 backdrop-blur-md">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSend();
+          }}
+          className="liquid-glass flex items-center gap-2 rounded-full p-1.5 border border-emerald-500/30 shadow-2xl"
+          style={{ background: 'color-mix(in srgb, var(--bg-surface) 95%, transparent)' }}
+        >
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="AI Copilotga savol bering..."
+            disabled={isLoading}
+            className="flex-1 bg-transparent px-4 py-2 text-[13.5px] text-white placeholder-slate-400 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isLoading}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 text-white shadow-md disabled:opacity-40 transition-transform active:scale-95 cursor-pointer"
+          >
+            <Icon paths={I.send} size={16} strokeWidth={2.4} />
+          </button>
+        </form>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ============================================================================
+ * DIGITAL BADGE VIEW (Apple Wallet Passbook Style)
+ * ========================================================================== */
+
+function QrCodeMatrix({ value }: { value: string }) {
+  const size = 21;
+  const hash = useMemo(() => {
+    let h = 0;
+    for (let i = 0; i < value.length; i++) {
+      h = (Math.imul(31, h) + value.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  }, [value]);
+
+  const grid = useMemo(() => {
+    const m: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false));
+
+    const drawCorner = (startX: number, startY: number) => {
+      for (let y = 0; y < 7; y++) {
+        for (let x = 0; x < 7; x++) {
+          if (
+            y === 0 || y === 6 || x === 0 || x === 6 ||
+            (y >= 2 && y <= 4 && x >= 2 && x <= 4)
+          ) {
+            m[startY + y][startX + x] = true;
+          }
+        }
+      }
+    };
+
+    drawCorner(0, 0);
+    drawCorner(size - 7, 0);
+    drawCorner(0, size - 7);
+
+    for (let i = 8; i < size - 8; i++) {
+      m[6][i] = i % 2 === 0;
+      m[i][6] = i % 2 === 0;
+    }
+
+    let seed = hash;
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (r < 8 && (c < 8 || c >= size - 8)) continue;
+        if (r >= size - 8 && c < 8) continue;
+        if (r >= 12 && r <= 16 && c >= 12 && c <= 16) continue;
+        if (r === 6 || c === 6) continue;
+
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        m[r][c] = (seed % 3) === 0;
+      }
+    }
+
+    return m;
+  }, [hash, size]);
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} className="w-48 h-48 rounded-xl bg-white p-2.5 shadow-inner">
+      {grid.map((row, r) =>
+        row.map((cell, c) =>
+          cell ? <rect key={`${r}-${c}`} x={c} y={r} width={1} height={1} fill="#0F172A" /> : null
+        )
+      )}
+    </svg>
+  );
+}
+
+function DigitalBadgeView({
+  appUser,
+  haptic,
+}: {
+  appUser: any;
+  haptic: (style: HapticStyle) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(60);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSecondsLeft((prev) => (prev <= 1 ? 60 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const userId = appUser?.id || 'USR-2026-MEDU';
+  const displayId = `EDU-${userId.slice(0, 8).toUpperCase()}`;
+  const orgName = appUser?.organizationName || 'M-EDU Xalqaro Ta\'lim Markazi';
+  const roleName = ROLE_LABELS[appUser?.role] || appUser?.role || "O'quvchi";
+  const fullName = `${appUser?.firstName || ''} ${appUser?.lastName || ''}`.trim() || 'Foydalanuvchi';
+  const qrValue = `medu://pass/${userId}?org=${appUser?.organizationId || 'org-1'}&t=${Math.floor(Date.now() / 60000)}`;
+
+  const handleCopyId = () => {
+    try {
+      navigator.clipboard?.writeText?.(displayId);
+      setCopied(true);
+      haptic('light');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <motion.div variants={STAGGER_CONTAINER} initial="hidden" animate="show" className="space-y-4">
+      <Surface tone="green" className="relative overflow-hidden p-6 !rounded-[32px] border border-emerald-500/40 shadow-2xl">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-x-20 -top-20 h-40 transform rotate-12 opacity-25"
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent)' }}
+        />
+
+        <div className="flex items-center justify-between border-b border-emerald-500/30 pb-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-slate-900 font-black text-[13px]">
+              M
+            </div>
+            <div>
+              <p className="text-[12px] font-bold text-white tracking-wide">{orgName}</p>
+              <p className="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold">SMART CAMPUS PASS</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10.5px] font-bold text-emerald-300 border border-emerald-500/30">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+            FAOL
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center gap-4">
+          <Avatar name={fullName} size={58} active />
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-[18px] font-extrabold text-white tracking-tight">{fullName}</h3>
+            <div className="mt-1 flex items-center gap-2">
+              <Pill tone="green">{roleName}</Pill>
+              <span className="text-[11px] font-semibold text-slate-400">ID: {displayId}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-col items-center justify-center">
+          <div className="relative p-2 rounded-2xl bg-slate-900/60 border border-slate-700/80 shadow-2xl">
+            <QrCodeMatrix value={qrValue} />
+            <motion.div
+              animate={{ y: [0, 180, 0] }}
+              transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+              className="pointer-events-none absolute inset-x-2 top-2 h-0.5 bg-emerald-400/80 shadow-[0_0_12px_#10B981]"
+            />
+          </div>
+          <p className="mt-3 text-[11px] font-medium text-slate-300">
+            Dinamik QR-kod yangilanishiga: <span className="font-bold text-emerald-400 tabular-nums">{secondsLeft}s</span>
+          </p>
+        </div>
+
+        <div className="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between">
+          <div>
+            <p className="text-[10.5px] uppercase tracking-wider text-slate-400 font-semibold">Biometrik Identifikator</p>
+            <p className="text-[13px] font-bold text-white tabular-nums tracking-wide">{displayId}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleCopyId}
+            className="liquid-btn flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11.5px] font-bold text-emerald-300 hover:text-white cursor-pointer"
+          >
+            <Icon paths={I.copy} size={14} strokeWidth={2.2} />
+            {copied ? 'Nusxalandi!' : 'Nusxa olish'}
+          </button>
+        </div>
+      </Surface>
+    </motion.div>
+  );
+}
+
+/* ============================================================================
+ * BOTTOM DOCK (Apple visionOS Floating Dock)
+ * ========================================================================== */
+
+const TAB_META: Record<TabId, { label: string; icon: readonly string[] }> = {
   parent: { label: 'Ota-ona', icon: I.heart },
-  student: { label: 'O’quvchi', icon: I.graduationCap },
-  teacher: { label: 'O’qituvchi', icon: I.users },
+  student: { label: 'O\'quvchi', icon: I.graduationCap },
+  teacher: { label: 'O\'qituvchi', icon: I.users },
+  ai: { label: 'AI Yordamchi', icon: I.sparkles },
+  badge: { label: 'Mening QR', icon: I.qrCode },
 };
 
 function BottomDock({
@@ -2142,11 +2279,11 @@ function BottomDock({
 }) {
   if (tabs.length < 2) return null;
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(env(safe-area-inset-bottom),14px)]">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(env(safe-area-inset-bottom),14px)]">
       <nav
         role="tablist"
         aria-label="Portallar"
-        className="tg-dock mx-auto flex max-w-sm items-center justify-around rounded-full p-1.5"
+        className="liquid-dock pointer-events-auto mx-auto flex max-w-sm items-center justify-around rounded-full p-1.5"
       >
         {tabs.map((id) => {
           const isActive = active === id;
@@ -2156,22 +2293,30 @@ function BottomDock({
               type="button"
               role="tab"
               aria-selected={isActive}
-              aria-label={`${TAB_META[id].label} bo’limi`}
+              aria-label={`${TAB_META[id].label} bo'limi`}
               onClick={() => onChange(id)}
               className="relative flex flex-1 flex-col items-center gap-0.5 rounded-full py-2 text-[10.5px] font-bold transition-colors"
-              style={{ color: isActive ? '#34C759' : 'var(--text-tertiary)' }}
+              style={{ color: isActive ? '#10B981' : 'var(--text-tertiary)' }}
             >
               {isActive && (
                 <motion.span
-                  layoutId="dock-pill"
+                  layoutId="dock-liquid-pill"
                   className="absolute inset-0 rounded-full"
-                  style={{ background: 'rgba(52,199,89,.16)', border: '1px solid rgba(52,199,89,.28)' }}
-                  transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(16,185,129,0.22) 0%, rgba(10,132,255,0.14) 100%)',
+                    border: '1px solid rgba(16,185,129,0.35)',
+                    boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.35), 0 4px 14px -4px rgba(16,185,129,0.35)',
+                  }}
+                  transition={reduced ? { duration: 0 } : SPRING_SNAPPY}
                 />
               )}
-              <span className="relative z-10 flex h-5 items-center">
+              <motion.span
+                animate={{ scale: isActive ? 1.08 : 1, y: isActive ? -1 : 0 }}
+                transition={SPRING_SNAPPY}
+                className="relative z-10 flex h-5 items-center"
+              >
                 <Icon paths={TAB_META[id].icon} size={20} strokeWidth={isActive ? 2.4 : 1.8} />
-              </span>
+              </motion.span>
               <span className="relative z-10">{TAB_META[id].label}</span>
             </button>
           );
@@ -2182,7 +2327,7 @@ function BottomDock({
 }
 
 /* ============================================================================
- * MAXSUS HOLATLAR
+ * GATE & ACCESS SCREENS
  * ========================================================================== */
 
 function GateScreen() {
@@ -2191,11 +2336,9 @@ function GateScreen() {
       icon={I.graduationCap}
       tone="blue"
       title="M-EDU Telegram Portali"
-      message="Portalda ko’rish uchun M-EDU hisobingizga kiring. Bu sizning va farzandlaringiz maʼlumotlarini himoya qiladi."
+      message="Portalda ko'rish uchun M-EDU hisobingizga kiring. Bu sizning va farzandlaringiz ma'lumotlarini himoya qiladi."
     >
-      <Btn onClick={() => window.location.assign('/login')}>
-        Hisobga kirish
-      </Btn>
+      <Btn onClick={() => window.location.assign('/login')}>Hisobga kirish</Btn>
     </EmptyState>
   );
 }
@@ -2205,44 +2348,47 @@ function NoAccessScreen({ role }: { role?: string | null }) {
     <EmptyState
       icon={I.shieldCheck}
       tone="slate"
-      title="Bo’lim topilmadi"
-      message={`Sizning profilingiz uchun (${ROLE_LABELS[role ?? ''] ?? role ?? 'nomaʼlum rol'}) ushbu portalda ochiq bo’lim yo’q. Markaz adminstratsiyasiga murojaat qiling.`}
+      title="Bo'lim topilmadi"
+      message={`Sizning profilingiz uchun (${ROLE_LABELS[role ?? ''] ?? role ?? 'noma\'lum rol'}) ushbu portalda ochiq bo'lim yo'q. Markaz ma'muriyatiga murojaat qiling.`}
     />
   );
 }
 
 /* ============================================================================
- * SAHIFA
+ * MAIN PAGE COMPONENT
  * ========================================================================== */
 
 export function TelegramWebAppPage() {
   usePageTitle('M-EDU Telegram Portali');
 
-  const { user: tgUser, colorScheme, haptic, contactAdmin } = useTelegram();
+  const { tg, user: tgUser, colorScheme, haptic, contactAdmin } = useTelegram();
   const { user: appUser, status: authStatus, hasAnyRole } = useAuth();
   const isOnline = useOnlineStatus();
   const reduced = useReducedMotion();
-  const [tab, setTab] = useState<TabId>('parent');
 
   const tabs = useMemo<TabId[]>(() => {
     const list: TabId[] = [];
     if (hasAnyRole('PARENT')) list.push('parent');
     if (hasAnyRole('STUDENT')) list.push('student');
-    if (hasAnyRole('TEACHER', 'ASSISTANT', 'SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')) list.push('teacher');
+    if (hasAnyRole('TEACHER', 'ASSISTANT', 'SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN', 'MANAGER')) list.push('teacher');
+    if (appUser) {
+      list.push('ai');
+      list.push('badge');
+    }
     return list;
-  }, [hasAnyRole]);
+  }, [hasAnyRole, appUser]);
 
-  useEffect(() => {
-    if (tabs.length > 0 && !tabs.includes(tab)) setTab(tabs[0]);
-  }, [tabs, tab]);
+  const [selectedTab, setSelectedTab] = useState<TabId | null>(null);
+  const activeTab: TabId = useMemo(() => {
+    if (selectedTab && tabs.includes(selectedTab)) return selectedTab;
+    return tabs[0] ?? 'parent';
+  }, [selectedTab, tabs]);
 
   const { greeting, icon: greetingIcon } = getTimeGreeting();
-  const displayName =
-    tgUser?.first_name ?? appUser?.firstName ?? (appUser ? null : 'Mehmon');
+  const displayName = tgUser?.first_name ?? appUser?.firstName ?? (appUser ? null : 'Mehmon');
   const appRole = appUser?.role ?? undefined;
 
   const theme = tgThemeStyle(colorScheme);
-
   const headerAvatar = tgUser?.photo_url ?? null;
   const avatarName = displayName ?? `${appUser?.lastName ?? ''} ${appUser?.firstName ?? ''}`;
 
@@ -2252,62 +2398,64 @@ export function TelegramWebAppPage() {
       data-tg-theme={colorScheme}
       style={theme}
     >
-      <style>{PRESET_CSS}</style>
+      <style>{LIQUID_GLASS_CSS}</style>
 
-      {/* Ambient orbs */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {/* Ambient Liquid Background Orbs */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
         <div
-          className="absolute -right-20 -top-24 h-72 w-72 rounded-full"
-          style={{ background: 'radial-gradient(closest-side, rgba(76,128,255,.20), transparent)' }}
+          className="ambient-orb-1 absolute -right-20 -top-24 h-80 w-80 rounded-full"
+          style={{ background: 'radial-gradient(closest-side, rgba(10,132,255,0.22), transparent)' }}
         />
         <div
-          className="absolute -bottom-28 -left-24 h-80 w-80 rounded-full"
-          style={{ background: 'radial-gradient(closest-side, rgba(175,122,255,.16), transparent)' }}
+          className="ambient-orb-2 absolute -bottom-28 -left-24 h-96 w-96 rounded-full"
+          style={{ background: 'radial-gradient(closest-side, rgba(139,92,246,0.18), transparent)' }}
         />
       </div>
 
-      {/* Header */}
+      {/* Liquid Glass Sticky Header with safe-area support */}
       <header
         className="sticky top-0 z-30 border-b"
         style={{
-          background: 'color-mix(in srgb, var(--tg-theme-bg-color, #0E141E) 84%, transparent)',
-          backdropFilter: 'blur(20px) saturate(1.5)',
-          WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
-          borderColor: 'var(--border-subtle)',
-          paddingTop: 'max(env(safe-area-inset-top), 0px)',
+          background: 'color-mix(in srgb, var(--bg-page) 72%, transparent)',
+          backdropFilter: 'blur(28px) saturate(190%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(190%)',
+          borderColor: 'var(--glass-border)',
+          boxShadow: 'inset 0 -1px 0 0 rgba(255,255,255,0.08)',
+          paddingTop: 'max(env(safe-area-inset-top), 8px)',
         }}
       >
         <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <Avatar name={avatarName} photo={headerAvatar} size={44} />
+            <Avatar name={avatarName} photo={headerAvatar} size={44} active={isOnline} />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span style={{ color: TONE_COLORS.orange.fg }}>
                   <Icon paths={greetingIcon} size={14} strokeWidth={2.4} />
                 </span>
-                <p className="truncate text-[14.5px] font-bold tracking-tight">
-                  {displayName
-                    ? `${greeting}, ${displayName.split(' ')[0]}!`
-                    : `${greeting}!`}
+                <p className="truncate text-[15px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                  {displayName ? `${greeting}, ${displayName.split(' ')[0]}!` : `${greeting}!`}
                 </p>
               </div>
               <p className="truncate text-[11.5px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-                {appRole ? `${ROLE_LABELS[appRole] ?? appRole} • ` : ''}M-EDU Taʼlim portali
+                {appRole ? `${ROLE_LABELS[appRole] ?? appRole} • ` : ''}M-EDU Ta'lim portali
               </p>
             </div>
           </div>
+
           <div
-            className="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold backdrop-blur-md"
             style={{
-              background: isOnline ? 'rgba(52,199,89,.13)' : 'rgba(255,149,0,.13)',
-              color: isOnline ? '#34C759' : '#E08A00',
+              background: isOnline ? TONE_COLORS.green.bg : TONE_COLORS.orange.bg,
+              color: isOnline ? TONE_COLORS.green.fg : TONE_COLORS.orange.fg,
+              borderColor: isOnline ? TONE_COLORS.green.border : TONE_COLORS.orange.border,
+              boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.2)',
             }}
           >
             <span
               className="h-1.5 w-1.5 rounded-full"
               style={{
-                background: isOnline ? '#34C759' : '#FF9500',
-                boxShadow: isOnline ? '0 0 0 3px rgba(52,199,89,.2)' : 'none',
+                background: isOnline ? '#10B981' : '#F59E0B',
+                boxShadow: isOnline ? '0 0 0 3px rgba(16,185,129,0.25)' : 'none',
               }}
             />
             {isOnline ? 'Onlayn' : 'Oflayn'}
@@ -2315,25 +2463,13 @@ export function TelegramWebAppPage() {
         </div>
       </header>
 
-      {!isOnline && (
-        <div className="relative z-10 mx-auto w-full max-w-md px-4 pb-1 pt-2">
-          <div
-            className="flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-[12px] font-semibold"
-            style={{ background: 'rgba(255,149,0,.10)', borderColor: 'rgba(255,149,0,.28)', color: '#B86A00' }}
-          >
-            <Icon paths={I.wifiOff} size={15} strokeWidth={2.2} />
-            Internet aloqasi yo’q — maʼlumotlar yangilanmaydi.
-          </div>
-        </div>
-      )}
-
-      {/* Content */}
-      <main className="relative z-10 mx-auto w-full max-w-md px-4 pb-[calc(112px+env(safe-area-inset-bottom))] pt-4">
+      {/* Main Content */}
+      <main className="relative z-10 mx-auto w-full max-w-md px-4 pb-[calc(116px+env(safe-area-inset-bottom))] pt-4">
         {authStatus === 'booting' ? (
           <div className="space-y-4">
-            <Skeleton className="rounded-[28px]" height={190} />
-            <Skeleton className="rounded-[28px]" height={130} />
-            <Skeleton className="rounded-[28px]" height={150} />
+            <Skeleton className="rounded-[30px]" height={190} />
+            <Skeleton className="rounded-[30px]" height={130} />
+            <Skeleton className="rounded-[30px]" height={150} />
           </div>
         ) : authStatus === 'unauthenticated' ? (
           <GateScreen />
@@ -2342,15 +2478,17 @@ export function TelegramWebAppPage() {
         ) : (
           <AnimatePresence mode="wait">
             <motion.div
-              key={tab}
-              initial={reduced ? false : { opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduced ? undefined : { opacity: 0, y: -6 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
+              key={activeTab}
+              initial={reduced ? false : { opacity: 0, y: 12, scale: 0.99 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={reduced ? undefined : { opacity: 0, y: -8, scale: 0.99 }}
+              transition={SPRING_SMOOTH}
             >
-              {tab === 'parent' && <ParentView contactAdmin={contactAdmin} haptic={haptic} />}
-              {tab === 'teacher' && <TeacherView haptic={haptic} />}
-              {tab === 'student' && <StudentView haptic={haptic} />}
+              {activeTab === 'parent' && <ParentView contactAdmin={contactAdmin} haptic={haptic} tg={tg} />}
+              {activeTab === 'teacher' && <TeacherView haptic={haptic} />}
+              {activeTab === 'student' && <StudentView haptic={haptic} />}
+              {activeTab === 'ai' && <AiCopilotView haptic={haptic} contactAdmin={contactAdmin} />}
+              {activeTab === 'badge' && <DigitalBadgeView appUser={appUser} haptic={haptic} />}
             </motion.div>
           </AnimatePresence>
         )}
@@ -2358,11 +2496,12 @@ export function TelegramWebAppPage() {
 
       <BottomDock
         tabs={tabs}
-        active={tab}
+        active={activeTab}
         reduced={reduced ?? false}
         onChange={(next) => {
+          if (next === activeTab) return;
           haptic('light');
-          setTab(next);
+          setSelectedTab(next);
           window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
         }}
       />

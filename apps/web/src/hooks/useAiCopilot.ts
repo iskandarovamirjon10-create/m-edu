@@ -243,7 +243,7 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
             signal: controller.signal,
             conversationId: activeConvId,
             onDelta: (chunk) => {
-              if (statusRef.current !== 'streaming') {
+              if (statusRef.current !== 'streaming' && statusRef.current !== 'awaiting_confirmation') {
                 updateStatus('streaming');
               }
               setMessages(prev => {
@@ -255,9 +255,71 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
                 return newMessages;
               });
             },
-            onTool: (_toolEvent) => {
-              // Tool event handling if needed in future
-            }
+            onTool: (toolEvent: any) => {
+              if (!toolEvent) return;
+              const tType = toolEvent.type;
+              if (tType === 'tool_running') {
+                setMessages((prev) => {
+                  const newMessages = [...prev];
+                  const lastIdx = newMessages.length - 1;
+                  if (lastIdx >= 0 && newMessages[lastIdx].id === partialId) {
+                    const activities = newMessages[lastIdx].toolActivities || [];
+                    const existingIdx = activities.findIndex((a) => a.toolName === toolEvent.toolName);
+                    const updated = existingIdx >= 0
+                      ? activities.map((a, i) => (i === existingIdx ? { ...a, status: 'running' as const } : a))
+                      : [...activities, { id: toolEvent.toolName, toolName: toolEvent.toolName, status: 'running' as const }];
+                    newMessages[lastIdx] = { ...newMessages[lastIdx], toolActivities: updated };
+                  }
+                  return newMessages;
+                });
+              } else if (tType === 'tool_result') {
+                setMessages((prev) => {
+                  const newMessages = [...prev];
+                  const lastIdx = newMessages.length - 1;
+                  if (lastIdx >= 0 && newMessages[lastIdx].id === partialId) {
+                    const activities = newMessages[lastIdx].toolActivities || [];
+                    const status = toolEvent.status === 'success' ? ('success' as const) : ('error' as const);
+                    const existingIdx = activities.findIndex((a) => a.toolName === toolEvent.toolName);
+                    const updated = existingIdx >= 0
+                      ? activities.map((a, i) => (i === existingIdx ? { ...a, status } : a))
+                      : [...activities, { id: toolEvent.toolName, toolName: toolEvent.toolName, status }];
+                    newMessages[lastIdx] = { ...newMessages[lastIdx], toolActivities: updated };
+                  }
+                  return newMessages;
+                });
+              } else if (tType === 'action_pending') {
+                const rawArgs = typeof toolEvent.parameters === 'string'
+                  ? toolEvent.parameters
+                  : JSON.stringify(toolEvent.parameters || {});
+                const pendingAction: AiPendingAction = {
+                  actionId: toolEvent.actionId || '',
+                  toolName: toolEvent.toolName || '',
+                  parameters: parseActionParameters(rawArgs),
+                  rawArguments: prettifyArguments(rawArgs),
+                  backendMessage: toolEvent.message,
+                };
+                updateStatus('awaiting_confirmation');
+                setMessages((prev) => {
+                  const newMessages = [...prev];
+                  const lastIdx = newMessages.length - 1;
+                  if (lastIdx >= 0 && newMessages[lastIdx].id === partialId) {
+                    newMessages[lastIdx] = {
+                      ...newMessages[lastIdx],
+                      confirmation: pendingAction,
+                      toolActivities: [
+                        ...(newMessages[lastIdx].toolActivities || []),
+                        {
+                          id: toolEvent.actionId || toolEvent.toolName,
+                          toolName: toolEvent.toolName,
+                          status: 'pending_confirmation' as const,
+                        },
+                      ],
+                    };
+                  }
+                  return newMessages;
+                });
+              }
+            },
           });
           
           if (streamRes.conversationId) {
@@ -280,9 +342,15 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
             conversationId: streamRes.conversationId
           } as AiChatResponse & { conversationId?: string };
           
-          // don't append again
           historyRef.current = [...wire, { role: 'assistant', content: streamRes.content }];
-          updateStatus('idle');
+          const msgsNow = messagesRef.current;
+          const lastMsg = msgsNow[msgsNow.length - 1];
+          const hasPending = Boolean(lastMsg?.confirmation) || statusRef.current === 'awaiting_confirmation';
+          if (!hasPending) {
+            updateStatus('idle');
+          } else {
+            updateStatus('awaiting_confirmation');
+          }
           return;
         } else {
           response = await aiChat(wire, { signal: controller.signal, conversationId: activeConvId });

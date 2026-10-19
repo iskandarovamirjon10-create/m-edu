@@ -14,7 +14,7 @@
  *  - 100% logic preserved (queries, mutations, validators, i18n)
  */
 
-import { formatDate } from '../lib/format';
+import { formatDate } from '@/lib/format';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
@@ -180,16 +180,16 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald' | 'amber' | 'indigo';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
+  blue:    { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)', border: 'rgba(37,99,235,0.20)' },
+  green:   { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)',  border: 'rgba(16,185,129,0.20)' },
+  orange:  { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)',  border: 'rgba(245,158,11,0.20)' },
+  red:     { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)' },
+  purple:  { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)' },
+  cyan:    { fg: '#0284C7', bg: 'rgba(2,132,199,0.10)', glow: 'rgba(2,132,199,0.28)', border: 'rgba(2,132,199,0.20)' },
+  gray:    { fg: '#64748B', bg: 'rgba(100,116,139,0.10)', glow: 'rgba(100,116,139,0.22)', border: 'rgba(100,116,139,0.20)' },
   emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
   amber:   { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)', glow: 'rgba(245,158,11,0.28)', border: 'rgba(245,158,11,0.20)' },
-  indigo:  { fg: '#5856D6', bg: 'rgba(88,86,214,0.10)',  glow: 'rgba(88,86,214,0.28)',  border: 'rgba(88,86,214,0.20)' },
+  indigo:  { fg: '#6366F1', bg: 'rgba(88,86,214,0.10)',  glow: 'rgba(88,86,214,0.28)',  border: 'rgba(88,86,214,0.20)' },
 };
 
 const CATEGORY_TONE: Record<string, Tone> = {
@@ -284,12 +284,12 @@ function nameHash(str: string): number {
 }
 
 const DOC_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
+  ['#2563EB', '#6366F1'],
+  ['#6366F1', '#FF2D55'],
+  ['#10B981', '#0284C7'],
+  ['#F59E0B', '#FF2D55'],
+  ['#6366F1', '#6366F1'],
+  ['#0284C7', '#2563EB'],
 ];
 
 function docGradient(title: string): string {
@@ -302,26 +302,7 @@ function docGradient(title: string): string {
  * ========================================================================== */
 
 function AmbientOrbs() {
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <motion.div
-        className="absolute -left-[8%] top-[6%] h-[44%] w-[40%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(0,122,255,0.14), transparent 70%)',
-          }}
-        animate={{ x: [0, 24, 0], y: [0, 18, 0], opacity: [0.85, 1, 0.85] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute -bottom-[10%] -right-[8%] h-[46%] w-[42%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(175,82,222,0.12), transparent 70%)',
-          }}
-        animate={{ x: [0, -28, 0], y: [0, -22, 0], opacity: [0.8, 1, 0.8] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </div>
-  );
+  return null;
 }
 
 function CountUp({ value, duration = 1.1 }: { value: number; duration?: number }) {
@@ -356,7 +337,7 @@ function KpiTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       style={{
         boxShadow:
           'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
@@ -387,7 +368,7 @@ function KpiTile({
         <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
           {typeof value === 'number' ? <CountUp value={value} /> : stringValue}
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B]">
           {label}
         </div>
       </div>
@@ -422,9 +403,9 @@ function DocumentsSkeleton() {
         {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[88px]" radius="1rem" />)}
       </div>
       <Shimmer className="h-14" radius="1rem" />
-      <div className="overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] dark:border-[#ffffff10] dark:bg-[#1c1c1e80]">
+      <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="flex items-center gap-4 border-b border-[#00000008] p-4 last:border-0 dark:border-[#ffffff08]">
+          <div key={i} className="flex items-center gap-4 border-b border-black/[0.06] p-4 last:border-0 dark:border-white/[0.08]">
             <Shimmer className="h-12 w-12" radius="0.75rem" />
             <div className="flex-1 space-y-2">
               <Shimmer className="h-4 w-48" radius="0.5rem" />
@@ -630,7 +611,7 @@ export function DocumentsPage() {
   if (docsQuery.isLoading && !docsQuery.data) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card" />
         <DocumentsSkeleton />
       </div>
     );
@@ -667,12 +648,13 @@ export function DocumentsPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-7"
           style={{
             boxShadow:
               'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
           }}
         >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
           <span
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-0 h-24"
@@ -687,9 +669,9 @@ export function DocumentsPage() {
               transition={SPRING.smooth}
               className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
               style={{
-                background: 'linear-gradient(135deg, #32ADE6 0%, #5856D6 100%)',
+                background: 'linear-gradient(135deg, #0284C7 0%, #6366F1 100%)',
                 boxShadow:
-                  '0 12px 28px -10px rgba(50,173,230,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
+                  '0 12px 28px -10px rgba(2,132,199,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
               }}
             >
               <span
@@ -704,17 +686,17 @@ export function DocumentsPage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#32ADE6]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#32ADE6]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#0284C7]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#0284C7]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   {t('documents.title')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
                   {stats.total} files
                 </span>
                 {stats.recent > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#34C759]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
                     {stats.recent} new this week
                   </span>
                 )}
@@ -723,7 +705,7 @@ export function DocumentsPage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('documents.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {t('documents.pageSubtitle')}
               </p>
             </div>
@@ -779,9 +761,10 @@ export function DocumentsPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
           style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)' }}
         >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
               <FieldIcon icon={I.search} tone="blue" />
@@ -807,7 +790,7 @@ export function DocumentsPage() {
                 ))}
               </GlassSelect>
             </div>
-            <div className="text-[12.5px] font-semibold tabular-nums text-[#86868B] sm:ml-2 sm:shrink-0">
+            <div className="text-[12.5px] font-semibold tabular-nums text-[#64748B] sm:ml-2 sm:shrink-0">
               {docsQuery.data ? t('documents.count', { n: docsQuery.data.total }) : '—'}
             </div>
           </div>
@@ -819,7 +802,7 @@ export function DocumentsPage() {
       ============================================================ */}
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
         style={{
           boxShadow:
             'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -837,10 +820,10 @@ export function DocumentsPage() {
           <div className="relative p-10">
             <div className="flex flex-col items-center text-center">
               <div
-                className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#32ADE6]/10 text-[#32ADE6]"
+                className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#0284C7]/10 text-[#0284C7]"
                 style={{
                   boxShadow:
-                    'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(50,173,230,0.4)',
+                    'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(2,132,199,0.4)',
                 }}
               >
                 <Icon paths={I.empty} size={26} strokeWidth={1.8} />
@@ -848,7 +831,7 @@ export function DocumentsPage() {
               <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                 {search || category ? t('documents.emptySearch') : t('documents.empty')}
               </p>
-              <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+              <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
                 {search || category
                   ? t('documents.emptySearchMessage')
                   : t('documents.emptyMessage')}
@@ -879,7 +862,7 @@ export function DocumentsPage() {
             </div>
           </div>
         ) : (
-          <div className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+          <div className="relative divide-y divide-slate-200/80 dark:divide-slate-800 dark:divide-[#ffffff08]">
             {items.map((doc, idx) => {
               const categoryKey = `documents.category.${doc.category}`;
               const categoryLabel = t(categoryKey);
@@ -891,7 +874,7 @@ export function DocumentsPage() {
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                  className="group flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#32ADE6]/[0.03]"
+                  className="group flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#0284C7]/[0.03]"
                 >
                   <FileTypeTile title={doc.title} mime={doc.mimeType} />
 
@@ -905,18 +888,18 @@ export function DocumentsPage() {
                         className="inline-flex items-center rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold"
                         style={{
                           background: 'rgba(0,0,0,0.04)',
-                          color: '#86868B',
+                          color: '#64748B',
                         }}
                       >
                         v{doc.version}
                       </span>
                     </div>
                     {doc.description && (
-                      <p className="mt-0.5 truncate text-[11.5px] font-medium text-[#86868B]">
+                      <p className="mt-0.5 truncate text-[11.5px] font-medium text-[#64748B]">
                         {doc.description}
                       </p>
                     )}
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#86868B]">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#64748B]">
                       <span className="inline-flex items-center gap-1 tabular-nums">
                         <Icon paths={I.database} size={10} strokeWidth={2.2} className="opacity-60" />
                         {formatSize(doc.fileSize)}
@@ -932,8 +915,8 @@ export function DocumentsPage() {
                               key={tag}
                               className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold"
                               style={{
-                                background: 'rgba(175,82,222,0.10)',
-                                color: '#AF52DE',
+                                background: 'rgba(99,102,241,0.10)',
+                                color: '#6366F1',
                               }}
                             >
                               <Icon paths={I.tag} size={8} strokeWidth={2.4} />
@@ -945,7 +928,7 @@ export function DocumentsPage() {
                               className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold"
                               style={{
                                 background: 'rgba(0,0,0,0.04)',
-                                color: '#86868B',
+                                color: '#64748B',
                               }}
                             >
                               +{doc.tags.length - 3}
@@ -967,9 +950,9 @@ export function DocumentsPage() {
                       title={t('common.open')}
                       className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
                       style={{
-                        background: 'rgba(50,173,230,0.10)',
-                        color: '#32ADE6',
-                        border: '1px solid rgba(50,173,230,0.2)',
+                        background: 'rgba(2,132,199,0.10)',
+                        color: '#0284C7',
+                        border: '1px solid rgba(2,132,199,0.2)',
                       }}
                       role="button"
                       tabIndex={0}
@@ -992,9 +975,9 @@ export function DocumentsPage() {
                       title={t('common.edit')}
                       className="flex h-8 w-8 items-center justify-center rounded-lg outline-none disabled:opacity-50"
                       style={{
-                        background: 'rgba(0,122,255,0.10)',
-                        color: '#007AFF',
-                        border: '1px solid rgba(0,122,255,0.2)',
+                        background: 'rgba(37,99,235,0.10)',
+                        color: '#2563EB',
+                        border: '1px solid rgba(37,99,235,0.2)',
                       }}
                       role="button"
                       tabIndex={0}
@@ -1017,9 +1000,9 @@ export function DocumentsPage() {
                       title={t('common.delete')}
                       className="flex h-8 w-8 items-center justify-center rounded-lg outline-none disabled:opacity-50"
                       style={{
-                        background: 'rgba(255,59,48,0.10)',
-                        color: '#FF3B30',
-                        border: '1px solid rgba(255,59,48,0.2)',
+                        background: 'rgba(239,68,68,0.10)',
+                        color: '#EF4444',
+                        border: '1px solid rgba(239,68,68,0.2)',
                       }}
                       role="button"
                       tabIndex={0}
@@ -1069,8 +1052,8 @@ export function DocumentsPage() {
       >
         <form onSubmit={handleCreate} className="space-y-5" noValidate>
           {/* Hint banner */}
-          <div className="flex items-center gap-3 rounded-2xl border border-[#32ADE633] bg-[#32ADE6]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#32ADE6]/15 text-[#32ADE6]">
+          <div className="flex items-center gap-3 rounded-2xl border border-[#0284C733] bg-[#0284C7]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0284C7]/15 text-[#0284C7]">
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -1197,7 +1180,7 @@ export function DocumentsPage() {
             </p>
           )}
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-black/[0.06] pt-4 dark:border-white/[0.08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"

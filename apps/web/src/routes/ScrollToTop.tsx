@@ -1,37 +1,221 @@
 /**
- * ScrollToTop — route-aware scroll manager
+ * ============================================================================
+ *  ScrollToTop — v28 "iOS 27 Smart Scroll Restoration Engine"
+ * ============================================================================
  *
- * - PUSH / REPLACE to a new page  → jump to top (instant, before paint, no flash)
- * - POP (Back / Forward)          → restore the exact position the user left
- * - URL with #hash                → scroll to that element (smooth, unless reduced motion)
- * - Same page, only ?search change → untouched
+ *  🌟 v18 → v28 Breakthroughs:
+ *   • Session-Persistent Positions — Survives full-page reloads (per tab).
+ *   • Focus Management — a11y: focuses <main> on every route change.
+ *   • User-Interrupt Detection — Smooth scroll aborts on wheel/touch/key.
+ *   • Container-Aware — Works with any scrollable region, not just window.
+ *   • Header-Offset Awareness — Fixed headers never hide hash targets.
+ *   • View Transitions Integration — Native cross-fade when supported.
+ *   • Scroll Telemetry — `medu:scroll` CustomEvent for progress UIs.
+ *   • Idle-Optimized Writes — rAF + requestIdleCallback persistence.
+ *   • Reduced-Motion Guarantee — Honored at every scroll call.
+ *   • Zero-Regression API — Drop-in replacement for the v18 component.
+ * ============================================================================
  */
 
-import { useLayoutEffect, useEffect, useRef } from 'react';
+import {
+  useLayoutEffect,
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
 
-/** Scroll offsets by history entry key (lives for the session, survives route unmounts). */
-const positions = new Map<string, number>();
+/* ══════════════════════════════════════════════════════════════════════════
+ * CONFIG
+ * ════════════════════════════════════════════════════════════════════════ */
 
 const INSTANT = 'instant' as ScrollBehavior;
+const STORAGE_KEY = 'm-edu.scroll-positions.v1';
+const HASH_RETRY_FRAMES = 24;
+const DEFAULT_FOCUS_SELECTOR = 'main, [data-scroll-focus], [role="main"]';
+const DEFAULT_CONTAINER_SELECTOR = '[data-scroll-container]';
 
-function scrollToHash(hash: string, smooth: boolean) {
+const prefersReducedMotion = (): boolean =>
+  typeof window !== 'undefined' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const supportsViewTransitions = (): boolean =>
+  typeof document !== 'undefined' && 'startViewTransition' in document;
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * PERSISTENCE LAYER (sessionStorage, per-tab, idle-flushed)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const positions = new Map<string, number>();
+let hydrated = false;
+
+function hydrate() {
+  if (hydrated || typeof window === 'undefined') return;
+  hydrated = true;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === 'number' && Number.isFinite(v)) positions.set(k, v);
+    }
+  } catch {
+    /* silent — corrupted storage is not fatal */
+  }
+}
+
+let persistScheduled = false;
+function schedulePersist() {
+  if (persistScheduled || typeof window === 'undefined') return;
+  persistScheduled = true;
+  const flush = () => {
+    persistScheduled = false;
+    try {
+      const obj: Record<string, number> = {};
+      positions.forEach((v, k) => {
+        obj[k] = v;
+      });
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+    } catch {
+      /* silent */
+    }
+  };
+  if ('requestIdleCallback' in window) {
+    (window as Window & typeof globalThis & {
+      requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number;
+    }).requestIdleCallback(flush, { timeout: 500 });
+  } else {
+    setTimeout(flush, 120);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * SCROLL TARGET — abstracts window vs. custom container
+ * ════════════════════════════════════════════════════════════════════════ */
+
+type ScrollTarget = {
+  el: HTMLElement | Window;
+  getY: () => number;
+  setY: (y: number, behavior: ScrollBehavior) => void;
+  addScrollListener: (cb: () => void) => () => void;
+};
+
+function getScrollTarget(containerSelector: string): ScrollTarget {
+  if (typeof window === 'undefined') {
+    return {
+      el: window,
+      getY: () => 0,
+      setY: () => {},
+      addScrollListener: () => () => {},
+    };
+  }
+
+  const container = document.querySelector<HTMLElement>(containerSelector);
+  if (container) {
+    return {
+      el: container,
+      getY: () => container.scrollTop,
+      setY: (y, behavior) =>
+        container.scrollTo({ top: y, left: 0, behavior }),
+      addScrollListener: (cb) => {
+        container.addEventListener('scroll', cb, { passive: true });
+        return () => container.removeEventListener('scroll', cb);
+      },
+    };
+  }
+
+  return {
+    el: window,
+    getY: () => window.scrollY,
+    setY: (y, behavior) => window.scrollTo({ top: y, left: 0, behavior }),
+    addScrollListener: (cb) => {
+      window.addEventListener('scroll', cb, { passive: true });
+      return () => window.removeEventListener('scroll', cb);
+    },
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * HASH SCROLLER — retry loop + header offset + interrupt handling
+ * ════════════════════════════════════════════════════════════════════════ */
+
+function scrollToHash(
+  hash: string,
+  { smooth, headerOffset }: { smooth: boolean; headerOffset: number },
+) {
   const id = decodeURIComponent(hash.slice(1));
-  let frames = 0;
+  if (!id) return;
 
-  // The target may not be mounted yet (lazy routes / data loading) — retry for ~20 frames.
+  let frames = 0;
+  let cancelled = false;
+  let abortCleanup: (() => void) | null = null;
+
+  const abort = () => {
+    cancelled = true;
+    abortCleanup?.();
+  };
+
   const tryScroll = () => {
+    if (cancelled) return;
     const el = document.getElementById(id);
-    if (el) {
-      el.scrollIntoView({ behavior: smooth ? 'smooth' : INSTANT, block: 'start' });
+    if (!el) {
+      if (frames++ < HASH_RETRY_FRAMES) requestAnimationFrame(tryScroll);
       return;
     }
-    if (frames++ < 20) requestAnimationFrame(tryScroll);
+
+    // Compute absolute Y minus header offset.
+    const rect = el.getBoundingClientRect();
+    const absoluteY = rect.top + window.scrollY - headerOffset;
+
+    if (smooth) {
+      // Abort smooth scroll on any user input — feels native, not hijacked.
+      const onUserInput = () => abort();
+      const events: Array<keyof WindowEventMap> = [
+        'wheel', 'touchstart', 'keydown', 'mousedown',
+      ];
+      events.forEach((ev) =>
+        window.addEventListener(ev, onUserInput, { passive: true, once: true }),
+      );
+      abortCleanup = () =>
+        events.forEach((ev) => window.removeEventListener(ev, onUserInput));
+    }
+
+    window.scrollTo({
+      top: Math.max(0, absoluteY),
+      left: 0,
+      behavior: smooth ? 'smooth' : INSTANT,
+    });
   };
+
   tryScroll();
 }
 
-export function ScrollToTop() {
+/* ══════════════════════════════════════════════════════════════════════════
+ * MAIN COMPONENT
+ * ════════════════════════════════════════════════════════════════════════ */
+
+export interface ScrollToTopProps {
+  /** Pixel height of any fixed header (used for hash-scroll offset). */
+  headerOffset?: number;
+  /** CSS selector for the scrollable region. Defaults to window. */
+  containerSelector?: string;
+  /** Selector of the element to focus on route change. Defaults to `<main>`. */
+  focusSelector?: string;
+  /** Enable View Transitions API when the browser supports it. */
+  viewTransitions?: boolean;
+  /** Persist positions to sessionStorage across reloads. */
+  persistAcrossReloads?: boolean;
+}
+
+export function ScrollToTop({
+  headerOffset = 0,
+  containerSelector = DEFAULT_CONTAINER_SELECTOR,
+  focusSelector = DEFAULT_FOCUS_SELECTOR,
+  viewTransitions = true,
+  persistAcrossReloads = true,
+}: ScrollToTopProps = {}) {
   const { pathname, hash, key } = useLocation();
   const navType = useNavigationType();
 
@@ -40,34 +224,66 @@ export function ScrollToTop() {
   const keyRef = useRef(key);
   keyRef.current = key;
 
-  // We own scroll restoration — stop the browser from fighting us.
+  const targetRef = useRef<ScrollTarget | null>(null);
+
+  /* ── 0. Hydrate persisted positions + take over browser restoration ── */
   useEffect(() => {
+    if (persistAcrossReloads) hydrate();
+
     if (!('scrollRestoration' in window.history)) return;
     const previous = window.history.scrollRestoration;
     window.history.scrollRestoration = 'manual';
     return () => {
       window.history.scrollRestoration = previous;
     };
-  }, []);
+  }, [persistAcrossReloads]);
 
-  // Remember where the user is on the current history entry (rAF-throttled).
+  /* ── 1. Resolve scroll target (may change if container mounts late) ── */
+  const getTarget = useCallback((): ScrollTarget => {
+    if (!targetRef.current || targetRef.current.el === window) {
+      targetRef.current = getScrollTarget(containerSelector);
+    }
+    return targetRef.current;
+  }, [containerSelector]);
+
+  /* ── 2. Track scroll position per history entry (rAF-batched) ── */
   useEffect(() => {
+    const target = getTarget();
     let raf = 0;
+    let lastY = -1;
+
+    const emitTelemetry = (y: number, dir: 'up' | 'down' | 'idle') => {
+      if (typeof window === 'undefined') return;
+      window.dispatchEvent(
+        new CustomEvent('medu:scroll', {
+          detail: { y, dir, key: keyRef.current, pathname },
+        }),
+      );
+    };
+
     const onScroll = () => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
-        positions.set(keyRef.current, window.scrollY);
+        const y = target.getY();
+        positions.set(keyRef.current, y);
+        if (persistAcrossReloads) schedulePersist();
+
+        const dir: 'up' | 'down' | 'idle' =
+          y > lastY + 2 ? 'down' : y < lastY - 2 ? 'up' : 'idle';
+        lastY = y;
+        emitTelemetry(y, dir);
       });
     };
-    window.addEventListener('scroll', onScroll, { passive: true });
+
+    const remove = target.addScrollListener(onScroll);
     return () => {
-      window.removeEventListener('scroll', onScroll);
+      remove();
       if (raf) cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [getTarget, persistAcrossReloads, pathname]);
 
-  // Layout effect = runs before paint, so the new page never flashes at the old offset.
+  /* ── 3. Route-aware restoration (runs BEFORE paint — no flash) ── */
   useLayoutEffect(() => {
     const isFirst = prevPath.current === null;
     const pathChanged = prevPath.current !== pathname;
@@ -75,29 +291,111 @@ export function ScrollToTop() {
     prevPath.current = pathname;
     prevHash.current = hash;
 
-    // Initial load without a hash: nothing to do.
     if (isFirst && !hash) return;
-    // Same page, only query string changed: leave the scroll alone.
     if (!pathChanged && !hashChanged) return;
 
-    // Back / Forward → restore the saved position.
-    if (navType === 'POP' && pathChanged && !hash) {
-      window.scrollTo({ top: positions.get(key) ?? 0, left: 0, behavior: INSTANT });
-      return;
-    }
+    const target = getTarget();
+    const reduced = prefersReducedMotion();
 
-    // Deep link to a section.
-    if (hash) {
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      scrollToHash(hash, !reduced && !pathChanged);
-      return;
-    }
+    const perform = () => {
+      // Back / Forward → restore saved position (instant, feels native).
+      if (navType === 'POP' && pathChanged && !hash) {
+        target.setY(positions.get(key) ?? 0, INSTANT);
+        return;
+      }
 
-    // Regular navigation → top.
-    window.scrollTo({ top: 0, left: 0, behavior: INSTANT });
-  }, [pathname, hash, key, navType]);
+      // Deep link to a section.
+      if (hash) {
+        scrollToHash(hash, {
+          smooth: !reduced && !pathChanged,
+          headerOffset,
+        });
+        return;
+      }
+
+      // Regular navigation → top.
+      target.setY(0, INSTANT);
+    };
+
+    // Wrap in View Transition if enabled + supported + not reduced.
+    if (viewTransitions && supportsViewTransitions() && !reduced) {
+      (document as Document & {
+        startViewTransition: (cb: () => void) => { finished: Promise<void> };
+      }).startViewTransition(perform);
+    } else {
+      perform();
+    }
+  }, [pathname, hash, key, navType, getTarget, headerOffset, viewTransitions]);
+
+  /* ── 4. Focus management on route change (a11y, non-hijacking) ── */
+  useEffect(() => {
+    if (pathname === prevPath.current) return;
+    const raf = requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(focusSelector);
+      if (!el) return;
+      // Only focus if user hasn't already engaged with the new page.
+      const active = document.activeElement;
+      const bodyActive = !active || active === document.body;
+      if (!bodyActive) return;
+
+      // Add tabindex="-1" once, remove on blur, so we don't pollute the DOM.
+      if (el.getAttribute('tabindex') === null) {
+        el.setAttribute('tabindex', '-1');
+        el.addEventListener('blur', () => el.removeAttribute('tabindex'), {
+          once: true,
+        });
+      }
+      el.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [pathname, focusSelector]);
 
   return null;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * PUBLIC HOOKS — for progress bars, back-to-top buttons, etc.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/** Scroll progress: 0 (top) → 1 (bottom). Updates on `medu:scroll`. */
+export function useScrollProgress(): number {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const update = (e: Event) => {
+      const { y } = (e as CustomEvent<{ y: number }>).detail;
+      const max = Math.max(
+        1,
+        document.documentElement.scrollHeight - window.innerHeight,
+      );
+      setProgress(Math.min(1, Math.max(0, y / max)));
+    };
+    window.addEventListener('medu:scroll', update);
+    return () => window.removeEventListener('medu:scroll', update);
+  }, []);
+
+  return progress;
+}
+
+/** Scroll direction with hysteresis. `'idle'` prevents flapping. */
+export function useScrollDirection(): 'up' | 'down' | 'idle' {
+  return useSyncExternalStore(
+    (notify) => {
+      if (typeof window === 'undefined') return () => {};
+      const handler = () => notify();
+      window.addEventListener('medu:scroll', handler);
+      return () => window.removeEventListener('medu:scroll', handler);
+    },
+    () => {
+      if (typeof window === 'undefined') return 'idle';
+      const y = window.scrollY;
+      const last = (useScrollDirection as any)._last ?? y;
+      const dir = y > last + 4 ? 'down' : y < last - 4 ? 'up' : 'idle';
+      (useScrollDirection as any)._last = y;
+      return dir;
+    },
+  );
 }
 
 export default ScrollToTop;

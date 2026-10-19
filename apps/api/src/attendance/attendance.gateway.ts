@@ -50,8 +50,17 @@ export class AttendanceGateway implements OnGatewayConnection, OnGatewayDisconne
 
   private extractToken(client: AuthenticatedSocket): string | null {
     const auth = client.handshake?.auth?.token || client.handshake?.headers?.authorization;
-    if (!auth) return null;
-    return auth.replace('Bearer ', '');
+    if (auth) return auth.replace('Bearer ', '');
+    const cookieHeader = client.handshake?.headers?.cookie;
+    if (cookieHeader) {
+      const cookies = cookieHeader.split(';').reduce<Record<string, string>>((acc, c) => {
+        const [key, ...rest] = c.trim().split('=');
+        if (key) acc[key] = rest.join('=');
+        return acc;
+      }, {});
+      return cookies['access_token'] || null;
+    }
+    return null;
   }
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -68,6 +77,7 @@ export class AttendanceGateway implements OnGatewayConnection, OnGatewayDisconne
         this.logger.log(`Client ${client.id} joined attendance room org:${organizationId}`);
       } else {
         this.logger.warn(`Client ${client.id} authenticated but no organizationId found`);
+        client.disconnect();
       }
     } catch (err) {
       this.logger.warn(`Attendance Gateway Connection rejected: ${err.message}`);

@@ -216,5 +216,98 @@ export class ScheduleService {
       }
     }
   }
+
+  // ------------------------------------------------------------------
+  // Room Utilization & Dead Hours Heatmap (Xonalar unumdorligi)
+  // ------------------------------------------------------------------
+
+  async getRoomUtilization(organizationId: string) {
+    const [groups, schedules] = await Promise.all([
+      this.prisma.group.findMany({
+        where: { organizationId, isActive: true },
+        select: { id: true, name: true, room: true },
+      }),
+      this.prisma.schedule.findMany({
+        where: { group: { organizationId }, isActive: true },
+        include: { group: { select: { id: true, name: true, room: true } } },
+      }),
+    ]);
+
+    const roomsSet = new Set<string>();
+    groups.forEach((g) => {
+      if (g.room?.trim()) roomsSet.add(g.room.trim());
+    });
+    schedules.forEach((s) => {
+      if (s.room?.trim()) roomsSet.add(s.room.trim());
+      else if (s.group.room?.trim()) roomsSet.add(s.group.room.trim());
+    });
+
+    const rooms = Array.from(roomsSet).sort();
+    if (rooms.length === 0) {
+      rooms.push('Xona 1', 'Xona 2', 'Xona 3', 'Xona 4');
+    }
+
+    const timeSlots = [
+      { id: '09:00', label: '09:00 - 10:30', start: '09:00', end: '10:30', isMorning: true },
+      { id: '10:30', label: '10:30 - 12:00', start: '10:30', end: '12:00', isMorning: true },
+      { id: '12:00', label: '12:00 - 13:30', start: '12:00', end: '13:30', isMorning: true },
+      { id: '14:00', label: '14:00 - 15:30', start: '14:00', end: '15:30', isMorning: false },
+      { id: '15:30', label: '15:30 - 17:00', start: '15:30', end: '17:00', isMorning: false },
+      { id: '17:00', label: '17:00 - 18:30', start: '17:00', end: '18:30', isMorning: false },
+      { id: '18:30', label: '18:30 - 20:00', start: '18:30', end: '20:00', isMorning: false },
+    ];
+
+    const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'] as const;
+
+    const matrix: Record<string, Record<string, { occupiedRooms: string[]; rate: number; isDeadHour: boolean }>> = {};
+
+    let totalSlotChecks = 0;
+    let deadSlotCount = 0;
+
+    for (const day of days) {
+      matrix[day] = {};
+      for (const slot of timeSlots) {
+        const occupied = new Set<string>();
+
+        for (const s of schedules) {
+          if (s.dayOfWeek !== day) continue;
+          const assignedRoom = s.room?.trim() || s.group.room?.trim();
+          if (!assignedRoom) continue;
+
+          if (s.startTime < slot.end && s.endTime > slot.start) {
+            occupied.add(assignedRoom);
+          }
+        }
+
+        const occupiedRooms = Array.from(occupied);
+        const rate = rooms.length > 0 ? Math.round((occupiedRooms.length / rooms.length) * 100) : 0;
+        const isDeadHour = rate <= 35;
+
+        totalSlotChecks++;
+        if (isDeadHour) deadSlotCount++;
+
+        matrix[day][slot.id] = {
+          occupiedRooms,
+          rate,
+          isDeadHour,
+        };
+      }
+    }
+
+    const deadHoursPercentage = totalSlotChecks > 0 ? Math.round((deadSlotCount / totalSlotChecks) * 100) : 0;
+
+    return {
+      totalRooms: rooms.length,
+      rooms,
+      timeSlots,
+      days,
+      matrix,
+      deadHoursPercentage,
+      recommendation:
+        deadHoursPercentage > 30
+          ? "Ertalabki 09:00 - 13:30 vaqt oralig'ida xonalar 60%+ bo'sh. Bu soatlarga maxsus chegirmali yoki intensiv kurslar ochish orqali tushumni 25% ga oshirish mumkin."
+          : "Xonalar unumdorligi barqaror darajada taqsimlangan.",
+    };
+  }
 }
 

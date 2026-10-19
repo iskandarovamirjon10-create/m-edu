@@ -37,7 +37,7 @@ export class NotificationEventService {
   async emit(event: NotificationEventPayload): Promise<void> {
     if (!this.queue) return;
     try {
-      await this.queue.add(event.type, event, {
+      const enqueue = this.queue.add(event.type, event, {
         // Deterministic ID per (type, entity, day) collapses accidental
         // duplicate emissions while still allowing legitimate repeats on
         // later days (e.g. a student absent two days in a row).
@@ -47,6 +47,14 @@ export class NotificationEventService {
         attempts: 3,
         backoff: { type: 'exponential', delay: 2000 },
       });
+
+      // Bounded wait: a slow or offline Redis must never hang the business transaction.
+      await Promise.race([
+        enqueue,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Queue timeout (Redis unreachable)')), 2000),
+        ),
+      ]);
     } catch (error) {
       // Never break the business flow on notification failure.
       this.logger.error(

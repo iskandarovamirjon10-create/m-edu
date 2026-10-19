@@ -16,49 +16,72 @@ export interface AttendanceEventPayload {
   eventId: string;
 }
 
+let sharedSocket: Socket | null = null;
+let subscribersCount = 0;
+
 export function useAttendanceSocket() {
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [socket, setSocket] = useState<Socket | null>(sharedSocket);
+  const [isConnected, setIsConnected] = useState(Boolean(sharedSocket?.connected));
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const socketInstance = io(`${getSocketBaseUrl()}/attendance`, {
-      withCredentials: true,
-      transports: ['websocket'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
-    });
+    subscribersCount++;
 
-    socketInstance.on('connect', () => {
+    if (!sharedSocket) {
+      sharedSocket = io(`${getSocketBaseUrl()}/attendance`, {
+        withCredentials: true,
+        transports: ['websocket', 'polling'],
+        reconnectionAttempts: 10,
+        reconnectionDelay: 2000,
+      });
+    }
+
+    const currentSocket = sharedSocket;
+    setSocket(currentSocket);
+    setIsConnected(currentSocket.connected);
+
+    const onConnect = () => {
       setIsConnected(true);
-      // Invalidate history to reconcile any missed events during disconnect
       queryClient.invalidateQueries({ queryKey: queryKeys.face.history() });
       queryClient.invalidateQueries({ queryKey: queryKeys.face.all() });
-    });
+    };
 
-    socketInstance.on('disconnect', () => {
+    const onConnectError = () => {
       setIsConnected(false);
-    });
+    };
 
-    socketInstance.on('attendance.created', (_payload: AttendanceEventPayload) => {
-      // Invalidate queries using centralized query key registry
+    const onDisconnect = () => {
+      setIsConnected(false);
+    };
+
+    const onAttendanceCreated = (_payload: AttendanceEventPayload) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.face.history() });
       queryClient.invalidateQueries({ queryKey: queryKeys.face.all() });
       queryClient.invalidateQueries({ queryKey: queryKeys.attendance.all() });
       queryClient.invalidateQueries({ queryKey: queryKeys.attendance.analyticsAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
-      
-      // Opt 2 (Optional): Update local state or toast notification
-      // We rely on React Query cache update to avoid duplicate render issues
-    });
+    };
 
-    setSocket(socketInstance);
+    currentSocket.on('connect', onConnect);
+    currentSocket.on('connect_error', onConnectError);
+    currentSocket.on('disconnect', onDisconnect);
+    currentSocket.on('attendance.created', onAttendanceCreated);
 
     return () => {
-      socketInstance.disconnect();
+      currentSocket.off('connect', onConnect);
+      currentSocket.off('connect_error', onConnectError);
+      currentSocket.off('disconnect', onDisconnect);
+      currentSocket.off('attendance.created', onAttendanceCreated);
+
+      subscribersCount--;
+      if (subscribersCount <= 0) {
+        subscribersCount = 0;
+        currentSocket.disconnect();
+        sharedSocket = null;
+      }
     };
   }, [isAuthenticated, queryClient]);
 

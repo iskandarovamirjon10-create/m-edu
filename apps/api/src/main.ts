@@ -6,7 +6,7 @@ import 'dotenv/config';
 // Trigger reload
 
 import { NestFactory } from '@nestjs/core';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import * as express from 'express';
@@ -50,6 +50,8 @@ process.on('uncaughtException', (error) => {
 
 import { JsonLogger } from './common/json-logger';
 
+import { ensureDevDatabase } from './config/ensure-dev-db';
+
 async function bootstrap() {
   const nodeEnv = process.env.NODE_ENV || 'development';
   const isProd = nodeEnv === 'production';
@@ -60,6 +62,9 @@ async function bootstrap() {
   for (const w of configWarnings(nodeEnv)) {
     bootstrapLogger.warn(`${w.variable}: ${w.message}`);
   }
+
+  // Ensure development database is up before NestFactory initializes PrismaModule
+  await ensureDevDatabase(bootstrapLogger);
 
   const app = await NestFactory.create(AppModule, { 
     bodyParser: false,
@@ -146,9 +151,13 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api', {
     // RootController owns the literal `/` and `/api` is the namespace for
-    // every other route. Keeping RootController at `/` means visiting
-    // http://localhost:3001/ shows the API banner instead of a 404.
-    exclude: ['RootController'],
+    // every other route. Excluding `/` and `api` means visiting
+    // http://localhost:3001/ or http://localhost:3001/api shows the API banner instead of 404.
+    exclude: [
+      { path: '', method: RequestMethod.GET },
+      { path: '/', method: RequestMethod.GET },
+      { path: 'api', method: RequestMethod.GET },
+    ],
   });
   app.useGlobalPipes(
     new ValidationPipe({
@@ -163,9 +172,9 @@ async function bootstrap() {
 
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
-      .setTitle('M-EDU CRM API')
-      .setDescription('Education Center CRM platform API')
-      .setVersion('1.0')
+      .setTitle('M-EDU CRM API v2')
+      .setDescription('Education Center CRM Platform API — Enterprise v2')
+      .setVersion('2.0')
       .addBearerAuth()
       .build();
     const document = SwaggerModule.createDocument(app, config);
@@ -175,7 +184,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const port = process.env.PORT || 3001;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   bootstrapLogger.log(`Application is running on: http://localhost:${port}`);
   if (process.env.NODE_ENV !== 'production') {
     bootstrapLogger.log(`Swagger docs: http://localhost:${port}/api/docs`);

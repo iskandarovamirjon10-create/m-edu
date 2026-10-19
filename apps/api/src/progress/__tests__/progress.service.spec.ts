@@ -11,6 +11,7 @@ describe('ProgressService (Student 360 Aggregation & Risk Engine)', () => {
   beforeEach(async () => {
     prisma = {
       student: { findFirst: vi.fn() },
+      attendance: { groupBy: vi.fn().mockResolvedValue([]) },
       studentObjectiveMastery: { upsert: vi.fn() },
       studentProgressSnapshot: { create: vi.fn() },
       parentStudent: { findUnique: vi.fn() },
@@ -27,17 +28,14 @@ describe('ProgressService (Student 360 Aggregation & Risk Engine)', () => {
   });
 
   it('aggregates Student 360 profile in a single query and detects attendance risk', async () => {
+    prisma.attendance.groupBy.mockResolvedValue([
+      { status: 'ABSENT', _count: { _all: 4 } },
+    ]);
     prisma.student.findFirst.mockResolvedValue({
       id: 'stu-1',
       organizationId: 'org-1',
       user: { firstName: 'Ali', lastName: 'Valiyev', email: 'ali@test.com' },
       groups: [],
-      attendance: [
-        { status: 'ABSENT', date: new Date() },
-        { status: 'ABSENT', date: new Date() },
-        { status: 'ABSENT', date: new Date() },
-        { status: 'ABSENT', date: new Date() },
-      ],
       grades: [],
       assignmentSubmissions: [],
       quizAttempts: [],
@@ -47,6 +45,11 @@ describe('ProgressService (Student 360 Aggregation & Risk Engine)', () => {
     const p = await service.getStudent360('org-1', 'stu-1');
 
     expect(p.student.id).toBe('stu-1');
+    expect(prisma.attendance.groupBy).toHaveBeenCalledWith({
+      by: ['status'],
+      where: { organizationId: 'org-1', studentId: 'stu-1' },
+      _count: { _all: true },
+    });
     expect(p.attendance.rate).toBe(0);
     expect(p.risk.signals[0].reason).toContain('Attendance rate below acceptable threshold');
     expect(p.risk.level).toBe('MEDIUM');

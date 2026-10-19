@@ -48,8 +48,8 @@ describe('ReportsModule Unit Tests', () => {
       ],
     }).compile();
 
-    service = module.get<ReportBuilderService>(ReportBuilderService);
-    controller = module.get<ReportsController>(ReportsController);
+    service = new ReportBuilderService(prisma as unknown as PrismaService, financialBrain as unknown as FinancialBrainService);
+    controller = new ReportsController(service);
   });
 
   describe('ReportBuilderService', () => {

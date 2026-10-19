@@ -79,7 +79,9 @@ export interface TelegramWebApp {
   setBackgroundColor(color: string): void;
   ready(): void;
   expand(): void;
-  /** Disable vertical swipe gestures (Mini Apps 7.0+). Older SDKs omit it. */
+  /** Check if Telegram WebApp version is at least the given version (e.g. '7.7'). */
+  isVersionAtLeast?(version: string): boolean;
+  /** Disable vertical swipe gestures (Mini Apps 7.7+). Older SDKs omit it or warn. */
   disableVerticalSwipes?(): void;
   /** Subscribe to a Telegram WebApp event (e.g. 'themeChanged'). */
   onEvent?(event: string, callback: () => void): void;

@@ -14,12 +14,12 @@ describe('MarkdownContent rendering', () => {
 
   it('renders headings, bold, italic, strikethrough and inline code', () => {
     render(
-      <MarkdownContent content={'# Sarlavha\n\n**kuchli** *yozuv* ~~o’chirilgan~~ va `kod`'} />,
+      <MarkdownContent content={'# Sarlavha\n\n**kuchli** *yozuv* ~~o\'chirilgan~~ va `kod`'} />,
     );
     expect(screen.getByRole('heading', { level: 1, name: 'Sarlavha' })).toBeInTheDocument();
     expect(screen.getByText('kuchli').tagName).toBe('STRONG');
     expect(screen.getByText('yozuv').tagName).toBe('EM');
-    expect(screen.getByText('o’chirilgan').tagName).toBe('S');
+    expect(screen.getByText('o\'chirilgan').tagName).toBe('S');
     expect(screen.getByText('kod').tagName).toBe('CODE');
   });
 

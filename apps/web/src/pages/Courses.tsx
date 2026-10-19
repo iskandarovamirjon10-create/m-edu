@@ -13,6 +13,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef, forwardRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
@@ -24,11 +25,14 @@ import {
   GlassField,
   GlassInput,
   GlassTextArea,
-  GlassBadge,
   GlassButton,
   useToasts,
   ConfirmDialog,
+  FloatingActionIsland,
 } from '@/components/ui';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { coursesApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -187,9 +191,9 @@ type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'slate';
 const TONE: Record<Tone, { fg: string; bg: string; glow: string }> = {
   blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)',  glow: 'rgba(0,122,255,0.28)' },
   green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',   glow: 'rgba(52,199,89,0.28)' },
-  orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',   glow: 'rgba(255,149,0,0.28)' },
+  orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)' },
   red:    { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',   glow: 'rgba(255,59,48,0.28)' },
-  purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)',  glow: 'rgba(175,82,222,0.28)' },
+  purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)' },
   slate:  { fg: '#8E8E93', bg: 'rgba(142,142,147,0.10)', glow: 'rgba(142,142,147,0.28)' },
 };
 
@@ -241,10 +245,10 @@ function nameHash(str: string): number {
 
 const COURSE_PALETTES = [
   ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
   ['#5856D6', '#AF52DE'],
+  ['#34C759', '#007AFF'],
+  ['#FF9500', '#FF3B30'],
+  ['#AF52DE', '#FF2D55'],
   ['#32ADE6', '#007AFF'],
   ['#FF2D55', '#FF9500'],
   ['#30D158', '#34C759'],
@@ -331,39 +335,25 @@ function StatTile({
   return (
     <motion.div
       variants={rowVariants}
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -2 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card hover:shadow-card-hover transition-all"
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
-      />
       <div
         className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
         style={{
           background: c.bg,
           color: c.fg,
           border: `1px solid ${c.fg}22`,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
         }}
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-xl"
-          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent)' }}
-        />
-        <Icon paths={icon} size={18} strokeWidth={2} className="relative" />
+        <Icon paths={icon} size={18} strokeWidth={2.2} className="relative" />
       </div>
       <div className="relative min-w-0 flex-1">
-        <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
+        <div className="text-[20px] font-bold tracking-tight text-[var(--text-primary)] font-display">
           {typeof value === 'number' ? <CountUp value={value} /> : value}
         </div>
-        <div className="mt-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B] truncate">
+        <div className="mt-0.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)] truncate">
           {label}
         </div>
       </div>
@@ -381,8 +371,7 @@ function SegmentedFilter({
 }) {
   return (
     <div
-      className="inline-flex flex-wrap gap-1 rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-1 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)' }}
+      className="inline-flex flex-wrap gap-1 rounded-2xl border border-black/[0.06] bg-black/[0.04] p-1 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.06]"
     >
       {options.map((opt) => {
         const active = value === opt.key;
@@ -397,13 +386,13 @@ function SegmentedFilter({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             transition={SPRING.snappy}
-            className="relative flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold outline-none transition-colors"
+            className={`relative flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold outline-none transition-all ${
+              active
+                ? 'bg-white text-[var(--text-primary)] shadow-sm dark:bg-surface-800'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
             style={{
-              color: active ? c.fg : '#86868B',
-              background: active ? c.bg : 'transparent',
-              boxShadow: active
-                ? `inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 8px -4px ${c.glow}`
-                : undefined,
+              color: active ? c.fg : undefined,
             }}
             role="button"
             tabIndex={0}
@@ -419,8 +408,8 @@ function SegmentedFilter({
               <span
                 className="ml-0.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold tabular-nums"
                 style={{
-                  background: active ? `${c.fg}25` : 'rgba(142,142,147,0.15)',
-                  color: active ? c.fg : '#86868B',
+                  background: active ? `${c.fg}22` : 'rgba(142,142,147,0.15)',
+                  color: active ? c.fg : 'inherit',
                 }}
               >
                 {count}
@@ -437,8 +426,12 @@ const CourseRow = forwardRef<HTMLDivElement, {
   course: Course;
   onEdit: (c: Course) => void;
   onDelete: (id: string) => void;
+  isSelected?: boolean;
+  isFocused?: boolean;
+  onToggleSelect?: () => void;
+  onOpenSidecar?: () => void;
 }>(function CourseRow({
-  course, onEdit, onDelete,
+  course, onEdit, onDelete, isSelected, isFocused, onToggleSelect, onOpenSidecar,
 }, ref) {
   const { t } = useI18n();
   const level = course.level as CourseLevel | null | undefined;
@@ -449,46 +442,83 @@ const CourseRow = forwardRef<HTMLDivElement, {
   return (
     <motion.div
       ref={ref}
+      id={`course-row-${course.id}`}
       layout
       variants={rowVariants}
       whileHover={{ y: -2 }}
       transition={SPRING.snappy}
-      className="group relative flex flex-col gap-3 rounded-2xl border border-[#00000008] bg-[#00000002] p-3.5 transition-all hover:border-[#007AFF]/25 hover:bg-[#007AFF]/[0.02] dark:border-[#ffffff08] dark:bg-[#ffffff04] sm:flex-row sm:items-center"
+      onClick={onOpenSidecar}
+      className={`group relative flex flex-col gap-3 rounded-2xl border p-3.5 transition-all cursor-pointer ${
+        isSelected
+          ? 'border-[#007AFF] bg-brand-500/[0.08] ring-1 ring-[#007AFF]/30'
+          : isFocused
+          ? 'border-[#007AFF]/60 bg-brand-500/[0.05] ring-1 ring-[#007AFF]/30'
+          : 'border-black/[0.06] bg-white/80 dark:border-white/[0.08] dark:bg-surface-900/80 hover:border-black/[0.12] dark:hover:border-white/[0.15] hover:shadow-card shadow-sm backdrop-blur-xl'
+      } sm:flex-row sm:items-center`}
     >
-      {/* Course avatar/icon */}
+      {/* Selection Checkbox */}
+      {onToggleSelect && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect();
+          }}
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
+            isSelected
+              ? 'border-[#007AFF] bg-[#007AFF] text-white'
+              : 'border-black/20 dark:border-white/20 bg-white/50 dark:bg-surface-800/50 hover:border-black/40 dark:hover:border-white/40'
+          }`}
+          aria-label={`Tanlash ${course.name}`}
+        >
+          {isSelected && (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          )}
+        </button>
+      )}
+
+      {/* Course avatar squircle */}
       <div
-        className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
+        className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-bold text-white shadow-[0_4px_14px_rgba(0,0,0,0.12)] ring-1 ring-white/20"
         style={{
           background: courseGradient(course.name),
-          boxShadow: '0 6px 16px -6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.35)',
         }}
       >
         <span
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-2xl"
-          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)' }}
+          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent 55%)' }}
         />
-        <span className="relative text-[13px] tracking-tight">{getInitials(course.name)}</span>
+        <span className="relative text-[13px] font-bold tracking-tight">{getInitials(course.name)}</span>
       </div>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="truncate text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+          <h3 className="truncate text-[14px] font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[#007AFF] transition-colors">
             {course.name}
           </h3>
-          <GlassBadge variant={course.isActive ? 'success' : 'muted'}>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums border ${
+              course.isActive
+                ? 'bg-[#34C759]/10 text-[#28A745] dark:text-[#34C759] border-[#34C759]/20'
+                : 'bg-black/[0.04] dark:bg-white/[0.06] text-[var(--text-tertiary)] border-black/[0.04] dark:border-white/[0.06]'
+            }`}
+          >
+            {course.isActive && <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] animate-pulse" />}
             {course.isActive ? t('common.active') : t('common.inactive')}
-          </GlassBadge>
+          </span>
         </div>
 
         {course.description && (
-          <p className="mt-1 line-clamp-1 text-[12px] font-medium text-[#86868B]">
+          <p className="mt-0.5 line-clamp-1 text-[12px] font-normal text-[var(--text-secondary)]">
             {course.description}
           </p>
         )}
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11.5px] font-medium text-[#86868B]">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11.5px] font-medium text-[var(--text-tertiary)]">
           {/* Level chip */}
           {course.level && (
             <span
@@ -507,7 +537,7 @@ const CourseRow = forwardRef<HTMLDivElement, {
             <Icon paths={I.clock} size={11} strokeWidth={2} className="opacity-70" />
             {course.duration} {course.duration === 1 ? 'month' : 'months'}
           </span>
-          <span className="inline-flex items-center gap-1 font-semibold text-[#34C759]">
+          <span className="inline-flex items-center gap-1 font-bold tabular-nums text-[#34C759] dark:text-[#30D158]">
             <Icon paths={I.creditCard} size={11} strokeWidth={2.2} />
             {formatCurrency(course.price)}
           </span>
@@ -515,7 +545,24 @@ const CourseRow = forwardRef<HTMLDivElement, {
       </div>
 
       {/* Actions */}
-      <div className="flex shrink-0 gap-1.5 sm:opacity-70 sm:group-hover:opacity-100 sm:transition-opacity">
+      <div
+        className="flex shrink-0 items-center justify-end sm:justify-start w-full sm:w-auto gap-1.5 pt-1.5 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Sidecar Inspector Toggle */}
+        <motion.button
+          type="button"
+          onClick={() => onOpenSidecar?.()}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          transition={SPRING.snappy}
+          aria-label="Course Dossier"
+          title="Sidecar tafsilotlari (Split-View · Space)"
+          className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-brand-500/40 transition-colors text-xs font-bold"
+        >
+          <span>◨</span>
+        </motion.button>
+
         <motion.button
           type="button"
           onClick={() => onEdit(course)}
@@ -524,12 +571,7 @@ const CourseRow = forwardRef<HTMLDivElement, {
           transition={SPRING.snappy}
           aria-label={t('common.edit')}
           title={t('courses.editCourse')}
-          className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
-          style={{
-            background: 'rgba(0,122,255,0.10)',
-            color: '#007AFF',
-            border: '1px solid rgba(0,122,255,0.22)',
-          }}
+          className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-[#007AFF]/30 transition-colors"
           role="button"
           tabIndex={0}
           onKeyDown={(e: any) => {
@@ -548,12 +590,7 @@ const CourseRow = forwardRef<HTMLDivElement, {
           transition={SPRING.snappy}
           aria-label={t('common.delete')}
           title={t('courses.deleteCourse')}
-          className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
-          style={{
-            background: 'rgba(255,59,48,0.10)',
-            color: '#FF3B30',
-            border: '1px solid rgba(255,59,48,0.22)',
-          }}
+          className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/15 transition-colors"
           role="button"
           tabIndex={0}
           onKeyDown={(e: any) => {
@@ -585,8 +622,9 @@ export function CoursesPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // Filter + search
+  const [searchParams] = useSearchParams();
   const [filter, setFilter] = useState<LevelFilter>('ALL');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') || searchParams.get('q') || '');
 
   // Form state
   const [form, setForm] = useState<CourseFormState>(INITIAL_FORM);
@@ -762,6 +800,113 @@ export function CoursesPage() {
     setDeleteTarget(null);
   }, [deleteTarget, remove]);
 
+  const sound = usePremiumSound();
+
+  const handleOpenCourseSidecar = useCallback((course: Course) => {
+    sound.playPop();
+    const data: QuickLookData = {
+      id: course.id,
+      type: 'general',
+      title: course.name,
+      subtitle: `${course.duration} oylik professional kurs`,
+      badge: {
+        text: course.isActive ? "FAOL (ACTIVE)" : "NOFAOL",
+        tone: course.isActive ? 'emerald' : 'slate',
+      },
+      avatar: {
+        text: course.name.slice(0, 2).toUpperCase(),
+        color: '#2563EB',
+      },
+      metrics: [
+        {
+          label: "Oylik narx",
+          value: formatCurrency(course.price),
+          subtext: "Standart to'lov",
+        },
+        {
+          label: "Davomiyligi",
+          value: `${course.duration} oy`,
+          subtext: "O'quv dasturi",
+        },
+        {
+          label: "Daraja",
+          value: course.level || "Umumiy",
+        },
+      ],
+      details: [
+        { label: "Kurs nomi", value: course.name, copyable: true },
+        { label: "Narxi", value: formatCurrency(course.price) },
+        { label: "Davomiyligi", value: `${course.duration} oy` },
+        { label: "Darajasi", value: course.level || "Umumiy" },
+        { label: "Tavsifi", value: course.description || "Qo'shimcha tavsif berilmagan." },
+      ],
+      primaryAction: {
+        label: "Tahrirlash",
+        onExecute: () => handleEdit(course),
+      },
+    };
+    openSidecar(data);
+  }, [sound, handleEdit]);
+
+  /* ── Keyboard Navigation ──────────────────────────────────────────── */
+  const {
+    focusedIndex,
+    selectedIds,
+    selectedCount,
+    isSelected,
+    toggleSelection,
+    clearSelection,
+  } = useListKeyboardNavigation<Course>({
+    items: filtered,
+    getItemId: (c) => c.id,
+    rowIdPrefix: 'course-row-',
+    onSelect: (c) => handleOpenCourseSidecar(c),
+    onQuickLook: (c) => handleOpenCourseSidecar(c),
+    onEdit: (c) => handleEdit(c),
+  });
+
+  /* ── Bulk Actions ─────────────────────────────────────────────────── */
+  const handleBatchToggleCourseStatus = async () => {
+    let count = 0;
+    for (const id of selectedIds) {
+      try {
+        const item = filtered.find((c) => c.id === id);
+        if (item) {
+          await coursesApi.update(id, { isActive: !item.isActive });
+          count++;
+        }
+      } catch {
+        // continue
+      }
+    }
+    qc.invalidateQueries({ queryKey: queryKeys.courses.all() });
+    clearSelection();
+    push('success', `${count} ta kurs holati yangilandi`);
+  };
+
+  const handleExportSelectedCoursesCSV = () => {
+    const selectedRows = filtered.filter((c) => isSelected(c.id));
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      ['ID,Name,Price,Duration,Level,IsActive']
+        .concat(
+          selectedRows.map(
+            (c) =>
+              `"${c.id}","${c.name}","${c.price}","${c.duration}","${c.level || ''}","${c.isActive ? 'Active' : 'Inactive'}"`
+          )
+        )
+        .join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `courses_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    clearSelection();
+    push('success', `${selectedRows.length} ta kurs CSV formatida yuklandi`);
+  };
+
   /* ---------------------------------------------------------------
      LOADING
   --------------------------------------------------------------- */
@@ -814,82 +959,41 @@ export function CoursesPage() {
 
         {/* HERO */}
         <motion.div variants={cardVariants}>
-          <GlassCard className="overflow-hidden p-6 sm:p-7" interactive>
-            <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
-              {/* Animated icon */}
-              <div className="relative" style={{ width: 88, height: 88 }}>
-                <motion.div
-                  className="absolute inset-[-4px] rounded-full p-[3px]"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 14, repeat: Infinity, ease: 'linear' }}
-                >
-                  <span
-                    className="absolute inset-0 rounded-full"
-                    style={{
-                      background:
-                        'conic-gradient(from 0deg, #007AFF, #5856D6, #AF52DE, #FF2D55, #FF9500, #34C759, #007AFF)',
-                    }}
-                    aria-hidden
-                  />
-                </motion.div>
-
-                <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={SPRING.smooth}
-                  className="relative flex h-full w-full items-center justify-center rounded-full text-white ring-2 ring-white/70 dark:ring-black/50"
-                  style={{
-                    background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
-                    boxShadow:
-                      '0 12px 32px -8px rgba(0,122,255,0.5), inset 0 2px 0 rgba(255,255,255,0.4)',
-                  }}
-                >
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 rounded-full"
-                    style={{
-                      background:
-                        'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
-                    }}
-                  />
-                  <Icon paths={I.graduationCap} size={34} strokeWidth={2} className="relative" />
-                </motion.div>
+          <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-5 sm:p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+            <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+              {/* Apple Icon squircle */}
+              <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#007AFF] to-[#5856D6] text-white shadow-[0_8px_20px_rgba(0,122,255,0.25)] ring-1 ring-white/20 sm:h-16 sm:w-16">
+                <Icon paths={I.graduationCap} size={28} strokeWidth={2.2} className="relative z-10" />
               </div>
 
               {/* Text */}
               <div className="min-w-0 flex-1 text-center sm:text-left">
                 <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                  <GlassBadge color="success">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />
-                      {stats.active} Active
-                    </span>
-                  </GlassBadge>
-                  <GlassBadge color="muted">
-                    <span className="inline-flex items-center gap-1">
-                      <Icon paths={I.layers} size={10} strokeWidth={2.5} />
-                      {stats.total} Total
-                    </span>
-                  </GlassBadge>
-                  <GlassBadge color="purple">
-                    <span className="inline-flex items-center gap-1">
-                      <Icon paths={I.award} size={10} strokeWidth={2.5} />
-                      {stats.levels} Levels
-                    </span>
-                  </GlassBadge>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#28A745] dark:text-[#34C759] border border-[#34C759]/20 tabular-nums">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] animate-pulse" />
+                    {stats.active} Active
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)] border border-black/[0.04] dark:border-white/[0.06] tabular-nums">
+                    <Icon paths={I.layers} size={11} strokeWidth={2.2} />
+                    {stats.total} Total
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#AF52DE] border border-[#AF52DE]/20 tabular-nums">
+                    <Icon paths={I.award} size={11} strokeWidth={2.2} />
+                    {stats.levels} Levels
+                  </span>
                 </div>
 
-                <h2 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+                <h2 className="mt-1.5 text-2xl font-bold tracking-tight text-[var(--text-primary)] sm:text-3xl font-display">
                   {t('courses.title')}
                 </h2>
-                <p className="mt-1 max-w-2xl text-[13.5px] font-medium text-[#86868B]">
+                <p className="mt-0.5 text-[13px] text-[var(--text-secondary)]">
                   {t('courses.pageSubtitle')}
                 </p>
               </div>
 
               {/* Actions */}
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} transition={SPRING.snappy}>
                   <GlassButton
                     type="button"
                     variant="primary"
@@ -902,7 +1006,7 @@ export function CoursesPage() {
                         e.currentTarget.click();
                       }
                     }}>
-                    <span className="inline-flex items-center gap-2">
+                    <span className="inline-flex items-center gap-2 font-medium">
                       <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                       {t('courses.add')}
                     </span>
@@ -910,7 +1014,7 @@ export function CoursesPage() {
                 </motion.div>
               </div>
             </div>
-          </GlassCard>
+          </div>
         </motion.div>
 
         {/* STATS */}
@@ -937,7 +1041,7 @@ export function CoursesPage() {
 
           {/* Search */}
           <div className="relative w-full sm:w-72">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]">
               <Icon paths={I.search} size={14} strokeWidth={2.2} />
             </span>
             <input
@@ -956,7 +1060,7 @@ export function CoursesPage() {
                 exit={{ opacity: 0, scale: 0.6 }}
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
-                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[#86868B] outline-none hover:bg-[#00000008] dark:hover:bg-[#ffffff08]"
+                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[#64748B] outline-none hover:bg-slate-100 dark:hover:bg-slate-800/60 dark:hover:bg-[#ffffff08]"
                 aria-label={t('courses.clearSearch')}
                 role="button"
                 tabIndex={0}
@@ -974,26 +1078,24 @@ export function CoursesPage() {
 
         {/* LIST */}
         <motion.div variants={cardVariants}>
-          <GlassCard className="overflow-hidden p-0" interactive>
-            <div className="flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
-                <Icon paths={I.bookOpen} size={15} strokeWidth={2} />
+          <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+            <div className="flex items-center gap-3 border-b border-black/[0.05] dark:border-white/[0.05] px-5 py-3.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400">
+                <Icon paths={I.bookOpen} size={15} strokeWidth={2.2} />
               </div>
               <div className="min-w-0 flex-1">
-                <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <h2 className="text-[14px] font-bold tracking-tight text-[var(--text-primary)]">
                   {t('courses.title')}
                 </h2>
-                <p className="text-[11px] font-medium text-[#86868B]">
+                <p className="text-[11.5px] font-medium text-[var(--text-tertiary)]">
                   {filtered.length} {filtered.length === 1 ? 'course' : 'courses'}
                 </p>
               </div>
               {search && (
-                <GlassBadge color="muted">
-                  <span className="inline-flex items-center gap-1">
-                    <Icon paths={I.search} size={10} strokeWidth={2.5} />
-                    {filtered.length} found
-                  </span>
-                </GlassBadge>
+                <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)]">
+                  <Icon paths={I.search} size={10} strokeWidth={2.5} />
+                  {filtered.length} found
+                </span>
               )}
             </div>
 
@@ -1007,14 +1109,14 @@ export function CoursesPage() {
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="p-4">
-                  <div className="rounded-2xl border border-dashed border-[#00000015] p-6 text-center dark:border-[#ffffff15]">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#007AFF]/10 text-[#007AFF]">
+                  <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center dark:border-[#ffffff15]">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2563EB]/10 text-[#2563EB]">
                       <Icon paths={I.search} size={20} strokeWidth={2} />
                     </div>
                     <p className="mt-3 text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
                       {t('courses.noMatch')}
                     </p>
-                    <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#86868B]">
+                    <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#64748B]">
                       {t('courses.clearSearchHint')}
                     </p>
                     <div className="mt-4 flex justify-center gap-2">
@@ -1056,19 +1158,23 @@ export function CoursesPage() {
               ) : (
                 <motion.div layout className="space-y-2">
                   <AnimatePresence initial={false} mode="popLayout">
-                    {filtered.map((course) => (
+                    {filtered.map((course, idx) => (
                       <CourseRow
                         key={course.id}
                         course={course}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
+                        isSelected={isSelected(course.id)}
+                        isFocused={focusedIndex === idx}
+                        onToggleSelect={() => toggleSelection(course.id)}
+                        onOpenSidecar={() => handleOpenCourseSidecar(course)}
                       />
                     ))}
                   </AnimatePresence>
                 </motion.div>
               )}
             </div>
-          </GlassCard>
+          </div>
         </motion.div>
 
         {/* ADD / EDIT MODAL */}
@@ -1080,11 +1186,11 @@ export function CoursesPage() {
         >
           <form className="space-y-5" onSubmit={handleSubmit} noValidate>
             {/* Header hint */}
-            <div className="flex items-center gap-3 rounded-2xl border border-[#007AFF33] bg-[#007AFF]/[0.06] px-4 py-3">
+            <div className="flex items-center gap-3 rounded-2xl border border-[#007AFF]/20 bg-[#007AFF]/[0.06] px-4 py-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#007AFF]/15 text-[#007AFF]">
                 <Icon paths={I.sparkles} size={18} strokeWidth={2} />
               </div>
-              <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+              <p className="text-[12px] font-medium leading-snug text-[var(--text-primary)]">
                 {editingId
                   ? 'Update course details. Changes apply immediately to new enrollments.'
                   : 'Create a new course with pricing, duration, and level. Students can enroll right away.'}
@@ -1094,8 +1200,8 @@ export function CoursesPage() {
             {/* Section: Basic info */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Icon paths={I.bookOpen} size={13} strokeWidth={2} className="text-[#86868B]" />
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                <Icon paths={I.bookOpen} size={13} strokeWidth={2} className="text-[var(--text-tertiary)]" />
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                   {t('courses.basicInfo')}
                 </p>
               </div>
@@ -1121,10 +1227,10 @@ export function CoursesPage() {
             </div>
 
             {/* Section: Pricing & duration */}
-            <div className="space-y-3 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+            <div className="space-y-3 border-t border-black/[0.06] dark:border-white/[0.08] pt-4">
               <div className="flex items-center gap-2">
-                <Icon paths={I.creditCard} size={13} strokeWidth={2} className="text-[#86868B]" />
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                <Icon paths={I.creditCard} size={13} strokeWidth={2} className="text-[var(--text-tertiary)]" />
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                   Pricing & Duration
                 </p>
               </div>
@@ -1157,10 +1263,10 @@ export function CoursesPage() {
             </div>
 
             {/* Section: Level */}
-            <div className="space-y-3 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+            <div className="space-y-3 border-t border-black/[0.06] dark:border-white/[0.08] pt-4">
               <div className="flex items-center gap-2">
-                <Icon paths={I.award} size={13} strokeWidth={2} className="text-[#86868B]" />
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                <Icon paths={I.award} size={13} strokeWidth={2} className="text-[var(--text-tertiary)]" />
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                   {t('courses.level')}
                 </p>
               </div>
@@ -1181,7 +1287,7 @@ export function CoursesPage() {
                       style={{
                         background: active ? c.bg : 'transparent',
                         borderColor: active ? `${c.fg}44` : 'rgba(0,0,0,0.06)',
-                        color: active ? c.fg : '#86868B',
+                        color: active ? c.fg : 'var(--text-secondary)',
                         boxShadow: active
                           ? `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`
                           : undefined,
@@ -1203,7 +1309,7 @@ export function CoursesPage() {
             </div>
 
             {/* Footer actions */}
-            <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+            <div className="flex justify-end gap-2 border-t border-black/[0.06] dark:border-white/[0.08] pt-4">
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <GlassButton
                   type="button"
@@ -1255,6 +1361,27 @@ export function CoursesPage() {
           onConfirm={confirmDelete}
           description={t('courses.deleteConfirm')}
           loading={remove.isPending}
+        />
+
+        {/* Floating Action Island for Bulk Course Operations */}
+        <FloatingActionIsland
+          selectedCount={selectedCount}
+          onClear={clearSelection}
+          actions={[
+            {
+              label: "Holatni o'zgartirish",
+              icon: "🔄",
+              onClick: handleBatchToggleCourseStatus,
+              variant: 'primary',
+              shortcutBadge: 't',
+            },
+            {
+              label: "Eksport (CSV)",
+              icon: "📊",
+              onClick: handleExportSelectedCoursesCSV,
+              shortcutBadge: 'e',
+            },
+          ]}
         />
 
         {toastNode}

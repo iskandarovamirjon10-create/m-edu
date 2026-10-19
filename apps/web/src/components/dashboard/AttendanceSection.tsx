@@ -12,20 +12,20 @@ export function AttendanceSection({ stats, overallRate }: AttendanceSectionProps
   const { t } = useI18n();
 
   return (
-    <div className="flex flex-col justify-between rounded-[var(--radius-2xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)] sm:p-6">
+    <div className="relative overflow-hidden flex flex-col justify-between rounded-2xl border border-subtle/80 bg-card/85 backdrop-blur-xl p-5 shadow-card before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent dark:before:via-white/10 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold tracking-tight text-[var(--text-primary)]">
+          <h2 className="text-base font-semibold tracking-tight text-primary">
             {t('dashboard.attendance') || 'Attendance Analysis'}
           </h2>
-          <p className="text-xs text-[var(--text-muted)]">
+          <p className="text-xs text-secondary">
             {t('dashboard.last30Days') || 'Aggregated over the last 30 days'}
           </p>
         </div>
 
         <Link
           to="/attendance"
-          className="items-center gap-1 text-xs font-semibold text-[var(--primary)] transition-colors hover:underline inline-flex"
+          className="items-center gap-1 text-xs font-semibold text-primary transition-colors hover:underline inline-flex"
         >
           <span>{t('nav.attendance') || 'Open sheet'}</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -34,9 +34,10 @@ export function AttendanceSection({ stats, overallRate }: AttendanceSectionProps
         </Link>
       </div>
 
-      <div className="my-auto">
+      <div className="my-auto pt-2">
         <ActivityRings stats={stats} overallRate={overallRate} />
       </div>
     </div>
   );
 }
+

@@ -127,6 +127,7 @@ describe('FfmpegStreamIngester.buildArgs', () => {
     const rtsp = FfmpegStreamIngester.buildArgs('rtsp://192.168.1.10:554/ch1', 3, 'tcp');
     expect(rtsp[0]).toBe('-rtsp_transport');
     expect(rtsp[1]).toBe('tcp');
+    expect(rtsp).toContain('-stimeout');
     expect(rtsp).toContain('-i');
 
     const http = FfmpegStreamIngester.buildArgs('http://cam/videostream.cgi', 3, 'tcp');

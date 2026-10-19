@@ -186,12 +186,24 @@ export class AssessmentService {
       });
 
       if (dto.questionIds && dto.questionIds.length > 0) {
-        for (let i = 0; i < dto.questionIds.length; i++) {
+        // SECURITY: questions are organization-scoped. A caller must not be
+        // able to attach another tenant's questions to their quiz by id.
+        const questionIds = [...new Set(dto.questionIds)];
+        const ownedCount = await tx.question.count({
+          where: { id: { in: questionIds }, organizationId },
+        });
+        if (ownedCount !== questionIds.length) {
+          throw new BadRequestException(
+            'One or more questions do not belong to this organization',
+          );
+        }
+
+        for (let i = 0; i < questionIds.length; i++) {
           await tx.quizQuestion.create({
             data: {
               id: crypto.randomUUID(),
               quizId: quiz.id,
-              questionId: dto.questionIds[i],
+              questionId: questionIds[i],
               order: i + 1,
             },
           });
@@ -266,8 +278,11 @@ export class AssessmentService {
         text: opt.text,
         order: opt.order ?? opt.orderIndex,
       }));
+      // SECURITY: never serve answer-revealing fields (explanation) to the
+      // student; correct options are already stripped by the select above.
+      const { explanation, ...safeQuestion } = qEntity;
       return {
-        ...qEntity,
+        ...safeQuestion,
         text: qEntity.prompt ?? qEntity.text,
         options: safeOptions,
       };
@@ -332,15 +347,29 @@ export class AssessmentService {
 
     return this.prisma.$transaction(async (tx) => {
       let totalEarned = 0;
-      let totalMax = 0;
 
       const questionsMap = new Map(attempt.quiz.QuizQuestion.map((q) => [q.Question.id, q.Question]));
+      // SECURITY: the denominator must cover EVERY question on the quiz, not
+      // just the ones the client chose to submit. Otherwise answering a single
+      // question correctly would score 100%.
+      const totalMax = attempt.quiz.QuizQuestion.reduce(
+        (sum, q) => sum + Number(q.Question.points ?? 0),
+        0,
+      );
 
+      const answeredQuestionIds = new Set<string>();
       for (const ans of dto.answers) {
-        const question = questionsMap.get(ans.questionId);
-        if (!question) continue;
+        // Duplicate answers for the same question must not be counted twice.
+        if (answeredQuestionIds.has(ans.questionId)) continue;
+        answeredQuestionIds.add(ans.questionId);
 
-        totalMax += question.points;
+        const question = questionsMap.get(ans.questionId);
+        if (!question) {
+          throw new BadRequestException(
+            'Answer submitted for a question that is not part of this quiz',
+          );
+        }
+
         let isCorrect = false;
         let pointsEarned = 0;
 

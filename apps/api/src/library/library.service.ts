@@ -86,7 +86,7 @@ export class LibraryService {
   }
 
   async createBook(organizationId: string, dto: CreateLibraryBookDto) {
-    // Check if barcode already exists
+    // Check if barcode or isbn already exists in this organization
     const existingBook = await this.prisma.libraryBook.findFirst({
       where: {
         organizationId,
@@ -98,20 +98,45 @@ export class LibraryService {
     });
 
     if (existingBook) {
-      throw new BadRequestException('Book with this barcode or ISBN already exists');
+      throw new BadRequestException('Book with this barcode or ISBN already exists in this organization');
     }
 
-    return this.prisma.libraryBook.create({
-      data: {
-        ...dto,
-        organizationId,
-        available: dto.quantity ?? 1,
-      },
-    });
+    try {
+      return await this.prisma.libraryBook.create({
+        data: {
+          ...dto,
+          organizationId,
+          available: dto.quantity ?? 1,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new BadRequestException('Book with this barcode or ISBN already exists in this organization');
+      }
+      throw error;
+    }
   }
 
   async updateBook(organizationId: string, id: string, dto: UpdateLibraryBookDto) {
     await this.findBookById(organizationId, id);
+
+    if (dto.barcode || dto.isbn) {
+      const orConditions: Prisma.LibraryBookWhereInput[] = [];
+      if (dto.barcode) orConditions.push({ barcode: dto.barcode });
+      if (dto.isbn) orConditions.push({ isbn: dto.isbn });
+
+      const existingBook = await this.prisma.libraryBook.findFirst({
+        where: {
+          organizationId,
+          id: { not: id },
+          OR: orConditions,
+        },
+      });
+
+      if (existingBook) {
+        throw new BadRequestException('Book with this barcode or ISBN already exists in this organization');
+      }
+    }
 
     const updateData: Prisma.LibraryBookUpdateInput = { ...dto };
     if (dto.quantity !== undefined) {
@@ -129,10 +154,17 @@ export class LibraryService {
       updateData.available = (dto.quantity ?? 0) - borrowedCount;
     }
 
-    return this.prisma.libraryBook.update({
-      where: { id },
-      data: updateData,
-    });
+    try {
+      return await this.prisma.libraryBook.update({
+        where: { id },
+        data: updateData,
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new BadRequestException('Book with this barcode or ISBN already exists in this organization');
+      }
+      throw error;
+    }
   }
 
   async deleteBook(organizationId: string, id: string) {
@@ -253,13 +285,24 @@ export class LibraryService {
     const lateFee = isLate ? lateDays * 5000 : null; // 5000 UZS per day
 
     return this.prisma.$transaction(async (tx) => {
-      const updatedBorrow = await tx.libraryBorrow.update({
-        where: { id: borrowId },
+      // Atomic state transition: only the transaction that actually flips the
+      // row ACTIVE -> RETURNED may restock the book. A concurrent second
+      // return matches zero rows and is rejected instead of double-incrementing.
+      const returned = await tx.libraryBorrow.updateMany({
+        where: { id: borrowId, organizationId, status: 'ACTIVE' },
         data: {
           returnedAt: now,
           status: 'RETURNED',
           lateFee,
         },
+      });
+
+      if (returned.count !== 1) {
+        throw new NotFoundException('Active borrow record not found');
+      }
+
+      const updatedBorrow = await tx.libraryBorrow.findUniqueOrThrow({
+        where: { id: borrowId },
       });
 
       await tx.libraryBook.update({

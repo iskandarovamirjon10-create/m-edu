@@ -1,6 +1,7 @@
-import { toLocalISOString } from '../lib/format';
-import { useMemo, useState, useCallback } from 'react';
+import { toLocalISOString } from '@/lib/format';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, type Variants } from 'framer-motion';
 import { expensesApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
 import {
@@ -21,7 +22,34 @@ import { formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Expense, ExpenseCategory } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { useI18n } from '@/i18n/I18nProvider';
+
+const SPRING = {
+  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
+  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
+  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
+} as const;
+
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.04, delayChildren: 0.03 },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 10, scale: 0.99 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: 'spring', stiffness: 360, damping: 28 },
+  },
+};
 
 const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   'SALARY', 'RENT', 'UTILITIES', 'MARKETING', 'SUPPLIES',
@@ -76,7 +104,7 @@ const CATEGORY_STYLES: Record<string, CategoryStyle> = {
     icon: <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>,
   },
   RENT: {
-    bg: 'bg-blue-500/12', text: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-500/12', text: 'text-brand-600 dark:text-brand-400',
     ring: 'ring-blue-500/25', dot: 'bg-blue-500',
     accent: 'from-blue-500 to-indigo-500',
     glow: 'shadow-[0_0_20px_-4px_rgba(59,130,246,0.55)]',
@@ -146,25 +174,24 @@ function GlassSurface({
   return (
     <div
       className={[
-        'relative overflow-hidden rounded-[2rem]',
-        'bg-white/55 dark:bg-white/[0.035]',
-        'backdrop-blur-2xl backdrop-saturate-[1.8]',
-        'ring-1 ring-inset ring-white/60 dark:ring-white/[0.08]',
-        'shadow-[0_8px_32px_-8px_rgba(15,23,42,0.12),inset_0_1px_0_0_rgba(255,255,255,0.75)]',
-        'dark:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.06)]',
+        'liquid-glass-surface relative overflow-hidden rounded-2xl',
+        'border border-black/[0.08] dark:border-white/[0.12]',
+        'bg-white/75 dark:bg-surface-900/75 backdrop-blur-xl backdrop-saturate-150',
+        'shadow-[0_8px_32px_-8px_rgba(15,23,42,0.08),inset_0_1px_0_0_rgba(255,255,255,0.85)]',
+        'dark:shadow-[0_12px_40px_-10px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.12)]',
         hover
-          ? 'transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-1 hover:shadow-[0_20px_60px_-15px_rgba(15,23,42,0.22),inset_0_1px_0_0_rgba(255,255,255,0.85)]'
+          ? 'transition-all duration-300 ease-apple-spring hover:-translate-y-1 hover:shadow-[0_20px_60px_-15px_rgba(15,23,42,0.15),inset_0_1px_0_0_rgba(255,255,255,0.95)] hover:border-black/[0.14] dark:hover:border-white/[0.2]'
           : '',
         className,
-      ].join(' ')}
+      ].filter(Boolean).join(' ')}
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/25"
+        className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/25"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[140%] -translate-x-1/2 rounded-full bg-gradient-to-b from-white/50 to-transparent blur-2xl dark:from-white/[0.06]"
+        className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[140%] -translate-x-1/2 rounded-full bg-gradient-to-b from-white/40 to-transparent blur-2xl dark:from-white/[0.05]"
       />
       {children}
     </div>
@@ -177,7 +204,6 @@ function MiniStat({
   value,
   gradient,
   icon,
-  delay = 0,
 }: {
   label: string;
   value: string | number;
@@ -186,9 +212,9 @@ function MiniStat({
   delay?: number;
 }) {
   return (
-    <div
-      className="animate-[slideUp_0.55s_cubic-bezier(0.34,1.56,0.64,1)_both]"
-      style={{ animationDelay: `${delay}ms` }}
+    <motion.div
+      variants={itemVariants}
+      whileHover={{ y: -3, transition: SPRING.snappy }}
     >
       <GlassSurface hover className="h-full">
         <div className="relative z-10 flex items-center gap-4 p-4">
@@ -211,7 +237,7 @@ function MiniStat({
           />
         </div>
       </GlassSurface>
-    </div>
+    </motion.div>
   );
 }
 
@@ -360,6 +386,71 @@ export function ExpensesPage() {
     void refetchExpenses();
   }, [refetchExpenses]);
 
+  const { playPop, playTick } = usePremiumSound();
+
+  const handleOpenExpenseSidecar = useCallback((expense: Expense) => {
+    const catLabel = t(categoryKey(expense.category));
+    const sidecarData: QuickLookData = {
+      id: expense.id,
+      type: 'payment',
+      title: expense.description || catLabel,
+      subtitle: `${catLabel} · ${formatDate(expense.date)}`,
+      badge: {
+        text: catLabel,
+        tone: expense.category === 'SALARY' ? 'emerald' : expense.category === 'RENT' ? 'blue' : 'amber',
+      },
+      avatar: {
+        text: expense.category.slice(0, 2),
+        color: '#EF4444',
+      },
+      metrics: [
+        { label: 'Chiqim summasi', value: formatCurrency(expense.amount) },
+        { label: 'Kategoriya', value: catLabel },
+        { label: 'Sana', value: formatDate(expense.date) },
+      ],
+      details: [
+        { label: 'Chiqim ID', value: expense.id, copyable: true },
+        { label: 'Tavsif', value: expense.description || 'Kiritilmagan' },
+        { label: 'Kategoriya', value: catLabel },
+        { label: 'Sana', value: formatDate(expense.date) },
+        { label: 'Summa', value: formatCurrency(expense.amount) },
+      ],
+      primaryAction: {
+        label: t('common.edit') || 'Tahrirlash',
+        onExecute: () => handleEdit(expense),
+      },
+      secondaryAction: {
+        label: t('common.delete') || 'O\'chirish',
+        onExecute: () => handleDelete(expense.id),
+      },
+    };
+    openSidecar(sidecarData);
+  }, [t, handleEdit, handleDelete]);
+
+  /* Keyboard shortcut 'c' to create */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        playPop();
+        handleOpenModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleOpenModal, playPop]);
+
+  useListKeyboardNavigation<Expense>({
+    items: expenseList,
+    getItemId: (e) => e.id,
+    rowIdPrefix: 'expense-row-',
+    onSelect: (e) => { playTick(); handleOpenExpenseSidecar(e); },
+    onQuickLook: (e) => { playTick(); handleOpenExpenseSidecar(e); },
+    onEdit: (e) => handleEdit(e),
+    onDelete: (eList) => { if (eList && eList[0]) handleDelete(eList[0].id); },
+  });
+
   const hasActiveFilter = Boolean(category);
   const totalExpenses = data?.total || 0;
 
@@ -414,7 +505,12 @@ export function ExpensesPage() {
         />
       </div>
 
-      <div className="page-container relative z-10 space-y-5 animate-in fade-in duration-700">
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="page-container relative z-10 space-y-5"
+      >
         <GlassPageHeader
           title={t('expenses.title')}
           subtitle={t('expenses.subtitle')}
@@ -518,7 +614,7 @@ export function ExpensesPage() {
         </GlassSurface>
 
         {/* ── Table ── */}
-        <GlassSurface>
+        <GlassSurface className="liquid-glass-surface">
           {expenseList.length === 0 ? (
             <div className="p-12">
               <GlassEmptyState
@@ -562,6 +658,7 @@ export function ExpensesPage() {
                       return (
                         <tr
                           key={expense.id}
+                          id={`expense-row-${expense.id}`}
                           className="group relative border-b border-white/30 transition-colors duration-300 last:border-0 hover:bg-white/40 dark:border-white/[0.04] dark:hover:bg-white/[0.03] animate-[slideUp_0.5s_cubic-bezier(0.34,1.56,0.64,1)_both]"
                           style={{ animationDelay: `${Math.min(i, 15) * 45}ms` }}
                         >
@@ -609,7 +706,18 @@ export function ExpensesPage() {
 
                           {/* Actions */}
                           <td className="px-6 py-3.5">
-                            <div className="flex items-center justify-end gap-1.5 opacity-60 transition-opacity duration-300 group-hover:opacity-100">
+                            <div className="flex items-center justify-end gap-1.5 opacity-100 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity duration-300">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playPop();
+                                  handleOpenExpenseSidecar(expense);
+                                }}
+                                title="Split View Sidecar"
+                                className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-all duration-300 hover:bg-white/60 hover:text-emerald-600 hover:shadow-[0_4px_12px_-4px_rgba(16,185,129,0.4)] active:scale-95 dark:hover:bg-white/[0.06] dark:hover:text-emerald-400"
+                              >
+                                <span className="text-xs font-bold font-mono">◨</span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleEdit(expense)}
@@ -821,7 +929,7 @@ export function ExpensesPage() {
         />
 
         {toastNode}
-      </div>
+      </motion.div>
 
       <style>{`
         @keyframes slideUp {

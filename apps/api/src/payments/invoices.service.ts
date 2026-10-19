@@ -2,7 +2,8 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { InvoiceStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { CreateInvoiceDto, AddInvoiceItemDto, RecordPaymentDto, CreateRefundDto } from './dto/invoice.dto';
+import { CreateInvoiceDto, AddInvoiceItemDto, RecordPaymentDto, CreateRefundDto, ProrateInvoiceDto } from './dto/invoice.dto';
+import { generatePaymentLinks } from './payment-links.util';
 import { toMinor, fromMinor, DecimalLike } from '@medu/financial-engine';
 import { computeInvoiceOutstanding } from './invoice-outstanding';
 import { NotificationEventService } from '../notifications/events/notification-event.service';
@@ -609,20 +610,25 @@ export class InvoicesService {
   private async nextReceiptNumber(tx: Prisma.TransactionClient, organizationId: string): Promise<string> {
     const year = new Date().getFullYear();
 
-    const counter = await tx.receiptCounter.upsert({
-      where: { organizationId },
-      update: {
-        lastNumber: { increment: 1 },
-        year,
-      },
-      create: {
-        organizationId,
-        lastNumber: 1,
-        year,
-      },
-    });
+    // Single atomic upsert: concurrent payments serialize on the counter row
+    // and can never mint the same receipt number. `lastNumber` resets to 1 when
+    // the stored year rolls over, otherwise it increments.
+    const rows = await tx.$queryRaw<Array<{ lastNumber: number }>>`
+      INSERT INTO "ReceiptCounter" ("organizationId", "lastNumber", "year", "createdAt", "updatedAt")
+      VALUES (${organizationId}::uuid, 1, ${year}, now(), now())
+      ON CONFLICT ("organizationId") DO UPDATE
+      SET "lastNumber" = CASE
+            WHEN "ReceiptCounter"."year" = EXCLUDED."year"
+              THEN "ReceiptCounter"."lastNumber" + 1
+            ELSE 1
+          END,
+          "year" = EXCLUDED."year",
+          "updatedAt" = now()
+      RETURNING "lastNumber"
+    `;
 
-    return `RCP-${year}-${String(counter.lastNumber).padStart(6, '0')}`;
+    const counter = rows[0];
+    return `RCP-${year}-${String(counter?.lastNumber ?? 1).padStart(6, '0')}`;
   }
 
   // ------------------------------------------------------------------
@@ -848,6 +854,148 @@ export class InvoicesService {
       changes: { reason: { old: null, new: reason.trim() } },
     });
     return this.prisma.refund.findFirst({ where: { id: refundId, organizationId } });
+  }
+
+  // ------------------------------------------------------------------
+  // Payment Links & Uzbekistan Local Providers (Click, Payme)
+  // ------------------------------------------------------------------
+
+  async getPaymentLinks(organizationId: string, invoiceId: string) {
+    const invoice = await this.findOne(organizationId, invoiceId);
+    const outstandingMinor =
+      toMinor(invoice.total) -
+      toMinor(invoice.paidAmount ?? 0) +
+      toMinor(invoice.refundedAmount ?? 0);
+    const amountUzs = fromMinor(Math.max(0, outstandingMinor));
+
+    const studentName = invoice.student?.user
+      ? `${invoice.student.user.firstName} ${invoice.student.user.lastName ?? ''}`.trim()
+      : undefined;
+
+    return generatePaymentLinks({
+      invoiceId: invoice.id,
+      amountUzs: Number(amountUzs),
+      organizationId,
+      studentName,
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Prorated Tuition Billing (Kunbay hisoblash)
+  // ------------------------------------------------------------------
+
+  async proratePreview(organizationId: string, dto: ProrateInvoiceDto) {
+    const student = await this.prisma.student.findFirst({
+      where: { id: dto.studentId, organizationId },
+      include: { user: { select: { firstName: true, lastName: true } } },
+    });
+    if (!student) throw new NotFoundException('Student not found');
+
+    const totalLessons = dto.totalLessonsInMonth ?? 12;
+    const start = new Date(dto.startDate);
+
+    let remainingLessons = dto.remainingLessons;
+    if (remainingLessons === undefined || remainingLessons === null) {
+      const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+      const remainingDays = Math.max(1, daysInMonth - start.getDate() + 1);
+      const ratio = remainingDays / daysInMonth;
+      remainingLessons = Math.max(1, Math.min(totalLessons, Math.round(totalLessons * ratio)));
+    }
+
+    const lessonRate = Math.round(dto.fullMonthlyAmount / totalLessons);
+    const proratedTotal = Math.round(lessonRate * remainingLessons);
+
+    return {
+      studentId: dto.studentId,
+      studentName: `${student.user.firstName} ${student.user.lastName ?? ''}`.trim(),
+      groupId: dto.groupId,
+      startDate: dto.startDate,
+      fullMonthlyAmount: dto.fullMonthlyAmount,
+      totalLessonsInMonth: totalLessons,
+      remainingLessons,
+      lessonRate,
+      proratedTotal,
+    };
+  }
+
+  async createProratedInvoice(organizationId: string, actorId: string, dto: ProrateInvoiceDto) {
+    const preview = await this.proratePreview(organizationId, dto);
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const invoiceNumber = `INV-PRORATE-${Date.now().toString().slice(-4)}${randomSuffix}`;
+
+    const invoiceDto: CreateInvoiceDto = {
+      studentId: dto.studentId,
+      number: invoiceNumber,
+      currency: 'UZS',
+      notes: dto.notes ?? `Prorated tuition starting from ${dto.startDate}`,
+      items: [
+        {
+          description: `Prorated Tuition: ${preview.remainingLessons}/${preview.totalLessonsInMonth} lessons from ${dto.startDate}`,
+          quantity: preview.remainingLessons,
+          unitPrice: preview.lessonRate,
+        },
+      ],
+    };
+
+    const invoice = await this.createInvoice(organizationId, actorId, invoiceDto);
+    return this.issueInvoice(organizationId, actorId, invoice.id);
+  }
+
+  // ------------------------------------------------------------------
+  // Debtor Lockout Policy (Qarzdorlik nazorati)
+  // ------------------------------------------------------------------
+
+  async checkStudentDebtorStatus(organizationId: string, studentId: string, graceDays = 5) {
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, organizationId },
+      include: { user: { select: { firstName: true, lastName: true, phone: true } } },
+    });
+    if (!student) throw new NotFoundException('Student not found');
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - graceDays);
+
+    const overdueInvoices = await this.prisma.invoice.findMany({
+      where: {
+        organizationId,
+        studentId,
+        status: { in: ['ISSUED', 'PARTIALLY_PAID', 'OVERDUE'] },
+        dueDate: { lt: cutoff },
+      },
+      select: {
+        id: true,
+        number: true,
+        dueDate: true,
+        total: true,
+        paidAmount: true,
+        refundedAmount: true,
+      },
+    });
+
+    let totalOverdueMinor = 0;
+    for (const inv of overdueInvoices) {
+      const outstanding =
+        toMinor(inv.total) - toMinor(inv.paidAmount ?? 0) + toMinor(inv.refundedAmount ?? 0);
+      if (outstanding > 0) {
+        totalOverdueMinor += outstanding;
+      }
+    }
+
+    const overdueAmount = fromMinor(totalOverdueMinor);
+    const isDebtor = totalOverdueMinor > 0;
+
+    return {
+      studentId,
+      studentName: `${student.user.firstName} ${student.user.lastName ?? ''}`.trim(),
+      isDebtor,
+      overdueAmount: Number(overdueAmount),
+      overdueCount: overdueInvoices.length,
+      graceDays,
+      cutoffDate: cutoff.toISOString().slice(0, 10),
+      message: isDebtor
+        ? `To'lov muddati o'tgan qarzdorlik: ${new Intl.NumberFormat('uz-UZ').format(Number(overdueAmount))} so'm (${overdueInvoices.length} ta hisob-faktura)`
+        : "Qarzdorlik yo'q — barcha to'lovlar o'z vaqtida amalga oshirilgan",
+    };
   }
 }
 

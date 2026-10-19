@@ -8,6 +8,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ADMIN_ROLES } from '../auth/authorization.policy';
+import { Idempotent } from '../common/idempotency';
 
 @ApiTags('Payments')
 @ApiBearerAuth()
@@ -31,6 +32,7 @@ export class PaymentsController {
   }
 
   @Post()
+  @Idempotent({ ttlSeconds: 86400 })
   @Roles(...ADMIN_ROLES)
   @ApiOperation({ summary: 'Record a payment' })
   create(@CurrentUser('organizationId') orgId: string, @Body() dto: CreatePaymentDto) {

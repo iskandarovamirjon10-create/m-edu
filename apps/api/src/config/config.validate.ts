@@ -28,6 +28,13 @@ const INSECURE_PLACEHOLDER_SUBSTRINGS = [
   'this-is-a-very-long-secret',
   'placeholder',
   'secret-here',
+  // Repo-specific development defaults. These are >= 32 chars and contain none
+  // of the substrings above, so they previously slipped through the detector
+  // even though .env.docker ships them (`super-secret-*-for-test-*`, `mock-key`).
+  'super-secret',
+  'for-test',
+  'mock-key',
+  '8q3zqgjuxhmthdnjy8uazgsjuvrpjyo0',
 ];
 
 function isUnsafePlaceholder(val: string | undefined): boolean {
@@ -98,6 +105,28 @@ export function validateConfig(nodeEnv: string = process.env.NODE_ENV || 'develo
     if (!env.FACE_EMBEDDER_MODEL_PATH) error('FACE_EMBEDDER_MODEL_PATH', 'Required (SFace ONNX) in production.');
     if (!env.FACE_LIVENESS_MODEL_PATH) {
       warn('FACE_LIVENESS_MODEL_PATH', 'Not set — liveness will be UNAVAILABLE and recognition will fail closed.');
+    }
+  }
+
+  // --- AI provider ---
+  // Setting AI_PROVIDER declares intent to use the assistant. Without its key
+  // every call fails with AI_PROVIDER_UNAVAILABLE at request time, so fail fast
+  // at boot; a placeholder key (`mock-key` ships in .env.docker) must never
+  // reach production.
+  if (env.AI_PROVIDER) {
+    const provider = env.AI_PROVIDER.toLowerCase();
+    const keyByProvider: Record<string, string> = { gemini: 'GEMINI_API_KEY' };
+    const keyVar = keyByProvider[provider];
+    if (!keyVar) {
+      warn('AI_PROVIDER', `Unknown AI provider "${env.AI_PROVIDER}" — no API key validation applied.`);
+    } else if (!env[keyVar]) {
+      error(keyVar, `Required when AI_PROVIDER=${env.AI_PROVIDER}.`);
+    } else if (isUnsafePlaceholder(env[keyVar])) {
+      if (nodeEnv === 'production') {
+        error(keyVar, 'Unsafe placeholder AI API key detected. Production must use a real provider key.');
+      } else {
+        warn(keyVar, 'Placeholder AI API key detected — the AI provider will not authenticate.');
+      }
     }
   }
 

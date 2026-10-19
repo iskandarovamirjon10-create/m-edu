@@ -518,4 +518,120 @@ export class PayrollService {
 
     return this.getRun(organizationId, id);
   }
+
+  // ------------------------------------------------------------------
+  // Revenue-Share & Retention KPI Model (% of student tuition)
+  // ------------------------------------------------------------------
+
+  async calculateRevenueShare(
+    organizationId: string,
+    params: {
+      teacherId: string;
+      year: number;
+      month: number;
+      revenueSharePercentage?: number;
+      retentionBonusPercentage?: number;
+    },
+  ) {
+    const { teacherId, year, month } = params;
+    const sharePct = params.revenueSharePercentage ?? 40;
+    const bonusPct = params.retentionBonusPercentage ?? 10;
+
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { id: teacherId, organizationId },
+      include: {
+        user: { select: { firstName: true, lastName: true, email: true } },
+        groups: {
+          select: {
+            id: true,
+            name: true,
+            enrollments: { select: { studentId: true, isActive: true } },
+          },
+        },
+      },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    const startDate = new Date(Date.UTC(year, month - 1, 1));
+    const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+    const studentIds: string[] = Array.from(
+      new Set(teacher.groups.flatMap((g) => g.enrollments.map((s) => s.studentId))),
+    );
+
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        organizationId,
+        studentId: { in: studentIds },
+        status: 'PAID',
+        paidAt: { gte: startDate, lte: endDate },
+      },
+      select: { amount: true },
+    });
+
+    const totalCollected = payments.reduce((acc, p) => acc + Number(p.amount), 0);
+    const baseShareAmount = Math.round(totalCollected * (sharePct / 100));
+
+    let activeStudentsCount = 0;
+    let totalEnrolledCount = 0;
+    for (const g of teacher.groups) {
+      for (const s of g.enrollments) {
+        totalEnrolledCount++;
+        if (s.isActive) activeStudentsCount++;
+      }
+    }
+
+    const retentionRate =
+      totalEnrolledCount > 0 ? Math.round((activeStudentsCount / totalEnrolledCount) * 100) : 100;
+
+    const retentionBonusEarned =
+      retentionRate >= 85 ? Math.round(baseShareAmount * (bonusPct / 100)) : 0;
+
+    const totalEarnings = baseShareAmount + retentionBonusEarned;
+
+    return {
+      teacherId,
+      teacherName: `${teacher.user.firstName} ${teacher.user.lastName ?? ''}`.trim(),
+      periodYear: year,
+      periodMonth: month,
+      groupCount: teacher.groups.length,
+      groups: teacher.groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        studentsCount: g.enrollments.length,
+      })),
+      totalCollectedRevenue: totalCollected,
+      revenueSharePercentage: sharePct,
+      baseShareAmount,
+      retentionRate,
+      retentionThreshold: 85,
+      retentionBonusPercentage: bonusPct,
+      retentionBonusEarned,
+      totalEarnings,
+      formattedEarnings: new Intl.NumberFormat('uz-UZ').format(totalEarnings) + " so'm",
+    };
+  }
+
+  async createRevenueShareRun(
+    organizationId: string,
+    actorId: string,
+    params: {
+      teacherId: string;
+      year: number;
+      month: number;
+      revenueSharePercentage?: number;
+      retentionBonusPercentage?: number;
+    },
+  ) {
+    const calc = await this.calculateRevenueShare(organizationId, params);
+
+    return this.calculateRun(organizationId, actorId, {
+      teacherId: calc.teacherId,
+      periodYear: calc.periodYear,
+      periodMonth: calc.periodMonth,
+      salaryType: 'MONTHLY',
+      baseAmount: calc.baseShareAmount,
+      bonus: calc.retentionBonusEarned,
+    });
+  }
 }

@@ -26,8 +26,12 @@ import {
   GlassField,
   GlassModal,
   GlassButton,
+  FloatingActionIsland,
   useToasts,
 } from '@/components/ui';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate, toLocalISOString } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -205,13 +209,13 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
+  blue:    { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)', border: 'rgba(37,99,235,0.20)' },
+  green:   { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)',  border: 'rgba(16,185,129,0.20)' },
+  orange:  { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)',  border: 'rgba(245,158,11,0.20)' },
+  red:     { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)' },
+  purple:  { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)' },
+  cyan:    { fg: '#0284C7', bg: 'rgba(2,132,199,0.10)', glow: 'rgba(2,132,199,0.28)', border: 'rgba(2,132,199,0.20)' },
+  gray:    { fg: '#64748B', bg: 'rgba(100,116,139,0.10)', glow: 'rgba(100,116,139,0.22)', border: 'rgba(100,116,139,0.20)' },
   emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
 };
 
@@ -305,14 +309,14 @@ function nameHash(str: string): number {
 }
 
 const AVATAR_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
-  ['#FF2D55', '#FF9500'],
-  ['#30D158', '#34C759'],
+  ['#2563EB', '#4F46E5'],
+  ['#4F46E5', '#7C3AED'],
+  ['#10B981', '#0284C7'],
+  ['#D97706', '#E11D48'],
+  ['#6366F1', '#4F46E5'],
+  ['#0284C7', '#2563EB'],
+  ['#0D9488', '#059669'],
+  ['#475569', '#334155'],
 ];
 
 function avatarGradient(name: string): string {
@@ -425,26 +429,16 @@ function KpiTile({
   return (
     <motion.div
       variants={rowVariants}
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -2 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl shadow-card dark:border-white/[0.08] dark:bg-surface-900/80"
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
-      />
       <div
-        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
         style={{
           background: c.bg,
           color: c.fg,
           border: `1px solid ${c.border}`,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
         }}
       >
         <span
@@ -458,11 +452,11 @@ function KpiTile({
         <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
           <CountUp value={value} suffix={percent ? '%' : ''} />
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B]">
           {label}
         </div>
         {secondary && (
-          <div className="mt-0.5 truncate text-[10.5px] font-semibold tracking-tight text-[#86868B]/80">
+          <div className="mt-0.5 truncate text-[10.5px] font-semibold tracking-tight text-[#64748B]/80">
             {secondary}
           </div>
         )}
@@ -569,7 +563,7 @@ function StatusSegmented({
             style={{
               borderColor: active ? c.border : 'rgba(0,0,0,0.06)',
               background: active ? c.bg : 'transparent',
-              color: active ? c.fg : '#86868B',
+              color: active ? c.fg : '#64748B',
               boxShadow: active
                 ? `inset 0 1px 0 rgba(255,255,255,0.6), 0 6px 16px -8px ${c.glow}`
                 : 'none',
@@ -585,7 +579,7 @@ function StatusSegmented({
               className="flex h-7 w-7 items-center justify-center rounded-lg"
               style={{
                 background: active ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.03)',
-                color: active ? c.fg : '#86868B',
+                color: active ? c.fg : '#64748B',
               }}
             >
               <Icon paths={STATUS_ICON[s]} size={14} strokeWidth={2.2} />
@@ -853,11 +847,116 @@ export function AttendancePage() {
   const overallPresent = analyticsQuery.data?.overall.present ?? 0;
   const overallTotal = analyticsQuery.data?.overall.total ?? 0;
 
+  const sound = usePremiumSound();
+
+  const handleOpenAttendanceSidecar = useCallback((record: Attendance) => {
+    sound.playPop();
+    const sName = fullStudentName(record);
+    const gName = record.group?.name || groupList.find((g) => g.id === record.groupId)?.name || "Guruh";
+    const data: QuickLookData = {
+      id: record.id,
+      type: 'student',
+      title: sName,
+      subtitle: `${gName} · ${formatDate(record.date)}`,
+      badge: {
+        text: record.status,
+        tone: record.status === 'PRESENT' ? 'emerald' : record.status === 'ABSENT' ? 'rose' : 'amber',
+      },
+      avatar: {
+        text: sName.slice(0, 2).toUpperCase(),
+        color: record.status === 'PRESENT' ? '#10B981' : '#EF4444',
+      },
+      metrics: [
+        {
+          label: "Davomat holati",
+          value: t(`attendance.${record.status.toLowerCase()}`),
+        },
+        {
+          label: "Sana",
+          value: formatDate(record.date),
+        },
+        {
+          label: "Manba",
+          value: record.source || "Manual",
+        },
+      ],
+      details: [
+        { label: "O'quvchi", value: sName, copyable: true },
+        { label: "Guruh", value: gName },
+        { label: "Sana", value: formatDate(record.date) },
+        { label: "Holat", value: t(`attendance.${record.status.toLowerCase()}`) },
+        { label: "Izoh / Note", value: record.note || "Izoh kiritilmagan." },
+      ],
+      primaryAction: {
+        label: "Tahrirlash",
+        onExecute: () => openEdit(record),
+      },
+    };
+    openSidecar(data);
+  }, [sound, openEdit, groupList, t]);
+
+  const itemsList = useMemo(() => data?.items || [], [data?.items]);
+
+  /* ── Keyboard Navigation ──────────────────────────────────────────── */
+  const {
+    focusedIndex,
+    selectedIds,
+    selectedCount,
+    isSelected,
+    toggleSelection,
+    clearSelection,
+  } = useListKeyboardNavigation<Attendance>({
+    items: itemsList,
+    getItemId: (a) => a.id,
+    rowIdPrefix: 'attendance-row-',
+    onSelect: (a) => handleOpenAttendanceSidecar(a),
+    onQuickLook: (a) => handleOpenAttendanceSidecar(a),
+    onEdit: (a) => openEdit(a),
+  });
+
+  /* ── Bulk Actions ─────────────────────────────────────────────────── */
+  const handleBatchMarkPresent = async () => {
+    let count = 0;
+    for (const id of selectedIds) {
+      try {
+        await updateRecord.mutateAsync({ id, status: 'PRESENT', note: '' });
+        count++;
+      } catch {
+        // continue
+      }
+    }
+    clearSelection();
+    push({ type: 'success', message: `${count} ta talaba "Hozir" deb belgilandi` });
+  };
+
+  const handleExportSelectedAttendanceCSV = () => {
+    const selectedRows = itemsList.filter((a) => isSelected(a.id));
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      ['ID,Student,Group,Date,Status,Source']
+        .concat(
+          selectedRows.map(
+            (a) =>
+              `"${a.id}","${fullStudentName(a)}","${a.group?.name || ''}","${a.date}","${a.status}","${a.source || ''}"`
+          )
+        )
+        .join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `attendance_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    clearSelection();
+    push({ type: 'success', message: `${selectedRows.length} ta yozuv CSV formatida yuklandi` });
+  };
+
   /* ── Loading ──────────────────────────────────────────────────────── */
   if (attendance.isLoading && !data) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card" />
         <AttendanceSkeleton />
       </div>
     );
@@ -893,32 +992,16 @@ export function AttendancePage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-7"
         >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-24"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-            }}
-          />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/10 z-10" />
           <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-            {/* Gradient calendar-check tile */}
+            {/* Calendar icon tile */}
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, rotate: -6 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               transition={SPRING.smooth}
-              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
-              style={{
-                background: 'linear-gradient(135deg, #34C759 0%, #007AFF 100%)',
-                boxShadow:
-                  '0 12px 28px -10px rgba(52,199,89,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
-              }}
+              className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
             >
               <span
                 aria-hidden
@@ -933,11 +1016,11 @@ export function AttendancePage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#34C759]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   Attendance
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
                   {totalRecords} {totalRecords === 1 ? t('attendance.countOne') : t('attendance.countMany')}
                 </span>
@@ -952,7 +1035,7 @@ export function AttendancePage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('attendance.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {t('attendance.pageSubtitle')}
               </p>
             </div>
@@ -1064,11 +1147,9 @@ export function AttendancePage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-          style={{
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
-          }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm"
         >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/10 z-10" />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="relative">
               <FieldIcon icon={I.usersRound} tone="purple" />
@@ -1121,29 +1202,17 @@ export function AttendancePage() {
       ============================================================ */}
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-        style={{
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-        }}
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-16"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-          }}
-        />
 
         {!data || data.items.length === 0 ? (
           <div className="relative p-10">
             <div className="flex flex-col items-center text-center">
               <div
-                className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#007AFF]/10 text-[#007AFF]"
+                className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#2563EB]/10 text-[#2563EB]"
                 style={{
                   boxShadow:
-                    'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(0,122,255,0.4)',
+                    'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(37,99,235,0.4)',
                 }}
               >
                 <Icon paths={I.empty} size={26} strokeWidth={1.8} />
@@ -1153,7 +1222,7 @@ export function AttendancePage() {
                   ? t('attendance.emptyFilteredTitle')
                   : t('attendance.emptyTitle')}
               </p>
-              <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+              <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
                 {hasActiveFilters
                   ? t('attendance.emptyFilteredHint')
                   : t('attendance.emptyMessage')}
@@ -1186,7 +1255,7 @@ export function AttendancePage() {
           </div>
         ) : (
           <>
-            <div className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+            <div className="relative divide-y divide-slate-200/80 dark:divide-slate-800 dark:divide-[#ffffff08]">
               {data.items.map((a, idx) => {
                 const name = fullStudentName(a);
                 const initials = getInitials(name);
@@ -1194,119 +1263,172 @@ export function AttendancePage() {
                 return (
                   <motion.div
                     key={a.id}
+                    id={`attendance-row-${a.id}`}
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                    className="flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#34C759]/[0.03]"
+                    onClick={() => handleOpenAttendanceSidecar(a)}
+                    className={`flex cursor-pointer flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-3.5 transition-all ${
+                      isSelected(a.id)
+                        ? 'bg-blue-500/[0.08] dark:bg-blue-500/[0.12] ring-1 ring-blue-500/30'
+                        : focusedIndex === idx
+                        ? 'bg-emerald-500/[0.06] dark:bg-emerald-500/[0.08] ring-1 ring-emerald-500/30'
+                        : 'hover:bg-[#10B981]/[0.03]'
+                    }`}
                   >
-                    {/* Avatar */}
-                    <div
-                      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
-                      style={{
-                        background: gradient,
-                        boxShadow:
-                          'inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 12px -4px rgba(0,0,0,0.25)',
-                      }}
-                    >
-                      <span
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 rounded-full"
-                        style={{
-                          background:
-                            'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)',
+                    {/* Top / Left: Selection + Avatar + Student Details */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {/* Selection Checkbox */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelection(a.id);
                         }}
-                      />
-                      <span className="relative">{initials}</span>
-                    </div>
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-lg border transition-all ${
+                          isSelected(a.id)
+                            ? 'border-blue-500 bg-blue-500 text-white shadow-xs'
+                            : 'border-slate-300 dark:border-white/20 hover:border-blue-400 bg-transparent'
+                        }`}
+                        aria-label={`Tanlash ${name}`}
+                      >
+                        {isSelected(a.id) && (
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        )}
+                      </button>
 
-                    {/* Student + meta */}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {name}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#86868B]">
-                        <span className="inline-flex items-center gap-1 tabular-nums">
-                          <Icon paths={I.calendar} size={10} strokeWidth={2.2} className="opacity-60" />
-                          {formatDate(a.date)}
-                        </span>
-                        {a.group?.name && (
-                          <span className="inline-flex items-center gap-1">
-                            <Icon paths={I.book} size={10} strokeWidth={2.2} className="opacity-60" />
-                            {a.group.name}
+                      {/* Avatar */}
+                      <div
+                        className="relative flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-slate-900/50"
+                        style={{
+                          background: gradient,
+                          boxShadow:
+                            'inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 12px -4px rgba(0,0,0,0.25)',
+                        }}
+                      >
+                        <span
+                          aria-hidden
+                          className="pointer-events-none absolute inset-0 rounded-full"
+                          style={{
+                            background:
+                              'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)',
+                          }}
+                        />
+                        <span className="relative">{initials}</span>
+                      </div>
+
+                      {/* Student + meta */}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                          {name}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-medium text-[#64748B]">
+                          <span className="inline-flex items-center gap-1 tabular-nums shrink-0">
+                            <Icon paths={I.calendar} size={10} strokeWidth={2.2} className="opacity-60" />
+                            {formatDate(a.date)}
                           </span>
-                        )}
-                        <SourceChip source={a.source || 'SYSTEM'} label={a.source || 'SYSTEM'} />
-                        {a.note && (
-                          <span
-                            className="max-w-[16rem] truncate"
-                            title={a.note}
-                          >
-                            {a.note}
-                          </span>
-                        )}
+                          {a.group?.name && (
+                            <span className="inline-flex items-center gap-1 shrink-0">
+                              <Icon paths={I.book} size={10} strokeWidth={2.2} className="opacity-60" />
+                              {a.group.name}
+                            </span>
+                          )}
+                          <SourceChip source={a.source || 'SYSTEM'} label={a.source || 'SYSTEM'} />
+                          {a.note && (
+                            <span
+                              className="max-w-[12rem] sm:max-w-[16rem] truncate"
+                              title={a.note}
+                            >
+                              {a.note}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Status badge */}
-                    <StatusBadge
-                      status={a.status}
-                      label={t(`attendance.${a.status.toLowerCase()}`)}
-                    />
+                    {/* Bottom / Right: Status & Actions Row */}
+                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0 shrink-0">
+                      {/* Status badge */}
+                      <StatusBadge
+                        status={a.status}
+                        label={t(`attendance.${a.status.toLowerCase()}`)}
+                      />
 
-                    {/* Actions */}
-                    <div className="flex gap-1.5">
-                      <motion.button
-                        type="button"
-                        onClick={() => openEdit(a)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        transition={SPRING.snappy}
-                        aria-label={t('attendance.editAria', {
-                          name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
-                        })}
-                        title={t('common.edit')}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
-                        style={{
-                          background: 'rgba(0,122,255,0.10)',
-                          color: '#007AFF',
-                          border: '1px solid rgba(0,122,255,0.2)',
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e: any) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            e.currentTarget.click();
-                          }
-                        }}>
-                        <Icon paths={I.edit} size={13} strokeWidth={2} />
-                      </motion.button>
-                      <motion.button
-                        type="button"
-                        onClick={() => setVoidTarget(a)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        transition={SPRING.snappy}
-                        aria-label={t('attendance.voidAria', {
-                          name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
-                        })}
-                        title={t('attendance.void')}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
-                        style={{
-                          background: 'rgba(255,59,48,0.10)',
-                          color: '#FF3B30',
-                          border: '1px solid rgba(255,59,48,0.2)',
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e: any) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            e.currentTarget.click();
-                          }
-                        }}>
-                        <Icon paths={I.trash} size={13} strokeWidth={2} />
-                      </motion.button>
+                      {/* Actions */}
+                      <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {/* Sidecar Inspector Toggle */}
+                        <motion.button
+                          type="button"
+                          onClick={() => handleOpenAttendanceSidecar(a)}
+                          whileHover={{ scale: 1.08 }}
+                          whileTap={{ scale: 0.92 }}
+                          transition={SPRING.snappy}
+                          aria-label="Attendance Dossier"
+                          title="macOS Split-View Sidecar (Space)"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg outline-none text-xs font-bold"
+                          style={{
+                            background: 'rgba(99,102,241,0.10)',
+                            color: '#6366F1',
+                            border: '1px solid rgba(99,102,241,0.22)',
+                          }}
+                        >
+                          <span>◨</span>
+                        </motion.button>
+                        <motion.button
+                          type="button"
+                          onClick={() => openEdit(a)}
+                          whileHover={{ scale: 1.08 }}
+                          whileTap={{ scale: 0.92 }}
+                          transition={SPRING.snappy}
+                          aria-label={t('attendance.editAria', {
+                            name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
+                          })}
+                          title={t('common.edit')}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
+                          style={{
+                            background: 'rgba(37,99,235,0.10)',
+                            color: '#2563EB',
+                            border: '1px solid rgba(37,99,235,0.2)',
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
+                          <Icon paths={I.edit} size={13} strokeWidth={2} />
+                        </motion.button>
+                        <motion.button
+                          type="button"
+                          onClick={() => setVoidTarget(a)}
+                          whileHover={{ scale: 1.08 }}
+                          whileTap={{ scale: 0.92 }}
+                          transition={SPRING.snappy}
+                          aria-label={t('attendance.voidAria', {
+                            name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
+                          })}
+                          title={t('attendance.void')}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
+                          style={{
+                            background: 'rgba(239,68,68,0.10)',
+                            color: '#EF4444',
+                            border: '1px solid rgba(239,68,68,0.2)',
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
+                          <Icon paths={I.trash} size={13} strokeWidth={2} />
+                        </motion.button>
+                      </div>
                     </div>
                   </motion.div>
                 );
@@ -1314,7 +1436,7 @@ export function AttendancePage() {
             </div>
 
             {/* Pagination */}
-            <div className="relative border-t border-[#00000008] px-4 py-3 dark:border-[#ffffff08]">
+            <div className="relative border-t border-slate-200/80 dark:border-slate-800 px-4 py-3 dark:border-[#ffffff08]">
               <GlassPagination
                 page={page}
                 totalPages={data.totalPages}
@@ -1336,8 +1458,8 @@ export function AttendancePage() {
       >
         <form className="space-y-5" onSubmit={handleSubmit} noValidate>
           {/* Hint banner */}
-          <div className="flex items-center gap-3 rounded-2xl border border-[#34C75933] bg-[#34C759]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#34C759]/15 text-[#34C759]">
+          <div className="flex items-center gap-3 rounded-2xl border border-[#10B98133] bg-[#10B981]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#10B981]/15 text-[#10B981]">
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -1473,7 +1595,7 @@ export function AttendancePage() {
             </div>
           </GlassField>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"
@@ -1528,7 +1650,7 @@ export function AttendancePage() {
         <form className="space-y-5" onSubmit={handleEditSubmit} noValidate>
           {/* Student summary */}
           {editTarget && (
-            <div className="flex items-center gap-3 rounded-2xl border border-[#007AFF33] bg-[#007AFF]/[0.06] px-4 py-3">
+            <div className="flex items-center gap-3 rounded-2xl border border-[#2563EB33] bg-[#2563EB]/[0.06] px-4 py-3">
               <div
                 className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white"
                 style={{
@@ -1542,7 +1664,7 @@ export function AttendancePage() {
                 <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {fullStudentName(editTarget)}
                 </p>
-                <p className="text-[11px] font-medium text-[#86868B]">
+                <p className="text-[11px] font-medium text-[#64748B]">
                   {formatDate(editTarget.date)}
                   {editTarget.group?.name ? ` · ${editTarget.group.name}` : ''}
                 </p>
@@ -1551,7 +1673,7 @@ export function AttendancePage() {
           )}
 
           <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
               {t('common.status')}
             </p>
             <StatusSegmented
@@ -1573,7 +1695,7 @@ export function AttendancePage() {
             </div>
           </GlassField>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"
@@ -1626,11 +1748,11 @@ export function AttendancePage() {
       >
         <div className="space-y-5">
           {/* Warning banner */}
-          <div className="flex items-start gap-3 rounded-2xl border border-[#FF3B3033] bg-[#FF3B30]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FF3B30]/15 text-[#FF3B30]">
+          <div className="flex items-start gap-3 rounded-2xl border border-[#EF444433] bg-[#EF4444]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#EF4444]/15 text-[#EF4444]">
               <Icon paths={I.warning} size={18} strokeWidth={2} />
             </div>
-            <p className="text-[12.5px] font-semibold leading-snug text-[#FF3B30]">
+            <p className="text-[12.5px] font-semibold leading-snug text-[#EF4444]">
               {t('attendance.voidConfirmBefore')}{' '}
               <strong className="text-[#1D1D1F] dark:text-[#F5F5F7]">
                 {voidTarget?.student?.user
@@ -1643,7 +1765,7 @@ export function AttendancePage() {
             </p>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"
@@ -1697,6 +1819,27 @@ export function AttendancePage() {
           </div>
         </div>
       </GlassModal>
+
+      {/* Floating Action Island for Bulk Attendance Operations */}
+      <FloatingActionIsland
+        selectedCount={selectedCount}
+        onClear={clearSelection}
+        actions={[
+          {
+            label: "Barchasini Hozir (Present) deb belgilash",
+            icon: "✓",
+            onClick: handleBatchMarkPresent,
+            variant: 'primary',
+            shortcutBadge: 'p',
+          },
+          {
+            label: "Eksport (CSV)",
+            icon: "📊",
+            onClick: handleExportSelectedAttendanceCSV,
+            shortcutBadge: 'e',
+          },
+        ]}
+      />
     </motion.div>
   );
 }

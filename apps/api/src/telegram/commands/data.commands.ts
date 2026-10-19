@@ -73,7 +73,7 @@ export class ProfileCommand implements TelegramCommandHandler {
       '',
       tr('profile.name', { name: escapeHtml(`${user.firstName} ${user.lastName}`.trim()) }),
       tr('profile.email', { email: escapeHtml(user.email) }),
-      tr('profile.phone', { email: escapeHtml(user.phone ?? '—') }),
+      tr('profile.phone', { phone: escapeHtml(user.phone ?? '—') }),
       tr('profile.role', { role: escapeHtml(user.role) }),
     ];
 

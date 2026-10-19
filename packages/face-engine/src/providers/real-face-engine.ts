@@ -51,8 +51,10 @@ export interface RealFaceEngineConfig {
   livenessInputSize?: number;
   /** Minimum detection confidence (default: 0.5) */
   detectionConfidence?: number;
-  /** Liveness pass threshold (default: 0.8) */
+  /** Liveness pass threshold (default: 0.5) */
   livenessPassThreshold?: number;
+  /** Liveness fail threshold (default: 0.2) */
+  livenessFailThreshold?: number;
 }
 
 export class RealFaceEngine implements FaceEngine {
@@ -80,7 +82,12 @@ export class RealFaceEngine implements FaceEngine {
     this.liveness = new RealLivenessChecker({
       modelPath: config.livenessModelPath,
       inputSize: config.livenessInputSize ?? 80,
-      passThreshold: config.livenessPassThreshold ?? 0.8,
+      ...(config.livenessPassThreshold !== undefined
+        ? { passThreshold: config.livenessPassThreshold }
+        : {}),
+      ...(config.livenessFailThreshold !== undefined
+        ? { failThreshold: config.livenessFailThreshold }
+        : {}),
     });
 
     this.quality = new QualityAssessor();

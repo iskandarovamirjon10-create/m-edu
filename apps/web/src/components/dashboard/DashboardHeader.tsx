@@ -1,105 +1,393 @@
-import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { GlassButton } from '@/components/ui';
-import { useI18n } from '@/i18n/I18nProvider';
+/**
+ * ============================================================================
+ * DashboardHeader v3.1 — Apple Executive Command Center (Hyper-Refractive Liquid Glass)
+ * ============================================================================
+ */
 
-interface DashboardHeaderProps {
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { RefreshCw, FileText, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/design';
+import { useI18n } from '@/i18n/I18nProvider';
+import type { DashboardStats } from '@/lib/types';
+import { ExecutiveBriefingModal } from '@/components/dashboard/ExecutiveBriefingModal';
+
+export interface DashboardHeaderProps {
   userName?: string;
   orgName?: string;
+  stats?: DashboardStats;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
-export function DashboardHeader({ userName, orgName }: DashboardHeaderProps) {
-  const { t } = useI18n();
+const EMPTY_STATS: Readonly<DashboardStats> = Object.freeze({}) as DashboardStats;
 
-  const greeting = useMemo(() => {
-    const h = new Date().getHours();
-    if (h < 5) return { text: t('dashboard.goodNight') || 'Good night', emoji: '🌙' };
-    if (h < 12) return { text: t('dashboard.goodMorning') || 'Good morning', emoji: '☀️' };
-    if (h < 17) return { text: t('dashboard.goodAfternoon') || 'Good afternoon', emoji: '🌤️' };
-    if (h < 22) return { text: t('dashboard.goodEvening') || 'Good evening', emoji: '🌆' };
-    return { text: t('dashboard.goodNight') || 'Good night', emoji: '🌙' };
-  }, [t]);
+const DATE_FORMATTER = new Intl.DateTimeFormat('uz-UZ', {
+  weekday: 'short',
+  day: '2-digit',
+  month: 'short',
+});
 
-  const formattedDate = useMemo(() => {
-    return new Intl.DateTimeFormat(undefined, {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
-    }).format(new Date());
+const TIME_FORMATTER = new Intl.DateTimeFormat('uz-UZ', {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
+
+function resolveTranslation(
+  t: (key: string) => string,
+  key: string,
+  fallback: string
+): string {
+  try {
+    const translated = t(key);
+    return !translated || translated === key ? fallback : translated;
+  } catch {
+    return fallback;
+  }
+}
+
+function getGreetingConfig(hour: number) {
+  if (hour >= 5 && hour < 11) return { key: 'dashboard.goodMorning', fallback: 'Xayrli tong' };
+  if (hour >= 11 && hour < 17) return { key: 'dashboard.goodAfternoon', fallback: 'Xayrli kun' };
+  if (hour >= 17 && hour < 22) return { key: 'dashboard.goodEvening', fallback: 'Xayrli oqshom' };
+  return { key: 'dashboard.goodNight', fallback: 'Xayrli tun' };
+}
+
+/* ────────────────────────────────────────────────────────────────────────── *
+ *  LIVE CLOCK — adaptive pill (mobile → desktop)
+ * ────────────────────────────────────────────────────────────────────────── */
+
+const LiveClock = memo(function LiveClock() {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    let timeoutId: number | null = null;
+    let cancelled = false;
+
+    const tick = () => {
+      if (cancelled) return;
+      setNow(new Date());
+      timeoutId = window.setTimeout(tick, 1000 - (Date.now() % 1000));
+    };
+    const start = () => {
+      if (cancelled || timeoutId !== null) return;
+      tick();
+    };
+    const stop = () => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') start();
+      else stop();
+    };
+
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      cancelled = true;
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
 
+  const formattedDate = DATE_FORMATTER.format(now);
+  const formattedTime = TIME_FORMATTER.format(now);
+
   return (
-    <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--primary-soft)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--primary)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--primary)] animate-pulse" />
-            {orgName || t('dashboard.liveOverview') || 'Live Overview'}
-          </span>
-          <span>·</span>
-          <span>{formattedDate}</span>
+    <div
+      className={cn(
+        'inline-flex h-11 shrink-0 items-center gap-2 rounded-2xl px-3.5',
+        'border border-white/60 bg-white/70 backdrop-blur-3xl backdrop-saturate-[210%]',
+        'shadow-[inset_0_1.5px_1.5px_rgba(255,255,255,0.9),0_8px_24px_-8px_rgba(0,0,0,0.08)]',
+        'dark:border-white/[0.15] dark:bg-[#1C1C1E]/70 dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)]'
+      )}
+    >
+      {/* Live status dot */}
+      <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+        <span className="absolute inline-flex h-full w-full rounded-full bg-[#34C759] motion-safe:animate-[livePulse_2.4s_ease-in-out_infinite]" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#34C759]" />
+      </span>
+
+      <span className="hidden text-[11px] font-bold uppercase tracking-[0.08em] text-[#34C759] sm:inline dark:text-[#30D158]">
+        Live
+      </span>
+
+      <span
+        className="hidden h-3 w-px bg-black/10 sm:block dark:bg-white/15"
+        aria-hidden="true"
+      />
+
+      <time
+        dateTime={now.toISOString()}
+        aria-label={`Hozirgi vaqt: ${formattedTime}, ${formattedDate}`}
+        className="whitespace-nowrap text-[13px] font-bold tabular-nums tracking-tight text-[var(--text-primary,#1D1D1F)] dark:text-[var(--text-primary,#F5F5F7)]"
+      >
+        {formattedTime}
+      </time>
+
+      <span className="hidden whitespace-nowrap text-[12px] font-semibold text-[var(--text-secondary,#86868B)] lg:inline">
+        · {formattedDate}
+      </span>
+    </div>
+  );
+});
+
+/* ────────────────────────────────────────────────────────────────────────── *
+ *  HEADER
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export const DashboardHeader = memo(function DashboardHeader({
+  userName,
+  orgName = 'M-EDU',
+  stats,
+  onRefresh,
+  isRefreshing = false,
+}: DashboardHeaderProps) {
+  const { t } = useI18n();
+  const [isBriefingOpen, setIsBriefingOpen] = useState(false);
+  const [currentHour, setCurrentHour] = useState(() => new Date().getHours());
+
+  useEffect(() => {
+    const sync = () => {
+      const h = new Date().getHours();
+      setCurrentHour((prev) => (prev !== h ? h : prev));
+    };
+    const id = window.setInterval(sync, 60_000);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') sync();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return;
+        e.preventDefault();
+        setIsBriefingOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const greeting = useMemo(() => getGreetingConfig(currentHour), [currentHour]);
+  const openBriefing = useCallback(() => setIsBriefingOpen(true), []);
+  const closeBriefing = useCallback(() => setIsBriefingOpen(false), []);
+
+  const isMac =
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+  const modKey = isMac ? '⌘' : 'Ctrl';
+
+  const greetingText = resolveTranslation(t, greeting.key, greeting.fallback);
+  const displayUser =
+    userName?.trim() || resolveTranslation(t, 'dashboard.defaultUser', 'Ustoz');
+  const badgeSubtitle = resolveTranslation(t, 'dashboard.orgSubtitle', 'Ta\'lim boshqaruvi');
+  const subtitleText = resolveTranslation(
+    t,
+    'dashboard.headerSubtitle',
+    'Bugungi ta\'lim jarayonlari, real vaqt davomati va asosiy moliyaviy ko\'rsatkichlar tahlili.'
+  );
+  const briefingLabel = resolveTranslation(t, 'dashboard.briefing', 'Tahliliy Hisobot');
+  const refreshLabel = resolveTranslation(t, 'common.refresh', 'Yangilash');
+
+  const orgInitial = (orgName.charAt(0) || 'M').toUpperCase();
+
+  return (
+    <header
+      className={cn(
+        'relative isolate overflow-hidden rounded-[2.25rem] p-5 sm:p-6 lg:p-7.5',
+        'border border-white/65 bg-white/75 backdrop-blur-3xl backdrop-saturate-[210%]',
+        'shadow-[0_24px_64px_-16px_rgba(0,0,0,0.18),inset_0_1.5px_2px_rgba(255,255,255,0.95)]',
+        'dark:border-white/[0.16] dark:bg-[#161618]/75 dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.7),inset_0_1.5px_2px_rgba(255,255,255,0.22)]'
+      )}
+    >
+      {/* ── Aurora caustic backdrop ────────────────────────────────── */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+      >
+        <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(10,132,255,0.18),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(10,132,255,0.28),transparent_70%)]" />
+        <div className="absolute -bottom-24 -left-20 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(94,92,230,0.14),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(94,92,230,0.24),transparent_70%)]" />
+      </div>
+
+      {/* ── Top specular hairline ───────────────────────────────────── */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/45"
+      />
+
+      <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
+        {/* ══ Left Column: Identity · Greeting · Subtitle ═══════════ */}
+        <div className="min-w-0 flex-1 space-y-3.5 sm:space-y-4">
+          {/* Identity badge */}
+          <div
+            className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] inline-flex items-center gap-2.5 rounded-full border border-black/[0.06] bg-white/70 py-1.5 pl-1.5 pr-3.5 backdrop-blur-2xl dark:border-white/[0.1] dark:bg-white/[0.07]"
+            style={{ animationDelay: '0ms' }}
+          >
+            <span
+              aria-hidden="true"
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-[#0A84FF] to-[#5E5CE6] text-[11px] font-bold text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.5),0_2px_6px_rgba(0,102,255,0.4)]"
+            >
+              {orgInitial}
+            </span>
+            <span className="text-[12px] font-semibold tracking-tight text-[var(--text-secondary,#515154)] dark:text-[var(--text-secondary,#A1A1A6)]">
+              <strong className="font-bold text-[var(--text-primary,#1D1D1F)] dark:text-[var(--text-primary,#F5F5F7)]">
+                {orgName}
+              </strong>
+              <span className="mx-1.5 opacity-40" aria-hidden="true">
+                ·
+              </span>
+              {badgeSubtitle}
+            </span>
+          </div>
+
+          {/* Greeting */}
+          <h1
+            className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] truncate text-[28px] font-bold leading-[1.1] tracking-[-0.035em] text-[var(--text-primary,#1D1D1F)] sm:text-[32px] lg:text-[34px] dark:text-[var(--text-primary,#F5F5F7)]"
+            style={{ animationDelay: '80ms' }}
+          >
+            <span key={greeting.key} className="motion-safe:animate-[greetingFade_400ms_ease-out]">
+              {greetingText}
+            </span>
+            ,{' '}
+            <span className="bg-gradient-to-br from-[#0A84FF] to-[#5E5CE6] bg-clip-text text-transparent dark:from-[#409CFF] dark:to-[#9B8AFF]">
+              {displayUser}
+            </span>
+            <span className="ml-0.5" aria-hidden="true">
+              !
+            </span>
+          </h1>
+
+          {/* Subtitle */}
+          <p
+            className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] line-clamp-2 max-w-2xl text-[14px] leading-relaxed text-balance text-[var(--text-secondary,#515154)] sm:line-clamp-none dark:text-[var(--text-secondary,#A1A1A6)]"
+            style={{ animationDelay: '140ms' }}
+          >
+            {subtitleText}
+          </p>
         </div>
 
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] sm:text-3xl">
-          <span className="mr-2" role="img" aria-label="greeting icon">
-            {greeting.emoji}
-          </span>
-          {greeting.text}
-          {userName ? `, ${userName}` : ''}
-        </h1>
+        {/* ══ Right Column: Action Bar ══════════════════════════════ */}
+        <div
+          className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] flex w-full items-center gap-2.5 sm:gap-3 lg:w-auto lg:shrink-0"
+          style={{ animationDelay: '200ms' }}
+        >
+          <LiveClock />
 
-        <p className="text-sm text-[var(--text-muted)]">
-          {t('dashboard.description') || "Here's what is happening across your academy today."}
-        </p>
-      </div>
+          {/* Primary — Executive Briefing */}
+          <motion.button
+            type="button"
+            onClick={openBriefing}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
+            aria-keyshortcuts="Meta+K Control+K"
+            className={cn(
+              'group relative inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl px-4.5 lg:flex-initial',
+              'text-[13.5px] font-bold text-white',
+              'bg-gradient-to-r from-[#007AFF] to-[#5E5CE6]',
+              'shadow-[inset_0_1.5px_1.5px_rgba(255,255,255,0.4),0_4px_18px_-4px_rgba(0,122,255,0.55)]',
+              'transition-[background-color,box-shadow] duration-200 ease-out',
+              'hover:from-[#0062CC] hover:to-[#4E4AE2]',
+              'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[rgba(10,132,255,0.5)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#1C1C1E]'
+            )}
+          >
+            {/* Hover sheen sweep */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-full motion-reduce:hidden"
+            />
 
-      <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:flex-wrap sm:items-center">
-        <GlassButton asChild variant="secondary" size="sm" className="w-full justify-center rounded-xl font-medium sm:w-auto">
-          <Link to="/students/new" className="flex items-center justify-center gap-1.5">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <line x1="19" y1="8" x2="19" y2="14" />
-              <line x1="22" y1="11" x2="16" y2="11" />
-            </svg>
-            <span>{t('students.create') || 'New Student'}</span>
-            <kbd className="hidden rounded bg-black/5 px-1 py-0.5 text-[10px] text-[var(--text-tertiary)] dark:bg-white/10 md:inline-block">
-              ⌘N
+            <FileText
+              className="relative h-4 w-4 shrink-0"
+              strokeWidth={2.4}
+              aria-hidden="true"
+            />
+            <span className="relative truncate">{briefingLabel}</span>
+            <Sparkles
+              className="relative hidden h-3.5 w-3.5 shrink-0 text-white/90 transition-opacity duration-200 group-hover:opacity-100 sm:inline"
+              strokeWidth={2.2}
+              aria-hidden="true"
+            />
+            <kbd className="relative ml-1 hidden items-center gap-0.5 rounded-md bg-white/25 px-1.5 py-0.5 text-[10.5px] font-bold tracking-tight text-white lg:inline-flex">
+              {modKey}K
             </kbd>
-          </Link>
-        </GlassButton>
+          </motion.button>
 
-        <GlassButton asChild variant="secondary" size="sm" className="w-full justify-center rounded-xl font-medium sm:w-auto">
-          <Link to="/attendance" className="flex items-center justify-center gap-1.5">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" />
-              <path d="M3 10h18" /><path d="m9 16 2 2 4-4" />
-            </svg>
-            <span>{t('nav.attendance') || 'Attendance'}</span>
-          </Link>
-        </GlassButton>
-
-        <GlassButton asChild variant="secondary" size="sm" className="w-full justify-center rounded-xl font-medium sm:w-auto">
-          <Link to="/groups/new" className="flex items-center justify-center gap-1.5">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            <span>{t('groups.create') || 'New Group'}</span>
-          </Link>
-        </GlassButton>
-
-        <GlassButton asChild variant="primary" size="sm" className="w-full justify-center rounded-xl font-semibold shadow-md shadow-[var(--primary)]/20 sm:w-auto">
-          <Link to="/payments" className="flex items-center justify-center gap-1.5">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect width="20" height="14" x="2" y="5" rx="2" />
-              <line x1="2" y1="10" x2="22" y2="10" />
-            </svg>
-            <span>{t('payments.title') || 'Payments'}</span>
-          </Link>
-        </GlassButton>
+          {/* Refresh */}
+          {onRefresh && (
+            <motion.button
+              type="button"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.93 }}
+              aria-label={refreshLabel}
+              aria-busy={isRefreshing}
+              title={refreshLabel}
+              className={cn(
+                'group inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl',
+                'border border-white/60 bg-white/75 text-[var(--text-secondary,#515154)]',
+                'shadow-[inset_0_1.5px_1.5px_rgba(255,255,255,0.9),0_4px_16px_-4px_rgba(0,0,0,0.06)]',
+                'hover:bg-white hover:text-[var(--text-primary,#1D1D1F)]',
+                'dark:border-white/[0.15] dark:bg-white/[0.06] dark:text-[var(--text-secondary,#A1A1A6)]',
+                'dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)] dark:hover:bg-white/[0.12] dark:hover:text-white',
+                'transition-[background-color,color] duration-200 ease-out',
+                'disabled:pointer-events-none disabled:opacity-45',
+                'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[rgba(10,132,255,0.5)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#1C1C1E]'
+              )}
+            >
+              <RefreshCw
+                className={cn(
+                  'h-[18px] w-[18px] transition-transform duration-300 motion-reduce:transition-none',
+                  isRefreshing
+                    ? 'animate-spin text-[var(--primary,#007AFF)]'
+                    : 'group-hover:rotate-90'
+                )}
+                strokeWidth={2.2}
+                aria-hidden="true"
+              />
+            </motion.button>
+          )}
+        </div>
       </div>
+
+      <ExecutiveBriefingModal
+        isOpen={isBriefingOpen}
+        onClose={closeBriefing}
+        stats={stats || EMPTY_STATS}
+        userName={userName}
+        orgName={orgName}
+      />
+
+      {/* Scoped keyframes */}
+      <style>{`
+        @keyframes headerFadeUp {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes greetingFade {
+          from { opacity: 0; transform: translateY(-2px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes livePulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50%      { opacity: 0.55; transform: scale(1.25); }
+        }
+      `}</style>
     </header>
   );
-}
+});
+
+export default DashboardHeader;

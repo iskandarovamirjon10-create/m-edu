@@ -1,98 +1,120 @@
 /**
- * GlassToast V2 — Toast notification system.
+ * GlassToast — Apple-premium toast system.
  *
- * Single global instance: any component can call `useToast()` and push a
- * toast; App.tsx renders <ToastHost /> once so toasts appear app-wide.
- *
- * Backward compatibility: pages historically used two shapes:
- * const { push } = useToast(); push('success', 'Saved')
- * const { success, error } = useToast(); success('Saved')
- * Both are supported.
+ * Module-level store + subscribe, portal host per position, auto-dismiss
+ * timers, progress bar, maxVisible with overflow counter.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { cn, usePrefersReducedMotion } from '@/lib/design';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
+export type ToastPosition =
+  | 'top-right'
+  | 'top-left'
+  | 'bottom-right'
+  | 'bottom-left'
+  | 'top-center'
+  | 'bottom-center';
 
-interface ToastItem {
+export interface ToastItem {
   id: string;
   type: ToastType;
   title: string;
   description?: string;
+  /** Auto-dismiss duration in ms (0 disables). Defaults to 5000. */
+  duration?: number;
 }
 
-const ToastIcon: Record<ToastType, ReactNode> = {
+const TYPE_FG: Record<ToastType, string> = {
+  success: 'var(--success)',
+  error: 'var(--danger)',
+  warning: 'var(--warning)',
+  info: 'var(--info)',
+};
+
+const ICONS: Record<ToastType, ReactNode> = {
   success: (
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       <circle cx="12" cy="12" r="10" />
       <path d="m9 12 2 2 4-4" />
     </svg>
   ),
   error: (
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       <circle cx="12" cy="12" r="10" />
       <path d="M15 9l-6 6M9 9l6 6" />
     </svg>
   ),
   warning: (
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
       <path d="M12 9v4M12 17h.01" />
     </svg>
   ),
   info: (
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       <circle cx="12" cy="12" r="10" />
       <path d="M12 16v-4M12 8h.01" />
     </svg>
   ),
 };
 
-const TOAST_TYPE_COLOR: Record<ToastType, string> = {
-  success: 'text-[var(--success)]',
-  error:   'text-[var(--danger)]',
-  warning: 'text-[var(--warning)]',
-  info:    'text-[var(--info)]',
-};
+const CloseIcon = () => (
+  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <path d="M18 6 6 18M6 6l12 12" />
+  </svg>
+);
 
-const TOAST_TYPE_BG: Record<ToastType, string> = {
-  success: 'border-l-[var(--success)]',
-  error:   'border-l-[var(--danger)]',
-  warning: 'border-l-[var(--warning)]',
-  info:    'border-l-[var(--info)]',
-};
+/* ── Module-level store ─────────────────────────────────────── */
 
-/* ── Global toast store ─────────────────────────────────────── */
 type Listener = (toasts: ToastItem[]) => void;
 
 let toasts: ToastItem[] = [];
 let seq = 0;
 const listeners = new Set<Listener>();
+const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function emit() {
   for (const l of listeners) l(toasts);
 }
 
-function addToast(t: Omit<ToastItem, 'id'>) {
+function addToast(t: Omit<ToastItem, 'id'>): string {
   const id = `toast-${++seq}`;
   toasts = [...toasts, { ...t, id }];
   emit();
-  setTimeout(() => removeToast(id), 5000);
+
+  const duration = t.duration ?? 5000;
+  if (duration > 0) {
+    timers.set(id, setTimeout(() => removeToast(id), duration));
+  }
   return id;
 }
 
 function removeToast(id: string) {
+  if (!toasts.some((t) => t.id === id)) return;
+  const handle = timers.get(id);
+  if (handle) {
+    clearTimeout(handle);
+    timers.delete(id);
+  }
   toasts = toasts.filter((t) => t.id !== id);
   emit();
 }
 
+/** @deprecated No-op — kept for API compatibility. */
 export function setToastContext(_fn: (t: Omit<ToastItem, 'id'>) => void) {
   void _fn;
 }
 
+/* ── Hook ───────────────────────────────────────────────────── */
+
 export interface UseToastResult {
   push: (
-    typeOrObject: ToastType | { type: ToastType; message: string; title?: string },
+    typeOrObject:
+      | ToastType
+      | { type: ToastType; message: string; title?: string; duration?: number },
     titleOrMessage?: string,
     description?: string,
   ) => string | void;
@@ -104,13 +126,15 @@ export interface UseToastResult {
 }
 
 function normalizePush(
-  typeOrObject: ToastType | { type: ToastType; message: string; title?: string },
+  typeOrObject:
+    | ToastType
+    | { type: ToastType; message: string; title?: string; duration?: number },
   titleOrMessage?: string,
   description?: string,
 ): string {
   if (typeof typeOrObject === 'object' && typeOrObject !== null) {
-    const { type, message, title } = typeOrObject;
-    return addToast({ type, title: title ?? message, description });
+    const { type, message, title, duration } = typeOrObject;
+    return addToast({ type, title: title ?? message, description, duration });
   }
   return addToast({ type: typeOrObject, title: titleOrMessage ?? '', description });
 }
@@ -119,102 +143,190 @@ export function useToast(): UseToastResult {
   return {
     push: normalizePush,
     success: (title, description) => addToast({ type: 'success', title, description }),
-    error:   (title, description) => addToast({ type: 'error',   title, description }),
+    error: (title, description) => addToast({ type: 'error', title, description }),
     warning: (title, description) => addToast({ type: 'warning', title, description }),
-    info:    (title, description) => addToast({ type: 'info',    title, description }),
+    info: (title, description) => addToast({ type: 'info', title, description }),
     toastNode: null,
   };
 }
 
-/* ── Rendering ──────────────────────────────────────────────── */
+/* ── ToastItemView ──────────────────────────────────────────── */
+
+export interface ToastItemViewProps {
+  toast: ToastItem;
+  onClose: (id: string) => void;
+  /** @deprecated no-op */
+  disableRefraction?: boolean;
+  /** @deprecated no-op */
+  disableMotion?: boolean;
+  /** Kept for API parity — toggles the auto-dismiss progress bar. */
+  autoProgress?: boolean;
+}
+
 export function ToastItemView({
   toast,
   onClose,
-}: {
-  toast: ToastItem;
-  onClose: (id: string) => void;
-}) {
+  autoProgress = true,
+}: ToastItemViewProps) {
   const { t } = useSafeI18n();
+  const reduced = usePrefersReducedMotion();
+  const duration = toast.duration ?? 5000;
+
+  const [leaving, setLeaving] = useState(false);
+  const [progress, setProgress] = useState(100);
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleClose = () => {
+    if (leaving) return;
+    setLeaving(true);
+    leaveTimer.current = setTimeout(() => onClose(toast.id), reduced ? 0 : 200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    };
+  }, []);
+
+  const showProgress = autoProgress && duration > 0 && !reduced;
+  useEffect(() => {
+    if (!showProgress) return;
+    const raf = requestAnimationFrame(() => setProgress(0));
+    return () => cancelAnimationFrame(raf);
+  }, [showProgress]);
+
   return (
     <div
-      className={[
-        'flex items-start gap-3',
-        'w-full min-w-[18rem] max-w-sm',
-        'bg-[var(--bg-card)]',
-        'backdrop-blur-[20px] [-webkit-backdrop-filter:blur(20px)_saturate(1.5)]',
-        'border border-[var(--border)] border-l-4',
-        TOAST_TYPE_BG[toast.type],
-        'rounded-[var(--radius-lg)]',
-        'shadow-[var(--shadow-lg)]',
-        'px-4 py-3.5',
-      ].join(' ')}
-      style={{ animation: 'slide-up var(--duration-normal) var(--ease-enter) both' }}
-      role="alert"
-      aria-live="assertive"
+      data-component="glass-toast"
+      data-type={toast.type}
+      role={toast.type === 'error' ? 'alert' : 'status'}
+      className={cn(
+        'bg-white/90 dark:bg-surface-900/90 backdrop-blur-2xl backdrop-saturate-150 border border-black/[0.08] dark:border-white/[0.12] shadow-dropdown shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] rounded-2xl px-4 py-3',
+        'relative flex w-full min-w-[18rem] max-w-sm items-start gap-3 overflow-hidden',
+        reduced
+          ? 'animate-none'
+          : leaving
+            ? 'opacity-0 transition-opacity duration-200'
+            : 'animate-slide-up',
+      )}
     >
-      <span className={['flex-shrink-0 mt-0.5', TOAST_TYPE_COLOR[toast.type]].join(' ')}>
-        {ToastIcon[toast.type]}
+      <span
+        aria-hidden="true"
+        className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center"
+        style={{ color: TYPE_FG[toast.type] }}
+      >
+        {ICONS[toast.type]}
       </span>
-      <div className="flex-1 min-w-0">
-        <p className="text-[var(--text-body-sm)] font-semibold text-[var(--text-primary)] leading-snug">
-          {toast.title}
-        </p>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold leading-snug text-primary">{toast.title}</p>
         {toast.description && (
-          <p className="text-[var(--text-caption)] text-[var(--text-secondary)] mt-0.5 leading-snug">
-            {toast.description}
-          </p>
+          <p className="mt-0.5 text-xs leading-snug text-secondary">{toast.description}</p>
         )}
       </div>
+
       <button
         type="button"
-        onClick={() => onClose(toast.id)}
-        className={[
-          'flex-shrink-0 mt-0.5',
-          'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]',
-          'transition-colors duration-[var(--duration-fast)]',
-          'p-1 rounded-[var(--radius-sm)]',
-          'focus-visible:outline-2 focus-visible:outline-[var(--border-focus)]',
-        ].join(' ')}
-        aria-label={t('a11y.dismiss')}
+        onClick={handleClose}
+        className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-tertiary transition-colors duration-150 hover:bg-black/[0.04] hover:text-secondary dark:hover:bg-white/[0.08]"
+        aria-label={t('a11y.dismiss') || 'Dismiss'}
       >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-          <path d="M18 6 6 18M6 6l12 12" />
-        </svg>
+        <CloseIcon />
       </button>
+
+      {showProgress && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 left-0 h-0.5"
+          style={{
+            width: `${progress}%`,
+            background: TYPE_FG[toast.type],
+            transition: `width ${duration}ms linear`,
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/** Render all global toasts. Mount ONCE in App.tsx. */
-export function ToastHost() {
+/* ── ToastHost ──────────────────────────────────────────────── */
+
+export interface ToastHostProps {
+  /** Screen corner. Default `bottom-right`. */
+  position?: ToastPosition;
+  /** Max simultaneous visible toasts. Extras collapse into a counter. */
+  maxVisible?: number;
+  /** @deprecated no-op */
+  disableRefraction?: boolean;
+  /** @deprecated no-op */
+  disableMotion?: boolean;
+}
+
+const POSITIONS: Record<ToastPosition, string> = {
+  'top-right': 'top-6 right-6 items-end',
+  'top-left': 'top-6 left-6 items-start',
+  'bottom-right': 'bottom-6 right-6 items-end',
+  'bottom-left': 'bottom-6 left-6 items-start',
+  'top-center': 'top-6 left-1/2 -translate-x-1/2 items-center',
+  'bottom-center': 'bottom-6 left-1/2 -translate-x-1/2 items-center',
+};
+
+export function ToastHost({
+  position = 'bottom-right',
+  maxVisible = 4,
+}: ToastHostProps = {}) {
   const [items, setItems] = useState<ToastItem[]>(toasts);
   const { t } = useSafeI18n();
 
   useEffect(() => {
     const listener: Listener = (next) => setItems(next);
     listeners.add(listener);
-    return () => { listeners.delete(listener); };
+    return () => {
+      listeners.delete(listener);
+    };
   }, []);
 
-  if (items.length === 0) return null;
+  if (items.length === 0 || typeof document === 'undefined') return null;
 
-  return (
+  const visible = items.slice(0, maxVisible);
+  const overflow = items.length - visible.length;
+
+  return createPortal(
     <div
-      className="fixed bottom-6 right-6 flex flex-col gap-3"
-      style={{ zIndex: 'var(--z-toast)' } as React.CSSProperties}
-      aria-label={t('a11y.notifications')}
+      data-component="glass-toast-host"
+      role="region"
+      aria-label={t('a11y.notifications') || 'Notifications'}
+      aria-live="polite"
+      aria-atomic="false"
+      className={cn(
+        'pointer-events-none fixed z-[var(--z-toast,2000)] flex flex-col gap-3',
+        POSITIONS[position],
+      )}
     >
-      {items.map((item) => (
-        <ToastItemView key={item.id} toast={item} onClose={removeToast} />
+      {overflow > 0 && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-auto inline-flex items-center justify-center rounded-full border border-subtle bg-card px-2.5 py-1 text-[11px] font-medium tabular-nums text-secondary shadow-card"
+        >
+          +{overflow}
+        </span>
+      )}
+      {visible.map((item) => (
+        <div key={item.id} className="pointer-events-auto">
+          <ToastItemView toast={item} onClose={removeToast} />
+        </div>
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
-/** @deprecated No-op: ToastHost in App.tsx renders toasts globally. */
-export function ToastContainer(_props: { toasts: ToastItem[]; onRemove: (id: string) => void }) {
+/** @deprecated No-op: <ToastHost /> in App.tsx renders toasts globally. */
+export function ToastContainer(_props: {
+  toasts: ToastItem[];
+  onRemove: (id: string) => void;
+}) {
   return null;
 }
 
-export type { ToastItem };
 export default ToastItemView;

@@ -1,18 +1,16 @@
-import { Controller, Get, Req } from '@nestjs/common';
+import { Controller, Get, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
+import * as crypto from 'crypto';
 import { CSRF_COOKIE_NAME } from './csrf.middleware';
 import { AllowPublic } from '../auth/public.decorator';
 
 /**
  * Public CSRF-token seed endpoint.
  *
- * `CsrfMiddleware` sets the `XSRF-TOKEN` cookie on every response that does
- * not already carry one; this route exists so the SPA can force that to
- * happen *before* its first mutating request (login, password reset, …)
- * instead of racing it. It returns no secret: the token is only ever read
- * from the cookie, which the browser must echo back in `X-XSRF-TOKEN`.
+ * Ensures the `XSRF-TOKEN` cookie is present on the response so the SPA/client
+ * can immediately satisfy double-submit CSRF requirements on mutations.
  */
 @ApiTags('Security')
 @AllowPublic()
@@ -21,8 +19,19 @@ import { AllowPublic } from '../auth/public.decorator';
 export class CsrfController {
   @Get()
   @ApiOperation({ summary: 'Ensure the XSRF-TOKEN cookie is present' })
-  getToken(@Req() req: Request) {
-    const token = (req.cookies as Record<string, string> | undefined)?.[CSRF_COOKIE_NAME];
-    return { cookieName: CSRF_COOKIE_NAME, present: typeof token === 'string' && token.length > 0 };
+  getToken(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    let token = (req.cookies as Record<string, string> | undefined)?.[CSRF_COOKIE_NAME];
+    if (!token) {
+      token = crypto.randomBytes(32).toString('hex');
+      const isProduction = process.env.NODE_ENV === 'production';
+      res.cookie(CSRF_COOKIE_NAME, token, {
+        httpOnly: false, // must be readable by the frontend (double submit)
+        secure: isProduction,
+        sameSite: 'lax',
+        path: '/',
+        ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
+      });
+    }
+    return { cookieName: CSRF_COOKIE_NAME, present: true };
   }
 }

@@ -23,7 +23,10 @@ function createMockPrisma() {
     group: {
       findFirst: vi.fn(),
       count: vi.fn(),
+      updateMany: vi.fn(),
     },
+    lesson: { updateMany: vi.fn() },
+    payrollRun: { deleteMany: vi.fn() },
     notification: { deleteMany: vi.fn() },
     session: { deleteMany: vi.fn() },
     userSettings: { deleteMany: vi.fn() },
@@ -150,22 +153,22 @@ describe('TeachersService', () => {
   });
 
   describe('remove', () => {
-    it('rejects deleting a teacher assigned to groups', async () => {
+    it('unlinks teacher from groups and deletes them and their user in one transaction', async () => {
       prisma.teacher.findFirst.mockResolvedValue({ id: 't1', organizationId: 'org-1', userId: 'u1' });
-      prisma.group.count.mockResolvedValue(2);
-
-      await expect(svc.remove('org-1', 't1')).rejects.toThrow(
-        'deactivate the teacher instead of deleting them',
-      );
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-    });
-
-    it('deletes an unassigned teacher and their linked user in one transaction', async () => {
-      prisma.teacher.findFirst.mockResolvedValue({ id: 't1', organizationId: 'org-1', userId: 'u1' });
-      prisma.group.count.mockResolvedValue(0);
 
       const result = await svc.remove('org-1', 't1');
 
+      expect(prisma.group.updateMany).toHaveBeenCalledWith({
+        where: { teacherId: 't1', organizationId: 'org-1' },
+        data: { teacherId: null },
+      });
+      expect(prisma.lesson.updateMany).toHaveBeenCalledWith({
+        where: { teacherId: 't1' },
+        data: { teacherId: null },
+      });
+      expect(prisma.payrollRun.deleteMany).toHaveBeenCalledWith({
+        where: { teacherId: 't1', organizationId: 'org-1' },
+      });
       expect(prisma.teacher.delete).toHaveBeenCalledWith({ where: { id: 't1', organizationId: 'org-1' } });
       expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } });
       expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } });

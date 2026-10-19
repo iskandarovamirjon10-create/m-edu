@@ -31,6 +31,7 @@ import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Group, Course, Teacher } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -172,13 +173,13 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
+  blue:    { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)', border: 'rgba(37,99,235,0.20)' },
+  green:   { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)',  border: 'rgba(16,185,129,0.20)' },
+  orange:  { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)',  border: 'rgba(245,158,11,0.20)' },
+  red:     { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)' },
+  purple:  { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)' },
+  cyan:    { fg: '#0284C7', bg: 'rgba(2,132,199,0.10)', glow: 'rgba(2,132,199,0.28)', border: 'rgba(2,132,199,0.20)' },
+  gray:    { fg: '#64748B', bg: 'rgba(100,116,139,0.10)', glow: 'rgba(100,116,139,0.22)', border: 'rgba(100,116,139,0.20)' },
   emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
 };
 
@@ -231,12 +232,12 @@ function nameHash(str: string): number {
 }
 
 const AVATAR_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
+  ['#2563EB', '#6366F1'],
+  ['#6366F1', '#FF2D55'],
+  ['#10B981', '#0284C7'],
+  ['#F59E0B', '#FF2D55'],
+  ['#6366F1', '#6366F1'],
+  ['#0284C7', '#2563EB'],
 ];
 
 function avatarGradient(name: string): string {
@@ -325,7 +326,7 @@ function FormSection({
           {title}
         </h3>
         {subtitle && (
-          <p className="text-[10.5px] font-medium text-[#86868B]">{subtitle}</p>
+          <p className="text-[10.5px] font-medium text-[#64748B]">{subtitle}</p>
         )}
       </div>
     </div>
@@ -346,10 +347,7 @@ function ActiveToggle({
     <div
       role="radiogroup"
       aria-label={t('enum.status.ACTIVE')}
-      className="inline-flex items-center gap-1 rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-1 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
-      }}
+      className="inline-flex items-center gap-1 rounded-xl border border-black/[0.04] bg-black/[0.04] p-1 dark:border-white/[0.06] dark:bg-white/[0.06]"
     >
       {[true, false].map((val) => {
         const active = value === val;
@@ -367,7 +365,7 @@ function ActiveToggle({
             transition={SPRING.snappy}
             className="relative overflow-hidden rounded-xl px-3.5 py-1.5 text-[12px] font-bold tracking-tight outline-none transition-colors"
             style={{
-              color: active ? c.fg : '#86868B',
+              color: active ? c.fg : '#64748B',
             }}
           >
             {active && (
@@ -418,6 +416,7 @@ export function GroupFormPage() {
   const navigate = useNavigate();
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
+  const { playTick, playSuccess, playError } = usePremiumSound();
 
   const [form, setForm] = useState<GroupFormState>(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState<
@@ -530,6 +529,7 @@ export function GroupFormPage() {
       return isEdit ? groupsApi.update(id!, payload) : groupsApi.create(payload);
     },
     onSuccess: (res) => {
+      playSuccess();
       push('success', isEdit ? t('groups.updated') : t('groups.created'));
       qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
       qc.invalidateQueries({ queryKey: queryKeys.groups.selectors() });
@@ -538,6 +538,7 @@ export function GroupFormPage() {
       navigate(`/groups/${(res as Group).id}`, { replace: true });
     },
     onError: (e: Error) => {
+      playError();
       push('error', getErrorMessage(e));
     },
   });
@@ -546,15 +547,20 @@ export function GroupFormPage() {
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (!validateForm()) return;
+      if (!validateForm()) {
+        playError();
+        return;
+      }
+      playTick();
       save.mutate();
     },
-    [validateForm, save],
+    [validateForm, save, playError, playTick],
   );
 
   const handleCancel = useCallback(() => {
+    playTick();
     navigate(-1);
-  }, [navigate]);
+  }, [navigate, playTick]);
 
   const { refetch: refetchExisting } = existing;
   const handleRetry = useCallback(() => {
@@ -565,7 +571,7 @@ export function GroupFormPage() {
   if (isEdit && existing.isLoading && !existing.data) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80" />
         <GroupFormSkeleton />
       </div>
     );
@@ -601,12 +607,9 @@ export function GroupFormPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-7"
         >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
           <span
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-0 h-24"
@@ -624,11 +627,11 @@ export function GroupFormPage() {
               className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
               style={{
                 background: isEdit
-                  ? 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)'
-                  : 'linear-gradient(135deg, #34C759 0%, #32ADE6 100%)',
+                  ? 'linear-gradient(135deg, #2563EB 0%, #6366F1 100%)'
+                  : 'linear-gradient(135deg, #10B981 0%, #0284C7 100%)',
                 boxShadow: isEdit
-                  ? '0 12px 28px -10px rgba(0,122,255,0.55), inset 0 2px 0 rgba(255,255,255,0.35)'
-                  : '0 12px 28px -10px rgba(52,199,89,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
+                  ? '0 12px 28px -10px rgba(37,99,235,0.55), inset 0 2px 0 rgba(255,255,255,0.35)'
+                  : '0 12px 28px -10px rgba(16,185,129,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
               }}
             >
               <span
@@ -653,16 +656,16 @@ export function GroupFormPage() {
                   className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em]"
                   style={{
                     background: isEdit
-                      ? 'rgba(0,122,255,0.10)'
-                      : 'rgba(52,199,89,0.10)',
-                    color: isEdit ? '#007AFF' : '#34C759',
+                      ? 'rgba(37,99,235,0.10)'
+                      : 'rgba(16,185,129,0.10)',
+                    color: isEdit ? '#2563EB' : '#10B981',
                   }}
                 >
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   {isEdit ? t('groupForm.editTitle') : t('groupForm.newTitle')}
                 </span>
                 {selectedCourse && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#AF52DE]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#6366F1]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#6366F1]">
                     <Icon paths={I.book} size={11} strokeWidth={2.5} />
                     {selectedCourse.name}
                   </span>
@@ -674,15 +677,15 @@ export function GroupFormPage() {
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={SPRING.snappy}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-[#FF9500]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#FF9500]"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[#F59E0B]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#F59E0B]"
                     >
                       <span className="relative flex h-1.5 w-1.5">
                         <motion.span
-                          className="absolute inset-0 rounded-full bg-[#FF9500]"
+                          className="absolute inset-0 rounded-full bg-[#F59E0B]"
                           animate={{ scale: [1, 2.4, 1], opacity: [0.6, 0, 0.6] }}
                           transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
                         />
-                        <span className="relative h-1.5 w-1.5 rounded-full bg-[#FF9500]" />
+                        <span className="relative h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
                       </span>
                       {t('common.unsavedChanges') ?? 'Unsaved'}
                     </motion.span>
@@ -693,7 +696,7 @@ export function GroupFormPage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {isEdit ? t('groupForm.editTitle') : t('groupForm.newTitle')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {isEdit
                   ? t('groupForm.editSubtitle')
                   : t('groupForm.createSubtitle')}
@@ -708,11 +711,7 @@ export function GroupFormPage() {
       ============================================================ */}
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-6"
-        style={{
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-        }}
+        className="liquid-glass-surface relative overflow-hidden rounded-3xl p-6 shadow-xl backdrop-blur-xl sm:p-8"
       >
         <span
           aria-hidden
@@ -803,7 +802,7 @@ export function GroupFormPage() {
                   </GlassSelect>
                 </div>
                 {selectedTeacher && (
-                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-[#32ADE633] bg-[#32ADE6]/[0.06] px-2.5 py-1.5">
+                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-[#0284C733] bg-[#0284C7]/[0.06] px-2.5 py-1.5">
                     <div
                       className="relative flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold text-white"
                       style={{
@@ -916,7 +915,7 @@ export function GroupFormPage() {
           </div>
 
           {/* ── Actions ──────────────────────────────────────────────── */}
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-5 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-5 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"

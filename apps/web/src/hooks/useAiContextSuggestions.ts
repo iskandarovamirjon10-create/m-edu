@@ -64,7 +64,7 @@ export function useAiContextSuggestions(): AiContextSuggestions {
         id: 'attendanceSummary',
         title: t('ai.tools.attendanceSummary.title') || 'Davomat tahlili',
         desc: t('ai.tools.attendanceSummary.desc') || 'Bugungi davomat va qatnashmaganlar tahlilini olish',
-        prompt: t('ai.tools.attendanceSummary.prompt') || 'Bugungi davomat bo’yicha to’liq hisobot ber: kelganlar, kelmaganlar va kechikkanlar.',
+        prompt: t('ai.tools.attendanceSummary.prompt') || 'Bugungi davomat bo\'yicha to\'liq hisobot ber: kelganlar, kelmaganlar va kechikkanlar.',
         icon: ClipboardCheck,
         badge: 'Live Data',
         gradient: 'linear-gradient(135deg, #007AFF 0%, #32ADE6 100%)',
@@ -72,17 +72,17 @@ export function useAiContextSuggestions(): AiContextSuggestions {
       {
         id: 'lessonPlan',
         title: t('ai.tools.lessonPlan.title') || 'Dars rejasi yordamchisi',
-        desc: t('ai.tools.lessonPlan.desc') || 'Mavzu bo’yicha 45 daqiqalik dars rejasi va topshiriqlar',
-        prompt: t('ai.tools.lessonPlan.prompt') || 'Mavzu bo’yicha batafsil 45 daqiqalik dars rejasi, vaqt taqsimoti va uy vazifasini tuzib ber.',
+        desc: t('ai.tools.lessonPlan.desc') || 'Mavzu bo\'yicha 45 daqiqalik dars rejasi va topshiriqlar',
+        prompt: t('ai.tools.lessonPlan.prompt') || 'Mavzu bo\'yicha batafsil 45 daqiqalik dars rejasi, vaqt taqsimoti va uy vazifasini tuzib ber.',
         icon: BookOpen,
         badge: 'Curriculum',
         gradient: 'linear-gradient(135deg, #AF52DE 0%, #5856D6 100%)',
       },
       {
         id: 'studentRisk',
-        title: t('ai.tools.studentRisk.title') || 'O’quvchilar xavf tahlili',
-        desc: t('ai.tools.studentRisk.desc') || 'Davomat va natijalarda orqada qolayotgan o’quvchilar',
-        prompt: t('ai.tools.studentRisk.prompt') || 'Davomat va baholarda pasayish kuzatilgan, xavf ostidagi o’quvchilar tahlilini ko’rsat.',
+        title: t('ai.tools.studentRisk.title') || 'O\'quvchilar xavf tahlili',
+        desc: t('ai.tools.studentRisk.desc') || 'Davomat va natijalarda orqada qolayotgan o\'quvchilar',
+        prompt: t('ai.tools.studentRisk.prompt') || 'Davomat va baholarda pasayish kuzatilgan, xavf ostidagi o\'quvchilar tahlilini ko\'rsat.',
         icon: AlertTriangle,
         badge: 'Early Warning',
         gradient: 'linear-gradient(135deg, #FF9500 0%, #FF2D55 100%)',
@@ -90,8 +90,8 @@ export function useAiContextSuggestions(): AiContextSuggestions {
       {
         id: 'financialDebt',
         title: t('ai.tools.financialDebt.title') || 'Moliyaviy qarz ogohlantirishi',
-        desc: t('ai.tools.financialDebt.desc') || 'Qarzdorlar ro’yxati, to’lovlar va kassa tushumi',
-        prompt: t('ai.tools.financialDebt.prompt') || 'Qarzdor o’quvchilar, kechikkan to’lovlar va umumiy moliyaviy intizom bo’yicha hisobot ber.',
+        desc: t('ai.tools.financialDebt.desc') || 'Qarzdorlar ro\'yxati, to\'lovlar va kassa tushumi',
+        prompt: t('ai.tools.financialDebt.prompt') || 'Qarzdor o\'quvchilar, kechikkan to\'lovlar va umumiy moliyaviy intizom bo\'yicha hisobot ber.',
         icon: Wallet,
         badge: 'Cashflow',
         gradient: 'linear-gradient(135deg, #34C759 0%, #10B981 100%)',
@@ -118,7 +118,7 @@ export function useAiContextSuggestions(): AiContextSuggestions {
           'Bugun kimlar darsga kelmadi?',
           'Shu haftalik davomat dinamikasi qanday?',
           'Surunkali dars qoldiruvchi talabalar',
-          'Guruhlar bo’yicha davomat ko’rsatkichlari',
+          'Guruhlar bo\'yicha davomat ko\'rsatkichlari',
         ];
       }
       return [
@@ -140,10 +140,10 @@ export function useAiContextSuggestions(): AiContextSuggestions {
       }
       if (isUz) {
         return [
-          'Xavf guruhidagi talabalar ro’yxati',
+          'Xavf guruhidagi talabalar ro\'yxati',
           'Eng faol va iqtidorli talabalar',
-          'Yangi qabul qilingan o’quvchilar',
-          'Guruhlar bo’yicha umumiy o’zlashtirish',
+          'Yangi qabul qilingan o\'quvchilar',
+          'Guruhlar bo\'yicha umumiy o\'zlashtirish',
         ];
       }
       return [
@@ -165,9 +165,9 @@ export function useAiContextSuggestions(): AiContextSuggestions {
       }
       if (isUz) {
         return [
-          'To’lov muddati o’tgan qarzdor talabalar',
-          'Bu oyda tushgan to’lovlar va kutilayotgan summa',
-          'Kechikkan to’lovlar bo’yicha eslatma tayyorla',
+          'To\'lov muddati o\'tgan qarzdor talabalar',
+          'Bu oyda tushgan to\'lovlar va kutilayotgan summa',
+          'Kechikkan to\'lovlar bo\'yicha eslatma tayyorla',
           'Moliyaviy intizom tahlili',
         ];
       }
@@ -190,10 +190,10 @@ export function useAiContextSuggestions(): AiContextSuggestions {
       }
       if (isUz) {
         return [
-          'Dars jadvalida to’qnashuvlar bormi?',
-          'Bugungi bo’sh xonalar va darslar',
-          'O’qituvchilar haftalik dars yuklamasi',
-          'Ertangi kunlik darslar ro’yxati',
+          'Dars jadvalida to\'qnashuvlar bormi?',
+          'Bugungi bo\'sh xonalar va darslar',
+          'O\'qituvchilar haftalik dars yuklamasi',
+          'Ertangi kunlik darslar ro\'yxati',
         ];
       }
       return [
@@ -219,10 +219,10 @@ export function useAiContextSuggestions(): AiContextSuggestions {
       }
       if (isUz) {
         return [
-          'Mavzu bo’yicha 45 daqiqalik dars rejasi tuz',
-          'Mening guruhlarim bo’yicha bugungi davomat',
+          'Mavzu bo\'yicha 45 daqiqalik dars rejasi tuz',
+          'Mening guruhlarim bo\'yicha bugungi davomat',
           'Interaktiv topshiriqlar va test savollari',
-          'Mening darslarimdagi orqada qolayotgan o’quvchilar',
+          'Mening darslarimdagi orqada qolayotgan o\'quvchilar',
         ];
       }
       return [
@@ -245,9 +245,9 @@ export function useAiContextSuggestions(): AiContextSuggestions {
       if (isUz) {
         return [
           'Bugungi darslarim jadvali',
-          'Mening uy vazifalarim ro’yxati',
-          'Mening davomat ko’rsatkichlarim',
-          'To’lovlarim va balansim holati',
+          'Mening uy vazifalarim ro\'yxati',
+          'Mening davomat ko\'rsatkichlarim',
+          'To\'lovlarim va balansim holati',
         ];
       }
       return [
@@ -269,10 +269,10 @@ export function useAiContextSuggestions(): AiContextSuggestions {
     }
     if (isUz) {
       return [
-        'Bugungi markaziy operatsion ko’rsatkichlar',
-        'E’tibor talab qiladigan muammolar tahlili',
-        'Davomat va to’lovlar holati qisqacha',
-        'Guruhlar to’laligi va faollik darajasi',
+        'Bugungi markaziy operatsion ko\'rsatkichlar',
+        'E\'tibor talab qiladigan muammolar tahlili',
+        'Davomat va to\'lovlar holati qisqacha',
+        'Guruhlar to\'laligi va faollik darajasi',
       ];
     }
     return [

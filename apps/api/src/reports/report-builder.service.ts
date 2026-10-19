@@ -681,10 +681,14 @@ export class ReportBuilderService {
             xlsx: { writeBuffer: () => Promise<ArrayBuffer> };
           };
         };
+        // CWE-1236: sanitize cells starting with formula triggers (=, +, -, @, \t, \r)
+        const sanitizeExcelCell = (v: string): string => {
+          return /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+        };
         const workbook = new ExcelJS.Workbook();
         const sheet = workbook.addWorksheet(params.type);
         sheet.addRow(headers);
-        matrix.forEach((r) => sheet.addRow(r));
+        matrix.forEach((r) => sheet.addRow(r.map(sanitizeExcelCell)));
         const buffer = await workbook.xlsx.writeBuffer();
         return {
           buffer: Buffer.from(buffer),

@@ -10,6 +10,26 @@ describe('toMinor — exact decimal quantization (regression F1)', () => {
     expect(toMinor('1234.56')).toBe(123456);
   });
 
+  it('correctly rounds Prisma Decimal-like objects without IEEE 754 precision loss (M-EDU-FIN-006)', () => {
+    const mockDecimal1 = {
+      toString: () => '1.005',
+      toNumber: () => 1.005,
+    };
+    expect(toMinor(mockDecimal1)).toBe(101);
+
+    const mockDecimal2 = {
+      toString: () => '8.165',
+      toNumber: () => 8.165,
+    };
+    expect(toMinor(mockDecimal2)).toBe(817);
+
+    const mockDecimal3 = {
+      toString: () => '1234.56',
+      toNumber: () => 1234.56,
+    };
+    expect(toMinor(mockDecimal3)).toBe(123456);
+  });
+
   it('handles negatives symmetrically', () => {
     expect(toMinor('-3.005')).toBe(-301);
     expect(toMinor('-0.01')).toBe(-1);

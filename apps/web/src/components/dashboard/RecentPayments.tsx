@@ -37,29 +37,29 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
     switch (status) {
       case 'PAID':
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--success-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--success)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
+          <span className="inline-flex items-center gap-1 rounded-full bg-apple-green/10 dark:bg-apple-green/15 px-2 py-0.5 text-[11px] font-semibold text-apple-green">
+            <span className="h-1.5 w-1.5 rounded-full bg-apple-green" />
             {t('payments.status.PAID') || 'Paid'}
           </span>
         );
       case 'PENDING':
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--warning)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--warning)]" />
+          <span className="inline-flex items-center gap-1 rounded-full bg-apple-orange/10 dark:bg-apple-orange/15 px-2 py-0.5 text-[11px] font-semibold text-apple-orange">
+            <span className="h-1.5 w-1.5 rounded-full bg-apple-orange" />
             {t('payments.status.PENDING') || 'Pending'}
           </span>
         );
       case 'FAILED':
       case 'CANCELLED':
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--danger-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--danger)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--danger)]" />
+          <span className="inline-flex items-center gap-1 rounded-full bg-apple-red/10 dark:bg-apple-red/15 px-2 py-0.5 text-[11px] font-semibold text-apple-red">
+            <span className="h-1.5 w-1.5 rounded-full bg-apple-red" />
             {t(`payments.status.${status}`) || status}
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center rounded-full bg-[var(--neutral-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)]">
+          <span className="inline-flex items-center rounded-full bg-black/[0.05] dark:bg-white/[0.08] px-2 py-0.5 text-[11px] font-semibold text-secondary">
             {status}
           </span>
         );
@@ -67,20 +67,20 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
   };
 
   return (
-    <div className="flex flex-col justify-between rounded-[var(--radius-2xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)] sm:p-6">
+    <div className="relative overflow-hidden flex flex-col justify-between rounded-2xl border border-subtle/80 bg-card/85 backdrop-blur-xl p-5 shadow-card before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent dark:before:via-white/10 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold tracking-tight text-[var(--text-primary)]">
+          <h2 className="text-base font-semibold tracking-tight text-primary">
             {t('dashboard.recentPayments') || 'Recent Transactions'}
           </h2>
-          <p className="text-xs text-[var(--text-muted)]">
+          <p className="text-xs text-secondary">
             {t('dashboard.paymentCollection') || 'Latest tuition & fee payments'}
           </p>
         </div>
 
         <Link
           to="/payments"
-          className="items-center gap-1 text-xs font-semibold text-[var(--primary)] transition-colors hover:underline inline-flex"
+          className="items-center gap-1 text-xs font-semibold text-primary transition-colors hover:underline inline-flex"
         >
           <span>{t('dashboard.viewPayments') || 'View all'}</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -98,7 +98,7 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
             />
           </div>
         ) : (
-          <div className="divide-y divide-[var(--border-subtle)] overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)]">
+          <div className="divide-y divide-subtle/60 overflow-hidden rounded-xl border border-subtle/70 bg-card/50 backdrop-blur-sm">
             {payments.slice(0, 6).map((payment) => {
               const studentName = getStudentName(payment, t('dashboard.student') || 'Student');
               const studentId = payment.studentId;
@@ -114,19 +114,19 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
                       navigate(studentId ? `/students/${studentId}` : '/payments');
                     }
                   }}
-                  className="group flex cursor-pointer items-center justify-between gap-3 p-3 transition-colors hover:bg-[var(--bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                  className="group flex cursor-pointer items-center justify-between gap-3 p-3 transition-colors hover:bg-surface/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {/* Left: Avatar + Student Name + Date */}
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--primary-soft)] text-xs font-bold text-[var(--primary)] ring-1 ring-[var(--primary)]/20">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-apple-blue/10 dark:bg-apple-blue/20 text-xs font-bold text-apple-blue ring-1 ring-apple-blue/20">
                       {getInitials(studentName)}
                     </div>
 
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)]">
+                      <p className="truncate text-xs font-semibold text-primary group-hover:text-apple-blue transition-colors">
                         {studentName}
                       </p>
-                      <p className="truncate text-[11px] text-[var(--text-muted)]">
+                      <p className="truncate text-[11px] text-tertiary">
                         {formatDate(payment.createdAt)}
                         {payment.method ? ` · ${payment.method}` : ''}
                       </p>
@@ -136,7 +136,7 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
                   {/* Right: Amount + Status Badge + Arrow */}
                   <div className="flex shrink-0 items-center gap-3">
                     <div className="text-right">
-                      <p className="text-xs font-bold text-[var(--text-primary)] tabular-nums">
+                      <p className="text-xs font-bold text-primary tabular-nums">
                         {formatCurrency(payment.amount)}
                       </p>
                       <div className="mt-0.5">{statusBadge(payment.status)}</div>
@@ -151,7 +151,7 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
                       strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="hidden sm:block text-[var(--text-tertiary)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--primary)]"
+                      className="hidden sm:block text-tertiary transition-transform group-hover:translate-x-0.5 group-hover:text-apple-blue"
                     >
                       <path d="m9 18 6-6-6-6" />
                     </svg>

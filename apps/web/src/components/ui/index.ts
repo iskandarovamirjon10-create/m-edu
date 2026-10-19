@@ -27,11 +27,24 @@ export { GlassSurface, type GlassElevation, type GlassTone} from'./Glass';
 export { useToast, setToastContext, ToastContainer, ToastHost, ToastItemView, type ToastType, type ToastItem} from'./GlassToast';
 
 // GlassField and GlassPagination — extracted to avoid circular import
-export { GlassField} from'./GlassField';
-export { GlassPagination} from'./GlassPagination';
+export { GlassField } from './GlassField';
+export { GlassPagination } from './GlassPagination';
+
+// Floating Action Island for Linear-style batch actions
+export { FloatingActionIsland, type FloatingActionItem, type FloatingActionIslandProps } from './FloatingActionIsland';
+
+// Apple Liquid Glass Optics Engine
+export {
+  LiquidGlassStudio,
+  openLiquidGlassStudio,
+  applyOpticsToDOM,
+  loadSavedOptics,
+  DEFAULT_OPTICS,
+  GLASS_PRESETS,
+  type LiquidGlassOptics,
+} from './LiquidGlassStudio';
 
 // Backward-compatibility aliases for legacy page imports — note that
 // `ui.tsx` provides a richer set of legacy aliases (TextInput, Modal,
 // Pagination, useToasts, statusColor, etc.) and is the file pages import
 // from via `@/components/ui`. We only add the ones that are missing.
-export * from'./GlassAsyncSelect';

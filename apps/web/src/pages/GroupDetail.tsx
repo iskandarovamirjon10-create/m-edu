@@ -18,6 +18,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
 import { groupsApi } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys.factory';
 import {
   GlassErrorState,
   GlassButton,
@@ -27,6 +28,8 @@ import { getErrorMessage } from '@/lib/errorMessages';
 import type { Group, GroupSchedule } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -178,29 +181,27 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
-  emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
+  blue:    { fg: '#2563EB', bg: 'rgba(37,99,235,0.08)', glow: 'rgba(37,99,235,0.12)', border: 'rgba(37,99,235,0.18)' },
+  green:   { fg: '#059669', bg: 'rgba(5,150,105,0.08)',  glow: 'rgba(5,150,105,0.12)',  border: 'rgba(5,150,105,0.18)' },
+  orange:  { fg: '#D97706', bg: 'rgba(217,119,6,0.08)',  glow: 'rgba(217,119,6,0.12)',  border: 'rgba(217,119,6,0.18)' },
+  red:     { fg: '#DC2626', bg: 'rgba(220,38,38,0.08)',  glow: 'rgba(220,38,38,0.12)',  border: 'rgba(220,38,38,0.18)' },
+  purple:  { fg: '#4F46E5', bg: 'rgba(79,70,229,0.08)', glow: 'rgba(79,70,229,0.12)', border: 'rgba(79,70,229,0.18)' },
+  cyan:    { fg: '#0284C7', bg: 'rgba(2,132,199,0.08)', glow: 'rgba(2,132,199,0.12)', border: 'rgba(2,132,199,0.18)' },
+  gray:    { fg: '#475569', bg: 'rgba(71,85,105,0.08)', glow: 'rgba(71,85,105,0.12)', border: 'rgba(71,85,105,0.18)' },
+  emerald: { fg: '#059669', bg: 'rgba(5,150,105,0.08)', glow: 'rgba(5,150,105,0.12)', border: 'rgba(5,150,105,0.18)' },
 };
 
 const DAY_TONES: Record<string, Tone> = {
   MONDAY: 'blue',
   TUESDAY: 'purple',
-  WEDNESDAY: 'green',
-  THURSDAY: 'orange',
-  FRIDAY: 'red',
-  SATURDAY: 'cyan',
-  SUNDAY: 'emerald',
+  WEDNESDAY: 'emerald',
+  THURSDAY: 'cyan',
+  FRIDAY: 'blue',
+  SATURDAY: 'purple',
+  SUNDAY: 'gray',
 };
 
 const DAYS: string[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
-
-const GROUP_PALETTES: Tone[] = ['blue', 'purple', 'emerald', 'orange', 'cyan', 'red', 'green', 'gray'];
 
 /* ============================================================================
  * TYPES + HELPERS
@@ -258,23 +259,17 @@ function nameHash(str: string): number {
 }
 
 const AVATAR_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
-  ['#FF2D55', '#FF9500'],
-  ['#30D158', '#34C759'],
+  ['#2563EB', '#1D4ED8'],
+  ['#475569', '#334155'],
+  ['#059669', '#047857'],
+  ['#0D9488', '#0F766E'],
+  ['#4F46E5', '#4338CA'],
+  ['#1E293B', '#0F172A'],
 ];
 
 function avatarGradient(name: string): string {
   const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
-}
-
-function groupTone(name: string): Tone {
-  return GROUP_PALETTES[nameHash(name) % GROUP_PALETTES.length];
 }
 
 function durationDays(start: string | null | undefined, end: string | null | undefined): number | null {
@@ -311,15 +306,15 @@ function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; r
 function GroupDetailSkeleton() {
   return (
     <div className="space-y-5">
-      <Shimmer className="h-28 w-full" radius="1.75rem" />
+      <Shimmer className="h-28 w-full" radius="1rem" />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[88px]" radius="1rem" />)}
+        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[88px]" radius="0.75rem" />)}
       </div>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Shimmer className="h-72" radius="1.75rem" />
-        <div className="lg:col-span-2"><Shimmer className="h-72" radius="1.75rem" /></div>
+        <Shimmer className="h-72" radius="1rem" />
+        <div className="lg:col-span-2"><Shimmer className="h-72" radius="1rem" /></div>
       </div>
-      <Shimmer className="h-64 w-full" radius="1.75rem" />
+      <Shimmer className="h-64 w-full" radius="1rem" />
     </div>
   );
 }
@@ -358,7 +353,7 @@ function CountUp({
   );
 }
 
-/** Premium KPI tile */
+/** Apple Pro KPI tile */
 function KpiTile({
   label,
   value,
@@ -376,44 +371,29 @@ function KpiTile({
   return (
     <motion.div
       variants={rowVariants}
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -2 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
-      />
       <div
-        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
         style={{
           background: c.bg,
           color: c.fg,
           border: `1px solid ${c.border}`,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
         }}
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-xl"
-          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent)' }}
-        />
-        <Icon paths={icon} size={18} strokeWidth={2} className="relative" />
+        <Icon paths={icon} size={17} strokeWidth={2} className="relative" />
       </div>
       <div className="relative min-w-0 flex-1">
-        <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
+        <div className="text-[20px] font-bold tracking-tight leading-none text-slate-900 dark:text-slate-100">
           <CountUp value={value} suffix={suffixFromSecondary(secondary)} />
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-1 truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
           {label}
         </div>
         {secondary && (
-          <div className="mt-0.5 truncate text-[10.5px] font-semibold tracking-tight text-[#86868B]/80">
+          <div className="mt-0.5 truncate text-[11px] text-slate-400 dark:text-slate-500">
             {secondary}
           </div>
         )}
@@ -426,13 +406,13 @@ function suffixFromSecondary(_?: string): string {
   return '';
 }
 
-/** Status badge with tone-aware pulse */
+/** Status badge */
 function StatusBadge({ isActive, label }: { isActive: boolean; label: string }) {
   const tone: Tone = isActive ? 'emerald' : 'gray';
   const c = TONES[tone];
   return (
     <span
-      className="relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em]"
+      className="relative inline-flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-[11px] font-medium"
       style={{
         background: c.bg,
         color: c.fg,
@@ -440,14 +420,6 @@ function StatusBadge({ isActive, label }: { isActive: boolean; label: string }) 
       }}
     >
       <span className="relative flex h-1.5 w-1.5">
-        {isActive && (
-          <motion.span
-            className="absolute inset-0 rounded-full"
-            style={{ background: c.fg, opacity: 0.6 }}
-            animate={{ scale: [1, 2.4, 1], opacity: [0.6, 0, 0.6] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
-          />
-        )}
         <span className="relative h-1.5 w-1.5 rounded-full" style={{ background: c.fg }} />
       </span>
       {label}
@@ -475,39 +447,26 @@ function SectionPanel({
   return (
     <motion.section
       variants={cardVariants}
-      className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-      }}
+      className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-16"
-        style={{
-          background:
-            'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-        }}
-      />
-      <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+      <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-white/[0.06] px-5 py-3.5">
         <div className="flex items-center gap-3">
           <div
-            className="flex h-9 w-9 items-center justify-center rounded-xl"
+            className="flex h-8 w-8 items-center justify-center rounded-lg"
             style={{
               background: c.bg,
               color: c.fg,
               border: `1px solid ${c.border}`,
-              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
             }}
           >
-            <Icon paths={icon} size={16} strokeWidth={2} />
+            <Icon paths={icon} size={15} strokeWidth={2} />
           </div>
           <div className="min-w-0">
-            <h2 className="text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+            <h2 className="text-[13.5px] font-semibold tracking-tight text-slate-900 dark:text-slate-100">
               {title}
             </h2>
             {subtitle && (
-              <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 {subtitle}
               </p>
             )}
@@ -534,17 +493,17 @@ function InfoRow({
 }) {
   const c = TONES[tone];
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
-      <span className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[#86868B]">
+    <div className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+      <span className="inline-flex items-center gap-2 text-[12.5px] font-medium text-slate-500 dark:text-slate-400">
         <span
-          className="flex h-7 w-7 items-center justify-center rounded-lg"
+          className="flex h-6 w-6 items-center justify-center rounded-md"
           style={{ background: c.bg, color: c.fg }}
         >
           <Icon paths={icon} size={12} strokeWidth={2.2} />
         </span>
         {label}
       </span>
-      <span className="text-right text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+      <span className="text-right text-[13px] font-semibold tracking-tight text-slate-900 dark:text-slate-100">
         {value}
       </span>
     </div>
@@ -558,11 +517,11 @@ function CapacityBar({ current, capacity }: { current: number; capacity?: number
   const c = TONES[tone];
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[13px] font-semibold tabular-nums tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+      <span className="text-[13px] font-semibold tabular-nums tracking-tight text-slate-900 dark:text-slate-100">
         {formatCapacity(current, capacity)}
       </span>
       {capacity ? (
-        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-200 dark:bg-white/[0.08]">
           <motion.div
             className="h-full rounded-full"
             style={{ background: c.fg }}
@@ -583,20 +542,14 @@ function DayTile({ day }: { day: string }) {
   const idx = DAYS.indexOf(day) + 1;
   return (
     <div
-      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
       style={{
-        background: `linear-gradient(135deg, ${c.fg} 0%, ${c.glow} 100%)`,
-        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 6px 16px -6px ${c.glow}`,
+        background: c.bg,
+        color: c.fg,
+        border: `1px solid ${c.border}`,
       }}
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-2xl"
-        style={{
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
-        }}
-      />
-      <span className="relative text-[14px] font-bold tracking-tighter tabular-nums">
+      <span className="relative text-[13px] font-bold tracking-tight tabular-nums">
         {idx > 0 ? String(idx).padStart(2, '0') : '—'}
       </span>
     </div>
@@ -606,7 +559,7 @@ function DayTile({ day }: { day: string }) {
 /** Time chip */
 function TimeChip({ start, end }: { start: string; end: string }) {
   return (
-    <div className="inline-flex items-center gap-1.5 rounded-lg bg-[#007AFF]/10 px-2.5 py-1 text-[12px] font-bold tabular-nums tracking-tight text-[#007AFF]">
+    <div className="inline-flex items-center gap-1.5 rounded-md bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium tabular-nums tracking-tight text-blue-600 dark:text-blue-400">
       <Icon paths={I.clock} size={11} strokeWidth={2.2} />
       <span>{formatScheduleTime(start)}</span>
       <span className="opacity-40">→</span>
@@ -620,7 +573,7 @@ function RoomChip({ name }: { name: string }) {
   const c = TONES.purple;
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.10em]"
+      className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-medium"
       style={{
         background: c.bg,
         color: c.fg,
@@ -635,14 +588,9 @@ function RoomChip({ name }: { name: string }) {
 
 /** Email chip */
 function EmailChip({ email }: { email: string }) {
-  const c = TONES.gray;
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-medium tracking-tight"
-      style={{
-        background: c.bg,
-        color: '#5F6368',
-      }}
+      className="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-400 tracking-tight"
     >
       <Icon paths={I.mail} size={10} strokeWidth={2} />
       <span className="truncate max-w-[14rem]">{email}</span>
@@ -660,7 +608,7 @@ export function GroupDetailPage() {
   const { id } = useParams<{ id: string }>();
 
   const group = useQuery({
-    queryKey: ['group', id],
+    queryKey: queryKeys.groups.detail(id!),
     queryFn: () => groupsApi.get(id!),
     enabled: !!id,
     placeholderData: (previousData) => previousData,
@@ -696,7 +644,7 @@ export function GroupDetailPage() {
   if (group.isLoading && !groupData) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80" />
         <GroupDetailSkeleton />
       </div>
     );
@@ -726,8 +674,89 @@ export function GroupDetailPage() {
     : '—';
   const teacherInitials = getInitials(teacherName);
   const teacherGradient = avatarGradient(teacherName);
-  const tone = groupTone(groupData.name);
-  const c = TONES[tone];
+
+  const { playTick, playPop } = usePremiumSound();
+
+  const handleOpenGroupSidecar = useCallback(() => {
+    if (!groupData) return;
+    playPop();
+    const sidecarData: QuickLookData = {
+      type: 'group',
+      id: groupData.id,
+      title: groupData.name,
+      subtitle: `${groupData.course?.name || 'Kurs'} · ${groupData.room || 'Xona belgilanmagan'}`,
+      status: {
+        label: groupData.isActive ? 'Faol guruh' : 'Nofaol',
+        tone: groupData.isActive ? 'green' : 'amber',
+      },
+      metrics: [
+        { label: 'O\'quvchilar', value: `${stats.totalMembers} / ${stats.capacity || 'Cheksiz'}` },
+        { label: 'Dars jadvali', value: `${stats.scheduleCount} ta slot` },
+        { label: 'Davomiylik', value: stats.days ? `${stats.days} kun` : '—' },
+        { label: 'O\'qituvchi', value: teacherName },
+      ],
+      details: [
+        { label: 'Guruh ID', value: groupData.id, copyable: true },
+        { label: 'Guruh nomi', value: groupData.name },
+        { label: 'Kurs / Fan', value: groupData.course?.name || '—' },
+        { label: 'O\'qituvchi', value: teacherName },
+        { label: 'Dars xonasi', value: groupData.room || '—' },
+        { label: 'O\'quvchilar soni', value: `${stats.totalMembers} nafar` },
+        { label: 'Maksimal sig\'im', value: groupData.capacity ? `${groupData.capacity} nafar` : 'Cheklanmagan' },
+        { label: 'Boshlanish sanasi', value: formatDate(groupData.startDate) },
+        { label: 'Tugash sanasi', value: formatDate(groupData.endDate) },
+        { label: 'Holati', value: groupData.isActive ? 'Faol' : 'Nofaol' },
+      ],
+    };
+    openSidecar(sidecarData);
+  }, [groupData, playPop, stats, teacherName]);
+
+  const handleOpenMemberSidecar = useCallback((member: GroupMember) => {
+    playPop();
+    const name = fullName(member.student.user?.firstName, member.student.user?.lastName);
+    const sidecarData: QuickLookData = {
+      type: 'student',
+      id: member.student.id,
+      title: name,
+      subtitle: member.student.user?.email || (member.student.user as { phone?: string })?.phone || 'Guruh a\'zosi',
+      status: {
+        label: member.isActive ? 'Faol o\'quvchi' : 'Nofaol',
+        tone: member.isActive ? 'green' : 'slate',
+      },
+      metrics: [
+        { label: 'F.I.SH.', value: name },
+        { label: 'Guruh', value: groupData?.name || '—' },
+        { label: 'Qo\'shilgan sana', value: formatDate(member.joinedAt) },
+      ],
+      details: [
+        { label: 'Talaba ID', value: member.student.id, copyable: true },
+        { label: 'F.I.SH.', value: name },
+        { label: 'Elektron pochta', value: member.student.user?.email || '—', copyable: Boolean(member.student.user?.email) },
+        { label: 'Telefon', value: (member.student.user as { phone?: string })?.phone || '—', copyable: Boolean((member.student.user as { phone?: string })?.phone) },
+        { label: 'Guruhga qo\'shilgan sana', value: formatDate(member.joinedAt) },
+        { label: 'Holati', value: member.isActive ? 'Faol o\'quvchi' : 'Nofaol' },
+      ],
+    };
+    openSidecar(sidecarData);
+  }, [groupData, playPop]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === 's') {
+        playTick();
+        handleOpenGroupSidecar();
+      } else if (e.key === 'r') {
+        playTick();
+        void refetchGroup();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleOpenGroupSidecar, playTick, refetchGroup]);
 
   /* ── Render ───────────────────────────────────────────────────────── */
   return (
@@ -742,48 +771,20 @@ export function GroupDetailPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
+          className="liquid-glass-surface relative overflow-hidden rounded-3xl p-5 sm:p-6 shadow-xl backdrop-blur-xl"
         >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-24"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-            }}
-          />
-          <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-            {/* Gradient group tile */}
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, rotate: -6 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              transition={SPRING.smooth}
-              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
-              style={{
-                background: `linear-gradient(135deg, ${c.fg} 0%, ${c.glow} 100%)`,
-                boxShadow:
-                  `0 12px 28px -10px ${c.glow}, inset 0 2px 0 rgba(255,255,255,0.35)`,
-              }}
+          <div className="relative flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            {/* Group icon tile */}
+            <div
+              className="relative flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm dark:bg-blue-500"
             >
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0 rounded-2xl"
-                style={{
-                  background:
-                    'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
-                }}
-              />
-              <Icon paths={I.groups} size={28} strokeWidth={2} className="relative" />
-            </motion.div>
+              <Icon paths={I.groups} size={24} strokeWidth={2} className="relative" />
+            </div>
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
-                  <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400">
+                  <Icon paths={I.sparkles} size={11} strokeWidth={2.2} />
                   {t('enum.badge.GROUP')}
                 </span>
                 <StatusBadge
@@ -791,29 +792,46 @@ export function GroupDetailPage() {
                   label={t(isActive ? 'enum.status.ACTIVE' : 'enum.status.INACTIVE')}
                 />
                 {groupData.course?.name && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#AF52DE]">
-                    <Icon paths={I.book} size={11} strokeWidth={2.5} />
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-indigo-500/10 px-2 py-0.5 text-[11px] font-medium text-indigo-600 dark:text-indigo-400">
+                    <Icon paths={I.book} size={11} strokeWidth={2.2} />
                     {groupData.course.name}
                   </span>
                 )}
                 {groupData.room && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF9500]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#FF9500]">
-                    <Icon paths={I.door} size={11} strokeWidth={2.5} />
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                    <Icon paths={I.door} size={11} strokeWidth={2.2} />
                     {groupData.room}
                   </span>
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
                 {groupData.name}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="text-[13px] text-slate-500 dark:text-slate-400">
                 {groupData.course?.name || t('enum.badge.COURSE')} ·{' '}
                 {groupData.room || t('groupDetail.noRoom')}
               </p>
             </div>
 
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <motion.div
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
+              >
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={handleOpenGroupSidecar}
+                  className="!border-blue-500/30 hover:!border-blue-500/50"
+                >
+                  <span className="inline-flex items-center gap-2 text-brand-600 dark:text-brand-400 font-medium">
+                    <span>◨</span>
+                    <span>Sidecar [S]</span>
+                  </span>
+                </GlassButton>
+              </motion.div>
               <motion.div
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
@@ -918,7 +936,7 @@ export function GroupDetailPage() {
                 value={
                   <span className="inline-flex items-center gap-1.5">
                     <span
-                      className="relative flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white ring-1 ring-white/50 dark:ring-black/30"
+                      className="relative flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white ring-1 ring-white/50 dark:ring-slate-900/50"
                       style={{ background: teacherGradient }}
                     >
                       <span className="relative">{teacherInitials}</span>
@@ -998,14 +1016,14 @@ export function GroupDetailPage() {
                   }
                 }}>
                 <div className="flex items-center gap-2.5">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-500/10 text-[#007AFF]">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-500/10 text-[#2563EB]">
                     <Icon paths={I.calendar} size={12} strokeWidth={2.2} />
                   </span>
                   <span className="text-[12px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
                     Guruh davomati & monitoring
                   </span>
                 </div>
-                <Icon paths={['M5 12h14', 'M12 5l7 7-7 7']} size={12} strokeWidth={2.5} className="text-[#86868B] group-hover:translate-x-0.5 transition-transform" />
+                <Icon paths={['M5 12h14', 'M12 5l7 7-7 7']} size={12} strokeWidth={2.5} className="text-[#64748B] group-hover:translate-x-0.5 transition-transform" />
               </button>
 
               <button
@@ -1029,14 +1047,14 @@ export function GroupDetailPage() {
                   }
                 }}>
                 <div className="flex items-center gap-2.5">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-purple-500/10 text-[#AF52DE]">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-purple-500/10 text-[#6366F1]">
                     <Icon paths={I.book} size={12} strokeWidth={2.2} />
                   </span>
                   <span className="text-[12px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
                     {t('group.lessonPlan45')}
                   </span>
                 </div>
-                <Icon paths={['M5 12h14', 'M12 5l7 7-7 7']} size={12} strokeWidth={2.5} className="text-[#86868B] group-hover:translate-x-0.5 transition-transform" />
+                <Icon paths={['M5 12h14', 'M12 5l7 7-7 7']} size={12} strokeWidth={2.5} className="text-[#64748B] group-hover:translate-x-0.5 transition-transform" />
               </button>
 
               <button
@@ -1060,14 +1078,14 @@ export function GroupDetailPage() {
                   }
                 }}>
                 <div className="flex items-center gap-2.5">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-[#34C759]">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-[#10B981]">
                     <Icon paths={I.users} size={12} strokeWidth={2.2} />
                   </span>
                   <span className="text-[12px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
                     O'quvchilar xavf tahlili
                   </span>
                 </div>
-                <Icon paths={['M5 12h14', 'M12 5l7 7-7 7']} size={12} strokeWidth={2.5} className="text-[#86868B] group-hover:translate-x-0.5 transition-transform" />
+                <Icon paths={['M5 12h14', 'M12 5l7 7-7 7']} size={12} strokeWidth={2.5} className="text-[#64748B] group-hover:translate-x-0.5 transition-transform" />
               </button>
             </div>
           </SectionPanel>
@@ -1086,7 +1104,7 @@ export function GroupDetailPage() {
             }
             right={
               members.length > 0 ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#AF52DE]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#6366F1]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#6366F1]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
                   {members.length}
                 </span>
@@ -1096,19 +1114,19 @@ export function GroupDetailPage() {
             {members.length === 0 ? (
               <div className="p-8">
                 <div className="flex flex-col items-center text-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#AF52DE]/10 text-[#AF52DE]">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#6366F1]/10 text-[#6366F1]">
                     <Icon paths={I.empty} size={22} strokeWidth={1.8} />
                   </div>
                   <p className="mt-3 text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                     {t('groupDetail.noMembers')}
                   </p>
-                  <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#86868B]">
+                  <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#64748B]">
                     {t('groupDetail.noMembersHint')}
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+              <div className="relative divide-y divide-slate-200/80 dark:divide-slate-800 dark:divide-[#ffffff08]">
                 {members.map((member, idx) => {
                   const name = fullName(
                     member.student.user?.firstName,
@@ -1122,10 +1140,10 @@ export function GroupDetailPage() {
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                      className="flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#AF52DE]/[0.03]"
+                      className="flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#6366F1]/[0.03]"
                     >
                       <div
-                        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
+                        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ring-2 ring-white/50 dark:ring-slate-900/50"
                         style={{
                           background: gradient,
                           boxShadow:
@@ -1152,12 +1170,24 @@ export function GroupDetailPage() {
                             <EmailChip email={member.student.user.email} />
                           )}
                           {member.joinedAt && (
-                            <span className="inline-flex items-center gap-1 text-[10.5px] font-medium tabular-nums text-[#86868B]">
+                            <span className="inline-flex items-center gap-1 text-[10.5px] font-medium tabular-nums text-[#64748B]">
                               <Icon paths={I.clock} size={10} strokeWidth={2.2} className="opacity-60" />
                               {formatDate(member.joinedAt)}
                             </span>
                           )}
                         </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenMemberSidecar(member)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/40 px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)] shadow-sm backdrop-blur-md transition-all hover:bg-white/60 hover:text-[var(--text-primary)] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
+                          title="Split View Sidecar"
+                        >
+                          <span>◨</span>
+                          <span>Sidecar</span>
+                        </button>
                       </div>
                     </motion.div>
                   );
@@ -1179,20 +1209,20 @@ export function GroupDetailPage() {
             title={t('nav.schedule')}
             subtitle={`${schedules.length} slots`}
             right={
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#34C759]">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
                 <Icon paths={I.layers} size={11} strokeWidth={2.5} />
                 {schedules.length}
               </span>
             }
           >
-            <div className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+            <div className="relative divide-y divide-slate-200/80 dark:divide-slate-800 dark:divide-[#ffffff08]">
               {schedules.map((schedule, idx) => (
                 <motion.div
                   key={schedule.id}
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                  className="flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#34C759]/[0.03]"
+                  className="flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#10B981]/[0.03]"
                 >
                   <DayTile day={schedule.dayOfWeek} />
                   <div className="min-w-0 flex-1">

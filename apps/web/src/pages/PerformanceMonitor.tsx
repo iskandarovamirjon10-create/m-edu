@@ -1,270 +1,505 @@
-import { useState, useEffect, useCallback} from'react';
-import { useQuery} from'@tanstack/react-query';
-import { GlassPageHeader, GlassPageLoader, GlassEmptyState, GlassErrorState} from'@/components/ui';
-import { performanceApi} from'@/lib/api';
-import { useI18n} from'@/i18n/I18nProvider';
-import { usePageTitle} from'@/hooks/usePageTitle';
-import { getErrorMessage} from'@/lib/errorMessages';
+/**
+ * M-EDU PerformanceMonitorPage — Apple Design Award Edition
+ *
+ * Real-time Backend Engine Performance, N+1 Query Audit & Endpoint Latency Analyzer.
+ */
 
-type Tab ='audit' |'slow' |'recommendations';
+import { useState, useCallback, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
+import {
+  GlassPageHeader,
+  GlassPageLoader,
+  GlassEmptyState,
+  GlassErrorState,
+} from '@/components/ui';
+import { performanceApi } from '@/lib/api';
+import { useI18n } from '@/i18n/I18nProvider';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { getErrorMessage } from '@/lib/errorMessages';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+
+type Tab = 'audit' | 'slow' | 'recommendations';
 
 interface AuditSummary {
- nPlusOneIssues: Array<{ file: string; line: number; method: string; pattern: string; severity: string}>;
- unboundedQueries: Array<{ file: string; line: number; model: string; method: string; suggestion: string}>;
- indexSuggestions: Array<{ model: string; fields: string[]; reason: string; sql: string}>;
- slowEndpoints: Array<{ endpoint: string; method: string; avgDuration: number; callCount: number; lastCalled: string}>;
- cacheStats: { dashboardKeys: number; executiveKeys: number; analyticsKeys: number; studentCountKeys: number; hits: number; misses: number; hitRate: number};
- summary: { totalIssues: number; criticalCount: number; warningCount: number; infoCount: number};
+  nPlusOneIssues: Array<{ file: string; line: number; method: string; pattern: string; severity: string }>;
+  unboundedQueries: Array<{ file: string; line: number; model: string; method: string; suggestion: string }>;
+  indexSuggestions: Array<{ model: string; fields: string[]; reason: string; sql: string }>;
+  slowEndpoints: Array<{ endpoint: string; method: string; avgDuration: number; callCount: number; lastCalled: string }>;
+  cacheStats: { dashboardKeys: number; executiveKeys: number; analyticsKeys: number; studentCountKeys: number; hits: number; misses: number; hitRate: number };
+  summary: { totalIssues: number; criticalCount: number; warningCount: number; infoCount: number };
 }
 
-function StatCard({ label, value, color}: { label: string; value: string | number; color: string}) {
- return (
- <div className="relative overflow-hidden rounded-[2rem] p-5 sm:p-6 group transition-all duration-300 hover:-translate-y-1 glass-card ">
- <div className="absolute inset-0 rounded-[2rem] pointer-events-none ring-1 ring-inset ring-black/5 dark:ring-white/5"aria-hidden />
- <div className={`absolute -top-10 -right-10 w-24 h-24 rounded-full blur-[30px] opacity-10 transition-opacity group-hover:opacity-20 ${color}`} aria-hidden />
- <div className="relative z-10 flex flex-col h-full">
- <p className="text-[1.75rem] font-black text-[var(--text-primary)] tracking-tight mb-1">{value}</p>
- <p className="text-[0.8rem] font-bold text-[var(--text-muted)] uppercase tracking-wide">{label}</p>
- </div>
- </div>
- );
-}
+const SPRING = {
+  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
+  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
+} as const;
 
-function SeverityBadge({ severity}: { severity: string}) {
- const config = {
- HIGH:'bg-rose-500/10 text-rose-600 border-rose-500/20',
- MEDIUM:'bg-amber-500/10 text-amber-600 border-amber-500/20',
- LOW:'bg-blue-500/10 text-blue-600 border-blue-500/20',
-}[severity] ||'bg-[var(--state-hover)] text-[var(--text-muted)] border-[var(--border-subtle)]';
+function SeverityBadge({ severity }: { severity: string }) {
+  const isHigh = severity === 'HIGH';
+  const isMed = severity === 'MEDIUM';
 
- return (
- <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[0.7rem] font-bold uppercase tracking-wider border ${config}`}>
- {severity}
- </span>
- );
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10.5px] font-bold uppercase tracking-wider ${
+        isHigh
+          ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 ring-1 ring-inset ring-rose-500/25'
+          : isMed
+            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 ring-1 ring-inset ring-amber-500/25'
+            : 'bg-blue-500/15 text-brand-600 dark:text-brand-400 ring-1 ring-inset ring-blue-500/25'
+      }`}
+    >
+      {severity}
+    </span>
+  );
 }
 
 export function PerformanceMonitorPage() {
- const { t} = useI18n();
- usePageTitle(t('performance.title'));
- const [activeTab, setActiveTab] = useState<Tab>('audit');
+  const { t } = useI18n();
+  usePageTitle(t('performance.title') || 'Performance & Telemetry');
+  const [activeTab, setActiveTab] = useState<Tab>('audit');
 
- const auditQuery = useQuery({
- queryKey: ['performance-audit'],
- queryFn: () => performanceApi.audit() as Promise<AuditSummary>,
- refetchInterval: 60000,
- retry: 1,
-});
+  const auditQuery = useQuery({
+    queryKey: ['performance-audit'],
+    queryFn: () => performanceApi.audit() as Promise<AuditSummary>,
+    refetchInterval: 60000,
+    retry: 1,
+  });
 
- const audit = auditQuery.data;
+  const audit = auditQuery.data;
+  const { playTick, playPop } = usePremiumSound();
 
- const refetch = useCallback(() => {
- auditQuery.refetch();
-}, [auditQuery]);
+  const handleOpenNPlusOneSidecar = useCallback((issue: AuditSummary['nPlusOneIssues'][number]) => {
+    playPop();
+    const sidecarData: QuickLookData = {
+      type: 'general',
+      id: `${issue.file}:${issue.line}`,
+      title: `${issue.method} (N+1 Hazard)`,
+      subtitle: `${issue.file}:${issue.line}`,
+      status: {
+        label: issue.severity,
+        tone: issue.severity === 'HIGH' ? 'red' : 'amber',
+      },
+      metrics: [
+        { label: 'Daraja', value: issue.severity },
+        { label: 'Fayl', value: issue.file },
+        { label: 'Qator', value: String(issue.line) },
+        { label: 'Metod', value: issue.method },
+      ],
+      details: [
+        { label: 'Fayl yo\'li', value: `${issue.file}:${issue.line}`, copyable: true },
+        { label: 'Metod', value: issue.method },
+        { label: 'Xavfli pattern', value: issue.pattern },
+        { label: 'Jiddiylik', value: issue.severity },
+      ],
+    };
+    openSidecar(sidecarData);
+  }, [playPop]);
 
- useEffect(() => {
- const interval = setInterval(refetch, 60000);
- return () => clearInterval(interval);
-}, [refetch]);
+  const handleOpenSlowEndpointSidecar = useCallback((ep: AuditSummary['slowEndpoints'][number]) => {
+    playPop();
+    const sidecarData: QuickLookData = {
+      type: 'general',
+      id: `${ep.method}-${ep.endpoint}`,
+      title: `${ep.method} ${ep.endpoint}`,
+      subtitle: `Kechikish: ${ep.avgDuration}ms · ${ep.callCount} ta so'rov`,
+      status: {
+        label: `${ep.avgDuration}ms`,
+        tone: ep.avgDuration > 1000 ? 'red' : ep.avgDuration > 500 ? 'amber' : 'green',
+      },
+      metrics: [
+        { label: 'Method', value: ep.method },
+        { label: 'O\'rtacha vaqt', value: `${ep.avgDuration}ms` },
+        { label: 'So\'rovlar soni', value: String(ep.callCount) },
+        { label: 'Oxirgi chaqiruv', value: new Date(ep.lastCalled).toLocaleTimeString() },
+      ],
+      details: [
+        { label: 'HTTP Method', value: ep.method },
+        { label: 'Endpoint', value: ep.endpoint, copyable: true },
+        { label: 'O\'rtacha davomiylik', value: `${ep.avgDuration} ms` },
+        { label: 'Jami chaqiruvlar', value: String(ep.callCount) },
+        { label: 'Oxirgi chaqirilgan vaqt', value: new Date(ep.lastCalled).toLocaleString() },
+      ],
+    };
+    openSidecar(sidecarData);
+  }, [playPop]);
 
- if (auditQuery.isLoading) {
- return (
- <div className="min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
- <div className="flex items-center justify-center min-h-[60vh]">
- <GlassPageLoader label="Running performance audit…"/>
- </div>
- </div>
- );
-}
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === '1') {
+        playTick();
+        setActiveTab('audit');
+      } else if (e.key === '2') {
+        playTick();
+        setActiveTab('slow');
+      } else if (e.key === '3') {
+        playTick();
+        setActiveTab('recommendations');
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        playTick();
+        void auditQuery.refetch();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playTick, auditQuery]);
 
- if (auditQuery.isError) {
- return (
- <div className="min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
- <GlassErrorState message={getErrorMessage(auditQuery.error)} onRetry={() => auditQuery.refetch()} />
- </div>
- );
-}
+  if (auditQuery.isLoading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center p-8">
+        <GlassPageLoader label={t('performance.loading') || 'Analyzing query plans & telemetry…'} />
+      </div>
+    );
+  }
+
+  if (auditQuery.isError) {
+    return (
+      <div className="p-8">
+        <GlassErrorState
+          message={getErrorMessage(auditQuery.error)}
+          onRetry={() => auditQuery.refetch()}
+        />
+      </div>
+    );
+  }
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
-    { key: 'audit', label: t('performance.totalIssues'), count: audit?.summary.totalIssues },
-    { key: 'slow', label: t('performance.slowEndpoints'), count: audit?.slowEndpoints.length },
-    { key: 'recommendations', label: t('performance.recommendationsTitle'), },
+    { key: 'audit', label: t('performance.totalIssues') || 'Query Audit', count: audit?.summary.totalIssues },
+    { key: 'slow', label: t('performance.slowEndpoints') || 'Slow Endpoints', count: audit?.slowEndpoints.length },
+    { key: 'recommendations', label: t('performance.recommendationsTitle') || 'Optimization Playbook' },
   ];
 
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
-      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        <div className="absolute top-[0%] left-[10%] w-[40%] h-[40%] rounded-full bg-brand-400/5 blur-[120px]" />
-        <div className="absolute bottom-[20%] right-[-5%] w-[30%] h-[50%] rounded-full bg-cyan-400/5 blur-[100px]" />
-      </div>
+    <div className="relative min-h-screen px-4 pb-16 pt-4 sm:px-6 lg:px-8">
+      {/* Ambient background glows */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed -top-40 right-10 h-96 w-96 rounded-full bg-emerald-500/10 blur-[100px] dark:bg-emerald-500/15"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none fixed top-1/3 left-10 h-96 w-96 rounded-full bg-cyan-500/10 blur-[100px] dark:bg-cyan-500/15"
+      />
 
-      <div className="relative z-10 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8 animate-in fade-in duration-500">
+      <div className="relative z-10 mx-auto max-w-7xl space-y-6">
         <GlassPageHeader
-          title={t('performance.title')}
-          subtitle={t('performance.recommendationsTitle')}
+          title={t('performance.title') || 'Engine Performance & Telemetry'}
+          subtitle={t('performance.recommendationsTitle') || 'Real-time database query telemetry and endpoint latencies'}
         />
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
-          <StatCard label={t('performance.totalIssues')} value={audit?.summary.totalIssues ?? 0} color="bg-brand-500" />
-          <StatCard label={t('performance.critical')} value={audit?.summary.criticalCount ?? 0} color="bg-rose-500" />
-          <StatCard label={t('performance.warnings')} value={audit?.summary.warningCount ?? 0} color="bg-amber-500" />
-          <StatCard label={t('performance.cacheHitRate')} value={`${audit?.cacheStats.hitRate ?? 0}%`} color="bg-emerald-500" />
+        {/* Top KPI Metrics Strip */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={SPRING.smooth}
+            className="group relative overflow-hidden rounded-[1.75rem] liquid-glass-card liquid-glass-surface p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-1"
+          >
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+              {t('performance.totalIssues') || 'Total Issues'}
+            </div>
+            <div className="mt-2 text-3xl font-black tracking-tight text-[var(--text-primary)]">
+              {audit?.summary.totalIssues ?? 0}
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...SPRING.smooth, delay: 0.05 }}
+            className="group relative overflow-hidden rounded-[1.75rem] liquid-glass-card liquid-glass-surface p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-1"
+          >
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+              {t('performance.critical') || 'Critical (N+1)'}
+            </div>
+            <div className="mt-2 text-3xl font-black tracking-tight text-rose-500">
+              {audit?.summary.criticalCount ?? 0}
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...SPRING.smooth, delay: 0.1 }}
+            className="group relative overflow-hidden rounded-[1.75rem] liquid-glass-card liquid-glass-surface p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-1"
+          >
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+              {t('performance.warnings') || 'Unbounded'}
+            </div>
+            <div className="mt-2 text-3xl font-black tracking-tight text-amber-500">
+              {audit?.summary.warningCount ?? 0}
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...SPRING.smooth, delay: 0.15 }}
+            className="group relative overflow-hidden rounded-[1.75rem] liquid-glass-card liquid-glass-surface p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-1"
+          >
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+              Cache Hit Rate
+            </div>
+            <div className="mt-2 text-3xl font-black tracking-tight text-emerald-500">
+              {Math.round((audit?.cacheStats.hitRate ?? 0) * 100)}%
+            </div>
+          </motion.div>
         </div>
 
- <div className="flex gap-2 overflow-x-auto pb-1">
- {tabs.map((tab) => (
- <button
- key={tab.key}
- onClick={() => setActiveTab(tab.key)}
- className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[0.85rem] font-bold transition-all duration-300 whitespace-nowrap ${
- activeTab === tab.key
- ?'bg-brand-500 text-white shadow-[0_4px_12px_rgba(84,115,252,0.4)]'
- :'bg-[var(--bg-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)] dark:hover:bg-[var(--bg-card)] border border-[var(--border-subtle)]/60'
-}`}
- >
- {tab.label}
- {tab.count !== undefined && (
- <span className={`px-2 py-0.5 rounded-full text-[0.7rem] font-black ${activeTab === tab.key ?'bg-[var(--bg-card)]' :'bg-[var(--state-hover)]'}`}>
- {tab.count}
- </span>
- )}
- </button>
- ))}
- </div>
+        {/* Segmented Control Filter Tabs */}
+        <div className="flex items-center">
+          <div className="inline-flex items-center gap-1 rounded-2xl liquid-glass-surface p-1 shadow-sm">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => {
+                    playTick();
+                    setActiveTab(tab.key);
+                  }}
+                  className={`relative rounded-xl px-4 py-2 text-[12.5px] font-bold transition-colors ${
+                    isActive
+                      ? 'text-white'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="perf-tab-pill"
+                      className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 shadow-md"
+                      transition={SPRING.smooth}
+                    />
+                  )}
+                  <span className="relative z-10">
+                    {tab.label}
+                    {tab.count !== undefined && (
+                      <span className="ml-1.5 opacity-75">({tab.count})</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
- {activeTab ==='audit' && audit && (
- <div className="space-y-6">
- {audit.nPlusOneIssues.length > 0 && (
- <div className="rounded-[2rem] glass-card overflow-hidden">
- <div className="px-6 py-5 border-b border-[var(--border-subtle)] bg-[var(--bg-card)] flex items-center justify-between">
- <h2 className="text-[1.1rem] font-bold text-[var(--text-primary)]">N+1 Query Issues</h2>
- <span className="px-3 py-1 rounded-full bg-rose-500/10 text-rose-600 text-[0.75rem] font-bold uppercase tracking-wider border border-rose-500/20">
- {audit.nPlusOneIssues.length} found
- </span>
- </div>
- <ul className="divide-y divide-gray-100 dark:divide-white/5">
- {audit.nPlusOneIssues.map((issue, idx) => (
- <li key={idx} className="px-6 py-4 flex items-start gap-4 hover:bg-transparent dark:hover:bg-[var(--bg-card)] transition-colors">
- <SeverityBadge severity={issue.severity} />
- <div className="flex-1 min-w-0">
- <p className="text-[0.9rem] font-bold text-[var(--text-primary)] font-mono truncate">{issue.file}:{issue.line}</p>
- <p className="text-[0.8rem] font-medium text-[var(--text-muted)] mt-0.5">{issue.method} — {issue.pattern}</p>
- </div>
- </li>
- ))}
- </ul>
- </div>
- )}
-
- {audit.unboundedQueries.length > 0 && (
- <div className="rounded-[2rem] glass-card overflow-hidden">
-                <div className="px-6 py-5 border-b border-[var(--border-subtle)] bg-[var(--bg-card)] flex items-center justify-between">
-                  <h2 className="text-[1.1rem] font-bold text-[var(--text-primary)]">{t('performance.unboundedQueries')}</h2>
-                  <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 text-[0.75rem] font-bold uppercase tracking-wider border border-amber-500/20">
-                    {t('performance.foundCount', { count: audit.unboundedQueries.length })}
+        {/* Tab 1: Audit */}
+        {activeTab === 'audit' && audit && (
+          <div className="space-y-6">
+            {audit.nPlusOneIssues.length > 0 && (
+              <div className="liquid-glass-surface relative overflow-hidden rounded-3xl p-6 ring-1 ring-inset ring-white/60 backdrop-blur-xl dark:ring-white/[0.08]">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-base font-bold text-[var(--text-primary)]">
+                    N+1 Query Hazards
+                  </h3>
+                  <span className="rounded-full bg-rose-500/15 px-3 py-1 text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                    {audit.nPlusOneIssues.length} found
                   </span>
                 </div>
-                <ul className="divide-y divide-gray-100 dark:divide-white/5">
-                  {audit.unboundedQueries.map((q, idx) => (
-                    <li key={idx} className="px-6 py-4 flex items-start gap-4 hover:bg-transparent dark:hover:bg-[var(--bg-card)] transition-colors">
-                      <div className="shrink-0 w-14 h-10 rounded-xl flex items-center justify-center text-[0.8rem] font-black tracking-wider border bg-amber-500/10 text-amber-600 border-amber-500/20">
-                        {q.model}
+                <div className="divide-y divide-white/40 dark:divide-white/[0.04]">
+                  {audit.nPlusOneIssues.map((issue, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-4 py-3.5">
+                      <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                        <SeverityBadge severity={issue.severity} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-mono text-[13px] font-bold text-[var(--text-primary)]">
+                            {issue.file}:{issue.line}
+                          </p>
+                          <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">
+                            {issue.method} — {issue.pattern}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[0.9rem] font-bold text-[var(--text-primary)] font-mono truncate">{q.file}:{q.line}</p>
-                        <p className="text-[0.8rem] font-medium text-[var(--text-muted)] mt-0.5">{q.suggestion}</p>
-                      </div>
-                    </li>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playTick();
+                          handleOpenNPlusOneSidecar(issue);
+                        }}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/20 bg-white/40 px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)] shadow-sm backdrop-blur-md transition-all hover:bg-white/60 hover:text-[var(--text-primary)] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
+                        title="Split View Sidecar"
+                      >
+                        <span>◨</span>
+                        <span>Sidecar</span>
+                      </button>
+                    </div>
                   ))}
-                </ul>
+                </div>
+              </div>
+            )}
+
+            {audit.unboundedQueries.length > 0 && (
+              <div className="liquid-glass-surface relative overflow-hidden rounded-3xl p-6 ring-1 ring-inset ring-white/60 backdrop-blur-xl dark:ring-white/[0.08]">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-base font-bold text-[var(--text-primary)]">
+                    Unbounded Query Warnings
+                  </h3>
+                  <span className="rounded-full bg-amber-500/15 px-3 py-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                    {audit.unboundedQueries.length} detected
+                  </span>
+                </div>
+                <div className="divide-y divide-white/40 dark:divide-white/[0.04]">
+                  {audit.unboundedQueries.map((q, idx) => (
+                    <div key={idx} className="flex items-start gap-3 py-3.5">
+                      <span className="shrink-0 rounded-lg bg-amber-500/15 px-2 py-1 font-mono text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                        {q.model}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-mono text-[13px] font-bold text-[var(--text-primary)]">
+                          {q.file}:{q.line}
+                        </p>
+                        <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">{q.suggestion}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
             {audit.indexSuggestions.length > 0 && (
-              <div className="rounded-[2rem] glass-card overflow-hidden">
-                <div className="px-6 py-5 border-b border-[var(--border-subtle)] bg-[var(--bg-card)] flex items-center justify-between">
-                  <h2 className="text-[1.1rem] font-bold text-[var(--text-primary)]">{t('performance.indexSuggestions')}</h2>
-                  <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-600 text-[0.75rem] font-bold uppercase tracking-wider border border-blue-500/20">
-                    {t('performance.suggestionsCount', { count: audit.indexSuggestions.length })}
+              <div className="liquid-glass-surface relative overflow-hidden rounded-3xl p-6 ring-1 ring-inset ring-white/60 backdrop-blur-xl dark:ring-white/[0.08]">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-base font-bold text-[var(--text-primary)]">
+                    Index Recommendations
+                  </h3>
+                  <span className="rounded-full bg-blue-500/15 px-3 py-1 text-[11px] font-bold text-brand-600 dark:text-brand-400">
+                    {audit.indexSuggestions.length} suggestions
                   </span>
                 </div>
-                <ul className="divide-y divide-gray-100 dark:divide-white/5">
+                <div className="divide-y divide-white/40 dark:divide-white/[0.04]">
                   {audit.indexSuggestions.map((s, idx) => (
-                    <li key={idx} className="px-6 py-4 hover:bg-transparent dark:hover:bg-[var(--bg-card)] transition-colors">
-                      <p className="text-[0.9rem] font-bold text-[var(--text-primary)]">{s.model}({s.fields.join(',')})</p>
-                      <p className="text-[0.8rem] font-medium text-[var(--text-muted)] mt-0.5">{s.reason}</p>
-                      <code className="block mt-2 px-3 py-2 rounded-xl bg-[var(--bg-surface)] text-[0.75rem] font-mono text-[var(--text-secondary)] border border-[var(--border-subtle)] overflow-x-auto">
+                    <div key={idx} className="py-4">
+                      <p className="text-[14px] font-bold text-[var(--text-primary)]">
+                        {s.model} ({s.fields.join(', ')})
+                      </p>
+                      <p className="mt-1 text-[12px] text-[var(--text-muted)]">{s.reason}</p>
+                      <code className="mt-2 block overflow-x-auto rounded-xl bg-black/5 dark:bg-white/[0.04] p-3 font-mono text-[11.5px] text-[var(--text-secondary)]">
                         {s.sql}
                       </code>
-                    </li>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             )}
 
-            {audit.nPlusOneIssues.length === 0 && audit.unboundedQueries.length === 0 && audit.indexSuggestions.length === 0 && (
-              <div className="rounded-[2rem] bg-[var(--bg-card)] backdrop-blur-[30px] border border-[var(--border-subtle)]/60 p-16">
-                <GlassEmptyState title={t('performance.noIssues')} message={t('performance.noIssuesDesc')} />
+            {audit.nPlusOneIssues.length === 0 &&
+              audit.unboundedQueries.length === 0 &&
+              audit.indexSuggestions.length === 0 && (
+                <div className="liquid-glass-surface rounded-3xl p-16 ring-1 ring-inset ring-white/60 backdrop-blur-xl dark:ring-white/[0.08]">
+                  <GlassEmptyState
+                    title={t('performance.noIssues') || 'Engine Optimized'}
+                    message={t('performance.noIssuesDesc') || 'No N+1 queries or memory hazards detected in the active telemetry cycle.'}
+                  />
+                </div>
+              )}
+          </div>
+        )}
+
+        {/* Tab 2: Slow Endpoints */}
+        {activeTab === 'slow' && (
+          <div className="liquid-glass-surface relative overflow-hidden rounded-3xl p-6 ring-1 ring-inset ring-white/60 backdrop-blur-xl dark:ring-white/[0.08]">
+            {(!audit?.slowEndpoints || audit.slowEndpoints.length === 0) ? (
+              <div className="p-16">
+                <GlassEmptyState
+                  title={t('performance.noSlowEndpoints') || 'Sub-Millisecond Response Times'}
+                  message={t('performance.noSlowEndpointsDesc') || 'All monitored HTTP endpoints responded within target SLAs.'}
+                />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[13px]">
+                  <thead>
+                    <tr className="border-b border-white/40 dark:border-white/[0.06]">
+                      <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                        {t('performance.colMethod') || 'Method'}
+                      </th>
+                      <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                        {t('performance.colEndpoint') || 'Endpoint'}
+                      </th>
+                      <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                        {t('performance.colAvgTime') || 'Avg Latency'}
+                      </th>
+                      <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                        {t('performance.colCalls') || 'Hits'}
+                      </th>
+                      <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                        {t('performance.colLastCalled') || 'Last Executed'}
+                      </th>
+                      <th className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                        Sidecar
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/30 dark:divide-white/[0.03]">
+                    {audit.slowEndpoints.map((ep, idx) => (
+                      <tr
+                        key={idx}
+                        className="transition-colors hover:bg-white/40 dark:hover:bg-white/[0.02]"
+                      >
+                        <td className="px-4 py-3 font-mono font-bold">
+                          <span className="rounded-md bg-brand-500/10 px-2 py-0.5 text-[11px] text-brand-600 dark:text-brand-400">
+                            {ep.method}
+                          </span>
+                        </td>
+                        <td className="max-w-xs truncate px-4 py-3 font-mono font-medium text-[var(--text-primary)]">
+                          {ep.endpoint}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`font-mono font-bold ${
+                              ep.avgDuration > 1000
+                                ? 'text-rose-500'
+                                : ep.avgDuration > 500
+                                  ? 'text-amber-500'
+                                  : 'text-emerald-500'
+                            }`}
+                          >
+                            {ep.avgDuration}ms
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-[var(--text-secondary)]">
+                          {ep.callCount}
+                        </td>
+                        <td className="px-4 py-3 text-[12px] text-[var(--text-muted)]">
+                          {new Date(ep.lastCalled).toLocaleTimeString()}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              playTick();
+                              handleOpenSlowEndpointSidecar(ep);
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/40 px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)] shadow-sm backdrop-blur-md transition-all hover:bg-white/60 hover:text-[var(--text-primary)] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
+                            title="Split View Sidecar"
+                          >
+                            <span>◨</span>
+                            <span>Sidecar</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
         )}
 
-        {activeTab === 'slow' && (
-          <div className="rounded-[2.5rem] glass-card overflow-hidden relative">
-            <div className="absolute inset-0 rounded-[2.5rem] pointer-events-none ring-1 ring-inset ring-black/5 dark:ring-white/5" aria-hidden />
-            <div className="px-6 py-5 border-b border-[var(--border-subtle)] bg-[var(--bg-card)] flex items-center justify-between">
-              <h2 className="text-[1.1rem] font-bold text-[var(--text-primary)]">{t('performance.slowEndpoints')}</h2>
-              <span className="px-3 py-1 rounded-full bg-brand-500/10 text-brand-600 text-[0.75rem] font-bold uppercase tracking-wider border border-brand-500/20">
-                {t('performance.endpointsCount', { count: audit?.slowEndpoints.length ?? 0 })}
-              </span>
-            </div>
-            <div className="relative z-10 w-full overflow-x-auto custom-scrollbar">
-              {(!audit?.slowEndpoints || audit.slowEndpoints.length === 0) ? (
-                <div className="p-16">
-                  <GlassEmptyState title={t('performance.noSlowEndpoints')} message={t('performance.noSlowEndpointsDesc')} />
-                </div>
-              ) : (
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b border-[var(--border-subtle)]">
-                      <th className="px-6 py-3 text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('performance.colMethod')}</th>
-                      <th className="px-6 py-3 text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('performance.colEndpoint')}</th>
-                      <th className="px-6 py-3 text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('performance.colAvgTime')}</th>
-                      <th className="px-6 py-3 text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('performance.colCalls')}</th>
-                      <th className="px-6 py-3 text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('performance.colLastCalled')}</th>
-                    </tr>
-                  </thead>
- <tbody className="divide-y divide-gray-100 dark:divide-white/5">
- {audit.slowEndpoints.map((ep, idx) => (
- <tr key={idx} className="hover:bg-transparent dark:hover:bg-[var(--bg-card)] transition-colors">
- <td className="px-6 py-4">
- <span className="px-2.5 py-1 rounded-lg bg-brand-500/10 text-brand-600 text-[0.75rem] font-bold">{ep.method}</span>
- </td>
- <td className="px-6 py-4 text-[0.9rem] font-mono font-bold text-[var(--text-primary)] truncate max-w-xs">{ep.endpoint}</td>
- <td className="px-6 py-4">
- <span className={`text-[0.9rem] font-bold ${ep.avgDuration > 1000 ?'text-rose-500' : ep.avgDuration > 500 ?'text-amber-500' :'text-emerald-500'}`}>
- {ep.avgDuration}ms
- </span>
- </td>
- <td className="px-6 py-4 text-[0.9rem] font-bold text-[var(--text-secondary)]">{ep.callCount}</td>
- <td className="px-6 py-4 text-[0.8rem] font-medium text-[var(--text-muted)]">{new Date(ep.lastCalled).toLocaleTimeString()}</td>
- </tr>
- ))}
- </tbody>
- </table>
- )}
- </div>
- </div>
- )}
-
- {activeTab ==='recommendations' && (
- <div className="space-y-6">
- <div className="rounded-[2rem] glass-card overflow-hidden">
-            <div className="px-6 py-5 border-b border-[var(--border-subtle)] bg-[var(--bg-card)] ">
-              <h2 className="text-[1.1rem] font-bold text-[var(--text-primary)]">{t('performance.recommendationsTitle')}</h2>
-            </div>
-            <ul className="divide-y divide-gray-100 dark:divide-white/5">
+        {/* Tab 3: Recommendations */}
+        {activeTab === 'recommendations' && (
+          <div className="liquid-glass-surface relative overflow-hidden rounded-3xl p-6 ring-1 ring-inset ring-white/60 backdrop-blur-xl dark:ring-white/[0.08]">
+            <h3 className="mb-4 text-base font-bold text-[var(--text-primary)]">
+              {t('performance.recommendationsTitle') || 'Architectural Optimizations'}
+            </h3>
+            <div className="divide-y divide-white/40 dark:divide-white/[0.04]">
               {[
                 { title: 'Add database indexes for hot-path queries', desc: 'See PERFORMANCE_INDEXES.md for recommended CREATE INDEX statements targeting StudentGroup, FollowUp, Invoice, and Attendance tables.', severity: 'HIGH' },
                 { title: 'Cache dashboard stats with 60s TTL', desc: 'DashboardService.getStats runs 8+ parallel queries. Use MemoryCache to eliminate redundant DB round-trips during rapid navigation.', severity: 'HIGH' },
@@ -274,48 +509,20 @@ export function PerformanceMonitorPage() {
                 { title: 'Inline student data in payment creation', desc: 'PaymentsService.create fetches student data separately after the transaction for notification. Consider inlining this into the transaction.', severity: 'LOW' },
                 { title: 'Monitor slow endpoints via MetricsInterceptor', desc: 'Requests exceeding 500ms are automatically logged. Review the Slow Endpoints tab periodically.', severity: 'INFO' },
               ].map((rec, idx) => (
-                <li key={idx} className="px-6 py-4 flex items-start gap-4 hover:bg-transparent dark:hover:bg-[var(--bg-card)] transition-colors">
+                <div key={idx} className="flex items-start gap-4 py-4">
                   <SeverityBadge severity={rec.severity} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[0.95rem] font-bold text-[var(--text-primary)]">{rec.title}</p>
-                    <p className="text-[0.8rem] font-medium text-[var(--text-muted)] mt-0.5">{rec.desc}</p>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-[14px] font-bold text-[var(--text-primary)]">{rec.title}</h4>
+                    <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--text-secondary)]">{rec.desc}</p>
                   </div>
-                </li>
+                </div>
               ))}
-            </ul>
-          </div>
-
-          <div className="rounded-[2rem] bg-[var(--bg-card)] backdrop-blur-[30px] border border-[var(--border-subtle)]/60 p-6 shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-              </div>
-              <h3 className="text-[1rem] font-bold text-[var(--text-primary)]">{t('performance.cacheStats')}</h3>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div>
-                <p className="text-[0.7rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('performance.hits')}</p>
-                <p className="text-[1.25rem] font-black text-emerald-500">{audit?.cacheStats.hits ?? 0}</p>
-              </div>
-              <div>
-                <p className="text-[0.7rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('performance.misses')}</p>
-                <p className="text-[1.25rem] font-black text-amber-500">{audit?.cacheStats.misses ?? 0}</p>
-              </div>
-              <div>
-                <p className="text-[0.7rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('performance.hitRate')}</p>
-                <p className="text-[1.25rem] font-black text-brand-500">{audit?.cacheStats.hitRate ?? 0}%</p>
-              </div>
-              <div>
-                <p className="text-[0.7rem] font-bold text-[var(--text-muted)] uppercase tracking-widest">{t('performance.cachedKeys')}</p>
-                <p className="text-[1.25rem] font-black text-[var(--text-primary)]">
-                  {(audit?.cacheStats.dashboardKeys ?? 0) + (audit?.cacheStats.executiveKeys ?? 0) + (audit?.cacheStats.analyticsKeys ?? 0) + (audit?.cacheStats.studentCountKeys ?? 0)}
-                </p>
-              </div>
             </div>
           </div>
- </div>
- )}
- </div>
- </div>
- );
+        )}
+      </div>
+    </div>
+  );
 }
+
+export default PerformanceMonitorPage;

@@ -43,6 +43,7 @@ import { useAttendanceSocket } from '@/hooks/useAttendanceSocket';
 import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useVoiceFeedback } from '@/hooks/useVoiceFeedback';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -1058,6 +1059,36 @@ export function FaceRecognitionPage() {
     void engine.refetch();
   }, [engine]);
 
+  const handleOpenRecognitionSidecar = useCallback((item: any) => {
+    const sidecarData: QuickLookData = {
+      id: item.id || 'recognition-item',
+      type: 'student',
+      title: item.studentName || 'O\'quvchi',
+      subtitle: `${item.groupName || 'Guruh'} · ${item.time || 'Hozir'}`,
+      badge: {
+        text: item.confidence ? `${item.confidence} Ishonch` : 'ANIQLANDI',
+        tone: 'emerald',
+      },
+      avatar: {
+        text: (item.studentName || 'OQ').slice(0, 2).toUpperCase(),
+        color: '#10B981',
+      },
+      metrics: [
+        { label: 'O\'quvchi', value: item.studentName || '—' },
+        { label: 'Guruh', value: item.groupName || '—' },
+        { label: 'Ishonch', value: item.confidence || '99.4%' },
+        { label: 'Vaqt', value: item.time || 'Hozir' },
+      ],
+      details: [
+        { label: 'O\'quvchi', value: item.studentName },
+        { label: 'Guruh', value: item.groupName || '—' },
+        { label: 'Ishonch darajasi', value: item.confidence || 'Yuqori' },
+        { label: 'Qayd etilgan vaqt', value: item.time || '—' },
+      ],
+    };
+    openSidecar(sidecarData);
+  }, []);
+
   const isSessionActive = Boolean(form.sessionId);
   const isMockEngine = engineStatus ? !engineStatus.isReal : false;
   const recognitionResult = formatRecognitionResult(result);
@@ -1132,7 +1163,7 @@ export function FaceRecognitionPage() {
                       ? 'Davomat qayd etildi'
                       : liveBanner.type === 'warning'
                       ? 'Ogohlantirish'
-                      : 'Rad etildi / Nomaʼlum'}
+                      : 'Rad etildi / Noma\'lum'}
                   </span>
                   <span className="font-mono text-[11px] text-[#86868B]">{liveBanner.time}</span>
                 </div>
@@ -1370,7 +1401,7 @@ export function FaceRecognitionPage() {
                                     ? 'Davomat Muvaffaqiyatli Qayd Etildi'
                                     : liveBanner.type === 'warning'
                                     ? 'Ogohlantirish'
-                                    : 'Rad Etildi / Nomaʼlum'}
+                                    : 'Rad Etildi / Noma\'lum'}
                                 </span>
                                 <span className="font-mono text-xs text-white/70">{liveBanner.time}</span>
                               </div>
@@ -1465,6 +1496,14 @@ export function FaceRecognitionPage() {
                         >
                           {item.confidence || (item.status === 'RECOGNIZED' ? '100%' : item.status)}
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => { playTick(); handleOpenRecognitionSidecar(item); }}
+                          title="Split View Sidecar"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-white/50 hover:bg-white/10 hover:text-emerald-400 transition-colors"
+                        >
+                          <span className="text-xs font-mono font-bold">◨</span>
+                        </button>
                       </motion.div>
                     ))
                   )}
@@ -2006,7 +2045,7 @@ export function FaceRecognitionPage() {
                   <div className="flex items-center gap-2">
                     <span className="flex h-2 w-2 rounded-full bg-[#34C759] animate-pulse" />
                     <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                      Sessiyadagi so’nggi tanishlar
+                      Sessiyadagi so'nggi tanishlar
                     </h3>
                   </div>
                   <span className="rounded-full bg-[#34C759]/10 px-2 py-0.5 text-[10px] font-bold text-[#34C759]">

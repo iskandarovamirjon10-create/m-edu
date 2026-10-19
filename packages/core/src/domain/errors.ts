@@ -54,6 +54,18 @@ export class EnrollmentNotActiveError extends FacePlatformError {
   }
 }
 
+export class DuplicateFaceEnrollmentError extends FacePlatformError {
+  readonly code = 'DUPLICATE_FACE_ENROLLMENT';
+  readonly httpStatus = 409;
+
+  constructor(duplicateStudentId: string, similarity: number) {
+    super(
+      `Face enrollment rejected: this face is already enrolled for another student (${duplicateStudentId}) with similarity ${(similarity * 100).toFixed(1)}%`,
+      { duplicateStudentId, similarity },
+    );
+  }
+}
+
 // ============================================================================
 // Face Detection Errors
 // ============================================================================

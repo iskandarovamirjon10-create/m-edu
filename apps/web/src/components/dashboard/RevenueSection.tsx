@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { dashboardApi } from '@/lib/api';
 import { useI18n } from '@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import type { MonthlyRevenue } from '@/lib/types';
 import type { Period } from './RevenueChart';
 
@@ -16,6 +17,7 @@ interface RevenueSectionProps {
 
 export function RevenueSection({ initialData }: RevenueSectionProps) {
   const { t } = useI18n();
+  const sound = usePremiumSound();
   const [period, setPeriod] = useState<Period>('1Y');
 
   const { data: revenueData, isFetching } = useQuery({
@@ -28,21 +30,21 @@ export function RevenueSection({ initialData }: RevenueSectionProps) {
   const chartData = revenueData?.length ? revenueData : (period === '1Y' ? initialData : []);
 
   return (
-    <div className="flex flex-col justify-between rounded-[var(--radius-2xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)] sm:p-6">
+    <div className="relative overflow-hidden flex flex-col justify-between rounded-2xl border border-subtle/80 bg-card/85 backdrop-blur-xl p-5 shadow-card before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent dark:before:via-white/10 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold tracking-tight text-[var(--text-primary)]">
+          <h2 className="text-base font-semibold tracking-tight text-primary">
             {t('dashboard.monthlyRevenue') || 'Revenue Overview'}
           </h2>
-          <p className="text-xs text-[var(--text-muted)]">
+          <p className="text-xs text-secondary">
             {t('dashboard.paymentCollection') || 'Cash collected and processed inflows'}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Period selector tabs */}
+          {/* Period selector tabs with macOS Segmented Control feel */}
           <div
-            className="inline-flex rounded-xl bg-[var(--bg-surface)] p-1 border border-[var(--border-subtle)]"
+            className="inline-flex rounded-xl bg-surface/80 p-1 border border-subtle backdrop-blur-sm"
             role="tablist"
             aria-label="Revenue chart period"
           >
@@ -54,11 +56,14 @@ export function RevenueSection({ initialData }: RevenueSectionProps) {
                   type="button"
                   role="tab"
                   aria-selected={active}
-                  onClick={() => setPeriod(p)}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold tracking-tight transition-all ${
+                  onClick={() => {
+                    sound.playTick();
+                    setPeriod(p);
+                  }}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold tracking-tight transition-all duration-200 ${
                     active
-                      ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                      ? 'bg-card text-primary shadow-xs'
+                      : 'text-tertiary hover:text-primary'
                   }`}
                 >
                   {p}

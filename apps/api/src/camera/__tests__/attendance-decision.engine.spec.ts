@@ -67,6 +67,7 @@ function makePrisma(): PrismaMock {
 
     lesson: {
       findFirst: vi.fn().mockResolvedValue({ id: 'lesson-1', status: 'PLANNED' }),
+      findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({ id: 'lesson-1', status: 'CONDUCTED' }),
     },
 
@@ -941,3 +942,144 @@ describe('AttendanceDecisionEngine — camera room fallback', () => {
     expect(result.decision).toBe('RECORDED');
   });
 });
+
+describe('AttendanceDecisionEngine — ATT-002: Multi-Lesson Integrity', () => {
+  it('records independent attendance for Lesson 1 and Lesson 2 on the same day', async () => {
+    const prisma = makePrisma();
+    mockStudent(prisma);
+
+    // Group with 2 schedules on SATURDAY: Morning (08:00-11:00) and Afternoon (13:00-16:00)
+    prisma.studentGroup.findMany.mockResolvedValue([
+      {
+        groupId: 'group-1',
+        group: {
+          id: 'group-1',
+          name: 'G1',
+          room: 'Room 1',
+          schedules: [
+            {
+              dayOfWeek: 'SATURDAY',
+              startTime: '08:00',
+              endTime: '11:00',
+              room: 'Room 1',
+            },
+            {
+              dayOfWeek: 'SATURDAY',
+              startTime: '13:00',
+              endTime: '16:00',
+              room: 'Room 1',
+            },
+          ],
+        },
+      },
+    ]);
+
+    // Lesson 1 is running at 09:30
+    prisma.lesson.findMany.mockResolvedValue([
+      { id: 'lesson-morning', startTime: '08:00', endTime: '11:00' },
+      { id: 'lesson-afternoon', startTime: '13:00', endTime: '16:00' },
+    ]);
+
+    mockNoAttendance(prisma);
+    prisma.attendance.create.mockResolvedValueOnce({ id: 'att-morning', lessonId: 'lesson-morning' });
+    prisma.cameraAttendanceEvent.upsert.mockResolvedValue({ id: 'evt-morning', decision: 'RECORDED' });
+
+    const engine = new AttendanceDecisionEngine(prisma);
+
+    // Morning recognition
+    const morningResult = await engine.processRecognition(
+      makeParams({
+        recognizedAt: new Date('2026-09-05T09:30:00Z'),
+      }),
+    );
+
+    expect(morningResult.decision).toBe('RECORDED');
+    expect(prisma.attendance.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          studentId: 'student-1',
+          lessonId: 'lesson-morning',
+        }),
+      }),
+    );
+
+    // Afternoon recognition for the same student, same group, same day
+    prisma.attendance.create.mockResolvedValueOnce({ id: 'att-afternoon', lessonId: 'lesson-afternoon' });
+    prisma.cameraAttendanceEvent.upsert.mockResolvedValue({ id: 'evt-afternoon', decision: 'RECORDED' });
+
+    const afternoonResult = await engine.processRecognition(
+      makeParams({
+        recognizedAt: new Date('2026-09-05T14:30:00Z'),
+      }),
+    );
+
+    expect(afternoonResult.decision).toBe('RECORDED');
+    expect(prisma.attendance.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          studentId: 'student-1',
+          lessonId: 'lesson-afternoon',
+        }),
+      }),
+    );
+  });
+
+  it('prevents duplicate within the same lesson (DUPLICATE_PREVENTED)', async () => {
+    const prisma = makePrisma();
+    mockStudent(prisma);
+    mockGroup(prisma);
+
+    // Existing attendance for this specific lesson
+    prisma.attendance.findUnique.mockResolvedValue({
+      id: 'att-existing',
+      studentId: 'student-1',
+      lessonId: 'lesson-1',
+      source: 'FACE',
+    });
+
+    prisma.cameraAttendanceEvent.upsert.mockResolvedValue({
+      id: 'evt-dup',
+      decision: 'DUPLICATE_PREVENTED',
+    });
+
+    const engine = new AttendanceDecisionEngine(prisma);
+    const result = await engine.processRecognition(makeParams());
+
+    expect(result.decision).toBe('DUPLICATE_PREVENTED');
+    expect(result.attendanceId).toBe('att-existing');
+    expect(prisma.attendance.create).not.toHaveBeenCalled();
+  });
+
+  it('resolves concurrent P2002 race targeting studentId_lessonId without throwing', async () => {
+    const prisma = makePrisma();
+    mockStudent(prisma);
+    mockGroup(prisma);
+    mockNoAttendance(prisma);
+
+    // Simulate concurrent P2002 on (studentId, lessonId)
+    const p2002: any = new Error('Unique constraint failed on Attendance_studentId_lessonId_key');
+    p2002.code = 'P2002';
+    p2002.meta = { target: ['studentId', 'lessonId'], modelName: 'Attendance' };
+    prisma.attendance.create.mockRejectedValue(p2002);
+
+    // In recovery transaction, the concurrent attendance row is found
+    prisma.attendance.findUnique.mockResolvedValue({
+      id: 'att-concurrent-winner',
+      studentId: 'student-1',
+      lessonId: 'lesson-1',
+      source: 'FACE',
+    });
+
+    prisma.cameraAttendanceEvent.upsert.mockResolvedValue({
+      id: 'evt-concurrent',
+      decision: 'DUPLICATE_PREVENTED',
+    });
+
+    const engine = new AttendanceDecisionEngine(prisma);
+    const result = await engine.processRecognition(makeParams());
+
+    expect(result.decision).toBe('DUPLICATE_PREVENTED');
+    expect(result.attendanceId).toBe('att-concurrent-winner');
+  });
+});
+

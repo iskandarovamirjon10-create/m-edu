@@ -26,6 +26,7 @@ import {
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
 import { chatApi } from '@/lib/api';
+import { getSocketBaseUrl } from '@/lib/socketUrl';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { ChatConversation, ChatMessage } from '@/lib/types';
 import { useAuth } from '@/auth/AuthContext';
@@ -129,25 +130,25 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
+  blue:    { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)', border: 'rgba(37,99,235,0.20)' },
+  green:   { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)',  border: 'rgba(16,185,129,0.20)' },
+  orange:  { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)',  border: 'rgba(245,158,11,0.20)' },
+  red:     { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)' },
+  purple:  { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)' },
+  cyan:    { fg: '#0284C7', bg: 'rgba(2,132,199,0.10)', glow: 'rgba(2,132,199,0.28)', border: 'rgba(2,132,199,0.20)' },
+  gray:    { fg: '#64748B', bg: 'rgba(100,116,139,0.10)', glow: 'rgba(100,116,139,0.22)', border: 'rgba(100,116,139,0.20)' },
   emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
 };
 
 const AVATAR_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
-  ['#FF2D55', '#FF9500'],
-  ['#30D158', '#34C759'],
+  ['#2563EB', '#6366F1'],
+  ['#6366F1', '#FF2D55'],
+  ['#10B981', '#0284C7'],
+  ['#F59E0B', '#FF2D55'],
+  ['#6366F1', '#6366F1'],
+  ['#0284C7', '#2563EB'],
+  ['#FF2D55', '#F59E0B'],
+  ['#30D158', '#10B981'],
 ];
 
 function nameHash(str: string): number {
@@ -169,9 +170,9 @@ function useSocket() {
   const socketRef = useRef<Socket | null>(null);
   const getSocket = useCallback(() => {
     if (!socketRef.current) {
-      socketRef.current = io('/chat', {
+      socketRef.current = io(`${getSocketBaseUrl()}/chat`, {
         withCredentials: true,
-        transports: ['websocket'],
+        transports: ['websocket', 'polling'],
       });
     }
     return socketRef.current;
@@ -248,27 +249,7 @@ function getParticipantInitials(conv: ChatConversation, currentUserId?: string):
  * ========================================================================== */
 
 function AmbientOrbs() {
-  const reduced = useReducedMotion();
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <motion.div
-        className="absolute -left-[8%] top-[6%] h-[44%] w-[40%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(0,122,255,0.14), transparent 70%)',
-          }}
-        animate={reduced ? undefined : { x: [0, 24, 0], y: [0, 18, 0], opacity: [0.85, 1, 0.85] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute -bottom-[10%] -right-[8%] h-[46%] w-[42%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(175,82,222,0.12), transparent 70%)',
-          }}
-        animate={reduced ? undefined : { x: [0, -28, 0], y: [0, -22, 0], opacity: [0.8, 1, 0.8] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </div>
-  );
+  return null;
 }
 
 function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
@@ -350,11 +331,11 @@ function ConversationRow({
       transition={{ ...SPRING.smooth, delay: index * 0.04 }}
       whileHover={reduced ? undefined : { x: 2 }}
       whileTap={{ scale: 0.98 }}
-      className="group relative flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#007AFF]/40"
+      className="group relative flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#2563EB]/40"
       style={{
-        background: isActive ? 'rgba(0,122,255,0.08)' : 'transparent',
+        background: isActive ? 'rgba(37,99,235,0.08)' : 'transparent',
         border: isActive
-          ? '1px solid rgba(0,122,255,0.22)'
+          ? '1px solid rgba(37,99,235,0.22)'
           : '1px solid transparent',
       }}
       onMouseEnter={(e) => {
@@ -376,7 +357,7 @@ function ConversationRow({
       {/* Avatar */}
       <div className="relative shrink-0">
         <div
-          className="relative flex h-12 w-12 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
+          className="relative flex h-12 w-12 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-slate-900/50"
           style={{
             background: gradient,
             boxShadow:
@@ -397,7 +378,7 @@ function ConversationRow({
         {unread > 0 && !reduced && (
           <motion.span
             className="pointer-events-none absolute inset-0 rounded-full"
-            style={{ border: '2px solid rgba(0,122,255,0.5)' }}
+            style={{ border: '2px solid rgba(37,99,235,0.5)' }}
             animate={{ scale: [1, 1.35], opacity: [0.8, 0] }}
             transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
           />
@@ -411,7 +392,7 @@ function ConversationRow({
             {title}
           </span>
           {conv.lastMessageAt && (
-            <span className="shrink-0 text-[10.5px] font-bold uppercase tracking-wider text-[#86868B]">
+            <span className="shrink-0 text-[10.5px] font-bold uppercase tracking-wider text-[#64748B]">
               {formatTime(conv.lastMessageAt, t)}
             </span>
           )}
@@ -421,7 +402,7 @@ function ConversationRow({
             className="truncate text-[12.5px]"
             style={{
               fontWeight: unread > 0 ? 600 : 500,
-              color: unread > 0 ? '#1D1D1F' : '#86868B',
+              color: unread > 0 ? '#1D1D1F' : '#64748B',
             }}
           >
             {lastMsg || t('chat.newConversation')}
@@ -433,8 +414,8 @@ function ConversationRow({
               transition={SPRING.snappy}
               className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white"
               style={{
-                background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
-                boxShadow: '0 4px 10px -3px rgba(0,122,255,0.55)',
+                background: 'linear-gradient(135deg, #2563EB 0%, #6366F1 100%)',
+                boxShadow: '0 4px 10px -3px rgba(37,99,235,0.55)',
               }}
             >
               {unread > 99 ? '99+' : unread}
@@ -474,7 +455,7 @@ function MessageBubble({
         }`}
       >
         {!isOwn && msg.sender && (
-          <span className="mb-1 ml-3 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+          <span className="mb-1 ml-3 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B]">
             {msg.sender.firstName} {msg.sender.lastName}
           </span>
         )}
@@ -491,9 +472,9 @@ function MessageBubble({
             isOwn
               ? {
                   background:
-                    'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
+                    'linear-gradient(135deg, #2563EB 0%, #6366F1 100%)',
                   boxShadow:
-                    'inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 14px -6px rgba(0,122,255,0.5)',
+                    'inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 14px -6px rgba(37,99,235,0.5)',
                 }
               : {
                   background: 'rgba(255,255,255,0.9)',
@@ -511,7 +492,7 @@ function MessageBubble({
             isOwn ? 'mr-1 flex-row-reverse' : 'ml-1'
           }`}
         >
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[#86868B] tabular-nums">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] tabular-nums">
             {formatTime(msg.createdAt, t)}
           </span>
           {isOwn && msg.isRead && (
@@ -520,7 +501,7 @@ function MessageBubble({
               animate={{ scale: 1, opacity: 1 }}
               transition={SPRING.snappy}
               className="inline-flex items-center"
-              style={{ color: '#007AFF' }}
+              style={{ color: '#2563EB' }}
             >
               <Icon paths={I.checkDouble} size={14} strokeWidth={2.2} />
             </motion.span>
@@ -569,17 +550,17 @@ function Composer({
   };
 
   return (
-    <div className="relative z-10 border-t border-[#00000008] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff08] dark:bg-[#1c1c1e80]">
+    <div className="relative z-10 border-t border-black/[0.06] bg-white/80 p-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
       <div className="mx-auto flex max-w-4xl items-end gap-2">
         <div
-          className="relative flex flex-1 items-end gap-1.5 rounded-3xl border px-2 py-1.5 transition-colors"
+          className="relative flex flex-1 items-end gap-1.5 rounded-2xl border px-2 py-1.5 transition-colors"
           style={{
-            borderColor: focused ? 'rgba(0,122,255,0.4)' : 'rgba(0,0,0,0.08)',
+            borderColor: focused ? 'rgba(37,99,235,0.4)' : 'rgba(0,0,0,0.08)',
             background: 'rgba(255,255,255,0.9)',
             backdropFilter: 'blur(20px) saturate(1.5)',
             WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
             boxShadow: focused
-              ? 'inset 0 1px 0 rgba(255,255,255,0.7), 0 0 0 3px rgba(0,122,255,0.12)'
+              ? 'inset 0 1px 0 rgba(255,255,255,0.7), 0 0 0 3px rgba(37,99,235,0.12)'
               : 'inset 0 1px 0 rgba(255,255,255,0.7), 0 4px 16px -10px rgba(0,0,0,0.10)',
           }}
         >
@@ -611,10 +592,10 @@ function Composer({
           className="relative flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full text-white outline-none transition-opacity disabled:opacity-35"
           style={{
             background: canSend
-              ? 'linear-gradient(135deg, #007AFF 0%, #5856D6 50%, #AF52DE 100%)'
-              : 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
+              ? 'linear-gradient(135deg, #2563EB 0%, #6366F1 50%, #6366F1 100%)'
+              : 'linear-gradient(135deg, #2563EB 0%, #6366F1 100%)',
             boxShadow: canSend
-              ? 'inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 22px -8px rgba(0,122,255,0.55)'
+              ? 'inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 22px -8px rgba(37,99,235,0.55)'
               : 'inset 0 1px 0 rgba(255,255,255,0.2)',
           }}
           role="button"
@@ -835,7 +816,7 @@ export function ChatPage() {
   if (conversationsQuery.isLoading) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80" />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <Shimmer key={i} className="h-[88px]" radius="1rem" />
@@ -876,12 +857,9 @@ export function ChatPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-7"
         >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
           <span
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-0 h-24"
@@ -896,9 +874,9 @@ export function ChatPage() {
               transition={SPRING.smooth}
               className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
               style={{
-                background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
+                background: 'linear-gradient(135deg, #2563EB 0%, #6366F1 100%)',
                 boxShadow:
-                  '0 12px 28px -10px rgba(0,122,255,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
+                  '0 12px 28px -10px rgba(37,99,235,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
               }}
             >
               <span
@@ -913,23 +891,23 @@ export function ChatPage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   {t('chat.messaging')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#AF52DE]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#6366F1]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#6366F1]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
                   {stats.total} chats
                 </span>
                 {stats.unread > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF3B30]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#FF3B30]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EF4444]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#EF4444]">
                     <span className="relative flex h-1.5 w-1.5">
                       <motion.span
-                        className="absolute inset-0 rounded-full bg-[#FF3B30]"
+                        className="absolute inset-0 rounded-full bg-[#EF4444]"
                         animate={{ scale: [1, 2.4, 1], opacity: [0.6, 0, 0.6] }}
                         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
                       />
-                      <span className="relative h-1.5 w-1.5 rounded-full bg-[#FF3B30]" />
+                      <span className="relative h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
                     </span>
                     {stats.unread} unread
                   </span>
@@ -939,7 +917,7 @@ export function ChatPage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('chat.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {t('chat.subtitle')}
               </p>
             </div>
@@ -957,33 +935,29 @@ export function ChatPage() {
         {/* ── Left: Conversation list ─────────────────────────────── */}
         <div
           className={[
-            'flex w-full shrink-0 flex-col overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]',
+            'flex w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card',
             'md:w-[340px] lg:w-[380px]',
             showMobileThread ? 'hidden md:flex' : 'flex',
           ].join(' ')}
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
         >
           {/* Header */}
-          <div className="relative flex items-center justify-between gap-2 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+          <div className="relative flex items-center justify-between gap-2 border-b border-black/[0.05] px-5 py-4 dark:border-white/[0.05]">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2563EB]/10 text-[#2563EB]">
                 <Icon paths={I.chat} size={16} strokeWidth={2} />
               </div>
               <div>
                 <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {t('chat.inbox')}
                 </h2>
-                <p className="text-[11px] font-medium text-[#86868B]">
+                <p className="text-[11px] font-medium text-[#64748B]">
                   {conversations.length} {conversations.length === 1 ? 'conversation' : 'conversations'}
                 </p>
               </div>
             </div>
             {stats.active > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#34C759]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#10B981]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
                 {stats.active} active
               </span>
             )}
@@ -994,13 +968,13 @@ export function ChatPage() {
             {conversations.length === 0 ? (
               <div className="flex h-full items-center justify-center p-6">
                 <div className="flex flex-col items-center text-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#007AFF]/10 text-[#007AFF]">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2563EB]/10 text-[#2563EB]">
                     <Icon paths={I.empty} size={22} strokeWidth={1.8} />
                   </div>
                   <p className="mt-3 text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
                     {t('chat.inboxZero')}
                   </p>
-                  <p className="mx-auto mt-1 max-w-xs text-[12px] font-medium text-[#86868B]">
+                  <p className="mx-auto mt-1 max-w-xs text-[12px] font-medium text-[#64748B]">
                     {t('chat.inboxZeroHint')}
                   </p>
                 </div>
@@ -1026,25 +1000,21 @@ export function ChatPage() {
         {/* ── Right: Thread ───────────────────────────────────────── */}
         <div
           className={[
-            'flex flex-1 flex-col overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]',
+            'flex flex-1 flex-col overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card',
             !showMobileThread && activeConvId ? 'hidden md:flex' : showMobileThread ? 'flex' : 'hidden md:flex',
           ].join(' ')}
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
         >
           {!activeConvId ? (
             /* Empty state */
             <div className="flex flex-1 items-center justify-center p-8">
               <div className="flex flex-col items-center text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#AF52DE]/10 text-[#AF52DE]">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#6366F1]/10 text-[#6366F1]">
                   <Icon paths={I.chat} size={26} strokeWidth={1.8} />
                 </div>
                 <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {t('chat.selectConversation')}
                 </p>
-                <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+                <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
                   {t('chat.selectConversationHint')}
                 </p>
               </div>
@@ -1052,7 +1022,7 @@ export function ChatPage() {
           ) : (
             <>
               {/* Thread header */}
-              <div className="relative flex items-center gap-3 border-b border-[#00000008] bg-[#ffffff80] px-4 py-3 backdrop-blur-xl dark:border-[#ffffff08] dark:bg-[#1c1c1e80]">
+              <div className="relative flex items-center gap-3 border-b border-black/[0.05] bg-white/80 px-4 py-3 backdrop-blur-xl dark:border-white/[0.05] dark:bg-surface-900/80">
                 <motion.button
                   type="button"
                   onClick={handleBack}
@@ -1060,7 +1030,7 @@ export function ChatPage() {
                   whileTap={{ scale: 0.92 }}
                   transition={SPRING.snappy}
                   aria-label={t('chat.backToInbox')}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#00000005] text-[#1D1D1F] outline-none transition-colors hover:bg-[#00000008] dark:bg-[#ffffff08] dark:text-[#F5F5F7] md:hidden"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#00000005] text-[#1D1D1F] outline-none transition-colors hover:bg-slate-100 dark:hover:bg-slate-800/60 dark:bg-[#ffffff08] dark:text-[#F5F5F7] md:hidden"
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e: any) => {
@@ -1073,13 +1043,13 @@ export function ChatPage() {
                 </motion.button>
 
                 <div
-                  className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
+                  className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ring-2 ring-white/50 dark:ring-slate-900/50"
                   style={{
                     background: activeConversation
                       ? avatarGradient(
                           getConversationTitle(activeConversation, user?.id, t),
                         )
-                      : 'linear-gradient(135deg, #007AFF, #5856D6)',
+                      : 'linear-gradient(135deg, #2563EB, #6366F1)',
                     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 12px -4px rgba(0,0,0,0.25)',
                   }}
                 >
@@ -1111,7 +1081,7 @@ export function ChatPage() {
                           exit={{ opacity: 0, y: -4 }}
                           transition={{ duration: 0.15 }}
                           className="inline-flex items-center gap-1.5 text-[11px] font-semibold"
-                          style={{ color: '#007AFF' }}
+                          style={{ color: '#2563EB' }}
                         >
                           {typingNames.length === 1
                             ? t('chat.typingOne', { names: typingNames.join(',') })
@@ -1145,7 +1115,7 @@ export function ChatPage() {
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center text-center">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#007AFF]/10 text-[#007AFF]">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2563EB]/10 text-[#2563EB]">
                       <Icon paths={I.chat} size={22} strokeWidth={1.8} />
                     </div>
                     <p className="mt-3 text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">

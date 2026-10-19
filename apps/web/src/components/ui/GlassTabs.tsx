@@ -1,44 +1,25 @@
 /**
- * GlassTabs V3 — Canonical tabs for M-EDU Design System V4 (Aurora Prime).
+ * GlassTabs — Apple-premium tabs.
  *
- * Variants: segmented | underline | pill
- * Sizes:    sm | md | lg
- *
- * Fully WAI-ARIA compliant (tablist pattern):
- *   - Arrow Left/Right: move focus between tabs
- *   - Home/End: first/last tab
- *   - tabIndex: only active tab is tabbable (roving tabindex)
- *   - id + aria-controls + aria-labelledby: panel association
- *
- * v3 FIXES (v2 → v3):
- *  1. Keyboard navigation (Arrow/Home/End + roving tabIndex) — was missing (P0)
- *  2. aria-controls / id / aria-labelledby — panel association
- *  3. type="button" on all tabs — was missing (form submit bug)
- *  4. React.ReactNode → import type { ReactNode }
- *  5. TabCountBadge extracted — was 3x duplicated
- *  6. formatCount (1.2K, 15K) — better UX for large counts
- *  7. Motion — sliding indicator via Framer Motion layoutId (segmented + underline)
- *  8. Mobile — overflow-x-auto + scroll-snap (segmented + underline)
- *  9. Underline: focus-visible outline (was outline-none — a11y bug)
- * 10. Underline: after:scale-x-0 initial (was scale-x-100 — pop)
- * 11. Design tokens: --shadow-brand, --text-on-brand, --opacity-disabled
- * 12. Token sizes: --text-md/lg/xl (was Tailwind text-base 16px)
- * 13. SIZE_MAP — single source of truth (was 3x inline)
- * 14. tablist aria-label — dev warning if absent
+ * Variants: segmented (default) · underline · pill — sizes sm/md/lg.
+ * Full WAI-ARIA tablist with roving tabindex and Arrow/Home/End keys,
+ * count badges, a framer `layoutId` indicator and DOM ids namespaced per
+ * instance via `useId` (fixes the old cross-instance id collision).
  */
-
 import {
   useCallback,
-  useMemo,
+  useId,
   useRef,
-  type ReactNode,
   type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
 } from 'react';
 import { motion } from 'framer-motion';
+import { SPRING, cn, compactNumber, usePrefersReducedMotion } from '@/lib/design';
 
-/* ============================================================================
+/* ═══════════════════════════════════════════════════════════
  * TYPES
- * ========================================================================== */
+ * ═══════════════════════════════════════════════════════════ */
 
 export interface Tab {
   id: string;
@@ -46,103 +27,98 @@ export interface Tab {
   count?: number;
   icon?: ReactNode;
   disabled?: boolean;
-  /** Optional: id of the panel this tab controls (for a11y) */
+  /** Optional: id of the panel this tab controls (for a11y). */
   panelId?: string;
 }
 
-type Variant = 'segmented' | 'underline' | 'pill';
-type Size = 'sm' | 'md' | 'lg';
+export type GlassTabsVariant = 'segmented' | 'underline' | 'pill';
+export type GlassTabsSize = 'sm' | 'md' | 'lg';
 
 export interface GlassTabsProps {
   tabs: Tab[];
   active: string;
   onChange: (id: string) => void;
-  variant?: Variant;
-  size?: Size;
+  variant?: GlassTabsVariant;
+  size?: GlassTabsSize;
   className?: string;
   /** A11y label for the tablist. Strongly recommended. */
   'aria-label'?: string;
-  /** Alternative a11y label via element id */
+  /** Alternative a11y label via element id. */
   'aria-labelledby'?: string;
+  /** @deprecated no-op — the shell no longer renders an SVG filter. */
+  disableRefraction?: boolean;
+  /** Disables the indicator slide animation. */
+  disableMotion?: boolean;
 }
 
-interface InternalProps extends Omit<GlassTabsProps, 'variant'> {
-  variant: Variant;
-}
+/* ═══════════════════════════════════════════════════════════
+ * STYLE MAPS
+ * ═══════════════════════════════════════════════════════════ */
 
-/* ============================================================================
- * CONSTANTS
- * ========================================================================== */
-
-const MOTION_SPRING = {
-  type: 'spring',
-  stiffness: 380,
-  damping: 32,
-  mass: 0.7,
-} as const;
-
-const SIZE_MAP: Record<Variant, Record<Size, string>> = {
+const SIZE_BUTTON: Record<GlassTabsVariant, Record<GlassTabsSize, string>> = {
   segmented: {
-    sm: 'px-3 py-1.5 text-[var(--text-sm)]',
-    md: 'px-4 py-2 text-[var(--text-md)]',
-    lg: 'px-5 py-2.5 text-[var(--text-lg)]',
+    sm: 'gap-1.5 px-3 py-1.5 text-xs rounded-md',
+    md: 'gap-2 px-4 py-2 text-sm rounded-md',
+    lg: 'gap-2 px-5 py-2.5 text-base rounded-lg',
   },
   underline: {
-    sm: 'px-1 py-2 text-[var(--text-sm)]',
-    md: 'px-1 py-3 text-[var(--text-md)]',
-    lg: 'px-1 py-3.5 text-[var(--text-lg)]',
+    sm: 'gap-1.5 px-1 py-2 text-xs',
+    md: 'gap-2 px-1 py-2.5 text-sm',
+    lg: 'gap-2 px-1 py-3 text-base',
   },
   pill: {
-    sm: 'px-2.5 py-1 text-[var(--text-xs)]',
-    md: 'px-3.5 py-1.5 text-[var(--text-sm)]',
-    lg: 'px-5 py-2 text-[var(--text-lg)]',
+    sm: 'gap-1.5 px-2.5 py-1 text-xs rounded-full',
+    md: 'gap-1.5 px-3 py-1.5 text-sm rounded-full',
+    lg: 'gap-2 px-4 py-2 text-sm rounded-full',
   },
 };
 
-const ICON_SIZE_MAP: Record<Variant, string> = {
-  segmented: '[&>svg]:w-4 [&>svg]:h-4',
-  underline: '[&>svg]:w-4 [&>svg]:h-4',
-  pill:      '[&>svg]:w-3.5 [&>svg]:h-3.5',
+const ICON_SIZE: Record<GlassTabsSize, string> = {
+  sm: 'h-3.5 w-3.5',
+  md: 'h-4 w-4',
+  lg: 'h-[18px] w-[18px]',
 };
 
-/* ============================================================================
+const CONTENT_GAP: Record<GlassTabsSize, string> = {
+  sm: 'gap-1.5',
+  md: 'gap-2',
+  lg: 'gap-2',
+};
+
+const SHELL_CLASS: Record<GlassTabsVariant, string> = {
+  segmented:
+    'inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-xl ' +
+    'bg-black/[0.04] p-1 border border-black/[0.04] backdrop-blur-xl dark:bg-white/[0.06] dark:border-white/[0.06]',
+  underline:
+    'flex max-w-full items-center gap-1 overflow-x-auto border-b border-black/[0.06] dark:border-white/[0.08]',
+  pill: 'flex flex-wrap items-center gap-2',
+};
+
+function tabClass(variant: GlassTabsVariant, isActive: boolean): string {
+  if (variant === 'segmented') {
+    return isActive ? 'text-primary font-semibold' : 'text-secondary hover:text-primary';
+  }
+  if (variant === 'underline') {
+    return isActive ? 'text-brand-500 font-semibold' : 'text-secondary hover:text-primary';
+  }
+  return isActive
+    ? 'text-white font-semibold'
+    : 'text-secondary hover:bg-black/[0.06] dark:hover:bg-white/[0.08]';
+}
+
+function indicatorClass(variant: GlassTabsVariant): string {
+  if (variant === 'segmented') {
+    return 'pointer-events-none absolute inset-0 rounded-lg bg-white/95 dark:bg-surface-800/95 shadow-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]';
+  }
+  if (variant === 'underline') {
+    return 'pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-brand-500';
+  }
+  return 'pointer-events-none absolute inset-0 rounded-full bg-brand-500 shadow-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]';
+}
+
+/* ═══════════════════════════════════════════════════════════
  * HELPERS
- * ========================================================================== */
-
-/** Compact number formatting: 1234 → "1.2K", 1_500_000 → "1.5M" */
-function formatCount(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 1_000_000) {
-    const k = n / 1000;
-    return k < 10 ? `${k.toFixed(1).replace(/\.0$/, '')}K` : `${Math.round(k)}K`;
-  }
-  const m = n / 1_000_000;
-  return m < 10 ? `${m.toFixed(1).replace(/\.0$/, '')}M` : `${Math.round(m)}M`;
-}
-
-const isDev = (() => {
-  try {
-    if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) return true;
-  } catch { /* noop */ }
-  try {
-    return process.env.NODE_ENV !== 'production';
-  } catch {
-    return false;
-  }
-})();
-
-function devWarn(condition: boolean, message: string): void {
-  if (isDev && condition && typeof console !== 'undefined') {
-    // eslint-disable-next-line no-console
-    console.warn(`[GlassTabs] ${message}`);
-  }
-}
-
-/* ============================================================================
- * SHARED — TabCountBadge
- * ----------------------------------------------------------------------------
- * Previously duplicated 3 times. Single source of truth.
- * ========================================================================== */
+ * ═══════════════════════════════════════════════════════════ */
 
 function TabCountBadge({
   count,
@@ -151,371 +127,181 @@ function TabCountBadge({
 }: {
   count: number;
   isActive: boolean;
-  variant: Variant;
+  variant: GlassTabsVariant;
 }) {
-  const isPill = variant === 'pill';
-
-  // Pill: count badge on primary background
-  if (isPill) {
-    return (
-      <span
-        className={[
-          'px-1.5 py-0.5 text-[var(--text-2xs)] font-semibold rounded-[var(--radius-pill)]',
-          'min-w-[1.125rem] text-center leading-tight tabular-nums',
-          isActive
-            ? 'bg-white/20 text-[var(--text-on-brand)]'
-            : 'bg-[var(--border-subtle)] text-[var(--text-tertiary)]',
-        ].join(' ')}
-      >
-        {formatCount(count)}
-      </span>
-    );
-  }
-
-  // Segmented + Underline: same visual
   return (
     <span
-      className={[
-        'px-1.5 py-0.5 text-[var(--text-2xs)] font-semibold rounded-[var(--radius-pill)]',
-        'min-w-[1.125rem] text-center leading-tight tabular-nums',
+      className={cn(
+        'inline-flex min-w-[18px] items-center justify-center rounded-full',
+        'border px-1.5 py-px text-[11px] font-semibold leading-none tabular-nums',
         isActive
-          ? 'bg-[var(--primary-soft)] text-[var(--primary)]'
-          : 'bg-[var(--border-subtle)] text-[var(--text-tertiary)]',
-      ].join(' ')}
+          ? variant === 'pill'
+            ? 'border-white/30 bg-white/20 text-white'
+            : 'border-brand-500/30 bg-brand-500/10 text-brand-500'
+          : 'border-subtle bg-black/[0.04] text-tertiary dark:bg-white/[0.06]',
+      )}
     >
-      {formatCount(count)}
+      {compactNumber(count)}
     </span>
   );
 }
 
-/* ============================================================================
- * SHARED — Keyboard navigation hook (roving tabindex)
- * ========================================================================== */
-
+/** Roving tabindex: Arrow keys, Home, End (disabled tabs are skipped). */
 function useTabKeyboardNav(
   tabs: Tab[],
   onChange: (id: string) => void,
-  tabRefs: React.MutableRefObject<Map<string, HTMLButtonElement>>,
+  tabRefs: RefObject<Map<string, HTMLButtonElement>>,
 ) {
   return useCallback(
     (e: KeyboardEvent<HTMLButtonElement>, currentId: string) => {
-      const enabledTabs = tabs.filter((t) => !t.disabled);
-      if (enabledTabs.length === 0) return;
-
-      const currentIndex = enabledTabs.findIndex((t) => t.id === currentId);
+      const enabled = tabs.filter((tab) => !tab.disabled);
+      if (enabled.length === 0) return;
+      const currentIndex = enabled.findIndex((tab) => tab.id === currentId);
       if (currentIndex === -1) return;
 
       let nextIndex = currentIndex;
-
       switch (e.key) {
         case 'ArrowRight':
         case 'ArrowDown':
-          nextIndex = (currentIndex + 1) % enabledTabs.length;
+          nextIndex = (currentIndex + 1) % enabled.length;
           break;
         case 'ArrowLeft':
         case 'ArrowUp':
-          nextIndex = (currentIndex - 1 + enabledTabs.length) % enabledTabs.length;
+          nextIndex = (currentIndex - 1 + enabled.length) % enabled.length;
           break;
         case 'Home':
           nextIndex = 0;
           break;
         case 'End':
-          nextIndex = enabledTabs.length - 1;
+          nextIndex = enabled.length - 1;
           break;
         default:
           return;
       }
 
       e.preventDefault();
-      const nextTab = enabledTabs[nextIndex];
+      const nextTab = enabled[nextIndex];
       onChange(nextTab.id);
-      // Move focus after state update
-      requestAnimationFrame(() => {
-        tabRefs.current.get(nextTab.id)?.focus();
-      });
+      requestAnimationFrame(() => tabRefs.current?.get(nextTab.id)?.focus());
     },
     [tabs, onChange, tabRefs],
   );
 }
 
-/* ============================================================================
- * SEGMENTED TABS
- * ========================================================================== */
+/* ═══════════════════════════════════════════════════════════
+ * MAIN
+ * ═══════════════════════════════════════════════════════════ */
 
-function SegmentedTabs({
-  tabs, active, onChange, size = 'md', className = '',
-  'aria-label': ariaLabel, 'aria-labelledby': ariaLabelledBy,
-}: InternalProps) {
+export function GlassTabs({
+  tabs,
+  active,
+  onChange,
+  variant = 'segmented',
+  size = 'md',
+  className = '',
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
+  disableMotion = false,
+}: GlassTabsProps) {
+  // Namespaced per instance — two <GlassTabs /> mounted at once never clash.
+  const uid = useId().replace(/:/g, '');
+  const indicatorLayoutId = `glass-tabs-${uid}-indicator`;
+  const reduced = usePrefersReducedMotion();
+
   const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const sizeClass = SIZE_MAP.segmented[size];
-  const iconClass = ICON_SIZE_MAP.segmented;
-
   const handleKeyDown = useTabKeyboardNav(tabs, onChange, tabRefs);
 
-  devWarn(
-    !ariaLabel && !ariaLabelledBy,
-    'tablist should have `aria-label` or `aria-labelledby` for screen readers.',
-  );
+  if (import.meta.env.DEV && !ariaLabel && !ariaLabelledBy) {
+    // eslint-disable-next-line no-console
+    console.warn('[GlassTabs] tablist should have `aria-label` or `aria-labelledby`.');
+  }
+
+  const motionTransition =
+    reduced || disableMotion ? { duration: 0 } : SPRING.snappy;
 
   return (
     <div
-      role="tablist"
-      aria-label={ariaLabel}
-      aria-labelledby={ariaLabelledBy}
-      className={[
-        // Mobile: horizontal scroll
-        'inline-flex items-center gap-0.5 p-1',
-        'bg-[var(--bg-glass)] backdrop-blur-xl [-webkit-backdrop-filter:blur(16px)]',
-        'border border-[var(--border-subtle)]',
-        'rounded-[var(--radius-lg)]',
-        // Scroll safety
-        'max-w-full overflow-x-auto scrollbar-thin',
-        'whitespace-nowrap',
-        className,
-      ].join(' ')}
+      data-component="glass-tabs"
+      data-variant={variant}
+      className={className}
     >
-      {tabs.map((tab) => {
-        const isActive = tab.id === active;
-        const isDisabled = Boolean(tab.disabled);
+      <div
+        role="tablist"
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy}
+        className={cn(
+          SHELL_CLASS[variant],
+          variant !== 'pill' &&
+            '[scrollbar-width:none] [ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
+        )}
+      >
+        {tabs.map((tab) => {
+          const isActive = tab.id === active;
+          const isDisabled = Boolean(tab.disabled);
 
-        return (
-          <button
-            key={tab.id}
-            ref={(el) => {
-              if (el) tabRefs.current.set(tab.id, el);
-              else tabRefs.current.delete(tab.id);
-            }}
-            type="button"
-            role="tab"
-            id={`tab-${tab.id}`}
-            aria-controls={tab.panelId}
-            aria-selected={isActive}
-            aria-disabled={isDisabled || undefined}
-            disabled={isDisabled}
-            tabIndex={isActive ? 0 : -1}
-            onClick={() => !isDisabled && onChange(tab.id)}
-            onKeyDown={(e) => handleKeyDown(e, tab.id)}
-            className={[
-              'relative flex items-center gap-2',
-              sizeClass,
-              'font-medium rounded-[var(--radius-md)]',
-              'whitespace-nowrap select-none',
-              'transition-colors',
-              'duration-[var(--duration-fast)] [transition-timing-function:var(--ease-standard)]',
-              'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--border-focus)]',
-              isActive
-                ? 'text-[var(--text-primary)] font-semibold'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--state-hover)]',
-              isDisabled ? 'opacity-[var(--opacity-disabled,0.55)] cursor-not-allowed' : 'cursor-pointer',
-            ].join(' ')}
-          >
-            {/* Sliding indicator (Framer Motion) */}
-            {isActive && (
-              <motion.span
-                layoutId="glass-tabs-segmented-indicator"
-                className="absolute inset-0 rounded-[var(--radius-md)]"
-                style={{
-                  background: 'var(--bg-surface)',
-                  boxShadow: 'var(--shadow-xs)',
-                }}
-                transition={MOTION_SPRING}
-                aria-hidden
-              />
-            )}
-
-            <span className="relative z-10 flex items-center gap-2">
-              {tab.icon && <span className={`${iconClass} flex-shrink-0 flex items-center`}>{tab.icon}</span>}
-              {tab.label}
-              {tab.count !== undefined && (
-                <TabCountBadge count={tab.count} isActive={isActive} variant="segmented" />
+          return (
+            <button
+              key={tab.id}
+              ref={(el) => {
+                if (el) tabRefs.current.set(tab.id, el);
+                else tabRefs.current.delete(tab.id);
+              }}
+              type="button"
+              role="tab"
+              id={`${uid}-tab-${tab.id}`}
+              aria-controls={tab.panelId}
+              aria-selected={isActive}
+              aria-disabled={isDisabled || undefined}
+              disabled={isDisabled}
+              tabIndex={isActive ? 0 : -1}
+              onClick={() => !isDisabled && onChange(tab.id)}
+              onKeyDown={(e) => handleKeyDown(e, tab.id)}
+              className={cn(
+                'relative inline-flex shrink-0 select-none items-center whitespace-nowrap',
+                'font-medium transition-colors duration-150 active:scale-[0.98]',
+                'focus-visible:outline-2 focus-visible:outline-offset-2',
+                'focus-visible:outline-[var(--border-focus)]',
+                'disabled:cursor-not-allowed disabled:opacity-50',
+                SIZE_BUTTON[variant][size],
+                tabClass(variant, isActive),
               )}
-            </span>
-          </button>
-        );
-      })}
+            >
+              {isActive && (
+                <motion.span
+                  layoutId={indicatorLayoutId}
+                  transition={motionTransition}
+                  className={indicatorClass(variant)}
+                  aria-hidden="true"
+                />
+              )}
+
+              <span className={cn('relative z-[1] inline-flex items-center', CONTENT_GAP[size])}>
+                {tab.icon && (
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'flex shrink-0 items-center [&>svg]:h-full [&>svg]:w-full',
+                      ICON_SIZE[size],
+                    )}
+                  >
+                    {tab.icon}
+                  </span>
+                )}
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <TabCountBadge
+                    count={tab.count}
+                    isActive={isActive}
+                    variant={variant}
+                  />
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
-}
-
-/* ============================================================================
- * UNDERLINE TABS
- * ========================================================================== */
-
-function UnderlineTabs({
-  tabs, active, onChange, size = 'md', className = '',
-  'aria-label': ariaLabel, 'aria-labelledby': ariaLabelledBy,
-}: InternalProps) {
-  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const sizeClass = SIZE_MAP.underline[size];
-  const iconClass = ICON_SIZE_MAP.underline;
-
-  const handleKeyDown = useTabKeyboardNav(tabs, onChange, tabRefs);
-
-  devWarn(
-    !ariaLabel && !ariaLabelledBy,
-    'tablist should have `aria-label` or `aria-labelledby` for screen readers.',
-  );
-
-  return (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      aria-labelledby={ariaLabelledBy}
-      className={[
-        'flex items-center gap-4',
-        'border-b border-[var(--border-subtle)]',
-        // Mobile scroll
-        'max-w-full overflow-x-auto scrollbar-thin',
-        'whitespace-nowrap',
-        className,
-      ].join(' ')}
-    >
-      {tabs.map((tab) => {
-        const isActive = tab.id === active;
-        const isDisabled = Boolean(tab.disabled);
-
-        return (
-          <button
-            key={tab.id}
-            ref={(el) => {
-              if (el) tabRefs.current.set(tab.id, el);
-              else tabRefs.current.delete(tab.id);
-            }}
-            type="button"
-            role="tab"
-            id={`tab-${tab.id}`}
-            aria-controls={tab.panelId}
-            aria-selected={isActive}
-            aria-disabled={isDisabled || undefined}
-            disabled={isDisabled}
-            tabIndex={isActive ? 0 : -1}
-            onClick={() => !isDisabled && onChange(tab.id)}
-            onKeyDown={(e) => handleKeyDown(e, tab.id)}
-            className={[
-              'relative flex items-center gap-2',
-              sizeClass,
-              'font-medium whitespace-nowrap select-none',
-              'transition-colors duration-[var(--duration-fast)] [transition-timing-function:var(--ease-standard)]',
-              // v3: focus ring (was outline-none — a11y bug)
-              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-focus)] focus-visible:rounded-[var(--radius-xs)]',
-              isActive
-                ? 'text-[var(--primary)] font-semibold'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
-              isDisabled ? 'opacity-[var(--opacity-disabled,0.55)] cursor-not-allowed' : 'cursor-pointer',
-            ].join(' ')}
-          >
-            {tab.icon && <span className={`${iconClass} flex-shrink-0 flex items-center`}>{tab.icon}</span>}
-            {tab.label}
-            {tab.count !== undefined && (
-              <TabCountBadge count={tab.count} isActive={isActive} variant="underline" />
-            )}
-
-            {/* Sliding underline (Framer Motion) */}
-            {isActive && (
-              <motion.span
-                layoutId="glass-tabs-underline-indicator"
-                className="absolute -bottom-px left-0 right-0 h-[2px] rounded-full"
-                style={{ background: 'var(--primary)' }}
-                transition={MOTION_SPRING}
-                aria-hidden
-              />
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ============================================================================
- * PILL TABS
- * ========================================================================== */
-
-function PillTabs({
-  tabs, active, onChange, size = 'md', className = '',
-  'aria-label': ariaLabel, 'aria-labelledby': ariaLabelledBy,
-}: InternalProps) {
-  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const sizeClass = SIZE_MAP.pill[size];
-  const iconClass = ICON_SIZE_MAP.pill;
-
-  const handleKeyDown = useTabKeyboardNav(tabs, onChange, tabRefs);
-
-  devWarn(
-    !ariaLabel && !ariaLabelledBy,
-    'tablist should have `aria-label` or `aria-labelledby` for screen readers.',
-  );
-
-  return (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      aria-labelledby={ariaLabelledBy}
-      className={['flex flex-wrap items-center gap-2', className].join(' ')}
-    >
-      {tabs.map((tab) => {
-        const isActive = tab.id === active;
-        const isDisabled = Boolean(tab.disabled);
-
-        return (
-          <button
-            key={tab.id}
-            ref={(el) => {
-              if (el) tabRefs.current.set(tab.id, el);
-              else tabRefs.current.delete(tab.id);
-            }}
-            type="button"
-            role="tab"
-            id={`tab-${tab.id}`}
-            aria-controls={tab.panelId}
-            aria-selected={isActive}
-            aria-disabled={isDisabled || undefined}
-            disabled={isDisabled}
-            tabIndex={isActive ? 0 : -1}
-            onClick={() => !isDisabled && onChange(tab.id)}
-            onKeyDown={(e) => handleKeyDown(e, tab.id)}
-            className={[
-              'flex items-center gap-1.5',
-              sizeClass,
-              'font-medium rounded-[var(--radius-pill)] border',
-              'whitespace-nowrap select-none',
-              'transition-[background-color,color,border-color,box-shadow]',
-              'duration-[var(--duration-fast)] [transition-timing-function:var(--ease-standard)]',
-              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-focus)]',
-              isActive
-                ? 'bg-[var(--primary)] border-[var(--primary)] text-[var(--text-on-brand)] shadow-[var(--shadow-brand)]'
-                : 'bg-transparent border-[var(--border-medium)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] hover:bg-[var(--state-hover)]',
-              isDisabled ? 'opacity-[var(--opacity-disabled,0.55)] cursor-not-allowed' : 'cursor-pointer',
-            ].join(' ')}
-          >
-            {tab.icon && <span className={`${iconClass} flex-shrink-0 flex items-center`}>{tab.icon}</span>}
-            {tab.label}
-            {tab.count !== undefined && (
-              <TabCountBadge count={tab.count} isActive={isActive} variant="pill" />
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ============================================================================
- * MAIN EXPORT
- * ========================================================================== */
-
-export function GlassTabs({ variant = 'segmented', ...props }: GlassTabsProps) {
-  // Memoize variant switch to avoid re-render churn when tabs list is stable
-  const VariantComponent = useMemo(() => {
-    switch (variant) {
-      case 'underline': return UnderlineTabs;
-      case 'pill':      return PillTabs;
-      case 'segmented':
-      default:          return SegmentedTabs;
-    }
-  }, [variant]);
-
-  return <VariantComponent {...props} variant={variant} />;
 }
 
 export default GlassTabs;

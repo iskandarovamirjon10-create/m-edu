@@ -122,7 +122,7 @@ describe('I18nProvider', () => {
     );
     const select = screen.getByRole('combobox', { name: 'Language' }) as HTMLSelectElement;
     expect(select.options.length).toBe(3);
-    expect(select.options[0].text).toBe('O’zbekcha');
+    expect(select.options[0].text).toBe('O\'zbekcha');
     expect(select.options[1].text).toBe('Русский');
     expect(select.options[2].text).toBe('English');
   });

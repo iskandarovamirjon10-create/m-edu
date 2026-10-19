@@ -32,6 +32,8 @@ import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, LibraryBook } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -179,13 +181,13 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald' | 'amber';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
+  blue:    { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)', border: 'rgba(37,99,235,0.20)' },
+  green:   { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)',  border: 'rgba(16,185,129,0.20)' },
+  orange:  { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)',  border: 'rgba(245,158,11,0.20)' },
+  red:     { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)' },
+  purple:  { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)' },
+  cyan:    { fg: '#0284C7', bg: 'rgba(2,132,199,0.10)', glow: 'rgba(2,132,199,0.28)', border: 'rgba(2,132,199,0.20)' },
+  gray:    { fg: '#64748B', bg: 'rgba(100,116,139,0.10)', glow: 'rgba(100,116,139,0.22)', border: 'rgba(100,116,139,0.20)' },
   emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
   amber:   { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)', glow: 'rgba(245,158,11,0.28)', border: 'rgba(245,158,11,0.20)' },
 };
@@ -278,14 +280,14 @@ function nameHash(str: string): number {
 }
 
 const BOOK_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
-  ['#FF2D55', '#FF9500'],
-  ['#30D158', '#34C759'],
+  ['#2563EB', '#6366F1'],
+  ['#6366F1', '#FF2D55'],
+  ['#10B981', '#0284C7'],
+  ['#F59E0B', '#FF2D55'],
+  ['#6366F1', '#6366F1'],
+  ['#0284C7', '#2563EB'],
+  ['#FF2D55', '#F59E0B'],
+  ['#30D158', '#10B981'],
 ];
 
 function bookGradient(title: string): string {
@@ -313,28 +315,7 @@ function bookInitials(title: string): string {
  * ========================================================================== */
 
 function AmbientOrbs() {
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <motion.div
-        className="absolute -left-[8%] top-[6%] h-[44%] w-[40%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(0,122,255,0.14), transparent 70%)',
-          filter: 'blur(70px)',
-        }}
-        animate={{ x: [0, 24, 0], y: [0, 18, 0], opacity: [0.85, 1, 0.85] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute -bottom-[10%] -right-[8%] h-[46%] w-[42%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(175,82,222,0.12), transparent 70%)',
-          filter: 'blur(80px)',
-        }}
-        animate={{ x: [0, -28, 0], y: [0, -22, 0], opacity: [0.8, 1, 0.8] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </div>
-  );
+  return null;
 }
 
 function CountUp({
@@ -375,7 +356,7 @@ function KpiTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       style={{
         boxShadow:
           'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
@@ -406,7 +387,7 @@ function KpiTile({
         <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
           {typeof value === 'number' ? <CountUp value={value} /> : stringValue}
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B]">
           {label}
         </div>
       </div>
@@ -442,9 +423,9 @@ function LibrarySkeleton() {
         ))}
       </div>
       <Shimmer className="h-14" radius="1rem" />
-      <div className="overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] dark:border-[#ffffff10] dark:bg-[#1c1c1e80]">
+      <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="flex items-center gap-4 border-b border-[#00000008] p-4 last:border-0 dark:border-[#ffffff08]">
+          <div key={i} className="flex items-center gap-4 border-b border-black/[0.06] p-4 last:border-0 dark:border-white/[0.08]">
             <Shimmer className="h-12 w-12" radius="0.75rem" />
             <div className="flex-1 space-y-2">
               <Shimmer className="h-4 w-48" radius="0.5rem" />
@@ -555,6 +536,7 @@ export function LibraryPage() {
   usePageTitle(t('library.title'));
   const { push, toastNode } = useToast();
   const qc = useQueryClient();
+  const { playTick, playPop, playSuccess, playError } = usePremiumSound();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -564,6 +546,7 @@ export function LibraryPage() {
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof BookFormState, string>>>({});
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('ALL');
 
   /* ── Queries ──────────────────────────────────────────────────────── */
   const books = useQuery({
@@ -576,16 +559,22 @@ export function LibraryPage() {
   const bookList = useMemo(() => data?.items || [], [data]);
 
   const filteredBooks = useMemo(() => {
-    if (!searchQuery.trim()) return bookList;
-    const q = searchQuery.toLowerCase();
-    return bookList.filter(
-      (book) =>
-        book.title.toLowerCase().includes(q) ||
-        book.author?.toLowerCase().includes(q) ||
-        book.isbn?.toLowerCase().includes(q) ||
-        book.barcode.toLowerCase().includes(q),
-    );
-  }, [bookList, searchQuery]);
+    let list = bookList;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (book) =>
+          book.title.toLowerCase().includes(q) ||
+          book.author?.toLowerCase().includes(q) ||
+          book.isbn?.toLowerCase().includes(q) ||
+          book.barcode.toLowerCase().includes(q),
+      );
+    }
+    if (filterCategory !== 'ALL') {
+      list = list.filter((book) => book.category === filterCategory);
+    }
+    return list;
+  }, [bookList, searchQuery, filterCategory]);
 
   /* ── Derived stats ────────────────────────────────────────────────── */
   const stats = useMemo(() => {
@@ -596,6 +585,38 @@ export function LibraryPage() {
     const inStockPct = totalCopies ? Math.round((availableCopies / totalCopies) * 100) : 0;
     return { total, totalCopies, availableCopies, categories, inStockPct };
   }, [bookList]);
+
+  const handleOpenBookSidecar = useCallback((book: LibraryBook) => {
+    playTick();
+    const available = book.availableQuantity ?? book.quantity ?? 0;
+    const isOutOfStock = available === 0;
+    const sidecarData: QuickLookData = {
+      title: book.title,
+      subtitle: `${book.author || 'Unknown Author'} • ${book.category}`,
+      badge: book.category,
+      status: {
+        label: isOutOfStock ? 'Checked Out / 0 Available' : `${available} Copies in Stock`,
+        tone: isOutOfStock ? 'error' : available <= 2 ? 'warning' : 'success',
+      },
+      metrics: [
+        { label: 'Available Copies', value: available },
+        { label: 'Total Copies', value: book.quantity },
+        { label: 'Published Year', value: book.publishedYear || '—' },
+        { label: 'Language', value: book.language || 'Default' },
+      ],
+      details: [
+        { label: 'Catalog ID', value: book.id },
+        { label: 'Barcode', value: book.barcode },
+        { label: 'ISBN', value: book.isbn || 'None' },
+        { label: 'Classification', value: book.category },
+        { label: 'Storage / Stacks', value: book.location || 'Main Stacks' },
+        { label: 'Publisher', value: book.publisher || 'Not recorded' },
+        { label: 'Synopsis', value: book.description || 'No synopsis recorded' },
+        { label: 'Registered Date', value: book.createdAt ? new Date(book.createdAt).toLocaleDateString() : '—' },
+      ],
+    };
+    openSidecar(sidecarData);
+  }, [playTick]);
 
   /* ── Save mutation ────────────────────────────────────────────────── */
   const saveBook = useMutation({
@@ -623,11 +644,13 @@ export function LibraryPage() {
       }
     },
     onSuccess: () => {
+      playSuccess();
       push('success', editingId ? t('library.bookUpdated') : t('library.bookCreated'));
       qc.invalidateQueries({ queryKey: ['library-books'] });
       closeModal();
     },
     onError: (error) => {
+      playError();
       push('error', getErrorMessage(error));
     },
   });
@@ -636,16 +659,19 @@ export function LibraryPage() {
   const deleteBook = useMutation({
     mutationFn: (id: string) => libraryApi.deleteBook(id),
     onSuccess: () => {
+      playSuccess();
       push('success', t('library.bookDeleted'));
       qc.invalidateQueries({ queryKey: ['library-books'] });
     },
     onError: (error) => {
+      playError();
       push('error', getErrorMessage(error));
     },
   });
 
   /* ── Handlers ─────────────────────────────────────────────────────── */
   const openModal = useCallback((book?: LibraryBook) => {
+    playPop();
     if (book) {
       setEditingId(book.id);
       setForm({
@@ -668,23 +694,66 @@ export function LibraryPage() {
     }
     setFormErrors({});
     setModalOpen(true);
-  }, []);
+  }, [playPop]);
 
   const closeModal = useCallback(() => {
+    playTick();
     setModalOpen(false);
     setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
-  }, []);
+  }, [playTick]);
 
   const handleSubmit = useCallback(() => {
     const errors = validateBookForm(form);
     if (Object.keys(errors).length > 0) {
+      playError();
       setFormErrors(errors);
       return;
     }
     saveBook.mutate();
-  }, [form, saveBook]);
+  }, [form, saveBook, playError]);
+
+  // Keyboard Shortcuts: N for new book, R for refresh, 1-6 for filters
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+        return;
+      }
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        openModal();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        playTick();
+        books.refetch();
+      } else if (e.key === '1') {
+        e.preventDefault();
+        playTick();
+        setFilterCategory('ALL');
+      } else if (e.key === '2') {
+        e.preventDefault();
+        playTick();
+        setFilterCategory('FICTION');
+      } else if (e.key === '3') {
+        e.preventDefault();
+        playTick();
+        setFilterCategory('NON_FICTION');
+      } else if (e.key === '4') {
+        e.preventDefault();
+        playTick();
+        setFilterCategory('EDUCATIONAL');
+      } else if (e.key === '5') {
+        e.preventDefault();
+        playTick();
+        setFilterCategory('SCIENCE');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [books, openModal, playTick]);
 
   const handleFormField = useCallback(
     (field: keyof BookFormState) =>
@@ -699,7 +768,7 @@ export function LibraryPage() {
   if (books.isLoading) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card" />
         <LibrarySkeleton />
       </div>
     );
@@ -734,13 +803,8 @@ export function LibraryPage() {
           HERO HEADER
       ============================================================ */}
       <motion.div variants={cardVariants}>
-        <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
-        >
+        <div className="liquid-glass-card liquid-glass-surface relative overflow-hidden rounded-[2.25rem] border border-white/40 dark:border-white/10 p-6 sm:p-7 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.07)] backdrop-blur-2xl">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
           <span
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-0 h-24"
@@ -754,11 +818,9 @@ export function LibraryPage() {
               initial={{ scale: 0.9, opacity: 0, rotate: -6 }}
               animate={{ scale: 1, opacity: 1, rotate: 0 }}
               transition={SPRING.smooth}
-              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
+              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg shadow-indigo-500/25 ring-1 ring-white/30"
               style={{
-                background: 'linear-gradient(135deg, #AF52DE 0%, #5856D6 100%)',
-                boxShadow:
-                  '0 12px 28px -10px rgba(175,82,222,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
+                background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
               }}
             >
               <span
@@ -773,17 +835,17 @@ export function LibraryPage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#AF52DE]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#6366F1]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#6366F1]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   {t('library.title')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
                   {stats.total} titles
                 </span>
                 {stats.availableCopies > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#34C759]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
                     {stats.availableCopies} in stock
                   </span>
                 )}
@@ -792,33 +854,35 @@ export function LibraryPage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('library.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {t('library.pageDescription')}
               </p>
             </div>
 
-            <motion.div
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              transition={SPRING.snappy}
-            >
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  playTick();
+                  books.refetch();
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-white/60 dark:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-white/10 hover:bg-white/80 dark:hover:bg-white/15 transition-all shadow-sm active:scale-95"
+                title="Refresh Catalog (R)"
+              >
+                <span>↺</span>
+                <span>{t('common.refresh') || 'Refresh'}</span>
+                <kbd className="text-[10px] opacity-60 font-mono px-1 py-0.2 rounded bg-black/5 dark:bg-white/10 ml-0.5">R</kbd>
+              </button>
               <GlassButton
                 variant="primary"
                 onClick={() => openModal()}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e: any) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.currentTarget.click();
-                  }
-                }}>
-                <span className="inline-flex items-center gap-2">
-                  <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                  {t('library.addBook')}
-                </span>
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold shadow-sm hover:shadow active:scale-[0.98] transition-all"
+              >
+                <Icon paths={I.plus} size={15} strokeWidth={2.5} />
+                <span>{t('library.addBook')}</span>
+                <kbd className="text-[10px] opacity-75 font-mono px-1.5 py-0.5 rounded bg-white/20 ml-1">N</kbd>
               </GlassButton>
-            </motion.div>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -849,14 +913,13 @@ export function LibraryPage() {
       {/* ============================================================
           SEARCH TOOLBAR
       ============================================================ */}
+      {/* ============================================================
+          SEARCH & CATEGORY FILTER TOOLBAR
+      ============================================================ */}
       <motion.div variants={cardVariants}>
-        <div
-          className="relative overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-          style={{
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
-          }}
-        >
-          <div className="relative">
+        <div className="liquid-glass-card liquid-glass-surface relative overflow-hidden rounded-2xl border border-white/40 dark:border-white/10 p-4 backdrop-blur-xl shadow-sm flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
+          <div className="relative flex-1 max-w-md">
             <FieldIcon icon={I.search} tone="blue" />
             <GlassInput
               placeholder={t('library.searchPlaceholder')}
@@ -864,6 +927,34 @@ export function LibraryPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-11"
             />
+          </div>
+
+          {/* Category Filter Chips */}
+          <div className="flex max-w-full overflow-x-auto scrollbar-none gap-1.5 p-1 rounded-xl bg-slate-100/70 dark:bg-white/5 border border-slate-200/50 dark:border-white/10 backdrop-blur-md">
+            {[
+              { id: 'ALL', label: t('common.all') || 'All', key: '1' },
+              { id: 'FICTION', label: t('library.category.FICTION') || 'Fiction', key: '2' },
+              { id: 'NON_FICTION', label: t('library.category.NON_FICTION') || 'Non-Fiction', key: '3' },
+              { id: 'EDUCATIONAL', label: t('library.category.EDUCATIONAL') || 'Educational', key: '4' },
+              { id: 'SCIENCE', label: t('library.category.SCIENCE') || 'Science', key: '5' },
+            ].map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  playTick();
+                  setFilterCategory(cat.id);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
+                  filterCategory === cat.id
+                    ? 'bg-white dark:bg-white/15 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span>{cat.label}</span>
+                <kbd className="hidden sm:inline-block text-[9px] opacity-60 font-mono px-1 py-0.2 rounded bg-black/5 dark:bg-white/10">{cat.key}</kbd>
+              </button>
+            ))}
           </div>
         </div>
       </motion.div>
@@ -873,11 +964,7 @@ export function LibraryPage() {
       ============================================================ */}
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-        style={{
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-        }}
+        className="liquid-glass-card liquid-glass-surface relative overflow-hidden rounded-3xl border border-white/40 dark:border-white/10 backdrop-blur-2xl shadow-[0_12px_40px_rgba(0,0,0,0.04)]"
       >
         <span
           aria-hidden
@@ -900,10 +987,10 @@ export function LibraryPage() {
             >
               <div className="flex flex-col items-center text-center">
                 <div
-                  className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#AF52DE]/10 text-[#AF52DE]"
+                  className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#6366F1]/10 text-[#6366F1]"
                   style={{
                     boxShadow:
-                      'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(175,82,222,0.4)',
+                      'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(99,102,241,0.4)',
                   }}
                 >
                   <Icon paths={I.empty} size={26} strokeWidth={1.8} />
@@ -911,7 +998,7 @@ export function LibraryPage() {
                 <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {searchQuery ? t('library.emptySearch') : t('library.empty')}
                 </p>
-                <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+                <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
                   {searchQuery
                     ? t('certificates.emptySearchHint')
                     : t('library.emptyMessage')}
@@ -948,7 +1035,7 @@ export function LibraryPage() {
               variants={containerVariants}
               initial="hidden"
               animate="visible"
-              className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]"
+              className="relative divide-y divide-slate-200/80 dark:divide-slate-800 dark:divide-[#ffffff08]"
             >
               {filteredBooks.map((book) => {
                 const categoryKey = `library.category.${book.category}`;
@@ -961,54 +1048,70 @@ export function LibraryPage() {
                   <motion.div
                     key={book.id}
                     variants={rowVariants}
-                    className="group flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#AF52DE]/[0.03]"
+                    onClick={() => handleOpenBookSidecar(book)}
+                    className="group flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 transition-colors hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-400/[0.04] cursor-pointer"
                   >
-                    {/* Book cover */}
-                    <BookCover title={book.title} size={48} />
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {/* Book cover */}
+                      <BookCover title={book.title} size={48} />
 
-                    {/* Title + meta */}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {book.title}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#86868B]">
-                        {book.author && (
-                          <span className="inline-flex items-center gap-1">
-                            <Icon paths={I.user} size={10} strokeWidth={2.2} className="opacity-60" />
-                            {book.author}
+                      {/* Title + meta */}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                          {book.title}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#64748B]">
+                          {book.author && (
+                            <span className="inline-flex items-center gap-1">
+                              <Icon paths={I.user} size={10} strokeWidth={2.2} className="opacity-60" />
+                              {book.author}
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1 font-mono tabular-nums">
+                            <Icon paths={I.hash} size={10} strokeWidth={2.2} className="opacity-60" />
+                            {book.barcode}
                           </span>
-                        )}
-                        <span className="inline-flex items-center gap-1 font-mono tabular-nums">
-                          <Icon paths={I.hash} size={10} strokeWidth={2.2} className="opacity-60" />
-                          {book.barcode}
-                        </span>
-                        {book.location && (
-                          <span className="inline-flex items-center gap-1">
-                            <Icon paths={I.pin} size={10} strokeWidth={2.2} className="opacity-60" />
-                            {book.location}
-                          </span>
-                        )}
-                        <CategoryChip category={book.category} label={displayCategory} />
+                          {book.location && (
+                            <span className="inline-flex items-center gap-1">
+                              <Icon paths={I.pin} size={10} strokeWidth={2.2} className="opacity-60" />
+                              {book.location}
+                            </span>
+                          )}
+                          <CategoryChip category={book.category} label={displayCategory} />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Quantity + availability */}
-                    <div className="hidden flex-col items-end sm:flex">
-                      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                        {t('library.col.quantity')}
-                      </span>
-                      <span className="mt-0.5 text-[13px] font-semibold tabular-nums text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {book.quantity}
-                      </span>
-                    </div>
+                    <div className="flex items-center justify-between w-full sm:w-auto gap-3 self-start sm:self-center mt-1 sm:mt-0">
+                      {/* Quantity + availability */}
+                      <div className="hidden flex-col items-end sm:flex">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
+                          {t('library.col.quantity')}
+                        </span>
+                        <span className="mt-0.5 text-[13px] font-semibold tabular-nums text-[#1D1D1F] dark:text-[#F5F5F7]">
+                          {book.quantity}
+                        </span>
+                      </div>
 
-                    <AvailabilityBadge
-                      available={book.availableQuantity}
-                      total={book.quantity}
-                    />
+                      <AvailabilityBadge
+                        available={book.availableQuantity}
+                        total={book.quantity}
+                      />
 
-                    {/* Actions */}
-                    <div className="flex gap-1.5">
+                      {/* Actions */}
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenBookSidecar(book);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all border border-indigo-500/20 inline-flex items-center gap-1"
+                          title="Inspect book details in macOS Sidecar"
+                        >
+                          <span>◨</span>
+                          <span>Sidecar</span>
+                        </button>
                       <motion.button
                         type="button"
                         onClick={() => openModal(book)}
@@ -1019,9 +1122,9 @@ export function LibraryPage() {
                         title={t('common.edit')}
                         className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
                         style={{
-                          background: 'rgba(0,122,255,0.10)',
-                          color: '#007AFF',
-                          border: '1px solid rgba(0,122,255,0.2)',
+                          background: 'rgba(37,99,235,0.10)',
+                          color: '#2563EB',
+                          border: '1px solid rgba(37,99,235,0.2)',
                         }}
                         role="button"
                         tabIndex={0}
@@ -1044,9 +1147,9 @@ export function LibraryPage() {
                         title={t('common.delete')}
                         className="flex h-8 w-8 items-center justify-center rounded-lg outline-none disabled:opacity-50"
                         style={{
-                          background: 'rgba(255,59,48,0.10)',
-                          color: '#FF3B30',
-                          border: '1px solid rgba(255,59,48,0.2)',
+                          background: 'rgba(239,68,68,0.10)',
+                          color: '#EF4444',
+                          border: '1px solid rgba(239,68,68,0.2)',
                         }}
                         role="button"
                         tabIndex={0}
@@ -1059,7 +1162,8 @@ export function LibraryPage() {
                         <Icon paths={I.trash} size={13} strokeWidth={2} />
                       </motion.button>
                     </div>
-                  </motion.div>
+                  </div>
+                </motion.div>
                 );
               })}
             </motion.div>
@@ -1148,8 +1252,8 @@ export function LibraryPage() {
       >
         <div className="space-y-5">
           {/* Hint banner */}
-          <div className="flex items-center gap-3 rounded-2xl border border-[#AF52DE33] bg-[#AF52DE]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#AF52DE]/15 text-[#AF52DE]">
+          <div className="flex items-center gap-3 rounded-2xl border border-[#6366F133] bg-[#6366F1]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#6366F1]/15 text-[#6366F1]">
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">

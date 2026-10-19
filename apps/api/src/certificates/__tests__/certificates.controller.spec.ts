@@ -32,20 +32,9 @@ describe('CertificatesController', () => {
     organizationId: 'org-1',
   };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
-
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [CertificatesController],
-      providers: [
-        {
-          provide: CertificatesService,
-          useValue: mockService,
-        },
-      ],
-    }).compile();
-
-    controller = module.get<CertificatesController>(CertificatesController);
+    controller = new CertificatesController(mockService as unknown as CertificatesService);
   });
 
   it('should be defined', () => {

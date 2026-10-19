@@ -195,13 +195,13 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald' | 'telegram';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:     { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:    { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:   { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:      { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:   { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:     { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:     { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
+  blue:     { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)', border: 'rgba(37,99,235,0.20)' },
+  green:    { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)',  border: 'rgba(16,185,129,0.20)' },
+  orange:   { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)',  border: 'rgba(245,158,11,0.20)' },
+  red:      { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)' },
+  purple:   { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)' },
+  cyan:     { fg: '#0284C7', bg: 'rgba(2,132,199,0.10)', glow: 'rgba(2,132,199,0.28)', border: 'rgba(2,132,199,0.20)' },
+  gray:     { fg: '#64748B', bg: 'rgba(100,116,139,0.10)', glow: 'rgba(100,116,139,0.22)', border: 'rgba(100,116,139,0.20)' },
   emerald:  { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
   telegram: { fg: '#0088cc', bg: 'rgba(0,136,204,0.10)', glow: 'rgba(0,136,204,0.28)', border: 'rgba(0,136,204,0.20)' },
 };
@@ -303,11 +303,7 @@ function KpiTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
       <span
         aria-hidden
@@ -334,11 +330,11 @@ function KpiTile({
         <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
           {typeof value === 'number' ? <CountUp value={value} /> : stringValue}
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B]">
           {label}
         </div>
         {secondary && (
-          <div className="mt-0.5 truncate text-[10.5px] font-semibold tracking-tight text-[#86868B]/80">
+          <div className="mt-0.5 truncate text-[10.5px] font-semibold tracking-tight text-[#64748B]/80">
             {secondary}
           </div>
         )}
@@ -389,10 +385,7 @@ function PremiumTabs({
   return (
     <div
       role="tablist"
-      className="inline-flex w-full items-center gap-1 overflow-x-auto rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-1 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
-      }}
+      className="inline-flex w-full items-center gap-1 overflow-x-auto rounded-xl border border-black/[0.04] bg-black/[0.04] p-1 dark:border-white/[0.06] dark:bg-white/[0.06]"
     >
       {tabs.map((tb) => {
         const isActive = active === tb.id;
@@ -409,7 +402,7 @@ function PremiumTabs({
             transition={SPRING.snappy}
             className="relative flex-1 overflow-hidden rounded-xl px-3.5 py-2 text-[12.5px] font-bold tracking-tight outline-none transition-colors whitespace-nowrap"
             style={{
-              color: isActive ? c.fg : '#86868B',
+              color: isActive ? c.fg : '#64748B',
             }}
           >
             {isActive && (
@@ -455,21 +448,9 @@ function SectionPanel({
   return (
     <motion.section
       variants={cardVariants}
-      className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-      }}
+      className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-16"
-        style={{
-          background:
-            'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-        }}
-      />
-      <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+      <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.05] px-5 py-4 dark:border-white/[0.05]">
         <div className="flex items-center gap-3">
           <div
             className="flex h-9 w-9 items-center justify-center rounded-xl"
@@ -483,11 +464,11 @@ function SectionPanel({
             <Icon paths={icon} size={16} strokeWidth={2} />
           </div>
           <div className="min-w-0">
-            <h2 className="text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+            <h2 className="text-[13.5px] font-semibold tracking-tight text-[var(--text-primary)]">
               {title}
             </h2>
             {subtitle && (
-              <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+              <p className="mt-0.5 text-[11px] font-medium text-[var(--text-secondary)]">
                 {subtitle}
               </p>
             )}
@@ -518,11 +499,7 @@ function FeatureCard({
       variants={cardVariants}
       whileHover={{ y: -4 }}
       transition={SPRING.smooth}
-      className="group relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-      }}
+      className="group relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
       <span
         aria-hidden
@@ -549,7 +526,7 @@ function FeatureCard({
       <h4 className="relative mt-4 text-[14px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
         {title}
       </h4>
-      <p className="relative mt-1.5 text-[12.5px] font-medium leading-relaxed text-[#86868B]">
+      <p className="relative mt-1.5 text-[12.5px] font-medium leading-relaxed text-[#64748B]">
         {desc}
       </p>
     </motion.div>
@@ -694,7 +671,7 @@ export function TelegramPage() {
   if (statusQ.isLoading) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80" />
         <TelegramSkeleton />
       </div>
     );
@@ -733,12 +710,9 @@ export function TelegramPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-7"
         >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
           <span
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-0 h-24"
@@ -755,7 +729,7 @@ export function TelegramPage() {
               transition={SPRING.smooth}
               className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
               style={{
-                background: 'linear-gradient(135deg, #0088cc 0%, #32ADE6 100%)',
+                background: 'linear-gradient(135deg, #0088cc 0%, #0284C7 100%)',
                 boxShadow:
                   '0 12px 28px -10px rgba(0,136,204,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
               }}
@@ -792,7 +766,7 @@ export function TelegramPage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('nav.telegram') || 'Telegram Integration'}
               </h1>
-              <p className="mt-1 max-w-2xl text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 max-w-2xl text-[13.5px] font-medium text-[#64748B]">
                 {t('telegram.subtitle') ||
                   'Connect your account to receive instant notifications and manage classes via Telegram.'}
               </p>
@@ -900,13 +874,13 @@ export function TelegramPage() {
                     <>
                       {/* Account card */}
                       <div
-                        className="relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#34C75933] bg-[#34C759]/[0.06] px-4 py-3.5"
+                        className="relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#10B98133] bg-[#10B981]/[0.06] px-4 py-3.5"
                       >
                         <div
                           className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
                           style={{
                             background:
-                              'linear-gradient(135deg, #0088cc 0%, #32ADE6 100%)',
+                              'linear-gradient(135deg, #0088cc 0%, #0284C7 100%)',
                             boxShadow:
                               'inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px rgba(0,136,204,0.5)',
                           }}
@@ -996,14 +970,14 @@ export function TelegramPage() {
                   ) : (
                     <>
                       {!pendingLink ? (
-                        <div className="rounded-2xl border border-dashed border-[#00000015] p-6 text-center dark:border-[#ffffff15]">
+                        <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center dark:border-[#ffffff15]">
                           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0088cc]/10 text-[#0088cc]">
                             <Icon paths={I.link} size={22} strokeWidth={2} />
                           </div>
                           <p className="mt-3 text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
                             Ready to link?
                           </p>
-                          <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#86868B]">
+                          <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#64748B]">
                             Generate a one-time link and open it in Telegram to
                             connect your account.
                           </p>
@@ -1074,7 +1048,7 @@ export function TelegramPage() {
                               type="text"
                               readOnly
                               value={pendingLink}
-                              className="flex-1 rounded-xl border border-[#00000008] bg-[#00000003] px-3 py-2.5 font-mono text-[11.5px] text-[#1D1D1F] outline-none dark:border-[#ffffff08] dark:bg-[#ffffff04] dark:text-[#F5F5F7]"
+                              className="flex-1 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-[#00000003] px-3 py-2.5 font-mono text-[11.5px] text-[#1D1D1F] outline-none dark:border-[#ffffff08] dark:bg-[#ffffff04] dark:text-[#F5F5F7]"
                             />
                             <motion.button
                               type="button"
@@ -1127,7 +1101,7 @@ export function TelegramPage() {
                               className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[13px] font-bold tracking-tight text-white outline-none"
                               style={{
                                 background:
-                                  'linear-gradient(135deg, #0088cc 0%, #32ADE6 100%)',
+                                  'linear-gradient(135deg, #0088cc 0%, #0284C7 100%)',
                                 boxShadow:
                                   'inset 0 1px 0 rgba(255,255,255,0.35), 0 10px 24px -8px rgba(0,136,204,0.5)',
                               }}
@@ -1165,11 +1139,7 @@ export function TelegramPage() {
               {/* Hero bot tile */}
               <motion.div variants={cardVariants}>
                 <div
-                  className="relative flex aspect-square items-center justify-center overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-8 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-                  style={{
-                    boxShadow:
-                      'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-                  }}
+                  className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-8 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
                 >
                   {/* Decorative rings */}
                   <motion.span
@@ -1204,17 +1174,17 @@ export function TelegramPage() {
                       repeat: Infinity,
                       ease: 'easeInOut',
                     }}
-                    className="relative flex h-32 w-32 items-center justify-center rounded-3xl text-white"
+                    className="relative flex h-32 w-32 items-center justify-center rounded-2xl text-white"
                     style={{
                       background:
-                        'linear-gradient(135deg, #0088cc 0%, #32ADE6 100%)',
+                        'linear-gradient(135deg, #0088cc 0%, #0284C7 100%)',
                       boxShadow:
                         'inset 0 2px 0 rgba(255,255,255,0.35), 0 20px 40px -10px rgba(0,136,204,0.5)',
                     }}
                   >
                     <span
                       aria-hidden
-                      className="pointer-events-none absolute inset-0 rounded-3xl"
+                      className="pointer-events-none absolute inset-0 rounded-2xl"
                       style={{
                         background:
                           'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
@@ -1345,11 +1315,7 @@ function AdminStat({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
       <span
         aria-hidden
@@ -1368,7 +1334,7 @@ function AdminStat({
         >
           <Icon paths={icon} size={15} strokeWidth={2.2} />
         </div>
-        <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+        <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
           {label}
         </p>
       </div>

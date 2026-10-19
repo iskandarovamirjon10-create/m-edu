@@ -51,8 +51,8 @@ const DEFAULT_CONFIG: LivenessConfig = {
   modelPath: '',
   inputSize: 80,
   margin: 2.7,
-  passThreshold: 0.8,
-  failThreshold: 0.3,
+  passThreshold: 0.5,
+  failThreshold: 0.2,
   classCount: 3,
   liveClassIndex: 1,
   required: true,
@@ -141,7 +141,17 @@ export class RealLivenessChecker {
   private warmupDone = false;
 
   constructor(config: Partial<LivenessConfig> = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    const envPass = process.env.FACE_LIVENESS_PASS_THRESHOLD || process.env.FACE_LIVENESS_THRESHOLD;
+    const envFail = process.env.FACE_LIVENESS_FAIL_THRESHOLD;
+    const parsedPass = envPass ? parseFloat(envPass) : undefined;
+    const parsedFail = envFail ? parseFloat(envFail) : undefined;
+
+    this.config = {
+      ...DEFAULT_CONFIG,
+      ...(parsedPass !== undefined && Number.isFinite(parsedPass) ? { passThreshold: parsedPass } : {}),
+      ...(parsedFail !== undefined && Number.isFinite(parsedFail) ? { failThreshold: parsedFail } : {}),
+      ...config,
+    };
   }
 
   /**
@@ -368,6 +378,10 @@ export class RealLivenessChecker {
     } else {
       decision = 'UNCERTAIN';
     }
+
+    logger.info(
+      `Liveness check: score=${score.toFixed(4)}, decision=${decision}, passThresh=${this.config.passThreshold}, failThresh=${this.config.failThreshold}, p=[${probabilities.map((p) => p.toFixed(4)).join(', ')}]`,
+    );
 
     return {
       decision,

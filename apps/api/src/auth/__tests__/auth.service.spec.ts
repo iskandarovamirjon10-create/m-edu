@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AuthService } from '../auth.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { JwtService } from '@nestjs/jwt';
@@ -231,6 +231,126 @@ describe('AuthService', () => {
           organizationName: 'X',
         }),
       ).rejects.toThrow(/already registered/);
+    });
+
+    it('rejects registration without invite code when AccessControlConfig row is missing (fail-closed default, M-EDU-SEC-002)', async () => {
+      prisma.accessControlConfig = {
+        findUnique: vi.fn().mockResolvedValue(null),
+      };
+      prisma.accessWhitelist = {
+        findUnique: vi.fn().mockResolvedValue(null),
+      };
+      const svc = new AuthService(prisma, mockJwt);
+
+      await expect(
+        svc.register({
+          email: 'attacker@evil.com',
+          password: 'password123',
+          firstName: 'Rogue',
+          lastName: 'Admin',
+          organizationName: 'Rogue Org',
+        }),
+      ).rejects.toThrow(/Registration is currently invite-only/);
+    });
+
+    it('rejects registration without invite code when inviteOnly is configured true (M-EDU-SEC-002)', async () => {
+      prisma.accessControlConfig = {
+        findUnique: vi.fn().mockResolvedValue({ id: 'global', inviteOnly: true, requireApproval: true }),
+      };
+      prisma.accessWhitelist = {
+        findUnique: vi.fn().mockResolvedValue(null),
+      };
+      const svc = new AuthService(prisma, mockJwt);
+
+      await expect(
+        svc.register({
+          email: 'guest@test.com',
+          password: 'password123',
+          firstName: 'Guest',
+          lastName: 'User',
+          organizationName: 'Guest Org',
+        }),
+      ).rejects.toThrow(/Registration is currently invite-only/);
+    });
+
+    it('creates pending approval account when inviteOnly is false but requireApproval is true', async () => {
+      prisma.accessControlConfig = {
+        findUnique: vi.fn().mockResolvedValue({ id: 'global', inviteOnly: false, requireApproval: true }),
+      };
+      prisma.accessWhitelist = {
+        findUnique: vi.fn().mockResolvedValue(null),
+      };
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          organization: { create: vi.fn().mockResolvedValue({ id: 'org-pending', name: 'Pending Org' }) },
+          user: {
+            create: vi.fn().mockResolvedValue({
+              id: 'u-pending',
+              email: 'pending@test.com',
+              firstName: 'Pending',
+              lastName: 'User',
+              role: 'ORG_ADMIN',
+              organizationId: 'org-pending',
+              status: 'PENDING',
+              isActive: false,
+            }),
+          },
+        };
+        return fn(tx);
+      });
+      const svc = new AuthService(prisma, mockJwt);
+
+      const result = await svc.register({
+        email: 'pending@test.com',
+        password: 'password123',
+        firstName: 'Pending',
+        lastName: 'User',
+        organizationName: 'Pending Org',
+      });
+
+      expect(result.pendingApproval).toBe(true);
+      expect(result.message).toMatch(/Pending administrator approval/);
+      expect(result.accessToken).toBeUndefined();
+    });
+
+    it('allows registration without invite code when email is whitelisted', async () => {
+      prisma.accessControlConfig = {
+        findUnique: vi.fn().mockResolvedValue({ id: 'global', inviteOnly: true, requireApproval: true }),
+      };
+      prisma.accessWhitelist = {
+        findUnique: vi.fn().mockResolvedValue({ email: 'whitelisted@school.edu' }),
+      };
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          $executeRaw: vi.fn().mockResolvedValue(undefined),
+          organization: { create: vi.fn().mockResolvedValue({ id: 'org-white', name: 'White Org' }) },
+          user: {
+            create: vi.fn().mockResolvedValue({
+              id: 'u-white',
+              email: 'whitelisted@school.edu',
+              firstName: 'White',
+              lastName: 'Listed',
+              role: 'ORG_ADMIN',
+              organizationId: 'org-white',
+              status: 'ACTIVE',
+              isActive: true,
+            }),
+          },
+        };
+        return fn(tx);
+      });
+      const svc = new AuthService(prisma, mockJwt);
+
+      const result = await svc.register({
+        email: 'whitelisted@school.edu',
+        password: 'password123',
+        firstName: 'White',
+        lastName: 'Listed',
+        organizationName: 'White Org',
+      });
+
+      expect(result.user.email).toBe('whitelisted@school.edu');
+      expect(result.accessToken).toBeTruthy();
     });
   });
 
@@ -486,6 +606,65 @@ describe('AuthService', () => {
       prisma = createMockPrisma();
     });
 
+    beforeEach(() => {
+      process.env.PLATFORM_BOOTSTRAP_SECRET = 'test-bootstrap-secret-long-enough-32';
+    });
+
+    afterEach(() => {
+      delete process.env.PLATFORM_BOOTSTRAP_SECRET;
+    });
+
+    it('rejects bootstrap when PLATFORM_BOOTSTRAP_SECRET is not configured on server (fail-closed)', async () => {
+      delete process.env.PLATFORM_BOOTSTRAP_SECRET;
+      prisma.user.count.mockResolvedValue(0);
+      const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
+      await expect(
+        svc.bootstrap({
+          email: 'platform@medu.test',
+          password: 'S3cure-Bootstrap-123!',
+          firstName: 'Platform',
+          lastName: 'Admin',
+          organizationName: 'M-EDU Platform',
+          inviteCode: 'some-secret',
+        }),
+      ).rejects.toThrow('Bootstrap is disabled: PLATFORM_BOOTSTRAP_SECRET is not configured on the server');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.organization.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects bootstrap when secret is missing from request', async () => {
+      prisma.user.count.mockResolvedValue(0);
+      const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
+      await expect(
+        svc.bootstrap({
+          email: 'platform@medu.test',
+          password: 'S3cure-Bootstrap-123!',
+          firstName: 'Platform',
+          lastName: 'Admin',
+          organizationName: 'M-EDU Platform',
+        }),
+      ).rejects.toThrow('Bootstrap secret is required');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.organization.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects bootstrap when secret is incorrect', async () => {
+      prisma.user.count.mockResolvedValue(0);
+      const svc = new AuthService(prisma as unknown as PrismaService, mockJwt);
+      await expect(
+        svc.bootstrap({
+          email: 'platform@medu.test',
+          password: 'S3cure-Bootstrap-123!',
+          firstName: 'Platform',
+          lastName: 'Admin',
+          organizationName: 'M-EDU Platform',
+          inviteCode: 'wrong-secret-value-1234',
+        }),
+      ).rejects.toThrow('Invalid bootstrap secret');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.organization.create).not.toHaveBeenCalled();
+    });
+
     it('creates the platform SUPER_ADMIN + organization and returns a token', async () => {
       prisma.user.count.mockResolvedValue(0);
       prisma.user.findFirst.mockResolvedValue(null);
@@ -516,6 +695,7 @@ describe('AuthService', () => {
         firstName: 'Platform',
         lastName: 'Admin',
         organizationName: 'M-EDU Platform',
+        inviteCode: 'test-bootstrap-secret-long-enough-32',
       });
       expect(result.user.role).toBe('SUPER_ADMIN');
       expect(result.accessToken).toBeTruthy();
@@ -532,6 +712,7 @@ describe('AuthService', () => {
           firstName: 'A',
           lastName: 'B',
           organizationName: 'X',
+          inviteCode: 'test-bootstrap-secret-long-enough-32',
         }),
       ).rejects.toThrow('Platform is already bootstrapped');
       expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -562,6 +743,7 @@ describe('AuthService', () => {
           firstName: 'A',
           lastName: 'B',
           organizationName: 'X',
+          inviteCode: 'test-bootstrap-secret-long-enough-32',
         }),
       ).rejects.toThrow('Email already registered');
       // The conflict is detected inside the serialized transaction (advisory lock).
@@ -590,6 +772,7 @@ describe('AuthService', () => {
           firstName: 'A',
           lastName: 'B',
           organizationName: 'X',
+          inviteCode: 'test-bootstrap-secret-long-enough-32',
         }),
       ).rejects.toThrow('Platform is already bootstrapped');
       expect(txExecuteRaw).toHaveBeenCalled();

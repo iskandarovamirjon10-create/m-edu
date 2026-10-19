@@ -1,64 +1,150 @@
+﻿/**
+ * M-EDU - Apple Premium Design System
+ *
+ * One restrained system:
+ *  - Apple system colors (blue #007AFF, green #34C759, orange #FF9500, red #FF3B30)
+ *  - Hairline borders, very soft shadows, no candy glows
+ *  - SF Pro typography with tight tracking on large text
+ *  - Apple spring easing (cubic-bezier(0.32, 0.72, 0, 1))
+ */
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   darkMode: 'class',
   theme: {
     extend: {
-      // App-shell layout tiers: phone < 768 (md), tablet 768–1279, desktop >= 1280 (xl).
-      // `xs` (480px) targets large phones where a two-column card grid fits.
       screens: {
         xs: '480px',
       },
       colors: {
         brand: {
-          50: '#EAFBFF',
-          100: '#D2F4F8',
-          200: '#A4E9F1',
-          300: '#94EAEF', // Cyan — primary hero
-          400: '#8CDCF1', // Sky
-          500: '#7EC2F3', // Azure
-          600: '#618CF9', // Indigo
-          700: '#5474FC', // Vivid — primary actions
-          800: '#4C65FD', // Deep
-          900: '#3950E0',
+          50: '#EAF3FF',
+          100: '#D6E8FF',
+          200: '#ADCCFF',
+          300: '#7FB3FF',
+          400: '#4A9AFF',
+          500: '#007AFF',
+          600: '#0066D6',
+          700: '#0052B3',
+          800: '#003D80',
+          900: '#002B5C',
+          950: '#001C3D',
+        },
+        accent: {
+          50: '#EFEEFF',
+          100: '#E0DFFE',
+          200: '#C3C0FD',
+          500: '#5856D6',
+          600: '#4744C4',
+          700: '#3633A8',
+        },
+        apple: {
+          blue: '#007AFF',
+          green: '#34C759',
+          indigo: '#5856D6',
+          orange: '#FF9500',
+          pink: '#FF2D55',
+          purple: '#AF52DE',
+          red: '#FF3B30',
+          teal: '#5AC8FA',
+          yellow: '#FFCC00',
+          gray: '#8E8E93',
+        },
+        surface: {
+          50: '#FFFFFF',
+          100: '#F5F5F7',
+          200: '#E8E8ED',
+          300: '#D2D2D7',
+          400: '#C7C7CC',
+          500: '#8E8E93',
+          600: '#636366',
+          700: '#48484A',
+          800: '#2C2C2E',
+          900: '#1C1C1E',
+          950: '#000000',
         },
         glass: {
-          light:    'rgba(255,255,255,0.55)',
-          lighter:  'rgba(255,255,255,0.78)',
-          dark:     'rgba(20,30,45,0.45)',
+          light: 'rgba(255,255,255,0.72)',
+          lighter: 'rgba(255,255,255,0.88)',
+          dark: 'rgba(28,28,30,0.72)',
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
-        display: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['-apple-system','BlinkMacSystemFont','"SF Pro Display"','"SF Pro Text"','"SF Pro"','system-ui','Inter','sans-serif'],
+        display: ['-apple-system','BlinkMacSystemFont','"SF Pro Display"','"SF Pro"','system-ui','Inter','sans-serif'],
+        mono: ['"SF Mono"','ui-monospace','"JetBrains Mono"','Menlo','Monaco','Consolas','monospace'],
+        serif: ['"New York"','ui-serif','Georgia','Cambria','serif'],
       },
       borderRadius: {
-        '4xl': '32px',
-        '5xl': '40px',
+        '3xl': '20px',
+        '4xl': '24px',
+        '5xl': '28px',
       },
       boxShadow: {
-        'glass':       '0 12px 32px rgba(20,30,45,0.08)',
-        'glass-lg':    '0 24px 56px rgba(20,30,45,0.10)',
-        'glow-cyan':   '0 0 40px rgba(148,234,239,0.30)',
-        'glow-vivid':  '0 8px 24px rgba(84,115,252,0.30)',
+        'xs': '0 1px 1px rgba(0,0,0,0.04)',
+        '2xs': '0 0.5px 1px rgba(0,0,0,0.05)',
+        'subtle': '0 1px 2px rgba(0,0,0,0.04)',
+        'card': '0 1px 2px rgba(0,0,0,0.04), 0 1px 1px rgba(0,0,0,0.02)',
+        'card-hover': '0 4px 12px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+        'raised': '0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)',
+        'dropdown': '0 12px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
+        'modal': '0 24px 64px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)',
+        'float': '0 32px 80px rgba(0,0,0,0.22), 0 8px 24px rgba(0,0,0,0.10)',
+        'royal': '0 4px 14px rgba(0,122,255,0.24)',
+        'glass': '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
+        'glass-lg': '0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)',
+        'apple-card': '0 1px 3px rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.06)',
+        'apple-float': '0 12px 32px -8px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.06)',
+        'glow-cyan': '0 0 20px rgba(90,200,250,0.16)',
+        'glow-vivid': '0 2px 12px rgba(0,122,255,0.18)',
       },
       backdropBlur: {
-        'glass': '24px',
+        'glass': '20px',
         'glass-lg': '32px',
+        'glass-xl': '48px',
+      },
+      transitionTimingFunction: {
+        'apple-spring': 'cubic-bezier(0.32, 0.72, 0, 1)',
+        'apple-bounce': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'apple-glide': 'cubic-bezier(0.16, 1, 0.3, 1)',
+        'apple-snappy': 'cubic-bezier(0.2, 0.9, 0.2, 1)',
+        'apple-out': 'cubic-bezier(0.22, 1, 0.36, 1)',
       },
       keyframes: {
-        'fade-in':     { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-        'slide-up':    { '0%': { opacity: '0', transform: 'translateY(16px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
-        'scale-in':    { '0%': { opacity: '0', transform: 'scale(0.94)' }, '100%': { opacity: '1', transform: 'scale(1)' } },
-        'pulse-glow':  { '0%, 100%': { boxShadow: '0 0 0 0 rgba(148,234,239,0.3)' }, '50%': { boxShadow: '0 0 0 8px rgba(148,234,239,0)' } },
-        'orb-drift':   { '0%, 100%': { transform: 'translate(0,0) scale(1)' }, '33%': { transform: 'translate(4%,6%) scale(1.06)' }, '66%': { transform: 'translate(-3%,-4%) scale(0.96)' } },
+        'fade-in': { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        'slide-up': { '0%': { opacity: '0', transform: 'translateY(8px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+        'scale-in': { '0%': { opacity: '0', transform: 'scale(0.97)' }, '100%': { opacity: '1', transform: 'scale(1)' } },
+        'overlay-in': { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        'modal-in': { '0%': { opacity: '0', transform: 'scale(0.96) translateY(8px)' }, '100%': { opacity: '1', transform: 'scale(1) translateY(0)' } },
+        'shimmer': { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
+        'apple-spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } },
+        'pulse-glow': { '0%, 100%': { boxShadow: '0 0 0 0 rgba(0,122,255,0.18)' }, '50%': { boxShadow: '0 0 0 6px rgba(0,122,255,0)' } },
+        'orb-drift': { '0%, 100%': { transform: 'translate(0,0) scale(1)' }, '33%': { transform: 'translate(3%,5%) scale(1.04)' }, '66%': { transform: 'translate(-2%,-3%) scale(0.97)' } },
+        'bell-shake': { '0%, 100%': { transform: 'rotate(0deg)' }, '20%': { transform: 'rotate(8deg)' }, '40%': { transform: 'rotate(-6deg)' }, '60%': { transform: 'rotate(4deg)' }, '80%': { transform: 'rotate(-2deg)' } },
       },
       animation: {
-        'fade-in':     'fade-in 0.3s ease forwards',
-        'slide-up':    'slide-up 0.35s cubic-bezier(.25,.46,.45,.94) forwards',
-        'scale-in':    'scale-in 0.25s cubic-bezier(.25,.46,.45,.94) forwards',
-        'pulse-glow':  'pulse-glow 2s ease-in-out infinite',
-        'orb-drift':   'orb-drift 40s ease-in-out infinite',
+        'fade-in': 'fade-in 0.2s ease-out forwards',
+        'slide-up': 'slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards',
+        'scale-in': 'scale-in 0.22s cubic-bezier(0.32, 0.72, 0, 1) forwards',
+        'overlay-in': 'overlay-in 0.18s ease-out forwards',
+        'modal-in': 'modal-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) forwards',
+        'shimmer': 'shimmer 1.6s linear infinite',
+        'apple-spin': 'apple-spin 0.9s linear infinite',
+        'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
+        'orb-drift': 'orb-drift 40s ease-in-out infinite',
+        'bell-shake': 'bell-shake 0.7s ease-in-out',
+      },
+      spacing: {
+        '4.5': '1.125rem',
+        '9.5': '2.375rem',
+        '13': '3.25rem',
+        '15': '3.75rem',
+        '18': '4.5rem',
+        '22': '5.5rem',
+      },
+      scale: {
+        '97': '0.97',
       },
     },
   },

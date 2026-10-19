@@ -62,21 +62,10 @@ describe('AuthController', () => {
       resetPassword: vi.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [AuthController],
-      providers: [
-        {
-          provide: AuthService,
-          useValue: authService,
-        },
-        {
-          provide: ParentPortalService,
-          useValue: { authenticate: vi.fn() },
-        },
-      ],
-    }).compile();
-
-    controller = module.get<AuthController>(AuthController);
+    controller = new AuthController(
+      authService as unknown as AuthService,
+      { authenticate: vi.fn() } as unknown as ParentPortalService,
+    );
   });
 
   afterEach(() => {
@@ -163,7 +152,7 @@ describe('AuthController', () => {
 
       const result = await controller.bootstrap(bootstrapDto);
 
-      expect(authService.bootstrap).toHaveBeenCalledWith(bootstrapDto);
+      expect(authService.bootstrap).toHaveBeenCalledWith(bootstrapDto, undefined);
       expect(result).toEqual(mockResult);
     });
 
@@ -431,6 +420,34 @@ describe('AuthController', () => {
       } as unknown as Request;
       const res = createMockResponse();
       const body: ExchangeAuthCodeDto = { code: 'valid-code', state: 'wrong-state-token' };
+
+      await expect(controller.exchangeAuthCode(body, reqWithCookie, res)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(authService.exchangeAuthCode).not.toHaveBeenCalled();
+    });
+
+    it('rejects exchange when body state is provided but oauth_exchange_state cookie is missing (M-EDU-SEC-003)', async () => {
+      const reqWithoutCookie = {
+        ...mockReq,
+        cookies: {},
+      } as unknown as Request;
+      const res = createMockResponse();
+      const body: ExchangeAuthCodeDto = { code: 'valid-code', state: 'some-state' };
+
+      await expect(controller.exchangeAuthCode(body, reqWithoutCookie, res)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(authService.exchangeAuthCode).not.toHaveBeenCalled();
+    });
+
+    it('rejects exchange when oauth_exchange_state cookie is present but body state is missing (M-EDU-SEC-003)', async () => {
+      const reqWithCookie = {
+        ...mockReq,
+        cookies: { oauth_exchange_state: 'some-state' },
+      } as unknown as Request;
+      const res = createMockResponse();
+      const body: ExchangeAuthCodeDto = { code: 'valid-code' };
 
       await expect(controller.exchangeAuthCode(body, reqWithCookie, res)).rejects.toThrow(
         BadRequestException,

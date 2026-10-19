@@ -27,7 +27,11 @@ import {
   useToasts,
   GlassButton,
   ConfirmDialog,
+  FloatingActionIsland,
 } from '@/components/ui';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useDebounce } from '@/hooks/useDebounce';
 import { fullName, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -186,6 +190,23 @@ const I: Record<string, string[]> = {
     'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z',
     'M14 2v6h6', 'M8 13h8', 'M8 17h5',
   ],
+  grid: [
+    'M3 3h7v7H3z',
+    'M14 3h7v7h-7z',
+    'M14 14h7v7h-7z',
+    'M3 14h7v7H3z',
+  ],
+  list: [
+    'M8 6h13',
+    'M8 12h13',
+    'M8 18h13',
+    'M3 6h.01',
+    'M3 12h.01',
+    'M3 18h.01',
+  ],
+  x: ['M18 6 6 18', 'M6 6l12 12'],
+  arrowRight: ['M5 12h14', 'M12 5l7 7-7 7'],
+  eye: ['M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],
 };
 
 function Icon({
@@ -287,29 +308,21 @@ function specializationTone(spec: string): Tone {
  * PREMIUM SUB-COMPONENTS
  * ========================================================================== */
 
-/** Ambient gradient orbs — consistent with suite */
+/** Ambient gradient orbs — GPU-friendly static atmospheric layer */
 function AmbientOrbs() {
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <motion.div
-        className="absolute -left-[8%] top-[6%] h-[44%] w-[40%] rounded-full"
+    <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-20 z-0 h-[360px] overflow-hidden">
+      <div
+        className="absolute left-1/4 -top-10 h-[280px] w-[500px] -translate-x-1/2 rounded-full opacity-60 dark:opacity-40"
         style={{
-          background:
-            'radial-gradient(closest-side, rgba(0,122,255,0.14), transparent 70%)',
-          filter: 'blur(70px)',
+          background: 'radial-gradient(ellipse at center, rgba(88,86,214,0.18) 0%, rgba(0,122,255,0.08) 45%, transparent 70%)',
         }}
-        animate={{ x: [0, 24, 0], y: [0, 18, 0], opacity: [0.85, 1, 0.85] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
       />
-      <motion.div
-        className="absolute -bottom-[10%] -right-[8%] h-[46%] w-[42%] rounded-full"
+      <div
+        className="absolute right-1/4 -top-10 h-[260px] w-[460px] translate-x-1/2 rounded-full opacity-50 dark:opacity-30"
         style={{
-          background:
-            'radial-gradient(closest-side, rgba(175,82,222,0.12), transparent 70%)',
-          filter: 'blur(80px)',
+          background: 'radial-gradient(ellipse at center, rgba(175,82,222,0.15) 0%, rgba(52,199,89,0.06) 50%, transparent 70%)',
         }}
-        animate={{ x: [0, -28, 0], y: [0, -22, 0], opacity: [0.8, 1, 0.8] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
       />
     </div>
   );
@@ -381,40 +394,25 @@ function StatTile({
   return (
     <motion.div
       variants={rowVariants}
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -2 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card hover:shadow-card-hover transition-all"
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
-      />
       <div
         className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
         style={{
           background: c.bg,
           color: c.fg,
           border: `1px solid ${c.border}`,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
         }}
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-xl"
-          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent)' }}
-        />
-        <Icon paths={icon} size={18} strokeWidth={2} className="relative" />
+        <Icon paths={icon} size={18} strokeWidth={2.2} className="relative" />
       </div>
       <div className="relative min-w-0 flex-1">
-        <div className="text-[20px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
+        <div className="text-[20px] font-bold tracking-tight text-[var(--text-primary)] font-display">
           {typeof value === 'number' ? <CountUp value={value} /> : value}
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-0.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
           {label}
         </div>
       </div>
@@ -712,6 +710,127 @@ export function TeachersPage() {
     setDeleteTarget(null);
   }, [deleteTarget, remove]);
 
+  const sound = usePremiumSound();
+
+  const handleOpenTeacherSidecar = useCallback((teacher: Teacher) => {
+    sound.playPop();
+    const name = formatTeacherName(teacher);
+    const data: QuickLookData = {
+      id: teacher.id,
+      type: 'teacher',
+      title: name,
+      subtitle: teacher.user?.email || teacher.user?.phone || "O'qituvchi",
+      badge: {
+        text: teacher.user?.isActive !== false ? "FAOL (ACTIVE)" : "NOFAOL",
+        tone: teacher.user?.isActive !== false ? 'emerald' : 'slate',
+      },
+      avatar: {
+        text: name.slice(0, 2).toUpperCase(),
+        color: '#6366F1',
+      },
+      metrics: [
+        {
+          label: "Soatlik tarif",
+          value: teacher.hourlyRate ? formatCurrency(teacher.hourlyRate) : "—",
+          subtext: "1 akademik soat",
+        },
+        {
+          label: "Tajriba",
+          value: teacher.experience ? `${teacher.experience} yil` : "—",
+          subtext: "Pedagogik tajriba",
+        },
+        {
+          label: "Status",
+          value: teacher.user?.isActive !== false ? "Aktiv" : "Nofaol",
+        },
+      ],
+      details: [
+        { label: "F.I.SH", value: name, copyable: true },
+        { label: "Email", value: teacher.user?.email || "—", copyable: Boolean(teacher.user?.email) },
+        { label: "Telefon", value: teacher.user?.phone || "—", copyable: Boolean(teacher.user?.phone) },
+        { label: "Mutaxassislik", value: (teacher.specializations || []).join(', ') || "Umumiy", copyable: true },
+        { label: "Tarjimai hol / Bio", value: teacher.bio || "Qo'shimcha ma'lumot mavjud emas." },
+      ],
+      tags: teacher.specializations || [],
+      primaryAction: {
+        label: "Tahrirlash",
+        onExecute: () => handleEdit(teacher),
+      },
+    };
+    openSidecar(data);
+  }, [sound, handleEdit]);
+
+  /* ── Filter & View State ─────────────────────────────────────────── */
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+
+  const filteredTeachers = useMemo(() => {
+    let list = teacherList;
+    if (statusFilter === 'ACTIVE') list = list.filter((t) => t.user?.isActive !== false);
+    else if (statusFilter === 'INACTIVE') list = list.filter((t) => t.user?.isActive === false);
+    return list;
+  }, [teacherList, statusFilter]);
+
+  /* ── Keyboard Navigation ──────────────────────────────────────────── */
+  const {
+    focusedIndex,
+    selectedIds,
+    selectedCount,
+    isSelected,
+    toggleSelection,
+    clearSelection,
+  } = useListKeyboardNavigation<Teacher>({
+    items: filteredTeachers,
+    getItemId: (t) => t.id,
+    rowIdPrefix: 'teacher-row-',
+    onSelect: (t) => handleOpenTeacherSidecar(t),
+    onQuickLook: (t) => handleOpenTeacherSidecar(t),
+    onEdit: (t) => handleEdit(t),
+  });
+
+  /* ── Bulk Actions ─────────────────────────────────────────────────── */
+  const handleBatchToggleStatus = async () => {
+    let count = 0;
+    for (const id of selectedIds) {
+      try {
+        const item = teacherList.find((t) => t.id === id);
+        if (item) {
+          const nextActive = !item.user?.isActive;
+          await teachersApi.update(id, { isActive: nextActive });
+          count++;
+        }
+      } catch {
+        // continue
+      }
+    }
+    qc.invalidateQueries({ queryKey: queryKeys.teachers.all() });
+    clearSelection();
+    push('success', `${count} ta o'qituvchi holati yangilandi`);
+  };
+
+  const handleExportSelectedTeachersCSV = () => {
+    const selectedRows = teacherList.filter((t) => isSelected(t.id));
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      ['ID,Name,Email,Phone,Specializations,HourlyRate,Experience']
+        .concat(
+          selectedRows.map(
+            (t) =>
+              `"${t.id}","${formatTeacherName(t)}","${t.user?.email || ''}","${t.user?.phone || ''}","${(t.specializations || []).join(';')}","${t.hourlyRate || ''}","${t.experience || ''}"`
+          )
+        )
+        .join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `teachers_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    clearSelection();
+    push('success', `${selectedRows.length} ta o'qituvchi CSV formatida yuklandi`);
+  };
+
   const { refetch: refetchTeachers } = teachers;
   const handleRetry = useCallback(() => {
     void refetchTeachers();
@@ -759,78 +878,46 @@ export function TeachersPage() {
           HERO HEADER
       ============================================================ */}
       <motion.div variants={cardVariants}>
-        <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-24"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-            }}
-          />
-          <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-            {/* Gradient teachers tile */}
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, rotate: -6 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              transition={SPRING.smooth}
-              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
-              style={{
-                background: 'linear-gradient(135deg, #5856D6 0%, #AF52DE 100%)',
-                boxShadow:
-                  '0 12px 28px -10px rgba(88,86,214,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
-              }}
-            >
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0 rounded-2xl"
-                style={{
-                  background:
-                    'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
-                }}
-              />
-              <Icon paths={I.users} size={28} strokeWidth={2} className="relative" />
-            </motion.div>
+        <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-5 sm:p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+          <div className="relative flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            {/* Apple Gradient teachers tile */}
+            <div className="relative flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#5856D6] to-[#AF52DE] text-white shadow-[0_8px_20px_rgba(88,86,214,0.25)] ring-1 ring-white/20">
+              <Icon paths={I.users} size={24} strokeWidth={2.2} className="relative" />
+            </div>
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#5856D6]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#5856D6]">
-                  <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  {t('teachers.faculty') || 'Faculty'}
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#5856D6]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#5856D6] border border-[#5856D6]/20">
+                  <Icon paths={I.sparkles} size={11} strokeWidth={2.2} />
+                  {t('teachers.faculty') || 'Ustozlar'}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
-                  <Icon paths={I.layers} size={11} strokeWidth={2.5} />
-                  {stats.total} {t('teachers.total') || 'total'}
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)] border border-black/[0.04] dark:border-white/[0.06] tabular-nums">
+                  <Icon paths={I.layers} size={11} strokeWidth={2.2} />
+                  {stats.total} {t('teachers.total') || 'jami'}
                 </span>
                 {stats.active > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#34C759]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />
-                    {stats.active} {t('teachers.active') || 'active'}
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#28A745] dark:text-[#34C759] border border-[#34C759]/20 tabular-nums">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] animate-pulse" />
+                    {stats.active} {t('teachers.active') || 'faol'}
                   </span>
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-[var(--text-primary)] sm:text-3xl font-display">
                 {t('teachers.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-0.5 text-[13px] text-[var(--text-secondary)]">
                 {t('teachers.subtitle')}
               </p>
             </div>
 
             <motion.div
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               transition={SPRING.snappy}
             >
               <GlassButton type="button" variant="primary" onClick={handleOpenModal}>
-                <span className="inline-flex items-center gap-2">
+                <span className="inline-flex items-center gap-2 font-medium">
                   <Icon paths={I.userPlus} size={15} strokeWidth={2.4} />
                   {t('teachers.add')}
                 </span>
@@ -856,126 +943,233 @@ export function TeachersPage() {
       {/* ============================================================
           FILTER TOOLBAR
       ============================================================ */}
-      <motion.div variants={cardVariants}>
-        <div
-          className="relative overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-          style={{
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
-          }}
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <FieldIcon icon={I.search} tone="blue" />
-              <GlassInput
-                placeholder={t('teachers.searchPlaceholder')}
-                value={search}
-                onChange={handleSearchChange}
-                aria-label={t('teachers.searchLabel')}
-                type="search"
-                className="pl-11"
-              />
-            </div>
+      <motion.div
+        variants={cardVariants}
+        className="relative flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm"
+      >
+        <div className="relative flex-1 min-w-[240px]">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-tertiary)]">
+            <Icon paths={I.search} size={15} strokeWidth={2.2} />
+          </div>
+          <input
+            type="search"
+            value={search}
+            onChange={handleSearchChange}
+            placeholder={t('teachers.searchPlaceholder')}
+            className="w-full h-10 pl-9 pr-9 text-[13px] font-medium rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 focus:border-[#007AFF] transition-all"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Tozalash"
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              <Icon paths={I.x} size={14} strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status segmented control */}
+          <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
+            <button
+              type="button"
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
+                statusFilter === 'ALL'
+                  ? 'bg-white text-[var(--text-primary)] shadow-sm dark:bg-surface-800 font-semibold'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              Hammasi <span className="ml-1 text-[10.5px] opacity-70">({stats.total})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('ACTIVE')}
+              className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
+                statusFilter === 'ACTIVE'
+                  ? 'bg-white text-[#28A745] dark:text-[#34C759] shadow-sm dark:bg-surface-800 font-semibold'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              Faol <span className="ml-1 text-[10.5px] opacity-70">({stats.active})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('INACTIVE')}
+              className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
+                statusFilter === 'INACTIVE'
+                  ? 'bg-white text-[var(--text-primary)] shadow-sm dark:bg-surface-800 font-semibold'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              Nofaol <span className="ml-1 text-[10.5px] opacity-70">({stats.inactive})</span>
+            </button>
+          </div>
+
+          {/* View switcher: list vs grid */}
+          <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              aria-label="Ro'yxat ko'rinishi"
+              className={`p-1.5 rounded-lg transition-all ${
+                viewMode === 'list'
+                  ? 'bg-white text-[#007AFF] shadow-sm dark:bg-surface-800'
+                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Icon paths={I.list} size={15} strokeWidth={2.2} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              aria-label="Kataklar (Grid) ko'rinishi"
+              className={`p-1.5 rounded-lg transition-all ${
+                viewMode === 'grid'
+                  ? 'bg-white text-[#007AFF] shadow-sm dark:bg-surface-800'
+                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Icon paths={I.grid} size={15} strokeWidth={2.2} />
+            </button>
           </div>
         </div>
       </motion.div>
 
       {/* ============================================================
-          TEACHERS LIST
+          TEACHERS CONTENT (EMPTY / LIST / GRID)
       ============================================================ */}
-      <motion.div
-        variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-        style={{
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-        }}
-      >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-16"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-          }}
-        />
-
-        <AnimatePresence mode="wait">
-          {teacherList.length === 0 ? (
-            <motion.div
-              key="empty"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={SPRING.smooth}
-              className="relative p-10"
-            >
-              <div className="flex flex-col items-center text-center">
-                <div
-                  className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#5856D6]/10 text-[#5856D6]"
-                  style={{
-                    boxShadow:
-                      'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(88,86,214,0.4)',
-                  }}
-                >
-                  <Icon paths={I.empty} size={26} strokeWidth={1.8} />
-                </div>
-                <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {hasActiveFilter ? t('teachers.emptyFiltered') : t('teachers.empty')}
-                </p>
-                <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
-                  {hasActiveFilter
-                    ? t('teachers.emptyFilteredHint')
-                    : t('teachers.emptyHint')}
-                </p>
-                {!hasActiveFilter && (
-                  <div className="mt-5">
-                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                      <GlassButton
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        onClick={handleOpenModal}
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <Icon paths={I.userPlus} size={14} strokeWidth={2.4} />
-                          {t('teachers.add')}
-                        </span>
-                      </GlassButton>
-                    </motion.div>
-                  </div>
-                )}
+      <AnimatePresence mode="wait">
+        {teacherList.length === 0 ? (
+          <motion.div
+            key="empty"
+            variants={cardVariants}
+            className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-10 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card text-center"
+          >
+            <div className="flex flex-col items-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#5856D6]/10 text-[#5856D6]">
+                <Icon paths={I.empty} size={24} strokeWidth={1.8} />
               </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="list"
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]"
-            >
-              {teacherList.map((teacher) => {
-                const statusBadge = getTeacherStatusBadge(teacher.user?.isActive);
-                const specializations = teacher.specializations || [];
-                const name = formatTeacherName(teacher);
-                const isActive = teacher.user?.isActive !== false;
+              <p className="mt-4 text-[15px] font-bold tracking-tight text-[var(--text-primary)] font-display">
+                {hasActiveFilter ? t('teachers.emptyFiltered') : t('teachers.empty')}
+              </p>
+              <p className="mt-1 max-w-sm text-[13px] text-[var(--text-secondary)]">
+                {hasActiveFilter
+                  ? t('teachers.emptyFilteredHint')
+                  : t('teachers.emptyHint')}
+              </p>
+              {!hasActiveFilter && (
+                <div className="mt-5">
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <GlassButton
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={handleOpenModal}
+                    >
+                      <span className="inline-flex items-center gap-2 font-medium">
+                        <Icon paths={I.userPlus} size={14} strokeWidth={2.4} />
+                        {t('teachers.add')}
+                      </span>
+                    </GlassButton>
+                  </motion.div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        ) : filteredTeachers.length === 0 ? (
+          <motion.div
+            key="empty-filtered"
+            variants={cardVariants}
+            className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-10 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card text-center"
+          >
+            <div className="flex flex-col items-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/[0.04] dark:bg-white/[0.06] text-[var(--text-tertiary)]">
+                <Icon paths={I.search} size={20} strokeWidth={2} />
+              </div>
+              <p className="mt-3 text-[14px] font-bold text-[var(--text-primary)]">
+                Mos keluvchi o'qituvchi topilmadi
+              </p>
+              <p className="mt-1 text-[12.5px] text-[var(--text-secondary)]">
+                Qidiruv so'zini yoki status filtrini o'zgartirib ko'ring
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setStatusFilter('ALL');
+                }}
+                className="mt-4 px-4 py-2 text-[12.5px] font-semibold rounded-xl bg-black/[0.04] hover:bg-black/[0.08] dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-[var(--text-primary)] transition-colors"
+              >
+                Filtrlarni tozalash
+              </button>
+            </div>
+          </motion.div>
+        ) : viewMode === 'list' ? (
+          <motion.div
+            key="list"
+            variants={cardVariants}
+            className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card divide-y divide-black/[0.05] dark:divide-white/[0.05]"
+          >
+            {filteredTeachers.map((teacher, idx) => {
+              const statusBadge = getTeacherStatusBadge(teacher.user?.isActive);
+              const specializations = teacher.specializations || [];
+              const name = formatTeacherName(teacher);
+              const isActive = teacher.user?.isActive !== false;
+              const isRowSelected = isSelected(teacher.id);
+              const isRowFocused = focusedIndex === idx;
 
-                return (
-                  <motion.div
-                    key={teacher.id}
-                    variants={rowVariants}
-                    className="group flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#007AFF]/[0.03]"
-                  >
-                    {/* Avatar + name */}
-                    <TeacherAvatar name={name} size={44} />
+              return (
+                <motion.div
+                  key={teacher.id}
+                  id={`teacher-row-${teacher.id}`}
+                  variants={rowVariants}
+                  onClick={() => handleOpenTeacherSidecar(teacher)}
+                  className={`group cursor-pointer flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-3.5 transition-all ${
+                    isRowFocused
+                      ? 'ring-2 ring-[#007AFF] bg-brand-500/[0.06]'
+                      : isRowSelected
+                      ? 'bg-brand-500/[0.04]'
+                      : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
+                  }`}
+                >
+                  {/* Left: Selection + Avatar + Teacher Info */}
+                  <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                    {/* Selection Checkbox */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelection(teacher.id);
+                      }}
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all mt-1 sm:mt-0 ${
+                        isRowSelected
+                          ? 'border-[#007AFF] bg-[#007AFF] text-white'
+                          : 'border-black/20 dark:border-white/20 bg-white/50 dark:bg-surface-800/50 hover:border-black/40 dark:hover:border-white/40'
+                      }`}
+                      aria-label={`Tanlash ${name}`}
+                    >
+                      {isRowSelected && (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                      )}
+                    </button>
+
+                    {/* Avatar */}
+                    <div className="shrink-0">
+                      <TeacherAvatar name={name} size={42} />
+                    </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        <p className="truncate text-[13.5px] font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[#007AFF] transition-colors">
                           {name}
                         </p>
                         {teacher.experience != null && teacher.experience > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF9500]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FF9500]">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF9500]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FF9500] shrink-0 border border-[#FF9500]/20">
                             <Icon paths={I.award} size={9} strokeWidth={2.4} />
                             {teacher.experience}y
                           </span>
@@ -983,12 +1177,12 @@ export function TeachersPage() {
                         <StatusBadge isActive={isActive} label={t(statusBadge.label)} />
                       </div>
 
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
                         {teacher.user?.email && (
                           <EmailChip email={teacher.user.email} />
                         )}
                         {teacher.user?.phone && (
-                          <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium tabular-nums text-[#86868B]">
+                          <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-[11.5px] font-medium tabular-nums text-[var(--text-tertiary)]">
                             <Icon paths={I.phone} size={11} strokeWidth={2} className="opacity-60" />
                             {teacher.user.phone}
                           </span>
@@ -996,35 +1190,52 @@ export function TeachersPage() {
                       </div>
 
                       {specializations.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
+                        <div className="mt-1.5 flex flex-wrap gap-1">
                           {specializations.slice(0, 4).map((s) => (
                             <SpecChip key={s} spec={s} />
                           ))}
                           {specializations.length > 4 && (
-                            <span className="inline-flex items-center rounded-lg bg-[#00000006] px-2 py-0.5 text-[10.5px] font-bold text-[#86868B] dark:bg-[#ffffff08]">
+                            <span className="inline-flex items-center rounded-lg bg-black/[0.04] dark:bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold text-[var(--text-tertiary)]">
                               +{specializations.length - 4}
                             </span>
                           )}
                         </div>
                       )}
                     </div>
+                  </div>
 
+                  {/* Right: Rate + Actions */}
+                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0 shrink-0">
                     {/* Rate */}
                     {teacher.hourlyRate ? (
-                      <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                      <div className="flex flex-col items-start sm:items-end shrink-0">
+                        <span className="text-[9.5px] sm:text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                           {t('teachers.col.hourlyRate')}
                         </span>
-                        <span className="mt-0.5 text-[14px] font-bold tabular-nums tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        <span className="mt-0.5 text-[13.5px] sm:text-[14px] font-bold tabular-nums tracking-tight text-[#34C759] dark:text-[#30D158]">
                           {formatCurrency(teacher.hourlyRate)}
                         </span>
                       </div>
                     ) : (
-                      <span className="text-[12px] font-medium text-[#86868B]">—</span>
+                      <span className="text-[12px] font-medium text-[var(--text-tertiary)] shrink-0">—</span>
                     )}
 
                     {/* Actions */}
-                    <div className="flex gap-1.5">
+                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {/* Sidecar Inspector Toggle */}
+                      <motion.button
+                        type="button"
+                        onClick={() => handleOpenTeacherSidecar(teacher)}
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.92 }}
+                        transition={SPRING.snappy}
+                        aria-label="Sidecar Dossier"
+                        title="Sidecar tafsilotlari (Split-View · Space)"
+                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-brand-500/40 transition-colors text-xs font-bold"
+                      >
+                        <span>◨</span>
+                      </motion.button>
+
                       <motion.button
                         type="button"
                         onClick={() => handleEdit(teacher)}
@@ -1033,12 +1244,7 @@ export function TeachersPage() {
                         transition={SPRING.snappy}
                         aria-label={t('common.edit')}
                         title={t('common.edit')}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
-                        style={{
-                          background: 'rgba(0,122,255,0.10)',
-                          color: '#007AFF',
-                          border: '1px solid rgba(0,122,255,0.2)',
-                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-[#007AFF]/30 transition-colors"
                       >
                         <Icon paths={I.edit} size={13} strokeWidth={2} />
                       </motion.button>
@@ -1051,26 +1257,167 @@ export function TeachersPage() {
                         transition={SPRING.snappy}
                         aria-label={t('common.delete')}
                         title={t('common.delete')}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg outline-none disabled:opacity-50"
-                        style={{
-                          background: 'rgba(255,59,48,0.10)',
-                          color: '#FF3B30',
-                          border: '1px solid rgba(255,59,48,0.2)',
-                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/15 disabled:opacity-50 transition-colors"
                       >
                         <Icon paths={I.trash} size={13} strokeWidth={2} />
                       </motion.button>
                     </div>
-                  </motion.div>
-                );
-              })}
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        ) : (
+          /* GRID VIEW */
+          <motion.div
+            key="grid"
+            variants={containerVariants}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          >
+            {filteredTeachers.map((teacher, idx) => {
+              const statusBadge = getTeacherStatusBadge(teacher.user?.isActive);
+              const specializations = teacher.specializations || [];
+              const name = formatTeacherName(teacher);
+              const isActive = teacher.user?.isActive !== false;
+              const isRowSelected = isSelected(teacher.id);
+              const isRowFocused = focusedIndex === idx;
+
+              return (
+                <motion.div
+                  key={teacher.id}
+                  id={`teacher-card-${teacher.id}`}
+                  variants={rowVariants}
+                  whileHover={{ y: -2 }}
+                  transition={SPRING.smooth}
+                  onClick={() => handleOpenTeacherSidecar(teacher)}
+                  className={`group relative flex flex-col justify-between rounded-2xl border border-black/[0.06] bg-white/80 p-5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card hover:shadow-card-hover transition-all cursor-pointer ${
+                    isRowFocused
+                      ? 'ring-2 ring-[#007AFF] bg-brand-500/[0.05]'
+                      : isRowSelected
+                      ? 'ring-2 ring-[#007AFF]/60 bg-brand-500/[0.03]'
+                      : ''
+                  }`}
+                >
+                  <div>
+                    {/* Top: Checkbox, Avatar, Name, Status */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelection(teacher.id);
+                          }}
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
+                            isRowSelected
+                              ? 'border-[#007AFF] bg-[#007AFF] text-white'
+                              : 'border-black/20 dark:border-white/20 bg-white/60 dark:bg-surface-800/60 hover:border-black/40 dark:hover:border-white/40'
+                          }`}
+                          aria-label={`Tanlash ${name}`}
+                        >
+                          {isRowSelected && (
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                          )}
+                        </button>
+                        <TeacherAvatar name={name} size={46} />
+                        <div className="min-w-0">
+                          <h3 className="truncate text-[14px] font-bold text-[var(--text-primary)] group-hover:text-[#007AFF] transition-colors">
+                            {name}
+                          </h3>
+                          {teacher.user?.email && (
+                            <span className="truncate text-[11.5px] text-[var(--text-tertiary)] block">
+                              {teacher.user.email}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <StatusBadge isActive={isActive} label={t(statusBadge.label)} />
+                    </div>
+
+                    {/* Middle: Experience & Hourly Rate */}
+                    <div className="mt-4 flex items-center justify-between border-t border-black/[0.04] dark:border-white/[0.04] pt-3">
+                      <div className="flex items-center gap-1.5">
+                        {teacher.experience != null && teacher.experience > 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF9500]/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-[#FF9500] border border-[#FF9500]/20">
+                            <Icon paths={I.award} size={10} strokeWidth={2.4} />
+                            {teacher.experience} yillik tajriba
+                          </span>
+                        )}
+                      </div>
+                      {teacher.hourlyRate && (
+                        <span className="text-[13px] font-bold tabular-nums text-[#34C759] dark:text-[#30D158]">
+                          {formatCurrency(teacher.hourlyRate)}/soat
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Specialization chips */}
+                    {specializations.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1">
+                        {specializations.slice(0, 3).map((s) => (
+                          <SpecChip key={s} spec={s} />
+                        ))}
+                        {specializations.length > 3 && (
+                          <span className="inline-flex items-center rounded-lg bg-black/[0.04] dark:bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold text-[var(--text-tertiary)]">
+                            +{specializations.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card Footer: Actions */}
+                  <div
+                    className="mt-4 flex items-center justify-between border-t border-black/[0.04] dark:border-white/[0.04] pt-3"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <motion.button
+                        type="button"
+                        onClick={() => handleOpenTeacherSidecar(teacher)}
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.92 }}
+                        title="Sidecar tafsilotlari (Split-View · Space)"
+                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      >
+                        <span className="text-[13px] leading-none">◨</span>
+                      </motion.button>
+                      <motion.button
+                        type="button"
+                        onClick={() => handleEdit(teacher)}
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.92 }}
+                        title={t('common.edit')}
+                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF]"
+                      >
+                        <Icon paths={I.edit} size={13} strokeWidth={2} />
+                      </motion.button>
+                    </div>
+
+                    <motion.button
+                      type="button"
+                      onClick={() => handleDelete(teacher.id)}
+                      disabled={remove.isPending && remove.variables === teacher.id}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      title={t('common.delete')}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] disabled:opacity-50"
+                    >
+                      <Icon paths={I.trash} size={13} strokeWidth={2} />
+                    </motion.button>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
         {/* Pagination */}
         {teacherList.length > 0 && (data?.totalPages ?? 1) > 1 && (
-          <div className="relative border-t border-[#00000008] p-4 dark:border-[#ffffff08]">
+          <div className="relative border-t border-black/[0.04] p-4 dark:border-white/[0.04]">
             <div className="flex justify-center">
               <GlassPagination
                 page={page}
@@ -1080,7 +1427,6 @@ export function TeachersPage() {
             </div>
           </div>
         )}
-      </motion.div>
 
       {/* ============================================================
           MODAL
@@ -1345,6 +1691,27 @@ export function TeachersPage() {
         onConfirm={confirmDelete}
         description={t('teachers.deleteConfirm')}
         loading={remove.isPending}
+      />
+
+      {/* Floating Action Island for Bulk Teacher Operations */}
+      <FloatingActionIsland
+        selectedCount={selectedCount}
+        onClear={clearSelection}
+        actions={[
+          {
+            label: "Holatni o'zgartirish",
+            icon: "🔄",
+            onClick: handleBatchToggleStatus,
+            variant: 'primary',
+            shortcutBadge: 't',
+          },
+          {
+            label: "Eksport (CSV)",
+            icon: "📊",
+            onClick: handleExportSelectedTeachersCSV,
+            shortcutBadge: 'e',
+          },
+        ]}
       />
     </motion.div>
   );

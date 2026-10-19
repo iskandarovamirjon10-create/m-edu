@@ -124,3 +124,36 @@ export class CreateRefundDto {
   @IsString()
   externalId?: string;
 }
+
+export class ProrateInvoiceDto {
+  @IsUUID()
+  studentId: string;
+
+  @IsOptional()
+  @IsUUID()
+  groupId?: string;
+
+  @IsDateString()
+  startDate: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  fullMonthlyAmount: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  totalLessonsInMonth?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  remainingLessons?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}

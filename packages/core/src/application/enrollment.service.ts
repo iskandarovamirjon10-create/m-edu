@@ -28,6 +28,7 @@ import {
   EnrollmentNotFoundError,
   EnrollmentAlreadyExistsError,
   EnrollmentNotActiveError,
+  DuplicateFaceEnrollmentError,
   FaceNotDetectedError,
   MultipleFacesDetectedError,
   FaceQualityTooLowError,
@@ -290,13 +291,14 @@ export class EnrollmentService {
         type: 'POTENTIAL_DUPLICATE_FACE',
         resourceType: 'FaceEnrollment',
         resourceId: enrollmentId,
-        description: `Potential duplicate face detected during enrollment. Extremely similar to another student.`,
+        description: `Duplicate face detected during enrollment. Extremely similar to another student.`,
         metadata: {
           studentId: enrollment.studentId,
           duplicateStudentId,
           similarityScore: maxSimilarity,
         },
       });
+      throw new DuplicateFaceEnrollmentError(duplicateStudentId, maxSimilarity);
     }
 
     // 8. Encrypt Template

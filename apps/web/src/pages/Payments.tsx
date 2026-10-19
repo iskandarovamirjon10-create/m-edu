@@ -27,8 +27,12 @@ import {
   GlassField,
   GlassModal,
   GlassButton,
+  FloatingActionIsland,
   useToasts,
 } from '@/components/ui';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { ExecutivePDFStudio } from '@/components/pdf-studio';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -429,11 +433,7 @@ function KpiTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
       <span
         aria-hidden
@@ -602,6 +602,7 @@ export function PaymentsPage() {
   /* ── Modal state ──────────────────────────────────────────────────── */
   const [modalOpen, setModalOpen] = useState(false);
   const [receiptTarget, setReceiptTarget] = useState<Payment | null>(null);
+  const [pdfStudioOpen, setPdfStudioOpen] = useState(false);
 
   /* ── Form state ───────────────────────────────────────────────────── */
   const [form, setForm] = useState<PaymentFormState>(INITIAL_FORM);
@@ -652,6 +653,97 @@ export function PaymentsPage() {
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     return { total, paid, pending, overdue, totalAmount };
   }, [paymentList]);
+
+  /* ── macOS Split-View Detail Sidecar ──────────────────────────────── */
+  const handleOpenPaymentSidecar = useCallback((payment: Payment) => {
+    const studentName = formatStudentName(payment.student);
+    const data: QuickLookData = {
+      id: payment.id,
+      type: 'payment',
+      title: formatCurrency(payment.amount),
+      subtitle: `${studentName} · ${payment.method}`,
+      badge: {
+        text: payment.status,
+        tone: payment.status === 'PAID' ? 'emerald' : payment.status === 'PENDING' ? 'amber' : 'rose',
+      },
+      avatar: {
+        text: getInitials(studentName),
+        color: payment.status === 'PAID' ? '#10B981' : '#6366F1',
+      },
+      metrics: [
+        { label: 'Summa', value: formatCurrency(payment.amount), trend: 'up' },
+        { label: 'Holat', value: payment.status },
+        { label: 'To\'lov usuli', value: payment.method || 'CASH' },
+        { label: 'Sana', value: formatDate(payment.createdAt) },
+      ],
+      details: [
+        { label: 'To\'lov ID', value: payment.id, copyable: true },
+        { label: 'Talaba', value: studentName },
+        { label: 'Izoh / Tavsif', value: payment.description || 'To\'lov qayd etildi' },
+        { label: 'O\'zgartirilgan', value: formatDate((payment as any).updatedAt || payment.createdAt) },
+      ],
+      primaryAction: {
+        label: 'Rasmiy Kvitansiya (PDF Studio)',
+        onExecute: () => setReceiptTarget(payment),
+      },
+    };
+    openSidecar(data);
+  }, []);
+
+  /* ── Superhuman Keyboard-First Navigation ─────────────────────────── */
+  const {
+    focusedIndex,
+    selectedIds,
+    selectedCount,
+    isSelected,
+    toggleSelection,
+    clearSelection,
+  } = useListKeyboardNavigation<Payment>({
+    items: paymentList,
+    getItemId: (p) => p.id,
+    rowIdPrefix: 'payment-row-',
+    onSelect: (p) => setReceiptTarget(p),
+    onQuickLook: (p) => handleOpenPaymentSidecar(p),
+    onEdit: (p) => handleOpenPaymentSidecar(p),
+  });
+
+  /* ── Batch actions ────────────────────────────────────────────────── */
+  const handleBatchMarkAsPaid = async () => {
+    let count = 0;
+    for (const id of selectedIds) {
+      try {
+        await paymentsApi.update(id, { status: 'PAID' });
+        count++;
+      } catch {
+        // continue
+      }
+    }
+    qc.invalidateQueries({ queryKey: queryKeys.payments.all() });
+    clearSelection();
+    push('success', `${count} ta to'lov "To'langan" deb yangilandi`);
+  };
+
+  const handleExportSelectedPaymentsCSV = () => {
+    const selectedRows = paymentList.filter((p) => isSelected(p.id));
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      ['ID,Student,Amount,Status,Method,Date']
+        .concat(
+          selectedRows.map(
+            (p) =>
+              `"${p.id}","${formatStudentName(p.student)}","${p.amount}","${p.status}","${p.method}","${p.createdAt}"`
+          )
+        )
+        .join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `payments_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    push('success', `${selectedRows.length} ta to'lov CSV formatida yuklandi`);
+  };
 
   /* ── Create mutation ──────────────────────────────────────────────── */
   const create = useMutation({
@@ -775,7 +867,7 @@ export function PaymentsPage() {
   if (payments.isLoading && !data) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80" />
         <PaymentsSkeleton />
       </div>
     );
@@ -811,11 +903,7 @@ export function PaymentsPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-7"
         >
           <span
             aria-hidden
@@ -936,10 +1024,7 @@ export function PaymentsPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-          style={{
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
-          }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm"
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             {/* Search */}
@@ -980,11 +1065,7 @@ export function PaymentsPage() {
       ============================================================ */}
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-        style={{
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-        }}
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       >
         <span
           aria-hidden
@@ -1038,111 +1119,161 @@ export function PaymentsPage() {
                 const gradient = avatarGradient(studentName);
                 const isUpdatingStatus =
                   updateStatus.isPending && updateStatus.variables?.id === payment.id;
+                const isRowSelected = isSelected(payment.id);
+                const isRowFocused = focusedIndex === idx;
 
                 return (
                   <motion.div
                     key={payment.id}
+                    id={`payment-row-${payment.id}`}
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                    className="flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#34C759]/[0.03]"
+                    className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-3.5 transition-all ${
+                      isRowFocused
+                        ? 'ring-2 ring-[#007AFF] bg-[#007AFF]/[0.06] rounded-xl'
+                        : isRowSelected
+                        ? 'bg-[#007AFF]/[0.04]'
+                        : 'hover:bg-[#34C759]/[0.03]'
+                    }`}
                   >
-                    {/* Avatar */}
-                    <div
-                      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
-                      style={{
-                        background: gradient,
-                        boxShadow:
-                          'inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 12px -4px rgba(0,0,0,0.25)',
-                      }}
-                    >
-                      <span
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 rounded-full"
-                        style={{
-                          background:
-                            'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)',
+                    {/* Student Info Group */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {/* Selection Checkbox */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelection(payment.id);
                         }}
-                      />
-                      <span className="relative">{initials}</span>
-                    </div>
-
-                    {/* Student + meta */}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {studentName}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#86868B]">
-                        <span className="inline-flex items-center gap-1 tabular-nums">
-                          <Icon paths={I.calendar} size={10} strokeWidth={2.2} className="opacity-60" />
-                          {formatDate(payment.createdAt)}
-                        </span>
-                        <MethodChip
-                          method={toPaymentMethod(payment.method)}
-                          label={t(`payments.method.${toPaymentMethod(payment.method)}`)}
-                        />
-                        {payment.description && (
-                          <span
-                            className="max-w-[16rem] truncate"
-                            title={payment.description}
-                          >
-                            {payment.description}
-                          </span>
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
+                          isRowSelected
+                            ? 'border-[#007AFF] bg-[#007AFF] text-white'
+                            : 'border-zinc-300 bg-white/50 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800/50'
+                        }`}
+                        aria-label={isRowSelected ? "Tanlovni bekor qilish" : "Tanlash"}
+                      >
+                        {isRowSelected && (
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
                         )}
+                      </button>
+                      {/* Avatar */}
+                      <div
+                        className="relative flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
+                        style={{
+                          background: gradient,
+                          boxShadow:
+                            'inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 12px -4px rgba(0,0,0,0.25)',
+                        }}
+                      >
+                        <span
+                          aria-hidden
+                          className="pointer-events-none absolute inset-0 rounded-full"
+                          style={{
+                            background:
+                              'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)',
+                          }}
+                        />
+                        <span className="relative">{initials}</span>
+                      </div>
+
+                      {/* Student + meta */}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                          {studentName}
+                        </p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-medium text-[#86868B]">
+                          <span className="inline-flex items-center gap-1 tabular-nums shrink-0">
+                            <Icon paths={I.calendar} size={10} strokeWidth={2.2} className="opacity-60" />
+                            {formatDate(payment.createdAt)}
+                          </span>
+                          <MethodChip
+                            method={toPaymentMethod(payment.method)}
+                            label={t(`payments.method.${toPaymentMethod(payment.method)}`)}
+                          />
+                          {payment.description && (
+                            <span
+                              className="max-w-[12rem] sm:max-w-[16rem] truncate"
+                              title={payment.description}
+                            >
+                              {payment.description}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Amount */}
-                    <div className="flex flex-col items-end">
-                      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
-                        {t('payments.col.amount')}
-                      </span>
-                      <span className="mt-0.5 text-[15px] font-bold tabular-nums tracking-tight text-[#10B981]">
-                        {formatCurrency(payment.amount)}
-                      </span>
-                    </div>
+                    {/* Amount, Status & Actions */}
+                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0 shrink-0">
+                      {/* Amount */}
+                      <div className="flex flex-col items-start sm:items-end shrink-0">
+                        <span className="text-[9.5px] sm:text-[10px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
+                          {t('payments.col.amount')}
+                        </span>
+                        <span className="mt-0.5 text-[14px] sm:text-[15px] font-bold tabular-nums tracking-tight text-[#10B981]">
+                          {formatCurrency(payment.amount)}
+                        </span>
+                      </div>
 
-                    {/* Status badge + inline selector */}
-                    <div className="flex items-center gap-2">
-                      <StatusBadge
-                        status={payment.status}
-                        label={t(`payments.status.${payment.status}`)}
-                      />
-                      <InlineStatusSelector
-                        value={payment.status}
-                        onChange={(s) => handleUpdateStatus(payment.id, s)}
-                        disabled={isUpdatingStatus}
-                        ariaLabel={t('payments.updateStatusFor', { name: studentName })}
-                        t={t}
-                      />
-                      {isUpdatingStatus && (
-                        <motion.span
-                          className="h-3.5 w-3.5 rounded-full border-2 border-[#007AFF]/30 border-t-[#007AFF]"
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                      {/* Status badge + inline selector */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <StatusBadge
+                          status={payment.status}
+                          label={t(`payments.status.${payment.status}`)}
                         />
-                      )}
-                    </div>
+                        <div className="hidden sm:flex items-center">
+                          <InlineStatusSelector
+                            value={payment.status}
+                            onChange={(s) => handleUpdateStatus(payment.id, s)}
+                            disabled={isUpdatingStatus}
+                            ariaLabel={t('payments.updateStatusFor', { name: studentName })}
+                            t={t}
+                          />
+                        </div>
+                        {isUpdatingStatus && (
+                          <motion.span
+                            className="h-3.5 w-3.5 rounded-full border-2 border-[#007AFF]/30 border-t-[#007AFF]"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                          />
+                        )}
 
-                    {/* Receipt action */}
-                    <motion.button
-                      type="button"
-                      onClick={() => setReceiptTarget(payment)}
-                      whileHover={{ scale: 1.06, y: -1 }}
-                      whileTap={{ scale: 0.94 }}
-                      transition={SPRING.snappy}
-                      aria-label={t('payments.receipt')}
-                      title={t('payments.receipt')}
-                      className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold tracking-tight outline-none"
-                      style={{
-                        background: 'rgba(0,122,255,0.10)',
-                        color: '#007AFF',
-                        border: '1px solid rgba(0,122,255,0.2)',
-                      }}
-                    >
-                      <Icon paths={I.receipt} size={12} strokeWidth={2.2} />
-                      <span className="hidden sm:inline">{t('payments.receipt')}</span>
-                    </motion.button>
+                        {/* Sidecar Split-View trigger */}
+                        <motion.button
+                          type="button"
+                          onClick={() => handleOpenPaymentSidecar(payment)}
+                          whileHover={{ scale: 1.08 }}
+                          whileTap={{ scale: 0.92 }}
+                          aria-label="Sidecar tafsilotlarini ochish"
+                          title="Sidecar tafsilotlari (Split-View · Space)"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-subtle bg-surface/80 text-secondary hover:text-primary hover:border-primary/40 transition-colors"
+                        >
+                          <span className="text-[13px] leading-none">◨</span>
+                        </motion.button>
+
+                        {/* Receipt action */}
+                        <motion.button
+                          type="button"
+                          onClick={() => setReceiptTarget(payment)}
+                          whileHover={{ scale: 1.06, y: -1 }}
+                          whileTap={{ scale: 0.94 }}
+                          transition={SPRING.snappy}
+                          aria-label={t('payments.receipt')}
+                          title={t('payments.receipt')}
+                          className="flex h-8 items-center gap-1.5 rounded-lg px-2 sm:px-2.5 text-[11px] font-bold tracking-tight outline-none"
+                          style={{
+                            background: 'rgba(0,122,255,0.10)',
+                            color: '#007AFF',
+                            border: '1px solid rgba(0,122,255,0.2)',
+                          }}
+                        >
+                          <Icon paths={I.receipt} size={12} strokeWidth={2.2} />
+                          <span className="hidden sm:inline">{t('payments.receipt')}</span>
+                        </motion.button>
+                      </div>
+                    </div>
                   </motion.div>
                 );
               })}
@@ -1159,6 +1290,29 @@ export function PaymentsPage() {
           </>
         )}
       </motion.div>
+
+      {/* Superhuman Floating Action Island */}
+      <FloatingActionIsland
+        selectedCount={selectedCount}
+        onClearSelection={clearSelection}
+        entityName="to'lov"
+        actions={[
+          {
+            label: "To'langan deb belgilash",
+            shortcut: 'P',
+            icon: <Icon paths={I.check} size={13} strokeWidth={2.4} />,
+            variant: 'primary',
+            onClick: handleBatchMarkAsPaid,
+          },
+          {
+            label: 'CSV Eksport',
+            shortcut: 'C',
+            icon: <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />,
+            variant: 'default',
+            onClick: handleExportSelectedPaymentsCSV,
+          },
+        ]}
+      />
 
       {/* ============================================================
           CREATE PAYMENT MODAL
@@ -1338,14 +1492,10 @@ export function PaymentsPage() {
           <div className="space-y-5">
             <div
               id="medu-printable-receipt"
-              className="relative overflow-hidden rounded-2xl border border-[#00000008] bg-white p-6 text-[#1D1D1F] dark:border-[#ffffff10] dark:bg-[#1c1c1e] dark:text-[#F5F5F7]"
-              style={{
-                boxShadow:
-                  'inset 0 1px 0 rgba(255,255,255,0.5), 0 10px 30px -18px rgba(0,0,0,0.15)',
-              }}
+              className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/90 p-6 text-[var(--text-primary)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/90 dark:text-[var(--text-primary)] shadow-card"
             >
               {/* Header */}
-              <div className="flex items-start justify-between border-b border-[#00000008] pb-4 dark:border-[#ffffff08]">
+              <div className="flex items-start justify-between border-b border-black/[0.05] pb-4 dark:border-white/[0.05]">
                 <div className="flex items-start gap-3">
                   <div
                     className="flex h-10 w-10 items-center justify-center rounded-xl text-[15px] font-black text-white"
@@ -1360,7 +1510,7 @@ export function PaymentsPage() {
                     <h3 className="text-[16px] font-bold tracking-tight">
                       {t('payments.receipt.academyName')}
                     </h3>
-                    <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+                    <p className="mt-0.5 text-[11px] font-medium text-[var(--text-secondary)]">
                       {t('payments.receipt.title')}
                     </p>
                   </div>
@@ -1369,7 +1519,7 @@ export function PaymentsPage() {
                   <span className="rounded-lg bg-[#007AFF]/10 px-2 py-1 font-mono text-[11px] font-bold text-[#007AFF]">
                     RCP-{receiptTarget.id.slice(0, 8).toUpperCase()}
                   </span>
-                  <p className="mt-1.5 text-[11px] font-medium text-[#86868B]">
+                  <p className="mt-1.5 text-[11px] font-medium text-[var(--text-secondary)]">
                     {formatDate(receiptTarget.createdAt)}
                   </p>
                 </div>
@@ -1378,21 +1528,21 @@ export function PaymentsPage() {
               {/* Student / Status */}
               <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                  <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                     {t('payments.form.student')}
                   </span>
                   <p className="mt-1 text-[14px] font-semibold tracking-tight">
                     {formatStudentName(receiptTarget.student)}
                   </p>
                   {receiptTarget.student?.user?.email && (
-                    <p className="mt-0.5 inline-flex items-center gap-1 text-[11.5px] font-medium text-[#86868B]">
+                    <p className="mt-0.5 inline-flex items-center gap-1 text-[11.5px] font-medium text-[var(--text-secondary)]">
                       <Icon paths={I.mail} size={11} strokeWidth={2} className="opacity-60" />
                       {receiptTarget.student.user.email}
                     </p>
                   )}
                 </div>
                 <div className="sm:text-right">
-                  <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                  <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                     {t('common.status')}
                   </span>
                   <div className="mt-1.5">
@@ -1405,8 +1555,8 @@ export function PaymentsPage() {
               </div>
 
               {/* Item + amount panel */}
-              <div className="mt-5 rounded-2xl border border-[#00000008] bg-[#00000002] p-4 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
-                <div className="flex items-center justify-between border-b border-[#00000008] pb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B] dark:border-[#ffffff08]">
+              <div className="mt-5 rounded-2xl border border-black/[0.05] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]">
+                <div className="flex items-center justify-between border-b border-black/[0.05] pb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)] dark:border-white/[0.05]">
                   <span>{t('common.description')}</span>
                   <span>{t('payments.col.amount')}</span>
                 </div>
@@ -1418,9 +1568,9 @@ export function PaymentsPage() {
                     {formatCurrency(receiptTarget.amount)}
                   </span>
                 </div>
-                <div className="mt-3 flex items-center justify-between border-t border-[#00000008] pt-3 dark:border-[#ffffff08]">
+                <div className="mt-3 flex items-center justify-between border-t border-black/[0.05] pt-3 dark:border-white/[0.05]">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#86868B]">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
                       {t('payments.form.method')}:
                     </span>
                     <MethodChip
@@ -1429,10 +1579,10 @@ export function PaymentsPage() {
                     />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                       {t('payments.receipt.total')}
                     </span>
-                    <span className="text-[20px] font-black tracking-tighter text-[#10B981]">
+                    <span className="text-[20px] font-black tracking-tighter text-[#34C759] dark:text-[#30D158]">
                       {formatCurrency(receiptTarget.amount)}
                     </span>
                   </div>
@@ -1440,9 +1590,9 @@ export function PaymentsPage() {
               </div>
 
               {/* Verification footer */}
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-[#00000008] pt-4 text-[10.5px] font-medium text-[#86868B] dark:border-[#ffffff08]">
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.05] pt-4 text-[10.5px] font-medium text-[var(--text-tertiary)] dark:border-white/[0.05]">
                 <div className="inline-flex items-center gap-1.5">
-                  <Icon paths={I.shield} size={13} strokeWidth={2.2} className="text-[#10B981]" />
+                  <Icon paths={I.shield} size={13} strokeWidth={2.2} className="text-[#34C759]" />
                   <span>{t('payments.receipt.footer')}</span>
                 </div>
                 <span className="font-mono">ID: {receiptTarget.id.slice(0, 12)}</span>
@@ -1463,7 +1613,7 @@ export function PaymentsPage() {
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <GlassButton
                   type="button"
-                  variant="primary"
+                  variant="secondary"
                   onClick={() => window.print()}
                 >
                   <span className="inline-flex items-center gap-2">
@@ -1472,10 +1622,47 @@ export function PaymentsPage() {
                   </span>
                 </GlassButton>
               </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <GlassButton
+                  type="button"
+                  variant="primary"
+                  onClick={() => setPdfStudioOpen(true)}
+                  className="!bg-gradient-to-r !from-blue-600 !to-indigo-600 !text-white !border-blue-400/40"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
+                    Executive PDF Studio
+                  </span>
+                </GlassButton>
+              </motion.div>
             </div>
           </div>
         )}
       </GlassModal>
+
+      {/* Executive PDF Studio */}
+      {receiptTarget && (
+        <ExecutivePDFStudio
+          open={pdfStudioOpen}
+          onClose={() => setPdfStudioOpen(false)}
+          initialData={{
+            id: `RCP-${receiptTarget.id.slice(0, 8).toUpperCase()}`,
+            docType: 'receipt',
+            title: "To'lov Kvitansiyasi / Official Receipt",
+            recipientName: formatStudentName(receiptTarget.student),
+            recipientId: receiptTarget.studentId || undefined,
+            amount: formatCurrency(receiptTarget.amount),
+            dateStr: formatDate(receiptTarget.createdAt),
+            items: [
+              { label: "O'quvchi / Student", value: formatStudentName(receiptTarget.student) },
+              { label: "To'lov usuli / Method", value: t(`payments.method.${toPaymentMethod(receiptTarget.method)}`) },
+              { label: "Status / Status", value: t(`payments.status.${receiptTarget.status}`) },
+              { label: "Izoh / Description", value: receiptTarget.description || "O'quv kursi to'lovi" },
+              { label: "Sana / Transaction Date", value: formatDate(receiptTarget.createdAt) },
+            ],
+          }}
+        />
+      )}
     </motion.div>
   );
 }

@@ -109,8 +109,9 @@ type MockRedisClient = InstanceType<typeof redisMock.MockRedisClient>;
 interface LockInternals {
   redis: MockRedisClient | null;
   replicaId: string;
+  activeLocks: Set<string>;
   acquireCameraLock(cameraId: string): Promise<boolean>;
-  renewCameraLock(cameraId: string): Promise<boolean>;
+  renewLocks(): Promise<void>;
   releaseCameraLock(cameraId: string): Promise<void>;
 }
 
@@ -189,35 +190,34 @@ describe('CameraWorkerManagerService — distributed camera lock', () => {
     expect(client.set).not.toHaveBeenCalled();
   });
 
-  it('takes ownership with SET key replicaId EX 10 NX', async () => {
+  it('takes ownership with atomic Lua acquire script', async () => {
     const { replicaId } = internals(manager);
+    client.eval.mockResolvedValueOnce(1);
 
     await expect(
       internals(manager).acquireCameraLock('cam-1'),
     ).resolves.toBe(true);
 
-    expect(client.set).toHaveBeenCalledWith(
+    expect(client.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("SET", KEYS[1], ARGV[1]'),
+      1,
       'camera:cam-1:lock',
       replicaId,
-      'EX',
-      10,
-      'NX',
+      15,
     );
   });
 
   it('treats a lock it already owns as acquired (idempotent re-start)', async () => {
-    const { replicaId } = internals(manager);
-
-    client.set.mockResolvedValueOnce(null);
-    client.get.mockResolvedValueOnce(replicaId);
+    client.eval.mockResolvedValueOnce(1);
 
     await expect(
       internals(manager).acquireCameraLock('cam-1'),
     ).resolves.toBe(true);
+    expect(internals(manager).activeLocks.has('cam-1')).toBe(true);
   });
 
   it('refuses a camera owned by another replica', async () => {
-    client.set.mockResolvedValueOnce(null);
+    client.eval.mockResolvedValueOnce(0);
     client.get.mockResolvedValueOnce('another-replica');
 
     await expect(
@@ -226,7 +226,7 @@ describe('CameraWorkerManagerService — distributed camera lock', () => {
   });
 
   it('degrades to running the worker when Redis rejects the acquire', async () => {
-    client.set.mockRejectedValueOnce(
+    client.eval.mockRejectedValueOnce(
       new Error("Stream isn't writeable and enableOfflineQueue options is false"),
     );
 
@@ -237,34 +237,44 @@ describe('CameraWorkerManagerService — distributed camera lock', () => {
 
   it('renews only while this replica still owns the lock', async () => {
     const { replicaId } = internals(manager);
+    internals(manager).activeLocks.add('cam-1');
+    client.eval.mockResolvedValueOnce([1]);
 
-    await expect(
-      internals(manager).renewCameraLock('cam-1'),
-    ).resolves.toBe(true);
+    await internals(manager).renewLocks();
 
-    const [script, , key, owner] = client.eval.mock.calls[0] as [
+    const [script, keyCount, key, owner, ttl] = client.eval.mock.calls[0] as [
       string,
       number,
       string,
       string,
+      number,
     ];
 
     expect(script).toContain('GET');
     expect(script).toContain('EXPIRE');
-    expect(script).toContain('ARGV[1]');
+    expect(script).toContain('owner');
+    expect(keyCount).toBe(1);
     expect(key).toBe('camera:cam-1:lock');
     expect(owner).toBe(replicaId);
+    expect(ttl).toBe(15);
 
     // An unconditional EXPIRE would extend a peer replica's lock.
     expect(client.expire).not.toHaveBeenCalled();
   });
 
   it('reports a lost lock when the Lua compare says another replica owns it', async () => {
-    client.eval.mockResolvedValueOnce(0);
+    internals(manager).activeLocks.add('cam-1');
+    client.eval.mockResolvedValueOnce([0]);
 
-    await expect(
-      internals(manager).renewCameraLock('cam-1'),
-    ).resolves.toBe(false);
+    await internals(manager).renewLocks();
+
+    expect(client.eval).toHaveBeenCalledWith(
+      expect.stringContaining('results[i] = 0'),
+      1,
+      'camera:cam-1:lock',
+      expect.any(String),
+      15,
+    );
   });
 
   it('releases with compare-and-del, never a blind DEL', async () => {

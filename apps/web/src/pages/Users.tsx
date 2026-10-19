@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import { usersApi } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
 import {
@@ -20,6 +21,12 @@ import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, User, UserRole } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+
+const SPRING = {
+  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
+  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
+  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
+} as const;
 
 const ALL_ROLES: UserRole[] = [
   'SUPER_ADMIN',
@@ -71,25 +78,24 @@ function GlassSurface({
   return (
     <div
       className={[
-        'relative overflow-hidden rounded-[2rem]',
-        'bg-white/55 dark:bg-white/[0.035]',
-        'backdrop-blur-2xl backdrop-saturate-[1.8]',
-        'ring-1 ring-inset ring-white/60 dark:ring-white/[0.08]',
-        'shadow-[0_8px_32px_-8px_rgba(15,23,42,0.12),inset_0_1px_0_0_rgba(255,255,255,0.75)]',
-        'dark:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.06)]',
+        'liquid-glass-surface relative overflow-hidden rounded-2xl',
+        'border border-black/[0.08] dark:border-white/[0.12]',
+        'bg-white/75 dark:bg-surface-900/75 backdrop-blur-xl backdrop-saturate-150',
+        'shadow-[0_8px_32px_-8px_rgba(15,23,42,0.08),inset_0_1px_0_0_rgba(255,255,255,0.85)]',
+        'dark:shadow-[0_12px_40px_-10px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.12)]',
         hover
-          ? 'transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-1 hover:shadow-[0_20px_60px_-15px_rgba(15,23,42,0.22),inset_0_1px_0_0_rgba(255,255,255,0.85)]'
+          ? 'transition-all duration-300 ease-apple-spring hover:-translate-y-1 hover:shadow-[0_20px_60px_-15px_rgba(15,23,42,0.15),inset_0_1px_0_0_rgba(255,255,255,0.95)] hover:border-black/[0.14] dark:hover:border-white/[0.2]'
           : '',
         className,
-      ].join(' ')}
+      ].filter(Boolean).join(' ')}
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/25"
+        className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/25"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[140%] -translate-x-1/2 rounded-full bg-gradient-to-b from-white/50 to-transparent blur-2xl dark:from-white/[0.06]"
+        className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[140%] -translate-x-1/2 rounded-full bg-gradient-to-b from-white/40 to-transparent blur-2xl dark:from-white/[0.05]"
       />
       {children}
     </div>
@@ -133,7 +139,7 @@ const ROLE_STYLES: Record<string, { ring: string; bg: string; text: string; dot:
   PLATFORM_OWNER:{ ring: 'ring-fuchsia-500/25', bg: 'bg-fuchsia-500/12', text: 'text-fuchsia-600 dark:text-fuchsia-400', dot: 'bg-fuchsia-500' },
   SUPER_ADMIN: { ring: 'ring-purple-500/25', bg: 'bg-purple-500/12', text: 'text-purple-600 dark:text-purple-400', dot: 'bg-purple-500' },
   ORG_ADMIN:   { ring: 'ring-brand-500/25',  bg: 'bg-brand-500/12',  text: 'text-brand-600 dark:text-brand-400',   dot: 'bg-brand-500' },
-  MANAGER:     { ring: 'ring-blue-500/25',   bg: 'bg-blue-500/12',   text: 'text-blue-600 dark:text-blue-400',     dot: 'bg-blue-500' },
+  MANAGER:     { ring: 'ring-blue-500/25',   bg: 'bg-blue-500/12',   text: 'text-brand-600 dark:text-brand-400',     dot: 'bg-blue-500' },
   TEACHER:     { ring: 'ring-emerald-500/25', bg: 'bg-emerald-500/12', text: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
   ASSISTANT:   { ring: 'ring-amber-500/25',  bg: 'bg-amber-500/12',  text: 'text-amber-600 dark:text-amber-400',   dot: 'bg-amber-500' },
   STUDENT:     { ring: 'ring-cyan-500/25',   bg: 'bg-cyan-500/12',   text: 'text-cyan-600 dark:text-cyan-400',     dot: 'bg-cyan-500' },
@@ -340,7 +346,12 @@ export function UsersPage() {
         />
       </div>
 
-      <div className="page-container relative z-10 space-y-5 animate-in fade-in duration-700">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={SPRING.smooth}
+        className="page-container relative z-10 space-y-5"
+      >
         <GlassPageHeader
           title={t('users.title')}
           subtitle={t('users.pageSubtitle')}
@@ -357,6 +368,34 @@ export function UsersPage() {
           }
         />
 
+        {/* ── Apple V2 KPI Bar ── */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('common.total') || 'Jami foydalanuvchilar'}</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
+              {data?.total ?? userList.length}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('users.status.ACTIVE') || 'Faol'}</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-[#34C759] dark:text-[#30D158] tabular-nums">
+              {userList.filter(u => u.isActive).length}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('users.role.ORG_ADMIN') || 'Adminlar'}</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-[#AF52DE] tabular-nums">
+              {userList.filter(u => u.role === 'SUPER_ADMIN' || u.role === 'ORG_ADMIN').length}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('users.role.TEACHER') || 'O\'qituvchilar'}</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-[#007AFF] tabular-nums">
+              {userList.filter(u => u.role === 'TEACHER').length}
+            </p>
+          </div>
+        </div>
+
         {/* ── Users table ── */}
         <GlassSurface>
           {userList.length === 0 ? (
@@ -365,7 +404,7 @@ export function UsersPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-[0.85rem]">
+              <table className="w-full text-[0.85rem] tabular-nums">
                 <thead>
                   <tr className="border-b border-white/40 dark:border-white/[0.06]">
                     {[
@@ -455,7 +494,7 @@ export function UsersPage() {
 
                         {/* Actions */}
                         <td className="px-6 py-3.5">
-                          <div className="flex items-center justify-end gap-1.5 opacity-60 transition-opacity duration-300 group-hover:opacity-100">
+                          <div className="flex items-center justify-end gap-1.5 opacity-100 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity duration-300">
                             {/* Edit */}
                             <button
                               type="button"
@@ -679,7 +718,7 @@ export function UsersPage() {
         />
 
         {toastNode}
-      </div>
+      </motion.div>
 
       <style>{`
         @keyframes slideUp {

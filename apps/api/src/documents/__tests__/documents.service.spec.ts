@@ -20,6 +20,12 @@ function makePrisma() {
     documentVersion: {
       create: vi.fn(),
     },
+    student: {
+      findUnique: vi.fn(),
+    },
+    parentStudent: {
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
       const tx = {
         documentVersion: { create: vi.fn() },
@@ -99,6 +105,53 @@ describe('DocumentsService', () => {
       expect(r.total).toBe(45);
       expect(r.totalPages).toBe(5);
     });
+
+    it('resolves Student.id from userId for student role (M-EDU-TEN-002)', async () => {
+      prisma.student.findUnique.mockResolvedValue({ id: 'student-uuid-456' });
+      prisma.document.findMany.mockResolvedValue([]);
+      prisma.document.count.mockResolvedValue(0);
+
+      await svc.findAll({ organizationId: 'org-1', role: 'STUDENT', sub: 'user-uuid-123' }, {});
+
+      expect(prisma.student.findUnique).toHaveBeenCalledWith({
+        where: { userId: 'user-uuid-123' },
+        select: { id: true },
+      });
+
+      const where = prisma.document.findMany.mock.calls[0][0].where;
+      expect(where.OR).toEqual([
+        { relatedEntityId: { in: ['student-uuid-456', 'user-uuid-123'] }, relatedEntityType: 'STUDENT' },
+        { category: 'PUBLIC' },
+      ]);
+    });
+
+    it('falls back to user.sub if student record does not exist (M-EDU-TEN-002)', async () => {
+      prisma.student.findUnique.mockResolvedValue(null);
+      prisma.document.findMany.mockResolvedValue([]);
+      prisma.document.count.mockResolvedValue(0);
+
+      await svc.findAll({ organizationId: 'org-1', role: 'STUDENT', sub: 'user-uuid-123' }, {});
+
+      const where = prisma.document.findMany.mock.calls[0][0].where;
+      expect(where.OR).toEqual([
+        { relatedEntityId: { in: ['user-uuid-123'] }, relatedEntityType: 'STUDENT' },
+        { category: 'PUBLIC' },
+      ]);
+    });
+
+    it('resolves children for parent role (M-EDU-TEN-002)', async () => {
+      prisma.parentStudent.findMany.mockResolvedValue([{ studentId: 'student-1' }, { studentId: 'student-2' }]);
+      prisma.document.findMany.mockResolvedValue([]);
+      prisma.document.count.mockResolvedValue(0);
+
+      await svc.findAll({ organizationId: 'org-1', role: 'PARENT', sub: 'parent-sub' }, {});
+
+      const where = prisma.document.findMany.mock.calls[0][0].where;
+      expect(where.OR).toEqual([
+        { relatedEntityId: { in: ['student-1', 'student-2'] }, relatedEntityType: 'STUDENT' },
+        { category: 'PUBLIC' },
+      ]);
+    });
   });
 
   describe('findOne', () => {
@@ -114,6 +167,21 @@ describe('DocumentsService', () => {
           },
         },
       });
+    });
+
+    it('resolves Student.id from userId for student role in findOne (M-EDU-TEN-002)', async () => {
+      prisma.student.findUnique.mockResolvedValue({ id: 'student-uuid-456' });
+      prisma.document.findFirst.mockResolvedValue({ id: 'd1', title: 'Cert' });
+
+      await svc.findOne({ organizationId: 'org-1', role: 'STUDENT', sub: 'user-uuid-123' }, 'd1');
+
+      const where = prisma.document.findFirst.mock.calls[0][0].where;
+      expect(where.id).toBe('d1');
+      expect(where.organizationId).toBe('org-1');
+      expect(where.OR).toEqual([
+        { relatedEntityId: { in: ['student-uuid-456', 'user-uuid-123'] }, relatedEntityType: 'STUDENT' },
+        { category: 'PUBLIC' },
+      ]);
     });
   });
 

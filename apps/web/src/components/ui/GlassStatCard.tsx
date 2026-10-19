@@ -1,78 +1,35 @@
 /**
- * GlassStatCard V2 — KPI metric card for dashboards.
- *
- * Features: loading skeleton, sparkline, trend, accent color, numeric typography
+ * GlassStatCard — Apple-premium KPI tile + simple SVG sparkline.
  */
 import { type ReactNode } from 'react';
+import { cn } from '@/lib/design';
 
-type TrendDirection = 'up' | 'down' | 'neutral';
-type AccentColor = 'indigo' | 'emerald' | 'amber' | 'rose' | 'cyan' | 'violet' | 'slate';
+export type TrendDirection = 'up' | 'down' | 'neutral';
 
-interface SparklineProps {
+export type AccentColor =
+  | 'indigo'
+  | 'emerald'
+  | 'amber'
+  | 'rose'
+  | 'cyan'
+  | 'violet'
+  | 'slate';
+
+export type StatCardSize = 'sm' | 'md' | 'lg';
+
+export interface SparklineProps {
   values: number[];
+  /** Stroke color (CSS color or var). */
   color: string;
+  /** @deprecated no-op */
+  glow?: string;
+  /** @deprecated no-op */
+  animated?: boolean;
+  width?: number;
+  height?: number;
 }
 
-function Sparkline({ values, color }: SparklineProps) {
-  if (values.length < 2) return null;
-  const w = 64;
-  const h = 24;
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const range = max - min || 1;
-  const points = values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * w;
-      const y = h - ((v - min) / range) * (h - 2) - 1;
-      return `${x},${y}`;
-    })
-    .join(' ');
-  const fillPoints = `0,${h} ${points} ${w},${h}`;
-
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden className="flex-shrink-0">
-      <defs>
-        <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon points={fillPoints} fill="url(#spark-fill)" />
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-const ACCENT_STYLES: Record<AccentColor, { icon: string; value: string; spark: string }> = {
-  indigo:  { icon: 'text-[var(--primary)] bg-[var(--primary-soft)]',      value: 'text-[var(--primary)]',  spark: 'var(--primary)' },
-  emerald: { icon: 'text-[var(--success)] bg-[var(--success-soft)]',      value: 'text-[var(--success)]',  spark: 'var(--success)' },
-  amber:   { icon: 'text-[var(--warning)] bg-[var(--warning-soft)]',      value: 'text-[var(--warning)]',  spark: 'var(--warning)' },
-  rose:    { icon: 'text-[var(--danger)]  bg-[var(--danger-soft)]',       value: 'text-[var(--danger)]',   spark: 'var(--danger)'  },
-  cyan:    { icon: 'text-[var(--info)]    bg-[var(--info-soft)]',         value: 'text-[var(--info)]',     spark: 'var(--info)'    },
-  violet:  { icon: 'text-[var(--primary)] bg-[var(--primary-soft)]',      value: 'text-[var(--text-primary)]', spark: 'var(--primary)' },
-  slate:   { icon: 'text-[var(--neutral)] bg-[var(--neutral-soft)]',      value: 'text-[var(--text-primary)]', spark: 'var(--neutral)'  },
-};
-
-const TREND_CLASSES: Record<TrendDirection, string> = {
-  up:      'text-[var(--success)]',
-  down:    'text-[var(--danger)]',
-  neutral: 'text-[var(--text-tertiary)]',
-};
-
-const TREND_ICONS: Record<TrendDirection, string> = {
-  up:      '↑',
-  down:    '↓',
-  neutral: '→',
-};
-
-interface GlassStatCardProps {
+export interface GlassStatCardProps {
   label: string;
   value: string | number;
   icon?: ReactNode;
@@ -82,30 +39,96 @@ interface GlassStatCardProps {
   loading?: boolean;
   description?: string;
   className?: string;
+  size?: StatCardSize;
+  interactive?: boolean;
+  onClick?: () => void;
+  /** @deprecated no-op */
+  disableRefraction?: boolean;
+  /** @deprecated no-op */
+  disableMotion?: boolean;
+  /** @deprecated no-op */
+  gradientTitle?: boolean;
+  /** @deprecated no-op */
+  glow?: boolean;
+  /** @deprecated no-op */
+  noReflection?: boolean;
 }
 
-// Skeleton state
-function StatCardSkeleton({ className = '' }: { className?: string }) {
+const ACCENTS: Record<AccentColor, { color: string; bg: string }> = {
+  indigo: { color: 'var(--primary)', bg: 'var(--tone-blue-bg)' },
+  emerald: { color: 'var(--success)', bg: 'var(--tone-green-bg)' },
+  amber: { color: 'var(--warning)', bg: 'var(--tone-orange-bg)' },
+  rose: { color: 'var(--danger)', bg: 'var(--tone-red-bg)' },
+  cyan: { color: 'var(--info)', bg: 'var(--tone-blue-bg)' },
+  violet: { color: 'var(--tone-purple-fg)', bg: 'var(--tone-purple-bg)' },
+  slate: { color: 'var(--text-secondary)', bg: 'var(--tone-bg)' },
+};
+
+const TREND: Record<TrendDirection, { fg: string; bg: string; path: string }> = {
+  up: { fg: 'var(--success)', bg: 'var(--tone-green-bg)', path: 'M6 14 10 10 14 14 18 6' },
+  down: { fg: 'var(--danger)', bg: 'var(--tone-red-bg)', path: 'M6 10 10 14 14 10 18 18' },
+  neutral: { fg: 'var(--text-tertiary)', bg: 'var(--tone-bg)', path: 'M6 12h12' },
+};
+
+const SIZES: Record<
+  StatCardSize,
+  { pad: string; label: string; value: string; icon: string; gap: string }
+> = {
+  sm: { pad: 'p-4', label: 'text-xs', value: 'text-xl', icon: 'h-8 w-8', gap: 'gap-2' },
+  md: { pad: 'p-5', label: 'text-xs', value: 'text-2xl', icon: 'h-9 w-9', gap: 'gap-3' },
+  lg: { pad: 'p-6', label: 'text-sm', value: 'text-3xl', icon: 'h-11 w-11', gap: 'gap-4' },
+};
+
+export function Sparkline({ values, color, width = 64, height = 24 }: SparklineProps) {
+  if (values.length < 2) return null;
+
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min || 1;
+  const pad = 2;
+
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * width;
+      const y = height - pad - ((v - min) / range) * (height - 2 * pad);
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(' ');
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      aria-hidden="true"
+      focusable="false"
+      className="flex-shrink-0"
+    >
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function StatCardSkeleton({ className = '', size = 'md' }: { className?: string; size?: StatCardSize }) {
+  const sz = SIZES[size];
   return (
     <div
-      className={[
-        'relative overflow-hidden',
-        'bg-[var(--bg-card)]',
-        'backdrop-blur-[16px] [-webkit-backdrop-filter:blur(16px)_saturate(1.5)]',
-        'border border-[var(--border)]',
-        'rounded-[var(--radius-xl)]',
-        'p-5 shadow-[var(--shadow-md)]',
-        className,
-      ].join(' ')}
+      aria-hidden="true"
+      className={cn('bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-card', sz.pad, className)}
     >
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div className="h-4 w-24 rounded-[var(--radius-sm)] skeleton-shimmer" />
-          <div className="h-9 w-9 rounded-[var(--radius-md)] skeleton-shimmer" />
-        </div>
-        <div className="h-8 w-20 rounded-[var(--radius-sm)] skeleton-shimmer" />
-        <div className="h-3.5 w-16 rounded-[var(--radius-sm)] skeleton-shimmer" />
+      <div className="flex items-center justify-between gap-3">
+        <div className="skeleton-shimmer h-3.5 rounded-lg" style={{ width: '6rem' }} />
+        <div className="skeleton-shimmer h-9 w-9 rounded-xl" />
       </div>
+      <div className="skeleton-shimmer mt-3 h-7 rounded-lg" style={{ width: '5rem' }} />
+      <div className="skeleton-shimmer mt-2 h-3.5 rounded-lg" style={{ width: '4rem' }} />
     </div>
   );
 }
@@ -120,83 +143,103 @@ export function GlassStatCard({
   loading = false,
   description,
   className = '',
+  size = 'md',
+  interactive = false,
+  onClick,
 }: GlassStatCardProps) {
-  if (loading) return <StatCardSkeleton className={className} />;
+  if (loading) return <StatCardSkeleton className={className} size={size} />;
 
-  const accentStyle = ACCENT_STYLES[accent];
+  const accentCfg = ACCENTS[accent];
+  const sz = SIZES[size];
+  const trendCfg = trend ? TREND[trend.direction] : null;
+
+  const content = (
+    <span className={cn('relative z-[1] flex flex-col', sz.gap)}>
+      <span className="flex items-start justify-between gap-2">
+        <span className={cn('font-medium leading-tight text-secondary', sz.label)}>
+          {label}
+        </span>
+        {icon && (
+          <span
+            aria-hidden="true"
+            className={cn(
+              'flex shrink-0 items-center justify-center rounded-xl [&>svg]:h-4 [&>svg]:w-4',
+              sz.icon,
+            )}
+            style={{ color: accentCfg.color, background: accentCfg.bg }}
+          >
+            {icon}
+          </span>
+        )}
+      </span>
+
+      <span className="flex items-end justify-between gap-3">
+        <span className={cn('font-semibold leading-none tracking-tight tabular-nums text-primary', sz.value)}>
+          {value}
+        </span>
+        {sparkline && sparkline.length >= 2 && (
+          <Sparkline values={sparkline} color={accentCfg.color} />
+        )}
+      </span>
+
+      {trend && trendCfg ? (
+        <span
+          className="inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+          style={{ color: trendCfg.fg, background: trendCfg.bg }}
+        >
+          <svg
+            className="h-3 w-3"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d={trendCfg.path} />
+          </svg>
+          <span>{trend.value}</span>
+          {trend.label && <span className="font-normal text-tertiary">{trend.label}</span>}
+        </span>
+      ) : description ? (
+        <span className="text-xs text-tertiary">{description}</span>
+      ) : null}
+    </span>
+  );
+
+  const base = cn(
+    'relative overflow-hidden bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-card shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] text-left transition-all duration-200',
+    sz.pad,
+    interactive &&
+      'cursor-pointer hover:shadow-card-hover hover:border-black/[0.1] dark:hover:border-white/[0.15] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.985] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-focus)]',
+    className,
+  );
+
+  if (interactive) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        data-component="glass-stat-card"
+        data-accent={accent}
+        data-size={size}
+        className={cn(base, 'block w-full')}
+      >
+        {content}
+      </button>
+    );
+  }
 
   return (
     <div
-      className={[
-        'relative overflow-hidden',
-        'bg-[var(--bg-card)]',
-        'backdrop-blur-[16px] [-webkit-backdrop-filter:blur(16px)_saturate(1.5)]',
-        'border border-[var(--border)]',
-        'rounded-[var(--radius-xl)]',
-        'p-5 shadow-[var(--shadow-md)]',
-        'transition-[background-color,box-shadow,border-color,transform]',
-        'duration-[var(--duration-normal)] [transition-timing-function:var(--ease-standard)]',
-        'hover:bg-[var(--bg-card-hover)]',
-        'hover:shadow-[var(--shadow-lg)]',
-        className,
-      ].join(' ')}
+      data-component="glass-stat-card"
+      data-accent={accent}
+      data-size={size}
+      className={base}
     >
-      {/* Reflection */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[inherit] z-0"
-        style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%)' }}
-      />
-
-      <div className="relative z-10 flex flex-col gap-3">
-        {/* Header row: label + icon */}
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-[var(--text-label)] font-medium text-[var(--text-secondary)] leading-tight">
-            {label}
-          </p>
-          {icon && (
-            <span
-              className={[
-                'flex-shrink-0 inline-flex items-center justify-center',
-                'w-9 h-9 rounded-[var(--radius-md)]',
-                '[&>svg]:w-4 [&>svg]:h-4',
-                accentStyle.icon,
-              ].join(' ')}
-            >
-              {icon}
-            </span>
-          )}
-        </div>
-
-        {/* Value + sparkline */}
-        <div className="flex items-end justify-between gap-3">
-          <p
-            className={[
-              'text-numeric-lg text-[var(--text-primary)]',
-              'font-[700] leading-none tracking-[-0.025em]',
-              'font-variant-numeric: tabular-nums',
-            ].join(' ')}
-            style={{ fontVariantNumeric: 'tabular-nums', fontFeatureSettings: "'tnum'" }}
-          >
-            {value}
-          </p>
-          {sparkline && sparkline.length >= 2 && (
-            <Sparkline values={sparkline} color={`var(--_${accent === 'indigo' ? 'brand-500' : accent === 'emerald' ? 'green-500' : accent === 'amber' ? 'amber-500' : accent === 'rose' ? 'red-500' : 'brand-500'})`} />
-          )}
-        </div>
-
-        {/* Trend or description */}
-        {trend && (
-          <p className={['text-[var(--text-caption)] flex items-center gap-1 font-medium', TREND_CLASSES[trend.direction]].join(' ')}>
-            <span aria-hidden>{TREND_ICONS[trend.direction]}</span>
-            <span>{trend.value}</span>
-            {trend.label && <span className="text-[var(--text-tertiary)] font-normal">{trend.label}</span>}
-          </p>
-        )}
-        {!trend && description && (
-          <p className="text-[var(--text-caption)] text-[var(--text-tertiary)]">{description}</p>
-        )}
-      </div>
+      {content}
     </div>
   );
 }

@@ -40,6 +40,8 @@ import type { Student, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
 import { queryKeys } from '@/lib/query-keys.factory';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -393,10 +395,7 @@ function StatTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
       <span
         aria-hidden
@@ -809,6 +808,66 @@ export function StudentDetailPage() {
 
   const studentName = fullName(studentData?.user?.firstName, studentData?.user?.lastName);
 
+  const { playTick, playPop } = usePremiumSound();
+
+  const handleOpenStudentSidecar = useCallback(() => {
+    if (!studentData) return;
+    playPop();
+    const sidecarData: QuickLookData = {
+      type: 'student',
+      id: studentData.id,
+      title: studentName,
+      subtitle: studentData.user?.email || studentData.user?.phone || 'Talaba profili',
+      status: {
+        label: studentData.user?.isActive ? 'Faol' : 'Nofaol',
+        tone: studentData.user?.isActive ? 'green' : 'amber',
+      },
+      metrics: [
+        { label: 'Davomat', value: `${stats.attendanceRate}%` },
+        { label: 'Guruhlar', value: String(stats.activeGroupsCount) },
+        { label: 'To\'lovlar', value: formatCurrency(stats.totalPaid) },
+        { label: 'Face ID', value: stats.faceEnrolled > 0 ? 'Faol' : 'Yo\'q' },
+      ],
+      details: [
+        { label: 'Talaba ID', value: studentData.id, copyable: true },
+        { label: 'F.I.SH.', value: studentName },
+        { label: 'Elektron pochta', value: studentData.user?.email || '—', copyable: Boolean(studentData.user?.email) },
+        { label: 'Telefon', value: studentData.user?.phone || '—', copyable: Boolean(studentData.user?.phone) },
+        { label: 'Tug\'ilgan sana', value: formatDate(studentData.dateOfBirth) },
+        { label: 'Jinsi', value: studentData.gender || '—' },
+        { label: 'Manzil', value: studentData.address || '—' },
+        { label: 'Guruhlar soni', value: String(stats.activeGroupsCount) },
+        { label: 'Jami to\'langan', value: formatCurrency(stats.totalPaid) },
+        { label: 'Davomat ko\'rsatkichi', value: `${stats.attendanceRate}%` },
+        { label: 'Face ID holati', value: stats.faceEnrolled > 0 ? 'Biometrik yozuv mavjud' : 'Ro\'yxatdan o\'tmagan' },
+        { label: 'Biriktirilgan ota-onalar', value: linkedParents.length > 0 ? `${linkedParents.length} ta hisob` : 'Mavjud emas' },
+      ],
+    };
+    openSidecar(sidecarData);
+  }, [studentData, playPop, studentName, stats, linkedParents]);
+
+  // Keyboard navigation shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === 's') {
+        playTick();
+        handleOpenStudentSidecar();
+      } else if (e.key === 'e') {
+        playTick();
+        handleEdit();
+      } else if (e.key === 'a') {
+        playTick();
+        handleOpenAssign();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleEdit, handleOpenAssign, handleOpenStudentSidecar, playTick]);
+
   const handleAiAnalyze = useCallback(() => {
     window.dispatchEvent(
       new CustomEvent('open-ai-copilot', {
@@ -902,6 +961,19 @@ export function StudentDetailPage() {
             </div>
 
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={handleOpenStudentSidecar}
+                  className="!border-blue-500/30 hover:!border-blue-500/50"
+                >
+                  <span className="inline-flex items-center gap-2 text-brand-600 dark:text-brand-400 font-medium">
+                    <span>◨</span>
+                    <span>Sidecar [S]</span>
+                  </span>
+                </GlassButton>
+              </motion.div>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                 <GlassButton
                   type="button"
@@ -1927,7 +1999,11 @@ export function StudentDetailPage() {
       <ConfirmDialog
         open={unlinkParentTarget !== null}
         onClose={() => setUnlinkParentTarget(null)}
-        onConfirm={() => unlinkParentTarget && unlinkParentMutation.mutate(unlinkParentTarget.id)}
+        onConfirm={() => {
+          if (unlinkParentTarget) {
+            unlinkParentMutation.mutate(unlinkParentTarget.id);
+          }
+        }}
         title={t('student.parents.unlinkTitle')}
         description={`Are you sure you want to unlink ${unlinkParentTarget?.name || 'this parent'} from this student? The parent account will remain in the system, but will no longer have access to this student.`}
         confirmLabel={t('student.parents.unlinkAction')}

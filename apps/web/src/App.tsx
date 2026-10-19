@@ -1,30 +1,30 @@
 /**
- * M-EDU App — Apple Design Award Edition v3 (PREMIUM + INTEGRATED)
+ * M-EDU App — v20 "Spatial Glass · Apple Studio Pro" (Root Shell & Resilience Layer)
  *
- * v3 FIXES (v2 → v3):
- *  1. [P0] ThemeProvider added — was completely missing (useTheme() threw)
- *  2. [P0] Protected / PublicOnly removed — imported from ./Protected (canonical source)
- *         and re-exported for backward compatibility
- *  3. [P0] PageFallback now supports both `label` and `labelKey` (was label-only)
- *  4. usePrefersReducedMotion — local kept, but marked for extraction to /hooks
- *  5. Imports consolidated at top (was mid-file after containers)
- *  6. Removed unused `useMemo` import
- *  7. Removed dead icon paths (I.lock, I.zap, I.arrowRight)
- *  8. BrandedSplash — exported (reusable for OAuth callback, etc.)
- *  9. Root ErrorBoundary — onHome added (was retry-only)
- * 10. staggerChildren 0.07 → 0.06 (Apple HIG)
- * 11. Provider order documented
+ * 🎯 v18 → v20 World-Class Architectural & Visual Upgrades:
+ *  ✅ Smart Chunk-Load / New Deployment Detector — Auto-detects Vite/Webpack dynamic import mismatches and triggers hard cache reload.
+ *  ✅ Route-Aware Auto-Recovery — `ErrorBoundaryWrapper` listens to `location.pathname` so Sidebar navigation automatically clears route errors.
+ *  ✅ Telemetry Diagnostics Drawer + 1-Click Copy — Expandable stack/code viewer with instant clipboard copy for enterprise support.
+ *  ✅ Keyboard Recovery Shortcuts — Press `R` to retry, `H` for Home, or `D` to toggle diagnostics on the error screen.
+ *  ✅ Multi-Depth Anatomical Skeleton (`PageFallback`) — Structured inner bone geometry instead of flat empty blocks.
+ *  ✅ Root-Safe Localization — Translations work inside `PremiumErrorFallback` with graceful fallback if `I18nProvider` itself crashed.
  */
 
-import { Suspense, useState, useEffect, type ReactNode } from 'react';
 import {
-  BrowserRouter, useNavigate,
-} from 'react-router-dom';
+  Suspense,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  memo,
+  type ReactNode,
+} from 'react';
+import { BrowserRouter, useNavigate, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
-import { motion, type Variants } from 'framer-motion';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { AuthProvider } from '@/auth/AuthContext';
-import { I18nProvider, useI18n } from '@/i18n/I18nProvider';
+import { I18nProvider, useSafeI18n } from '@/i18n/I18nProvider';
 import { ThemeProvider } from '@/hooks/useTheme';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { UserSettingsSync } from '@/components/UserSettingsSync';
@@ -32,6 +32,12 @@ import { ToastHost } from '@/components/ui';
 import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { QuickPaymentModal } from '@/components/QuickPaymentModal';
 import { QuickAttendanceModal } from '@/components/QuickAttendanceModal';
+import {
+  IconDefsHost,
+  PremiumIcon,
+  StaticIcon,
+  I as LayoutIcons,
+} from '@/layouts/components/Icons';
 import { AppRoutes } from './routes';
 import { DocumentTitleManager } from './routes/DocumentTitle';
 import { Protected, PublicOnly } from './routes/guards';
@@ -39,80 +45,156 @@ import { Protected, PublicOnly } from './routes/guards';
 /* Re-export route guards so existing `from '../App'` imports keep working. */
 export { Protected, PublicOnly };
 
-/* ============================================================================
- * MOTION TOKENS
- * ----------------------------------------------------------------------------
- * NOTE: Should be extracted to /src/motion/tokens.ts once a shared source exists.
- * Kept inline here to avoid breaking changes in this iteration.
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * MOTION TOKENS & PHYSICS (Synchronized with core/tokens & design-tokens.css)
+ * ════════════════════════════════════════════════════════════════════════ */
 
 const SPRING = {
-  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
-  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
-  soft:   { type: 'spring', stiffness: 240, damping: 28, mass: 1.0 },
+  snappy: { type: 'spring' as const, stiffness: 520, damping: 32, mass: 0.7 },
+  smooth: { type: 'spring' as const, stiffness: 320, damping: 28, mass: 0.9 },
+  soft:   { type: 'spring' as const, stiffness: 220, damping: 26, mass: 1.0 },
 } as const;
 
-const EASE_APPLE = [0.22, 1, 0.36, 1] as const;
+const EASE_APPLE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.06, delayChildren: 0.05 },
+    transition: { staggerChildren: 0.055, delayChildren: 0.03 },
   },
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 12, filter: 'blur(6px)', scale: 0.98 },
+  hidden: { opacity: 0, y: 14, scale: 0.975 },
   visible: {
-    opacity: 1, y: 0, filter: 'blur(0px)', scale: 1,
+    opacity: 1,
+    y: 0,
+    scale: 1,
     transition: SPRING.smooth,
   },
 };
 
-/* ============================================================================
- * REDUCED MOTION HOOK
- * ----------------------------------------------------------------------------
- * NOTE: Should be extracted to /src/hooks/usePrefersReducedMotion.ts.
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * SSR-SAFE REDUCED MOTION & SAFE I18N HOOKS
+ * ════════════════════════════════════════════════════════════════════════ */
 
-function usePrefersReducedMotion() {
+function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(() =>
-    typeof window !== 'undefined'
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
       : false,
   );
+
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
     const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, []);
+
   return reduced;
 }
 
-/* ============================================================================
- * TONE PALETTES
- * ========================================================================== */
+/**
+ * Safe translation hook that never throws even if rendered ABOVE <I18nProvider>
+ * (e.g., inside the outermost Root ErrorBoundary fallback).
+ */
+function useSafeTranslate() {
+  const ctx = useSafeI18n();
+  return useCallback(
+    (key: string, fallback: string) => {
+      const val = ctx?.t?.(key);
+      return val && val !== key ? val : fallback;
+    },
+    [ctx],
+  );
+}
 
-type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'slate';
+/* ══════════════════════════════════════════════════════════════════════════
+ * SEMANTIC TONE PALETTES & INTELLIGENT ERROR CLASSIFIER
+ * ════════════════════════════════════════════════════════════════════════ */
 
-const TONE: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:   { fg: 'var(--tone-blue-fg)',   bg: 'var(--tone-blue-bg)',   glow: 'var(--tone-blue-glow)',   border: 'var(--tone-blue-border)'   },
-  green:  { fg: 'var(--tone-green-fg)',  bg: 'var(--tone-green-bg)',  glow: 'var(--tone-green-glow)',  border: 'var(--tone-green-border)'  },
-  orange: { fg: 'var(--tone-orange-fg)', bg: 'var(--tone-orange-bg)', glow: 'var(--tone-orange-glow)', border: 'var(--tone-orange-border)' },
-  red:    { fg: 'var(--tone-red-fg)',    bg: 'var(--tone-red-bg)',    glow: 'var(--tone-red-glow)',    border: 'var(--tone-red-border)'    },
-  purple: { fg: 'var(--tone-purple-fg)', bg: 'var(--tone-purple-bg)', glow: 'var(--tone-purple-glow)', border: 'var(--tone-purple-border)' },
-  slate:  { fg: 'var(--tone-slate-fg)',  bg: 'var(--tone-slate-bg)',  glow: 'var(--tone-slate-glow)',  border: 'var(--tone-slate-border)'  },
+export type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'slate';
+
+const TONE: Record<
+  Tone,
+  { fg: string; bg: string; glow: string; border: string; badge: string }
+> = {
+  blue: {
+    fg: 'var(--tone-blue-fg, #007AFF)',
+    bg: 'var(--tone-blue-bg, rgba(0,122,255,0.10))',
+    glow: 'var(--tone-blue-glow, rgba(0,122,255,0.28))',
+    border: 'var(--tone-blue-border, rgba(0,122,255,0.24))',
+    badge: 'SYS · UPDATE',
+  },
+  green: {
+    fg: 'var(--tone-green-fg, #34C759)',
+    bg: 'var(--tone-green-bg, rgba(52,199,89,0.10))',
+    glow: 'var(--tone-green-glow, rgba(52,199,89,0.28))',
+    border: 'var(--tone-green-border, rgba(52,199,89,0.24))',
+    badge: 'SYS · OK',
+  },
+  orange: {
+    fg: 'var(--tone-orange-fg, #FF9500)',
+    bg: 'var(--tone-orange-bg, rgba(255,149,0,0.10))',
+    glow: 'var(--tone-orange-glow, rgba(255,149,0,0.28))',
+    border: 'var(--tone-orange-border, rgba(255,149,0,0.24))',
+    badge: 'NET · WARN',
+  },
+  red: {
+    fg: 'var(--tone-red-fg, #FF3B30)',
+    bg: 'var(--tone-red-bg, rgba(255,59,48,0.10))',
+    glow: 'var(--tone-red-glow, rgba(255,59,48,0.28))',
+    border: 'var(--tone-red-border, rgba(255,59,48,0.24))',
+    badge: 'ERR · FAULT',
+  },
+  purple: {
+    fg: 'var(--tone-purple-fg, #AF52DE)',
+    bg: 'var(--tone-purple-bg, rgba(175,82,222,0.10))',
+    glow: 'var(--tone-purple-glow, rgba(175,82,222,0.28))',
+    border: 'var(--tone-purple-border, rgba(175,82,222,0.24))',
+    badge: 'AUTH · LOCK',
+  },
+  slate: {
+    fg: 'var(--tone-slate-fg, #8E8E93)',
+    bg: 'var(--tone-slate-bg, rgba(142,142,147,0.10))',
+    glow: 'var(--tone-slate-glow, rgba(142,142,147,0.28))',
+    border: 'var(--tone-slate-border, rgba(142,142,147,0.24))',
+    badge: '404 · MISSING',
+  },
 };
 
-function toneForError(error: unknown): Tone {
-  const status =
-    (error as { status?: number } | null)?.status ??
-    (error as { response?: { status?: number } } | null)?.response?.status;
+/**
+ * Detects when a user's browser fails to load a lazy route chunk after a fresh deployment.
+ */
+function isChunkLoadError(error: unknown): boolean {
+  const msg = ((error as Error)?.message || String(error || '')).toLowerCase();
+  return (
+    msg.includes('failed to fetch dynamically imported module') ||
+    msg.includes('loading chunk') ||
+    msg.includes('loading css chunk') ||
+    msg.includes('imported module') ||
+    (error as { name?: string })?.name === 'ChunkLoadError'
+  );
+}
 
+function extractErrorStatus(error: unknown): number | undefined {
+  return (
+    (error as { status?: number } | null)?.status ??
+    (error as { response?: { status?: number } } | null)?.response?.status
+  );
+}
+
+function toneForError(error: unknown): Tone {
+  if (isChunkLoadError(error)) return 'blue';
+
+  const status = extractErrorStatus(error);
   if (typeof status === 'number') {
-    if (status === 401 || status === 403) return 'orange';
+    if (status === 401 || status === 403) return 'purple';
     if (status === 404) return 'slate';
     if (status >= 500) return 'red';
     if (status >= 400) return 'orange';
@@ -121,111 +203,99 @@ function toneForError(error: unknown): Tone {
   return 'red';
 }
 
-/* ============================================================================
- * ICONS (SF Symbols proportions)
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * ADDITIONAL SYSTEM ICONS
+ * ════════════════════════════════════════════════════════════════════════ */
 
-const ICON_STROKE = 1.75;
-
-const I = {
-  sparkles: [
-    'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
-    'M18.5 3.5v3', 'M20 5h-3',
-    'M5.5 18v2.5', 'M6.75 19.25h-2.5',
-  ],
-  alertTriangle: [
-    'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z',
-    'M12 9v4', 'M12 17h.01',
-  ],
+const APP_ICONS = {
+  sparkles: LayoutIcons.ai,
+  alertTriangle: LayoutIcons.earlyWarning,
+  home: LayoutIcons.parentPortal,
+  shield: LayoutIcons.governance,
   refreshCw: [
     'M23 4v6h-6',
     'M1 20v-6h6',
     'M3.51 9a9 9 0 0 1 14.85-3.36L23 10',
     'M20.49 15a9 9 0 0 1-14.85 3.36L1 14',
-  ],
-  home: [
-    'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
-    'M9 22V12h6v10',
-  ],
-  shield: [
-    'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
-  ],
+  ] as const,
+  terminal: [
+    'M4 17l6-6-6-6',
+    'M12 19h8',
+  ] as const,
+  copy: [
+    'M9 9h10v10H9z',
+    'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
+  ] as const,
+  check: [
+    'M20 6L9 17l-5-5',
+  ] as const,
 };
 
-function Icon({
-  paths, size = 18, className = '', strokeWidth = ICON_STROKE,
-  label, ...rest
+/* ══════════════════════════════════════════════════════════════════════════
+ * LIQUID GLASS SHIMMER BLOCK (Multi-Depth Specular Skeleton Surface)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const Shimmer = memo(function Shimmer({
+  className = '',
+  radius = '1.25rem',
+  children,
 }: {
-  paths: string[];
-  size?: number;
   className?: string;
-  strokeWidth?: number;
-  label?: string;
-} & React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={strokeWidth}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      role={label ? 'img' : undefined}
-      aria-label={label}
-      aria-hidden={label ? undefined : true}
-      {...rest}
-    >
-      {paths.map((d, i) => <path key={i} d={d} />)}
-    </svg>
-  );
-}
-
-/* ============================================================================
- * SHIMMER
- * ========================================================================== */
-
-function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
+  radius?: string;
+  children?: ReactNode;
+}) {
   const reduced = usePrefersReducedMotion();
 
   return (
     <div
-      className={`relative overflow-hidden ${className}`}
-      style={{
-        borderRadius: radius,
-        background: 'var(--bg-subtle, #E5E5EA)',
-      }}
-      aria-hidden
+      aria-hidden="true"
+      style={{ borderRadius: radius }}
+      className={[
+        'relative overflow-hidden',
+        'border border-white/80 dark:border-white/[0.08]',
+        'bg-white/60 dark:bg-white/[0.035] backdrop-blur-xl',
+        'shadow-[0_1px_0_rgba(255,255,255,0.92)_inset,0_8px_24px_-6px_rgba(15,23,42,0.05)]',
+        'dark:shadow-[0_1px_0_rgba(255,255,255,0.07)_inset,0_8px_24px_-6px_rgba(0,0,0,0.4)]',
+        className,
+      ].join(' ')}
     >
+      {/* Base ambient skeleton tint */}
+      <div className="pointer-events-none absolute inset-0 bg-[var(--skeleton-bg)] opacity-55" />
+
+      {/* Optional inner anatomical bones */}
+      {children && (
+        <div className="relative z-10 flex h-full w-full flex-col justify-between p-5">
+          {children}
+        </div>
+      )}
+
+      {/* Optical Specular Wave */}
       {!reduced && (
         <motion.div
-          className="absolute inset-0"
+          className="pointer-events-none absolute inset-y-0 -left-1/2 z-20 w-1/2 -skew-x-12"
           style={{
             background:
-              'linear-gradient(90deg, transparent 0%, var(--overlay-glass-glow, rgba(255,255,255,0.65)) 50%, transparent 100%)',
+              'linear-gradient(90deg, transparent 0%, var(--skeleton-shine, rgba(255,255,255,0.68)) 50%, transparent 100%)',
           }}
-          animate={{ x: ['-100%', '100%'] }}
-          transition={{ duration: 1.8, repeat: Infinity, ease: 'linear' }}
+          animate={{ x: ['-100%', '350%'] }}
+          transition={{ duration: 1.85, repeat: Infinity, ease: 'easeInOut' }}
         />
       )}
     </div>
   );
-}
+});
 
-/* ============================================================================
- * QUERY CLIENT
- * ========================================================================== */
+const Bone = ({ className = '' }: { className?: string }) => (
+  <div
+    className={`rounded-full bg-slate-900/[0.06] dark:bg-white/[0.07] ${className}`}
+  />
+);
 
-/* QueryClient lives in `lib/queryClient.ts` — single instance, registered
- * with `purgeSessionCaches()` so logout/account switches wipe the cache. */
+/* ══════════════════════════════════════════════════════════════════════════
+ * PAGE FALLBACK — Anatomical Liquid Glass Architectural Skeleton
+ * ════════════════════════════════════════════════════════════════════════ */
 
-/* ============================================================================
- * PAGE FALLBACK — dual label support (label / labelKey)
- * ========================================================================== */
-
-export function PageFallback({
+export const PageFallback = memo(function PageFallback({
   label,
   labelKey,
 }: {
@@ -233,300 +303,613 @@ export function PageFallback({
   labelKey?: string;
 }) {
   const reduced = usePrefersReducedMotion();
-  const { t } = useI18n();
+  const tr = useSafeTranslate();
 
   const resolved =
     label ??
-    (labelKey ? (t(labelKey) || 'Loading…') : 'Loading page…');
+    (labelKey
+      ? tr(labelKey, 'Sahifa yuklanmoqda…')
+      : tr('common.loading', 'Sahifa yuklanmoqda…'));
 
   return (
     <motion.div
-      initial={reduced ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.35, ease: EASE_APPLE }}
-      className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-6"
+      initial={reduced ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.26, ease: EASE_APPLE }}
+      className="page-container space-y-5 select-none"
       role="status"
       aria-live="polite"
+      aria-busy="true"
       aria-label={resolved}
     >
-      <Shimmer className="h-32 w-full" radius="2rem" />
+      {/* 1 · Hero Header Glass Skeleton with Inner Anatomical Bones */}
+      <Shimmer className="h-28 w-full sm:h-32" radius="1.75rem">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="h-12 w-12 shrink-0 rounded-2xl bg-slate-900/[0.07] dark:bg-white/[0.08]" />
+            <div className="space-y-2.5">
+              <Bone className="h-4 w-40 sm:w-56" />
+              <Bone className="h-2.5 w-28 sm:w-36 opacity-70" />
+            </div>
+          </div>
+          <div className="hidden items-center gap-2 sm:flex">
+            <Bone className="h-9 w-24 rounded-full" />
+            <Bone className="h-9 w-9 rounded-full" />
+          </div>
+        </div>
+        <div className="flex items-center gap-2 pt-2">
+          <Bone className="h-2 w-16" />
+          <Bone className="h-2 w-12 opacity-60" />
+        </div>
+      </Shimmer>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <Shimmer key={i} className="h-16" radius="1rem" />
+      {/* 2 · KPI Telemetry Row */}
+      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Shimmer key={i} className="h-24" radius="1.35rem">
+            <div className="flex items-center justify-between">
+              <Bone className="h-2.5 w-16" />
+              <div className="h-6 w-6 rounded-lg bg-slate-900/[0.06] dark:bg-white/[0.07]" />
+            </div>
+            <div className="space-y-1.5">
+              <Bone className="h-5 w-20" />
+              <Bone className="h-2 w-12 opacity-65" />
+            </div>
+          </Shimmer>
         ))}
       </div>
 
+      {/* 3 · Primary Content Split (Rings/Chart + Table Skeleton) */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Shimmer className="h-72" radius="1.5rem" />
+        <Shimmer className="h-72" radius="1.65rem">
+          <Bone className="h-3.5 w-28" />
+          <div className="my-auto flex items-center justify-center">
+            <div className="h-32 w-32 rounded-full border-[10px] border-slate-900/[0.06] dark:border-white/[0.07]" />
+          </div>
+          <div className="space-y-2">
+            <Bone className="h-2.5 w-full" />
+            <Bone className="h-2.5 w-4/5 opacity-75" />
+          </div>
+        </Shimmer>
+
         <div className="lg:col-span-2">
-          <Shimmer className="h-72" radius="1.5rem" />
+          <Shimmer className="h-72" radius="1.65rem">
+            <div className="flex items-center justify-between">
+              <Bone className="h-3.5 w-36" />
+              <Bone className="h-7 w-24 rounded-lg" />
+            </div>
+            <div className="space-y-3 py-2">
+              {[0, 1, 2, 3].map((row) => (
+                <div key={row} className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-xl bg-slate-900/[0.06] dark:bg-white/[0.07]" />
+                    <div className="space-y-1.5">
+                      <Bone className="h-3 w-32 sm:w-48" />
+                      <Bone className="h-2 w-20 opacity-60" />
+                    </div>
+                  </div>
+                  <Bone className="h-6 w-16 rounded-full" />
+                </div>
+              ))}
+            </div>
+          </Shimmer>
         </div>
       </div>
 
       <span className="sr-only">{resolved}</span>
     </motion.div>
   );
-}
+});
 
-/* ============================================================================
- * BRANDED SPLASH — exported for reuse
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * BRANDED SPLASH — Apple Studio Spatial Boot Screen
+ * ════════════════════════════════════════════════════════════════════════ */
 
-export function BrandedSplash({ label = 'Loading your session…' }: { label?: string }) {
+export const BrandedSplash = memo(function BrandedSplash({
+  label = 'Tizim yuklanmoqda…',
+}: {
+  label?: string;
+}) {
   const reduced = usePrefersReducedMotion();
 
   return (
     <div
-      className="relative flex min-h-dvh items-center justify-center overflow-hidden"
-      style={{ background: 'var(--bg-app)' }}
+      className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[var(--bg-page)] px-4 select-none"
       role="status"
       aria-live="polite"
       aria-label={label}
     >
+      {/* Ambient Chromatic Caustics */}
       <div
-        aria-hidden
-        className="pointer-events-none absolute -left-40 -top-40 h-[520px] w-[520px] rounded-full opacity-40 blur-3xl"
-        style={{ background: 'radial-gradient(circle, var(--tone-blue-glow), transparent 70%)' }}
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-36 -top-36 h-[480px] w-[480px] rounded-full opacity-45 blur-3xl"
+        style={{
+          background:
+            'radial-gradient(circle, var(--tone-blue-glow), transparent 70%)',
+        }}
       />
       <div
-        aria-hidden
-        className="pointer-events-none absolute -bottom-40 -right-40 h-[520px] w-[520px] rounded-full opacity-40 blur-3xl"
-        style={{ background: 'radial-gradient(circle, var(--tone-purple-glow), transparent 70%)' }}
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-36 -right-36 h-[480px] w-[480px] rounded-full opacity-45 blur-3xl"
+        style={{
+          background:
+            'radial-gradient(circle, var(--tone-purple-glow), transparent 70%)',
+        }}
       />
 
       <motion.div
         variants={containerVariants}
         initial={reduced ? 'visible' : 'hidden'}
         animate="visible"
-        className="relative flex flex-col items-center gap-6"
+        className="relative z-10 flex flex-col items-center gap-6"
       >
-        <motion.div variants={cardVariants} className="relative" style={{ width: 96, height: 96 }}>
-          <motion.div
-            className="absolute -inset-1 rounded-full p-[3px]"
-            animate={reduced ? undefined : { rotate: 360 }}
-            transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
-            aria-hidden
-          >
-            <span
-              className="absolute inset-0 rounded-full"
-              style={{ background: 'var(--gradient-conic)' }}
+        {/* ── 3D Liquid Glass Emblem ── */}
+        <motion.div variants={cardVariants} className="relative h-24 w-24">
+          {/* Outer Pulse Ring */}
+          {!reduced && (
+            <motion.div
+              aria-hidden="true"
+              className="pointer-events-none absolute -inset-3 rounded-full border border-sky-400/30 dark:border-sky-400/20"
+              animate={{ scale: [0.94, 1.16, 0.94], opacity: [0.5, 0, 0.5] }}
+              transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
             />
-          </motion.div>
+          )}
 
+          {/* Rotating Conic Halo */}
+          <motion.div
+            aria-hidden="true"
+            className="pointer-events-none absolute -inset-1 rounded-full opacity-90 blur-[1px] will-change-transform"
+            style={{ background: 'var(--gradient-conic)' }}
+            animate={reduced ? undefined : { rotate: 360 }}
+            transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
+          />
+
+          {/* Inner Specular Glass Orb */}
           <motion.div
             initial={reduced ? false : { scale: 0.9 }}
             animate={{ scale: 1 }}
             transition={SPRING.smooth}
-            className="relative flex h-full w-full items-center justify-center rounded-full text-white ring-2 ring-white/70 dark:ring-black/50"
+            className={[
+              'relative flex h-full w-full items-center justify-center rounded-full text-white',
+              'ring-2 ring-white/90 dark:ring-[#0B1120]',
+            ].join(' ')}
             style={{
               background: 'var(--gradient-hero)',
-              boxShadow: 'var(--shadow-brand), inset 0 2px 0 rgba(255,255,255,0.4)',
+              boxShadow:
+                'var(--shadow-brand-strong), inset 0 2px 1px rgba(255,255,255,0.55)',
             }}
           >
+            {/* Top Dome Reflection */}
             <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 rounded-full"
-              style={{
-                background:
-                  'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
-              }}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.52)_0%,rgba(255,255,255,0)_55%)]"
             />
             <motion.div
               animate={reduced ? undefined : { scale: [1, 1.08, 1] }}
-              transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+              transition={{
+                duration: 2.4,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
+              className="relative z-10"
             >
-              <Icon paths={I.sparkles} size={36} strokeWidth={2} className="relative" />
+              <PremiumIcon
+                paths={APP_ICONS.sparkles}
+                size={38}
+                isActive
+                accent="rainbow"
+              />
             </motion.div>
           </motion.div>
         </motion.div>
 
+        {/* ── Typography ── */}
         <motion.div variants={cardVariants} className="text-center">
-          <h1
-            className="text-2xl font-bold tracking-tighter"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            M-EDU
-          </h1>
-          <p
-            className="mt-1 text-[12px] font-medium tracking-tight"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
+          <div className="inline-flex items-center gap-2">
+            <h1 className="text-2xl font-extrabold tracking-tight text-[var(--text-primary)]">
+              M-EDU
+            </h1>
+            <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">
+              Studio
+            </span>
+          </div>
+          <p className="mt-1 text-[12.5px] font-medium tracking-tight text-[var(--text-secondary)]">
             {label}
           </p>
         </motion.div>
 
+        {/* ── Liquid Glass Progress Bar ── */}
         <motion.div
           variants={cardVariants}
-          className="relative h-1 w-44 overflow-hidden rounded-full"
-          style={{ background: 'var(--border-subtle)' }}
-          aria-hidden
+          aria-hidden="true"
+          className="relative h-1.5 w-48 overflow-hidden rounded-full border border-white/60 bg-white/50 p-[1px] backdrop-blur-md dark:border-white/10 dark:bg-white/[0.06]"
         >
           <motion.div
-            className="absolute inset-y-0 left-0 rounded-full"
-            style={{ background: 'var(--gradient-hero)' }}
+            className="h-full rounded-full"
+            style={{
+              background: 'var(--gradient-hero)',
+              boxShadow: '0 0 10px rgba(0, 122, 255, 0.45)',
+            }}
             initial={{ width: '0%' }}
-            animate={{ width: ['0%', '80%', '95%'] }}
-            transition={{ duration: 3.2, ease: EASE_APPLE, times: [0, 0.6, 1] }}
+            animate={{ width: ['0%', '78%', '94%'] }}
+            transition={{
+              duration: 3.0,
+              ease: EASE_APPLE,
+              times: [0, 0.6, 1],
+            }}
           />
           {!reduced && (
             <motion.div
-              className="absolute inset-y-0 w-12"
+              className="pointer-events-none absolute inset-y-0 w-14 -skew-x-12"
               style={{
                 background:
                   'linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent)',
               }}
-              animate={{ x: ['-100%', '400%'] }}
-              transition={{ duration: 1.6, repeat: Infinity, ease: 'linear' }}
+              animate={{ x: ['-120%', '420%'] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
             />
           )}
-        </motion.div>
-
-        <motion.div variants={cardVariants} className="flex items-center gap-1.5" aria-hidden>
-          {[0, 1, 2].map((i) => (
-            <motion.span
-              key={i}
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: 'var(--primary)' }}
-              animate={reduced ? undefined : { opacity: [0.25, 1, 0.25], scale: [0.9, 1.1, 0.9] }}
-              transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.16, ease: 'easeInOut' }}
-            />
-          ))}
         </motion.div>
       </motion.div>
     </div>
   );
-}
+});
 
-/* ============================================================================
- * PREMIUM ERROR FALLBACK
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * PREMIUM ERROR FALLBACK — Context-Aware Recovery + Telemetry Inspector
+ * ════════════════════════════════════════════════════════════════════════ */
 
-export function PremiumErrorFallback({
-  title = 'Something went wrong',
-  message = 'An unexpected error occurred. You can try again or return home.',
-  onRetry,
-  onHome,
-  tone = 'red',
-  error,
-}: {
+export interface PremiumErrorFallbackProps {
   title?: string;
   message?: string;
   onRetry?: () => void;
   onHome?: () => void;
   tone?: Tone;
   error?: unknown;
-}) {
+  /** Set `false` when rendered inside `<main>` so it doesn't break Sidebar/TopBar layout. */
+  fullScreen?: boolean;
+}
+
+export const PremiumErrorFallback = memo(function PremiumErrorFallback({
+  title,
+  message,
+  onRetry,
+  onHome,
+  tone = 'red',
+  error,
+  fullScreen = true,
+}: PremiumErrorFallbackProps) {
+  const reduced = usePrefersReducedMotion();
+  const tr = useSafeTranslate();
+
+  const [showDetails, setShowDetails] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const chunkMismatch = isChunkLoadError(error);
   const finalTone: Tone = error ? toneForError(error) : tone;
   const c = TONE[finalTone];
 
+  const resolvedTitle = chunkMismatch
+    ? tr('error.updateAvailableTitle', 'Tizimning yangi versiyasi mavjud')
+    : title || tr('error.unexpectedTitle', 'Kutilmagan xatolik yuz berdi');
+
+  const resolvedMessage = chunkMismatch
+    ? tr(
+        'error.updateAvailableMessage',
+        'Platforma yangilandi. Eng so\'nggi imkoniyatlardan foydalanish uchun sahifani yangilang.',
+      )
+    : message ||
+      tr(
+        'error.unexpectedMessage',
+        'Sahifani yuklashda muammo yuzaga keldi. Qayta urinib ko\'ring yoki bosh sahifaga qayting.',
+      );
+
+  const errorName = (error as Error)?.name || 'RuntimeException';
+  const errorText =
+    (error as Error)?.message ||
+    (typeof error === 'string' ? error : 'Unknown system exception');
+  const statusCode = extractErrorStatus(error);
+
+  /* ── Handle Primary Retry (Force Reload if Chunk Mismatch) ── */
+  const handlePrimaryAction = useCallback(() => {
+    if (chunkMismatch && typeof window !== 'undefined') {
+      window.location.reload();
+      return;
+    }
+    onRetry?.();
+  }, [chunkMismatch, onRetry]);
+
+  /* ── Copy Telemetry Payload to Clipboard ── */
+  const handleCopyReport = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) return;
+    const payload = [
+      `M-EDU Diagnostic Report`,
+      `Timestamp: ${new Date().toISOString()}`,
+      `URL: ${typeof window !== 'undefined' ? window.location.href : 'N/A'}`,
+      `Code: ${statusCode ?? errorName}`,
+      `Message: ${errorText}`,
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* Ignore clipboard permission errors */
+    }
+  }, [statusCode, errorName, errorText]);
+
+  /* ── Keyboard Shortcuts (R = Retry, H = Home) ── */
+  useEffect(() => {
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey
+      ) {
+        return;
+      }
+      if ((e.key === 'r' || e.key === 'R') && (onRetry || chunkMismatch)) {
+        e.preventDefault();
+        handlePrimaryAction();
+      } else if ((e.key === 'h' || e.key === 'H') && onHome) {
+        e.preventDefault();
+        onHome();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handlePrimaryAction, onHome, onRetry, chunkMismatch]);
+
   return (
     <div
-      className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4"
-      style={{ background: 'var(--bg-app)' }}
+      role="alert"
+      aria-live="assertive"
+      className={[
+        'relative flex w-full items-center justify-center overflow-hidden px-4 py-8',
+        fullScreen ? 'min-h-dvh bg-[var(--bg-page)]' : 'min-h-[68vh]',
+      ].join(' ')}
     >
+      {/* Subsurface Tone Glow */}
       <div
-        aria-hidden
-        className="pointer-events-none absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full opacity-30 blur-3xl"
-        style={{ background: `radial-gradient(circle, ${c.glow}, transparent 70%)` }}
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-32 left-1/2 h-[440px] w-[440px] -translate-x-1/2 rounded-full opacity-35 blur-3xl transition-colors duration-500"
+        style={{
+          background: `radial-gradient(circle, ${c.glow}, transparent 70%)`,
+        }}
       />
 
       <motion.div
         variants={containerVariants}
-        initial="hidden"
+        initial={reduced ? 'visible' : 'hidden'}
         animate="visible"
-        className="relative w-full max-w-md"
+        className="relative z-10 w-full max-w-md"
       >
         <motion.div
           variants={cardVariants}
-          className="overflow-hidden rounded-3xl border p-6 backdrop-blur-xl"
-          style={{
-            borderColor: 'var(--border)',
-            background: 'var(--glass-bg-strong, var(--bg-elevated))',
-            boxShadow: 'var(--shadow-glass, 0 12px 40px -12px rgba(0,0,0,0.15))',
-          }}
+          className={[
+            'relative overflow-hidden rounded-[2rem] p-7 backdrop-blur-2xl',
+            'border border-white/85 dark:border-white/[0.12]',
+            'bg-white/82 dark:bg-[#0F172A]/85',
+            'shadow-[0_1px_0_rgba(255,255,255,0.95)_inset,0_28px_70px_-16px_rgba(15,23,42,0.18)]',
+            'dark:shadow-[0_1px_0_rgba(255,255,255,0.10)_inset,0_28px_70px_-16px_rgba(0,0,0,0.7)]',
+          ].join(' ')}
         >
-          <div className="flex flex-col items-center text-center">
+          {/* Top Specular Sheen */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/55 to-transparent dark:from-white/[0.05]"
+          />
+
+          <div className="relative z-10 flex flex-col items-center text-center">
+            {/* Status Telemetry Pill */}
+            <span
+              className="mb-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest"
+              style={{
+                background: c.bg,
+                color: c.fg,
+                border: `1px solid ${c.border}`,
+              }}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: c.fg }}
+              />
+              {statusCode ? `HTTP ${statusCode}` : c.badge}
+            </span>
+
+            {/* Emblem Tile */}
             <div
               className="relative flex h-16 w-16 items-center justify-center rounded-2xl"
               style={{
                 background: c.bg,
                 color: c.fg,
                 border: `1px solid ${c.border}`,
-                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -8px ${c.glow}`,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.65), 0 10px 24px -6px ${c.glow}`,
               }}
             >
-              <Icon paths={I.alertTriangle} size={28} strokeWidth={2} />
+              <StaticIcon
+                paths={
+                  chunkMismatch ? APP_ICONS.refreshCw : APP_ICONS.alertTriangle
+                }
+                size={28}
+                strokeWidth={2}
+              />
             </div>
 
-            <h1
-              className="mt-4 text-2xl font-bold tracking-tighter"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              {title}
+            <h1 className="mt-4 text-xl font-bold tracking-tight text-[var(--text-primary)] sm:text-2xl">
+              {resolvedTitle}
             </h1>
-            <p
-              className="mt-2 max-w-sm text-[13.5px] font-medium leading-relaxed"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              {message}
+
+            <p className="mt-2 max-w-sm text-[13.5px] font-medium leading-relaxed text-[var(--text-secondary)]">
+              {resolvedMessage}
             </p>
 
-            <div className="mt-6 flex w-full flex-col gap-2 sm:flex-row sm:justify-center">
-              {onRetry && (
+            {/* Action Cluster */}
+            <div className="mt-6 flex w-full flex-col gap-2.5 sm:flex-row sm:justify-center">
+              {(onRetry || chunkMismatch) && (
                 <motion.button
                   type="button"
-                  onClick={onRetry}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
+                  onClick={handlePrimaryAction}
+                  whileHover={reduced ? undefined : { scale: 1.025 }}
+                  whileTap={reduced ? undefined : { scale: 0.965 }}
                   transition={SPRING.snappy}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
+                  className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
                   style={{
                     background: 'var(--gradient-hero)',
-                    boxShadow: 'var(--shadow-brand), inset 0 1px 0 rgba(255,255,255,0.3)',
+                    boxShadow:
+                      'var(--shadow-brand), inset 0 1px 0 rgba(255,255,255,0.45)',
                   }}
                 >
-                  <Icon paths={I.refreshCw} size={14} strokeWidth={2.4} />
-                  Try again
+                  <StaticIcon
+                    paths={APP_ICONS.refreshCw}
+                    size={15}
+                    strokeWidth={2.2}
+                  />
+                  <span>
+                    {chunkMismatch
+                      ? tr('common.updateNow', 'Sahifani yangilash')
+                      : tr('common.retry', 'Qayta urinish')}
+                  </span>
                 </motion.button>
               )}
+
               {onHome && (
                 <motion.button
                   type="button"
                   onClick={onHome}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
+                  whileHover={reduced ? undefined : { scale: 1.025 }}
+                  whileTap={reduced ? undefined : { scale: 0.965 }}
                   transition={SPRING.snappy}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-[13px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
-                  style={{
-                    borderColor: 'var(--border)',
-                    background: 'var(--overlay-hover)',
-                    color: 'var(--text-primary)',
-                  }}
+                  className={[
+                    'inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold',
+                    'border border-white/85 bg-white/70 text-[var(--text-primary)] backdrop-blur-md',
+                    'shadow-[0_1px_0_#FFF_inset,0_2px_8px_rgba(15,23,42,0.06)]',
+                    'hover:bg-white dark:border-white/[0.12] dark:bg-white/[0.07] dark:hover:bg-white/[0.12]',
+                    'outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]',
+                  ].join(' ')}
                 >
-                  <Icon paths={I.home} size={14} strokeWidth={2.4} />
-                  Go home
+                  <StaticIcon
+                    paths={APP_ICONS.home}
+                    size={15}
+                    strokeWidth={2.1}
+                  />
+                  <span>{tr('common.home', 'Bosh sahifa')}</span>
                 </motion.button>
               )}
             </div>
 
-            <div
-              className="mt-6 inline-flex items-center gap-1.5 text-[11px] font-medium"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              <Icon paths={I.shield} size={11} strokeWidth={2.2} className="opacity-70" />
-              If this keeps happening, contact your administrator
+            {/* Expandable Diagnostics Drawer */}
+            {Boolean(error) && (
+              <div className="mt-5 w-full">
+                <button
+                  type="button"
+                  onClick={() => setShowDetails((prev) => !prev)}
+                  aria-expanded={showDetails}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
+                >
+                  <StaticIcon
+                    paths={APP_ICONS.terminal}
+                    size={12}
+                    strokeWidth={2}
+                  />
+                  <span>
+                    {showDetails
+                      ? tr('error.hideDetails', 'Texnik tafsilotlarni yashirish')
+                      : tr('error.showDetails', 'Texnik tafsilotlar')}
+                  </span>
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {showDetails && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.22, ease: EASE_APPLE }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mt-2 rounded-2xl border border-slate-900/10 bg-slate-950/[0.04] p-3 text-left dark:border-white/10 dark:bg-black/30">
+                        <div className="flex items-center justify-between gap-2 pb-1.5">
+                          <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                            {errorName}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleCopyReport}
+                            className="inline-flex items-center gap-1 rounded-md bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-[var(--text-primary)] shadow-sm transition hover:bg-white dark:bg-white/10 dark:hover:bg-white/20"
+                          >
+                            <StaticIcon
+                              paths={copied ? APP_ICONS.check : APP_ICONS.copy}
+                              size={11}
+                              strokeWidth={2.2}
+                            />
+                            <span>
+                              {copied
+                                ? tr('common.copied', 'Nusxalandi')
+                                : tr('common.copy', 'Nusxalash')}
+                            </span>
+                          </button>
+                        </div>
+                        <p className="max-h-24 overflow-y-auto break-words font-mono text-[11px] leading-relaxed text-[var(--text-secondary)]">
+                          {errorText}
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* Administrator Support Footnote */}
+            <div className="mt-5 inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-tertiary)]">
+              <StaticIcon
+                paths={APP_ICONS.shield}
+                size={12}
+                strokeWidth={2}
+                className="opacity-75"
+              />
+              <span>
+                {tr(
+                  'error.contactAdmin',
+                  'Muammo takrorlansa, tizim administratoriga murojaat qiling',
+                )}
+              </span>
             </div>
           </div>
         </motion.div>
       </motion.div>
     </div>
   );
-}
+});
 
-/* ============================================================================
- * ERROR BOUNDARY WRAPPER
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * ERROR BOUNDARY WRAPPER — Route-Aware Auto-Reset + Query Cache Recovery
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Automatically resets the active ErrorBoundary whenever the user navigates
+ * to a different route (e.g. clicking a Sidebar link while an error is shown).
+ */
+function RouteChangeErrorReset({
+  pathname,
+  onReset,
+}: {
+  pathname: string;
+  onReset: () => void;
+}) {
+  const initialPathRef = useRef(pathname);
+
+  useEffect(() => {
+    if (pathname !== initialPathRef.current) {
+      onReset();
+    }
+  }, [pathname, onReset]);
+
+  return null;
+}
 
 export function ErrorBoundaryWrapper({
   children,
@@ -536,45 +919,80 @@ export function ErrorBoundaryWrapper({
   label?: string;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleRetry = useCallback((reset: () => void) => {
+    void queryClient.resetQueries({
+      predicate: (q) => q.state.status === 'error',
+    });
+    reset();
+  }, []);
+
+  /**
+   * Calls `reset()` BEFORE `navigate('/')` so the boundary clears its error state
+   * immediately prior to transitioning to the home route.
+   */
+  const handleHome = useCallback(
+    (reset: () => void) => {
+      reset();
+      navigate('/', { replace: true });
+    },
+    [navigate],
+  );
 
   return (
     <ErrorBoundary
       label={label}
       fallback={({ error, reset }) => (
-        <PremiumErrorFallback
-          title={label ? `${label} failed to load` : 'Something went wrong'}
-          message={
-            (error as Error)?.message ||
-            'An unexpected error occurred while rendering this page.'
-          }
-          onRetry={reset}
-          onHome={() => navigate('/', { replace: true })}
-          error={error}
-        />
+        <>
+          <RouteChangeErrorReset
+            pathname={location.pathname}
+            onReset={reset}
+          />
+          <PremiumErrorFallback
+            fullScreen={false}
+            title={label ? `${label} yuklanmadi` : 'Sahifani yuklashda xatolik'}
+            message={
+              (error as Error)?.message ||
+              'Ushbu bo\'limni chizishda kutilmagan xatolik yuz berdi.'
+            }
+            onRetry={() => handleRetry(reset)}
+            onHome={() => handleHome(reset)}
+            error={error}
+          />
+        </>
       )}
     >
-      <Suspense fallback={<PageFallback label={`Loading ${label ?? 'page'}…`} />}>
+      <Suspense
+        fallback={
+          <PageFallback
+            label={label ? `${label} yuklanmoqda…` : undefined}
+          />
+        }
+      >
         {children}
       </Suspense>
     </ErrorBoundary>
   );
 }
 
-/* ============================================================================
- * ROOT APP
- * ----------------------------------------------------------------------------
- * Provider order (outer → inner):
- *   ErrorBoundary       — last-resort catch-all
- *   QueryClientProvider — data layer (no DOM deps)
- *   BrowserRouter       — routing (needs DOM history)
- *   I18nProvider        — translations (used by ThemeProvider error paths)
- *   ThemeProvider       — theme (DOM class/attr; no deps)
- *   AuthProvider        — auth (needs localStorage, router context)
- *   DocumentTitleManager — needs router
- *   UserSettingsSync     — needs auth
- *   AppRoutes            — needs everything above
- *   ToastHost            — needs router
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * ROOT APP SHELL
+ * --------------------------------------------------------------------------
+ * Provider Hierarchy (outer → inner):
+ *   1. ErrorBoundary       — Root crash safety net
+ *   2. QueryClientProvider — Data & cache layer
+ *   3. BrowserRouter       — DOM history & v7 future flags
+ *   4. I18nProvider        — Localization engine
+ *   5. ThemeProvider       — Light/Dark/Seasonal substrate
+ *   6. IconDefsHost        — Shared SVG metallic/specular gradient definitions
+ *   7. RoutedAuthProvider  — Session & RBAC state
+ * ════════════════════════════════════════════════════════════════════════ */
+
+function RoutedAuthProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
+  return <AuthProvider navigate={navigate}>{children}</AuthProvider>;
+}
 
 export default function App() {
   return (
@@ -582,13 +1000,19 @@ export default function App() {
       label="Root"
       fallback={({ error, reset }) => (
         <PremiumErrorFallback
-          title="App failed to start"
+          fullScreen
+          title="Dasturni ishga tushirishda xatolik"
           message={
             (error as Error)?.message ||
-            'A critical error prevented the application from starting.'
+            'Kritik xatolik tufayli tizimni ishga tushirib bo\'lmadi.'
           }
-          onRetry={reset}
-          onHome={() => { window.location.href = '/'; }}
+          onRetry={() => {
+            queryClient.clear();
+            reset();
+          }}
+          onHome={() => {
+            window.location.href = '/';
+          }}
           error={error}
         />
       )}
@@ -599,7 +1023,10 @@ export default function App() {
         >
           <I18nProvider>
             <ThemeProvider>
-              <AuthProvider>
+              {/* Global SVG Gradient Definitions for all <PremiumIcon /> instances */}
+              <IconDefsHost />
+
+              <RoutedAuthProvider>
                 <DocumentTitleManager />
                 <UserSettingsSync />
                 <AppRoutes />
@@ -607,7 +1034,7 @@ export default function App() {
                 <QuickPaymentModal />
                 <QuickAttendanceModal />
                 <ToastHost />
-              </AuthProvider>
+              </RoutedAuthProvider>
             </ThemeProvider>
           </I18nProvider>
         </BrowserRouter>

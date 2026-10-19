@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { LibraryService } from '../library.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -69,6 +70,8 @@ describe('LibraryService', () => {
         findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue(mockBorrow),
         update: vi.fn().mockResolvedValue({ ...mockBorrow, status: 'RETURNED' }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ ...mockBorrow, status: 'RETURNED' }),
         count: vi.fn().mockResolvedValue(0),
         groupBy: vi.fn().mockResolvedValue([]),
       },
@@ -201,8 +204,8 @@ describe('LibraryService', () => {
       prisma.libraryBorrow.findFirst.mockResolvedValue(overdueBorrow);
 
       await service.returnBook('org-1', 'borrow-1', {});
-      expect(prisma.libraryBorrow.update).toHaveBeenCalledWith({
-        where: { id: 'borrow-1' },
+      expect(prisma.libraryBorrow.updateMany).toHaveBeenCalledWith({
+        where: { id: 'borrow-1', organizationId: 'org-1', status: 'ACTIVE' },
         data: expect.objectContaining({ lateFee: 15000 }),
       });
     });
@@ -229,6 +232,103 @@ describe('LibraryService', () => {
     it('should search books', async () => {
       const result = await service.searchBooks('org-1', 'clean');
       expect(result).toHaveLength(1);
+    });
+  });
+
+  describe('DB-002: Tenant-scoped LibraryBook.barcode uniqueness and isolation', () => {
+    it('rejects duplicate barcode within the same organization (intra-tenant rejection)', async () => {
+      prisma.libraryBook.findFirst.mockResolvedValueOnce({
+        id: 'book-existing',
+        organizationId: 'org-1',
+        barcode: 'BC-DUPLICATE',
+      });
+
+      await expect(
+        service.createBook('org-1', {
+          title: 'Duplicate Book',
+          barcode: 'BC-DUPLICATE',
+          category: 'FICTION',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('allows same barcode in a different organization (cross-tenant allow)', async () => {
+      prisma.libraryBook.findFirst.mockImplementation(async ({ where }) => {
+        if (where.organizationId === 'org-2' && where.OR?.some((cond: any) => cond.barcode === 'BC-SHARED')) {
+          return null;
+        }
+        return { id: 'book-org1', organizationId: 'org-1', barcode: 'BC-SHARED' };
+      });
+
+      prisma.libraryBook.create.mockResolvedValueOnce({
+        id: 'book-org2',
+        organizationId: 'org-2',
+        barcode: 'BC-SHARED',
+        title: 'Org 2 Book',
+        category: 'SCIENCE',
+      });
+
+      const result = await service.createBook('org-2', {
+        title: 'Org 2 Book',
+        barcode: 'BC-SHARED',
+        category: 'SCIENCE',
+      });
+
+      expect(result).toBeDefined();
+      expect(prisma.libraryBook.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          organizationId: 'org-2',
+          barcode: 'BC-SHARED',
+        }),
+      });
+    });
+
+    it('prohibits cross-tenant access to books belonging to another organization', async () => {
+      prisma.libraryBook.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.findBookById('org-2', 'book-org-1'),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prisma.libraryBook.findFirst).toHaveBeenCalledWith({
+        where: { id: 'book-org-1', organizationId: 'org-2' },
+        include: expect.any(Object),
+      });
+    });
+
+    it('converts Prisma P2002 duplicate constraint violation to BadRequestException on createBook', async () => {
+      prisma.libraryBook.findFirst.mockResolvedValueOnce(null);
+      const p2002Error = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+        meta: { target: ['organizationId', 'barcode'] },
+      });
+      prisma.libraryBook.create.mockRejectedValueOnce(p2002Error);
+
+      await expect(
+        service.createBook('org-1', {
+          title: 'Concurrent Book',
+          barcode: 'BC-RACE',
+          category: 'TECH',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('converts Prisma P2002 duplicate constraint violation to BadRequestException on updateBook', async () => {
+      prisma.libraryBook.findFirst
+        .mockResolvedValueOnce({ id: 'book-1', organizationId: 'org-1' })
+        .mockResolvedValueOnce(null);
+
+      const p2002Error = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+        meta: { target: ['organizationId', 'barcode'] },
+      });
+      prisma.libraryBook.update.mockRejectedValueOnce(p2002Error);
+
+      await expect(
+        service.updateBook('org-1', 'book-1', { barcode: 'BC-COLLIDE' }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

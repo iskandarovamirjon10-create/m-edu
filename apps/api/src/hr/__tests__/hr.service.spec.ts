@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { HremployeeService } from '../hr.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -293,6 +294,117 @@ describe('HremployeeService', () => {
       expect(stats.pendingLeaves).toBe(2);
       expect(stats.monthlyPayroll).toBe(50000);
       expect(stats.departments).toEqual([{ name: 'Engineering', count: 10 }]);
+    });
+  });
+
+  describe('DB-002: Tenant-scoped Employee.employeeNumber uniqueness and isolation', () => {
+    it('rejects duplicate employeeNumber within the same organization (intra-tenant rejection)', async () => {
+      prisma.user.findUnique.mockResolvedValueOnce({ id: 'u-1', organizationId: 'org-1' });
+      // userId check passes
+      prisma.employee.findFirst
+        .mockResolvedValueOnce(null) // user is not an employee yet
+        .mockResolvedValueOnce({ id: 'emp-dup', organizationId: 'org-1', employeeNumber: 'EMP-100' }); // duplicate number exists
+
+      await expect(
+        service.createEmployee('org-1', {
+          userId: 'u-1',
+          employeeNumber: 'EMP-100',
+          department: 'Science',
+          position: 'Teacher',
+          hireDate: '2026-01-01',
+          salary: 4000,
+          contractType: 'FULL_TIME',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('allows same employeeNumber in a different organization (cross-tenant allow)', async () => {
+      prisma.user.findUnique.mockResolvedValueOnce({ id: 'u-org2', organizationId: 'org-2' });
+      prisma.employee.findFirst
+        .mockResolvedValueOnce(null) // user is not an employee
+        .mockResolvedValueOnce(null); // employeeNumber is unique in org-2
+
+      prisma.employee.create.mockResolvedValueOnce({
+        id: 'emp-org2',
+        organizationId: 'org-2',
+        employeeNumber: 'EMP-100',
+        user: { firstName: 'Alice', lastName: 'Smith', email: 'alice@org2.com' },
+      });
+
+      const result = await service.createEmployee('org-2', {
+        userId: 'u-org2',
+        employeeNumber: 'EMP-100',
+        department: 'Science',
+        position: 'Teacher',
+        hireDate: '2026-01-01',
+        salary: 4000,
+        contractType: 'FULL_TIME',
+      });
+
+      expect(result).toBeDefined();
+      expect(prisma.employee.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          organizationId: 'org-2',
+          employeeNumber: 'EMP-100',
+        }),
+        include: expect.any(Object),
+      });
+    });
+
+    it('prohibits cross-tenant access to employees belonging to another organization', async () => {
+      prisma.employee.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.findEmployeeById('org-2', 'emp-org-1'),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prisma.employee.findFirst).toHaveBeenCalledWith({
+        where: { id: 'emp-org-1', organizationId: 'org-2' },
+        include: expect.any(Object),
+      });
+    });
+
+    it('converts Prisma P2002 duplicate constraint violation to BadRequestException on createEmployee', async () => {
+      prisma.user.findUnique.mockResolvedValueOnce({ id: 'u-1', organizationId: 'org-1' });
+      prisma.employee.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+
+      const p2002Error = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+        meta: { target: ['organizationId', 'employeeNumber'] },
+      });
+      prisma.employee.create.mockRejectedValueOnce(p2002Error);
+
+      await expect(
+        service.createEmployee('org-1', {
+          userId: 'u-1',
+          employeeNumber: 'EMP-RACE',
+          department: 'Science',
+          position: 'Teacher',
+          hireDate: '2026-01-01',
+          salary: 4000,
+          contractType: 'FULL_TIME',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('converts Prisma P2002 duplicate constraint violation to BadRequestException on updateEmployee', async () => {
+      prisma.employee.findFirst
+        .mockResolvedValueOnce({ id: 'emp-1', organizationId: 'org-1' }) // findEmployeeById
+        .mockResolvedValueOnce(null); // duplicate check passes or raced
+
+      const p2002Error = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+        meta: { target: ['organizationId', 'employeeNumber'] },
+      });
+      prisma.employee.update.mockRejectedValueOnce(p2002Error);
+
+      await expect(
+        service.updateEmployee('org-1', 'emp-1', { employeeNumber: 'EMP-COLLIDE' }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

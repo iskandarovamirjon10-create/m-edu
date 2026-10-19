@@ -7,9 +7,17 @@ apps/*/node_modules
 apps/*/dist
 packages/*/node_modules
 packages/*/dist
-!.env.example
+# `.env` / `.env.*` must be listed before the negation: the last matching
+# pattern wins, so `!.env.example` has to re-include it afterwards.
 .env
 .env.*
+!.env.example
 backups
 load-test
 scratch
+# Docs, reports and local test artifacts — never needed in the image.
+*.md
+docs/
+*.log
+test-results/
+.freebuff/

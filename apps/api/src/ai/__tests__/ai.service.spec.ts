@@ -39,9 +39,10 @@ function createPrisma(): MockPrisma {
         ...args.data,
       })),
     },
-    student: { count: vi.fn(async () => 12) },
-    group: { count: vi.fn(async () => 3) },
-    teacher: { count: vi.fn(async () => 4) },
+    student: { count: vi.fn(async () => 12), findMany: vi.fn(async () => []) },
+    group: { count: vi.fn(async () => 3), findFirst: vi.fn(async () => null) },
+    teacher: { count: vi.fn(async () => 4), findFirst: vi.fn(async () => null) },
+    course: { count: vi.fn(async () => 2), findFirst: vi.fn(async () => null) },
     payment: {
       aggregate: vi.fn(async () => ({ _sum: { amount: 250000 } })),
       findMany: vi.fn(async () => [
@@ -174,6 +175,54 @@ describe('AiService', () => {
     });
   });
 
+  describe('Uzbek entity resolution & disambiguation', () => {
+    it('resolves student with Uzbek case suffix (-ning) and includes deep link', async () => {
+      (prisma as any).student = {
+        ...prisma.student,
+        findMany: vi.fn(async () => [
+          {
+            id: 'stu-123',
+            status: 'ACTIVE',
+            balance: 150000,
+            user: { firstName: 'Rustam', lastName: 'Sharipov', phone: '+998901234567' },
+            groups: [{ group: { name: 'Frontend-01', course: { name: 'Frontend' }, teacher: { user: { firstName: 'Anvar', lastName: 'Karimov' } } } }],
+            attendance: [{ date: new Date('2026-10-18'), status: 'PRESENT' }],
+            payments: [{ amount: 500000, status: 'PAID' }],
+          },
+        ]),
+      };
+
+      const dossier = await service.resolveEntityDossier(ORG, 'Rustamning davomati qanday?');
+      expect(dossier).toContain('Rustam Sharipov');
+      expect(dossier).toContain('[👉 O\'quvchi profiliga o\'tish](/students/stu-123)');
+      expect(dossier).toContain('Frontend-01');
+    });
+
+    it('emits disambiguation prompt when multiple students match the same name', async () => {
+      (prisma as any).student = {
+        ...prisma.student,
+        findMany: vi.fn(async () => [
+          {
+            id: 'stu-1',
+            user: { firstName: 'Rustam', lastName: 'Sharipov' },
+            groups: [{ group: { name: 'Frontend-01' } }],
+          },
+          {
+            id: 'stu-2',
+            user: { firstName: 'Rustam', lastName: 'Aliyev' },
+            groups: [{ group: { name: 'Backend-02' } }],
+          },
+        ]),
+      };
+
+      const dossier = await service.resolveEntityDossier(ORG, 'Rustam haqida ma\'lumot ber');
+      expect(dossier).toContain("DIQQAT (BIR XIL ISMLI O'QUVCHILAR TOPILDI)");
+      expect(dossier).toContain('Rustam Sharipov');
+      expect(dossier).toContain('Rustam Aliyev');
+      expect(dossier).toContain('aniqlashtirishni so\'rang');
+    });
+  });
+
   describe('error handling', () => {
     it('rethrows HttpExceptions as-is (403 stays 403)', async () => {
       prisma.aiConversation.findFirst.mockResolvedValue(null);
@@ -184,4 +233,5 @@ describe('AiService', () => {
     });
   });
 });
+
 

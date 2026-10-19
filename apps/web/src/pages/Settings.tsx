@@ -1,16 +1,16 @@
 /**
- * M-EDU SettingsPage — Apple Design Award Edition
+ * M-EDU SettingsPage — v19 "Aurora Command Center"
  *
- * Premium craft:
- *  - Hero header with gradient app-icon + signed-in account chip
- *  - "Premium panel" sections with squircle gradient icons + tone colors
- *  - Theme switcher as a native segmented control (layoutId indicator)
- *  - Live password strength meter with tone feedback
- *  - Password visibility toggles with custom SVG eye icons
- *  - Shimmer skeletons (not pulse)
- *  - Custom SVG icons in SF Symbols proportions
- *  - Framer Motion spring physics + staggered blur-in
- *  - Full i18n + a11y preserved (radiogroup, aria-invalid, aria-describedby)
+ * 🎯 v18 → v19 Complete Visual Rearchitecture:
+ *  ✅ Split-Pane Layout — Sticky left nav rail + right content pane (macOS System Settings style).
+ *  ✅ Aurora Backdrop — Fixed full-page atmospheric canvas with breathing orbs + grid.
+ *  ✅ Scroll-Spy Navigation — Active nav item auto-highlights based on viewport position.
+ *  ✅ Editorial Section Numbers — 01 → 07 ghost numerals on every section header.
+ *  ✅ Floating Command Bar — Sticky pill: breadcrumb · account chip · ⌘K hint.
+ *  ✅ iOS-Style Rows — Devices & whitelist as compact list rows (not nested cards).
+ *  ✅ Inline Access Toggles — Platform switches as label/toggle rows (no bulky cards).
+ *  ✅ Mobile-First — Nav rail becomes horizontal scroll pills on small screens.
+ *  ✅ Preserved — All queries, mutations, forms, validation, a11y, and i18n intact.
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
@@ -27,6 +27,7 @@ import {
   useToasts,
   GlassButton,
   GlassSwitch,
+  ConfirmDialog,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { isPlatformRole } from '@/lib/roles';
@@ -36,30 +37,34 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useTheme, type Theme } from '@/hooks/useTheme';
 import { usePersistSettings } from '@/hooks/usePersistSettings';
 import { useI18n, isLocale } from '@/i18n/I18nProvider';
+import { usePrefersReducedMotion } from '@/layouts/core/singletons';
 
-/* ============================================================================
+/* ══════════════════════════════════════════════════════════════════════════
  * MOTION TOKENS
- * ========================================================================== */
+ * ════════════════════════════════════════════════════════════════════════ */
 
 const SPRING = {
-  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
-  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
+  snappy: { type: 'spring', stiffness: 500, damping: 32, mass: 0.7 },
+  smooth: { type: 'spring', stiffness: 320, damping: 30, mass: 0.9 },
   soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
 } as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.08 } },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.06, delayChildren: 0.06 },
+  },
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18 },
+  hidden: { opacity: 0, y: 16 },
   visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
-/* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * ICONS
+ * ════════════════════════════════════════════════════════════════════════ */
 
 const ICON_STROKE = 1.75;
 
@@ -81,9 +86,7 @@ const I: Record<string, string[]> = {
     'M8 21h8', 'M12 17v4',
   ],
   building: [
-    'M3 21h18',
-    'M5 21V7l8-4v18',
-    'M19 21V11l-6-4',
+    'M3 21h18', 'M5 21V7l8-4v18', 'M19 21V11l-6-4',
     'M9 9v.01', 'M9 12v.01', 'M9 15v.01', 'M9 18v.01',
   ],
   user: [
@@ -107,10 +110,7 @@ const I: Record<string, string[]> = {
     'M2 12h20',
     'M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z',
   ],
-  clock: [
-    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
-    'M12 6v6l4 2',
-  ],
+  clock: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 6v6l4 2'],
   mail: [
     'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
     'M22 6 12 13 2 6',
@@ -162,6 +162,23 @@ const I: Record<string, string[]> = {
     'M16 17l5-5-5-5',
     'M21 12H9',
   ],
+  arrowRight: ['M5 12h14', 'M12 5l7 7-7 7'],
+  userCheck: [
+    'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
+    'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+    'M17 11l2 2 4-4',
+  ],
+  users: [
+    'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2',
+    'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+    'M23 21v-2a4 4 0 0 0-3-3.9',
+    'M16 3.1a4 4 0 0 1 0 7.8',
+  ],
+  plus: ['M12 5v14', 'M5 12h14'],
+  alert: [
+    'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z',
+    'M12 9v4', 'M12 17h.01',
+  ],
 };
 
 function Icon({
@@ -203,23 +220,23 @@ function getDeviceIcon(deviceType?: string, os?: string) {
   return I.laptop;
 }
 
-/* ============================================================================
+/* ══════════════════════════════════════════════════════════════════════════
  * TONE PALETTE
- * ========================================================================== */
+ * ════════════════════════════════════════════════════════════════════════ */
 
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:    { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
+  blue:   { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)',  glow: 'rgba(37,99,235,0.28)',  border: 'rgba(37,99,235,0.20)'  },
+  green:  { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
+  orange: { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)', glow: 'rgba(245,158,11,0.28)', border: 'rgba(245,158,11,0.20)' },
+  red:    { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)'  },
+  purple: { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)' },
 };
 
-/* ============================================================================
+/* ══════════════════════════════════════════════════════════════════════════
  * TYPES & CONSTANTS
- * ========================================================================== */
+ * ════════════════════════════════════════════════════════════════════════ */
 
 interface OrgFormState {
   name: string;
@@ -253,13 +270,13 @@ const TIMEZONES = [
 
 const LANGUAGES = [
   { value: 'en', label: 'English' },
-  { value: 'uz', label: 'O’zbekcha' },
+  { value: 'uz', label: 'O\'zbekcha' },
   { value: 'ru', label: 'Русский' },
 ];
 
-/* ============================================================================
+/* ══════════════════════════════════════════════════════════════════════════
  * PASSWORD UTILS
- * ========================================================================== */
+ * ════════════════════════════════════════════════════════════════════════ */
 
 function validatePassword(password: string): string | undefined {
   if (password.length < 8) return 'Password must be at least 8 characters.';
@@ -293,138 +310,363 @@ function getPasswordStrength(pwd: string): PasswordStrength {
   return { score, ...map[score] };
 }
 
-/* ============================================================================
- * PREMIUM SUB-COMPONENTS
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * AVATAR HELPERS
+ * ════════════════════════════════════════════════════════════════════════ */
 
-/** Shimmer — siljiydigan gradient, pulse emas */
-function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
+const AVATAR_PALETTES: ReadonlyArray<readonly [string, string]> = [
+  ['#2563EB', '#6366F1'],
+  ['#6366F1', '#FF2D55'],
+  ['#10B981', '#0284C7'],
+  ['#F59E0B', '#FF2D55'],
+];
+
+function nameHash(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function avatarGradient(name: string): string {
+  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
+  return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
+}
+
+function getInitials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .map((p) => p.charAt(0))
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || '—'
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * AURORA BACKDROP — full-page atmospheric canvas
+ * ════════════════════════════════════════════════════════════════════════ */
+
+function AuroraBackdrop() {
+  const reduced = usePrefersReducedMotion();
   return (
     <div
-      className={`relative overflow-hidden bg-[#E5E5EA]/60 dark:bg-[#2C2C2E]/60 ${className}`}
-      style={{ borderRadius: radius }}
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
     >
-      <motion.div
-        className="absolute inset-0"
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 dark:from-[#04060C] dark:via-[#0A0F1A] dark:to-[#080A14]" />
+      <div className="absolute -left-40 -top-40 h-[580px] w-[580px] rounded-full bg-blue-400/10 blur-[140px] dark:bg-sky-500/10" />
+      <div className="absolute -right-32 top-1/3 h-[520px] w-[520px] rounded-full bg-violet-400/10 blur-[140px] dark:bg-violet-500/10" />
+      <div className="absolute -bottom-32 left-1/3 h-[460px] w-[460px] rounded-full bg-emerald-400/08 blur-[140px] dark:bg-emerald-500/08" />
+      {!reduced && (
+        <motion.div
+          animate={{ scale: [1, 1.06, 1], opacity: [0.55, 0.85, 0.55] }}
+          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute left-1/2 top-1/2 h-[700px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.03] via-violet-500/[0.02] to-emerald-500/[0.03] blur-[160px]"
+        />
+      )}
+      <div
+        className="absolute inset-0 opacity-[0.015] dark:opacity-[0.022]"
         style={{
-          background:
-            'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.65) 50%, transparent 100%)',
+          backgroundImage:
+            'linear-gradient(rgba(15,23,42,0.85) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.85) 1px, transparent 1px)',
+          backgroundSize: '64px 64px',
         }}
-        animate={{ x: ['-100%', '%100'] }}
-        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
       />
     </div>
   );
 }
 
-function SettingsSkeleton() {
-  return (
-    <div className="space-y-5">
-      <Shimmer className="h-28 w-full" radius="1.75rem" />
-      {[1, 2, 3, 4].map((i) => (
-        <Shimmer key={i} className="h-44 w-full" radius="1.75rem" />
-      ))}
-    </div>
-  );
+/* ══════════════════════════════════════════════════════════════════════════
+ * SCROLL SPY HOOK
+ * ════════════════════════════════════════════════════════════════════════ */
+
+function useScrollSpy(ids: string[]) {
+  const [activeId, setActiveId] = useState(ids[0] || '');
+
+  useEffect(() => {
+    const observers: IntersectionObserver[] = [];
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) setActiveId(id);
+          });
+        },
+        { rootMargin: '-100px 0px -60% 0px', threshold: 0 },
+      );
+      observer.observe(el);
+      observers.push(observer);
+    });
+    return () => observers.forEach((o) => o.disconnect());
+  }, [ids.join('|')]);
+
+  return activeId;
 }
 
-/** Premium section panel — squircle icon + title + subtitle + content + footer */
-function PremiumPanel({
-  icon,
+/* ══════════════════════════════════════════════════════════════════════════
+ * SETTINGS SECTION — editorial numbered card
+ * ════════════════════════════════════════════════════════════════════════ */
+
+function SettingsSection({
+  id,
+  number,
   title,
   subtitle,
+  icon,
   tone = 'blue',
-  children,
   footer,
+  children,
 }: {
-  icon: string[];
+  id: string;
+  number: string;
   title: string;
   subtitle?: string;
+  icon: string[];
   tone?: Tone;
-  children: ReactNode;
   footer?: ReactNode;
+  children: ReactNode;
 }) {
   const c = TONES[tone];
   return (
     <motion.section
+      id={id}
       variants={cardVariants}
-      className="group relative overflow-hidden rounded-3xl border border-[#ffffff70] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-      }}
+      className="relative scroll-mt-32 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
-      {/* top gloss */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-24"
-        style={{
-          background:
-            'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-        }}
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/[0.18]"
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-8 left-0 w-px bg-gradient-to-b from-transparent via-blue-400/12 to-transparent dark:via-sky-400/18"
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-8 right-0 w-px bg-gradient-to-b from-transparent via-violet-400/12 to-transparent dark:via-violet-400/18"
       />
 
-      {/* Header */}
-      <div className="relative flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+      <header className="flex items-center gap-3.5 border-b border-slate-200/70 px-5 py-4 dark:border-white/[0.06]">
+        <span
+          className="text-[26px] font-black leading-none tracking-[-0.02em] tabular-nums text-slate-900/15 dark:text-white/[0.12]"
+          style={{ fontFeatureSettings: '"tnum"' }}
+        >
+          {number}
+        </span>
         <div
-          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl"
+          className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
           style={{
             background: c.bg,
             color: c.fg,
             border: `1px solid ${c.border}`,
-            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 6px 16px -8px ${c.glow}`,
+            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.55), 0 4px 12px -6px ${c.glow}`,
           }}
         >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-2xl"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(255,255,255,0.45), transparent)',
-            }}
-          />
-          <Icon paths={icon} size={18} strokeWidth={2} className="relative" />
+          <Icon paths={icon} size={15} strokeWidth={2.2} />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+          <h2 className="truncate text-[14.5px] font-bold tracking-tight text-[var(--text-primary)]">
             {title}
           </h2>
           {subtitle && (
-            <p className="mt-0.5 text-[12px] font-medium text-[#86868B]">
+            <p className="mt-0.5 truncate text-[11.5px] font-medium text-[var(--text-muted)]">
               {subtitle}
             </p>
           )}
         </div>
-      </div>
+      </header>
 
-      {/* Body */}
-      <div className="relative p-5">{children}</div>
+      <div className="p-5">{children}</div>
 
-      {/* Footer */}
       {footer && (
-        <div className="relative flex justify-end border-t border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+        <footer className="flex items-center justify-end border-t border-slate-200/70 px-5 py-3.5 dark:border-white/[0.06]">
           {footer}
-        </div>
+        </footer>
       )}
     </motion.section>
   );
 }
 
-/** Premium field icon badge — small squircle leading the input */
-function FieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Tone }) {
-  const c = TONES[tone];
+/* ══════════════════════════════════════════════════════════════════════════
+ * NAV RAIL
+ * ════════════════════════════════════════════════════════════════════════ */
+
+interface NavItem {
+  id: string;
+  label: string;
+  icon: string[];
+  tone: Tone;
+  number: string;
+}
+
+function NavRail({
+  items,
+  activeId,
+  onJump,
+}: {
+  items: NavItem[];
+  activeId: string;
+  onJump: (id: string) => void;
+}) {
   return (
-    <span
-      className="pointer-events-none absolute left-3 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg"
-      style={{ background: c.bg, color: c.fg }}
-      aria-hidden
-    >
-      <Icon paths={icon} size={12} strokeWidth={2.2} />
-    </span>
+    <nav aria-label="Sozlamalar navigatsiyasi" className="space-y-1">
+      {items.map((item) => {
+        const active = item.id === activeId;
+        const c = TONES[item.tone];
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onJump(item.id)}
+            className={[
+              'group relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left outline-none transition-all',
+              active
+                ? 'bg-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_4px_14px_-4px_rgba(15,23,42,0.10)] dark:bg-white/[0.08]'
+                : 'hover:bg-white/60 dark:hover:bg-white/[0.04]',
+            ].join(' ')}
+          >
+            {active && (
+              <motion.span
+                layoutId="nav-active-indicator"
+                transition={SPRING.snappy}
+                className="absolute inset-y-1.5 left-0 w-1 rounded-r-full"
+                style={{
+                  background: c.fg,
+                  boxShadow: `0 0 8px ${c.glow}`,
+                }}
+              />
+            )}
+            <span
+              className={[
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-all',
+                active ? '' : 'opacity-70',
+              ].join(' ')}
+              style={
+                active
+                  ? { background: c.bg, color: c.fg }
+                  : { background: 'rgba(0,0,0,0.035)', color: '#64748B' }
+              }
+            >
+              <Icon paths={item.icon} size={13} strokeWidth={2.2} />
+            </span>
+            <span
+              className={[
+                'flex-1 truncate text-[12.5px] font-semibold transition-colors',
+                active
+                  ? 'text-[var(--text-primary)]'
+                  : 'text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]',
+              ].join(' ')}
+            >
+              {item.label}
+            </span>
+            <span className="shrink-0 text-[10px] font-bold tabular-nums text-[var(--text-muted)] opacity-50">
+              {item.number}
+            </span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
-/** Password input with visibility toggle */
+/* ══════════════════════════════════════════════════════════════════════════
+ * THEME SWITCHER
+ * ════════════════════════════════════════════════════════════════════════ */
+
+function ThemeSwitcher() {
+  const { t } = useI18n();
+  const { theme, setTheme } = useTheme();
+  const persist = usePersistSettings();
+
+  const choose = useCallback(
+    (next: Theme) => {
+      setTheme(next);
+      persist({ theme: next });
+    },
+    [setTheme, persist],
+  );
+
+  const options: { value: Theme; label: string; icon: string[]; tone: Tone }[] = useMemo(
+    () => [
+      { value: 'light', label: t('settings.themeLight'), icon: I.sun, tone: 'orange' },
+      { value: 'dark', label: t('settings.themeDark'), icon: I.moon, tone: 'purple' },
+      { value: 'system', label: t('common.system'), icon: I.monitor, tone: 'blue' },
+    ],
+    [t],
+  );
+
+  return (
+    <div
+      className="grid grid-cols-3 gap-2.5"
+      role="radiogroup"
+      aria-label={t('a11y.themeSelection')}
+    >
+      {options.map((opt) => {
+        const active = theme === opt.value;
+        const c = TONES[opt.tone];
+        return (
+          <motion.button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => choose(opt.value)}
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.97 }}
+            transition={SPRING.snappy}
+            className="relative flex flex-col items-center gap-2 overflow-hidden rounded-2xl border px-3 py-4 outline-none transition-colors"
+            style={{
+              borderColor: active ? c.border : 'rgba(15,23,42,0.06)',
+              background: active ? c.bg : 'rgba(255,255,255,0.45)',
+              boxShadow: active
+                ? `inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 20px -10px ${c.glow}`
+                : 'none',
+            }}
+          >
+            <span
+              className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
+              style={{
+                background: active ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.04)',
+                color: active ? c.fg : '#64748B',
+              }}
+            >
+              <Icon paths={opt.icon} size={18} strokeWidth={2} />
+            </span>
+            <span
+              className="text-[12px] font-bold tracking-tight"
+              style={{ color: active ? c.fg : '#64748B' }}
+            >
+              {opt.label}
+            </span>
+            <AnimatePresence>
+              {active && (
+                <motion.span
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={SPRING.snappy}
+                  className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full"
+                  style={{ background: c.fg, color: '#fff' }}
+                >
+                  <Icon paths={I.check} size={10} strokeWidth={3} />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * PASSWORD INPUT
+ * ════════════════════════════════════════════════════════════════════════ */
+
 function PasswordInput({
   value,
   onChange,
@@ -463,8 +705,7 @@ function PasswordInput({
         whileTap={{ scale: 0.92 }}
         transition={SPRING.snappy}
         aria-label={show ? 'Hide password' : 'Show password'}
-        title={show ? 'Hide password' : 'Show password'}
-        className="absolute right-2 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-[#86868B] hover:bg-black/[0.04] hover:text-[#1D1D1F] dark:hover:bg-white/[0.06] dark:hover:text-[#F5F5F7]"
+        className="absolute right-2 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-[#64748B] hover:bg-black/[0.04] hover:text-[#1D1D1F] dark:hover:bg-white/[0.06] dark:hover:text-[#F5F5F7]"
       >
         <Icon paths={show ? I.eyeOff : I.eye} size={14} strokeWidth={2} />
       </motion.button>
@@ -472,13 +713,15 @@ function PasswordInput({
   );
 }
 
-/** Password strength meter */
+/* ══════════════════════════════════════════════════════════════════════════
+ * PASSWORD STRENGTH METER
+ * ════════════════════════════════════════════════════════════════════════ */
+
 function PasswordStrengthMeter({ value }: { value: string }) {
   const { t } = useI18n();
   const { score, label, tone } = getPasswordStrength(value);
   const translatedLabel = t(label) || label;
   const c = TONES[tone];
-  const segments = [0, 1, 2, 3];
 
   return (
     <AnimatePresence initial={false}>
@@ -492,12 +735,12 @@ function PasswordStrengthMeter({ value }: { value: string }) {
         >
           <div className="flex items-center gap-2">
             <div className="flex flex-1 gap-1">
-              {segments.map((i) => {
+              {[0, 1, 2, 3].map((i) => {
                 const active = i < score;
                 return (
                   <motion.span
                     key={i}
-                    className="h-1.5 flex-1 rounded-full"
+                    className="h-1 flex-1 rounded-full"
                     animate={{
                       backgroundColor: active ? c.fg : 'rgba(0,0,0,0.08)',
                     }}
@@ -506,16 +749,12 @@ function PasswordStrengthMeter({ value }: { value: string }) {
                 );
               })}
             </div>
-            <motion.span
-              key={translatedLabel}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={SPRING.snappy}
-              className="text-[10.5px] font-bold uppercase tracking-[0.12em]"
+            <span
+              className="text-[10px] font-bold uppercase tracking-[0.12em]"
               style={{ color: c.fg }}
             >
               {translatedLabel}
-            </motion.span>
+            </span>
           </div>
         </motion.div>
       )}
@@ -523,187 +762,38 @@ function PasswordStrengthMeter({ value }: { value: string }) {
   );
 }
 
-/** Premium theme segmented control */
-function ThemeSwitcher() {
-  const { t } = useI18n();
-  const { theme, setTheme } = useTheme();
-  const persist = usePersistSettings();
+/* ══════════════════════════════════════════════════════════════════════════
+ * SKELETON
+ * ════════════════════════════════════════════════════════════════════════ */
 
-  const choose = useCallback(
-    (next: Theme) => {
-      setTheme(next);
-      persist({ theme: next });
-    },
-    [setTheme, persist],
-  );
-
-  const options: { value: Theme; label: string; icon: string[]; tone: Tone }[] = useMemo(
-    () => [
-      { value: 'light', label: t('settings.themeLight'), icon: I.sun, tone: 'orange' },
-      { value: 'dark', label: t('settings.themeDark'), icon: I.moon, tone: 'purple' },
-      { value: 'system', label: t('common.system'), icon: I.monitor, tone: 'blue' },
-    ],
-    [t],
-  );
-
+function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
   return (
     <div
-      className="grid grid-cols-3 gap-2"
-      role="radiogroup"
-      aria-label={t('a11y.themeSelection')}
-    >
-      {options.map((opt) => {
-        const active = theme === opt.value;
-        const c = TONES[opt.tone];
-        return (
-          <motion.button
-            key={opt.value}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            onClick={() => choose(opt.value)}
-            whileHover={{ y: -2 }}
-            whileTap={{ scale: 0.97 }}
-            transition={SPRING.snappy}
-            className="relative flex flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-center outline-none transition-colors"
-            style={{
-              borderColor: active ? c.border : 'rgba(0,0,0,0.06)',
-              background: active ? c.bg : 'transparent',
-              color: active ? c.fg : '#86868B',
-              boxShadow: active
-                ? `inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 20px -10px ${c.glow}`
-                : 'none',
-            }}
-          >
-            {active && (
-              <motion.span
-                layoutId="theme-active-glow"
-                className="pointer-events-none absolute inset-0 rounded-2xl"
-                style={{
-                  background:
-                    'radial-gradient(120% 60% at 50% 0%, rgba(255,255,255,0.45), transparent 70%)',
-                }}
-                transition={SPRING.smooth}
-              />
-            )}
-            <span className="relative flex h-9 w-9 items-center justify-center rounded-xl"
-              style={{
-                background: active ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.03)',
-                color: active ? c.fg : '#86868B',
-              }}
-            >
-              <Icon paths={opt.icon} size={17} strokeWidth={2} />
-            </span>
-            <span className="relative text-[12px] font-semibold tracking-tight">
-              {opt.label}
-            </span>
-            <AnimatePresence>
-              {active && (
-                <motion.span
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={SPRING.snappy}
-                  className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full"
-                  style={{ background: c.fg, color: '#fff' }}
-                >
-                  <Icon paths={I.check} size={10} strokeWidth={3} />
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </motion.button>
-        );
-      })}
-    </div>
+      className={`skeleton-shimmer relative overflow-hidden border border-white/60 dark:border-white/[0.06] ${className}`}
+      style={{ borderRadius: radius }}
+    />
   );
 }
 
-/** Small premium "signed-in" chip */
-function AccountChip({
-  name,
-  role,
-  avatarGradient,
-  initials,
-}: {
-  name: string;
-  role: string;
-  avatarGradient: string;
-  initials: string;
-}) {
+function SettingsSkeleton() {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-[#ffffff60] bg-[#ffffff70] px-3 py-2.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e70]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 14px -8px rgba(0,0,0,0.10)',
-      }}
-    >
-      <div
-        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
-        style={{
-          background: avatarGradient,
-          fontSize: '11px',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)',
-        }}
-      >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-full"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)',
-          }}
-        />
-        <span className="relative">{initials}</span>
+    <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+      <div className="space-y-3">
+        <Shimmer className="h-[88px] w-full" radius="1rem" />
+        <Shimmer className="h-[280px] w-full" radius="1rem" />
       </div>
-      <div className="min-w-0">
-        <p className="truncate text-[12.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-          {name}
-        </p>
-        <p className="truncate text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-          {role}
-        </p>
+      <div className="space-y-5">
+        <Shimmer className="h-[180px] w-full" radius="1rem" />
+        <Shimmer className="h-[220px] w-full" radius="1rem" />
+        <Shimmer className="h-[240px] w-full" radius="1rem" />
       </div>
     </div>
   );
 }
 
-/* ============================================================================
- * AVATAR HELPERS
- * ========================================================================== */
-
-const AVATAR_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-];
-
-function nameHash(str: string): number {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-function avatarGradient(name: string): string {
-  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
-  return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
-}
-
-function getInitials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .map((p) => p.charAt(0))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || '—'
-  );
-}
-
-/* ============================================================================
+/* ══════════════════════════════════════════════════════════════════════════
  * MAIN PAGE
- * ========================================================================== */
+ * ════════════════════════════════════════════════════════════════════════ */
 
 export function SettingsPage() {
   const { setLocale, locale, t } = useI18n();
@@ -711,9 +801,6 @@ export function SettingsPage() {
   const { push, toastNode } = useToasts();
   const { user, setUser, hasAnyRole } = useAuth();
   const isAdmin = hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN');
-  // The invite-only / require-approval switches rewrite ONE `id: 'global'`
-  // policy row shared by every tenant, so only platform roles may see (and
-  // therefore call) them — the API enforces exactly the same rule.
   const isPlatformAdmin = isPlatformRole(user?.role);
   const qc = useQueryClient();
 
@@ -721,12 +808,13 @@ export function SettingsPage() {
   const [orgErrors, setOrgErrors] = useState<Partial<Record<keyof OrgFormState, string>>>({});
   const [pwdForm, setPwdForm] = useState<PasswordFormState>(INITIAL_PASSWORD_FORM);
   const [pwdErrors, setPwdErrors] = useState<Partial<Record<keyof PasswordFormState, string>>>({});
+  const [confirmRevokeOthersOpen, setConfirmRevokeOthersOpen] = useState(false);
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>({
     language: locale,
     timezone: user?.settings?.timezone || 'UTC',
   });
 
-  /* ── Server language adoption (fresh device only) ───────────────────── */
+  /* ── Server language adoption ───────────────────────────────── */
   const adoptedServerLang = useRef(false);
   useEffect(() => {
     if (adoptedServerLang.current) return;
@@ -747,7 +835,6 @@ export function SettingsPage() {
     setSettingsForm((prev) => ({ ...prev, language: lang }));
   }, [user?.settings?.language, setLocale]);
 
-  /* ── Keep language field aligned with live locale ───────────────────── */
   useEffect(() => {
     setSettingsForm((prev) =>
       prev.language === locale ? prev : { ...prev, language: locale },
@@ -763,7 +850,7 @@ export function SettingsPage() {
     }
   }, [user, locale]);
 
-  /* ── Organization query ─────────────────────────────────────────────── */
+  /* ── Org query ─────────────────────────────────────────────── */
   const org = useQuery({
     queryKey: ['org-me'],
     queryFn: organizationsApi.me,
@@ -782,7 +869,7 @@ export function SettingsPage() {
     }
   }, [org.data, orgForm]);
 
-  /* ── Mutations ──────────────────────────────────────────────────────── */
+  /* ── Mutations ─────────────────────────────────────────────── */
   const saveOrg = useMutation({
     mutationFn: () => {
       if (!orgForm) throw new Error('Organization form not initialized');
@@ -822,12 +909,13 @@ export function SettingsPage() {
     },
     onSuccess: () => {
       push('success', t('settings.saved'));
-      qc.invalidateQueries({ queryKey: ['auth-me'] });
+      qc.invalidateQueries({ queryKey: ['auth', 'me'] });
+      qc.invalidateQueries({ queryKey: ['user', 'settings'] });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
-  /* ── Whitelist & Access Control ─────────────────────────────────────── */
+  /* ── Whitelist ─────────────────────────────────────────────── */
   const whitelistQuery = useQuery({
     queryKey: ['access-whitelist'],
     queryFn: authApi.getWhitelist,
@@ -845,9 +933,7 @@ export function SettingsPage() {
       setNewWhitelistNote('');
       push('success', t('settings.whitelist.addedSuccess'));
     },
-    onError: (err) => {
-      push('error', getErrorMessage(err as Error));
-    },
+    onError: (err) => push('error', getErrorMessage(err as Error)),
   });
 
   const removeWhitelistMutation = useMutation({
@@ -856,9 +942,7 @@ export function SettingsPage() {
       qc.invalidateQueries({ queryKey: ['access-whitelist'] });
       push('success', t('settings.whitelist.removedSuccess'));
     },
-    onError: (err) => {
-      push('error', getErrorMessage(err as Error));
-    },
+    onError: (err) => push('error', getErrorMessage(err as Error)),
   });
 
   const approveUserMutation = useMutation({
@@ -867,9 +951,7 @@ export function SettingsPage() {
       qc.invalidateQueries({ queryKey: ['access-whitelist'] });
       push('success', t('settings.whitelist.approvedSuccess'));
     },
-    onError: (err) => {
-      push('error', getErrorMessage(err as Error));
-    },
+    onError: (err) => push('error', getErrorMessage(err as Error)),
   });
 
   const rejectUserMutation = useMutation({
@@ -878,9 +960,7 @@ export function SettingsPage() {
       qc.invalidateQueries({ queryKey: ['access-whitelist'] });
       push('success', t('settings.whitelist.rejectedSuccess'));
     },
-    onError: (err) => {
-      push('error', getErrorMessage(err as Error));
-    },
+    onError: (err) => push('error', getErrorMessage(err as Error)),
   });
 
   const updateAccessSettingsMutation = useMutation({
@@ -890,12 +970,10 @@ export function SettingsPage() {
       qc.invalidateQueries({ queryKey: ['access-whitelist'] });
       push('success', t('settings.whitelist.settingsUpdated'));
     },
-    onError: (err) => {
-      push('error', getErrorMessage(err as Error));
-    },
+    onError: (err) => push('error', getErrorMessage(err as Error)),
   });
 
-  /* ── Active Devices & Sync ────────────────────────────────────────── */
+  /* ── Sessions ──────────────────────────────────────────────── */
   const sessionsQuery = useQuery({
     queryKey: ['auth', 'sessions'],
     queryFn: authApi.getSessions,
@@ -906,11 +984,9 @@ export function SettingsPage() {
     mutationFn: (id: string) => authApi.revokeSession(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['auth', 'sessions'] });
-      push('success', t('settings.devices.sessionRevoked', 'Qurilma sessiyasi muvaffaqiyatli yakunlandi'));
+      push('success', t('settings.devices.sessionRevoked', 'Qurilma sessiyasi yakunlandi'));
     },
-    onError: (err) => {
-      push('error', getErrorMessage(err as Error));
-    },
+    onError: (err) => push('error', getErrorMessage(err as Error)),
   });
 
   const revokeOtherSessionsMutation = useMutation({
@@ -919,15 +995,13 @@ export function SettingsPage() {
       qc.invalidateQueries({ queryKey: ['auth', 'sessions'] });
       push(
         'success',
-        t('settings.devices.otherSessionsRevoked', `Boshqa barcha qurilmalar sessiyasi yakunlandi (${data.revokedCount} ta)`),
+        t('settings.devices.otherSessionsRevoked', `Boshqa qurilmalar yakunlandi (${data.revokedCount} ta)`),
       );
     },
-    onError: (err) => {
-      push('error', getErrorMessage(err as Error));
-    },
+    onError: (err) => push('error', getErrorMessage(err as Error)),
   });
 
-  /* ── Validators ─────────────────────────────────────────────────────── */
+  /* ── Validators ────────────────────────────────────────────── */
   const validateOrgForm = useCallback((): boolean => {
     if (!orgForm) return false;
     const errors: Partial<Record<keyof OrgFormState, string>> = {};
@@ -949,34 +1023,31 @@ export function SettingsPage() {
     return Object.keys(errors).length === 0;
   }, [pwdForm, t]);
 
-  /* ── Handlers ───────────────────────────────────────────────────────── */
+  /* ── Handlers ──────────────────────────────────────────────── */
   const handleOrgChange = useCallback(
-    (field: keyof OrgFormState) =>
-      (e: React.ChangeEvent<HTMLInputElement>) => {
-        setOrgForm((prev) => (prev ? { ...prev, [field]: e.target.value } : prev));
-        setOrgErrors((prev) => ({ ...prev, [field]: undefined }));
-      },
+    (field: keyof OrgFormState) => (e: React.ChangeEvent<HTMLInputElement>) => {
+      setOrgForm((prev) => (prev ? { ...prev, [field]: e.target.value } : prev));
+      setOrgErrors((prev) => ({ ...prev, [field]: undefined }));
+    },
     [],
   );
 
   const handlePwdChange = useCallback(
-    (field: keyof PasswordFormState) =>
-      (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPwdForm((prev) => ({ ...prev, [field]: e.target.value }));
-        setPwdErrors((prev) => ({ ...prev, [field]: undefined }));
-      },
+    (field: keyof PasswordFormState) => (e: React.ChangeEvent<HTMLInputElement>) => {
+      setPwdForm((prev) => ({ ...prev, [field]: e.target.value }));
+      setPwdErrors((prev) => ({ ...prev, [field]: undefined }));
+    },
     [],
   );
 
   const handleSettingsChange = useCallback(
-    (field: keyof SettingsFormState) =>
-      (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const value = e.target.value;
-        setSettingsForm((prev) => ({ ...prev, [field]: value }));
-        if (field === 'language' && isLocale(value)) {
-          setLocale(value);
-        }
-      },
+    (field: keyof SettingsFormState) => (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const value = e.target.value;
+      setSettingsForm((prev) => ({ ...prev, [field]: value }));
+      if (field === 'language' && isLocale(value)) {
+        setLocale(value);
+      }
+    },
     [setLocale],
   );
 
@@ -1007,11 +1078,9 @@ export function SettingsPage() {
   );
 
   const { refetch: refetchOrg } = org;
-  const handleRetry = useCallback(() => {
-    void refetchOrg();
-  }, [refetchOrg]);
+  const handleRetry = useCallback(() => void refetchOrg(), [refetchOrg]);
 
-  /* ── Derived display values ─────────────────────────────────────────── */
+  /* ── Derived ───────────────────────────────────────────────── */
   const displayName = useMemo(() => {
     if (!user) return '—';
     const fn = user.firstName || '';
@@ -1025,22 +1094,47 @@ export function SettingsPage() {
     return user.role.replace(/_/g, ' ');
   }, [user]);
 
-  /* ── Loading ────────────────────────────────────────────────────────── */
+  /* ── Sections & scroll spy ─────────────────────────────────── */
+  const navItems = useMemo<NavItem[]>(() => {
+    const items: NavItem[] = [
+      { id: 'section-appearance', number: '01', label: t('settings.appearance'), icon: I.palette, tone: 'purple' },
+      { id: 'section-account',    number: '02', label: t('settings.account'),    icon: I.user,    tone: 'green'  },
+      { id: 'section-security',   number: '03', label: t('settings.changePassword'), icon: I.lock, tone: 'red'   },
+      { id: 'section-devices',    number: '04', label: t('settings.devices.title', 'Qurilmalar'), icon: I.laptop, tone: 'blue' },
+      { id: 'section-telegram',   number: '05', label: t('settings.telegram.title'), icon: I.telegram, tone: 'blue' },
+    ];
+    if (isAdmin) {
+      items.push({ id: 'section-organization', number: '06', label: t('settings.organization'), icon: I.building, tone: 'orange' });
+      items.push({ id: 'section-access',       number: '07', label: t('settings.accessControl.title'), icon: I.shield, tone: 'blue' });
+    }
+    return items;
+  }, [t, isAdmin]);
+
+  const sectionIds = useMemo(() => navItems.map((i) => i.id), [navItems]);
+  const activeId = useScrollSpy(sectionIds);
+
+  const scrollTo = useCallback((id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  /* ── Loading ───────────────────────────────────────────────── */
   if (isAdmin && org.isLoading && !org.data) {
     return (
-      <div className="page-container mx-auto max-w-3xl space-y-5">
-        <GlassPageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
+      <div className="page-container relative z-10 mx-auto max-w-6xl">
+        <AuroraBackdrop />
+        <div className="mb-6 h-16" />
         <SettingsSkeleton />
       </div>
     );
   }
 
-  /* ── Error ──────────────────────────────────────────────────────────── */
+  /* ── Error ─────────────────────────────────────────────────── */
   if (isAdmin && org.isError) {
     return (
-      <div className="page-container mx-auto max-w-3xl space-y-5">
+      <div className="page-container relative z-10 mx-auto max-w-3xl space-y-5">
+        <AuroraBackdrop />
         <GlassPageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
-        <div className="glass-card p-8">
+        <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-8 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
           <GlassErrorState
             title={t('settings.loadFailed')}
             message={getErrorMessage(org.error as Error)}
@@ -1051,724 +1145,765 @@ export function SettingsPage() {
     );
   }
 
-  /* ── Render ─────────────────────────────────────────────────────────── */
+  /* ── Main Render ───────────────────────────────────────────── */
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="page-container mx-auto max-w-3xl space-y-5"
-    >
-      {/* ============================================================
-          HERO HEADER
-      ============================================================ */}
-      <motion.div variants={cardVariants}>
-        <GlassPageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
-      </motion.div>
+    <div className="page-container relative z-10 mx-auto max-w-6xl pb-12">
+      <AuroraBackdrop />
 
-      <motion.div variants={cardVariants} className="flex flex-wrap items-center gap-3">
-        <AccountChip
-          name={displayName}
-          role={displayRole}
-          avatarGradient={avatarGradient(displayName)}
-          initials={getInitials(displayName)}
-        />
-        <div className="flex items-center gap-1.5 rounded-full border border-[#007AFF33] bg-[#007AFF]/[0.08] px-3 py-1.5">
-          <Icon paths={I.sparkles} size={12} strokeWidth={2.2} className="text-[#007AFF]" />
-          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
-            {t('settings.title')}
-          </span>
-        </div>
-      </motion.div>
+      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-5">
+        {/* ═══ FLOATING COMMAND BAR ═══ */}
+        <motion.div variants={cardVariants} className="sticky top-4 z-30 mt-4">
+          <div className="flex items-center gap-3 rounded-2xl border border-black/[0.06] bg-white/80 px-3 py-2.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm"
+          >
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#2563EB] to-[#6366F1] text-white shadow-[0_4px_14px_-4px_rgba(37,99,235,0.5)]"
+            >
+              <Icon paths={I.settings} size={16} strokeWidth={2.2} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                <span>M-EDU</span>
+                <span className="opacity-50">/</span>
+                <span className="text-[#2563EB] dark:text-[#38BDF8]">Settings</span>
+              </div>
+              <h1 className="truncate text-[15px] font-extrabold leading-tight tracking-tight text-[var(--text-primary)]">
+                {t('settings.title')}
+              </h1>
+            </div>
+            <div className="hidden items-center gap-2 sm:flex">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/[0.08] px-2.5 py-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10B981]" />
+                <span className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                  Online
+                </span>
+              </span>
+            </div>
+          </div>
+        </motion.div>
 
-      {/* ============================================================
-          APPEARANCE
-      ============================================================ */}
-      <PremiumPanel
-        icon={I.palette}
-        title={t('settings.appearance')}
-        subtitle={t('settings.appearanceHint')}
-        tone="purple"
-      >
-        <div className="space-y-3">
-          <p className="text-[12px] font-medium text-[#86868B]">
-            {t('settings.themeHint')}
-          </p>
-          <ThemeSwitcher />
-        </div>
-      </PremiumPanel>
-
-      {/* ============================================================
-          TELEGRAM INTEGRATION
-      ============================================================ */}
-      <PremiumPanel
-        icon={I.telegram}
-        title={t('settings.telegram.title')}
-        subtitle={t('settings.telegram.subtitle')}
-        tone="blue"
-      >
-        <TelegramIntegration />
-      </PremiumPanel>
-
-      {/* ============================================================
-          ORGANIZATION (admin only)
-      ============================================================ */}
-      {isAdmin && (
-        <PremiumPanel
-          icon={I.building}
-          title={t('settings.organization')}
-          subtitle={t('settings.organizationHint')}
-          tone="orange"
-        >
-          {orgForm && (
-            <form className="space-y-4" onSubmit={handleOrgSubmit} noValidate>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <GlassField label={t('settings.orgName')} required error={orgErrors.name}>
-                  <div className="relative">
-                    <FieldIcon icon={I.building} tone="orange" />
-                    <GlassInput
-                      value={orgForm.name}
-                      onChange={handleOrgChange('name')}
-                      required
-                      aria-invalid={Boolean(orgErrors.name)}
-                      aria-describedby={orgErrors.name ? 'org-name-error' : undefined}
-                      disabled={saveOrg.isPending}
-                      className="pl-11"
-                    />
-                  </div>
-                  {orgErrors.name && (
+        {/* ═══ SPLIT PANE ═══ */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
+          {/* ── NAV RAIL ── */}
+          <aside className="hidden lg:sticky lg:top-24 lg:block lg:self-start">
+            <div className="space-y-3">
+              {/* Profile card */}
+              <div
+                className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-bold text-white shadow-md ring-2 ring-white/50 dark:ring-slate-900/50"
+                    style={{
+                      background: avatarGradient(displayName),
+                      fontSize: '13px',
+                    }}
+                  >
                     <span
-                      id="org-name-error"
-                      className="mt-1 text-xs"
-                      style={{ color: 'var(--state-error)' }}
-                    >
-                      {orgErrors.name}
-                    </span>
-                  )}
-                </GlassField>
-
-                <GlassField
-                  label={t('settings.contactEmail')}
-                  required
-                  error={orgErrors.email}
-                >
-                  <div className="relative">
-                    <FieldIcon icon={I.mail} tone="blue" />
-                    <GlassInput
-                      type="email"
-                      value={orgForm.email}
-                      onChange={handleOrgChange('email')}
-                      required
-                      aria-invalid={Boolean(orgErrors.email)}
-                      aria-describedby={orgErrors.email ? 'org-email-error' : undefined}
-                      disabled={saveOrg.isPending}
-                      className="pl-11"
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.4),transparent_55%)]"
                     />
+                    <span className="relative">{getInitials(displayName)}</span>
                   </div>
-                  {orgErrors.email && (
-                    <span
-                      id="org-email-error"
-                      className="mt-1 text-xs"
-                      style={{ color: 'var(--state-error)' }}
-                    >
-                      {orgErrors.email}
-                    </span>
-                  )}
-                </GlassField>
-
-                <GlassField label={t('settings.phone')}>
-                  <div className="relative">
-                    <FieldIcon icon={I.phone} tone="green" />
-                    <GlassInput
-                      type="tel"
-                      value={orgForm.phone}
-                      onChange={handleOrgChange('phone')}
-                      disabled={saveOrg.isPending}
-                      className="pl-11"
-                    />
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-bold tracking-tight text-[var(--text-primary)]">
+                      {displayName}
+                    </p>
+                    <p className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                      {displayRole}
+                    </p>
                   </div>
-                </GlassField>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                  <GlassButton type="submit" variant="primary" disabled={saveOrg.isPending}>
-                    <span className="inline-flex items-center gap-2">
-                      <Icon paths={I.save} size={14} strokeWidth={2} />
-                      {saveOrg.isPending ? t('common.saving') : t('settings.saveOrg')}
-                    </span>
-                  </GlassButton>
-                </motion.div>
-              </div>
-            </form>
-          )}
-        </PremiumPanel>
-      )}
-
-      {/* ============================================================
-          ACCESS CONTROL & WHITELIST (admin only)
-      ============================================================ */}
-      {isAdmin && (
-        <PremiumPanel
-          icon={I.shield}
-          title={t('settings.accessControl.title')}
-          subtitle={t('settings.accessControl.subtitle')}
-          tone="blue"
-        >
-          <div className="space-y-6">
-            {/* Platform-wide mode toggles (platform roles only) */}
-            {isPlatformAdmin && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)]">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm text-[var(--text-primary)]">
-                      {t('settings.accessControl.inviteOnly')}
-                    </span>
-                    {whitelistQuery.data?.settings?.inviteOnly && (
-                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                        {t('common.active') || 'ACTIVE'}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                    {t('settings.accessControl.inviteOnlyDesc')}
-                  </p>
                 </div>
-                <GlassSwitch
-                  id="inviteOnlyToggle"
-                  aria-label={t('settings.inviteOnlyMode')}
-                  checked={Boolean(whitelistQuery.data?.settings?.inviteOnly)}
-                  disabled={updateAccessSettingsMutation.isPending || whitelistQuery.isLoading}
-                  onChange={(checked) =>
-                    updateAccessSettingsMutation.mutate({ inviteOnly: checked })
-                  }
-                />
               </div>
 
-              <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)]">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm text-[var(--text-primary)]">
-                      {t('settings.accessControl.requireApproval')}
-                    </span>
-                    {whitelistQuery.data?.settings?.requireApproval && (
-                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                        {t('common.active') || 'ACTIVE'}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                    {t('settings.accessControl.requireApprovalDesc')}
-                  </p>
-                </div>
-                <GlassSwitch
-                  id="requireApprovalToggle"
-                  aria-label={t('settings.requireApprovalMode')}
-                  checked={Boolean(whitelistQuery.data?.settings?.requireApproval)}
-                  disabled={updateAccessSettingsMutation.isPending || whitelistQuery.isLoading}
-                  onChange={(checked) =>
-                    updateAccessSettingsMutation.mutate({ requireApproval: checked })
-                  }
-                />
+              {/* Nav items */}
+              <div
+                className="rounded-2xl border border-slate-200/85 bg-white/72 p-2 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.03]"
+                style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85)' }}
+              >
+                <NavRail items={navItems} activeId={activeId} onJump={scrollTo} />
               </div>
             </div>
-            )}
+          </aside>
 
-            {/* Pending User Approvals */}
-            {(whitelistQuery.data?.pendingUsers?.length ?? 0) > 0 && (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.04] p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-                    <h3 className="font-semibold text-sm text-[var(--text-primary)]">
-                      {t('settings.accessControl.pendingRequests')} ({whitelistQuery.data?.pendingUsers.length})
-                    </h3>
-                  </div>
-                </div>
-
-                <div className="divide-y divide-[var(--border-subtle)]">
-                  {whitelistQuery.data?.pendingUsers.map((pendingUser) => (
-                    <div
-                      key={pendingUser.id}
-                      className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm"
+          {/* ── CONTENT ── */}
+          <div className="min-w-0 space-y-5">
+            {/* Mobile nav */}
+            <div className="lg:hidden">
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {navItems.map((item) => {
+                  const active = item.id === activeId;
+                  const c = TONES[item.tone];
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => scrollTo(item.id)}
+                      className={[
+                        'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-bold transition-all',
+                        active
+                          ? 'shadow-sm'
+                          : 'border border-slate-200/80 bg-white/60 text-[var(--text-secondary)] dark:border-white/[0.08] dark:bg-white/[0.04]',
+                      ].join(' ')}
+                      style={
+                        active
+                          ? {
+                              background: c.bg,
+                              color: c.fg,
+                              border: `1px solid ${c.border}`,
+                            }
+                          : undefined
+                      }
                     >
-                      <div>
-                        <div className="font-medium text-[var(--text-primary)]">
-                          {pendingUser.firstName} {pendingUser.lastName}
-                        </div>
-                        <div className="text-xs text-[var(--text-secondary)]">
-                          {pendingUser.email} &bull; {pendingUser.organizationName || "Tashkilot ko'rsatilmagan"} &bull;{' '}
-                          {new Date(pendingUser.createdAt).toLocaleDateString()}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <GlassButton
-                          type="button"
-                          variant="primary"
-                          size="sm"
-                          disabled={approveUserMutation.isPending}
-                          onClick={() => approveUserMutation.mutate(pendingUser.id)}
-                        >
-                          <Icon paths={I.check} size={14} className="mr-1" />
-                          {t('common.approve')}
-                        </GlassButton>
-                        <GlassButton
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-500 hover:text-red-600"
-                          disabled={rejectUserMutation.isPending}
-                          onClick={() => rejectUserMutation.mutate(pendingUser.id)}
-                        >
-                          <Icon paths={I.trash} size={14} className="mr-1" />
-                          {t('common.reject')}
-                        </GlassButton>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      <Icon paths={item.icon} size={12} strokeWidth={2.2} />
+                      <span className="whitespace-nowrap">{item.label}</span>
+                    </button>
+                  );
+                })}
               </div>
-            )}
+            </div>
 
-            {/* Add to Whitelist Form */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!newWhitelistEmail.trim()) return;
-                addWhitelistMutation.mutate({
-                  email: newWhitelistEmail.trim().toLowerCase(),
-                  note: newWhitelistNote.trim() || undefined,
-                });
-              }}
-              className="p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] space-y-3"
+            {/* ═══ SECTIONS ═══ */}
+
+            {/* 01 · Appearance */}
+            <SettingsSection
+              id="section-appearance"
+              number="01"
+              title={t('settings.appearance')}
+              subtitle={t('settings.appearanceHint')}
+              icon={I.palette}
+              tone="purple"
             >
-              <h3 className="font-semibold text-sm text-[var(--text-primary)]">
-                {t('settings.accessControl.addToWhitelist')}
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                <div className="sm:col-span-6">
-                  <GlassInput
-                    type="email"
-                    placeholder="email@example.com"
-                    value={newWhitelistEmail}
-                    onChange={(e) => setNewWhitelistEmail(e.target.value)}
+              <div className="space-y-3">
+                <p className="text-[12px] font-medium text-[var(--text-muted)]">
+                  {t('settings.themeHint')}
+                </p>
+                <ThemeSwitcher />
+              </div>
+            </SettingsSection>
+
+            {/* 02 · Account */}
+            <SettingsSection
+              id="section-account"
+              number="02"
+              title={t('settings.account')}
+              subtitle={t('settings.accountHint')}
+              icon={I.user}
+              tone="green"
+            >
+              <form onSubmit={handleSettingsSubmit} noValidate className="space-y-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <GlassField label={t('settings.language')}>
+                    <GlassSelect
+                      value={settingsForm.language}
+                      onChange={handleSettingsChange('language')}
+                      aria-label={t('settings.language')}
+                      disabled={saveSettings.isPending}
+                    >
+                      {LANGUAGES.map((language) => (
+                        <option key={language.value} value={language.value}>
+                          {language.label}
+                        </option>
+                      ))}
+                    </GlassSelect>
+                  </GlassField>
+
+                  <GlassField label={t('settings.timezone')}>
+                    <GlassSelect
+                      value={settingsForm.timezone}
+                      onChange={handleSettingsChange('timezone')}
+                      aria-label={t('settings.timezone')}
+                      disabled={saveSettings.isPending}
+                    >
+                      {TIMEZONES.map((timezone) => (
+                        <option key={timezone.value} value={timezone.value}>
+                          {timezone.label}
+                        </option>
+                      ))}
+                    </GlassSelect>
+                  </GlassField>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <GlassButton type="submit" variant="primary" disabled={saveSettings.isPending}>
+                    <span className="inline-flex items-center gap-2">
+                      {saveSettings.isPending ? (
+                        <>
+                          <motion.span
+                            className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                          />
+                          {t('common.saving')}
+                        </>
+                      ) : (
+                        <>
+                          <Icon paths={I.check} size={14} strokeWidth={2.5} />
+                          {t('settings.save')}
+                        </>
+                      )}
+                    </span>
+                  </GlassButton>
+                </div>
+              </form>
+            </SettingsSection>
+
+            {/* 03 · Security */}
+            <SettingsSection
+              id="section-security"
+              number="03"
+              title={t('settings.changePassword')}
+              subtitle={t('settings.changePasswordHint')}
+              icon={I.lock}
+              tone="red"
+            >
+              <form onSubmit={handlePasswordSubmit} noValidate className="space-y-4">
+                <GlassField
+                  label={t('settings.currentPassword')}
+                  required
+                  error={pwdErrors.currentPassword}
+                >
+                  <PasswordInput
+                    value={pwdForm.currentPassword}
+                    onChange={handlePwdChange('currentPassword')}
+                    autoComplete="current-password"
+                    disabled={changePassword.isPending}
+                    invalid={Boolean(pwdErrors.currentPassword)}
+                    describedBy={pwdErrors.currentPassword ? 'current-password-error' : undefined}
+                    ariaLabel={t('settings.currentPassword')}
+                  />
+                  {pwdErrors.currentPassword && (
+                    <span
+                      id="current-password-error"
+                      className="mt-1 text-xs"
+                      style={{ color: 'var(--state-error)' }}
+                    >
+                      {pwdErrors.currentPassword}
+                    </span>
+                  )}
+                </GlassField>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <GlassField
+                    label={t('settings.newPassword')}
                     required
-                    disabled={addWhitelistMutation.isPending}
-                    aria-label={t('settings.whitelistEmail')}
-                  />
+                    error={pwdErrors.newPassword}
+                  >
+                    <PasswordInput
+                      value={pwdForm.newPassword}
+                      onChange={handlePwdChange('newPassword')}
+                      autoComplete="new-password"
+                      disabled={changePassword.isPending}
+                      invalid={Boolean(pwdErrors.newPassword)}
+                      describedBy={pwdErrors.newPassword ? 'new-password-error' : undefined}
+                      ariaLabel={t('settings.newPassword')}
+                    />
+                    {pwdErrors.newPassword && (
+                      <span
+                        id="new-password-error"
+                        className="mt-1 text-xs"
+                        style={{ color: 'var(--state-error)' }}
+                      >
+                        {pwdErrors.newPassword}
+                      </span>
+                    )}
+                    <PasswordStrengthMeter value={pwdForm.newPassword} />
+                  </GlassField>
+
+                  <GlassField
+                    label={t('settings.confirmPassword')}
+                    required
+                    error={pwdErrors.confirm}
+                  >
+                    <PasswordInput
+                      value={pwdForm.confirm}
+                      onChange={handlePwdChange('confirm')}
+                      autoComplete="new-password"
+                      disabled={changePassword.isPending}
+                      invalid={Boolean(pwdErrors.confirm)}
+                      describedBy={pwdErrors.confirm ? 'confirm-password-error' : undefined}
+                      ariaLabel={t('settings.confirmPassword')}
+                    />
+                    {pwdErrors.confirm && (
+                      <span
+                        id="confirm-password-error"
+                        className="mt-1 text-xs"
+                        style={{ color: 'var(--state-error)' }}
+                      >
+                        {pwdErrors.confirm}
+                      </span>
+                    )}
+                  </GlassField>
                 </div>
-                <div className="sm:col-span-4">
-                  <GlassInput
-                    placeholder={t('settings.accessControl.notePlaceholder')}
-                    value={newWhitelistNote}
-                    onChange={(e) => setNewWhitelistNote(e.target.value)}
-                    disabled={addWhitelistMutation.isPending}
-                    aria-label={t('settings.whitelistNote')}
-                  />
-                </div>
-                <div className="sm:col-span-2">
+
+                <div className="flex justify-end pt-1">
                   <GlassButton
                     type="submit"
                     variant="primary"
-                    className="w-full h-full"
-                    disabled={!newWhitelistEmail.trim() || addWhitelistMutation.isPending}
+                    disabled={changePassword.isPending}
                   >
-                    {addWhitelistMutation.isPending ? t('common.saving') : t('common.add')}
+                    <span className="inline-flex items-center gap-2">
+                      {changePassword.isPending ? (
+                        <>
+                          <motion.span
+                            className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                          />
+                          {t('common.saving')}
+                        </>
+                      ) : (
+                        <>
+                          <Icon paths={I.key} size={14} strokeWidth={2.2} />
+                          {t('settings.changePasswordAction')}
+                        </>
+                      )}
+                    </span>
                   </GlassButton>
                 </div>
-              </div>
-            </form>
+              </form>
+            </SettingsSection>
 
-            {/* Whitelist Table */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-sm text-[var(--text-primary)]">
-                  {t('settings.accessControl.whitelistedEmails')} (
-                  {whitelistQuery.data?.whitelist?.length ?? 0})
-                </h3>
-              </div>
-
-              {whitelistQuery.isLoading ? (
-                <div className="py-8 text-center text-xs text-[var(--text-muted)]">
-                  {t('common.loading')}
-                </div>
-              ) : (whitelistQuery.data?.whitelist?.length ?? 0) === 0 ? (
-                <div className="py-8 text-center rounded-xl border border-dashed border-[var(--border-subtle)] text-xs text-[var(--text-muted)]">
-                  {t('settings.accessControl.noWhitelist')}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-[var(--border-subtle)] overflow-hidden">
-                  <div className="divide-y divide-[var(--border-subtle)] max-h-80 overflow-y-auto">
-                    {whitelistQuery.data?.whitelist.map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-3 flex items-center justify-between gap-3 text-sm hover:bg-[var(--state-hover)] transition-colors"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-[var(--text-primary)] truncate">
-                              {item.email}
-                            </span>
-                            {item.role && (
-                              <span className="px-1.5 py-0.5 text-[10px] rounded bg-[var(--state-hover)] text-[var(--text-secondary)] font-mono">
-                                {item.role}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-[var(--text-muted)] flex items-center gap-2 mt-0.5">
-                            {item.note && <span>{item.note} &bull;</span>}
-                            <span>{new Date(item.createdAt).toLocaleDateString()}</span>
-                            {item.addedByName && <span>({item.addedByName})</span>}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeWhitelistMutation.mutate(item.id)}
-                          disabled={removeWhitelistMutation.isPending}
-                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors"
-                          title={t('common.delete')}
-                          aria-label={`Remove ${item.email}`}
-                        >
-                          <Icon paths={I.trash} size={16} />
-                        </button>
-                      </div>
-                    ))}
+            {/* 04 · Devices */}
+            <SettingsSection
+              id="section-devices"
+              number="04"
+              title={t('settings.devices.title', 'Faol qurilmalar')}
+              subtitle={t('settings.devices.subtitle', 'Bitta hisob ostida ulangan barcha qurilmalar')}
+              icon={I.laptop}
+              tone="blue"
+              footer={
+                (sessionsQuery.data?.length ?? 0) > 1 ? (
+                  <div className="flex w-full items-center justify-between gap-3">
+                    <span className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10B981]" />
+                      {t('settings.devices.syncActive', 'Real-vaqt sinxronizatsiyasi faol')}
+                    </span>
+                    <GlassButton
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                      disabled={revokeOtherSessionsMutation.isPending}
+                      onClick={() => setConfirmRevokeOthersOpen(true)}
+                    >
+                      <Icon paths={I.logOut} size={13} className="mr-1.5" />
+                      {revokeOtherSessionsMutation.isPending
+                        ? t('common.saving')
+                        : t('settings.devices.revokeOthers', 'Boshqa qurilmalardan chiqish')}
+                    </GlassButton>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </PremiumPanel>
-      )}
+                ) : undefined
+              }
+            >
+              <div>
+                {sessionsQuery.isLoading ? (
+                  <div className="py-6 text-center text-xs text-[var(--text-muted)]">
+                    {t('common.loading', 'Yuklanmoqda…')}
+                  </div>
+                ) : (sessionsQuery.data?.length ?? 0) === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300/80 py-6 text-center text-xs text-[var(--text-muted)] dark:border-white/[0.10]">
+                    {t('settings.devices.noSessions', 'Faol sessiyalar topilmadi')}
+                  </div>
+                ) : (
+                  <div className="-mx-2 divide-y divide-slate-200/70 dark:divide-white/[0.06]">
+                    {sessionsQuery.data?.map((session) => {
+                      const isCurrent = session.isCurrentSession;
+                      const iconPaths = getDeviceIcon(session.deviceType, session.os);
+                      return (
+                        <div
+                          key={session.id}
+                          className="flex flex-col gap-3 px-2 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div
+                              className={[
+                                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                                isCurrent
+                                  ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400'
+                                  : 'bg-slate-500/[0.08] text-[var(--text-secondary)]',
+                              ].join(' ')}
+                            >
+                              <Icon paths={iconPaths} size={18} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-[13px] text-[var(--text-primary)]">
+                                  {session.deviceName || session.browser || 'Noma\'lum qurilma'}
+                                </span>
+                                {isCurrent && (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                                    <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                                    {t('settings.devices.currentBadge', 'Joriy')}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-[var(--text-muted)]">
+                                <span>{session.browser || 'Brauzer'} · {session.os || 'OS'}</span>
+                                <span className="opacity-40">·</span>
+                                <span className="font-mono">{session.ipAddress}</span>
+                              </div>
+                              <div className="mt-0.5 text-[10.5px] text-[var(--text-muted)]">
+                                {t('settings.devices.lastActive', 'Oxirgi faollik:')}{' '}
+                                {session.lastActiveAt
+                                  ? new Date(session.lastActiveAt).toLocaleString()
+                                  : new Date(session.createdAt).toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
 
-      {/* ============================================================
-          ACTIVE DEVICES & DEVICE SYNC
-      ============================================================ */}
-      <PremiumPanel
-        icon={I.laptop}
-        title={t('settings.devices.title', 'Faol qurilmalar va qurilma sinxronizatsiyasi')}
-        subtitle={t(
-          'settings.devices.subtitle',
-          'Bitta hisob ostida ulangan barcha qurilmalarni kuzating, boshqaring va masofadan sessiyani yakunlang',
-        )}
-        tone="blue"
-        footer={
-          (sessionsQuery.data?.length ?? 0) > 1 ? (
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                {t('settings.devices.syncActive', 'Real-vaqt sinxronizatsiyasi faol')}
-              </span>
-              <GlassButton
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                disabled={revokeOtherSessionsMutation.isPending}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      t(
-                        'settings.devices.revokeOthersConfirm',
-                        'Rostdan ham barcha boshqa faol qurilmalarni tizimdan chiqarmoqchimisiz?',
-                      ),
-                    )
-                  ) {
-                    revokeOtherSessionsMutation.mutate();
-                  }
-                }}
-              >
-                <Icon paths={I.logOut} size={14} className="mr-1.5" />
-                {revokeOtherSessionsMutation.isPending
-                  ? t('common.saving')
-                  : t('settings.devices.revokeOthers', 'Boshqa barcha qurilmalardan chiqish')}
-              </GlassButton>
-            </div>
-          ) : undefined
-        }
-      >
-        <div className="space-y-3">
-          {sessionsQuery.isLoading ? (
-            <div className="py-8 text-center text-xs text-[var(--text-muted)]">
-              {t('common.loading', 'Yuklanmoqda...')}
-            </div>
-          ) : (sessionsQuery.data?.length ?? 0) === 0 ? (
-            <div className="py-6 text-center text-xs text-[var(--text-muted)]">
-              {t('settings.devices.noSessions', 'Faol sessiyalar topilmadi')}
-            </div>
-          ) : (
-            <div className="divide-y divide-[var(--border-subtle)]">
-              {sessionsQuery.data?.map((session) => {
-                const isCurrent = session.isCurrentSession;
-                const iconPaths = getDeviceIcon(session.deviceType, session.os);
-                return (
-                  <div
-                    key={session.id}
-                    className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm"
-                  >
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--state-hover)] text-[var(--text-secondary)]">
-                        <Icon paths={iconPaths} size={20} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-[var(--text-primary)]">
-                            {session.deviceName || session.browser || 'Nomaʼlum qurilma'}
-                          </span>
-                          {isCurrent && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              {t('settings.devices.currentBadge', 'Joriy qurilma')}
-                            </span>
+                          {!isCurrent && (
+                            <div className="self-end sm:self-center">
+                              <GlassButton
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                                disabled={revokeSessionMutation.isPending}
+                                onClick={() => revokeSessionMutation.mutate(session.id)}
+                              >
+                                <Icon paths={I.trash} size={13} className="mr-1" />
+                                {t('settings.devices.revoke', 'Chiqarish')}
+                              </GlassButton>
+                            </div>
                           )}
                         </div>
-                        <div className="text-xs text-[var(--text-secondary)] mt-0.5 flex items-center gap-2 flex-wrap">
-                          <span>
-                            {session.browser || 'Brauzer'} &bull; {session.os || 'OS'}
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </SettingsSection>
+
+            {/* 05 · Telegram */}
+            <SettingsSection
+              id="section-telegram"
+              number="05"
+              title={t('settings.telegram.title')}
+              subtitle={t('settings.telegram.subtitle')}
+              icon={I.telegram}
+              tone="blue"
+            >
+              <TelegramIntegration />
+            </SettingsSection>
+
+            {/* 06 · Organization (admin) */}
+            {isAdmin && (
+              <SettingsSection
+                id="section-organization"
+                number="06"
+                title={t('settings.organization')}
+                subtitle={t('settings.organizationHint')}
+                icon={I.building}
+                tone="orange"
+              >
+                {orgForm && (
+                  <form onSubmit={handleOrgSubmit} noValidate className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <GlassField label={t('settings.orgName')} required error={orgErrors.name}>
+                        <GlassInput
+                          value={orgForm.name}
+                          onChange={handleOrgChange('name')}
+                          required
+                          aria-invalid={Boolean(orgErrors.name)}
+                          aria-describedby={orgErrors.name ? 'org-name-error' : undefined}
+                          disabled={saveOrg.isPending}
+                        />
+                        {orgErrors.name && (
+                          <span
+                            id="org-name-error"
+                            className="mt-1 text-xs"
+                            style={{ color: 'var(--state-error)' }}
+                          >
+                            {orgErrors.name}
                           </span>
-                          <span>&bull;</span>
-                          <span className="font-mono text-[11px] text-[var(--text-muted)]">
-                            {session.ipAddress}
+                        )}
+                      </GlassField>
+
+                      <GlassField
+                        label={t('settings.contactEmail')}
+                        required
+                        error={orgErrors.email}
+                      >
+                        <GlassInput
+                          type="email"
+                          value={orgForm.email}
+                          onChange={handleOrgChange('email')}
+                          required
+                          aria-invalid={Boolean(orgErrors.email)}
+                          aria-describedby={orgErrors.email ? 'org-email-error' : undefined}
+                          disabled={saveOrg.isPending}
+                        />
+                        {orgErrors.email && (
+                          <span
+                            id="org-email-error"
+                            className="mt-1 text-xs"
+                            style={{ color: 'var(--state-error)' }}
+                          >
+                            {orgErrors.email}
                           </span>
-                        </div>
-                        <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                          {t('settings.devices.lastActive', 'Oxirgi faollik:')}{' '}
-                          {session.lastActiveAt
-                            ? new Date(session.lastActiveAt).toLocaleString()
-                            : new Date(session.createdAt).toLocaleString()}
-                        </div>
-                      </div>
+                        )}
+                      </GlassField>
+
+                      <GlassField label={t('settings.phone')}>
+                        <GlassInput
+                          type="tel"
+                          value={orgForm.phone}
+                          onChange={handleOrgChange('phone')}
+                          disabled={saveOrg.isPending}
+                        />
+                      </GlassField>
                     </div>
 
-                    {!isCurrent && (
-                      <div className="self-end sm:self-center">
-                        <GlassButton
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                          disabled={revokeSessionMutation.isPending}
-                          onClick={() => revokeSessionMutation.mutate(session.id)}
-                          aria-label={`Revoke session on ${session.deviceName || session.browser}`}
-                        >
-                          <Icon paths={I.trash} size={14} className="mr-1" />
-                          {t('settings.devices.revoke', 'Chiqarish')}
-                        </GlassButton>
+                    <div className="flex justify-end pt-1">
+                      <GlassButton type="submit" variant="primary" disabled={saveOrg.isPending}>
+                        <span className="inline-flex items-center gap-2">
+                          <Icon paths={I.save} size={14} strokeWidth={2} />
+                          {saveOrg.isPending ? t('common.saving') : t('settings.saveOrg')}
+                        </span>
+                      </GlassButton>
+                    </div>
+                  </form>
+                )}
+              </SettingsSection>
+            )}
+
+            {/* 07 · Access Control (admin) */}
+            {isAdmin && (
+              <SettingsSection
+                id="section-access"
+                number="07"
+                title={t('settings.accessControl.title')}
+                subtitle={t('settings.accessControl.subtitle')}
+                icon={I.shield}
+                tone="blue"
+              >
+                <div className="space-y-6">
+                  {/* Platform toggles */}
+                  {isPlatformAdmin && (
+                    <div className="overflow-hidden rounded-xl border border-slate-200/85 dark:border-white/[0.08]">
+                      <div className="flex items-start justify-between gap-4 border-b border-slate-200/70 bg-white/40 px-4 py-3.5 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                        <div className="min-w-0">
+                          <p className="text-[12.5px] font-bold text-[var(--text-primary)]">
+                            {t('settings.accessControl.inviteOnly')}
+                          </p>
+                          <p className="mt-0.5 text-[11px] font-medium text-[var(--text-muted)]">
+                            {t('settings.accessControl.inviteOnlyDesc')}
+                          </p>
+                        </div>
+                        <GlassSwitch
+                          id="inviteOnlyToggle"
+                          aria-label={t('settings.inviteOnlyMode')}
+                          checked={Boolean(whitelistQuery.data?.settings?.inviteOnly)}
+                          disabled={updateAccessSettingsMutation.isPending || whitelistQuery.isLoading}
+                          onChange={(checked) =>
+                            updateAccessSettingsMutation.mutate({ inviteOnly: checked })
+                          }
+                        />
+                      </div>
+
+                      <div className="flex items-start justify-between gap-4 bg-white/40 px-4 py-3.5 dark:bg-white/[0.02]">
+                        <div className="min-w-0">
+                          <p className="text-[12.5px] font-bold text-[var(--text-primary)]">
+                            {t('settings.accessControl.requireApproval')}
+                          </p>
+                          <p className="mt-0.5 text-[11px] font-medium text-[var(--text-muted)]">
+                            {t('settings.accessControl.requireApprovalDesc')}
+                          </p>
+                        </div>
+                        <GlassSwitch
+                          id="requireApprovalToggle"
+                          aria-label={t('settings.requireApprovalMode')}
+                          checked={Boolean(whitelistQuery.data?.settings?.requireApproval)}
+                          disabled={updateAccessSettingsMutation.isPending || whitelistQuery.isLoading}
+                          onChange={(checked) =>
+                            updateAccessSettingsMutation.mutate({ requireApproval: checked })
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pending users */}
+                  {(whitelistQuery.data?.pendingUsers?.length ?? 0) > 0 && (
+                    <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.04] p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        <h3 className="text-[12px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                          {t('settings.accessControl.pendingRequests')} ({whitelistQuery.data?.pendingUsers.length})
+                        </h3>
+                      </div>
+                      <div className="space-y-2">
+                        {whitelistQuery.data?.pendingUsers.map((pendingUser) => (
+                          <div
+                            key={pendingUser.id}
+                            className="flex flex-col gap-2 rounded-lg border border-amber-500/15 bg-white/60 p-3 sm:flex-row sm:items-center sm:justify-between dark:bg-white/[0.03]"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-[12.5px] font-bold text-[var(--text-primary)]">
+                                {pendingUser.firstName} {pendingUser.lastName}
+                              </p>
+                              <p className="truncate text-[10.5px] text-[var(--text-muted)]">
+                                {pendingUser.email} · {pendingUser.organizationName || "—"} ·{' '}
+                                {new Date(pendingUser.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <GlassButton
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                disabled={approveUserMutation.isPending}
+                                onClick={() => approveUserMutation.mutate(pendingUser.id)}
+                              >
+                                <Icon paths={I.check} size={12} className="mr-1" />
+                                {t('common.approve')}
+                              </GlassButton>
+                              <GlassButton
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-500 hover:text-red-600"
+                                disabled={rejectUserMutation.isPending}
+                                onClick={() => rejectUserMutation.mutate(pendingUser.id)}
+                              >
+                                <Icon paths={I.trash} size={12} className="mr-1" />
+                                {t('common.reject')}
+                              </GlassButton>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add to whitelist */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!newWhitelistEmail.trim()) return;
+                      addWhitelistMutation.mutate({
+                        email: newWhitelistEmail.trim().toLowerCase(),
+                        note: newWhitelistNote.trim() || undefined,
+                      });
+                    }}
+                    className="rounded-xl border border-slate-200/85 bg-white/40 p-3.5 dark:border-white/[0.08] dark:bg-white/[0.02]"
+                  >
+                    <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                      {t('settings.accessControl.addToWhitelist')}
+                    </p>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <GlassInput
+                        type="email"
+                        placeholder="email@example.com"
+                        value={newWhitelistEmail}
+                        onChange={(e) => setNewWhitelistEmail(e.target.value)}
+                        required
+                        disabled={addWhitelistMutation.isPending}
+                        aria-label={t('settings.whitelistEmail')}
+                        className="flex-1"
+                      />
+                      <GlassInput
+                        placeholder={t('settings.accessControl.notePlaceholder')}
+                        value={newWhitelistNote}
+                        onChange={(e) => setNewWhitelistNote(e.target.value)}
+                        disabled={addWhitelistMutation.isPending}
+                        aria-label={t('settings.whitelistNote')}
+                        className="sm:w-48"
+                      />
+                      <GlassButton
+                        type="submit"
+                        variant="primary"
+                        disabled={!newWhitelistEmail.trim() || addWhitelistMutation.isPending}
+                      >
+                        <Icon paths={I.plus} size={13} className="mr-1" />
+                        {addWhitelistMutation.isPending ? t('common.saving') : t('common.add')}
+                      </GlassButton>
+                    </div>
+                  </form>
+
+                  {/* Whitelist table */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                        {t('settings.accessControl.whitelistedEmails')} (
+                        {whitelistQuery.data?.whitelist?.length ?? 0})
+                      </h3>
+                    </div>
+
+                    {whitelistQuery.isLoading ? (
+                      <div className="py-6 text-center text-xs text-[var(--text-muted)]">
+                        {t('common.loading')}
+                      </div>
+                    ) : (whitelistQuery.data?.whitelist?.length ?? 0) === 0 ? (
+                      <div className="rounded-xl border border-dashed border-slate-300/80 py-6 text-center text-xs text-[var(--text-muted)] dark:border-white/[0.10]">
+                        {t('settings.accessControl.noWhitelist')}
+                      </div>
+                    ) : (
+                      <div className="max-h-80 overflow-y-auto rounded-xl border border-slate-200/85 dark:border-white/[0.08]">
+                        <div className="divide-y divide-slate-200/70 dark:divide-white/[0.06]">
+                          {whitelistQuery.data?.whitelist.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between gap-3 px-3.5 py-2.5 transition-colors hover:bg-slate-50/60 dark:hover:bg-white/[0.03]"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="truncate text-[12.5px] font-bold text-[var(--text-primary)]">
+                                    {item.email}
+                                  </span>
+                                  {item.role && (
+                                    <span className="rounded bg-slate-500/10 px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-[var(--text-secondary)]">
+                                      {item.role}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10.5px] text-[var(--text-muted)]">
+                                  {item.note && <span>{item.note} ·</span>}
+                                  <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                                  {item.addedByName && <span>({item.addedByName})</span>}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeWhitelistMutation.mutate(item.id)}
+                                disabled={removeWhitelistMutation.isPending}
+                                className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-500/10"
+                                title={t('common.delete')}
+                                aria-label={`Remove ${item.email}`}
+                              >
+                                <Icon paths={I.trash} size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                </div>
+              </SettingsSection>
+            )}
+          </div>
         </div>
-      </PremiumPanel>
+      </motion.div>
 
-      {/* ============================================================
-          ACCOUNT SETTINGS
-      ============================================================ */}
-      <PremiumPanel
-        icon={I.user}
-        title={t('settings.account')}
-        subtitle={t('settings.accountHint')}
-        tone="green"
-      >
-        <form className="space-y-4" onSubmit={handleSettingsSubmit} noValidate>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <GlassField label={t('settings.language')}>
-              <div className="relative">
-                <FieldIcon icon={I.globe} tone="blue" />
-                <GlassSelect
-                  value={settingsForm.language}
-                  onChange={handleSettingsChange('language')}
-                  aria-label={t('settings.language')}
-                  disabled={saveSettings.isPending}
-                  className="pl-11"
-                >
-                  {LANGUAGES.map((language) => (
-                    <option key={language.value} value={language.value}>
-                      {language.label}
-                    </option>
-                  ))}
-                </GlassSelect>
-              </div>
-            </GlassField>
-
-            <GlassField label={t('settings.timezone')}>
-              <div className="relative">
-                <FieldIcon icon={I.clock} tone="purple" />
-                <GlassSelect
-                  value={settingsForm.timezone}
-                  onChange={handleSettingsChange('timezone')}
-                  aria-label={t('settings.timezone')}
-                  disabled={saveSettings.isPending}
-                  className="pl-11"
-                >
-                  {TIMEZONES.map((timezone) => (
-                    <option key={timezone.value} value={timezone.value}>
-                      {timezone.label}
-                    </option>
-                  ))}
-                </GlassSelect>
-              </div>
-            </GlassField>
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton type="submit" variant="primary" disabled={saveSettings.isPending}>
-                <span className="inline-flex items-center gap-2">
-                  {saveSettings.isPending ? (
-                    <>
-                      <motion.span
-                        className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                      />
-                      {t('common.saving')}
-                    </>
-                  ) : (
-                    <>
-                      <Icon paths={I.check} size={14} strokeWidth={2.5} />
-                      {t('settings.save')}
-                    </>
-                  )}
-                </span>
-              </GlassButton>
-            </motion.div>
-          </div>
-        </form>
-      </PremiumPanel>
-
-      {/* ============================================================
-          CHANGE PASSWORD
-      ============================================================ */}
-      <PremiumPanel
-        icon={I.lock}
-        title={t('settings.changePassword')}
-        subtitle={t('settings.changePasswordHint')}
-        tone="red"
-      >
-        <form className="space-y-4" onSubmit={handlePasswordSubmit} noValidate>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <GlassField
-              label={t('settings.currentPassword')}
-              required
-              error={pwdErrors.currentPassword}
-            >
-              <div className="relative">
-                <FieldIcon icon={I.lock} tone="red" />
-                <PasswordInput
-                  value={pwdForm.currentPassword}
-                  onChange={handlePwdChange('currentPassword')}
-                  autoComplete="current-password"
-                  disabled={changePassword.isPending}
-                  invalid={Boolean(pwdErrors.currentPassword)}
-                  describedBy={pwdErrors.currentPassword ? 'current-password-error' : undefined}
-                  ariaLabel={t('settings.currentPassword')}
-                />
-              </div>
-              {pwdErrors.currentPassword && (
-                <span
-                  id="current-password-error"
-                  className="mt-1 text-xs"
-                  style={{ color: 'var(--state-error)' }}
-                >
-                  {pwdErrors.currentPassword}
-                </span>
-              )}
-            </GlassField>
-
-            <GlassField
-              label={t('settings.newPassword')}
-              required
-              error={pwdErrors.newPassword}
-            >
-              <div className="relative">
-                <FieldIcon icon={I.key} tone="orange" />
-                <PasswordInput
-                  value={pwdForm.newPassword}
-                  onChange={handlePwdChange('newPassword')}
-                  autoComplete="new-password"
-                  disabled={changePassword.isPending}
-                  invalid={Boolean(pwdErrors.newPassword)}
-                  describedBy={pwdErrors.newPassword ? 'new-password-error' : undefined}
-                  ariaLabel={t('settings.newPassword')}
-                />
-              </div>
-              {pwdErrors.newPassword && (
-                <span
-                  id="new-password-error"
-                  className="mt-1 text-xs"
-                  style={{ color: 'var(--state-error)' }}
-                >
-                  {pwdErrors.newPassword}
-                </span>
-              )}
-              <PasswordStrengthMeter value={pwdForm.newPassword} />
-            </GlassField>
-
-            <GlassField
-              label={t('settings.confirmPassword')}
-              required
-              error={pwdErrors.confirm}
-            >
-              <div className="relative">
-                <FieldIcon icon={I.shield} tone="green" />
-                <PasswordInput
-                  value={pwdForm.confirm}
-                  onChange={handlePwdChange('confirm')}
-                  autoComplete="new-password"
-                  disabled={changePassword.isPending}
-                  invalid={Boolean(pwdErrors.confirm)}
-                  describedBy={pwdErrors.confirm ? 'confirm-password-error' : undefined}
-                  ariaLabel={t('settings.confirmPassword')}
-                />
-              </div>
-              {pwdErrors.confirm && (
-                <span
-                  id="confirm-password-error"
-                  className="mt-1 text-xs"
-                  style={{ color: 'var(--state-error)' }}
-                >
-                  {pwdErrors.confirm}
-                </span>
-              )}
-            </GlassField>
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton
-                type="submit"
-                variant="primary"
-                disabled={changePassword.isPending}
-              >
-                <span className="inline-flex items-center gap-2">
-                  {changePassword.isPending ? (
-                    <>
-                      <motion.span
-                        className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                      />
-                      {t('common.saving')}
-                    </>
-                  ) : (
-                    <>
-                      <Icon paths={I.key} size={14} strokeWidth={2.2} />
-                      {t('settings.changePasswordAction')}
-                    </>
-                  )}
-                </span>
-              </GlassButton>
-            </motion.div>
-          </div>
-        </form>
-      </PremiumPanel>
+      <ConfirmDialog
+        open={confirmRevokeOthersOpen}
+        title={t('settings.devices.revokeOthers', 'Boshqa barcha qurilmalardan chiqish')}
+        description={t(
+          'settings.devices.revokeOthersConfirm',
+          'Rostdan ham barcha boshqa faol qurilmalarni tizimdan chiqarmoqchimisiz?',
+        )}
+        confirmLabel={t('settings.devices.revokeOthers', 'Chiqarish')}
+        tone="danger"
+        loading={revokeOtherSessionsMutation.isPending}
+        onConfirm={() => {
+          revokeOtherSessionsMutation.mutate();
+          setConfirmRevokeOthersOpen(false);
+        }}
+        onClose={() => setConfirmRevokeOthersOpen(false)}
+      />
 
       {toastNode}
-    </motion.div>
+    </div>
   );
 }

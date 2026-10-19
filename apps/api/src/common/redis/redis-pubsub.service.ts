@@ -70,26 +70,66 @@ export class RedisPubSubService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private readonly memoryStore = new Map<string, { value: string; expiresAt: number }>();
+
   async publish(channel: string, payload: any): Promise<void> {
-    if (!this.pubClient) return;
+    const message = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    if (!this.pubClient) {
+      // Local in-memory dispatch when Redis is disabled or offline
+      const handlers = this.subscribers.get(channel);
+      if (handlers) {
+        for (const handler of handlers) {
+          try {
+            handler(message);
+          } catch (err) {
+            this.logger.error(`Error in local pub/sub handler for channel ${channel}`, getErrorMessage(err));
+          }
+        }
+      }
+      return;
+    }
     try {
-      const message = typeof payload === 'string' ? payload : JSON.stringify(payload);
       await this.pubClient.publish(channel, message);
     } catch (err) {
       this.logger.warn(`Failed to publish to ${channel}: ${getErrorMessage(err)}`);
+      // Fallback local dispatch on publish error
+      const handlers = this.subscribers.get(channel);
+      if (handlers) {
+        for (const handler of handlers) {
+          try {
+            handler(message);
+          } catch (subErr) {
+            this.logger.error(`Error in fallback pub/sub handler for channel ${channel}`, getErrorMessage(subErr));
+          }
+        }
+      }
     }
   }
 
   async get(key: string): Promise<string | null> {
-    if (!this.pubClient) return null;
+    if (!this.pubClient) {
+      const entry = this.memoryStore.get(key);
+      if (!entry) return null;
+      if (Date.now() > entry.expiresAt) {
+        this.memoryStore.delete(key);
+        return null;
+      }
+      return entry.value;
+    }
     try {
       return await this.pubClient.get(key);
     } catch {
+      const entry = this.memoryStore.get(key);
+      if (entry && Date.now() <= entry.expiresAt) {
+        return entry.value;
+      }
       return null;
     }
   }
 
   async set(key: string, value: string, ttlMs: number): Promise<void> {
+    // Always keep in memory store as fallback
+    this.memoryStore.set(key, { value, expiresAt: Date.now() + ttlMs });
     if (!this.pubClient) return;
     try {
       await this.pubClient.set(key, value, 'PX', ttlMs);
@@ -98,17 +138,49 @@ export class RedisPubSubService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async setIfNotExists(key: string, value: string, ttlMs: number): Promise<boolean> {
+    if (this.pubClient) {
+      try {
+        const res = await this.pubClient.set(key, value, 'PX', ttlMs, 'NX');
+        const success = res === 'OK';
+        if (success) {
+          this.memoryStore.set(key, { value, expiresAt: Date.now() + ttlMs });
+        }
+        return success;
+      } catch (err) {
+        this.logger.warn(`Failed to setNX Redis key ${key}: ${getErrorMessage(err)}`);
+      }
+    }
+    const now = Date.now();
+    const existing = this.memoryStore.get(key);
+    if (existing && existing.expiresAt > now) {
+      return false;
+    }
+    this.memoryStore.set(key, { value, expiresAt: now + ttlMs });
+    return true;
+  }
+
+  async delete(key: string): Promise<void> {
+    this.memoryStore.delete(key);
+    if (!this.pubClient) return;
+    try {
+      await this.pubClient.del(key);
+    } catch (err) {
+      this.logger.warn(`Failed to delete Redis key ${key}: ${getErrorMessage(err)}`);
+    }
+  }
+
   async subscribe(channel: string, handler: (payload: string) => void): Promise<void> {
-    if (!this.subClient) return;
-    
     let handlers = this.subscribers.get(channel);
     if (!handlers) {
       handlers = [];
       this.subscribers.set(channel, handlers);
-      try {
-        await this.subClient.subscribe(channel);
-      } catch (err) {
-        this.logger.warn(`Failed to subscribe to ${channel}: ${getErrorMessage(err)}`);
+      if (this.subClient) {
+        try {
+          await this.subClient.subscribe(channel);
+        } catch (err) {
+          this.logger.warn(`Failed to subscribe to ${channel}: ${getErrorMessage(err)}`);
+        }
       }
     }
     handlers.push(handler);

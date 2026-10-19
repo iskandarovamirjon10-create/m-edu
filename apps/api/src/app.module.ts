@@ -1,4 +1,4 @@
-﻿import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
+import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
@@ -6,6 +6,7 @@ import { authTracker } from './config/auth-tracker';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisPubSubModule } from './common/redis/redis-pubsub.module';
+import { IdempotencyModule } from './common/idempotency/idempotency.module';
 import { AuthModule } from './auth/auth.module';
 import { GlobalAuthGuard } from './auth/global-auth.guard';
 import { UsersModule } from './users/users.module';
@@ -146,6 +147,7 @@ const redisEnabled = isRedisEnabled();
     }),
     PrismaModule,
     RedisPubSubModule,
+    IdempotencyModule,
     AuthModule,
     UsersModule,
     AdminModule,
@@ -219,7 +221,7 @@ const redisEnabled = isRedisEnabled();
   controllers: [RootController],
   providers: [
     // Apply rate limiting to every HTTP endpoint. Per-endpoint overrides use
-    // @Throttle({ default: { limit, ttl } }) â€” e.g. auth (login/register) and
+    // @Throttle({ default: { limit, ttl } }) — e.g. auth (login/register) and
     // face capture/attempt endpoints are tightened well below the 100/min
     // default (see auth.controller.ts and face.controller.ts).
     //

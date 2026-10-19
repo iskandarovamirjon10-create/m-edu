@@ -1,31 +1,31 @@
 /**
  * M-EDU AI Message Bubbles — Apple Design Award Edition v4 "Aurora Whisper"
  *
- * v3 â†’ v4:
- *  âœ… Singleton reduced-motion + clock (bitta MQL butun app)
- *  âœ… Auto-updating timestamps (30s tick)
- *  âœ… FIX: user message status indicator (inline style conflict)
- *  âœ… FIX: MessageActions positioning in both sides
- *  âœ… FIX: compact mode actions
- *  âœ… FIX: SSR-safe clipboard
- *  âœ… FIX: assistant actions on activities+content
- *  âœ… FIX: streaming cursor inline flow
- *  âœ… FIX: aria-live debounce
- *  âœ… Design tokens everywhere (no hardcoded colors)
- *  âœ… color-mix() fallback chain
- *  âœ… NEW: Collapsible long messages
- *  âœ… NEW: Bookmark/Star per message
- *  âœ… NEW: Quote/Reply action
- *  âœ… NEW: Reactions (emoji)
- *  âœ… NEW: Edit user message
- *  âœ… NEW: Swipe-to-reply (mobile)
- *  âœ… NEW: Streaming shimmer overlay
- *  âœ… NEW: Regenerate rate-limit
- *  âœ… NEW: Token count footer
- *  âœ… NEW: Haptic feedback
- *  âœ… NEW: Focus rings with tokens
+ * v3 → v4:
+ *  ✅ Singleton reduced-motion + clock (bitta MQL butun app)
+ *  ✅ Auto-updating timestamps (30s tick)
+ *  ✅ FIX: user message status indicator (inline style conflict)
+ *  ✅ FIX: MessageActions positioning in both sides
+ *  ✅ FIX: compact mode actions
+ *  ✅ FIX: SSR-safe clipboard
+ *  ✅ FIX: assistant actions on activities+content
+ *  ✅ FIX: streaming cursor inline flow
+ *  ✅ FIX: aria-live debounce
+ *  ✅ Design tokens everywhere (no hardcoded colors)
+ *  ✅ color-mix() fallback chain
+ *  ✅ NEW: Collapsible long messages
+ *  ✅ NEW: Bookmark/Star per message
+ *  ✅ NEW: Quote/Reply action
+ *  ✅ NEW: Reactions (emoji)
+ *  ✅ NEW: Edit user message
+ *  ✅ NEW: Swipe-to-reply (mobile)
+ *  ✅ NEW: Streaming shimmer overlay
+ *  ✅ NEW: Regenerate rate-limit
+ *  ✅ NEW: Token count footer
+ *  ✅ NEW: Haptic feedback
+ *  ✅ NEW: Focus rings with tokens
  *
- * âœ… FULLY BACKWARD-COMPATIBLE — drop-in replacement.
+ * ✅ FULLY BACKWARD-COMPATIBLE — drop-in replacement.
  */
 
 import {

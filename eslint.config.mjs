@@ -2,6 +2,8 @@ import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import eslintConfigPrettier from "eslint-config-prettier";
 import globals from "globals";
+import reactPlugin from "eslint-plugin-react";
+import reactHooksPlugin from "eslint-plugin-react-hooks";
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -20,6 +22,10 @@ export default tseslint.config(
     ]
   },
   {
+    plugins: {
+      react: reactPlugin,
+      "react-hooks": reactHooksPlugin,
+    },
     languageOptions: {
       globals: {
         ...globals.node,
@@ -29,6 +35,9 @@ export default tseslint.config(
       parserOptions: {
         ecmaVersion: "latest",
         sourceType: "module",
+        ecmaFeatures: {
+          jsx: true,
+        },
       },
     },
     rules: {
@@ -38,7 +47,10 @@ export default tseslint.config(
       "@typescript-eslint/ban-ts-comment": "off",
       "no-empty": "off",
       "no-control-regex": "off",
-      "no-async-promise-executor": "off"
+      "no-async-promise-executor": "off",
+      "react/no-danger": "off",
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
     },
   }
 );

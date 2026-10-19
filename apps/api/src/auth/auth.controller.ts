@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpException, Param, Post, Req, Res, UseGuards, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpException, Param, Post, Req, Res, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Response, Request } from 'express';
@@ -82,8 +82,11 @@ export class AuthController {
       'SUPER_ADMIN exists anywhere in the platform; afterwards it returns ' +
       '409 forever. Intended for the initial deployment of a fresh platform.',
   })
-  async bootstrap(@Body() dto: BootstrapDto) {
-    return this.authService.bootstrap(dto);
+  async bootstrap(
+    @Body() dto: BootstrapDto,
+    @Headers('x-bootstrap-secret') secretHeader?: string,
+  ) {
+    return this.authService.bootstrap(dto, secretHeader);
   }
 
   @Post('register')
@@ -193,7 +196,10 @@ export class AuthController {
 
     // Cookie state verification (binds exchange to the browser that completed OAuth callback)
     const cookieState = req.cookies?.['oauth_exchange_state'];
-    if (cookieState && body.state) {
+    if (cookieState || body.state) {
+      if (!cookieState || !body.state) {
+        throw new BadRequestException('Invalid or expired OAuth exchange state');
+      }
       const expected = Buffer.from(cookieState);
       const actual = Buffer.from(body.state);
       if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {

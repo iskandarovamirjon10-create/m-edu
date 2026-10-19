@@ -73,6 +73,27 @@ export class StudentsController {
     return this.studentsService.removeFromGroup(orgId, studentId, groupId);
   }
 
+  @Post(':id/freeze')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Freeze student enrollment (medical leave / academic freeze)' })
+  freeze(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') studentId: string,
+    @Body() body: { startDate?: string; endDate?: string; reason?: string },
+  ) {
+    return this.studentsService.freeze(orgId, studentId, body);
+  }
+
+  @Post(':id/unfreeze')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Unfreeze and restore student active status' })
+  unfreeze(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') studentId: string,
+  ) {
+    return this.studentsService.unfreeze(orgId, studentId);
+  }
+
   // ==================== Parent Associations ====================
 
   @Get(':id/parents')

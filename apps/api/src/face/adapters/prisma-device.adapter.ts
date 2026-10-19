@@ -15,16 +15,21 @@ interface DeviceListFilters {
   limit?: number;
 }
 
+type FaceDeviceWithCredentials = FaceDevice & {
+  credentials?: Array<{ apiKeyHash: string; isActive: boolean }>;
+};
+
 @Injectable()
 export class PrismaDeviceAdapter implements DeviceRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private mapDeviceEntity(row: FaceDevice): DeviceEntity {
+  private mapDeviceEntity(row: FaceDeviceWithCredentials): DeviceEntity {
+    const activeCredential = row.credentials?.find((c) => c.isActive);
     return {
       id: row.id,
       organizationId: row.organizationId,
       name: row.name,
-      apiKeyHash: '',
+      apiKeyHash: activeCredential?.apiKeyHash ?? '',
       status: row.status as DeviceStatus,
       lastSeenAt: row.lastSeenAt,
       registeredAt: row.registeredAt,
@@ -39,6 +44,13 @@ export class PrismaDeviceAdapter implements DeviceRepository {
   async findById(organizationId: string, id: string): Promise<DeviceEntity | null> {
     const row = await this.prisma.faceDevice.findFirst({
       where: { id, organizationId },
+      include: {
+        credentials: {
+          where: { isActive: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
     });
     return row ? this.mapDeviceEntity(row) : null;
   }
@@ -46,6 +58,9 @@ export class PrismaDeviceAdapter implements DeviceRepository {
   async findByApiKeyHash(organizationId: string, apiKeyHash: string): Promise<DeviceEntity | null> {
     const row = await this.prisma.faceDevice.findFirst({
       where: { organizationId, credentials: { some: { apiKeyHash, isActive: true } } },
+      include: {
+        credentials: { where: { apiKeyHash, isActive: true }, take: 1 },
+      },
     });
     return row ? this.mapDeviceEntity(row) : null;
   }
@@ -61,6 +76,13 @@ export class PrismaDeviceAdapter implements DeviceRepository {
       this.prisma.faceDevice.findMany({
         where,
         orderBy: { registeredAt: 'desc' },
+        include: {
+          credentials: {
+            where: { isActive: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
         ...(filters.limit && { take: filters.limit }),
         ...(filters.limit && filters.page && { skip: (filters.page - 1) * filters.limit }),
       }),
@@ -79,15 +101,33 @@ export class PrismaDeviceAdapter implements DeviceRepository {
     apiKeyHash: string;
     metadata?: Record<string, unknown>;
   }): Promise<DeviceEntity> {
-    const row = await this.prisma.faceDevice.create({
-      data: {
-        organizationId: data.organizationId,
-        name: data.name,
-        status: 'ACTIVE',
-        metadata: (data.metadata || {}) as Prisma.InputJsonValue,
-      },
+    // The credential hash is what device authentication looks up in
+    // findByApiKeyHash, so it MUST be persisted with the device. Both writes
+    // share one transaction so a device can never exist without its credential.
+    return this.prisma.$transaction(async (tx) => {
+      const device = await tx.faceDevice.create({
+        data: {
+          organizationId: data.organizationId,
+          name: data.name,
+          status: 'ACTIVE',
+          metadata: (data.metadata || {}) as Prisma.InputJsonValue,
+        },
+      });
+
+      await tx.faceDeviceCredential.create({
+        data: {
+          organizationId: data.organizationId,
+          faceDeviceId: device.id,
+          apiKeyHash: data.apiKeyHash,
+          isActive: true,
+        },
+      });
+
+      return this.mapDeviceEntity({
+        ...device,
+        credentials: [{ apiKeyHash: data.apiKeyHash, isActive: true }],
+      });
     });
-    return this.mapDeviceEntity(row);
   }
 
   async updateStatus(
@@ -105,6 +145,13 @@ export class PrismaDeviceAdapter implements DeviceRepository {
     const row = await this.prisma.faceDevice.update({
       where: { id, organizationId },
       data,
+      include: {
+        credentials: {
+          where: { isActive: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
     });
     return this.mapDeviceEntity(row);
   }

@@ -47,6 +47,15 @@ export function asNumber(value: DecimalLike): number {
  * Applied once per external input so later math stays purely integral.
  */
 export function toMinor(value: DecimalLike): number {
+  if (value === null || value === undefined) return 0;
+
+  if (typeof value === 'object' && typeof (value as any).toString === 'function') {
+    const str = (value as any).toString();
+    if (typeof str === 'string' && PLAIN_DECIMAL.test(str.trim())) {
+      return decimalStringToMinor(str.trim());
+    }
+  }
+
   if (typeof value === 'string' && PLAIN_DECIMAL.test(value.trim())) {
     return decimalStringToMinor(value.trim());
   }

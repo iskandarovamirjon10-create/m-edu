@@ -176,6 +176,100 @@ export class LeadsService {
     return lead;
   }
 
+  async scheduleTrial(
+    organizationId: string,
+    id: string,
+    data: { groupId?: string; groupName?: string; date: string; notes?: string },
+  ) {
+    const lead = await this.findOne(organizationId, id);
+    await this.updateStage(organizationId, id, 'TRIAL_LESSON');
+
+    const activity = await this.prisma.leadActivity.create({
+      data: {
+        leadId: id,
+        type: 'MEETING',
+        subject: "Sinov darsi belgilandi (Trial Scheduled)",
+        description: `Sana: ${data.date}. Guruh: ${data.groupName || data.groupId || "Ko'rsatilmagan"}. ${data.notes || ''}`.trim(),
+      },
+    });
+
+    const scheduledDate = new Date(data.date);
+    await this.prisma.followUp.create({
+      data: {
+        organizationId,
+        leadId: id,
+        note: `Sinov darsi o'tkazish: ${lead.firstName} ${lead.lastName ?? ''}`,
+        scheduledAt: scheduledDate,
+      },
+    });
+
+    return { lead: await this.findOne(organizationId, id), activity };
+  }
+
+  async recordTrialAttendance(
+    organizationId: string,
+    id: string,
+    data: { attended: boolean; feedback?: string },
+  ) {
+    const lead = await this.findOne(organizationId, id);
+
+    const outcome = data.attended ? 'ATTENDED' : 'NO_SHOW';
+    const statusText = data.attended ? 'QATNASHDI' : 'KELMADI';
+
+    const activity = await this.prisma.leadActivity.create({
+      data: {
+        leadId: id,
+        type: 'CALL',
+        subject: `Sinov darsi natijasi: ${statusText}`,
+        description: `Izoh: ${data.feedback || "Izoh yo'q"}`.trim(),
+        outcome,
+      },
+    });
+
+    const nextCall = new Date();
+    nextCall.setHours(nextCall.getHours() + (data.attended ? 2 : 24));
+
+    await this.prisma.followUp.create({
+      data: {
+        organizationId,
+        leadId: id,
+        note: data.attended
+          ? `Sinov darsidan keyingi qayta aloqa va shartnoma taklif qilish (${lead.firstName})`
+          : `Kelmadi: sababini aniqlash va boshqa kunga sinov darsi belgilash (${lead.firstName})`,
+        scheduledAt: nextCall,
+      },
+    });
+
+    return { lead, activity };
+  }
+
+  async getTrialAnalytics(organizationId: string) {
+    const [totalLeads, trialLeads, wonLeads, trialActivities] = await Promise.all([
+      this.prisma.lead.count({ where: { organizationId } }),
+      this.prisma.lead.count({ where: { organizationId, stage: 'TRIAL_LESSON' } }),
+      this.prisma.lead.count({ where: { organizationId, stage: 'WON' } }),
+      this.prisma.leadActivity.findMany({
+        where: {
+          lead: { organizationId },
+          subject: { contains: 'Sinov darsi' },
+        },
+        include: { lead: { select: { id: true, firstName: true, lastName: true, phone: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      }),
+    ]);
+
+    const conversionRate = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0;
+
+    return {
+      totalLeads,
+      trialLeads,
+      wonLeads,
+      conversionRate,
+      recentTrials: trialActivities,
+    };
+  }
+
   private async assertOwnerInOrg(organizationId: string, ownerId?: string): Promise<void> {
     if (!ownerId) return;
     const owner = await this.prisma.user.findFirst({

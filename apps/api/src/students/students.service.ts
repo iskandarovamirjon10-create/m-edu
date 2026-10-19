@@ -22,6 +22,9 @@ export class StudentsService {
         { user: { firstName: { contains: query.search, mode: 'insensitive' } } },
         { user: { lastName: { contains: query.search, mode: 'insensitive' } } },
         { user: { email: { contains: query.search, mode: 'insensitive' } } },
+        { user: { phone: { contains: query.search, mode: 'insensitive' } } },
+        { parentName: { contains: query.search, mode: 'insensitive' } },
+        { parentPhone: { contains: query.search, mode: 'insensitive' } },
       ];
     }
     if (query.groupId || query.teacherId) {
@@ -117,7 +120,7 @@ export class StudentsService {
         include: { user: userPublicSelect },
       });
     } catch (error: unknown) {
-      // User.email is globally unique â€” the org-scoped pre-check above can
+      // User.email is globally unique — the org-scoped pre-check above can
       // race a concurrent create (in this or another tenant) and surface as
       // Prisma P2002 instead of a clean 409.
       if ((error as { code?: string })?.code === 'P2002') {
@@ -163,7 +166,7 @@ export class StudentsService {
    *
    * Mirror of the UsersService.delete pattern with FK-aware guards:
    *  - Rejects students that own historical records (payments, attendance,
-   *    grades, face enrollments/attempts, camera events) â€” those rows are
+   *    grades, face enrollments/attempts, camera events) — those rows are
    *    RESTRICT/SET-NULL protected, so deletion would silently destroy or
    *    orphan history. Deactivation is the correct path for those accounts.
    *  - When the student has no history, removes StudentGroup memberships
@@ -173,30 +176,34 @@ export class StudentsService {
   async remove(organizationId: string, id: string) {
     const student = await this.findOne(organizationId, id);
 
-    const [paymentCount, attendanceCount, gradeCount, cameraEventCount, invoiceCount] =
-      await Promise.all([
-        this.prisma.payment.count({ where: { studentId: id, organizationId } }),
-        this.prisma.attendance.count({ where: { studentId: id, organizationId } }),
-        this.prisma.grade.count({ where: { studentId: id, organizationId } }),
-        this.prisma.cameraAttendanceEvent.count({ where: { studentId: id, organizationId } }),
-        this.prisma.invoice.count({ where: { studentId: id, organizationId } }),
+    await this.prisma.$transaction(async (tx) => {
+      // 0. Concurrency serialization and financial history preservation check (FIN-010)
+      // Serialize access to prevent concurrent financial write TOCTOU race conditions
+      await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${id}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+
+      // Check whether this student has any financial records in this organization.
+      // Financial history is legally immutable: payments, invoices, and refunds must never be hard-deleted.
+      const [paymentCount, invoiceCount, refundCount] = await Promise.all([
+        tx.payment.count({ where: { studentId: id, organizationId } }),
+        tx.invoice.count({ where: { studentId: id, organizationId } }),
+        tx.refund.count({
+          where: {
+            organizationId,
+            OR: [
+              { Payment: { studentId: id } },
+              { Invoice: { studentId: id } },
+            ],
+          },
+        }),
       ]);
 
-    if (
-      paymentCount + attendanceCount + gradeCount + cameraEventCount + invoiceCount >
-      0
-    ) {
-      throw new BadRequestException(
-        'This student has historical records (invoices, payments, attendance, or grades) â€” deactivate the student instead of deleting them',
-      );
-    }
+      if (paymentCount > 0 || invoiceCount > 0 || refundCount > 0) {
+        throw new ConflictException(
+          'Cannot delete student with existing financial history (payments, invoices, or refunds). Deactivate or archive the student instead.',
+        );
+      }
 
-    await this.prisma.$transaction(async (tx) => {
-      // StudentGroup memberships cascade on Student delete; remove explicitly
-      // for clarity and to keep the transaction deterministic.
-      await tx.studentGroup.deleteMany({ where: { studentId: id, organizationId } });
-      
-      // Biometric data MUST be deleted immediately when the subject is deleted
+      // 1. Biometric data
       const enrollments = await tx.faceEnrollment.findMany({
         where: { studentId: id, organizationId },
         select: { id: true },
@@ -204,20 +211,55 @@ export class StudentsService {
       if (enrollments.length > 0) {
         const enrollmentIds = enrollments.map((e) => e.id);
         await tx.faceTemplate.deleteMany({
-          where: { enrollmentId: { in: enrollmentIds }, organizationId }
+          where: { enrollmentId: { in: enrollmentIds }, organizationId },
         });
         await tx.faceEnrollment.deleteMany({
-          where: { studentId: id, organizationId }
-        });
-        await tx.recognitionAttempt.deleteMany({
-          where: { identifiedStudentId: id, organizationId }
+          where: { studentId: id, organizationId },
         });
       }
+      await tx.recognitionAttempt.deleteMany({
+        where: { identifiedStudentId: id, organizationId },
+      });
+      await tx.cameraAttendanceEvent.deleteMany({
+        where: { studentId: id, organizationId },
+      });
 
+      // 2. Parent associations & messages
+      await tx.parentStudent.deleteMany({ where: { studentId: id } });
+      await tx.parentTeacherMessage.deleteMany({ where: { studentId: id } });
+
+      // 3. Memberships & Academic records
+      await tx.studentGroup.deleteMany({ where: { studentId: id, organizationId } });
+      await tx.attendance.deleteMany({ where: { studentId: id, organizationId } });
+      await tx.grade.deleteMany({ where: { studentId: id, organizationId } });
+      await tx.examResult.deleteMany({ where: { studentId: id, organizationId } });
+      await tx.certificate.deleteMany({ where: { studentId: id, organizationId } });
+      await tx.libraryBorrow.deleteMany({ where: { studentId: id, organizationId } });
+      await tx.homeworkSubmission.deleteMany({ where: { studentId: id } });
+      await tx.assignmentSubmission.deleteMany({ where: { studentId: id } });
+
+      const quizzes = await tx.quizAttempt.findMany({
+        where: { studentId: id },
+        select: { id: true },
+      });
+      if (quizzes.length > 0) {
+        const quizAttemptIds = quizzes.map((q) => q.id);
+        await tx.quizAttemptAnswer.deleteMany({
+          where: { attemptId: { in: quizAttemptIds } },
+        });
+        await tx.quizAttempt.deleteMany({ where: { studentId: id } });
+      }
+
+      await tx.studentObjectiveMastery.deleteMany({ where: { studentId: id } });
+      await tx.studentProgressSnapshot.deleteMany({ where: { studentId: id } });
+      await tx.gamificationXpEvent.deleteMany({ where: { studentId: id, organizationId } });
+      await tx.studentGamification.deleteMany({ where: { studentId: id, organizationId } });
+      await tx.discount.deleteMany({ where: { studentId: id } });
+
+      // 4. Delete the Student (Financial records are preserved; DB FK RESTRICT provides second-layer defense)
       await tx.student.deleteMany({ where: { id, organizationId } });
 
-      // Remove the linked login account so a deleted student cannot sign in.
-      // (FaceAuditEvent.userId is SET NULL automatically.)
+      // 5. Delete linked User and sessions/settings
       if (student.userId) {
         await tx.notification.deleteMany({ where: { userId: student.userId } });
         await tx.session.deleteMany({ where: { userId: student.userId } });
@@ -251,7 +293,7 @@ export class StudentsService {
       throw new BadRequestException('Cannot assign a deactivated student to a group');
     }
 
-    // Enforce group capacity BEFORE adding â€” check within a transaction so two
+    // Enforce group capacity BEFORE adding — check within a transaction so two
     // concurrent requests cannot both pass when only 1 slot remains.
     return this.prisma.$transaction(async (tx) => {
       // Serialize access to this group to prevent TOCTOU race condition
@@ -262,7 +304,7 @@ export class StudentsService {
         where: { groupId, isActive: true },
       });
 
-      // If the student is already an active member, upsert is safe â€” they are
+      // If the student is already an active member, upsert is safe — they are
       // already counted, capacity is not exceeded.
       const alreadyActive = await tx.studentGroup.findUnique({
         where: { studentId_groupId: { studentId, groupId } },
@@ -275,7 +317,7 @@ export class StudentsService {
         }
       }
 
-      // Upsert handles the re-activation case (inactive â†’ active) without
+      // Upsert handles the re-activation case (inactive → active) without
       // double-counting; concurrent composite-PK error is impossible inside
       // this transaction because the unique constraint is enforced by the DB.
       return tx.studentGroup.upsert({
@@ -328,62 +370,72 @@ export class StudentsService {
     await this.findOne(organizationId, studentId);
 
     const email = data.email.toLowerCase().trim();
-    let parent = await this.prisma.parentAccount.findFirst({
-      where: { email, organizationId },
-    });
-
-    if (!parent) {
-      const password = data.password || randomUUID().slice(0, 12) + '!Aa1';
+    const password = data.password || randomUUID().slice(0, 12) + '!Aa1';
     const passwordHash = await hashPassword(password);
-      parent = await this.prisma.parentAccount.create({
-        data: {
-          organizationId,
-          email,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          phone: data.phone,
-          passwordHash,
-          isActive: true,
-        },
+
+    return this.prisma.$transaction(async (tx) => {
+      let parent = await tx.parentAccount.findFirst({
+        where: { email, organizationId },
       });
-    }
 
-    const existingLink = await this.prisma.parentStudent.findUnique({
-      where: {
-        parentId_studentId: {
-          parentId: parent.id,
-          studentId,
-        },
-      },
-    });
-
-    if (existingLink) {
-      throw new ConflictException('Parent is already linked to this student');
-    }
-
-    return this.prisma.parentStudent.create({
-      data: {
-        parentId: parent.id,
-        studentId,
-        relationship: data.relationship || 'parent',
-        isPrimary: data.isPrimary ?? false,
-        canViewGrades: data.canViewGrades ?? true,
-        canViewPayments: data.canViewPayments ?? true,
-        canViewAttendance: data.canViewAttendance ?? true,
-      },
-      include: {
-        parent: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
+      if (!parent) {
+        parent = await tx.parentAccount.create({
+          data: {
+            organizationId,
+            email,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            phone: data.phone,
+            passwordHash,
             isActive: true,
-            lastLoginAt: true,
+          },
+        });
+      }
+
+      const existingLink = await tx.parentStudent.findUnique({
+        where: {
+          parentId_studentId: {
+            parentId: parent.id,
+            studentId,
           },
         },
-      },
+      });
+
+      if (existingLink) {
+        throw new ConflictException('Parent is already linked to this student');
+      }
+
+      if (data.isPrimary) {
+        await tx.parentStudent.updateMany({
+          where: { studentId, isPrimary: true },
+          data: { isPrimary: false },
+        });
+      }
+
+      return tx.parentStudent.create({
+        data: {
+          parentId: parent.id,
+          studentId,
+          relationship: data.relationship || 'parent',
+          isPrimary: data.isPrimary ?? false,
+          canViewGrades: data.canViewGrades ?? true,
+          canViewPayments: data.canViewPayments ?? true,
+          canViewAttendance: data.canViewAttendance ?? true,
+        },
+        include: {
+          parent: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+              isActive: true,
+              lastLoginAt: true,
+            },
+          },
+        },
+      });
     });
   }
 
@@ -406,27 +458,36 @@ export class StudentsService {
       throw new NotFoundException('Parent link not found for this student');
     }
 
-    return this.prisma.parentStudent.update({
-      where: { id: link.id },
-      data: {
-        ...(data.relationship !== undefined ? { relationship: data.relationship } : {}),
-        ...(data.isPrimary !== undefined ? { isPrimary: data.isPrimary } : {}),
-        ...(data.canViewGrades !== undefined ? { canViewGrades: data.canViewGrades } : {}),
-        ...(data.canViewPayments !== undefined ? { canViewPayments: data.canViewPayments } : {}),
-        ...(data.canViewAttendance !== undefined ? { canViewAttendance: data.canViewAttendance } : {}),
-      },
-      include: {
-        parent: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-            isActive: true,
+    return this.prisma.$transaction(async (tx) => {
+      if (data.isPrimary) {
+        await tx.parentStudent.updateMany({
+          where: { studentId, isPrimary: true, id: { not: link.id } },
+          data: { isPrimary: false },
+        });
+      }
+
+      return tx.parentStudent.update({
+        where: { id: link.id },
+        data: {
+          ...(data.relationship !== undefined ? { relationship: data.relationship } : {}),
+          ...(data.isPrimary !== undefined ? { isPrimary: data.isPrimary } : {}),
+          ...(data.canViewGrades !== undefined ? { canViewGrades: data.canViewGrades } : {}),
+          ...(data.canViewPayments !== undefined ? { canViewPayments: data.canViewPayments } : {}),
+          ...(data.canViewAttendance !== undefined ? { canViewAttendance: data.canViewAttendance } : {}),
+        },
+        include: {
+          parent: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+              isActive: true,
+            },
           },
         },
-      },
+      });
     });
   }
 
@@ -449,6 +510,48 @@ export class StudentsService {
     });
 
     return { success: true };
+  }
+
+  async freeze(
+    organizationId: string,
+    studentId: string,
+    data: { startDate?: string; endDate?: string; reason?: string },
+  ) {
+    const student = await this.findOne(organizationId, studentId);
+    const start = data.startDate || new Date().toISOString().slice(0, 10);
+    const end = data.endDate || 'Muddatsiz';
+    const reasonText = data.reason?.trim() || "Sabab ko'rsatilmagan";
+
+    const freezeLog = `\n[MUZLATILGAN / FROZEN ${new Date().toISOString().slice(0, 10)}]: ${start} dan ${end} gacha. Sabab: ${reasonText}`;
+    const updatedNotes = ((student.notes ?? '') + freezeLog).trim();
+
+    return this.prisma.student.update({
+      where: { id: studentId },
+      data: {
+        status: 'PAUSED',
+        notes: updatedNotes,
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+      },
+    });
+  }
+
+  async unfreeze(organizationId: string, studentId: string) {
+    const student = await this.findOne(organizationId, studentId);
+    const unfreezeLog = `\n[FAOL / UNFREEZE ${new Date().toISOString().slice(0, 10)}]: O'qish qayta tiklandi`;
+    const updatedNotes = ((student.notes ?? '') + unfreezeLog).trim();
+
+    return this.prisma.student.update({
+      where: { id: studentId },
+      data: {
+        status: 'ACTIVE',
+        notes: updatedNotes,
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+      },
+    });
   }
 }
 

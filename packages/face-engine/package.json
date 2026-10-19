@@ -1,6 +1,6 @@
 {
   "name": "@medu/face-engine",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "private": true,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,7 +25,7 @@
     "@medu/contracts": "*",
     "@medu/core": "*",
     "onnxruntime-node": "^1.29.0",
-    "sharp": "^0.35.4"
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^5.0.1",

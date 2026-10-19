@@ -64,6 +64,13 @@ export class LeadsController {
     return this.followUpService.getFollowUpStats(orgId);
   }
 
+  @AllowAnyRole()
+  @Get('trial-analytics')
+  @ApiOperation({ summary: 'Trial lesson (Sinov Darsi) conversion metrics and logs' })
+  getTrialAnalytics(@CurrentUser('organizationId') orgId: string) {
+    return this.leadsService.getTrialAnalytics(orgId);
+  }
+
   @Post('follow-up-rules')
   @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
   @ApiOperation({ summary: 'Create a follow-up automation rule' })
@@ -147,6 +154,28 @@ export class LeadsController {
     @Body() dto: ConvertLeadDto,
   ) {
     return this.leadsService.convert(orgId, id, dto);
+  }
+
+  @Post(':id/trial-schedule')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
+  @ApiOperation({ summary: 'Schedule a trial lesson for this lead' })
+  scheduleTrial(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') id: string,
+    @Body() body: { groupId?: string; groupName?: string; date: string; notes?: string },
+  ) {
+    return this.leadsService.scheduleTrial(orgId, id, body);
+  }
+
+  @Post(':id/trial-attendance')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
+  @ApiOperation({ summary: 'Record trial lesson attendance and feedback' })
+  recordTrialAttendance(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') id: string,
+    @Body() body: { attended: boolean; feedback?: string },
+  ) {
+    return this.leadsService.recordTrialAttendance(orgId, id, body);
   }
 
   @Post(':id/activities')

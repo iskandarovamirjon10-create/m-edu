@@ -24,17 +24,7 @@ describe('AttendanceController', () => {
       remove: vi.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [AttendanceController],
-      providers: [
-        {
-          provide: AttendanceService,
-          useValue: service,
-        },
-      ],
-    }).compile();
-
-    controller = module.get<AttendanceController>(AttendanceController);
+    controller = new AttendanceController(service as unknown as AttendanceService);
   });
 
   it('should be defined', () => {

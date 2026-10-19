@@ -110,6 +110,13 @@ jobs:
         run: npx prisma validate --schema apps/api/prisma/schema.prisma
       - name: Prisma migrate status
         run: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+      # Fail the build when schema.prisma and the replayed migration history
+      # disagree (drift). Prisma 5.x requires a shadow database to replay
+      # --from-migrations; the service user above can create/drop it. Exit code
+      # 2 (non-empty diff) fails the step.
+      - name: Prisma migration drift check
+        working-directory: apps/api
+        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "$DATABASE_URL" --exit-code
       - name: Integration tests
         run: npm run test:integration
       # ---- API end-to-end suite (root cause: a server must exist) ----

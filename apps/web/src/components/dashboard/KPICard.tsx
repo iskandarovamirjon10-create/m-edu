@@ -1,82 +1,119 @@
-import { type ReactNode, type MouseEvent, type CSSProperties, useEffect, useState, useRef } from 'react';
+/**
+ * ============================================================================
+ * KPICard v2.1 — Executive metric tile (Hyper-Refractive Liquid Glass)
+ * ============================================================================
+ */
 
-interface KPICardProps {
+import { type CSSProperties, type KeyboardEvent, type ReactNode, useId, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { cn, CountUp, TONES, resolveTone, usePrefersReducedMotion } from '@/lib/design';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+
+export interface KPICardTrend {
+  label: string;
+  isPositive?: boolean;
+  isNeutral?: boolean;
+}
+
+export interface KPICardProps {
   title: string;
   value: number;
   formattedValue?: string;
   description?: string;
   icon: ReactNode;
-  trend?: {
-    label: string;
-    isPositive?: boolean;
-    isNeutral?: boolean;
-  };
-  sparkline?: number[];
   accentColor?: string;
+  href?: string;
+  onClick?: () => void;
+  trend?: KPICardTrend;
+  delay?: number;
 }
 
-function MiniSparkline({ values, color }: { values: number[]; color: string }) {
-  if (!values || values.length < 2) return null;
-  const w = 72;
-  const h = 26;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
+const TREND_CHIP: Record<'positive' | 'neutral' | 'negative', string> = {
+  positive: 'bg-apple-green/12 text-apple-green dark:bg-apple-green/18',
+  neutral: 'bg-black/[0.06] text-secondary dark:bg-white/[0.08]',
+  negative: 'bg-apple-red/12 text-apple-red dark:bg-apple-red/18',
+};
 
-  const points = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * w;
-    const y = h - ((v - min) / range) * (h - 6) - 3;
-    return `${x},${y}`;
-  });
+const TREND_DOT: Record<'positive' | 'neutral' | 'negative', string> = {
+  positive: 'bg-apple-green',
+  neutral: 'bg-secondary/70',
+  negative: 'bg-apple-red',
+};
 
-  const pathD = `M ${points.join(' L ')}`;
-  const areaD = `${pathD} L ${w},${h} L 0,${h} Z`;
+function withAlpha(color: string, alpha: number): string {
+  if (!color.startsWith('#')) return color;
+  let h = color.slice(1);
+  if (h.length === 8) h = h.slice(0, 6);
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (h.length !== 6) return color;
+  const num = parseInt(h, 16);
+  if (Number.isNaN(num)) return color;
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function splitValue(formatted?: string): { prefix: string; suffix: string; numeric: boolean } {
+  if (!formatted) return { prefix: '', suffix: '', numeric: true };
+  const match = formatted.match(/\d+(?:[.,\s]\d+)*/);
+  if (!match || match.index === undefined) {
+    return { prefix: formatted, suffix: '', numeric: false };
+  }
+  return {
+    prefix: formatted.slice(0, match.index),
+    suffix: formatted.slice(match.index + match[0].length),
+    numeric: true,
+  };
+}
+
+function Sparkline({
+  tone,
+  gradientId,
+}: {
+  tone: 'positive' | 'neutral' | 'negative';
+  gradientId: string;
+}) {
+  const strokeColor =
+    tone === 'positive' ? '#34C759' : tone === 'negative' ? '#FF3B30' : '#6366F1';
+
+  const path =
+    tone === 'positive'
+      ? 'M0 26 C 15 24, 30 20, 45 16 C 60 12, 75 18, 90 8 C 105 3, 115 5, 120 2'
+      : tone === 'negative'
+        ? 'M0 4 C 15 6, 30 12, 45 14 C 60 22, 75 18, 90 24 C 105 27, 115 26, 120 29'
+        : 'M0 16 C 20 12, 40 20, 60 14 C 80 18, 100 13, 120 15';
+
+  const fillPath =
+    tone === 'positive'
+      ? 'M0 26 C 15 24, 30 20, 45 16 C 60 12, 75 18, 90 8 C 105 3, 115 5, 120 2 L 120 32 L 0 32 Z'
+      : tone === 'negative'
+        ? 'M0 4 C 15 6, 30 12, 45 14 C 60 22, 75 18, 90 24 C 105 27, 115 26, 120 29 L 120 32 L 0 32 Z'
+        : 'M0 16 C 20 12, 40 20, 60 14 C 80 18, 100 13, 120 15 L 120 32 L 0 32 Z';
 
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible" aria-hidden="true">
+    <svg
+      viewBox="0 0 120 32"
+      fill="none"
+      aria-hidden="true"
+      className="pointer-events-none absolute -bottom-1 -right-2 h-14 w-28 opacity-30 transition-opacity duration-300 group-hover:opacity-55 sm:h-16 sm:w-32 lg:h-20 lg:w-40 dark:opacity-25 dark:group-hover:opacity-45 motion-reduce:transition-none"
+    >
       <defs>
-        <linearGradient id={`kpi-spark-${color.replace(/[^a-zA-Z0-9]/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={strokeColor} stopOpacity="0.45" />
+          <stop offset="100%" stopColor={strokeColor} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={areaD} fill={`url(#kpi-spark-${color.replace(/[^a-zA-Z0-9]/g, '')})`} />
-      <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={fillPath} fill={`url(#${gradientId})`} />
+      <path
+        d={path}
+        stroke={strokeColor}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
-  );
-}
-
-function CountUpNumber({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
-  const [display, setDisplay] = useState(value);
-  const startRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    let raf: number;
-    const duration = 800; // ms
-    const initial = display;
-    const diff = value - initial;
-    if (diff === 0) return;
-
-    startRef.current = null;
-    const step = (ts: number) => {
-      if (startRef.current === null) startRef.current = ts;
-      const progress = Math.min(1, (ts - startRef.current) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(initial + diff * eased));
-      if (progress < 1) {
-        raf = requestAnimationFrame(step);
-      }
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [value]);
-
-  return (
-    <span className="tabular-nums">
-      {prefix}
-      {display.toLocaleString()}
-      {suffix}
-    </span>
   );
 }
 
@@ -86,120 +123,146 @@ export function KPICard({
   formattedValue,
   description,
   icon,
+  accentColor = '#6366F1',
+  href,
+  onClick,
   trend,
-  sparkline,
-  accentColor = 'var(--primary)',
+  delay = 0,
 }: KPICardProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const sound = usePremiumSound();
+  const reduced = usePrefersReducedMotion();
+  const uid = useId();
+  const lastHoverRef = useRef(0);
+  const interactive = Boolean(href || onClick);
 
-  const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    cardRef.current.style.setProperty('--spotlight-x', `${x}%`);
-    cardRef.current.style.setProperty('--spotlight-y', `${y}%`);
-    cardRef.current.style.setProperty('--spotlight-opacity', '1');
+  const activate = () => {
+    sound.playPop();
+    if (onClick) onClick();
+    else if (href) navigate(href);
   };
 
-  const handleMouseLeave = () => {
-    if (!cardRef.current) return;
-    cardRef.current.style.setProperty('--spotlight-opacity', '0');
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!interactive || e.repeat) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      activate();
+    }
   };
+
+  const handleMouseEnter = () => {
+    if (!interactive) return;
+    const now = Date.now();
+    if (now - lastHoverRef.current > 800) {
+      lastHoverRef.current = now;
+      sound.playTick();
+    }
+  };
+
+  const { prefix, suffix, numeric } = splitValue(formattedValue);
+  const trendTone = trend?.isNeutral ? 'neutral' : trend?.isPositive ? 'positive' : 'negative';
+
+  const isHexAccent = /^#([0-9a-f]{3,8})$/i.test(accentColor);
+  const tone = isHexAccent ? 'blue' : resolveTone(accentColor);
+  const gradientId = `kpi-spark-${uid}`;
+
+  const styleVars = {
+    '--kpi-glow': withAlpha(accentColor, 0.45),
+    '--kpi-accent-30': withAlpha(accentColor, 0.35),
+    '--kpi-accent-solid': accentColor,
+  } as CSSProperties;
 
   return (
-    <div
-      ref={cardRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      className="group relative flex flex-col justify-between overflow-hidden rounded-[var(--radius-2xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--border-medium)] hover:shadow-[var(--shadow-md)] sm:p-6"
-      style={
-        {
-          '--spotlight-x': '50%',
-          '--spotlight-y': '50%',
-          '--spotlight-opacity': '0',
-        } as CSSProperties
-      }
+    <motion.div
+      role={interactive ? 'button' : 'group'}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={`${title}: ${formattedValue ?? value}${interactive ? ' — ochish uchun bosing' : ''}`}
+      onClick={interactive ? activate : undefined}
+      onKeyDown={handleKeyDown}
+      onMouseEnter={handleMouseEnter}
+      initial={reduced ? false : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: reduced ? 0 : 0.45,
+        delay: reduced ? 0 : delay,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+      style={styleVars}
+      className={cn(
+        'group relative flex h-full flex-col justify-between gap-3 overflow-hidden rounded-[1.75rem]',
+        'border border-white/65 bg-white/75 p-4 backdrop-blur-3xl backdrop-saturate-[210%] sm:p-4.5 lg:p-5.5',
+        'shadow-[0_16px_48px_-12px_rgba(0,0,0,0.12),inset_0_1.5px_1.5px_rgba(255,255,255,0.95)]',
+        'dark:border-white/[0.15] dark:bg-[#1C1C1E]/75 dark:shadow-[0_16px_48px_-12px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.22)]',
+        'transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
+        'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-[1.5px] before:bg-gradient-to-r before:from-transparent before:via-white before:to-transparent dark:before:via-white/40',
+        interactive &&
+          cn(
+            'cursor-pointer select-none outline-none',
+            'hover:-translate-y-1 hover:border-[color:var(--kpi-accent-30)]',
+            'hover:shadow-[0_20px_52px_-14px_var(--kpi-glow),inset_0_1.5px_1.5px_rgba(255,255,255,0.95)]',
+            'active:translate-y-0 active:scale-[0.98] active:duration-75',
+            'motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 motion-reduce:transition-none',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--kpi-accent-solid)]'
+          )
+      )}
     >
-      {/* Zero-render CSS spotlight reflection */}
-      <div
-        className="pointer-events-none absolute inset-0 transition-opacity duration-300"
-        style={{
-          opacity: 'var(--spotlight-opacity)',
-          background: `radial-gradient(400px circle at var(--spotlight-x) var(--spotlight-y), rgba(255,255,255,0.12), transparent 60%)`,
-        }}
-      />
+      <Sparkline tone={trendTone} gradientId={gradientId} />
 
-      {/* Top row: Icon + Trend / Sparkline */}
+      {/* Top row: label + icon */}
       <div className="relative z-10 flex items-start justify-between gap-3">
-        <div
-          className="flex h-11 w-11 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105"
-          style={{
-            color: accentColor,
-            backgroundColor: `color-mix(in srgb, ${accentColor} 12%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${accentColor} 20%, transparent)`,
-          }}
+        <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-secondary sm:text-[11.5px]">
+          {title}
+        </span>
+        <span
+          className={cn(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition-transform duration-300 ease-out sm:h-11 sm:w-11',
+            'group-hover:scale-[1.1] group-active:scale-100 motion-reduce:group-hover:scale-100',
+            !isHexAccent && TONES[tone].chip
+          )}
+          style={
+            isHexAccent
+              ? { backgroundColor: withAlpha(accentColor, 0.15), color: accentColor }
+              : undefined
+          }
+          aria-hidden="true"
         >
           {icon}
-        </div>
+        </span>
+      </div>
 
-        <div className="flex flex-col items-end gap-1">
-          {sparkline && sparkline.length > 1 && (
-            <MiniSparkline values={sparkline} color={accentColor} />
-          )}
+      {/* Value */}
+      <div className="relative z-10 text-[24px] font-bold tabular-nums tracking-tight text-primary sm:text-[28px] lg:text-[30px]">
+        {numeric ? (
+          <CountUp value={value} prefix={prefix} suffix={suffix} />
+        ) : (
+          <span>{prefix}</span>
+        )}
+      </div>
 
+      {/* Footer: description + trend */}
+      {(description || trend) && (
+        <div className="relative z-10 flex items-center justify-between gap-2">
+          <span className="line-clamp-1 min-w-0 flex-1 truncate text-[11.5px] font-medium text-tertiary sm:text-xs">
+            {description}
+          </span>
           {trend && (
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-tight ${
-                trend.isNeutral
-                  ? 'bg-[var(--neutral-soft)] text-[var(--text-secondary)]'
-                  : trend.isPositive
-                    ? 'bg-[var(--success-soft)] text-[var(--success)]'
-                    : 'bg-[var(--danger-soft)] text-[var(--danger)]'
-              }`}
-            >
-              {!trend.isNeutral && (
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  className={trend.isPositive ? '' : 'rotate-180'}
-                >
-                  <path d="M7 17 17 7" /><path d="M7 7h10v10" />
-                </svg>
+              className={cn(
+                'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-tight',
+                TREND_CHIP[trendTone]
               )}
+            >
+              <span
+                className={cn('h-1.5 w-1.5 rounded-full', TREND_DOT[trendTone])}
+                aria-hidden="true"
+              />
               {trend.label}
             </span>
           )}
         </div>
-      </div>
-
-      {/* Metric content */}
-      <div className="relative z-10 mt-5">
-        <div
-          className="truncate text-2xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums sm:text-3xl"
-          title={formattedValue || String(value)}
-        >
-          {formattedValue ? (
-            formattedValue
-          ) : (
-            <CountUpNumber value={value} />
-          )}
-        </div>
-
-        <p className="mt-1 truncate text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-          {title}
-        </p>
-
-        {description && (
-          <p className="mt-1 line-clamp-1 text-xs text-[var(--text-tertiary)]">
-            {description}
-          </p>
-        )}
-      </div>
-    </div>
+      )}
+    </motion.div>
   );
 }
+
+export default KPICard;

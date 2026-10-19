@@ -103,4 +103,62 @@ describe('useAiCopilot', () => {
     const last = msgs[msgs.length - 1];
     expect(last.content).toBe('partial content');
   });
+
+  it('handles streaming tool activity and attaches toolActivities to the message', async () => {
+    AI_FLAGS.streaming = true;
+
+    vi.mocked(aiLib.aiChatStream).mockImplementation(async (_wire, opts) => {
+      opts.onTool?.({ type: 'tool_running', toolName: 'attendance.today' });
+      opts.onTool?.({ type: 'tool_result', toolName: 'attendance.today', status: 'success', result: { present: 10 } });
+      opts.onDelta('Bugungi davomat yaxshi');
+      return { conversationId: 'c-1', content: 'Bugungi davomat yaxshi' };
+    });
+
+    const { result } = renderHook(() => useAiCopilot({ persistence: 'server' }));
+
+    await act(async () => {
+      await result.current.send('Bugungi davomat qanday?');
+    });
+
+    const msgs = result.current.messages;
+    const assistantMsg = msgs.find((m) => m.role === 'assistant');
+    expect(assistantMsg).toBeDefined();
+    expect(assistantMsg?.toolActivities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ toolName: 'attendance.today', status: 'success' }),
+      ])
+    );
+  });
+
+  it('handles action_pending during stream and pauses for confirmation', async () => {
+    AI_FLAGS.streaming = true;
+
+    vi.mocked(aiLib.parseActionParameters).mockReturnValue([
+      { key: 'phone', label: 'Telefon', value: '+998901234567' },
+    ]);
+
+    vi.mocked(aiLib.aiChatStream).mockImplementation(async (_wire, opts) => {
+      opts.onTool?.({
+        type: 'action_pending',
+        toolName: 'telegram.prepareMessage',
+        actionId: 'act-99',
+        parameters: { phone: '+998901234567' },
+        message: 'Telegram xabari tayyorlash',
+      });
+      opts.onDelta('Tasdiqlashingiz kutilmoqda');
+      return { conversationId: 'c-1', content: 'Tasdiqlashingiz kutilmoqda' };
+    });
+
+    const { result } = renderHook(() => useAiCopilot({ persistence: 'server' }));
+
+    await act(async () => {
+      await result.current.send('Ota-onaga xabar yuborish');
+    });
+
+    expect(result.current.status).toBe('awaiting_confirmation');
+    const assistantMsg = result.current.messages.find((m) => m.role === 'assistant');
+    expect(assistantMsg?.confirmation).toBeDefined();
+    expect(assistantMsg?.confirmation?.actionId).toBe('act-99');
+    expect(assistantMsg?.confirmation?.toolName).toBe('telegram.prepareMessage');
+  });
 });

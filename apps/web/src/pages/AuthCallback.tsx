@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { authApi, userStore } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
@@ -117,21 +118,22 @@ export function AuthCallbackPage() {
 
   return (
     <AuthLayout title={t('authCallback.completing')}>
-      <div className="w-full max-w-md mx-auto">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+        className="relative overflow-hidden rounded-2xl bg-white/70 dark:bg-white/[0.04] p-6 sm:p-8 backdrop-blur-md ring-1 ring-inset ring-black/[0.06] dark:ring-white/[0.08] shadow-[0_12px_40px_-15px_rgba(0,0,0,0.06)] dark:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.5)] w-full max-w-md mx-auto"
+      >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
         {state.status === 'error' ? (
           <div
-            className="rounded-xl px-4 py-3 text-sm"
-            style={{
-              background: 'rgba(240,112,112,0.10)',
-              border: '1px solid rgba(240,112,112,0.25)',
-              color: 'var(--state-error)',
-            }}
+            className="rounded-2xl p-4 text-sm bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400"
             role="alert"
             aria-live="assertive"
           >
             <div className="flex items-start gap-3">
               <svg
-                className="h-5 w-5 shrink-0 mt-0.5"
+                className="h-5 w-5 shrink-0 mt-0.5 text-rose-500"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -145,15 +147,15 @@ export function AuthCallbackPage() {
                 />
               </svg>
               <div className="flex-1">
-                <p className="font-medium" style={{ color: 'var(--state-error)' }}>{t('authCallback.failedTitle')}</p>
-                <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>{state.rawMessage ?? t(state.messageKey)}</p>
+                <p className="font-semibold text-rose-700 dark:text-rose-300">{t('authCallback.failedTitle')}</p>
+                <p className="mt-1 text-slate-600 dark:text-slate-300 text-xs leading-relaxed">{state.rawMessage ?? t(state.messageKey)}</p>
               </div>
             </div>
             <div className="mt-4">
               <GlassButton
                 type="button"
                 variant="secondary"
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto text-xs"
                 onClick={handleBackToLogin}
               >
                 {t('auth.backToSignIn')}
@@ -162,46 +164,41 @@ export function AuthCallbackPage() {
           </div>
         ) : state.status === 'success' ? (
           <div
-            className="rounded-xl px-4 py-3 text-sm"
-            style={{
-              background: 'rgba(94,230,168,0.12)',
-              border: '1px solid rgba(94,230,168,0.30)',
-              color: '#2ea870',
-            }}
+            className="rounded-2xl p-4 text-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
             role="status"
             aria-live="polite"
           >
             <div className="flex items-center gap-3">
-              <svg
-                className="h-5 w-5 shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-              <p className="font-medium">{t(state.messageKey)}</p>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              </div>
+              <p className="font-semibold text-sm">{t(state.messageKey)}</p>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-4 py-8">
-            <div
-              className="spinner spinner-lg"
-              role="progressbar"
-              aria-label={t('auth.authenticating')}
-            />
-            <p className="text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <div className="relative flex h-12 w-12 items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-2 border-indigo-500/20 border-t-indigo-600 animate-spin" />
+            </div>
+            <p className="text-center text-sm font-medium text-slate-600 dark:text-slate-300">
               {t(state.messageKey)}
             </p>
           </div>
         )}
-      </div>
+      </motion.div>
     </AuthLayout>
   );
 }

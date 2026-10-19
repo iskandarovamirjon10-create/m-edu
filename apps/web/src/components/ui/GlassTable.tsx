@@ -1,34 +1,53 @@
 /**
- * GlassTable V2 — Consistent table system.
- * Features: sticky header, sort indicators, loading skeleton rows,
- *           empty state, responsive, token-driven hover.
+ * GlassTable — clean Apple-premium table.
+ *
+ * Card shell (card token + hairline border), row hover, sticky header,
+ * sortable `GlassTH` with `aria-sort`, and a `density` prop that really
+ * changes cell padding (delivered through context to TH/TD/skeleton).
  */
-import { type ReactNode, type CSSProperties, type KeyboardEvent, isValidElement } from 'react';
+import {
+  Children,
+  Fragment,
+  createContext,
+  isValidElement,
+  useContext,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
+import { Shimmer, cn } from '@/lib/design';
 
-interface GlassTableProps {
+/* ─────────────────────────────────────────────────────────────
+ * Public types
+ * ───────────────────────────────────────────────────────────── */
+
+export type TableDensity = 'comfortable' | 'compact';
+
+export interface GlassTableProps {
   children: ReactNode;
   className?: string;
-  /** Enable sticky table header */
+  /** Enable sticky table header. */
   stickyHeader?: boolean;
   /**
-   * Minimum width before the table starts scrolling horizontally.
-   *
-   * A data table is a legitimate horizontal scroller on a phone, but the
-   * scroll must happen INSIDE this component's wrapper: the wrapper is
-   * `overflow-x-auto`, so the page itself never gains a horizontal scrollbar.
+   * Minimum width before the table scrolls horizontally.
+   * Scrolling happens INSIDE the component; the page never scrolls sideways.
    */
   minWidth?: number | string;
-  /**
-   * When a page renders its own stacked card list on phones, set this so the
-   * table is hidden below `md` instead of forcing a horizontal scroll.
-   */
+  /** Hide below `md` (for pages that render their own mobile card list). */
   hideOnMobile?: boolean;
+  /** Row padding density — compact reduces it. */
+  density?: TableDensity;
+  /** @deprecated no-op — the shell no longer renders an SVG filter. */
+  disableRefraction?: boolean;
+  /** @deprecated no-op — rows only use CSS color transitions now. */
+  disableMotion?: boolean;
 }
 
 interface ExtraProps {
   style?: CSSProperties;
   title?: string;
-  onClick?: (e: React.MouseEvent) => void;
+  onClick?: (e: MouseEvent) => void;
   onKeyDown?: (e: KeyboardEvent) => void;
   tabIndex?: number;
   role?: string;
@@ -38,67 +57,137 @@ interface ExtraProps {
   colSpan?: number;
 }
 
+/* ─────────────────────────────────────────────────────────────
+ * Density — context so cells react to the shell's density prop
+ * ───────────────────────────────────────────────────────────── */
+
+const DensityContext = createContext<TableDensity>('comfortable');
+
+const CELL_PADDING: Record<TableDensity, string> = {
+  comfortable: 'px-4 py-3',
+  compact: 'px-3 py-2',
+};
+
+const HEAD_PADDING: Record<TableDensity, string> = {
+  comfortable: 'px-4 py-2.5',
+  compact: 'px-3 py-2',
+};
+
+/* ─────────────────────────────────────────────────────────────
+ * GlassTable — shell
+ * ───────────────────────────────────────────────────────────── */
+
 export function GlassTable({
   children,
   className = '',
   stickyHeader = false,
   minWidth = 500,
   hideOnMobile = false,
+  density = 'comfortable',
 }: GlassTableProps) {
   const resolvedMinWidth = typeof minWidth === 'number' ? `${minWidth}px` : minWidth;
 
   return (
-    <div
-      className={[
-        'min-w-0 max-w-full',
-        hideOnMobile ? 'hidden md:block' : '',
-        'bg-[var(--bg-glass)]',
-        'backdrop-blur-[16px] [-webkit-backdrop-filter:blur(16px)_saturate(1.4)]',
-        'border border-[var(--border-subtle)]',
-        'rounded-[var(--radius-lg)]',
-        'overflow-hidden',
-        'shadow-[var(--shadow-sm)]',
-        className,
-      ].join(' ')}
-    >
-      {/* The scroller lives here — never on the page. `overscroll-contain`
-          stops a horizontal flick from chaining to the page, and the sticky
-          variant caps its height against the viewport instead of a fixed
-          600px that overflows short phones. */}
+    <DensityContext.Provider value={density}>
       <div
-        className={
-          stickyHeader
-            ? 'medu-scroll-x overflow-y-auto max-h-[min(600px,70dvh)]'
-            : 'medu-scroll-x'
-        }
+        data-component="glass-table"
+        data-density={density}
+        className={cn(
+          'min-w-0 max-w-full overflow-hidden rounded-2xl border border-black/[0.06] dark:border-white/[0.08]',
+          'bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 shadow-card shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
+          hideOnMobile && 'hidden md:block',
+          className,
+        )}
       >
-        <table
-          className="w-full border-collapse"
-          style={{ minWidth: resolvedMinWidth }}
+        {/* Scroller — horizontal scroll stays inside the card. */}
+        <div
+          className={cn(
+            'overflow-x-auto overscroll-contain',
+            stickyHeader && 'overflow-y-auto max-h-[min(600px,70dvh)]',
+          )}
         >
-          {children}
-        </table>
+          <table
+            className="w-full border-separate border-spacing-0 text-left align-middle"
+            style={{ minWidth: resolvedMinWidth }}
+          >
+            {children}
+          </table>
+        </div>
       </div>
-    </div>
+    </DensityContext.Provider>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * GlassTHead — sniffs its row child (robust to arrays/fragments)
+ * ───────────────────────────────────────────────────────────── */
+
+function flattenChildren(nodes: ReactNode[]): ReactNode[] {
+  return nodes.flatMap((node) => {
+    if (Array.isArray(node)) return flattenChildren(node);
+    if (isValidElement(node) && node.type === Fragment) {
+      return flattenChildren(Children.toArray((node.props as { children?: ReactNode }).children));
+    }
+    return [node];
+  });
+}
+
+function hasTableRows(nodes: ReactNode[]): boolean {
+  const meaningful = nodes.filter(
+    (node) => !(typeof node === 'string' && node.trim() === ''),
+  );
+  if (meaningful.length === 0) return true;
+  return meaningful.every(
+    (node) => isValidElement(node) && (node.type === GlassTR || node.type === 'tr'),
   );
 }
 
 export function GlassTHead({ children }: { children: ReactNode | ReactNode[] }) {
-  const isRowChild = isValidElement(children) && (children.type === GlassTR || children.type === 'tr');
+  const rowsAlreadyPresent = hasTableRows(flattenChildren(Children.toArray(children)));
+
   return (
-    <thead className="bg-[rgba(15,23,42,0.04)] dark:bg-[rgba(255,255,255,0.03)] sticky top-0 z-10">
-      {isRowChild ? children : <tr>{children as never}</tr>}
+    <thead className="sticky top-0 z-10 bg-white/90 dark:bg-surface-900/90 backdrop-blur-md backdrop-saturate-150 border-b border-black/[0.06] dark:border-white/[0.08]">
+      {rowsAlreadyPresent ? children : <tr>{children}</tr>}
     </thead>
   );
 }
 
-interface GlassTHProps {
+/* ─────────────────────────────────────────────────────────────
+ * GlassTH — sortable header cell
+ * ───────────────────────────────────────────────────────────── */
+
+export interface GlassTHProps {
   children?: ReactNode;
   className?: string;
   sortable?: boolean;
   sortDir?: 'asc' | 'desc' | null;
   onSort?: () => void;
   align?: 'left' | 'right' | 'center';
+}
+
+function SortIcon({ dir }: { dir: 'asc' | 'desc' | null }) {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {dir === 'asc' ? (
+        <path d="M8 12V4m-4 4 4-4 4 4" />
+      ) : dir === 'desc' ? (
+        <path d="M8 4v8m-4-4 4 4 4-4" />
+      ) : (
+        <path d="M5 6l3-3 3 3M11 10l-3 3-3-3" />
+      )}
+    </svg>
+  );
 }
 
 export function GlassTH({
@@ -110,52 +199,71 @@ export function GlassTH({
   align = 'left',
   ...rest
 }: GlassTHProps & ExtraProps) {
-  const SortIcon = () => (
-    <svg
-      className={[
-        'w-3.5 h-3.5 flex-shrink-0 transition-colors duration-[var(--duration-fast)]',
-        sortDir ? 'text-[var(--primary)]' : 'text-[var(--text-tertiary)]',
-      ].join(' ')}
-      viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden
-    >
-      {sortDir === 'asc' ? (
-        <path d="M8 12V4m-4 4 4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
-      ) : sortDir === 'desc' ? (
-        <path d="M8 4v8m-4-4 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-      ) : (
-        <path d="M5 6l3-3 3 3M11 10l-3 3-3-3" strokeLinecap="round" strokeLinejoin="round" />
-      )}
-    </svg>
-  );
+  const density = useContext(DensityContext);
+  const alignClass =
+    align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left';
+  const isActive = sortDir === 'asc' || sortDir === 'desc';
 
-  const alignClass = align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left';
+  const inner = sortable ? (
+    <button
+      type="button"
+      onClick={onSort}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md',
+        'transition-colors duration-150 hover:text-primary',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-focus)]',
+        align === 'right' && 'flex-row-reverse',
+      )}
+    >
+      <span>{children}</span>
+      <SortIcon dir={sortDir} />
+    </button>
+  ) : (
+    <span className={cn('inline-flex items-center gap-1.5', align === 'right' && 'flex-row-reverse')}>
+      {children}
+    </span>
+  );
 
   return (
     <th
-      className={[
-        'px-4 py-3',
-        'text-[var(--text-overline)] font-semibold tracking-[0.05em] uppercase',
-        'text-[var(--text-tertiary)]',
-        'border-b border-[var(--border-subtle)]',
-        'whitespace-nowrap',
+      scope="col"
+      className={cn(
+        'whitespace-nowrap border-b border-black/[0.06] dark:border-white/[0.08] align-middle',
+        'text-[11px] font-medium uppercase tracking-wide text-tertiary',
+        HEAD_PADDING[density],
         alignClass,
-        sortable ? 'cursor-pointer select-none hover:text-[var(--text-secondary)] group' : '',
+        sortable && 'cursor-pointer select-none',
+        isActive && 'text-primary',
         className,
-      ].join(' ')}
-      onClick={sortable ? onSort : undefined}
-      aria-sort={sortDir === 'asc' ? 'ascending' : sortDir === 'desc' ? 'descending' : sortable ? 'none' : undefined}
-      {...(rest as object)}
+      )}
+      aria-sort={
+        sortDir === 'asc'
+          ? 'ascending'
+          : sortDir === 'desc'
+            ? 'descending'
+            : sortable
+              ? 'none'
+              : undefined
+      }
+      {...rest}
+      onClick={sortable ? undefined : rest.onClick}
     >
-      <span className="inline-flex items-center gap-1.5">
-        {children}
-        {sortable && <SortIcon />}
-      </span>
+      {inner}
     </th>
   );
 }
 
+/* ─────────────────────────────────────────────────────────────
+ * GlassTBody / GlassTR / GlassTD
+ * ───────────────────────────────────────────────────────────── */
+
 export function GlassTBody({ children }: { children: ReactNode }) {
-  return <tbody className="divide-y divide-[var(--border-subtle)]">{children}</tbody>;
+  return <tbody>{children}</tbody>;
+}
+
+export interface GlassTRProps {
+  children: ReactNode;
+  className?: string;
 }
 
 export function GlassTR({
@@ -163,22 +271,31 @@ export function GlassTR({
   onClick,
   className = '',
   ...rest
-}: GlassTableProps & ExtraProps) {
+}: GlassTRProps & ExtraProps) {
+  const selected = Boolean(rest['aria-selected']);
+
   return (
     <tr
-      className={[
-        'transition-colors duration-[var(--duration-fast)] [transition-timing-function:var(--ease-standard)]',
-        'hover:bg-[var(--state-hover)]',
-        onClick ? 'cursor-pointer' : '',
-        rest['aria-selected'] ? 'bg-[var(--state-active)]' : '',
+      data-selected={selected ? 'true' : 'false'}
+      className={cn(
+        'border-b border-black/[0.04] dark:border-white/[0.06] transition-colors duration-150 last:border-b-0',
+        'hover:bg-black/[0.02] dark:hover:bg-white/[0.03]',
+        selected && 'bg-apple-blue/[0.07] hover:bg-apple-blue/[0.10] dark:bg-apple-blue/[0.12]',
+        onClick && 'cursor-pointer',
         className,
-      ].join(' ')}
+      )}
       onClick={onClick}
-      {...(rest as object)}
+      {...rest}
     >
       {children}
     </tr>
   );
+}
+
+export interface GlassTDProps {
+  children?: ReactNode;
+  className?: string;
+  align?: 'left' | 'right' | 'center';
 }
 
 export function GlassTD({
@@ -186,32 +303,26 @@ export function GlassTD({
   className = '',
   align,
   ...rest
-}: GlassTableProps & ExtraProps & { align?: 'left' | 'right' | 'center' }) {
-  const alignClass = align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : '';
+}: GlassTDProps & ExtraProps) {
+  const density = useContext(DensityContext);
+  const alignClass =
+    align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : '';
+
   return (
     <td
-      className={[
-        'px-4 py-3.5',
-        'text-[var(--text-body)] text-[var(--text-primary)]',
-        'align-middle',
-        alignClass,
-        className,
-      ].join(' ')}
-      {...(rest as object)}
+      className={cn('align-middle text-sm text-primary', CELL_PADDING[density], alignClass, className)}
+      {...rest}
     >
       {children}
     </td>
   );
 }
 
-/* ── Skeleton Loading Rows ──────────────────────────────────── */
-function SkeletonCell({ width = 'w-full' }: { width?: string }) {
-  return (
-    <td className="px-4 py-3.5 align-middle">
-      <div className={['h-4 rounded-[var(--radius-sm)] skeleton-shimmer', width].join(' ')} />
-    </td>
-  );
-}
+/* ─────────────────────────────────────────────────────────────
+ * Internal skeleton (kept exported for existing importers)
+ * ───────────────────────────────────────────────────────────── */
+
+const SKELETON_WIDTHS = ['70%', '55%', '85%', '45%', '60%'];
 
 export function GlassTableSkeleton({
   rows = 5,
@@ -220,13 +331,19 @@ export function GlassTableSkeleton({
   rows?: number;
   columns?: number;
 }) {
-  const widths = ['w-32', 'w-24', 'w-40', 'w-20', 'w-28'];
+  const density = useContext(DensityContext);
   return (
     <>
       {Array.from({ length: rows }, (_, r) => (
-        <tr key={r} className="border-b border-[var(--border-subtle)] last:border-0">
+        <tr key={r} className="border-b border-subtle last:border-b-0">
           {Array.from({ length: columns }, (_, c) => (
-            <SkeletonCell key={c} width={widths[c % widths.length]} />
+            <td key={c} className={cn('border-b border-subtle', CELL_PADDING[density])}>
+              <Shimmer
+                height={12}
+                rounded="6px"
+                width={SKELETON_WIDTHS[c % SKELETON_WIDTHS.length]}
+              />
+            </td>
           ))}
         </tr>
       ))}

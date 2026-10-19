@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { authApi, friendlyHttpMessage, type ApiError } from '@/lib/api';
- import { GlassButton, GlassInput } from '@/components/ui';
+import { GlassButton, GlassInput } from '@/components/ui';
 import { MeduLogo } from '@/components/brand/MeduLogo';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -110,8 +111,14 @@ export function ResetPasswordPage() {
       style={{ background: 'var(--bg-base)' }}
     >
       <Backdrop />
-      <main className="relative z-10 w-full max-w-[400px] [animation:auth-rise_.6s_cubic-bezier(.16,.99,.3,1)_both]">
-        <section className="glass-card p-8 sm:p-9">
+      <motion.main
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+        className="relative z-10 w-full max-w-[420px]"
+      >
+        <section className="relative overflow-hidden rounded-[2.25rem] bg-white/65 p-8 backdrop-blur-md ring-1 ring-inset ring-white/70 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12)] dark:bg-white/[0.04] dark:ring-white/[0.08] dark:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.5)] sm:p-9">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20" />
           <BrandMark />
 
           <p
@@ -136,12 +143,7 @@ export function ResetPasswordPage() {
           {!hasToken ? (
             <div className="space-y-4 [animation:auth-fade_.4s_ease-out]">
               <div
-                className="rounded-[12px] p-3.5 text-[14px]"
-                style={{
-                  background: 'rgba(245,184,106,0.12)',
-                  border: '1px solid rgba(245,184,106,0.30)',
-                  color: '#c07828',
-                }}
+                className="rounded-[14px] p-3.5 text-[14px] font-medium border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
               >
                 {t('resetPassword.invalidToken')}
               </div>
@@ -158,12 +160,7 @@ export function ResetPasswordPage() {
           ) : done ? (
             <div className="space-y-4 [animation:auth-fade_.4s_ease-out]">
               <div
-                className="flex items-center gap-2.5 rounded-[12px] p-3.5 text-[14px]"
-                style={{
-                  background: 'rgba(94,230,168,0.12)',
-                  border: '1px solid rgba(94,230,168,0.30)',
-                  color: '#2ea870',
-                }}
+                className="flex items-center gap-2.5 rounded-[14px] p-3.5 text-[14px] font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
               >
                 <Check />
                 {t('resetPassword.success')}
@@ -179,51 +176,50 @@ export function ResetPasswordPage() {
               </GlassButton>
             </div>
           ) : (
- <form onSubmit={handleSubmit} className="space-y-3">
- <div className="relative">
- <GlassInput
- type={showPw ? 'text' : 'password'}
- required
- autoFocus
- minLength={8}
- maxLength={128}
- autoComplete="new-password"
- placeholder={t('settings.newPassword')}
- value={password}
- onChange={(e) => setPassword(e.target.value)}
- disabled={busy}
- className="h-[48px] pr-11 pl-4 text-[15px]"
- />
- <button
- type="button"
- tabIndex={-1}
- onClick={() => setShowPw((v) => !v)}
- className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors z-10"
- style={{ color: 'var(--text-muted)' }}
- aria-label={showPw ? t('auth.hidePassword') : t('auth.showPassword')}
- >
- <Eye off={showPw} />
- </button>
- </div>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div className="relative">
+                <GlassInput
+                  type={showPw ? 'text' : 'password'}
+                  required
+                  autoFocus
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  placeholder={t('settings.newPassword')}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={busy}
+                  className="h-[48px] pr-11 pl-4 text-[15px]"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPw((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors z-10"
+                  style={{ color: 'var(--text-muted)' }}
+                  aria-label={showPw ? t('auth.hidePassword') : t('auth.showPassword')}
+                >
+                  <Eye off={showPw} />
+                </button>
+              </div>
 
- <GlassInput
- type={showPw ? 'text' : 'password'}
- required
- minLength={8}
- maxLength={128}
- autoComplete="new-password"
- placeholder={t('auth.confirmPassword')}
- value={confirm}
- onChange={(e) => setConfirm(e.target.value)}
- disabled={busy}
- className="h-[48px] text-[15px]"
- />
+              <GlassInput
+                type={showPw ? 'text' : 'password'}
+                required
+                minLength={8}
+                maxLength={128}
+                autoComplete="new-password"
+                placeholder={t('auth.confirmPassword')}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                disabled={busy}
+                className="h-[48px] text-[15px]"
+              />
 
               {error && (
                 <p
                   role="alert"
-                  className="flex items-start gap-1.5 text-[13px] [animation:auth-fade_.25s_ease-out]"
-                  style={{ color: 'var(--state-error)' }}
+                  className="flex items-start gap-1.5 text-[13px] font-medium text-rose-600 dark:text-rose-400 [animation:auth-fade_.25s_ease-out]"
                 >
                   <svg className="mt-[3px] h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                     <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 5a1.25 1.25 0 0 1 1.25 1.25v5a1.25 1.25 0 0 1-2.5 0v-5A1.25 1.25 0 0 1 12 7Zm0 11a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />
@@ -257,7 +253,9 @@ export function ResetPasswordPage() {
             {t('auth.backToSignIn')}
           </Link>
         </p>
-      </main>
+      </motion.main>
     </div>
   );
 }
+
+export default ResetPasswordPage;

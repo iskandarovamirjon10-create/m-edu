@@ -10,13 +10,15 @@
  *  · Haptic-ready — vibrate() calls (qo'llab-quvvatlangan qurilmalarda)
  */
 
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassPageHeader } from '@/components/ui';
 import { useI18n } from '@/i18n/I18nProvider';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
+import { openSidecar } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import request from '@/lib/api';
 
 /* ══════════════════════════════════════════════════════════════════
@@ -95,72 +97,25 @@ interface LiquidGlassProps {
 function LiquidGlass({
   children,
   className = '',
-  radius = '1.75rem',
+  radius = '1.5rem',
   tint = 'transparent',
-  intensity = 1,
   elevated = false,
-  spotlight = true,
 }: LiquidGlassProps) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState({ x: 50, y: 0, active: false });
-
-  const onMove = useCallback((e: React.MouseEvent) => {
-    if (!spotlight || !ref.current) return;
-    const r = ref.current.getBoundingClientRect();
-    setPos({
-      x: ((e.clientX - r.left) / r.width) * 100,
-      y: ((e.clientY - r.top) / r.height) * 100,
-      active: true,
-    });
-  }, [spotlight]);
-
-  const onLeave = useCallback(() => setPos((p) => ({ ...p, active: false })), []);
-
   return (
     <div
-      ref={ref}
-      onMouseMove={onMove}
-      onMouseLeave={onLeave}
-      className={`relative overflow-hidden ${className}`}
+      className={`liquid-glass-card liquid-glass-surface relative overflow-hidden transition-all duration-300 ${
+        elevated ? 'shadow-xl -translate-y-0.5' : 'shadow-sm'
+      } ${className}`}
       style={{
         borderRadius: radius,
-        WebkitBackdropFilter: 'blur(48px) saturate(220%)',
-        backdropFilter: 'blur(48px) saturate(220%)',
-        background: `linear-gradient(135deg, rgba(255,255,255,${0.85 * intensity}) 0%, rgba(255,255,255,${0.65 * intensity}) 50%, rgba(255,255,255,${0.55 * intensity}) 100%)`,
-        boxShadow: elevated
-          ? '0 24px 60px -20px rgba(0,0,0,0.15), 0 8px 20px -8px rgba(0,0,0,0.08)'
-          : '0 12px 40px -15px rgba(0,0,0,0.1)',
       }}
     >
-      {/* Chromatic fringe */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.55] dark:opacity-[0.35]"
-        style={{
-          borderRadius: radius,
-          background: 'linear-gradient(120deg, rgba(255,0,80,0.05) 0%, transparent 12%, transparent 88%, rgba(0,120,255,0.05) 100%)',
-        }} />
-      {/* Specular */}
-      <div aria-hidden className="pointer-events-none absolute inset-0"
-        style={{
-          borderRadius: radius,
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.9),' +
-            'inset 0 -1px 0 rgba(255,255,255,0.25),' +
-            'inset 1px 0 0 rgba(255,255,255,0.4),' +
-            'inset -1px 0 0 rgba(255,255,255,0.4),' +
-            'inset 0 0 0 0.5px rgba(0,0,0,0.04)',
-        }} />
-      {/* Tint */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 transition-colors duration-700"
-        style={{ borderRadius: radius, background: tint }} />
-      {/* Spotlight */}
-      {spotlight && (
-        <div aria-hidden className="pointer-events-none absolute inset-0 transition-opacity duration-500"
-          style={{
-            borderRadius: radius,
-            opacity: pos.active ? 1 : 0,
-            background: `radial-gradient(520px circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.5), transparent 42%)`,
-            mixBlendMode: 'overlay',
-          }} />
+      {tint !== 'transparent' && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 transition-colors duration-500"
+          style={{ borderRadius: radius, background: tint }}
+        />
       )}
       <div className="relative z-10">{children}</div>
     </div>
@@ -194,7 +149,7 @@ function XPParticles({ trigger }: { trigger: number }) {
       angle: (Math.PI * 2 * i) / 24 + Math.random() * 0.3,
       velocity: 60 + Math.random() * 100,
       size: 3 + Math.random() * 5,
-      color: ['#FFD60A', '#FF9500', '#FF2D55', '#AF52DE'][i % 4],
+      color: ['#FFD60A', '#F59E0B', '#FF2D55', '#6366F1'][i % 4],
       duration: 0.8 + Math.random() * 0.6,
     }));
     setParticles(newParticles);
@@ -269,17 +224,6 @@ function LevelRing({ level, progress }: { level: number; progress: number }) {
 
   return (
     <div className="relative flex h-[88px] w-[88px] items-center justify-center">
-      {/* Rotating conic halo */}
-      <motion.span
-        className="absolute inset-0 rounded-full opacity-40 blur-md"
-        style={{
-          background: 'conic-gradient(from 0deg, #FFD60A, #FF9500, #FF2D55, #AF52DE, #FFD60A)',
-        }}
-        animate={{ rotate: 360 }}
-        transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-        aria-hidden
-      />
-
       {/* SVG progress ring */}
       <svg className="absolute inset-0 -rotate-90" viewBox="0 0 88 88" aria-hidden>
         <circle cx="44" cy="44" r={radius} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
@@ -298,7 +242,7 @@ function LevelRing({ level, progress }: { level: number; progress: number }) {
         <defs>
           <linearGradient id="levelGradient" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#FFD60A" />
-            <stop offset="50%" stopColor="#FF9500" />
+            <stop offset="50%" stopColor="#F59E0B" />
             <stop offset="100%" stopColor="#FF2D55" />
           </linearGradient>
         </defs>
@@ -337,7 +281,7 @@ function StreakFlame({ streak }: { streak: number }) {
         <motion.span
           className="absolute inset-0 rounded-full"
           style={{
-            background: 'radial-gradient(circle, rgba(255,149,0,0.5), transparent 70%)',
+            background: 'radial-gradient(circle, rgba(245,158,11,0.5), transparent 70%)',
           }}
           animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.8, 0.5] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
@@ -380,7 +324,7 @@ function Confetti({ trigger }: { trigger: number }) {
     duration: 1.8 + Math.random() * 1.2,
     size: 6 + Math.random() * 10,
     rotation: Math.random() * 720 - 360,
-    color: ['#FFD60A', '#FF2D55', '#AF52DE', '#007AFF', '#34C759', '#FF9500'][i % 6],
+    color: ['#FFD60A', '#FF2D55', '#6366F1', '#2563EB', '#10B981', '#F59E0B'][i % 6],
     drift: (Math.random() - 0.5) * 200,
   }));
 
@@ -419,7 +363,7 @@ function Confetti({ trigger }: { trigger: number }) {
  * 9. PODIUM CEREMONY
  * ══════════════════════════════════════════════════════════════════ */
 
-function PodiumStep({ entry, place, delay }: { entry: LeaderboardEntry; place: 1 | 2 | 3; delay: number }) {
+function PodiumStep({ entry, place, delay, onOpenSidecar }: { entry: LeaderboardEntry; place: 1 | 2 | 3; delay: number; onOpenSidecar?: () => void }) {
   const styles = {
     1: {
       emoji: '👑',
@@ -458,9 +402,10 @@ function PodiumStep({ entry, place, delay }: { entry: LeaderboardEntry; place: 1
       initial={{ opacity: 0, y: 40, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ ...SPRING.bouncy, delay }}
-      className={`relative flex flex-col items-center ${styles.offset}`}
+      className={`relative flex flex-col items-center cursor-pointer group ${styles.offset}`}
+      onClick={onOpenSidecar}
     >
-      <div className={`relative flex w-full flex-col items-center rounded-3xl border ${styles.border} bg-gradient-to-b ${styles.gradient} p-5 text-center backdrop-blur-xl ${styles.shadow}`}>
+      <div className={`relative flex w-full flex-col items-center rounded-3xl border ${styles.border} bg-gradient-to-b ${styles.gradient} p-5 text-center backdrop-blur-md transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-2xl ${styles.shadow}`}>
         {/* Medal floating */}
         <motion.div
           className="mb-3 text-4xl"
@@ -478,9 +423,20 @@ function PodiumStep({ entry, place, delay }: { entry: LeaderboardEntry; place: 1
         <div className="font-bold text-white text-sm truncate w-full">{entry.studentName}</div>
         <div className="text-[11px] text-slate-400 truncate w-full mb-3">{entry.groupName || 'Guruh'}</div>
 
-        <div className={`rounded-xl bg-black/30 border ${styles.border} px-3 py-1.5 text-xs font-black ${styles.medalColor}`}>
+        <div className={`rounded-xl bg-black/30 border ${styles.border} px-3 py-1.5 text-xs font-black ${styles.medalColor} mb-2`}>
           {entry.xp} XP · {entry.coins} 🪙
         </div>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenSidecar?.();
+          }}
+          className="rounded-lg border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white/90 backdrop-blur-md transition-all hover:bg-white/20"
+        >
+          ◨ Sidecar
+        </button>
       </div>
     </motion.div>
   );
@@ -550,12 +506,12 @@ function RewardCard({ reward, canAfford, isPending, onClaim, index }: RewardCard
               </div>
             </div>
             <h5 className="font-bold text-[#1D1D1F] dark:text-white text-[15px] tracking-tight">{reward.title}</h5>
-            <p className="text-[12px] text-[#86868B] dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+            <p className="text-[12px] text-[#64748B] dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
               {reward.description}
             </p>
           </div>
 
-          <div className="pt-4 mt-4 border-t border-black/[0.06] dark:border-white/10">
+          <div className="pt-4 mt-4 border-t border-slate-200/80 dark:border-slate-800 dark:border-white/10">
             <motion.button
               type="button"
               disabled={!canAfford || isPending}
@@ -565,7 +521,7 @@ function RewardCard({ reward, canAfford, isPending, onClaim, index }: RewardCard
               className={`relative w-full overflow-hidden rounded-xl py-2.5 text-[12px] font-bold transition-all ${
                 canAfford
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_4px_15px_-4px_rgba(16,185,129,0.6)]'
-                  : 'bg-black/[0.04] dark:bg-white/[0.05] text-[#86868B] dark:text-slate-500 cursor-not-allowed'
+                  : 'bg-black/[0.04] dark:bg-white/[0.05] text-[#64748B] dark:text-slate-500 cursor-not-allowed'
               }`}
               
               
@@ -615,7 +571,7 @@ function DailyCheckIn({ streak = 0 }: { streak?: number }) {
     <LiquidGlass radius="1.5rem" className="p-4" spotlight={false}>
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
             {t('gamification.dailyCheckIn')}
           </span>
         </div>
@@ -638,14 +594,14 @@ function DailyCheckIn({ streak = 0 }: { streak?: number }) {
                 isToday ? 'ring-2 ring-amber-400/50' : ''
               }`}
             >
-              <span className="text-[10px] font-bold uppercase text-[#86868B]">{d}</span>
+              <span className="text-[10px] font-bold uppercase text-[#64748B]">{d}</span>
               <div
                 className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] ${
                   isDone
                     ? 'bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-[0_4px_12px_-2px_rgba(16,185,129,0.5)]'
                     : isToday
                     ? 'bg-amber-400/20 text-amber-500 dark:text-amber-400 ring-1 ring-amber-400/40'
-                    : 'bg-black/[0.04] dark:bg-white/[0.05] text-[#86868B]'
+                    : 'bg-black/[0.04] dark:bg-white/[0.05] text-[#64748B]'
                 }`}
               >
                 {isDone ? '✓' : isToday ? '●' : '·'}
@@ -696,12 +652,12 @@ function AchievementBadge({ achievement, index }: { achievement: Achievement; in
           {achievement.icon}
         </span>
         {!achievement.unlocked && (
-          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[10px] text-white ring-2 ring-white dark:ring-[#1c1c1e]">
+          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[10px] text-white ring-2 ring-white dark:ring-[#131622]">
             🔒
           </span>
         )}
       </motion.div>
-      <div className={`mt-2 text-[11px] font-bold tracking-tight ${achievement.unlocked ? 'text-[#1D1D1F] dark:text-white' : 'text-[#86868B]'}`}>
+      <div className={`mt-2 text-[11px] font-bold tracking-tight ${achievement.unlocked ? 'text-[#1D1D1F] dark:text-white' : 'text-[#64748B]'}`}>
         {achievement.title}
       </div>
     </motion.div>
@@ -717,6 +673,7 @@ export function GamificationHubPage() {
   usePageTitle('M-Coins & Gamifikatsiya');
   const { push } = useToast();
   const queryClient = useQueryClient();
+  const { playTick, playPop, playSuccess, playError } = usePremiumSound();
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'store'>('leaderboard');
   const [xpParticleTrigger, setXpParticleTrigger] = useState(0);
   const [confettiTrigger, setConfettiTrigger] = useState(0);
@@ -724,17 +681,17 @@ export function GamificationHubPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   /* ── Queries ── */
-  const { data: myStats } = useQuery<StudentStats>({
+  const { data: myStats, refetch: refetchMe } = useQuery<StudentStats>({
     queryKey: ['gamification-me'],
     queryFn: () => request('/gamification/me'),
   });
 
-  const { data: leaderboardData, isLoading: loadingLeaderboard } = useQuery<{ items: LeaderboardEntry[] }>({
+  const { data: leaderboardData, isLoading: loadingLeaderboard, refetch: refetchLeaderboard } = useQuery<{ items: LeaderboardEntry[] }>({
     queryKey: ['gamification-leaderboard'],
     queryFn: () => request('/gamification/leaderboard?limit=25'),
   });
 
-  const { data: rewardsData } = useQuery<{ items: RewardItem[] }>({
+  const { data: rewardsData, refetch: refetchRewards } = useQuery<{ items: RewardItem[] }>({
     queryKey: ['gamification-rewards'],
     queryFn: () => request('/gamification/rewards'),
   });
@@ -744,11 +701,77 @@ export function GamificationHubPage() {
   const top3 = leaderboard.slice(0, 3);
   const rest = leaderboard.slice(3);
 
+  /* ── Open student sidecar ── */
+  const handleOpenStudentSidecar = (entry: LeaderboardEntry, rank?: number) => {
+    playPop();
+    const resolvedRank = rank ?? entry.rank;
+    openSidecar({
+      title: entry.studentName,
+      subtitle: `${entry.groupName || 'Guruh'} • #${resolvedRank} o'rin`,
+      badge: `LVL ${entry.level}`,
+      status: {
+        label: resolvedRank <= 3 ? 'Top 3 Lider' : 'Faol Ishtirokchi',
+        tone: resolvedRank <= 3 ? 'amber' : 'emerald',
+      },
+      metrics: [
+        { label: 'Tajriba (XP)', value: `${entry.xp} XP` },
+        { label: 'M-Coins', value: `${entry.coins} 🪙` },
+        { label: 'Daraja', value: `Level ${entry.level}` },
+        { label: 'O\'rin', value: `#${resolvedRank}` },
+      ],
+      details: [
+        { label: 'Talaba ID', value: entry.studentId },
+        { label: 'F.I.SH', value: entry.studentName },
+        { label: 'Guruh', value: entry.groupName || 'Biriktirilmagan' },
+        { label: 'M-Coins Balansi', value: `${entry.coins} ta tanga` },
+        { label: 'Yutuqlar', value: resolvedRank === 1 ? '🥇 Chempion unvoni' : resolvedRank <= 3 ? '🏆 Podium sovrindori' : 'O\'quv yulduzi' },
+      ],
+      actions: [
+        {
+          label: 'Profilga o\'tish',
+          variant: 'primary',
+          onClick: () => {
+            window.location.href = `/students/${entry.studentId}`;
+          },
+        },
+      ],
+    });
+  };
+
+  /* ── Keyboard shortcuts ── */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === '1') {
+        e.preventDefault();
+        playTick();
+        setActiveTab('leaderboard');
+      } else if (e.key === '2') {
+        e.preventDefault();
+        playTick();
+        setActiveTab('store');
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        playTick();
+        refetchMe();
+        refetchLeaderboard();
+        refetchRewards();
+        push('info', 'Gamifikatsiya ma\'lumotlari yangilandi');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playTick, refetchMe, refetchLeaderboard, refetchRewards, push]);
+
   /* ── Claim mutation ── */
   const claimMutation = useMutation({
     mutationFn: (rewardId: string) =>
       request(`/gamification/rewards/${rewardId}/claim`, { method: 'POST' }),
     onSuccess: (res: any) => {
+      playSuccess();
       push('success', res?.message || '🎉 Sovrin muvaffaqiyatli xarid qilindi!');
       setConfettiTrigger(Date.now());
       // Haptic feedback (mobile)
@@ -757,6 +780,7 @@ export function GamificationHubPage() {
       queryClient.invalidateQueries({ queryKey: ['gamification-rewards'] });
     },
     onError: (err: any) => {
+      playError();
       push('error', err?.message || 'Coinlar yetarli emas');
       if ('vibrate' in navigator) navigator.vibrate?.(80);
     },
@@ -832,7 +856,7 @@ export function GamificationHubPage() {
               >
                 {currentLevel}
               </motion.div>
-              <div className="text-[11px] text-[#86868B] dark:text-slate-400">Faol o'quvchi</div>
+              <div className="text-[11px] text-[#64748B] dark:text-slate-400">Faol o'quvchi</div>
             </div>
           </div>
 
@@ -841,8 +865,8 @@ export function GamificationHubPage() {
             <motion.div
               className="relative flex h-16 w-16 items-center justify-center rounded-2xl text-3xl"
               style={{
-                background: 'linear-gradient(135deg, #FFD60A 0%, #FF9500 100%)',
-                boxShadow: '0 10px 30px -8px rgba(255,149,0,0.6)',
+                background: 'linear-gradient(135deg, #FFD60A 0%, #F59E0B 100%)',
+                boxShadow: '0 10px 30px -8px rgba(245,158,11,0.6)',
               }}
               animate={{ rotate: [0, -3, 3, 0] }}
               transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
@@ -863,7 +887,7 @@ export function GamificationHubPage() {
               <div className="text-3xl font-black tracking-tight text-[#1D1D1F] dark:text-white">
                 <CoinValue value={currentCoins} />
               </div>
-              <div className="text-[11px] text-[#86868B] dark:text-slate-400">{t('gamification.forPurchases')}</div>
+              <div className="text-[11px] text-[#64748B] dark:text-slate-400">{t('gamification.forPurchases')}</div>
             </div>
           </div>
 
@@ -872,18 +896,18 @@ export function GamificationHubPage() {
             {/* XP bar */}
             <div className="relative">
               <div className="flex justify-between text-[11px] font-semibold mb-2">
-                <span className="text-[#86868B] dark:text-slate-400">
+                <span className="text-[#64748B] dark:text-slate-400">
                   {t('gamification.nextLevel')} <span className="text-indigo-500 dark:text-indigo-300 font-bold">{xpToNext} XP</span>
                 </span>
                 <span className="text-[#1D1D1F] dark:text-white font-bold tabular-nums">
                   {currentXp} / {(Math.floor(currentXp / 100) + 1) * 100}
                 </span>
               </div>
-              <div className="relative h-3 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08] p-[2px]">
+              <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800 dark:bg-white/[0.08] p-[2px]">
                 <motion.div
                   className="relative h-full rounded-full"
                   style={{
-                    background: 'linear-gradient(90deg, #5E5CE6 0%, #AF52DE 100%)',
+                    background: 'linear-gradient(90deg, #5E5CE6 0%, #6366F1 100%)',
                     boxShadow: '0 0 20px rgba(94,92,230,0.5)',
                   }}
                   initial={{ width: 0 }}
@@ -906,7 +930,7 @@ export function GamificationHubPage() {
                 </div>
                 <div className="text-lg font-black text-[#1D1D1F] dark:text-white">
                   #{myStats?.rank || 1}
-                  <span className="text-[11px] font-semibold text-[#86868B] ml-1">
+                  <span className="text-[11px] font-semibold text-[#64748B] ml-1">
                     / {myStats?.rankTotal || 128}
                   </span>
                 </div>
@@ -922,7 +946,7 @@ export function GamificationHubPage() {
 
         <LiquidGlass radius="1.5rem" className="p-4" spotlight={false}>
           <div className="flex items-center justify-between mb-3 px-1">
-            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
               Yutuqlar
             </span>
             <span className="text-[11px] font-bold text-[#1D1D1F] dark:text-white">
@@ -965,9 +989,9 @@ export function GamificationHubPage() {
             {/* Podium */}
             {top3.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 pb-2 items-end">
-                {top3[1] && <PodiumStep entry={top3[1]} place={2} delay={0.1} />}
-                {top3[0] && <PodiumStep entry={top3[0]} place={1} delay={0} />}
-                {top3[2] && <PodiumStep entry={top3[2]} place={3} delay={0.2} />}
+                {top3[1] && <PodiumStep entry={top3[1]} place={2} delay={0.1} onOpenSidecar={() => handleOpenStudentSidecar(top3[1], 2)} />}
+                {top3[0] && <PodiumStep entry={top3[0]} place={1} delay={0} onOpenSidecar={() => handleOpenStudentSidecar(top3[0], 1)} />}
+                {top3[2] && <PodiumStep entry={top3[2]} place={3} delay={0.2} onOpenSidecar={() => handleOpenStudentSidecar(top3[2], 3)} />}
               </div>
             )}
 
@@ -977,7 +1001,7 @@ export function GamificationHubPage() {
                 <h4 className="font-bold text-sm text-[#1D1D1F] dark:text-white tracking-tight">
                   {t('gamification.generalRating')}
                 </h4>
-                <span className="text-[11px] font-bold text-[#86868B]">
+                <span className="text-[11px] font-bold text-[#64748B]">
                   Jami {leaderboard.length} ishtirokchi
                 </span>
               </div>
@@ -993,7 +1017,13 @@ export function GamificationHubPage() {
                   />
                 ) : (
                   rest.map((entry, idx) => (
-                    <LeaderRow key={entry.studentId} entry={entry} rank={idx + 4} index={idx} />
+                    <LeaderRow
+                      key={entry.studentId}
+                      entry={entry}
+                      rank={idx + 4}
+                      index={idx}
+                      onOpenSidecar={() => handleOpenStudentSidecar(entry, idx + 4)}
+                    />
                   ))
                 )}
               </div>
@@ -1022,13 +1052,13 @@ export function GamificationHubPage() {
                     <h4 className="font-bold text-[14px] text-[#1D1D1F] dark:text-white tracking-tight">
                       M-Coins Do'koni
                     </h4>
-                    <p className="text-[12px] text-[#86868B] dark:text-slate-400">
+                    <p className="text-[12px] text-[#64748B] dark:text-slate-400">
                       Tangalarni real sovg'alarga almashtiring
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">
                     Balans
                   </div>
                   <div className="text-xl font-black text-amber-500 dark:text-amber-300">
@@ -1041,7 +1071,7 @@ export function GamificationHubPage() {
             {/* Search + Filters */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <div className="relative flex-1">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]">
                   <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="11" cy="11" r="8" />
                     <path d="M21 21l-4.3-4.3" />
@@ -1052,7 +1082,7 @@ export function GamificationHubPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Sovrin qidirish…"
-                  className="w-full rounded-full border border-black/[0.06] dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.05] py-2.5 pl-10 pr-4 text-[13px] outline-none placeholder:text-[#86868B] focus:border-indigo-400/40 focus:bg-white dark:focus:bg-white/[0.08]"
+                  className="w-full rounded-full border border-slate-200/80 dark:border-slate-800 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.05] py-2.5 pl-10 pr-4 text-[13px] outline-none placeholder:text-[#64748B] focus:border-indigo-400/40 focus:bg-white dark:focus:bg-white/[0.08]"
                 />
               </div>
               <div className="flex gap-1.5 overflow-x-auto pb-1 sm:pb-0">
@@ -1064,7 +1094,7 @@ export function GamificationHubPage() {
                     className={`shrink-0 rounded-full px-3.5 py-2 text-[12px] font-bold tracking-tight transition-all ${
                       categoryFilter === cat
                         ? 'bg-[#1D1D1F] dark:bg-white text-white dark:text-[#1D1D1F] shadow-lg'
-                        : 'bg-black/[0.04] dark:bg-white/[0.05] text-[#86868B] hover:bg-black/[0.06] dark:hover:bg-white/[0.08]'
+                        : 'bg-black/[0.04] dark:bg-white/[0.05] text-[#64748B] hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-white/[0.08]'
                     }`}
                     
                     
@@ -1118,7 +1148,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
       whileTap={{ scale: 0.98 }}
       transition={SPRING.snappy}
       className={`relative flex items-center gap-2 rounded-2xl px-6 py-3 text-[13px] font-bold tracking-tight transition-colors ${
-        active ? 'text-white' : 'text-[#86868B] dark:text-slate-400 hover:text-[#1D1D1F] dark:hover:text-white'
+        active ? 'text-white' : 'text-[#64748B] dark:text-slate-400 hover:text-[#1D1D1F] dark:hover:text-white'
       }`}
       
       
@@ -1128,7 +1158,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
           layoutId="tabPill"
           className="absolute inset-0 rounded-2xl"
           style={{
-            background: 'linear-gradient(135deg, #5E5CE6 0%, #AF52DE 100%)',
+            background: 'linear-gradient(135deg, #5E5CE6 0%, #6366F1 100%)',
             boxShadow: '0 10px 30px -8px rgba(94,92,230,0.5)',
           }}
           transition={SPRING.smooth}
@@ -1140,8 +1170,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
   );
 }
 
-function LeaderRow({ entry, rank, index }: { entry: LeaderboardEntry; rank: number; index: number }) {
-
+function LeaderRow({ entry, rank, index, onOpenSidecar }: { entry: LeaderboardEntry; rank: number; index: number; onOpenSidecar?: () => void }) {
   const [hovered, setHovered] = useState(false);
   return (
     <motion.div
@@ -1150,10 +1179,11 @@ function LeaderRow({ entry, rank, index }: { entry: LeaderboardEntry; rank: numb
       transition={{ ...SPRING.smooth, delay: Math.min(index * 0.03, 0.4) }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="flex items-center justify-between rounded-2xl border border-black/[0.04] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.03] p-3 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+      onClick={onOpenSidecar}
+      className="liquid-glass-surface flex cursor-pointer items-center justify-between rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="flex items-center gap-3 min-w-0">
-        <span className="w-8 shrink-0 text-[13px] font-black tabular-nums text-[#86868B]">
+        <span className="w-8 shrink-0 text-[13px] font-black tabular-nums text-[#64748B]">
           #{rank}
         </span>
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 text-[12px] font-black text-[#1D1D1F] dark:text-white ring-1 ring-black/[0.06] dark:ring-white/10">
@@ -1164,7 +1194,7 @@ function LeaderRow({ entry, rank, index }: { entry: LeaderboardEntry; rank: numb
             {entry.studentName}
           </div>
           {entry.groupName && (
-            <div className="truncate text-[11px] text-[#86868B]">{entry.groupName}</div>
+            <div className="truncate text-[11px] text-[#64748B]">{entry.groupName}</div>
           )}
         </div>
       </div>
@@ -1179,6 +1209,17 @@ function LeaderRow({ entry, rank, index }: { entry: LeaderboardEntry; rank: numb
         >
           {entry.coins} 🪙
         </motion.span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenSidecar?.();
+          }}
+          className="rounded-lg border border-slate-200/80 bg-white/60 px-2 py-1 text-[10px] font-bold text-slate-700 shadow-sm transition-all hover:bg-white dark:border-slate-700/80 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:bg-slate-800"
+          title="Tafsilotlar (Sidecar)"
+        >
+          ◨
+        </button>
       </div>
     </motion.div>
   );
@@ -1193,13 +1234,13 @@ function SkeletonRows({ count }: { count: number }) {
           key={i}
           className="flex items-center gap-3 rounded-2xl border border-black/[0.04] dark:border-white/[0.06] p-3"
         >
-          <div className="h-4 w-8 rounded bg-black/[0.06] dark:bg-white/[0.06] animate-pulse" />
-          <div className="h-9 w-9 rounded-full bg-black/[0.06] dark:bg-white/[0.06] animate-pulse" />
+          <div className="h-4 w-8 rounded bg-slate-200 dark:bg-slate-800 dark:bg-white/[0.06] animate-pulse" />
+          <div className="h-9 w-9 rounded-full bg-slate-200 dark:bg-slate-800 dark:bg-white/[0.06] animate-pulse" />
           <div className="flex-1 space-y-2">
-            <div className="h-3 w-32 rounded bg-black/[0.06] dark:bg-white/[0.06] animate-pulse" />
+            <div className="h-3 w-32 rounded bg-slate-200 dark:bg-slate-800 dark:bg-white/[0.06] animate-pulse" />
             <div className="h-2.5 w-20 rounded bg-black/[0.04] dark:bg-white/[0.04] animate-pulse" />
           </div>
-          <div className="h-6 w-16 rounded-xl bg-black/[0.06] dark:bg-white/[0.06] animate-pulse" />
+          <div className="h-6 w-16 rounded-xl bg-slate-200 dark:bg-slate-800 dark:bg-white/[0.06] animate-pulse" />
         </div>
       ))}
     </>
@@ -1223,7 +1264,7 @@ function EmptyState({ icon, title, description }: { icon: string; title: string;
         {icon}
       </motion.div>
       <h5 className="text-[14px] font-bold text-[#1D1D1F] dark:text-white tracking-tight">{title}</h5>
-      <p className="mt-1 max-w-xs text-[12px] text-[#86868B]">{description}</p>
+      <p className="mt-1 max-w-xs text-[12px] text-[#64748B]">{description}</p>
     </motion.div>
   );
 }

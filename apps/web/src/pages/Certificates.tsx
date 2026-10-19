@@ -25,6 +25,7 @@ import {
   studentsApi,
   downloadFile,
 } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys.factory';
 import {
   GlassErrorState,
   GlassModal,
@@ -34,8 +35,11 @@ import {
   GlassSelect,
   GlassButton,
   GlassSwitch,
+  FloatingActionIsland,
   useToasts,
 } from '@/components/ui';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { ExecutivePDFStudio, type PDFStudioDocData } from '@/components/pdf-studio';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type {
   Paginated,
@@ -46,6 +50,7 @@ import type {
 } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useI18n } from '@/i18n/I18nProvider';
+import { TiltCertificate } from '@/components/certificates/TiltCertificate';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -167,6 +172,25 @@ const I: Record<string, string[]> = {
     'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z',
     'M12 9v4', 'M12 17h.01',
   ],
+  eye: [
+    'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z',
+    'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  ],
+  external: [
+    'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6',
+    'M15 3h6v6',
+    'M10 14L21 3',
+  ],
+  copy: [
+    'M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8',
+    'M16 4h2a2 2 0 0 1 2 2v2',
+    'M8 2h8a2 2 0 0 1 2 2v2H8z',
+  ],
+  printer: [
+    'M6 9V2h12v7',
+    'M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2',
+    'M6 14h12v8H6z',
+  ],
 };
 
 function Icon({
@@ -193,26 +217,26 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald' | 'amber';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
+  blue:    { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)', border: 'rgba(37,99,235,0.20)' },
+  green:   { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)',  border: 'rgba(16,185,129,0.20)' },
+  orange:  { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)',  border: 'rgba(245,158,11,0.20)' },
+  red:     { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)' },
+  purple:  { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)' },
+  cyan:    { fg: '#0284C7', bg: 'rgba(2,132,199,0.10)', glow: 'rgba(2,132,199,0.28)', border: 'rgba(2,132,199,0.20)' },
+  gray:    { fg: '#64748B', bg: 'rgba(100,116,139,0.10)', glow: 'rgba(100,116,139,0.22)', border: 'rgba(100,116,139,0.20)' },
   emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
   amber:   { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)', glow: 'rgba(245,158,11,0.28)', border: 'rgba(245,158,11,0.20)' },
 };
 
 const AVATAR_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
-  ['#FF2D55', '#FF9500'],
-  ['#30D158', '#34C759'],
+  ['#2563EB', '#6366F1'],
+  ['#6366F1', '#FF2D55'],
+  ['#10B981', '#0284C7'],
+  ['#F59E0B', '#FF2D55'],
+  ['#6366F1', '#6366F1'],
+  ['#0284C7', '#2563EB'],
+  ['#FF2D55', '#F59E0B'],
+  ['#30D158', '#10B981'],
 ];
 
 function nameHash(str: string): number {
@@ -237,12 +261,14 @@ function getInitials(name: string): string {
 interface CertificateFormState {
   studentId: string;
   courseId: string;
+  templateId: string;
   notes: string;
 }
 
 const INITIAL_FORM: CertificateFormState = {
   studentId: '',
   courseId: '',
+  templateId: '',
   notes: '',
 };
 
@@ -299,26 +325,7 @@ function formatStudentName(student: Student | undefined): string {
  * ========================================================================== */
 
 function AmbientOrbs() {
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <motion.div
-        className="absolute -left-[8%] top-[6%] h-[44%] w-[40%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(0,122,255,0.14), transparent 70%)',
-          }}
-        animate={{ x: [0, 24, 0], y: [0, 18, 0], opacity: [0.85, 1, 0.85] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute -bottom-[10%] -right-[8%] h-[46%] w-[42%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(175,82,222,0.12), transparent 70%)',
-          }}
-        animate={{ x: [0, -28, 0], y: [0, -22, 0], opacity: [0.8, 1, 0.8] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </div>
-  );
+  return null;
 }
 
 function CountUp({
@@ -358,7 +365,7 @@ function KpiTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       style={{
         boxShadow:
           'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
@@ -389,7 +396,7 @@ function KpiTile({
         <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
           <CountUp value={value} />
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B]">
           {label}
         </div>
       </div>
@@ -448,7 +455,7 @@ function SegmentedTabs({
     <div
       role="tablist"
       aria-label={t('certificates.sectionsAria')}
-      className="inline-flex w-fit items-center gap-1 rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-1 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="inline-flex w-fit items-center gap-1 rounded-2xl border border-black/[0.04] bg-black/[0.04] p-1 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.06]"
       style={{
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
       }}
@@ -467,7 +474,7 @@ function SegmentedTabs({
             whileTap={{ scale: 0.97 }}
             transition={SPRING.snappy}
             className="relative overflow-hidden rounded-xl px-3.5 py-2 text-[12.5px] font-bold tracking-tight outline-none transition-colors"
-            style={{ color: isActive ? c.fg : '#86868B' }}
+            style={{ color: isActive ? c.fg : '#64748B' }}
             tabIndex={0}
             onKeyDown={(e: any) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -541,6 +548,8 @@ export function CertificatesPage() {
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<CertificateTemplate | null>(null);
   const [deletingTemplate, setDeletingTemplate] = useState<CertificateTemplate | null>(null);
+  const [previewCert, setPreviewCert] = useState<Certificate | null>(null);
+  const [templatePreviewActive, setTemplatePreviewActive] = useState(false);
 
   const [form, setForm] = useState<CertificateFormState>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof CertificateFormState, string>>>({});
@@ -562,12 +571,12 @@ export function CertificatesPage() {
   });
 
   const courses = useQuery({
-    queryKey: ['courses'],
+    queryKey: queryKeys.courses.selectors(),
     queryFn: () => coursesApi.list({ limit: 100 }),
   });
 
   const students = useQuery({
-    queryKey: ['students'],
+    queryKey: queryKeys.students.selectors(),
     queryFn: () => studentsApi.list({ limit: 100 }),
   });
 
@@ -621,6 +630,7 @@ export function CertificatesPage() {
         studentId: form.studentId,
         courseId: form.courseId,
       };
+      if (form.templateId) payload.templateId = form.templateId;
       if (form.notes.trim()) payload.notes = form.notes.trim();
       return certificatesApi.generate(payload);
     },
@@ -729,12 +739,14 @@ export function CertificatesPage() {
       setTemplateForm(getInitialTemplateForm(t));
     }
     setTemplateFormErrors({});
+    setTemplatePreviewActive(false);
     setTemplateModalOpen(true);
   }, []);
 
   const closeTemplateModal = useCallback(() => {
     setTemplateModalOpen(false);
     setEditingTemplate(null);
+    setTemplatePreviewActive(false);
     setTemplateForm(getInitialTemplateForm(t));
     setTemplateFormErrors({});
   }, []);
@@ -774,11 +786,102 @@ export function CertificatesPage() {
     [courseList, t],
   );
 
+  /* ── Executive PDF Studio State ───────────────────────────────────── */
+  const [studioCertificate, setStudioCertificate] = useState<Certificate | null>(null);
+
+  const studioDocData = useMemo<PDFStudioDocData | undefined>(() => {
+    if (!studioCertificate) return undefined;
+    const sName = getStudentName(studioCertificate.studentId);
+    const cName = studioCertificate.course?.name || getCourseName(studioCertificate.courseId);
+    return {
+      id: studioCertificate.certificateNumber || `CERT-${studioCertificate.id.slice(0, 8)}`,
+      docType: 'certificate',
+      title: "M-EDU Xalqaro Sertifikati / Certificate of Completion",
+      recipientName: sName,
+      recipientId: studioCertificate.studentId,
+      courseName: cName,
+      dateStr: studioCertificate.issueDate ? formatDate(studioCertificate.issueDate) : new Date().toLocaleDateString('uz-UZ'),
+      items: [
+        { label: "Talaba (Bitiruvchi)", value: sName },
+        { label: "Muvaffaqiyatli tamomlagan kursi", value: cName },
+        { label: "Sertifikat raqami", value: studioCertificate.certificateNumber },
+        { label: "Haqiqiylik kodi (QR)", value: studioCertificate.verificationCode },
+        { label: "Berilgan sanasi", value: studioCertificate.issueDate ? formatDate(studioCertificate.issueDate) : '—' },
+        { label: "Status", value: "Tasdiqlangan va Xalqaro Ro'yxatga olingan" },
+      ],
+    };
+  }, [studioCertificate, getStudentName, getCourseName]);
+
+  /* ── Keyboard Navigation ──────────────────────────────────────────── */
+  const {
+    focusedIndex,
+    selectedIds,
+    selectedCount,
+    isSelected,
+    toggleSelection,
+    clearSelection,
+  } = useListKeyboardNavigation<Certificate>({
+    items: filteredCertificates,
+    getItemId: (c) => c.id,
+    rowIdPrefix: 'cert-row-',
+    onSelect: (c) => setStudioCertificate(c),
+    onQuickLook: (c) => setPreviewCert(c),
+    onEdit: (c) => setStudioCertificate(c),
+  });
+
+  /* ── Batch actions ────────────────────────────────────────────────── */
+  const handleBatchDownloadCertificates = async () => {
+    let count = 0;
+    for (const id of selectedIds) {
+      try {
+        await downloadCertificate.mutateAsync(id);
+        count++;
+      } catch {
+        // continue
+      }
+    }
+    clearSelection();
+    push({ type: 'success', message: `${count} ta sertifikat yuklab olindi` });
+  };
+
+  const handleBatchCopyLinks = () => {
+    const selectedCerts = filteredCertificates.filter((c) => isSelected(c.id));
+    const links = selectedCerts
+      .map((c) => `${window.location.origin}/verify/${c.verificationCode}`)
+      .join('\n');
+    navigator.clipboard.writeText(links);
+    clearSelection();
+    push({ type: 'success', message: `${selectedCerts.length} ta tekshirish havolasi nusxalandi!` });
+  };
+
+  const handleExportSelectedCertificatesCSV = () => {
+    const selectedRows = filteredCertificates.filter((c) => isSelected(c.id));
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      ['ID,Number,Student,Course,VerificationCode,IssueDate']
+        .concat(
+          selectedRows.map(
+            (c) =>
+              `"${c.id}","${c.certificateNumber}","${getStudentName(c.studentId)}","${c.course?.name || getCourseName(c.courseId)}","${c.verificationCode}","${c.issueDate || ''}"`
+          )
+        )
+        .join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `certificates_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    clearSelection();
+    push({ type: 'success', message: `${selectedRows.length} ta sertifikat CSV formatida yuklandi` });
+  };
+
   /* ── Loading ──────────────────────────────────────────────────────── */
   if (certificates.isLoading) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card" />
         <PageSkeleton />
       </div>
     );
@@ -814,7 +917,7 @@ export function CertificatesPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-7"
           style={{
             boxShadow:
               'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -834,9 +937,9 @@ export function CertificatesPage() {
               transition={SPRING.smooth}
               className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
               style={{
-                background: 'linear-gradient(135deg, #FF9500 0%, #AF52DE 100%)',
+                background: 'linear-gradient(135deg, #F59E0B 0%, #6366F1 100%)',
                 boxShadow:
-                  '0 12px 28px -10px rgba(255,149,0,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
+                  '0 12px 28px -10px rgba(245,158,11,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
               }}
             >
               <span
@@ -851,17 +954,17 @@ export function CertificatesPage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF9500]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#FF9500]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F59E0B]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#F59E0B]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   {t('certificates.title')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
                   {stats.total} total
                 </span>
                 {stats.thisMonth > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#34C759]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
                     +{stats.thisMonth} this month
                   </span>
                 )}
@@ -870,7 +973,7 @@ export function CertificatesPage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('certificates.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {t('certificates.subtitle')}
               </p>
             </div>
@@ -942,7 +1045,7 @@ export function CertificatesPage() {
           >
             {/* Search toolbar */}
             <div
-              className="relative overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+              className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
               style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)' }}
             >
               <div className="relative">
@@ -959,7 +1062,7 @@ export function CertificatesPage() {
 
             {/* Certificates list */}
             <div
-              className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+              className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
               style={{
                 boxShadow:
                   'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -977,10 +1080,10 @@ export function CertificatesPage() {
                 <div className="relative p-10">
                   <div className="flex flex-col items-center text-center">
                     <div
-                      className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#FF9500]/10 text-[#FF9500]"
+                      className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F59E0B]/10 text-[#F59E0B]"
                       style={{
                         boxShadow:
-                          'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(255,149,0,0.4)',
+                          'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(245,158,11,0.4)',
                       }}
                     >
                       <Icon paths={I.empty} size={26} strokeWidth={1.8} />
@@ -988,7 +1091,7 @@ export function CertificatesPage() {
                     <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                       {searchQuery ? t('certificates.emptySearch') : t('certificates.empty')}
                     </p>
-                    <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+                    <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
                       {searchQuery
                         ? t('certificates.emptySearchHint')
                         : t('certificates.emptyHint')}
@@ -1019,7 +1122,7 @@ export function CertificatesPage() {
                   </div>
                 </div>
               ) : (
-                <div className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+                <div className="relative divide-y divide-slate-200/80 dark:divide-slate-800 dark:divide-[#ffffff08]">
                   {filteredCertificates.map((cert, idx) => {
                     const studentName = getStudentName(cert.studentId);
                     const courseName = cert.course?.name || getCourseName(cert.courseId);
@@ -1030,14 +1133,43 @@ export function CertificatesPage() {
                     return (
                       <motion.div
                         key={cert.id}
+                        id={`cert-row-${cert.id}`}
                         initial={{ opacity: 0, x: -8 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                        className="group flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#FF9500]/[0.03]"
+                        onClick={() => toggleSelection(cert.id)}
+                        className={`group cursor-pointer flex flex-wrap items-center gap-3 px-5 py-3.5 transition-all ${
+                          isSelected(cert.id)
+                            ? 'bg-blue-500/[0.08] dark:bg-blue-500/[0.12] ring-1 ring-blue-500/30'
+                            : focusedIndex === idx
+                            ? 'bg-amber-500/[0.06] dark:bg-amber-500/[0.08] ring-1 ring-amber-500/30'
+                            : 'hover:bg-[#F59E0B]/[0.03]'
+                        }`}
                       >
+                        {/* Selection Checkbox */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelection(cert.id);
+                          }}
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-lg border transition-all ${
+                            isSelected(cert.id)
+                              ? 'border-blue-500 bg-blue-500 text-white shadow-xs'
+                              : 'border-slate-300 dark:border-white/20 hover:border-blue-400 bg-transparent'
+                          }`}
+                          aria-label={`Tanlash ${studentName}`}
+                        >
+                          {isSelected(cert.id) && (
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                          )}
+                        </button>
+
                         {/* Avatar */}
                         <div
-                          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
+                          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-slate-900/50"
                           style={{
                             background: gradient,
                             boxShadow:
@@ -1060,7 +1192,7 @@ export function CertificatesPage() {
                           <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                             {studentName}
                           </p>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#86868B]">
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#64748B]">
                             <span className="inline-flex items-center gap-1">
                               <Icon paths={I.book} size={10} strokeWidth={2.2} className="opacity-60" />
                               {courseName}
@@ -1072,8 +1204,8 @@ export function CertificatesPage() {
                             <span
                               className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[10px]"
                               style={{
-                                background: 'rgba(0,122,255,0.08)',
-                                color: '#007AFF',
+                                background: 'rgba(37,99,235,0.08)',
+                                color: '#2563EB',
                               }}
                             >
                               <Icon paths={I.shield} size={9} strokeWidth={2.4} />
@@ -1088,43 +1220,131 @@ export function CertificatesPage() {
                           </div>
                         </div>
 
-                        {/* Download */}
-                        <motion.button
-                          type="button"
-                          onClick={() => downloadCertificate.mutate(cert.id)}
-                          disabled={isDownloading}
-                          whileHover={{ scale: 1.06, y: -1 }}
-                          whileTap={{ scale: 0.94 }}
-                          transition={SPRING.snappy}
-                          aria-label={t('certificates.download')}
-                          title={t('certificates.download')}
-                          className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-[11.5px] font-bold tracking-tight outline-none disabled:opacity-50"
-                          style={{
-                            background: 'rgba(255,149,0,0.10)',
-                            color: '#FF9500',
-                            border: '1px solid rgba(255,149,0,0.22)',
-                          }}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e: any) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              e.currentTarget.click();
-                            }
-                          }}>
-                          {isDownloading ? (
-                            <motion.span
-                              className="h-3.5 w-3.5 rounded-full border-2 border-current/30 border-t-current"
-                              animate={{ rotate: 360 }}
-                              transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                            />
-                          ) : (
-                            <Icon paths={I.download} size={13} strokeWidth={2.2} />
-                          )}
-                          <span className="hidden sm:inline">
-                            {isDownloading ? t('certificates.downloading') : t('certificates.download')}
-                          </span>
-                        </motion.button>
+                        {/* Row Actions Group */}
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          {/* Executive Studio Button */}
+                          <motion.button
+                            type="button"
+                            onClick={() => setStudioCertificate(cert)}
+                            whileHover={{ scale: 1.06, y: -1 }}
+                            whileTap={{ scale: 0.94 }}
+                            transition={SPRING.snappy}
+                            aria-label="Executive Studio"
+                            title="Apple Print & Executive PDF Studio (Guilloché himoyalangan)"
+                            className="inline-flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-[11.5px] font-bold tracking-tight outline-none"
+                            style={{
+                              background: 'rgba(245,158,11,0.12)',
+                              color: '#D97706',
+                              border: '1px solid rgba(245,158,11,0.28)',
+                            }}
+                          >
+                            <span>🖨️</span>
+                            <span className="hidden lg:inline">Executive Studio</span>
+                          </motion.button>
+
+                          {/* Preview Modal Button */}
+                          <motion.button
+                            type="button"
+                            onClick={() => setPreviewCert(cert)}
+                            whileHover={{ scale: 1.06, y: -1 }}
+                            whileTap={{ scale: 0.94 }}
+                            transition={SPRING.snappy}
+                            aria-label={t('common.preview') || 'Ko\'rish'}
+                            title={t('common.preview') || 'Sertifikatni ko\'rish'}
+                            className="inline-flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-[11.5px] font-bold tracking-tight outline-none"
+                            style={{
+                              background: 'rgba(37,99,235,0.08)',
+                              color: '#2563EB',
+                              border: '1px solid rgba(37,99,235,0.20)',
+                            }}
+                          >
+                            <Icon paths={I.eye} size={13} strokeWidth={2.2} />
+                            <span className="hidden md:inline">{t('common.preview') || 'Ko\'rish'}</span>
+                          </motion.button>
+
+                          {/* Copy Public Verification Link */}
+                          <motion.button
+                            type="button"
+                            onClick={() => {
+                              if (typeof window !== 'undefined') {
+                                const url = `${window.location.origin}/verify/${cert.verificationCode}`;
+                                navigator.clipboard.writeText(url);
+                                push({ type: 'success', message: t('certificates.linkCopied') || 'Tasdiqlash havolasi nusxalandi!' });
+                              }
+                            }}
+                            whileHover={{ scale: 1.08 }}
+                            whileTap={{ scale: 0.92 }}
+                            transition={SPRING.snappy}
+                            aria-label={t('certificates.copyLink') || 'Havolani nusxalash'}
+                            title={t('certificates.copyLink') || 'Tasdiqlash havolasini nusxalash'}
+                            className="flex h-9 w-9 items-center justify-center rounded-xl outline-none"
+                            style={{
+                              background: 'rgba(16,185,129,0.08)',
+                              color: '#10B981',
+                              border: '1px solid rgba(16,185,129,0.20)',
+                            }}
+                          >
+                            <Icon paths={I.copy} size={13} strokeWidth={2.2} />
+                          </motion.button>
+
+                          {/* Open Public Verification Portal */}
+                          <motion.a
+                            href={`/verify/${cert.verificationCode}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            whileHover={{ scale: 1.08 }}
+                            whileTap={{ scale: 0.92 }}
+                            transition={SPRING.snappy}
+                            aria-label={t('certificates.openPortal') || 'Portalda ochish'}
+                            title={t('certificates.openPortal') || 'Ochiq tekshirish sahifasida ochish'}
+                            className="flex h-9 w-9 items-center justify-center rounded-xl outline-none"
+                            style={{
+                              background: 'rgba(99,102,241,0.08)',
+                              color: '#6366F1',
+                              border: '1px solid rgba(99,102,241,0.20)',
+                            }}
+                          >
+                            <Icon paths={I.external} size={13} strokeWidth={2.2} />
+                          </motion.a>
+
+                          {/* Download PDF */}
+                          <motion.button
+                            type="button"
+                            onClick={() => downloadCertificate.mutate(cert.id)}
+                            disabled={isDownloading}
+                            whileHover={{ scale: 1.06, y: -1 }}
+                            whileTap={{ scale: 0.94 }}
+                            transition={SPRING.snappy}
+                            aria-label={t('certificates.download')}
+                            title={t('certificates.download')}
+                            className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-[11.5px] font-bold tracking-tight outline-none disabled:opacity-50"
+                            style={{
+                              background: 'rgba(245,158,11,0.10)',
+                              color: '#F59E0B',
+                              border: '1px solid rgba(245,158,11,0.22)',
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e: any) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.currentTarget.click();
+                              }
+                            }}>
+                            {isDownloading ? (
+                              <motion.span
+                                className="h-3.5 w-3.5 rounded-full border-2 border-current/30 border-t-current"
+                                animate={{ rotate: 360 }}
+                                transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                              />
+                            ) : (
+                              <Icon paths={I.download} size={13} strokeWidth={2.2} />
+                            )}
+                            <span className="hidden sm:inline">
+                              {isDownloading ? t('certificates.downloading') : t('certificates.download')}
+                            </span>
+                          </motion.button>
+                        </div>
                       </motion.div>
                     );
                   })}
@@ -1146,7 +1366,7 @@ export function CertificatesPage() {
             transition={SPRING.smooth}
           >
             <div
-              className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+              className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
               style={{
                 boxShadow:
                   'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -1177,10 +1397,10 @@ export function CertificatesPage() {
                 <div className="relative p-10">
                   <div className="flex flex-col items-center text-center">
                     <div
-                      className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#AF52DE]/10 text-[#AF52DE]"
+                      className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#6366F1]/10 text-[#6366F1]"
                       style={{
                         boxShadow:
-                          'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(175,82,222,0.4)',
+                          'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(99,102,241,0.4)',
                       }}
                     >
                       <Icon paths={I.empty} size={26} strokeWidth={1.8} />
@@ -1188,7 +1408,7 @@ export function CertificatesPage() {
                     <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                       {t('templates.empty')}
                     </p>
-                    <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+                    <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
                       {t('templates.emptyHint')}
                     </p>
                     <div className="mt-5">
@@ -1215,25 +1435,25 @@ export function CertificatesPage() {
                   </div>
                 </div>
               ) : (
-                <div className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+                <div className="relative divide-y divide-slate-200/80 dark:divide-slate-800 dark:divide-[#ffffff08]">
                   {templateList.map((tpl, idx) => (
                     <motion.div
                       key={tpl.id}
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
-                      className="group flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#AF52DE]/[0.03]"
+                      className="group flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#6366F1]/[0.03]"
                     >
                       {/* Template icon */}
                       <div
                         className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white"
                         style={{
                           background: tpl.isDefault
-                            ? 'linear-gradient(135deg, #10B981 0%, #34C759 100%)'
-                            : 'linear-gradient(135deg, #AF52DE 0%, #5856D6 100%)',
+                            ? 'linear-gradient(135deg, #10B981 0%, #10B981 100%)'
+                            : 'linear-gradient(135deg, #6366F1 0%, #6366F1 100%)',
                           boxShadow: tpl.isDefault
                             ? 'inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px rgba(16,185,129,0.5)'
-                            : 'inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px rgba(175,82,222,0.5)',
+                            : 'inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px rgba(99,102,241,0.5)',
                         }}
                       >
                         <span
@@ -1268,7 +1488,7 @@ export function CertificatesPage() {
                           )}
                         </div>
                         {tpl.createdAt && (
-                          <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium tabular-nums text-[#86868B]">
+                          <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium tabular-nums text-[#64748B]">
                             <Icon paths={I.clock} size={10} strokeWidth={2.2} className="opacity-60" />
                             {formatDate(tpl.createdAt)}
                           </p>
@@ -1316,9 +1536,9 @@ export function CertificatesPage() {
                           title={t('common.edit')}
                           className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
                           style={{
-                            background: 'rgba(0,122,255,0.10)',
-                            color: '#007AFF',
-                            border: '1px solid rgba(0,122,255,0.2)',
+                            background: 'rgba(37,99,235,0.10)',
+                            color: '#2563EB',
+                            border: '1px solid rgba(37,99,235,0.2)',
                           }}
                           role="button"
                           tabIndex={0}
@@ -1341,9 +1561,9 @@ export function CertificatesPage() {
                           title={t('common.delete')}
                           className="flex h-8 w-8 items-center justify-center rounded-lg outline-none disabled:opacity-50"
                           style={{
-                            background: 'rgba(255,59,48,0.10)',
-                            color: '#FF3B30',
-                            border: '1px solid rgba(255,59,48,0.2)',
+                            background: 'rgba(239,68,68,0.10)',
+                            color: '#EF4444',
+                            border: '1px solid rgba(239,68,68,0.2)',
                           }}
                           role="button"
                           tabIndex={0}
@@ -1374,8 +1594,8 @@ export function CertificatesPage() {
         title={t('certificates.generate')}
       >
         <div className="space-y-5">
-          <div className="flex items-center gap-3 rounded-2xl border border-[#FF950033] bg-[#FF9500]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FF9500]/15 text-[#FF9500]">
+          <div className="flex items-center gap-3 rounded-2xl border border-[#F59E0B33] bg-[#F59E0B]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F59E0B]/15 text-[#F59E0B]">
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -1426,6 +1646,27 @@ export function CertificatesPage() {
           </GlassField>
 
           <GlassField
+            label={t('certificates.field.template') || 'Shablon'}
+            error={formErrors.templateId ? t(formErrors.templateId) : undefined}
+          >
+            <div className="relative">
+              <FieldIcon icon={I.layers} tone="purple" />
+              <GlassSelect
+                value={form.templateId}
+                onChange={(e) => setForm({ ...form, templateId: e.target.value })}
+                className="pl-11"
+              >
+                <option value="">{t('certificates.defaultTemplate') || 'Standart shablon (Avtomatik)'}</option>
+                {templateList.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name} {tpl.isDefault ? `(${t('templates.isDefault') || 'Asosiy'})` : ''}
+                  </option>
+                ))}
+              </GlassSelect>
+            </div>
+          </GlassField>
+
+          <GlassField
             label={t('certificates.field.notes')}
             error={formErrors.notes ? t(formErrors.notes) : undefined}
           >
@@ -1447,7 +1688,7 @@ export function CertificatesPage() {
             </div>
           </GlassField>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 variant="secondary"
@@ -1513,8 +1754,8 @@ export function CertificatesPage() {
         wide
       >
         <div className="space-y-5">
-          <div className="flex items-center gap-3 rounded-2xl border border-[#AF52DE33] bg-[#AF52DE]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#AF52DE]/15 text-[#AF52DE]">
+          <div className="flex items-center gap-3 rounded-2xl border border-[#6366F133] bg-[#6366F1]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#6366F1]/15 text-[#6366F1]">
               <Icon paths={I.code} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -1522,6 +1763,65 @@ export function CertificatesPage() {
                 ? 'Update the HTML and CSS. Changes apply to new certificates.'
                 : 'Create a new certificate template with HTML and CSS.'}
             </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-800 pb-3 dark:border-[#ffffff08]">
+            {/* Mode Switcher */}
+            <div className="flex rounded-xl bg-black/5 p-1 dark:bg-white/5">
+              <button
+                type="button"
+                onClick={() => setTemplatePreviewActive(false)}
+                className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
+                  !templatePreviewActive
+                    ? 'bg-white shadow text-[#1D1D1F] dark:bg-white/20 dark:text-white'
+                    : 'text-[#64748B] hover:text-[#1D1D1F]'
+                }`}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <Icon paths={I.code} size={12} strokeWidth={2.2} />
+                  {t('templates.tabEditor') || 'HTML & CSS Muharrir'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTemplatePreviewActive(true)}
+                className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
+                  templatePreviewActive
+                    ? 'bg-white shadow text-[#1D1D1F] dark:bg-white/20 dark:text-white'
+                    : 'text-[#64748B] hover:text-[#1D1D1F]'
+                }`}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <Icon paths={I.eye} size={12} strokeWidth={2.2} />
+                  {t('templates.tabPreview') || 'Jonli Ko\'rinish'}
+                </span>
+              </button>
+            </div>
+
+            {/* Quick Variable Insertion Pills */}
+            {!templatePreviewActive && (
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] mr-1">
+                  O'zgaruvchilar:
+                </span>
+                {TEMPLATE_VARIABLES.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => {
+                      setTemplateForm((prev) => ({
+                        ...prev,
+                        htmlTemplate: prev.htmlTemplate + ` {{${v}}}`,
+                      }));
+                    }}
+                    className="rounded-md border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-purple-600 transition-colors hover:bg-purple-500/20 dark:text-purple-400"
+                    title={`Insert {{${v}}}`}
+                  >
+                    {`{{${v}}}`}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <GlassField
@@ -1544,64 +1844,91 @@ export function CertificatesPage() {
             </div>
           </GlassField>
 
-          <GlassField
-            label={t('templates.field.html')}
-            error={templateFormErrors.htmlTemplate ? t(templateFormErrors.htmlTemplate) : undefined}
-          >
-            <div className="relative">
-              <span
-                className="pointer-events-none absolute left-3 top-3 z-10 flex h-6 w-6 items-center justify-center rounded-lg"
-                style={{ background: TONES.purple.bg, color: TONES.purple.fg }}
-                aria-hidden
-              >
-                <Icon paths={I.code} size={12} strokeWidth={2.2} />
-              </span>
-              <GlassTextArea
-                value={templateForm.htmlTemplate}
-                onChange={(e) => {
-                  setTemplateForm((prev) => ({ ...prev, htmlTemplate: e.target.value }));
-                  setTemplateFormErrors((prev) => ({ ...prev, htmlTemplate: undefined }));
+          {templatePreviewActive ? (
+            <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121620]">
+              <div className="mb-3 flex items-center justify-between border-b border-black/5 pb-2 dark:border-white/5">
+                <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
+                  Jonli Shablon Namunasi (Namuna ma'lumotlar bilan)
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  <Icon paths={I.check} size={12} strokeWidth={2.5} />
+                  Dinamik render
+                </span>
+              </div>
+              <div
+                className="overflow-auto rounded-xl border border-black/5 p-6 dark:border-white/5 bg-white text-black min-h-[220px]"
+                dangerouslySetInnerHTML={{
+                  __html: `<style>${templateForm.cssStyles}</style>${(templateForm.htmlTemplate || '')
+                    .replace(/\{\{studentName\}\}/g, t('certificates.previewStudentName') || 'F.I.SH. (O\'quvchi ismi)')
+                    .replace(/\{\{courseName\}\}/g, t('certificates.previewCourseName') || 'Kurs nomi')
+                    .replace(/\{\{issueDate\}\}/g, new Date().toLocaleDateString('uz-UZ'))
+                    .replace(/\{\{certificateNumber\}\}/g, 'CERT-XXXX-XXXX')
+                    .replace(/\{\{verificationCode\}\}/g, 'XXXXXXXXXXXX')}`,
                 }}
-                placeholder="<html>…</html>"
-                rows={10}
-                className="font-mono text-xs pl-11"
-                aria-invalid={Boolean(templateFormErrors.htmlTemplate)}
               />
             </div>
-            <p className="text-xs text-[#86868B] mt-1">
-              {t('templates.variablesHint', {
-                variables: TEMPLATE_VARIABLES.map((v) => `{{${v}}}`).join(', '),
-              })}
-            </p>
-          </GlassField>
-
-          <GlassField
-            label={t('templates.field.css')}
-            error={templateFormErrors.cssStyles ? t(templateFormErrors.cssStyles) : undefined}
-          >
-            <div className="relative">
-              <span
-                className="pointer-events-none absolute left-3 top-3 z-10 flex h-6 w-6 items-center justify-center rounded-lg"
-                style={{ background: TONES.cyan.bg, color: TONES.cyan.fg }}
-                aria-hidden
+          ) : (
+            <>
+              <GlassField
+                label={t('templates.field.html')}
+                error={templateFormErrors.htmlTemplate ? t(templateFormErrors.htmlTemplate) : undefined}
               >
-                <Icon paths={I.code} size={12} strokeWidth={2.2} />
-              </span>
-              <GlassTextArea
-                value={templateForm.cssStyles}
-                onChange={(e) => {
-                  setTemplateForm((prev) => ({ ...prev, cssStyles: e.target.value }));
-                  setTemplateFormErrors((prev) => ({ ...prev, cssStyles: undefined }));
-                }}
-                placeholder=".student-name { font-size: 32px; color: #111; }"
-                rows={4}
-                className="font-mono text-xs pl-11"
-                aria-invalid={Boolean(templateFormErrors.cssStyles)}
-              />
-            </div>
-          </GlassField>
+                <div className="relative">
+                  <span
+                    className="pointer-events-none absolute left-3 top-3 z-10 flex h-6 w-6 items-center justify-center rounded-lg"
+                    style={{ background: TONES.purple.bg, color: TONES.purple.fg }}
+                    aria-hidden
+                  >
+                    <Icon paths={I.code} size={12} strokeWidth={2.2} />
+                  </span>
+                  <GlassTextArea
+                    value={templateForm.htmlTemplate}
+                    onChange={(e) => {
+                      setTemplateForm((prev) => ({ ...prev, htmlTemplate: e.target.value }));
+                      setTemplateFormErrors((prev) => ({ ...prev, htmlTemplate: undefined }));
+                    }}
+                    placeholder="<html>…</html>"
+                    rows={10}
+                    className="font-mono text-xs pl-11"
+                    aria-invalid={Boolean(templateFormErrors.htmlTemplate)}
+                  />
+                </div>
+                <p className="text-xs text-[#64748B] mt-1">
+                  {t('templates.variablesHint', {
+                    variables: TEMPLATE_VARIABLES.map((v) => `{{${v}}}`).join(', '),
+                  })}
+                </p>
+              </GlassField>
 
-          <div className="flex items-center gap-3 rounded-2xl border border-[#00000008] bg-[#00000002] px-4 py-3 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
+              <GlassField
+                label={t('templates.field.css')}
+                error={templateFormErrors.cssStyles ? t(templateFormErrors.cssStyles) : undefined}
+              >
+                <div className="relative">
+                  <span
+                    className="pointer-events-none absolute left-3 top-3 z-10 flex h-6 w-6 items-center justify-center rounded-lg"
+                    style={{ background: TONES.cyan.bg, color: TONES.cyan.fg }}
+                    aria-hidden
+                  >
+                    <Icon paths={I.code} size={12} strokeWidth={2.2} />
+                  </span>
+                  <GlassTextArea
+                    value={templateForm.cssStyles}
+                    onChange={(e) => {
+                      setTemplateForm((prev) => ({ ...prev, cssStyles: e.target.value }));
+                      setTemplateFormErrors((prev) => ({ ...prev, cssStyles: undefined }));
+                    }}
+                    placeholder=".student-name { font-size: 32px; color: #111; }"
+                    rows={4}
+                    className="font-mono text-xs pl-11"
+                    aria-invalid={Boolean(templateFormErrors.cssStyles)}
+                  />
+                </div>
+              </GlassField>
+            </>
+          )}
+
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-500/[0.02] px-4 py-3 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
             <GlassSwitch
               checked={templateForm.isDefault}
               onChange={(checked) =>
@@ -1614,7 +1941,7 @@ export function CertificatesPage() {
             </span>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 variant="secondary"
@@ -1676,21 +2003,21 @@ export function CertificatesPage() {
         title={t('templates.deleteTitle')}
       >
         <div className="space-y-5">
-          <div className="flex items-start gap-3 rounded-2xl border border-[#FF3B3033] bg-[#FF3B30]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FF3B30]/15 text-[#FF3B30]">
+          <div className="flex items-start gap-3 rounded-2xl border border-[#EF444433] bg-[#EF4444]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#EF4444]/15 text-[#EF4444]">
               <Icon paths={I.warning} size={18} strokeWidth={2} />
             </div>
             <div className="min-w-0">
-              <p className="text-[13px] font-semibold leading-snug text-[#FF3B30]">
+              <p className="text-[13px] font-semibold leading-snug text-[#EF4444]">
                 {t('templates.deleteConfirm', { name: deletingTemplate?.name ?? '' })}
               </p>
-              <p className="mt-1 text-[11.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[11.5px] font-medium text-[#64748B]">
                 {t('templates.deleteHint')}
               </p>
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 variant="secondary"
@@ -1742,6 +2069,148 @@ export function CertificatesPage() {
           </div>
         </div>
       </GlassModal>
+
+      {/* ============================================================
+          CERTIFICATE PREVIEW MODAL (STEVE JOBS / APPLE LUXURY)
+      ============================================================ */}
+      <GlassModal
+        open={Boolean(previewCert)}
+        onClose={() => setPreviewCert(null)}
+        title={t('certificates.previewTitle') || 'Sertifikat Namoyishi — M-EDU rasmiy hujjati'}
+        wide
+      >
+        {previewCert && (
+          <div className="space-y-6">
+            {/* 3D Holographic Tilt Card */}
+            <TiltCertificate
+              data={{
+                certificateNumber: previewCert.certificateNumber,
+                verificationCode: previewCert.verificationCode,
+                student: {
+                  name: getStudentName(previewCert.studentId),
+                },
+                course: {
+                  name: previewCert.course?.name || getCourseName(previewCert.courseId),
+                },
+                issueDate: previewCert.issueDate,
+              }}
+            />
+
+            {/* Quick Actions Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Copy Verification Link */}
+                <GlassButton
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      const url = `${window.location.origin}/verify/${previewCert.verificationCode}`;
+                      navigator.clipboard.writeText(url);
+                      push({
+                        type: 'success',
+                        message: t('certificates.linkCopied') || 'Tasdiqlash havolasi nusxalandi!',
+                      });
+                    }
+                  }}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon paths={I.copy} size={14} strokeWidth={2.2} />
+                    {t('certificates.copyLink') || 'Havolani nusxalash'}
+                  </span>
+                </GlassButton>
+
+                {/* Open in Verification Portal */}
+                <a
+                  href={`/verify/${previewCert.verificationCode}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-purple-500/20 bg-purple-500/10 px-3 text-xs font-semibold text-purple-600 transition-colors hover:bg-purple-500/20 dark:text-purple-400"
+                >
+                  <Icon paths={I.external} size={13} strokeWidth={2.2} />
+                  {t('certificates.openPortal') || 'Portalda ochish'}
+                </a>
+
+                {/* Print button */}
+                <GlassButton
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') window.print();
+                  }}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon paths={I.printer} size={14} strokeWidth={2.2} />
+                    Chop etish (Print)
+                  </span>
+                </GlassButton>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <GlassButton
+                  variant="primary"
+                  size="sm"
+                  onClick={() => downloadCertificate.mutate(previewCert.id)}
+                  disabled={downloadingId === previewCert.id}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    {downloadingId === previewCert.id ? (
+                      <motion.span
+                        className="h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                      />
+                    ) : (
+                      <Icon paths={I.download} size={14} strokeWidth={2.2} />
+                    )}
+                    {downloadingId === previewCert.id
+                      ? t('certificates.downloading')
+                      : t('certificates.downloadPdf') || 'Rasmiy PDF yuklab olish'}
+                  </span>
+                </GlassButton>
+
+                <GlassButton variant="secondary" size="sm" onClick={() => setPreviewCert(null)}>
+                  {t('common.close') || 'Yopish'}
+                </GlassButton>
+              </div>
+            </div>
+          </div>
+        )}
+      </GlassModal>
+
+      {/* Floating Action Island for Bulk Certificate Operations */}
+      <FloatingActionIsland
+        selectedCount={selectedCount}
+        onClear={clearSelection}
+        actions={[
+          {
+            label: "Barchasini yuklab olish",
+            icon: "📥",
+            onClick: handleBatchDownloadCertificates,
+            variant: 'primary',
+            shortcutBadge: 'd',
+          },
+          {
+            label: "Havolalarni nusxalash",
+            icon: "🔗",
+            onClick: handleBatchCopyLinks,
+            shortcutBadge: 'c',
+          },
+          {
+            label: "Eksport (CSV)",
+            icon: "📊",
+            onClick: handleExportSelectedCertificatesCSV,
+            shortcutBadge: 'e',
+          },
+        ]}
+      />
+
+      {/* Executive PDF Studio Modal */}
+      <ExecutivePDFStudio
+        open={Boolean(studioCertificate)}
+        onClose={() => setStudioCertificate(null)}
+        initialData={studioDocData}
+      />
     </motion.div>
   );
 }

@@ -29,11 +29,22 @@ describe('Phase 2 Verification: Google OAuth/OIDC & Cross-Device Sync against Re
 
   beforeAll(async () => {
     await prisma.$connect();
+    await prisma.accessWhitelist.upsert({
+      where: { email: testEmailA },
+      update: {},
+      create: {
+        email: testEmailA,
+        note: 'Integration test automated seed',
+      },
+    });
   });
 
   afterAll(async () => {
     // Clean up created test data
     try {
+      await prisma.accessWhitelist.deleteMany({
+        where: { email: { in: [testEmailA, testEmailB, testEmailC] } },
+      }).catch(() => {});
       if (orgAId) {
         await prisma.session.deleteMany({ where: { organizationId: orgAId } });
         await prisma.course.deleteMany({ where: { organizationId: orgAId } });

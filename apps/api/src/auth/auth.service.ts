@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
@@ -251,24 +252,32 @@ const pass = process.env.SMTP_PASSWORD;
     try {
       const cutoff = new Date(now - this.SESSION_RETENTION_HOURS * 60 * 60 * 1000);
       const [sessionResult, parentSessionResult, tokenResult, authCodeResult] = await Promise.all([
-        this.prisma.session.deleteMany({ where: { expiresAt: { lt: cutoff } } }),
-        this.prisma.parentSession.deleteMany({ where: { expiresAt: { lt: cutoff } } }),
-        this.prisma.passwordResetToken.deleteMany({
-          where: {
-            OR: [
-              { expiresAt: { lt: new Date(now) } },
-              { usedAt: { not: null, lt: cutoff } },
-            ],
-          },
-        }),
-        this.prisma.authorizationCode.deleteMany({
-          where: {
-            OR: [
-              { expiresAt: { lt: new Date(now) } },
-              { usedAt: { not: null, lt: cutoff } },
-            ],
-          },
-        }),
+        this.prisma.session?.deleteMany
+          ? this.prisma.session.deleteMany({ where: { expiresAt: { lt: cutoff } } })
+          : Promise.resolve({ count: 0 }),
+        this.prisma.parentSession?.deleteMany
+          ? this.prisma.parentSession.deleteMany({ where: { expiresAt: { lt: cutoff } } })
+          : Promise.resolve({ count: 0 }),
+        this.prisma.passwordResetToken?.deleteMany
+          ? this.prisma.passwordResetToken.deleteMany({
+              where: {
+                OR: [
+                  { expiresAt: { lt: new Date(now) } },
+                  { usedAt: { not: null, lt: cutoff } },
+                ],
+              },
+            })
+          : Promise.resolve({ count: 0 }),
+        this.prisma.authorizationCode?.deleteMany
+          ? this.prisma.authorizationCode.deleteMany({
+              where: {
+                OR: [
+                  { expiresAt: { lt: new Date(now) } },
+                  { usedAt: { not: null, lt: cutoff } },
+                ],
+              },
+            })
+          : Promise.resolve({ count: 0 }),
       ]);
       if (sessionResult.count > 0) {
         this.logger.info('Purged expired sessions', { count: sessionResult.count });
@@ -358,8 +367,9 @@ const pass = process.env.SMTP_PASSWORD;
 
     // 1. Platform invitation code check
     let redeemedInvite: any = null;
-    if (this.prisma.platformInvitation && data.inviteCode) {
-      const codeHash = createHash('sha256').update(data.inviteCode).digest('hex');
+    if (this.prisma.platformInvitation && data.inviteCode && data.inviteCode.trim().length > 0) {
+      const trimmedCode = data.inviteCode.trim();
+      const codeHash = createHash('sha256').update(trimmedCode).digest('hex');
       const invite = await this.prisma.platformInvitation.findUnique({
         where: { codeHash },
       });
@@ -385,7 +395,14 @@ const pass = process.env.SMTP_PASSWORD;
           where: { id: 'global' },
         });
 
-        if (config?.requireApproval) {
+        // Fail-closed default: if configuration row is absent, default to inviteOnly: true, requireApproval: true
+        const effectiveConfig = config ?? { inviteOnly: true, requireApproval: true };
+
+        if (effectiveConfig.inviteOnly) {
+          throw new ForbiddenException('Registration is currently invite-only or requires whitelist approval.');
+        }
+
+        if (effectiveConfig.requireApproval) {
           const passwordHash = await bcrypt.hash(data.password, this.BCRYPT_ROUNDS);
           const result = await this.prisma.$transaction(async (tx: any) => {
             const organization = await tx.organization.create({
@@ -425,10 +442,6 @@ const pass = process.env.SMTP_PASSWORD;
             pendingApproval: true,
             message: 'Account registered successfully. Pending administrator approval.',
           };
-        }
-
-        if (config?.inviteOnly) {
-          throw new ForbiddenException('Registration is currently invite-only or requires whitelist approval.');
         }
       }
     }
@@ -519,7 +532,7 @@ const pass = process.env.SMTP_PASSWORD;
    *  - Heavily throttled at controller
    *  - Audited via SecurityEvent
    */
-  async bootstrap(data: BootstrapDto): Promise<{ accessToken: string; user: TokenUser }> {
+  async bootstrap(data: BootstrapDto, secretHeader?: string): Promise<{ accessToken: string; user: TokenUser }> {
     const superAdminCount = await this.prisma.user.count({
       where: { role: { in: ['PLATFORM_OWNER', 'SUPER_ADMIN'] } },
     });
@@ -528,16 +541,18 @@ const pass = process.env.SMTP_PASSWORD;
     }
 
     const configuredSecret = process.env.PLATFORM_BOOTSTRAP_SECRET;
-    if (configuredSecret) {
-      const provided = data.inviteCode || (data as any).secret;
-      if (!provided) {
-        throw new ForbiddenException('Bootstrap secret is required');
-      }
-      const expected = Buffer.from(configuredSecret);
-      const actual = Buffer.from(provided);
-      if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
-        throw new ForbiddenException('Invalid bootstrap secret');
-      }
+    if (!configuredSecret || !configuredSecret.trim()) {
+      throw new ForbiddenException('Bootstrap is disabled: PLATFORM_BOOTSTRAP_SECRET is not configured on the server');
+    }
+
+    const provided = (data.inviteCode || (data as any).secret || secretHeader || '').trim();
+    if (!provided) {
+      throw new ForbiddenException('Bootstrap secret is required');
+    }
+    const expected = Buffer.from(configuredSecret.trim());
+    const actual = Buffer.from(provided);
+    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+      throw new ForbiddenException('Invalid bootstrap secret');
     }
 
     const email = normalizeEmail(data.email);
@@ -586,6 +601,10 @@ const pass = process.env.SMTP_PASSWORD;
         throw new ConflictException('Email already registered');
       }
       throw error;
+    }
+
+    if (!result?.organization || !result?.user) {
+      throw new InternalServerErrorException('Bootstrap transaction failed to produce an organization and user');
     }
 
     await this.security?.logEvent({
@@ -890,7 +909,7 @@ const pass = process.env.SMTP_PASSWORD;
     }
 
     if (currentSessionId) {
-      const live = await this.prisma.session.findFirst({
+      const rotated = await this.prisma.session.updateMany({
         where: {
           id: currentSessionId,
           userId: user.id,
@@ -898,16 +917,11 @@ const pass = process.env.SMTP_PASSWORD;
           revokedAt: null,
           expiresAt: { gt: new Date() },
         },
-        select: { id: true },
-      });
-      if (!live) {
-        throw new UnauthorizedException('Session is invalid or expired');
-      }
-
-      await this.prisma.session.updateMany({
-        where: { id: live.id, userId: user.id, revokedAt: null },
         data: { revokedAt: new Date(), revokedReason: 'token_refresh' },
       });
+      if (rotated.count !== 1) {
+        throw new UnauthorizedException('Session is invalid or expired');
+      }
     }
 
     return this.issueToken(user, clientMeta);
@@ -936,7 +950,7 @@ const pass = process.env.SMTP_PASSWORD;
     }
 
     if (currentSessionId) {
-      const live = await this.prisma.parentSession.findFirst({
+      const rotated = await this.prisma.parentSession.updateMany({
         where: {
           id: currentSessionId,
           parentId: parent.id,
@@ -944,16 +958,11 @@ const pass = process.env.SMTP_PASSWORD;
           revokedAt: null,
           expiresAt: { gt: new Date() },
         },
-        select: { id: true },
-      });
-      if (!live) {
-        throw new UnauthorizedException('Session is invalid or expired');
-      }
-
-      await this.prisma.parentSession.updateMany({
-        where: { id: live.id, parentId: parent.id, revokedAt: null },
         data: { revokedAt: new Date(), revokedReason: 'token_refresh' },
       });
+      if (rotated.count !== 1) {
+        throw new UnauthorizedException('Session is invalid or expired');
+      }
     }
 
     const accessToken = await this.issueParentToken(

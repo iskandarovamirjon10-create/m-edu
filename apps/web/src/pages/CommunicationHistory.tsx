@@ -3,13 +3,38 @@
  * Features fluid typography, deep frosted glass modules, macOS-style
  * segmented controls, staggered animations, and dynamic visual timelines.
  */
-import { useState} from'react';
-import { useQuery} from'@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { motion, type Variants } from 'framer-motion';
 import { GlassPageHeader, GlassPageLoader, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassEmptyState, GlassErrorState, GlassSelect, GlassButton, GlassInput, GlassTabs } from '@/components/ui';
-import { usePageTitle} from'@/hooks/usePageTitle';
-import { useI18n} from'@/i18n/I18nProvider';
-import { communicationApi} from'@/lib/api';
-import { getErrorMessage} from'@/lib/errorMessages';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { useI18n } from '@/i18n/I18nProvider';
+import { communicationApi } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errorMessages';
+
+const SPRING = {
+  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
+  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
+  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
+} as const;
+
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05, delayChildren: 0.04 },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 12, scale: 0.99 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: 'spring', stiffness: 360, damping: 28 },
+  },
+};
 
 const TABS = [
  { id:'timeline', labelKey:'Timeline'},
@@ -22,7 +47,7 @@ const ENTITY_TYPES = ['STUDENT','PARENT','TEACHER','LEAD'];
 // Premium Apple-style configuration for channels
 function getChannelConfig(channel: string) {
  switch (channel) {
- case'EMAIL': return { bg:'bg-blue-500/10', text:'text-blue-600', border:'border-blue-500/20', dot:'bg-blue-500', fill:'#3b82f6'};
+ case'EMAIL': return { bg:'bg-brand-500/10', text:'text-brand-600', border:'border-blue-500/20', dot:'bg-blue-500', fill:'#3b82f6'};
  case'SMS': return { bg:'bg-emerald-500/10', text:'text-emerald-600', border:'border-emerald-500/20', dot:'bg-emerald-500', fill:'#10b981'};
  case'TELEGRAM': return { bg:'bg-indigo-500/10', text:'text-indigo-600', border:'border-indigo-500/20', dot:'bg-indigo-500', fill:'#6366f1'};
  case'IN_APP': return { bg:'bg-amber-500/10', text:'text-amber-600', border:'border-amber-500/20', dot:'bg-amber-500', fill:'#f59e0b'};
@@ -34,7 +59,7 @@ function getChannelConfig(channel: string) {
 function getStatusConfig(status: string) {
  switch (status) {
  case'DELIVERED': return { bg:'bg-emerald-500/10', text:'text-emerald-600', border:'border-emerald-500/20', dot:'bg-emerald-500', fill:'#10b981'};
- case'SENT': return { bg:'bg-blue-500/10', text:'text-blue-600', border:'border-blue-500/20', dot:'bg-blue-500', fill:'#3b82f6'};
+ case'SENT': return { bg:'bg-brand-500/10', text:'text-brand-600', border:'border-blue-500/20', dot:'bg-blue-500', fill:'#3b82f6'};
  case'FAILED': return { bg:'bg-rose-500/10', text:'text-rose-600', border:'border-rose-500/20', dot:'bg-rose-500', fill:'#f43f5e'};
  case'BOUNCED': return { bg:'bg-amber-500/10', text:'text-amber-600', border:'border-amber-500/20', dot:'bg-amber-500', fill:'#f59e0b'};
  case'QUEUED': return { bg:'bg-[var(--bg-surface)]0/10', text:'text-[var(--text-secondary)]', border:'border-gray-500/20', dot:'bg-gray-400 animate-pulse', fill:'#9ca3af'};
@@ -43,21 +68,25 @@ function getStatusConfig(status: string) {
 }
 
 // Custom iOS-style Segmented Control for Tabs
-// Premium Local Stat Card
 function CommStatCard({ label, value, highlightColor}: { label: string; value: string | number; highlightColor: string}) {
- return (
- <div className="relative overflow-hidden rounded-[2rem] p-5 sm:p-6 group transition-all duration-300 hover:-translate-y-1 glass-card flex flex-col justify-between h-full">
- <div className="absolute inset-0 rounded-[2rem] pointer-events-none ring-1 ring-inset ring-black/5 dark:ring-white/5"aria-hidden />
- <div className={`absolute -top-10 -right-10 w-24 h-24 rounded-full blur-[30px] opacity-10 transition-opacity group-hover:opacity-20 ${highlightColor}`} aria-hidden />
- 
- <p className="text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-widest relative z-10 mb-4">
- {label}
- </p>
- <p className="text-[2rem] font-black tracking-tight leading-none text-[var(--text-primary)] relative z-10">
- {value}
- </p>
- </div>
- );
+  return (
+    <motion.div
+      variants={itemVariants}
+      whileHover={{ y: -3, transition: SPRING.snappy }}
+      className="relative overflow-hidden rounded-2xl p-5 sm:p-6 group transition-all duration-300 glass-card flex flex-col justify-between h-full border border-white/40 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
+    >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
+      <div className="absolute inset-0 rounded-2xl pointer-events-none ring-1 ring-inset ring-black/5 dark:ring-white/5" aria-hidden />
+      <div className={`absolute -top-10 -right-10 w-24 h-24 rounded-full blur-[30px] opacity-10 transition-opacity group-hover:opacity-20 ${highlightColor}`} aria-hidden />
+      
+      <p className="text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-widest relative z-10 mb-4">
+        {label}
+      </p>
+      <p className="text-[2rem] font-black tracking-tight leading-none text-[var(--text-primary)] relative z-10 tabular-nums">
+        {value}
+      </p>
+    </motion.div>
+  );
 }
 
 /* ── TABS ─────────────────────────────────────────────────────────────────── */
@@ -80,7 +109,7 @@ function TimelineTab() {
  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
  
  {/* Search Toolbar */}
- <div className="rounded-[2rem] bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)]/60 p-6 sm:p-8 shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
+ <div className="rounded-2xl bg-[var(--bg-card)] backdrop-blur-md border border-[var(--border-subtle)]/60 p-6 sm:p-8 shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
  <div className="flex flex-col md:flex-row md:items-end gap-6">
  <div className="flex-1">
  <label className="block text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-3">
@@ -539,33 +568,39 @@ export function CommunicationHistoryPage() {
 
  const tabs = TABS.map((tab) => ({ id: tab.id, label: t(`communication.tab.${tab.id}`) || tab.labelKey}));
 
- return (
- <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
- 
- {/* Soft Apple-style Background Ambient Orbs */}
- <div className="fixed inset-0 pointer-events-none overflow-hidden"aria-hidden="true">
- <div className="absolute top-[0%] left-[-10%] w-[40%] h-[40%] rounded-full bg-brand-400/5 blur-[120px]"/>
- <div className="absolute bottom-[20%] right-[-5%] w-[30%] h-[50%] rounded-full bg-indigo-400/5 blur-[130px]"/>
- </div>
+  return (
+    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+      {/* Soft Apple-style Background Ambient Orbs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+        <div className="absolute top-[0%] left-[-10%] w-[40%] h-[40%] rounded-full bg-brand-400/5 blur-[120px]" />
+        <div className="absolute bottom-[20%] right-[-5%] w-[30%] h-[50%] rounded-full bg-indigo-400/5 blur-[130px]" />
+      </div>
 
- <div className="relative z-10 w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500">
- <GlassPageHeader
- title={t('communication.title')}
- subtitle={t('communication.subtitle')}
- />
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="relative z-10 w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6"
+      >
+        <motion.div variants={itemVariants}>
+          <GlassPageHeader
+            title={t('communication.title')}
+            subtitle={t('communication.subtitle')}
+          />
+        </motion.div>
 
- <div className="overflow-x-auto pb-2">
- <GlassTabs active={activeTab} onChange={setActiveTab} tabs={tabs} />
- </div>
+        <motion.div variants={itemVariants} className="overflow-x-auto pb-2">
+          <GlassTabs active={activeTab} onChange={setActiveTab} tabs={tabs} />
+        </motion.div>
 
- <div className="pt-2">
- {activeTab ==='timeline' && <TimelineTab />}
- {activeTab ==='history' && <HistoryTab />}
- {activeTab ==='stats' && <StatsTab />}
- </div>
- </div>
- </div>
- );
+        <motion.div variants={itemVariants} className="pt-2">
+          {activeTab === 'timeline' && <TimelineTab />}
+          {activeTab === 'history' && <HistoryTab />}
+          {activeTab === 'stats' && <StatsTab />}
+        </motion.div>
+      </motion.div>
+    </div>
+  );
 }
 
 export default CommunicationHistoryPage;

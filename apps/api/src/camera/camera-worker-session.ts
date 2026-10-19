@@ -152,6 +152,13 @@ export class CameraWorkerSession extends EventEmitter {
    */
   private streamFailureRecorded = false;
 
+  /**
+   * Tracks consecutive received frames to verify stream stability before
+   * resetting the reconnect attempt budget (M-EDU-CAM-003).
+   */
+  private consecutiveHealthyFrames = 0;
+  private static readonly HEALTHY_STREAM_FRAME_THRESHOLD = 5;
+
   private frameProcessing = false;
 
   private activeTemplatesCache:
@@ -392,10 +399,9 @@ export class CameraWorkerSession extends EventEmitter {
         'ONLINE',
       );
 
-      // Healthy again: clear the per-episode failure guard and give the
-      // worker a fresh reconnect budget (P1: attempts never reset before).
-      this.streamFailureRecorded = false;
-      this.healthTracker.resetReconnectAttempts();
+      // Reset healthy frame counter; only reset reconnect attempts once
+      // frames actively arrive and stream proves stable (M-EDU-CAM-003).
+      this.consecutiveHealthyFrames = 0;
 
       // FIX-4: emit recovered event (clear alert debounce)
       this.emit('camera-recovered', {
@@ -481,6 +487,14 @@ export class CameraWorkerSession extends EventEmitter {
     }
 
     this.healthTracker.recordFrameReceived();
+    this.consecutiveHealthyFrames++;
+
+    if (this.consecutiveHealthyFrames >= CameraWorkerSession.HEALTHY_STREAM_FRAME_THRESHOLD) {
+      if (this.healthTracker.reconnectAttempts > 0 || this.streamFailureRecorded) {
+        this.healthTracker.resetReconnectAttempts();
+        this.streamFailureRecorded = false;
+      }
+    }
 
     if (
       !this.sampler.shouldSample(frame)
@@ -1257,6 +1271,8 @@ export class CameraWorkerSession extends EventEmitter {
 
     // Record at most once per failure episode: the ingester fires both
     // `error` and `close` for the same process death.
+    this.consecutiveHealthyFrames = 0;
+
     if (!this.streamFailureRecorded) {
       this.streamFailureRecorded = true;
 

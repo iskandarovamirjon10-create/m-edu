@@ -1,160 +1,567 @@
 /**
- * Real Face Detector — production face detection using ONNX Runtime.
+ * @fileoverview Enterprise-Grade YuNet Face Detection Engine (ONNX Runtime).
  *
- * Implements YuNet face detection model decoding.
- * YuNet outputs 12 detection heads across 3 strides (8, 16, 32):
- *   - cls_{s}: [1, A, 1] classification score
- *   - obj_{s}: [1, A, 1] objectness score
- *   - bbox_{s}: [1, A, 4] bounding box regression (dx, dy, dw, dh)
- *   - kps_{s}: [1, A, 10] 5 landmarks (x, y) pairs
- *
- * Decoded per face: [x, y, w, h, 10 landmark coords, score] (15 values)
- *
- * Input: BGR image 0-255 (NO normalization), NCHW float32 [1,3,640,640]
- *
- * License: MIT (YuNet model from OpenCV Zoo)
+ * Architectural Highlights:
+ * - Zero-Leak Native Memory Management: Deterministic disposal of all ONNX C++ tensors.
+ * - Pre-Allocated Memory Pool: Ring-buffer / Object-pool for Float32Arrays & NMS buffers (Zero GC thrashing).
+ * - Concurrency & Backpressure Control: Built-in Async Semaphore + Single-Flight initialization lock.
+ * - 1D Planar Channel Transposition: Cache-friendly RGB-to-BGR NCHW conversion without inner branching.
+ * - Exact OpenCV YuNet Geometry: Anchor grid without the erroneous +0.5 offset, logit clamping, and corner-accurate bbox clipping.
+ * - Flat-Array SoA (Structure of Arrays) NMS: Allocation-free Non-Maximum Suppression using typed arrays.
+ * - Full Observability: Sub-millisecond telemetry per pipeline stage (preprocess, inference, decode, total).
  */
 
 import type { FaceDetectionInput, DetectedFace, BoundingBox, Point2D } from '@medu/core';
+import type { InferenceSession, Tensor } from 'onnxruntime-node';
+import type sharp from 'sharp';
+import * as fs from 'node:fs/promises';
+import { performance } from 'node:perf_hooks';
 import { createLogger } from '../lib/logger';
 
 const logger = createLogger('RealDetector');
-import type { InferenceSession } from 'onnxruntime-node';
-import * as fs from 'fs';
+
+// ============================================================================
+// 1. TYPES, INTERFACES & CUSTOM ERRORS
+// ============================================================================
+
+export type ExecutionProvider = 'cpu' | 'cuda' | 'coreml' | 'tensorrt' | 'dml';
 
 export interface DetectorConfig {
-  modelPath: string;
-  inputSize: number;
-  confidenceThreshold: number;
-  nmsThreshold: number;
+  /** Absolute or relative path to the YuNet .onnx model file */
+  readonly modelPath: string;
+  /** Model canvas resolution. MUST be a positive multiple of 32 (e.g., 320, 640) */
+  readonly inputSize: number;
+  /** Minimum confidence score (cls * obj) in range (0, 1) */
+  readonly confidenceThreshold: number;
+  /** IoU threshold for Non-Maximum Suppression in range (0, 1) */
+  readonly nmsThreshold: number;
+  /** Maximum candidates retained before NMS to guarantee bounded O(K^2) latency */
+  readonly topKPreNms: number;
+  /** Maximum final detections returned per frame */
+  readonly maxDetections: number;
+  /** Maximum concurrent inferences allowed (backpressure / memory protection) */
+  readonly maxConcurrency: number;
+  /** Maximum waiting queue size before shedding load */
+  readonly maxQueueSize: number;
+  /** Maximum allowed source image pixels (anti-decompression bomb) */
+  readonly maxImagePixels: number;
+  /** ONNX Runtime execution providers in priority order */
+  readonly executionProviders: readonly ExecutionProvider[];
+  /** ONNX intra-op thread count (0 = let ORT decide) */
+  readonly intraOpNumThreads: number;
+  /** Whether to use standard OpenCV YuNet anchor center (0.0) or legacy (0.5) */
+  readonly anchorCenterOffset: 0 | 0.5;
 }
 
-const DEFAULT_CONFIG: DetectorConfig = {
+export interface DetectionTelemetry {
+  readonly preprocessMs: number;
+  readonly inferenceMs: number;
+  readonly postprocessMs: number;
+  readonly totalMs: number;
+  readonly candidateCount: number;
+  readonly retainedCount: number;
+}
+
+export interface DetectionResult {
+  readonly faces: DetectedFace[];
+  readonly telemetry: DetectionTelemetry;
+}
+
+export class DetectorError extends Error {
+  constructor(
+    message: string,
+    public readonly code:
+      | 'CONFIG_INVALID'
+      | 'NOT_INITIALIZED'
+      | 'MODEL_LOAD_FAILED'
+      | 'INVALID_IMAGE'
+      | 'QUEUE_OVERFLOW'
+      | 'INFERENCE_FAILED'
+      | 'DISPOSED',
+    public readonly cause?: unknown
+  ) {
+    super(message);
+    this.name = 'DetectorError';
+    Error.captureStackTrace?.(this, DetectorError);
+  }
+}
+
+// ============================================================================
+// 2. CONSTANTS & DEFAULTS
+// ============================================================================
+
+const YUNET_STRIDES = [8, 16, 32] as const;
+const NUM_CHANNELS = 3;
+const NUM_LANDMARKS = 5;
+const LANDMARK_COORDS = NUM_LANDMARKS * 2;
+/** Clamp regression scale logits to prevent Math.exp() overflow to Infinity */
+const MAX_SCALE_LOGIT = 10.0;
+const MIN_SCALE_LOGIT = -10.0;
+
+const DEFAULT_CONFIG: DetectorConfig = Object.freeze({
   modelPath: '',
   inputSize: 640,
   confidenceThreshold: 0.5,
   nmsThreshold: 0.4,
-};
+  topKPreNms: 256,
+  maxDetections: 100,
+  maxConcurrency: 4,
+  maxQueueSize: 64,
+  maxImagePixels: 64_000_000, // 64 Megapixels ceiling
+  executionProviders: ['cpu' as const],
+  intraOpNumThreads: 0,
+  anchorCenterOffset: 0, // Official OpenCV YuNet uses 0.0
+});
 
-const YUNET_STRIDES = [8, 16, 32];
+// ============================================================================
+// 3. CONCURRENCY SEMAPHORE & WORKSPACE MEMORY POOL
+// ============================================================================
 
 /**
- * Hard ceiling on decoded candidates handed to NMS.
- *
- * NMS is O(n^2) over the candidate list. A noisy or adversarial frame can
- * push a large number of anchors above the confidence threshold, and without
- * a cap a single frame could monopolise the CPU for the worker's whole frame
- * budget. Decoded candidates are score-sorted inside `nms` anyway, so
- * keeping the highest-scoring window costs nothing operationally.
+ * Pre-allocated execution slot containing reusable TypedArrays.
+ * Eliminates ~5MB Float32Array allocations and GC pauses per frame.
  */
-const MAX_PRE_NMS_CANDIDATES = 256;
+interface ExecutionWorkspace {
+  readonly id: number;
+  /** NCHW tensor buffer: [1, 3, inputSize, inputSize] */
+  readonly tensorBuffer: Float32Array;
+  /** Structure-of-Arrays (SoA) candidate buffers for zero-allocation decoding & NMS */
+  readonly candX1: Float32Array;
+  readonly candY1: Float32Array;
+  readonly candX2: Float32Array;
+  readonly candY2: Float32Array;
+  readonly candArea: Float32Array;
+  readonly candScore: Float32Array;
+  readonly candLandmarks: Float32Array; // length = maxAnchors * 10
+  readonly sortIndices: Uint32Array;
+  readonly suppressedMask: Uint8Array;
+}
 
-export class RealDetector {
-  private session: InferenceSession | null = null;
-  private config: DetectorConfig;
-  private available = false;
-  private warmupDone = false;
-  private outputNames: string[] = [];
+/**
+ * Bounded Async Resource Pool & Concurrency Semaphore.
+ * Manages backpressure and hands out pre-allocated memory workspaces to active workers.
+ */
+class WorkspacePool {
+  private readonly available: ExecutionWorkspace[] = [];
+  private readonly waitQueue: Array<{
+    resolve: (ws: ExecutionWorkspace) => void;
+    reject: (err: Error) => void;
+  }> = [];
+  private disposed = false;
 
-  constructor(config: Partial<DetectorConfig> = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
-  }
+  constructor(poolSize: number, private readonly maxQueueSize: number, inputSize: number) {
+    // Total anchors across strides 8, 16, 32 for square inputSize:
+    // (S/8)^2 + (S/16)^2 + (S/32)^2. For 640x640 -> 6400 + 1600 + 400 = 8400.
+    const totalAnchors = YUNET_STRIDES.reduce(
+      (acc, s) => acc + Math.floor(inputSize / s) * Math.floor(inputSize / s),
+      0
+    );
+    const tensorLength = NUM_CHANNELS * inputSize * inputSize;
 
-  async initialize(): Promise<void> {
-    try {
-      const ort = await import('onnxruntime-node');
-
-      if (!this.config.modelPath || !fs.existsSync(this.config.modelPath)) {
-        logger.warn(
-          `Model not found at: ${this.config.modelPath || '(not configured)'}. ` +
-          `Detector will be unavailable.`
-        );
-        this.available = false;
-        return;
-      }
-
-      const modelBuffer = fs.readFileSync(this.config.modelPath);
-      const session = await ort.InferenceSession.create(modelBuffer, {
-        executionProviders: ['cpu'],
-        graphOptimizationLevel: 'all',
+    for (let i = 0; i < poolSize; i++) {
+      this.available.push({
+        id: i,
+        tensorBuffer: new Float32Array(tensorLength),
+        candX1: new Float32Array(totalAnchors),
+        candY1: new Float32Array(totalAnchors),
+        candX2: new Float32Array(totalAnchors),
+        candY2: new Float32Array(totalAnchors),
+        candArea: new Float32Array(totalAnchors),
+        candScore: new Float32Array(totalAnchors),
+        candLandmarks: new Float32Array(totalAnchors * LANDMARK_COORDS),
+        sortIndices: new Uint32Array(totalAnchors),
+        suppressedMask: new Uint8Array(totalAnchors),
       });
-      this.session = session;
-
-      this.outputNames = [...session.outputNames];
-      this.available = true;
-      logger.info(`YuNet model loaded: ${this.config.modelPath}`);
-      logger.info(`Outputs: ${this.outputNames.join(', ')}`);
-    } catch (error) {
-      logger.error(`Failed to initialize:`, error);
-      this.available = false;
     }
   }
 
-  async warmup(): Promise<void> {
-    if (!this.available || !this.session || this.warmupDone) return;
-    const session = this.session;
+  public acquire(): Promise<ExecutionWorkspace> {
+    if (this.disposed) {
+      return Promise.reject(new DetectorError('Detector has been disposed', 'DISPOSED'));
+    }
 
-    try {
-      const ort = await import('onnxruntime-node');
-      const dummyInput = new ort.Tensor(
-        'float32',
-        new Float32Array(this.config.inputSize * this.config.inputSize * 3),
-        [1, 3, this.config.inputSize, this.config.inputSize]
+    const ws = this.available.pop();
+    if (ws !== undefined) {
+      return Promise.resolve(ws);
+    }
+
+    if (this.waitQueue.length >= this.maxQueueSize) {
+      return Promise.reject(
+        new DetectorError(
+          `Detector backpressure limit reached (${this.maxQueueSize} queued requests)`,
+          'QUEUE_OVERFLOW'
+        )
       );
+    }
 
-      const inputName = session.inputNames[0];
-      await session.run({ [inputName]: dummyInput });
-      this.warmupDone = true;
-      logger.info('Warmup complete');
-    } catch (error) {
-      logger.warn('Warmup failed:', error);
+    return new Promise<ExecutionWorkspace>((resolve, reject) => {
+      this.waitQueue.push({ resolve, reject });
+    });
+  }
+
+  public release(ws: ExecutionWorkspace): void {
+    if (this.disposed) return;
+
+    const next = this.waitQueue.shift();
+    if (next !== undefined) {
+      next.resolve(ws);
+    } else {
+      this.available.push(ws);
+    }
+  }
+
+  public dispose(): void {
+    this.disposed = true;
+    const err = new DetectorError('Detector is shutting down', 'DISPOSED');
+    while (this.waitQueue.length > 0) {
+      this.waitQueue.shift()?.reject(err);
+    }
+    this.available.length = 0;
+  }
+}
+
+// ============================================================================
+// 4. CORE DETECTOR IMPLEMENTATION
+// ============================================================================
+
+export class RealDetector {
+  private readonly config: DetectorConfig;
+  private readonly pool: WorkspacePool;
+
+  private ortModule: typeof import('onnxruntime-node') | null = null;
+  private sharpModule: typeof sharp | null = null;
+  private session: InferenceSession | null = null;
+  private inputName = '';
+  private outputNames: readonly string[] = [];
+
+  private initPromise: Promise<void> | null = null;
+  private warmupPromise: Promise<void> | null = null;
+  private available = false;
+  private warmupDone = false;
+  private disposed = false;
+
+  /** Precomputed anchor grids per stride: [cx0, cy0, cx1, cy1, ...] */
+  private readonly anchorGrids = new Map<number, Float32Array>();
+
+  constructor(userConfig: Partial<DetectorConfig> = {}) {
+    this.config = Object.freeze({ ...DEFAULT_CONFIG, ...userConfig });
+    this.validateConfig(this.config);
+    this.precomputeAnchorGrids();
+    this.pool = new WorkspacePool(
+      this.config.maxConcurrency,
+      this.config.maxQueueSize,
+      this.config.inputSize
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // Initialization & Lifecycle (Single-Flight & Memory-Safe)
+  // --------------------------------------------------------------------------
+
+  private validateConfig(cfg: DetectorConfig): void {
+    if (!Number.isInteger(cfg.inputSize) || cfg.inputSize < 64 || cfg.inputSize % 32 !== 0) {
+      throw new DetectorError(
+        `Invalid inputSize (${cfg.inputSize}). Must be an integer multiple of 32 >= 64.`,
+        'CONFIG_INVALID'
+      );
+    }
+    if (cfg.confidenceThreshold <= 0 || cfg.confidenceThreshold >= 1) {
+      throw new DetectorError(
+        `Invalid confidenceThreshold (${cfg.confidenceThreshold}). Must be in (0, 1).`,
+        'CONFIG_INVALID'
+      );
+    }
+    if (cfg.nmsThreshold <= 0 || cfg.nmsThreshold >= 1) {
+      throw new DetectorError(
+        `Invalid nmsThreshold (${cfg.nmsThreshold}). Must be in (0, 1).`,
+        'CONFIG_INVALID'
+      );
+    }
+    if (cfg.maxConcurrency < 1) {
+      throw new DetectorError('maxConcurrency must be >= 1', 'CONFIG_INVALID');
     }
   }
 
   /**
-   * Detect faces in an image using YuNet.
-   * Returns bounding boxes with confidence scores and 5-landmark keypoints.
+   * Precomputes anchor center coordinates (cx, cy) once at startup
+   * to avoid integer division and modulo inside the hot decoding loop.
    */
-  async detectFaces(input: FaceDetectionInput): Promise<DetectedFace[]> {
-    if (!this.available || !this.session) {
-      throw new Error('Face detector is not available. Ensure the ONNX model is configured.');
-    }
-    const session = this.session;
+  private precomputeAnchorGrids(): void {
+    const size = this.config.inputSize;
+    const offset = this.config.anchorCenterOffset;
 
-    const sharp = (await import('sharp')).default;
+    for (const stride of YUNET_STRIDES) {
+      const feat = Math.floor(size / stride);
+      const grid = new Float32Array(feat * feat * 2);
+      let ptr = 0;
+      for (let row = 0; row < feat; row++) {
+        const cy = (row + offset) * stride;
+        for (let col = 0; col < feat; col++) {
+          grid[ptr++] = (col + offset) * stride;
+          grid[ptr++] = cy;
+        }
+      }
+      this.anchorGrids.set(stride, grid);
+    }
+  }
+
+  /**
+   * Thread-safe, idempotent initialization. Concurrent calls share the same Promise.
+   */
+  public async initialize(): Promise<void> {
+    if (this.disposed) {
+      throw new DetectorError('Cannot initialize a disposed RealDetector', 'DISPOSED');
+    }
+    if (this.available && this.session) return;
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = this.performInitialize().finally(() => {
+      this.initPromise = null;
+    });
+
+    return this.initPromise;
+  }
+
+  private async performInitialize(): Promise<void> {
+    if (!this.config.modelPath) {
+      logger.warn('Model path is empty. Detector will remain unavailable.');
+      this.available = false;
+      return;
+    }
+
+    try {
+      await fs.access(this.config.modelPath);
+    } catch {
+      logger.warn(`YuNet model file not found at: ${this.config.modelPath}`);
+      this.available = false;
+      return;
+    }
+
+    try {
+      const [ort, sharpMod] = await Promise.all([
+        import('onnxruntime-node'),
+        import('sharp'),
+      ]);
+
+      this.ortModule = ort;
+      this.sharpModule = (sharpMod.default ?? sharpMod) as unknown as typeof sharp;
+
+      const sessionOptions: InferenceSession.SessionOptions = {
+        executionProviders: [...this.config.executionProviders],
+        graphOptimizationLevel: 'all',
+        enableCpuMemArena: true,
+        enableMemPattern: true,
+        ...(this.config.intraOpNumThreads > 0
+          ? { intraOpNumThreads: this.config.intraOpNumThreads }
+          : {}),
+      };
+
+      // Pass file path directly to ONNX Runtime C++ core instead of fs.readFileSync buffer
+      // to avoid duplicating the model weight buffer in V8 Heap.
+      const session = await ort.InferenceSession.create(this.config.modelPath, sessionOptions);
+
+      this.validateModelOutputs(session.outputNames);
+
+      this.session = session;
+      this.inputName = session.inputNames[0];
+      this.outputNames = Object.freeze([...session.outputNames]);
+      this.available = true;
+
+      logger.info(
+        `YuNet initialized [path=${this.config.modelPath}, size=${this.config.inputSize}, providers=${this.config.executionProviders.join(',')}]`
+      );
+    } catch (error) {
+      this.available = false;
+      logger.error('Failed to initialize YuNet ONNX session:', error);
+      throw new DetectorError('ONNX session initialization failed', 'MODEL_LOAD_FAILED', error);
+    }
+  }
+
+  private validateModelOutputs(outputNames: readonly string[]): void {
+    const outputSet = new Set(outputNames);
+    for (const stride of YUNET_STRIDES) {
+      for (const prefix of ['cls', 'obj', 'bbox', 'kps']) {
+        const expected = `${prefix}_${stride}`;
+        if (!outputSet.has(expected)) {
+          throw new DetectorError(
+            `Incompatible ONNX model: missing expected YuNet head "${expected}". Found: [${outputNames.join(', ')}]`,
+            'MODEL_LOAD_FAILED'
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Idempotent warmup pass that triggers ONNX kernel compilation and memory arena allocation.
+   */
+  public async warmup(): Promise<void> {
+    if (!this.available || !this.session || this.warmupDone || this.disposed) return;
+    if (this.warmupPromise) return this.warmupPromise;
+
+    this.warmupPromise = (async () => {
+      const ws = await this.pool.acquire();
+      let inputTensor: Tensor | null = null;
+      let outputs: InferenceSession.OnnxValueMapType | null = null;
+
+      try {
+        ws.tensorBuffer.fill(0);
+        inputTensor = new this.ortModule!.Tensor('float32', ws.tensorBuffer, [
+          1,
+          NUM_CHANNELS,
+          this.config.inputSize,
+          this.config.inputSize,
+        ]);
+        outputs = await this.session!.run({ [this.inputName]: inputTensor });
+        this.warmupDone = true;
+        logger.info('YuNet warmup inference complete');
+      } catch (error) {
+        logger.warn('YuNet warmup failed:', error);
+      } finally {
+        this.disposeTensor(inputTensor);
+        this.disposeOutputMap(outputs);
+        this.pool.release(ws);
+        this.warmupPromise = null;
+      }
+    })();
+
+    return this.warmupPromise;
+  }
+
+  // --------------------------------------------------------------------------
+  // Public Detection API
+  // --------------------------------------------------------------------------
+
+  /**
+   * Drop-in compatible method returning `DetectedFace[]`.
+   */
+  public async detectFaces(input: FaceDetectionInput): Promise<DetectedFace[]> {
+    const { faces } = await this.detectFacesWithTelemetry(input);
+    return faces;
+  }
+
+  /**
+   * Extended Senior API returning both detected faces and stage-by-stage latency telemetry.
+   */
+  public async detectFacesWithTelemetry(input: FaceDetectionInput): Promise<DetectionResult> {
+    if (this.disposed) {
+      throw new DetectorError('RealDetector has been disposed', 'DISPOSED');
+    }
+    if (!this.available || !this.session || !this.ortModule || !this.sharpModule) {
+      throw new DetectorError(
+        'Face detector is not available. Call initialize() and ensure the ONNX model exists.',
+        'NOT_INITIALIZED'
+      );
+    }
+    if (!input?.imageBuffer || input.imageBuffer.byteLength === 0) {
+      throw new DetectorError('Invalid input: imageBuffer is empty or missing', 'INVALID_IMAGE');
+    }
+
+    const t0 = performance.now();
+    const ws = await this.pool.acquire();
+
+    let inputTensor: Tensor | null = null;
+    let results: InferenceSession.OnnxValueMapType | null = null;
+
+    try {
+      // 1. Preprocess: EXIF auto-orient, Letterbox resize, RGB->BGR Planar NCHW
+      const tPreStart = performance.now();
+      const letterbox = await this.preprocessImage(input.imageBuffer, ws.tensorBuffer);
+      const preprocessMs = performance.now() - tPreStart;
+
+      // 2. ONNX Runtime Inference
+      const tInfStart = performance.now();
+      inputTensor = new this.ortModule.Tensor('float32', ws.tensorBuffer, [
+        1,
+        NUM_CHANNELS,
+        this.config.inputSize,
+        this.config.inputSize,
+      ]);
+      results = await this.session.run({ [this.inputName]: inputTensor });
+      const inferenceMs = performance.now() - tInfStart;
+
+      // 3. Postprocess: Multi-stride decode, Top-K selection, SoA NMS, Coordinate un-letterboxing
+      const tPostStart = performance.now();
+      const { faces, candidateCount } = this.decodeAndPostprocess(results, ws, letterbox);
+      const postprocessMs = performance.now() - tPostStart;
+
+      return {
+        faces,
+        telemetry: {
+          preprocessMs,
+          inferenceMs,
+          postprocessMs,
+          totalMs: performance.now() - t0,
+          candidateCount,
+          retainedCount: faces.length,
+        },
+      };
+    } catch (error) {
+      if (error instanceof DetectorError) throw error;
+      throw new DetectorError('Face detection pipeline failed', 'INFERENCE_FAILED', error);
+    } finally {
+      // Deterministic cleanup of native C++ ONNX tensors to prevent memory leaks
+      this.disposeTensor(inputTensor);
+      this.disposeOutputMap(results);
+      this.pool.release(ws);
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Stage 1: Image Preprocessing & 1D Planar Transposition
+  // --------------------------------------------------------------------------
+
+  private async preprocessImage(
+    imageBuffer: Buffer | Uint8Array,
+    targetTensorBuffer: Float32Array
+  ): Promise<{
+    origWidth: number;
+    origHeight: number;
+    scale: number;
+    padX: number;
+    padY: number;
+  }> {
+    const sharp = this.sharpModule!;
     const inputSize = this.config.inputSize;
 
-    // Get original image dimensions for coordinate scaling.
-    // Use ORIENTED dimensions: the tensor below is EXIF-rotated, so boxes
-    // decoded in rotated space must be scaled against the rotated size.
-    const originalMeta = await sharp(input.imageBuffer).metadata();
-    const orientation = originalMeta.orientation ?? 1;
-    const swapsAxes = orientation >= 5 && orientation <= 8;
-    const origWidth = (swapsAxes ? originalMeta.height : originalMeta.width) || 0;
-    const origHeight = (swapsAxes ? originalMeta.width : originalMeta.height) || 0;
+    // Single Sharp instance with anti-decompression-bomb limit
+    const pipeline = sharp(imageBuffer, {
+      limitInputPixels: this.config.maxImagePixels,
+      failOn: 'error',
+    });
 
-    if (origWidth === 0 || origHeight === 0) {
-      throw new Error('Invalid image: could not read dimensions');
+    let meta: import('sharp').Metadata;
+    try {
+      meta = await pipeline.metadata();
+    } catch (err) {
+      throw new DetectorError('Failed to read image metadata or corrupt image buffer', 'INVALID_IMAGE', err);
     }
 
-    // Letterbox resize: preserve the source aspect ratio and pad to the model
-    // canvas. The previous `fit: 'fill'` stretched a 640x480 (or any
-    // non-square) frame into a 640x640 square, distorting every face and
-    // shifting YuNet's landmarks — which then degraded the SFace embedding.
-    // OpenCV's FaceDetectorYN likewise runs at the source resolution
-    // (padded to a multiple of 32) instead of stretching.
+    const orientation = meta.orientation ?? 1;
+    const swapsAxes = orientation >= 5 && orientation <= 8;
+    const origWidth = (swapsAxes ? meta.height : meta.width) ?? 0;
+    const origHeight = (swapsAxes ? meta.width : meta.height) ?? 0;
+
+    if (origWidth <= 0 || origHeight <= 0) {
+      throw new DetectorError('Invalid image: dimensions could not be resolved', 'INVALID_IMAGE');
+    }
+
+    // Compute aspect-preserving letterbox parameters
     const scale = Math.min(inputSize / origWidth, inputSize / origHeight);
-    const scaledW = Math.max(1, Math.round(origWidth * scale));
-    const scaledH = Math.max(1, Math.round(origHeight * scale));
+    const scaledW = Math.min(inputSize, Math.max(1, Math.round(origWidth * scale)));
+    const scaledH = Math.min(inputSize, Math.max(1, Math.round(origHeight * scale)));
     const padX = Math.floor((inputSize - scaledW) / 2);
     const padY = Math.floor((inputSize - scaledH) / 2);
 
-    const { data, info } = await sharp(input.imageBuffer)
-      // Auto-apply EXIF orientation — photos from phones/webcams are often
-      // stored rotated (orientation=6 etc.); skipping this rotates the face
-      // sideways and destroys detection.
-      .rotate()
-      .resize(scaledW, scaledH, { fit: 'fill' })
+    const { data, info } = await pipeline
+      .rotate() // Apply EXIF orientation first
+      .toColorspace('srgb') // Guarantee 3-channel RGB even for Grayscale/CMYK inputs
+      .removeAlpha() // Strip alpha channel if present
+      .resize(scaledW, scaledH, {
+        fit: 'fill',
+        kernel: 'lanczos3',
+        fastShrinkOnLoad: true,
+      })
       .extend({
         top: padY,
         bottom: inputSize - scaledH - padY,
@@ -162,226 +569,271 @@ export class RealDetector {
         right: inputSize - scaledW - padX,
         background: { r: 0, g: 0, b: 0 },
       })
-      .removeAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
 
-    const channels = 3;
-    const height = info.height;
-    const width = info.width;
-
-    // NCHW layout, raw 0-255 values (YuNet does NOT expect [0,1] normalization).
-    // sharp raw output is RGB; YuNet expects BGR -> swap R/B (validated: BGR
-    // yields higher detection scores than RGB on ground-truth faces).
-    const tensorData = new Float32Array(channels * height * width);
-
-    for (let c = 0; c < channels; c++) {
-      for (let h = 0; h < height; h++) {
-        for (let w = 0; w < width; w++) {
-          const srcIdx = (h * width + w) * channels + c;
-          const bgrSrcIdx = c === 0 ? srcIdx + 2 : c === 2 ? srcIdx - 2 : srcIdx;
-          tensorData[c * height * width + h * width + w] = data[bgrSrcIdx];
-        }
-      }
+    if (info.width !== inputSize || info.height !== inputSize || info.channels !== 3) {
+      throw new DetectorError(
+        `Unexpected preprocessed buffer shape: ${info.width}x${info.height}x${info.channels}`,
+        'INVALID_IMAGE'
+      );
     }
 
-    const ort = await import('onnxruntime-node');
-    const inputTensor = new ort.Tensor('float32', tensorData, [1, channels, height, width]);
+    // Fast 1D Planar Transposition: Interleaved RGB [H, W, 3] -> Planar BGR [3, H, W]
+    // Zero inner branching, single pass over pixels, sequential writes per plane.
+    const planeSize = inputSize * inputSize;
+    const bOffset = 0;
+    const gOffset = planeSize;
+    const rOffset = planeSize * 2;
 
-    // Run inference
-    const inputName = session.inputNames[0];
-    const results = await session.run({ [inputName]: inputTensor });
-
-    // Decode YuNet output
-    const rawFaces = this.decodeYuNetOutput(results, inputSize, inputSize);
-
-    // Map canvas coordinates (letterboxed) back to the oriented source image.
-    const toOrigX = (v: number) => (v - padX) / scale;
-    const toOrigY = (v: number) => (v - padY) / scale;
-
-    const faces: DetectedFace[] = [];
-    for (const raw of rawFaces) {
-      if (raw.score < this.config.confidenceThreshold) continue;
-
-      const box: BoundingBox = {
-        x: Math.max(0, Math.round(toOrigX(raw.x))),
-        y: Math.max(0, Math.round(toOrigY(raw.y))),
-        width: Math.max(1, Math.round(raw.w / scale)),
-        height: Math.max(1, Math.round(raw.h / scale)),
-      };
-
-      let landmarks: Point2D[] | undefined;
-      if (raw.landmarks && raw.landmarks.length === 10) {
-        landmarks = [
-          { x: Math.round(toOrigX(raw.landmarks[0])), y: Math.round(toOrigY(raw.landmarks[1])) },
-          { x: Math.round(toOrigX(raw.landmarks[2])), y: Math.round(toOrigY(raw.landmarks[3])) },
-          { x: Math.round(toOrigX(raw.landmarks[4])), y: Math.round(toOrigY(raw.landmarks[5])) },
-          { x: Math.round(toOrigX(raw.landmarks[6])), y: Math.round(toOrigY(raw.landmarks[7])) },
-          { x: Math.round(toOrigX(raw.landmarks[8])), y: Math.round(toOrigY(raw.landmarks[9])) },
-        ];
-      }
-
-      faces.push({ boundingBox: box, confidence: raw.score, landmarks });
+    for (let pixelIdx = 0, byteIdx = 0; pixelIdx < planeSize; pixelIdx++, byteIdx += 3) {
+      targetTensorBuffer[bOffset + pixelIdx] = data[byteIdx + 2]; // Blue
+      targetTensorBuffer[gOffset + pixelIdx] = data[byteIdx + 1]; // Green
+      targetTensorBuffer[rOffset + pixelIdx] = data[byteIdx];     // Red
     }
 
-    return faces;
+    return { origWidth, origHeight, scale, padX, padY };
   }
 
-  /**
-   * Decode YuNet multi-head output into face detections.
-   *
-   * YuNet outputs 12 tensors across 3 strides:
-   *   cls_8, obj_8, bbox_8, kps_8    (stride 8, feature map 80x80)
-   *   cls_16, obj_16, bbox_16, kps_16 (stride 16, feature map 40x40)
-   *   cls_32, obj_32, bbox_32, kps_32 (stride 32, feature map 20x20)
-   *
-   * Each position has:
-   *   - cls: sigmoid classification score
-   *   - obj: sigmoid objectness score
-   *   - bbox: (dx, dy, dw, dh) regression relative to anchor center
-   *   - kps: (x1,y1,...,x5,y5) 5 landmark offsets relative to anchor center
-   */
-  private decodeYuNetOutput(
-    results: Record<string, { data: unknown }>,
-    inputHeight: number,
-    inputWidth: number
-  ): Array<{ x: number; y: number; w: number; h: number; score: number; landmarks: number[] }> {
-    const faces: Array<{ x: number; y: number; w: number; h: number; score: number; landmarks: number[] }> = [];
+  // --------------------------------------------------------------------------
+  // Stage 2: Multi-Stride Decoding, SoA NMS & Coordinate Un-Letterboxing
+  // --------------------------------------------------------------------------
+
+  private decodeAndPostprocess(
+    results: InferenceSession.OnnxValueMapType,
+    ws: ExecutionWorkspace,
+    letterbox: { origWidth: number; origHeight: number; scale: number; padX: number; padY: number }
+  ): { faces: DetectedFace[]; candidateCount: number } {
+    const threshold = this.config.confidenceThreshold;
+    const {
+      candX1,
+      candY1,
+      candX2,
+      candY2,
+      candArea,
+      candScore,
+      candLandmarks,
+      sortIndices,
+      suppressedMask,
+    } = ws;
+
+    let count = 0;
 
     for (const stride of YUNET_STRIDES) {
-      const clsTensor = results[`cls_${stride}`];
-      const objTensor = results[`obj_${stride}`];
-      const bboxTensor = results[`bbox_${stride}`];
-      const kpsTensor = results[`kps_${stride}`];
+      const clsData = results[`cls_${stride}`]?.data as Float32Array | undefined;
+      const objData = results[`obj_${stride}`]?.data as Float32Array | undefined;
+      const bboxData = results[`bbox_${stride}`]?.data as Float32Array | undefined;
+      const kpsData = results[`kps_${stride}`]?.data as Float32Array | undefined;
+      const grid = this.anchorGrids.get(stride);
 
-      if (!clsTensor || !objTensor || !bboxTensor) continue;
+      if (!clsData || !objData || !bboxData || !grid) continue;
 
-      const clsData = clsTensor.data as Float32Array;
-      const objData = objTensor.data as Float32Array;
-      const bboxData = bboxTensor.data as Float32Array;
-      const kpsData = kpsTensor ? (kpsTensor.data as Float32Array) : null;
-
-      const featH = Math.floor(inputHeight / stride);
-      const featW = Math.floor(inputWidth / stride);
-      const numAnchors = featH * featW;
+      const numAnchors = clsData.length;
 
       for (let i = 0; i < numAnchors; i++) {
-        const clsScore = clsData[i];
-        const objScore = objData[i];
-        // NOTE: this YuNet export already applies sigmoid to cls/obj in-graph
-        // (outputs are bounded probabilities in [0,1], verified empirically:
-        // a clear frontal face yields ~0.88 with the raw product but only
-        // ~0.45 when sigmoid is applied again). Applying sigmoid twice
-        // compresses every score below the 0.5 threshold and makes real
-        // detection fail. Keep the raw product.
-        const score = clsScore * objScore;
+        // YuNet exports sigmoid in-graph; score is the direct product of cls and obj
+        const score = clsData[i] * objData[i];
+        if (!(score >= threshold)) continue; // Handles NaN safely as well
 
-        if (score < this.config.confidenceThreshold) continue;
+        const gridOffset = i * 2;
+        const cx = grid[gridOffset];
+        const cy = grid[gridOffset + 1];
 
-        const row = Math.floor(i / featW);
-        const col = i % featW;
+        const bboxOffset = i * 4;
+        const dx = bboxData[bboxOffset];
+        const dy = bboxData[bboxOffset + 1];
+        // Clamp dw/dh logits to prevent Math.exp overflow to Infinity on corrupted inputs
+        const dw = Math.min(MAX_SCALE_LOGIT, Math.max(MIN_SCALE_LOGIT, bboxData[bboxOffset + 2]));
+        const dh = Math.min(MAX_SCALE_LOGIT, Math.max(MIN_SCALE_LOGIT, bboxData[bboxOffset + 3]));
 
-        // Anchor center in input coordinates
-        const cx = (col + 0.5) * stride;
-        const cy = (row + 0.5) * stride;
+        const boxCenterX = cx + dx * stride;
+        const boxCenterY = cy + dy * stride;
+        const halfW = (Math.exp(dw) * stride) * 0.5;
+        const halfH = (Math.exp(dh) * stride) * 0.5;
 
-        // Decode bbox
-        const dx = bboxData[i * 4 + 0];
-        const dy = bboxData[i * 4 + 1];
-        const dw = bboxData[i * 4 + 2];
-        const dh = bboxData[i * 4 + 3];
+        const x1 = boxCenterX - halfW;
+        const y1 = boxCenterY - halfH;
+        const x2 = boxCenterX + halfW;
+        const y2 = boxCenterY + halfH;
 
-        const x = cx + dx * stride;
-        const y = cy + dy * stride;
-        const w = Math.exp(dw) * stride;
-        const h = Math.exp(dh) * stride;
+        candX1[count] = x1;
+        candY1[count] = y1;
+        candX2[count] = x2;
+        candY2[count] = y2;
+        candArea[count] = (x2 - x1) * (y2 - y1);
+        candScore[count] = score;
 
-        // Decode 5 landmarks (right eye, left eye, nose, right mouth, left mouth)
-        const landmarks: number[] = [];
+        const dstKpsOffset = count * LANDMARK_COORDS;
         if (kpsData) {
-          for (let k = 0; k < 10; k += 2) {
-            const kx = cx + kpsData[i * 10 + k] * stride;
-            const ky = cy + kpsData[i * 10 + k + 1] * stride;
-            landmarks.push(kx, ky);
+          const srcKpsOffset = i * LANDMARK_COORDS;
+          for (let k = 0; k < LANDMARK_COORDS; k += 2) {
+            candLandmarks[dstKpsOffset + k] = cx + kpsData[srcKpsOffset + k] * stride;
+            candLandmarks[dstKpsOffset + k + 1] = cy + kpsData[srcKpsOffset + k + 1] * stride;
           }
         }
 
-        faces.push({
-          x: x - w / 2,
-          y: y - h / 2,
-          w,
-          h,
-          score,
-          landmarks,
-        });
+        sortIndices[count] = count;
+        count++;
       }
     }
 
-    // Cap the candidate list before the quadratic pass (see the constant above).
-    if (faces.length > MAX_PRE_NMS_CANDIDATES) {
-      faces.sort((a, b) => b.score - a.score);
-      faces.length = MAX_PRE_NMS_CANDIDATES;
+    if (count === 0) {
+      return { faces: [], candidateCount: 0 };
     }
 
-    // Apply NMS
-    return this.nms(faces, this.config.nmsThreshold);
-  }
+    // Sort candidate indices by descending score using a view over active candidates
+    const activeIndices = sortIndices.subarray(0, count);
+    activeIndices.sort((a, b) => candScore[b] - candScore[a]);
 
-  /**
-   * Non-Maximum Suppression to remove overlapping detections.
-   */
-  private nms(
-    faces: Array<{ x: number; y: number; w: number; h: number; score: number; landmarks: number[] }>,
-    iouThreshold: number
-  ): Array<{ x: number; y: number; w: number; h: number; score: number; landmarks: number[] }> {
-    if (faces.length === 0) return [];
+    // Cap pre-NMS candidates to bound quadratic NMS complexity
+    const nmsCount = Math.min(count, this.config.topKPreNms);
+    suppressedMask.fill(0, 0, nmsCount);
 
-    // Sort by score descending
-    faces.sort((a, b) => b.score - a.score);
+    const iouThreshold = this.config.nmsThreshold;
+    const maxDetections = this.config.maxDetections;
+    const { origWidth, origHeight, scale, padX, padY } = letterbox;
+    const invScale = 1.0 / scale;
 
-    const kept: typeof faces = [];
-    const suppressed = new Set<number>();
+    const faces: DetectedFace[] = [];
 
-    for (let i = 0; i < faces.length; i++) {
-      if (suppressed.has(i)) continue;
-      kept.push(faces[i]);
+    for (let i = 0; i < nmsCount; i++) {
+      if (suppressedMask[i] === 1) continue;
 
-      for (let j = i + 1; j < faces.length; j++) {
-        if (suppressed.has(j)) continue;
-        if (this.computeIoU(faces[i], faces[j]) > iouThreshold) {
-          suppressed.add(j);
+      const idxA = activeIndices[i];
+      const ax1 = candX1[idxA];
+      const ay1 = candY1[idxA];
+      const ax2 = candX2[idxA];
+      const ay2 = candY2[idxA];
+      const areaA = candArea[idxA];
+
+      // Convert corners from letterboxed canvas space back to original oriented image space
+      // Clamping BOTH corners to [0, origDim] before computing width/height prevents box shifting!
+      const origX1 = Math.min(origWidth, Math.max(0, Math.round((ax1 - padX) * invScale)));
+      const origY1 = Math.min(origHeight, Math.max(0, Math.round((ay1 - padY) * invScale)));
+      const origX2 = Math.min(origWidth, Math.max(0, Math.round((ax2 - padX) * invScale)));
+      const origY2 = Math.min(origHeight, Math.max(0, Math.round((ay2 - padY) * invScale)));
+
+      const boxWidth = origX2 - origX1;
+      const boxHeight = origY2 - origY1;
+
+      // Skip degenerate boxes that collapsed entirely into the letterbox padding
+      if (boxWidth >= 1 && boxHeight >= 1) {
+        const boundingBox: BoundingBox = {
+          x: origX1,
+          y: origY1,
+          width: boxWidth,
+          height: boxHeight,
+        };
+
+        const kpsBase = idxA * LANDMARK_COORDS;
+        const landmarks: Point2D[] = new Array(NUM_LANDMARKS);
+        for (let k = 0; k < NUM_LANDMARKS; k++) {
+          const rawLx = candLandmarks[kpsBase + k * 2];
+          const rawLy = candLandmarks[kpsBase + k * 2 + 1];
+          landmarks[k] = {
+            x: Math.min(origWidth, Math.max(0, Math.round((rawLx - padX) * invScale))),
+            y: Math.min(origHeight, Math.max(0, Math.round((rawLy - padY) * invScale))),
+          };
+        }
+
+        faces.push({
+          boundingBox,
+          confidence: candScore[idxA],
+          landmarks,
+        });
+
+        if (faces.length >= maxDetections) break;
+      }
+
+      // Suppress overlapping lower-scoring boxes
+      for (let j = i + 1; j < nmsCount; j++) {
+        if (suppressedMask[j] === 1) continue;
+
+        const idxB = activeIndices[j];
+        const interX1 = ax1 > candX1[idxB] ? ax1 : candX1[idxB];
+        const interY1 = ay1 > candY1[idxB] ? ay1 : candY1[idxB];
+        const interX2 = ax2 < candX2[idxB] ? ax2 : candX2[idxB];
+        const interY2 = ay2 < candY2[idxB] ? ay2 : candY2[idxB];
+
+        const interW = interX2 - interX1;
+        const interH = interY2 - interY1;
+
+        if (interW > 0 && interH > 0) {
+          const interArea = interW * interH;
+          const unionArea = areaA + candArea[idxB] - interArea;
+          if (unionArea > 0 && interArea / unionArea > iouThreshold) {
+            suppressedMask[j] = 1;
+          }
         }
       }
     }
 
-    return kept;
+    return { faces, candidateCount: count };
+  }
+
+  // --------------------------------------------------------------------------
+  // Native Memory Cleanup & Disposal
+  // --------------------------------------------------------------------------
+
+  private disposeTensor(tensor: Tensor | null | undefined): void {
+    if (!tensor) return;
+    try {
+      if (typeof (tensor as { dispose?: () => void }).dispose === 'function') {
+        (tensor as { dispose: () => void }).dispose();
+      }
+    } catch (err) {
+      logger.debug?.('Failed to dispose input tensor:', err);
+    }
+  }
+
+  private disposeOutputMap(outputs: InferenceSession.OnnxValueMapType | null | undefined): void {
+    if (!outputs) return;
+    for (const key of Object.keys(outputs)) {
+      this.disposeTensor(outputs[key]);
+    }
+  }
+
+  public isAvailable(): boolean {
+    return this.available && !this.disposed;
+  }
+
+  public getModelVersion(): string {
+    return `yunet-${this.config.inputSize}`;
+  }
+
+  public getOutputNames(): readonly string[] {
+    return this.outputNames;
   }
 
   /**
-   * Compute Intersection over Union (IoU) between two bounding boxes.
+   * Gracefully releases the ONNX C++ InferenceSession and rejects queued tasks.
    */
-  private computeIoU(
-    a: { x: number; y: number; w: number; h: number },
-    b: { x: number; y: number; w: number; h: number }
-  ): number {
-    const x1 = Math.max(a.x, b.x);
-    const y1 = Math.max(a.y, b.y);
-    const x2 = Math.min(a.x + a.w, b.x + b.w);
-    const y2 = Math.min(a.y + a.h, b.y + b.h);
+  public async dispose(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.available = false;
+    this.warmupDone = false;
 
-    const intersection = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
-    const areaA = a.w * a.h;
-    const areaB = b.w * b.h;
-    const union = areaA + areaB - intersection;
+    this.pool.dispose();
 
-    return union > 0 ? intersection / union : 0;
+    if (this.session) {
+      try {
+        const releasable = this.session as unknown as { release?: () => Promise<void> };
+        if (typeof releasable.release === 'function') {
+          await releasable.release();
+        }
+      } catch (error) {
+        logger.warn('Error releasing ONNX session during dispose:', error);
+      } finally {
+        this.session = null;
+      }
+    }
   }
 
-  isAvailable(): boolean {
-    return this.available;
-  }
-
-  getModelVersion(): string {
-    return `yunet-${this.config.inputSize}`;
+  /**
+   * Support for TypeScript 5.2+ `await using detector = new RealDetector(...)`
+   */
+  public async [Symbol.asyncDispose](): Promise<void> {
+    await this.dispose();
   }
 }

@@ -5,6 +5,7 @@ function createMockPrisma() {
   const obj = {
     organization: { findUnique: vi.fn().mockResolvedValue({ timezone: 'UTC' }) },
     group: { findFirst: vi.fn() },
+    teacher: { findFirst: vi.fn() },
     studentGroup: { findMany: vi.fn() },
     attendance: {
       findFirst: vi.fn(),
@@ -408,3 +409,335 @@ describe('AttendanceService on-demand lesson materialization (P0-2)', () => {
     expect(prisma.attendance.create).not.toHaveBeenCalled();
   });
 });
+
+describe('AttendanceService.update teacher authorization (M-EDU-ATT-003)', () => {
+  let prisma: any;
+  let svc: AttendanceService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma = createMockPrisma();
+    svc = new AttendanceService(prisma);
+  });
+
+  it('allows teacher to update attendance for their assigned group', async () => {
+    prisma.attendance.findFirst.mockResolvedValue({
+      id: 'att-1',
+      organizationId: 'org-1',
+      status: 'PRESENT',
+      groupId: 'g-assigned',
+      group: { teacherId: 'teacher-1' },
+      lesson: null,
+    });
+    prisma.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+    prisma.attendance.updateMany.mockResolvedValue({ count: 1 });
+
+    const user = { organizationId: 'org-1', sub: 'user-t1', role: 'TEACHER' };
+    const res = await svc.update(user as any, 'att-1', { status: 'LATE', note: 'Traffic' });
+
+    expect(prisma.teacher.findFirst).toHaveBeenCalledWith({
+      where: { userId: 'user-t1', organizationId: 'org-1' },
+      select: { id: true },
+    });
+    expect(res.status).toBe('PRESENT');
+  });
+
+  it('rejects teacher attempting to update attendance for another teacher group', async () => {
+    prisma.attendance.findFirst.mockResolvedValue({
+      id: 'att-1',
+      organizationId: 'org-1',
+      status: 'PRESENT',
+      groupId: 'g-other',
+      group: { teacherId: 'teacher-other' },
+      lesson: null,
+    });
+    prisma.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+
+    const user = { organizationId: 'org-1', sub: 'user-t1', role: 'TEACHER' };
+    await expect(
+      svc.update(user as any, 'att-1', { status: 'LATE' })
+    ).rejects.toThrow('Teachers can only update attendance for their assigned groups or lessons');
+  });
+
+  it('allows ORG_ADMIN to update attendance regardless of group teacher', async () => {
+    prisma.attendance.findFirst.mockResolvedValue({
+      id: 'att-1',
+      organizationId: 'org-1',
+      status: 'PRESENT',
+      groupId: 'g-other',
+      group: { teacherId: 'teacher-other' },
+      lesson: null,
+    });
+    prisma.attendance.updateMany.mockResolvedValue({ count: 1 });
+
+    const user = { organizationId: 'org-1', sub: 'user-admin', role: 'ORG_ADMIN' };
+    await svc.update(user as any, 'att-1', { status: 'EXCUSED' });
+
+    expect(prisma.teacher.findFirst).not.toHaveBeenCalled();
+    expect(prisma.attendance.updateMany).toHaveBeenCalled();
+  });
+});
+
+describe('ATT-002: Multi-Lesson Attendance Integrity', () => {
+  let prisma: any;
+  let svc: AttendanceService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma = createMockPrisma();
+    svc = new AttendanceService(prisma);
+  });
+
+  it('records attendance independently for Lesson 1 and Lesson 2 on the same day', async () => {
+    prisma.group.findFirst.mockResolvedValue({ id: 'g1', organizationId: 'org-1' });
+    prisma.studentGroup.findMany.mockResolvedValue([{ studentId: 's1' }]);
+
+    const lesson1Date = new Date('2026-09-04T09:00:00Z');
+    const lesson2Date = new Date('2026-09-04T14:00:00Z');
+
+    prisma.lesson.findFirst.mockImplementation(async ({ where }: any) => {
+      if (where.id === 'lesson-1') {
+        return { id: 'lesson-1', groupId: 'g1', status: 'PLANNED', date: lesson1Date };
+      }
+      if (where.id === 'lesson-2') {
+        return { id: 'lesson-2', groupId: 'g1', status: 'PLANNED', date: lesson2Date };
+      }
+      return null;
+    });
+
+    // Lesson 1 attendance
+    prisma.attendance.findMany.mockResolvedValueOnce([]);
+    prisma.attendance.create.mockResolvedValueOnce({ id: 'att-1', lessonId: 'lesson-1' });
+
+    const res1 = await svc.markAttendance('org-1', {
+      groupId: 'g1',
+      date: '2026-09-04',
+      lessonId: 'lesson-1',
+      records: [{ studentId: 's1', status: 'PRESENT' }],
+    });
+    expect(res1.created).toBe(1);
+    expect(prisma.attendance.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          studentId: 's1',
+          groupId: 'g1',
+          lessonId: 'lesson-1',
+          status: 'PRESENT',
+        }),
+      }),
+    );
+
+    // Lesson 2 attendance on same day
+    prisma.attendance.findMany.mockResolvedValueOnce([]);
+    prisma.attendance.create.mockResolvedValueOnce({ id: 'att-2', lessonId: 'lesson-2' });
+
+    const res2 = await svc.markAttendance('org-1', {
+      groupId: 'g1',
+      date: '2026-09-04',
+      lessonId: 'lesson-2',
+      records: [{ studentId: 's1', status: 'LATE' }],
+    });
+    expect(res2.created).toBe(1);
+    expect(prisma.attendance.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          studentId: 's1',
+          groupId: 'g1',
+          lessonId: 'lesson-2',
+          status: 'LATE',
+        }),
+      }),
+    );
+  });
+
+  it('does not overwrite Lesson 1 attendance when Lesson 2 attendance is marked', async () => {
+    prisma.group.findFirst.mockResolvedValue({ id: 'g1', organizationId: 'org-1' });
+    prisma.studentGroup.findMany.mockResolvedValue([{ studentId: 's1' }]);
+
+    prisma.lesson.findFirst.mockResolvedValue({
+      id: 'lesson-2',
+      groupId: 'g1',
+      status: 'PLANNED',
+      date: new Date('2026-09-04T14:00:00Z'),
+    });
+
+    // Query for existing records is scoped to lesson-2, so Lesson 1's record is NOT returned
+    prisma.attendance.findMany.mockImplementation(async ({ where }: any) => {
+      expect(where.lessonId).toBe('lesson-2');
+      return [];
+    });
+
+    prisma.attendance.create.mockResolvedValue({ id: 'att-2' });
+
+    const result = await svc.markAttendance('org-1', {
+      groupId: 'g1',
+      date: '2026-09-04',
+      lessonId: 'lesson-2',
+      records: [{ studentId: 's1', status: 'PRESENT' }],
+    });
+
+    expect(result.created).toBe(1);
+    expect(result.updated).toBe(0);
+    expect(prisma.attendance.update).not.toHaveBeenCalled();
+    expect(prisma.attendance.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          lessonId: 'lesson-2',
+        }),
+      }),
+    );
+  });
+
+  it('updates existing attendance for the SAME lesson instead of creating duplicate', async () => {
+    prisma.group.findFirst.mockResolvedValue({ id: 'g1', organizationId: 'org-1' });
+    prisma.studentGroup.findMany.mockResolvedValue([{ studentId: 's1' }]);
+
+    prisma.lesson.findFirst.mockResolvedValue({
+      id: 'lesson-1',
+      groupId: 'g1',
+      status: 'CONDUCTED',
+      date: new Date('2026-09-04T09:00:00Z'),
+    });
+
+    // An attendance already exists for lesson-1
+    prisma.attendance.findMany.mockResolvedValue([{ id: 'att-1', studentId: 's1', lessonId: 'lesson-1' }]);
+    prisma.attendance.update.mockResolvedValue({ id: 'att-1', status: 'LATE' });
+
+    const result = await svc.markAttendance('org-1', {
+      groupId: 'g1',
+      date: '2026-09-04',
+      lessonId: 'lesson-1',
+      records: [{ studentId: 's1', status: 'LATE' }],
+    });
+
+    expect(result.created).toBe(0);
+    expect(result.updated).toBe(1);
+    expect(prisma.attendance.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'att-1' },
+        data: expect.objectContaining({ status: 'LATE', lessonId: 'lesson-1' }),
+      }),
+    );
+    expect(prisma.attendance.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects attendance for a CANCELLED lesson', async () => {
+    prisma.group.findFirst.mockResolvedValue({ id: 'g1', organizationId: 'org-1' });
+    prisma.studentGroup.findMany.mockResolvedValue([{ studentId: 's1' }]);
+
+    prisma.lesson.findFirst.mockResolvedValue({
+      id: 'lesson-cancelled',
+      groupId: 'g1',
+      status: 'CANCELLED',
+      date: new Date('2026-09-04T09:00:00Z'),
+    });
+
+    await expect(
+      svc.markAttendance('org-1', {
+        groupId: 'g1',
+        date: '2026-09-04',
+        lessonId: 'lesson-cancelled',
+        records: [{ studentId: 's1', status: 'PRESENT' }],
+      }),
+    ).rejects.toThrow(/bekor qilingan/i);
+  });
+
+  it('rejects attendance when lesson belongs to a different group', async () => {
+    prisma.group.findFirst.mockResolvedValue({ id: 'g1', organizationId: 'org-1' });
+    prisma.studentGroup.findMany.mockResolvedValue([{ studentId: 's1' }]);
+
+    prisma.lesson.findFirst.mockResolvedValue({
+      id: 'lesson-other-group',
+      groupId: 'g2',
+      status: 'PLANNED',
+      date: new Date('2026-09-04T09:00:00Z'),
+    });
+
+    await expect(
+      svc.markAttendance('org-1', {
+        groupId: 'g1',
+        date: '2026-09-04',
+        lessonId: 'lesson-other-group',
+        records: [{ studentId: 's1', status: 'PRESENT' }],
+      }),
+    ).rejects.toThrow(/does not belong to group/);
+  });
+
+  it('rejects attendance when lesson belongs to a different organization (tenant isolation)', async () => {
+    prisma.group.findFirst.mockResolvedValue({ id: 'g1', organizationId: 'org-1' });
+    prisma.studentGroup.findMany.mockResolvedValue([{ studentId: 's1' }]);
+
+    // Scoped query by organizationId returns null
+    prisma.lesson.findFirst.mockResolvedValue(null);
+
+    await expect(
+      svc.markAttendance('org-1', {
+        groupId: 'g1',
+        date: '2026-09-04',
+        lessonId: 'foreign-lesson',
+        records: [{ studentId: 's1', status: 'PRESENT' }],
+      }),
+    ).rejects.toThrow(/not found/);
+  });
+
+  it('rejects attendance when lesson date does not match the attendance date', async () => {
+    prisma.group.findFirst.mockResolvedValue({ id: 'g1', organizationId: 'org-1' });
+    prisma.studentGroup.findMany.mockResolvedValue([{ studentId: 's1' }]);
+
+    prisma.lesson.findFirst.mockResolvedValue({
+      id: 'lesson-tomorrow',
+      groupId: 'g1',
+      status: 'PLANNED',
+      date: new Date('2026-09-05T09:00:00Z'),
+    });
+
+    await expect(
+      svc.markAttendance('org-1', {
+        groupId: 'g1',
+        date: '2026-09-04',
+        lessonId: 'lesson-tomorrow',
+        records: [{ studentId: 's1', status: 'PRESENT' }],
+      }),
+    ).rejects.toThrow(/does not match/);
+  });
+
+  it('recovers cleanly on concurrent P2002 race for the same lesson', async () => {
+    prisma.group.findFirst.mockResolvedValue({ id: 'g1', organizationId: 'org-1' });
+    prisma.studentGroup.findMany.mockResolvedValue([{ studentId: 's1' }]);
+
+    prisma.lesson.findFirst.mockResolvedValue({
+      id: 'lesson-1',
+      groupId: 'g1',
+      status: 'PLANNED',
+      date: new Date('2026-09-04T09:00:00Z'),
+    });
+
+    let pass = 0;
+    prisma.$transaction.mockImplementation(async (cb: any) => {
+      pass++;
+      if (pass === 1) {
+        // First attempt: simulate unique constraint race
+        const p2002: any = new Error('Unique constraint failed on Attendance_studentId_lessonId_key');
+        p2002.code = 'P2002';
+        throw p2002;
+      }
+      // Second attempt: recovery pass with allowCreate = false
+      return cb(prisma);
+    });
+
+    prisma.attendance.findMany.mockResolvedValue([]);
+    prisma.attendance.findUnique.mockResolvedValue({ id: 'att-race-winner', studentId: 's1', lessonId: 'lesson-1' });
+    prisma.attendance.update.mockResolvedValue({ id: 'att-race-winner' });
+
+    const result = await svc.markAttendance('org-1', {
+      groupId: 'g1',
+      date: '2026-09-04',
+      lessonId: 'lesson-1',
+      records: [{ studentId: 's1', status: 'PRESENT' }],
+    });
+
+    expect(result.updated).toBe(1);
+    expect(prisma.attendance.update).toHaveBeenCalled();
+  });
+});
+

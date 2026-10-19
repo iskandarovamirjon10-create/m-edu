@@ -56,7 +56,7 @@ export function resolveModelPath(modelPath?: string): string {
   const isRegularFile = (p: string): boolean => {
     try {
       const stat = fs.statSync(p);
-      return stat.isFile();
+      return stat.isFile() && stat.size > 0;
     } catch {
       return false;
     }
@@ -163,11 +163,20 @@ export async function getSharedFaceEngine(): Promise<FaceEngine> {
           throw new Error(`Real-local engine requires model paths: ${list}`);
         }
 
+        const passThreshold = process.env.FACE_LIVENESS_PASS_THRESHOLD
+          ? parseFloat(process.env.FACE_LIVENESS_PASS_THRESHOLD)
+          : (process.env.FACE_LIVENESS_THRESHOLD ? parseFloat(process.env.FACE_LIVENESS_THRESHOLD) : 0.5);
+        const failThreshold = process.env.FACE_LIVENESS_FAIL_THRESHOLD
+          ? parseFloat(process.env.FACE_LIVENESS_FAIL_THRESHOLD)
+          : 0.2;
+
         const engine = new RealFaceEngine({
           detectorModelPath,
           embedderModelPath,
           livenessModelPath: livenessModelPath || '',
           embeddingDimension: 128,
+          livenessPassThreshold: Number.isFinite(passThreshold) ? passThreshold : 0.5,
+          livenessFailThreshold: Number.isFinite(failThreshold) ? failThreshold : 0.2,
         });
 
         await engine.initialize();

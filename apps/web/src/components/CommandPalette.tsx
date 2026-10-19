@@ -11,6 +11,24 @@ import { useNavigate } from 'react-router-dom';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useOptionalAuthState } from '@/auth/AuthContext';
 import { searchApi } from '@/lib/api';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import {
+  CreditCard,
+  ClipboardCheck,
+  FileSpreadsheet,
+  UserPlus,
+  Trophy,
+  Smartphone,
+  GraduationCap,
+  Users,
+  BookOpen,
+  Search,
+  Sparkles,
+  CornerDownLeft,
+  LayoutDashboard,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
 
 interface CommandItem {
   id: string;
@@ -23,19 +41,35 @@ interface CommandItem {
   action?: () => void;
 }
 
-function Icon({
-  children,
+function cn(...classes: (string | undefined | null | false)[]): string {
+  return classes.filter(Boolean).join(' ');
+}
+
+function ActionBadge({
+  icon: IconComponent,
+  className,
+  color,
 }: {
-  children: React.ReactNode;
+  icon: LucideIcon;
+  className?: string;
+  color?: string;
 }) {
   return (
     <span
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
-      style={{
-        color: 'var(--text-secondary)',
-        background: 'var(--bg-glass)',
-      }}
+      className={cn(
+        'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-subtle bg-card/80 text-secondary transition-transform duration-150 ease-apple-spring group-hover:scale-[1.02]',
+        color,
+        className,
+      )}
     >
+      <IconComponent className="h-4 w-4" strokeWidth={1.75} />
+    </span>
+  );
+}
+
+function SimpleIcon({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-subtle bg-card/80 text-secondary transition-transform duration-150 ease-apple-spring group-hover:scale-[1.02]">
       {children}
     </span>
   );
@@ -51,63 +85,65 @@ const ICON_NAV = <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke
 const QUICK_ACTIONS: CommandItemWithRoles[] = [
   {
     id: 'quick-payment',
-    label: "⚡ Tezkor To’lov (3 soniya)",
-    description: "O’quvchidan zudlik bilan to’lov qabul qilish [Alt+P]",
-    category: "Tezkor Amallar (Fast Actions)",
+    label: "Tezkor To'lov (Kassa)",
+    description: "O'quvchidan zudlik bilan to'lov qabul qilish [Alt+P]",
+    category: "Tezkor Amallar (Spotlight Actions)",
     keywords: ['payment', 'tolov', 'pul', 'kassa', 'chek', 'payme', 'click', 'naqd'],
-    icon: <span className="text-base">💵</span>,
+    icon: <ActionBadge icon={CreditCard} className="bg-emerald-500/15 border-emerald-500/25 text-emerald-500 dark:text-emerald-400" />,
     action: () => {
       window.dispatchEvent(new CustomEvent('open-quick-payment'));
+      window.dispatchEvent(new CustomEvent('medu:open-quick-payment'));
     },
   },
   {
     id: 'quick-attendance',
-    label: "📋 Tezkor Davomat (Express)",
+    label: "Tezkor Davomat (Express)",
     description: "Bugungi guruh davomatini 1 daqiqada belgilash [Alt+A]",
-    category: "Tezkor Amallar (Fast Actions)",
+    category: "Tezkor Amallar (Spotlight Actions)",
     keywords: ['attendance', 'davomat', 'yoqlama', 'keldi', 'dars', 'kelmadi'],
-    icon: <span className="text-base">📋</span>,
+    icon: <ActionBadge icon={ClipboardCheck} className="bg-indigo-500/15 border-indigo-500/25 text-indigo-500 dark:text-indigo-400" />,
     action: () => {
       window.dispatchEvent(new CustomEvent('open-quick-attendance'));
+      window.dispatchEvent(new CustomEvent('medu:open-quick-attendance'));
     },
   },
   {
     id: 'quick-import',
-    label: "📥 Excel / CSV Bazasini Yuklash",
-    description: "Markaz o’quvchilarini 2 soniyada tizimga o’tkazish",
-    category: "Tezkor Amallar (Fast Actions)",
+    label: "Excel / CSV Bazasini Yuklash",
+    description: "Markaz o'quvchilarini 2 soniyada tizimga o'tkazish",
+    category: "Tezkor Amallar (Spotlight Actions)",
     keywords: ['import', 'excel', 'csv', 'baza', 'upload', 'yuklash'],
     href: '/import-export',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
-    icon: <span className="text-base">📊</span>,
+    icon: <ActionBadge icon={FileSpreadsheet} className="bg-blue-500/15 border-blue-500/25 text-blue-500 dark:text-blue-400" />,
   },
   {
     id: 'quick-new-student',
-    label: "➕ Yangi O’quvchi Qo’shish",
+    label: "Yangi O'quvchi Qo'shish",
     description: "Yangi talaba anketasini ochish",
-    category: "Tezkor Amallar (Fast Actions)",
+    category: "Tezkor Amallar (Spotlight Actions)",
     keywords: ['new', 'student', 'oquvchi', 'talaba', 'qoshish'],
     href: '/students',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
-    icon: <span className="text-base">👤</span>,
+    icon: <ActionBadge icon={UserPlus} className="bg-purple-500/15 border-purple-500/25 text-purple-500 dark:text-purple-400" />,
   },
   {
     id: 'quick-gamification',
-    label: "🏆 M-Coins & Gamifikatsiya",
-    description: "Reyting peshqadami va mukofotlar do’koni",
-    category: "Tezkor Amallar (Fast Actions)",
+    label: "M-Coins & Gamifikatsiya",
+    description: "Reyting peshqadami va mukofotlar do'koni",
+    category: "Tezkor Amallar (Spotlight Actions)",
     keywords: ['gamification', 'coins', 'xp', 'tangalar', 'sovrin', 'leaderboard', 'podium'],
     href: '/gamification',
-    icon: <span className="text-base">🏆</span>,
+    icon: <ActionBadge icon={Trophy} className="bg-amber-500/15 border-amber-500/25 text-amber-500 dark:text-amber-400" />,
   },
   {
     id: 'quick-tg-app',
-    label: "📱 Telegram WebApp Hub",
-    description: "Ota-ona (Face ID, invoys) & O’qituvchi (jadval, davomat)",
-    category: "Tezkor Amallar (Fast Actions)",
+    label: "Telegram WebApp Hub",
+    description: "Ota-ona (Face ID, invoys) & O'qituvchi (jadval, davomat)",
+    category: "Tezkor Amallar (Spotlight Actions)",
     keywords: ['telegram', 'tg', 'bot', 'webapp', 'ota-ona', 'mobil', 'davomat'],
     href: '/tg-app',
-    icon: <span className="text-base">📱</span>,
+    icon: <ActionBadge icon={Smartphone} className="bg-sky-500/15 border-sky-500/25 text-sky-500 dark:text-sky-400" />,
   },
 ];
 
@@ -120,12 +156,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['home', 'stats', 'overview'],
     href: '/',
     icon: (
-      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-        <rect x="3" y="3" width="7" height="7" rx="1" />
-        <rect x="14" y="3" width="7" height="7" rx="1" />
-        <rect x="3" y="14" width="7" height="7" rx="1" />
-        <rect x="14" y="14" width="7" height="7" rx="1" />
-      </svg>
+      <ActionBadge icon={LayoutDashboard} className="bg-blue-500/15 border-blue-500/25 text-blue-500 dark:text-blue-400" />
     ),
   },
   {
@@ -136,7 +167,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['pupils', 'learners', 'enrollment'],
     href: '/students',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'],
-    icon: <Icon>{ICON_NAV}</Icon>,
+    icon: <ActionBadge icon={GraduationCap} className="bg-blue-500/15 border-blue-500/25 text-blue-500 dark:text-blue-400" />,
   },
   {
     id: 'teachers',
@@ -146,7 +177,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['staff', 'faculty', 'instructors'],
     href: '/teachers',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
-    icon: <Icon>{ICON_NAV}</Icon>,
+    icon: <ActionBadge icon={Users} className="bg-purple-500/15 border-purple-500/25 text-purple-500 dark:text-purple-400" />,
   },
   {
     id: 'groups',
@@ -156,7 +187,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['classes', 'schedules'],
     href: '/groups',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'],
-    icon: <Icon>{ICON_NAV}</Icon>,
+    icon: <ActionBadge icon={Users} className="bg-cyan-500/15 border-cyan-500/25 text-cyan-500 dark:text-cyan-400" />,
   },
   {
     id: 'attendance',
@@ -166,7 +197,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['present', 'absent', 'late', 'face', 'recognition'],
     href: '/attendance',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'],
-    icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg></Icon>,
+    icon: <ActionBadge icon={ClipboardCheck} className="bg-indigo-500/15 border-indigo-500/25 text-indigo-500 dark:text-indigo-400" />,
   },
   {
     id: 'courses',
@@ -176,7 +207,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['subjects', 'curriculum', 'syllabus'],
     href: '/courses',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'],
-    icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25"/></svg></Icon>,
+    icon: <ActionBadge icon={BookOpen} className="bg-amber-500/15 border-amber-500/25 text-amber-500 dark:text-amber-400" />,
   },
   {
     id: 'payments',
@@ -186,7 +217,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['billing', 'fees', 'revenue', 'invoices'],
     href: '/payments',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
-    icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 6v12m-3-2.8.88.66c1.17.88 3.07.88 4.24 0 1.17-.88 1.17-2.3 0-3.18-.58-.44-1.35-.66-2.12-.66-.73 0-1.45-.22-2-.66-1.1-.88-1.1-2.3 0-3.18s2.9-.88 4 0l.42.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg></Icon>,
+    icon: <ActionBadge icon={CreditCard} className="bg-emerald-500/15 border-emerald-500/25 text-emerald-500 dark:text-emerald-400" />,
   },
   {
     id: 'leads',
@@ -196,7 +227,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['crm', 'prospects'],
     href: '/leads',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
-    icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 6h18M5 10h14M7 14h10M9 18h6"/></svg></Icon>,
+    icon: <ActionBadge icon={Users} className="bg-blue-500/15 border-blue-500/25 text-blue-500 dark:text-blue-400" />,
   },
   {
     id: 'analytics',
@@ -206,7 +237,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['reports', 'charts', 'metrics', 'statistics'],
     href: '/financial-analytics',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
-    icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 3v18h18M7 16l4-4 4 4 5-5"/></svg></Icon>,
+    icon: <SimpleIcon>{ICON_NAV}</SimpleIcon>,
   },
   {
     id: 'gamification',
@@ -215,7 +246,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     category: 'Academic',
     keywords: ['coins', 'xp', 'points', 'leaderboard', 'store', 'rewards', 'gamification'],
     href: '/gamification',
-    icon: <Icon><span className="text-sm">🏆</span></Icon>,
+    icon: <ActionBadge icon={Trophy} className="bg-amber-500/15 border-amber-500/25 text-amber-500 dark:text-amber-400" />,
   },
   {
     id: 'tg-app',
@@ -224,7 +255,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     category: 'System',
     keywords: ['telegram', 'tg', 'bot', 'webapp', 'portal', 'parent', 'teacher'],
     href: '/tg-app',
-    icon: <Icon><span className="text-sm">📱</span></Icon>,
+    icon: <ActionBadge icon={Smartphone} className="bg-sky-500/15 border-sky-500/25 text-sky-500 dark:text-sky-400" />,
   },
   {
     id: 'certificates',
@@ -234,7 +265,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['diploma', 'award', 'document'],
     href: '/certificates',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'],
-    icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></Icon>,
+    icon: <SimpleIcon>{ICON_NAV}</SimpleIcon>,
   },
   {
     id: 'notifications',
@@ -243,7 +274,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     category: 'System',
     keywords: ['alerts', 'messages', 'inbox'],
     href: '/notifications',
-    icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"/></svg></Icon>,
+    icon: <SimpleIcon>{ICON_NAV}</SimpleIcon>,
   },
   {
     id: 'import-export',
@@ -253,7 +284,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['csv', 'excel', 'upload', 'download', 'data'],
     href: '/import-export',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
-    icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg></Icon>,
+    icon: <ActionBadge icon={FileSpreadsheet} className="bg-blue-500/15 border-blue-500/25 text-blue-500 dark:text-blue-400" />,
   },
   {
     id: 'ai-copilot',
@@ -263,7 +294,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     keywords: ['artificial intelligence', 'assistant', 'chat', 'help', 'gemini'],
     href: '/ai-copilot',
     roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'],
-    icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg></Icon>,
+    icon: <ActionBadge icon={Sparkles} className="bg-purple-500/15 border-purple-500/25 text-purple-500 dark:text-purple-400" />,
   },
   {
     id: 'profile',
@@ -272,7 +303,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     category: 'System',
     keywords: ['account', 'me', 'user'],
     href: '/settings',
-    icon: <Icon><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0"/></svg></Icon>,
+    icon: <SimpleIcon>{ICON_NAV}</SimpleIcon>,
   },
   {
     id: 'settings',
@@ -281,14 +312,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     category: 'System',
     keywords: ['preferences', 'theme', 'configuration'],
     href: '/settings',
-    icon: (
-      <Icon>
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.7 1.7-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20h-2.4v-.2a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.7-1.7.06-.06A1.7 1.7 0 0 0 8.46 15a1.7 1.7 0 0 0-1.56-1.03H6v-2.4h.9A1.7 1.7 0 0 0 8.46 10a1.7 1.7 0 0 0-.34-1.88l-.06-.06 1.7-1.7.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 12.73 5.2V5h2.4v.2a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.7 1.7-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 11H21v2.4h-.04A1.7 1.7 0 0 0 19.4 15Z" />
-        </svg>
-      </Icon>
-    ),
+    icon: <ActionBadge icon={Settings} className="bg-zinc-500/15 border-zinc-500/25 text-zinc-500 dark:text-zinc-400" />,
   },
 ];
 
@@ -297,6 +321,7 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const authState = useOptionalAuthState();
   const userRole = authState?.user?.role;
+  const { playTick, playPop } = usePremiumSound();
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -327,20 +352,25 @@ export function CommandPalette() {
           if (cancelled) return;
           const mapped: CommandItem[] = (res.results || []).map((item: any) => {
             let cat = 'Qidiruv Natijalari';
-            let icon = '🔍';
+            let iconComponent: LucideIcon = Search;
+            let iconClass = 'bg-sky-500/15 border-sky-500/25 text-sky-400';
             const desc = item.subtitle || item.description || '';
             if (item.type === 'STUDENT') {
-              cat = 'O’quvchilar (Students)';
-              icon = '🎓';
+              cat = "O'quvchilar (Students)";
+              iconComponent = GraduationCap;
+              iconClass = 'bg-blue-500/15 border-blue-500/25 text-blue-500 dark:text-blue-400';
             } else if (item.type === 'TEACHER') {
-              cat = 'O’qituvchilar (Teachers)';
-              icon = '👨‍🏫';
+              cat = "O'qituvchilar (Teachers)";
+              iconComponent = Users;
+              iconClass = 'bg-purple-500/15 border-purple-500/25 text-purple-500 dark:text-purple-400';
             } else if (item.type === 'GROUP') {
               cat = 'Guruhlar (Groups)';
-              icon = '👥';
+              iconComponent = Users;
+              iconClass = 'bg-cyan-500/15 border-cyan-500/25 text-cyan-500 dark:text-cyan-400';
             } else if (item.type === 'COURSE') {
               cat = 'Kurslar (Courses)';
-              icon = '📚';
+              iconComponent = BookOpen;
+              iconClass = 'bg-amber-500/15 border-amber-500/25 text-amber-500 dark:text-amber-400';
             }
 
             return {
@@ -349,7 +379,7 @@ export function CommandPalette() {
               description: desc,
               category: cat,
               href: item.href,
-              icon: <span className="text-base">{icon}</span>,
+              icon: <ActionBadge icon={iconComponent} className={iconClass} />,
             };
           });
           setLiveResults(mapped);
@@ -416,8 +446,9 @@ export function CommandPalette() {
 
   const openPalette = useCallback(() => {
     previousFocusRef.current = document.activeElement as HTMLElement;
+    playTick();
     setOpen(true);
-  }, []);
+  }, [playTick]);
 
   const closePalette = useCallback(() => {
     setOpen(false);
@@ -448,28 +479,21 @@ export function CommandPalette() {
       openPalette();
     };
 
-    document.addEventListener('keydown', handleShortcut);
+    window.addEventListener('keydown', handleShortcut);
     window.addEventListener('medu:open-command-palette', handleCustomOpen);
 
     return () => {
-      document.removeEventListener('keydown', handleShortcut);
-    window.removeEventListener('medu:open-command-palette', handleCustomOpen);
+      window.removeEventListener('keydown', handleShortcut);
+      window.removeEventListener('medu:open-command-palette', handleCustomOpen);
     };
   }, [open, openPalette, closePalette]);
 
   useEffect(() => {
     if (!open) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
+    return () => cancelAnimationFrame(frame);
   }, [open]);
 
   useEffect(() => {
@@ -478,15 +502,15 @@ export function CommandPalette() {
 
   const execute = useCallback(
     (item: CommandItem) => {
+      playPop();
       closePalette();
-
-      if (item.href) {
+      if (item.action) {
+        item.action();
+      } else if (item.href) {
         navigate(item.href);
-      } else {
-        item.action?.();
       }
     },
-    [closePalette, navigate],
+    [navigate, closePalette, playPop],
   );
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -494,7 +518,7 @@ export function CommandPalette() {
       event.preventDefault();
 
       if (!filtered.length) return;
-
+      playTick();
       setSelected((value) =>
         value >= filtered.length - 1 ? 0 : value + 1,
       );
@@ -504,7 +528,7 @@ export function CommandPalette() {
       event.preventDefault();
 
       if (!filtered.length) return;
-
+      playTick();
       setSelected((value) =>
         value <= 0 ? filtered.length - 1 : value - 1,
       );
@@ -540,7 +564,7 @@ export function CommandPalette() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/35 dark:bg-black/70 px-4 pt-[12vh] backdrop-blur-md animate-overlay-in"
+      className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/40 px-4 pt-[10vh] sm:pt-[14vh] backdrop-blur-sm animate-overlay-in"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -552,32 +576,12 @@ export function CommandPalette() {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={t('a11y.commandPalette')}
-        className="relative w-full max-w-xl overflow-hidden rounded-[var(--radius-xl)] border animate-modal-in"
-        style={{
-          borderColor: 'var(--border-glass)',
-          background: 'var(--bg-card)',
-          backdropFilter: 'blur(36px) saturate(1.7)',
-          WebkitBackdropFilter: 'blur(36px) saturate(1.7)',
-          boxShadow: 'var(--shadow-lg)',
-        }}
+        aria-label={t('a11y.commandPalette', 'Spotlight Command Palette')}
+        className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-subtle bg-card shadow-modal animate-modal-in"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div
-          className="flex items-center gap-3 border-b px-4 py-3"
-          style={{ borderColor: 'var(--border-subtle)' }}
-        >
-          <svg
-            className="h-5 w-5 shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            aria-hidden="true"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
-          </svg>
+        <div className="flex items-center gap-3.5 border-b border-black/[0.06] dark:border-white/[0.08] px-5 py-3.5">
+          <Search className="h-5 w-5 shrink-0 text-[#2563EB] dark:text-[#0A84FF]" />
 
           <input
             ref={inputRef}
@@ -585,8 +589,8 @@ export function CommandPalette() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={t('a11y.searchPlaceholder')}
-            aria-label={t('a11y.search')}
+            placeholder={t('a11y.searchPlaceholder', "Buyruq, o'quvchi, guruh yoki sahifani qidiring...")}
+            aria-label={t('a11y.search', 'Qidiruv')}
             aria-autocomplete="list"
             aria-controls={listId}
             aria-activedescendant={
@@ -594,22 +598,14 @@ export function CommandPalette() {
                 ? `command-item-${filtered[selected].id}`
                 : undefined
             }
-            className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-[var(--text-muted)]"
-            style={{ color: 'var(--text-primary)' }}
+            className="min-w-0 flex-1 bg-transparent text-[16px] font-medium tracking-tight outline-none placeholder:text-[#8E8E93] text-[#1D1D1F] dark:text-[#F5F5F7]"
           />
 
           {isSearching && (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent shrink-0" />
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#2563EB] border-t-transparent shrink-0" />
           )}
 
-          <kbd
-            className="hidden rounded-lg border px-2 py-1 text-[10px] font-bold sm:inline-flex"
-            style={{
-              borderColor: 'var(--border-subtle)',
-              background: 'var(--bg-glass)',
-              color: 'var(--text-muted)',
-            }}
-          >
+          <kbd className="hidden rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2 py-0.5 text-[10px] font-bold text-[#8E8E93] sm:inline-flex">
             ESC
           </kbd>
         </div>
@@ -617,20 +613,17 @@ export function CommandPalette() {
         <ul
           id={listId}
           role="listbox"
-          className="max-h-[min(26rem,60vh)] overflow-y-auto py-2"
+          className="max-h-[min(26rem,60vh)] overflow-y-auto py-2 scrollbar-thin"
         >
           {!filtered.length && (
-            <li className="px-4 py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-              No results for “{query}”
+            <li className="px-5 py-12 text-center text-sm font-medium text-[#8E8E93]">
+              Hech qanday natija topilmadi: “{query}”
             </li>
           )}
 
           {Object.entries(grouped).map(([category, items]) => (
             <li key={category}>
-              <div
-                className="px-4 pb-2 pt-3 text-[10px] font-black uppercase tracking-[.16em]"
-                style={{ color: 'var(--text-muted)' }}
-              >
+              <div className="px-5 pb-2 pt-3 text-[10px] font-bold uppercase tracking-[.16em] text-[#8E8E93]">
                 {category}
               </div>
 
@@ -647,56 +640,40 @@ export function CommandPalette() {
                     type="button"
                     role="option"
                     aria-selected={active}
-                    onMouseEnter={() => setSelected(itemIndex)}
-                    onClick={() => execute(item)}
-                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition duration-150"
-                    style={{
-                      color: active
-                        ? 'var(--primary)'
-                        : 'var(--text-primary)',
-                      background: active
-                        ? 'rgba(84,115,252,.09)'
-                        : 'transparent',
+                    onMouseEnter={() => {
+                      if (selected !== itemIndex) {
+                        setSelected(itemIndex);
+                        playTick();
+                      }
                     }}
+                    onClick={() => execute(item)}
+                    className={[
+                      'group mx-2.5 my-0.5 flex w-[calc(100%-1.25rem)] items-center gap-3.5 rounded-2xl px-3 py-2.5 text-left transition-all duration-150',
+                      active
+                        ? 'bg-[#2563EB]/10 dark:bg-[#0A84FF]/15 ring-1 ring-[#2563EB]/25 dark:ring-[#0A84FF]/30'
+                        : 'hover:bg-black/[0.035] dark:hover:bg-white/[0.04]',
+                    ].join(' ')}
                   >
-                    <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-                      style={{
-                        color: active
-                          ? 'var(--primary)'
-                          : 'var(--text-secondary)',
-                        background: active
-                          ? 'rgba(84,115,252,.14)'
-                          : 'var(--bg-glass)',
-                      }}
-                    >
+                    <span className="shrink-0">
                       {item.icon}
                     </span>
 
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold">
+                      <span className={`block truncate text-[14px] font-semibold tracking-tight ${active ? 'text-[#2563EB] dark:text-[#0A84FF]' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'}`}>
                         {item.label}
                       </span>
 
                       {item.description && (
-                        <span
-                          className="mt-0.5 block truncate text-xs"
-                          style={{ color: 'var(--text-muted)' }}
-                        >
+                        <span className="mt-0.5 block truncate text-[12px] font-normal text-[#8E8E93] dark:text-[#98989D]">
                           {item.description}
                         </span>
                       )}
                     </span>
 
                     {active && (
-                      <span
-                        className="rounded-md px-1.5 py-0.5 text-xs"
-                        style={{
-                          color: 'var(--primary)',
-                          background: 'rgba(84,115,252,.12)',
-                        }}
-                      >
-                        ↵
+                      <span className="flex items-center gap-1 rounded-lg bg-[#2563EB]/15 dark:bg-[#0A84FF]/20 px-2 py-1 text-[11px] font-semibold text-[#2563EB] dark:text-[#0A84FF]">
+                        <span>Ochish</span>
+                        <CornerDownLeft className="h-3 w-3" />
                       </span>
                     )}
                   </button>
@@ -706,23 +683,28 @@ export function CommandPalette() {
           ))}
         </ul>
 
-        <div
-          className="hidden items-center justify-between border-t px-4 py-2.5 text-[11px] sm:flex"
-          style={{
-            borderColor: 'var(--border-subtle)',
-            color: 'var(--text-muted)',
-          }}
-        >
+        <div className="flex items-center justify-between border-t border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02] px-5 py-2.5 text-[11px] font-medium text-[#8E8E93]">
           <div className="flex items-center gap-3">
-            <span>↑↓ Tanlash</span>
-            <span>↵ Ochish</span>
-            <span>ESC Yopish</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-600 dark:border-white/10 dark:bg-white/5 dark:text-emerald-400">
-              Alt+P: To’lov
+            <span className="flex items-center gap-1">
+              <kbd className="rounded border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-1 py-0.5 text-[10px]">↑↓</kbd>
+              Navigatsiya
             </span>
-            <span className="rounded-md border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-indigo-400">
+            <span className="flex items-center gap-1">
+              <kbd className="rounded border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-1 py-0.5 text-[10px]">↵</kbd>
+              Tanlash
+            </span>
+            <span className="flex items-center gap-1">
+              <kbd className="rounded border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-1 py-0.5 text-[10px]">ESC</kbd>
+              Yopish
+            </span>
+          </div>
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Alt+P: To'lov
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
               Alt+A: Davomat
             </span>
           </div>

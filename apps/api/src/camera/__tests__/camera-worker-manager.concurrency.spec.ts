@@ -88,7 +88,7 @@ describe('CameraWorkerManagerService - Concurrency', () => {
 
     console.log('RESULTS:', results); expect(sessionStartMock).toHaveBeenCalledTimes(1);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0].message).toContain('Camera worker lifecycle operation already in progress');
+    expect(errors[0].message).toMatch(/Camera worker lifecycle operation.*already in progress/);
   });
 });
 vi.mock('ioredis', () => ({

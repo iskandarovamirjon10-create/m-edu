@@ -6,7 +6,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo dev",
+    "build:packages": "turbo build --filter=\"./packages/*\"",
+    "dev": "npm run build:packages && cross-env NODE_OPTIONS=--max-old-space-size=2048 turbo dev --filter=@medu/web --filter=@medu/api",
+    "dev:web": "npm run dev -w @medu/web",
+    "dev:api": "npm run build:packages && npm run dev -w @medu/api",
+    "dev:all": "npm run build:packages && cross-env NODE_OPTIONS=--max-old-space-size=2048 turbo dev --concurrency=3",
+    "db:dev": "npm run db:dev -w @medu/api",
     "build": "turbo build",
     "lint": "cross-env NODE_OPTIONS=--max-old-space-size=4096 turbo lint --concurrency=2",
     "test": "turbo test --concurrency=1",
@@ -50,13 +55,20 @@
     "file-type": "^21.3.4",
     "glob": "^10.5.0",
     "body-parser": "^1.20.8",
+    "proxy-addr": "^2.0.8",
+    "engine.io": "^6.6.11",
+    "brace-expansion": "^1.1.21",
+    "braces": "^3.0.3",
+    "source-map-js": "^1.2.2",
     "@nestjs/platform-express": {
       "multer": "^2.4.0",
       "body-parser": "^1.20.8"
     },
     "express": {
       "qs": "^6.16.0",
-      "body-parser": "^1.20.8"
+      "body-parser": "^1.20.8",
+      "proxy-addr": "^2.0.8"
     }
-  }
+  },
+  "version": "2.0.0"
 }

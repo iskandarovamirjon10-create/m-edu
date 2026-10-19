@@ -2,31 +2,34 @@ import { describe, it, expect, vi, beforeEach} from'vitest';
 import { render, screen, waitFor} from'@testing-library/react';
 import userEvent from'@testing-library/user-event';
 import { QueryClient, QueryClientProvider} from'@tanstack/react-query';
-import { NotificationsMenu} from'../NotificationsMenu';
+import { MemoryRouter } from 'react-router-dom';
+import { NotificationsMenu } from '../NotificationsMenu';
 
-const { listMock, markReadMock, markAllReadMock} = vi.hoisted(() => ({
- listMock: vi.fn(),
- markReadMock: vi.fn(),
- markAllReadMock: vi.fn(),
+const { listMock, markReadMock, markAllReadMock } = vi.hoisted(() => ({
+  listMock: vi.fn(),
+  markReadMock: vi.fn(),
+  markAllReadMock: vi.fn(),
 }));
 
 vi.mock('@/lib/api', () => ({
- notificationsApi: {
- list: listMock,
- markRead: markReadMock,
- markAllRead: markAllReadMock,
-},
+  notificationsApi: {
+    list: listMock,
+    markRead: markReadMock,
+    markAllRead: markAllReadMock,
+  },
 }));
 
 function renderMenu() {
- const qc = new QueryClient({
- defaultOptions: { queries: { retry: false}, mutations: { retry: false}},
-});
- return render(
- <QueryClientProvider client={qc}>
- <NotificationsMenu />
- </QueryClientProvider>,
- );
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <NotificationsMenu />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
 }
 
 const payload = {
@@ -87,11 +90,11 @@ describe('NotificationsMenu', () => {
  await waitFor(() => expect(markReadMock).toHaveBeenCalledWith('n1'));
 });
 
- it('marks all as read', async () => {
- const user = userEvent.setup();
- renderMenu();
- await user.click(await screen.findByRole('button', { name: /Notifications/i}));
- await user.click(await screen.findByRole('button', { name:'Mark all read'}));
- await waitFor(() => expect(markAllReadMock).toHaveBeenCalledTimes(1));
-});
+  it('marks all as read', async () => {
+    const user = userEvent.setup();
+    renderMenu();
+    await user.click(await screen.findByRole('button', { name: /Notifications/i }));
+    await user.click(await screen.findByRole('button', { name: /Mark all/i }));
+    await waitFor(() => expect(markAllReadMock).toHaveBeenCalledTimes(1));
+  });
 });

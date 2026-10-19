@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCertificateDto } from './dto/certificate.dto';
 import { CreateCertificateTemplateDto, UpdateCertificateTemplateDto } from './dto/certificate-template.dto';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 
 interface CertificateTemplate {
   id: string;
@@ -174,51 +175,119 @@ export class CertificatesService {
         throw new BadRequestException('An active certificate already exists for this student and course');
       }
 
-      // Generate unique certificate number
-      const certificateNumber = `CERT-${organizationId.slice(0, 8)}-${Date.now().toString(36).toUpperCase()}`;
+      // Resolve template: use dto.templateId if specified and valid; otherwise use default template
+      let resolvedTemplateId: string | null = null;
+      if (templateId) {
+        const customTpl = await tx.certificateTemplate.findFirst({
+          where: { id: templateId, organizationId },
+        });
+        if (customTpl) {
+          resolvedTemplateId = customTpl.id;
+        }
+      } else {
+        const defaultTpl = await tx.certificateTemplate.findFirst({
+          where: { organizationId, isDefault: true },
+        });
+        if (defaultTpl) {
+          resolvedTemplateId = defaultTpl.id;
+        }
+      }
 
-      // Generate verification code
-      const verificationCode = randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase();
+      // Generate certificate with cryptographic entropy and bounded retry on collision (P2002)
+      const MAX_RETRIES = 3;
+      let certificate;
+      let attempt = 0;
 
-      // Create certificate
-      const certificate = await tx.certificate.create({
-        data: {
-          organizationId,
-          studentId,
-          courseId,
-          certificateNumber,
-          verificationCode,
-          issueDate: new Date(),
-          isActive: true,
-          metadata: {
-            generatedBy: 'system',
-            // `templateId` here is the named parameter (dto.templateId), not a
-            // scope variable shadowed by the destructured const above.
-            ...(templateId ? { templateId } : {}),
-          },
-        },
-        include: {
-          student: {
+      while (attempt < MAX_RETRIES) {
+        attempt++;
+        // Generate unique certificate number with high-entropy random suffix
+        const randomSuffix = randomBytes(3).toString('hex').toUpperCase();
+        const certificateNumber = `CERT-${organizationId.slice(0, 8)}-${Date.now().toString(36).toUpperCase()}-${randomSuffix}`;
+
+        // Generate verification code
+        const verificationCode = randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase();
+
+        // Check if certificateNumber already exists in this organization
+        const duplicateCert = await tx.certificate.findFirst({
+          where: { organizationId, certificateNumber },
+        });
+        if (duplicateCert) {
+          if (attempt < MAX_RETRIES) {
+            continue; // retry with fresh random suffix
+          }
+          throw new BadRequestException('Certificate number already exists in this organization');
+        }
+
+        try {
+          certificate = await tx.certificate.create({
+            data: {
+              organizationId,
+              studentId,
+              courseId,
+              certificateNumber,
+              verificationCode,
+              issueDate: new Date(),
+              isActive: true,
+              templateId: resolvedTemplateId,
+              metadata: {
+                generatedBy: 'system',
+                ...(resolvedTemplateId ? { templateId: resolvedTemplateId } : {}),
+                ...(dto.notes ? { notes: dto.notes } : {}),
+              },
+            },
             include: {
-              user: {
-                select: {
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                  phone: true,
+              student: {
+                include: {
+                  user: {
+                    select: {
+                      firstName: true,
+                      lastName: true,
+                      email: true,
+                      phone: true,
+                    },
+                  },
                 },
+              },
+              course: {
+                select: {
+                  name: true,
+                description: true,
+                price: true,
               },
             },
           },
-          course: {
-            select: {
-              name: true,
-            description: true,
-            price: true,
-          },
-        },
-      },
-      });
+          });
+
+          break; // Success!
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            const target = Array.isArray(error.meta?.target)
+              ? error.meta.target.join(',')
+              : String(error.meta?.target || '');
+
+            const isCertCollision =
+              target.includes('certificateNumber') ||
+              target.includes('Certificate_organizationId_certificateNumber_key');
+            const isVerificationCollision =
+              target.includes('verificationCode') ||
+              target.includes('Certificate_verificationCode_key');
+
+            if ((isCertCollision || isVerificationCollision) && attempt < MAX_RETRIES) {
+              // Retry with fresh numbers
+              continue;
+            }
+
+            if (isCertCollision) {
+              throw new BadRequestException('Certificate number already exists in this organization');
+            }
+            if (isVerificationCollision) {
+              throw new BadRequestException('Certificate verification code collision. Please retry.');
+            }
+            throw new BadRequestException(`Certificate unique constraint violation: ${target}`);
+          }
+          throw error;
+        }
+      }
 
       return certificate;
     });
@@ -230,6 +299,11 @@ export class CertificatesService {
     const certificate = await this.prisma.certificate.findFirst({
       where: { id: certificateId, organizationId },
       include: {
+        organization: {
+          select: {
+            name: true,
+          },
+        },
         student: {
           include: {
             user: {
@@ -252,9 +326,21 @@ export class CertificatesService {
       throw new NotFoundException('Certificate not found');
     }
 
+    const studentName = `${certificate.student?.user?.firstName ?? ''} ${certificate.student?.user?.lastName ?? ''}`.trim() || 'Student';
+    const courseName = certificate.course?.name || 'Academic Course';
+    const organizationName = certificate.organization?.name || 'M-EDU Global Academy';
+    const issueDate = certificate.issueDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    const certificateNumber = certificate.certificateNumber;
+    const verificationCode = certificate.verificationCode;
+    const verificationUrl = `https://m-edu.uz/verify/${verificationCode}`;
+
     // Load template or use default
     const templateRecord = certificate.templateId
-      ? await this.findTemplateById(organizationId, certificate.templateId)
+      ? ((await this.findTemplateById(organizationId, certificate.templateId).catch(() => null)) ?? this.getDefaultTemplate())
       : this.getDefaultTemplate();
 
     const htmlContent = 'htmlTemplate' in templateRecord
@@ -263,21 +349,25 @@ export class CertificatesService {
 
     // Render HTML with certificate data
     const html = this.renderTemplate(htmlContent, {
-      studentName: `${certificate.student?.user?.firstName ?? ''} ${certificate.student?.user?.lastName ?? ''}`.trim(),
-      courseName: certificate.course.name,
-      issueDate: certificate.issueDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }),
-      certificateNumber: certificate.certificateNumber,
-      verificationCode: certificate.verificationCode,
+      studentName,
+      courseName,
+      issueDate,
+      certificateNumber,
+      verificationCode,
     });
 
-    // Generate PDF
-    const pdfBuffer = await this.createPdf(html);
+    // Generate Apple-grade landscape PDF
+    const pdfBuffer = await this.createPdf(html, {
+      organizationName,
+      studentName,
+      courseName,
+      issueDate,
+      certificateNumber,
+      verificationCode,
+      verificationUrl,
+    });
 
-    // Store PDF URL (in production, upload to S3)
+    // Store PDF URL
     await this.prisma.certificate.update({
       where: { id: certificateId },
       data: {
@@ -304,11 +394,18 @@ export class CertificatesService {
     return result;
   }
 
-  async createPdf(html: string): Promise<Buffer> {
-    // REAL PDF via pdfmake (already bundled, used by reports/import-export).
-    // The previous implementation returned HTML bytes labelled
-    // `application/pdf` with markup stripped and truncated to 500 chars —
-    // the delivered "PDF" was a broken file (regression: F-04).
+  async createPdf(
+    html: string,
+    meta?: {
+      organizationName?: string;
+      studentName?: string;
+      courseName?: string;
+      issueDate?: string;
+      certificateNumber?: string;
+      verificationCode?: string;
+      verificationUrl?: string;
+    },
+  ): Promise<Buffer> {
     const pdfmakeRaw = await import('pdfmake');
     const pdfmake = (pdfmakeRaw.default || pdfmakeRaw) as {
       setLocalAccessPolicy: (cb: () => boolean) => void;
@@ -327,37 +424,233 @@ export class CertificatesService {
       },
     });
 
-    // The rendered template is HTML; reduce it to its plain-text lines and
-    // lay them out as a clean A4 landscape-style certificate.
-    const text = html
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/\s+/g, ' ')
-      .trim();
-    const lines = text
-      .split(/\s*\n\s*/)
-      .map((line) => line.trim())
-      .filter(Boolean);
+    const studentName = meta?.studentName ?? 'Honored Student';
+    const courseName = meta?.courseName ?? 'Academic Mastery Course';
+    const organizationName = meta?.organizationName ?? 'M-EDU Global Academy';
+    const issueDate = meta?.issueDate ?? new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const certificateNumber = meta?.certificateNumber ?? 'CERT-0000-0000';
+    const verificationCode = meta?.verificationCode ?? 'MEDU-VERIFY';
+    const verificationUrl = meta?.verificationUrl ?? `https://m-edu.uz/verify/${verificationCode}`;
 
-    const doc = pdfmake.createPdf({
+    const docDefinition = {
       pageSize: 'A4',
-      pageMargins: [48, 48, 48, 48],
+      pageOrientation: 'landscape',
+      pageMargins: [36, 32, 36, 32],
       content: [
-        { text: lines[0] ?? 'Certificate of Completion', style: 'title' },
-        ...lines.slice(1).map((line) => ({ text: line, style: 'body' })),
-        { text: 'Verified Certificate', style: 'footer' },
+        {
+          table: {
+            widths: ['*'],
+            body: [
+              [
+                {
+                  stack: [
+                    {
+                      text: organizationName.toUpperCase(),
+                      style: 'orgHeader',
+                    },
+                    {
+                      text: 'CERTIFICATE OF ACHIEVEMENT',
+                      style: 'mainTitle',
+                    },
+                    {
+                      text: 'THIS IS PROUDLY PRESENTED TO',
+                      style: 'subtitlePre',
+                    },
+                    {
+                      text: studentName,
+                      style: 'studentName',
+                    },
+                    {
+                      canvas: [
+                        {
+                          type: 'line',
+                          x1: 180,
+                          y1: 0,
+                          x2: 520,
+                          y2: 0,
+                          lineWidth: 1.5,
+                          lineColor: '#C5A059',
+                        },
+                      ],
+                      margin: [0, 6, 0, 14],
+                    },
+                    {
+                      text: 'for successfully completing all requirements and demonstrating excellence in',
+                      style: 'completionText',
+                    },
+                    {
+                      text: courseName,
+                      style: 'courseName',
+                    },
+                    {
+                      columns: [
+                        {
+                          width: '35%',
+                          stack: [
+                            { text: `ISSUED: ${issueDate}`, style: 'metaText' },
+                            { text: `CERTIFICATE NO: ${certificateNumber}`, style: 'metaTextBold' },
+                            { text: `SECURITY HASH: ${verificationCode}`, style: 'metaTextHash' },
+                          ],
+                          alignment: 'left',
+                          margin: [20, 22, 0, 0],
+                        },
+                        {
+                          width: '30%',
+                          stack: [
+                            {
+                              qr: verificationUrl,
+                              fit: 52,
+                              alignment: 'center',
+                            },
+                            {
+                              text: '★ OFFICIAL ACCREDITED ★',
+                              style: 'sealText',
+                            },
+                          ],
+                          alignment: 'center',
+                          margin: [0, 8, 0, 0],
+                        },
+                        {
+                          width: '35%',
+                          stack: [
+                            {
+                              text: 'Academic Directorate',
+                              style: 'signatureScript',
+                            },
+                            {
+                              canvas: [
+                                {
+                                  type: 'line',
+                                  x1: 20,
+                                  y1: 0,
+                                  x2: 200,
+                                  y2: 0,
+                                  lineWidth: 1,
+                                  lineColor: '#94A3B8',
+                                },
+                              ],
+                              margin: [0, 2, 0, 4],
+                            },
+                            { text: 'AUTHORIZED SIGNATURE', style: 'sigLabel' },
+                            { text: 'M-EDU Global Academic Accreditation', style: 'sigSub' },
+                          ],
+                          alignment: 'right',
+                          margin: [0, 16, 20, 0],
+                        },
+                      ],
+                    },
+                  ],
+                  fillColor: '#FFFFFF',
+                  margin: [16, 18, 16, 18],
+                },
+              ],
+            ],
+          },
+          layout: {
+            hLineWidth: () => 2.5,
+            vLineWidth: () => 2.5,
+            hLineColor: () => '#C5A059',
+            vLineColor: () => '#C5A059',
+            paddingLeft: () => 14,
+            paddingRight: () => 14,
+            paddingTop: () => 14,
+            paddingBottom: () => 14,
+          },
+        },
       ],
       styles: {
-        title: { fontSize: 24, bold: true, alignment: 'center', margin: [0, 0, 0, 40] },
-        body: { fontSize: 14, alignment: 'center', margin: [0, 0, 0, 10] },
-        footer: { fontSize: 10, color: '#777777', alignment: 'center', margin: [0, 60, 0, 0] },
+        orgHeader: {
+          fontSize: 11,
+          bold: true,
+          color: '#C5A059',
+          characterSpacing: 3,
+          alignment: 'center',
+          margin: [0, 0, 0, 6],
+        },
+        mainTitle: {
+          fontSize: 25,
+          bold: true,
+          color: '#0A192F',
+          characterSpacing: 2,
+          alignment: 'center',
+          margin: [0, 0, 0, 10],
+        },
+        subtitlePre: {
+          fontSize: 9.5,
+          color: '#64748B',
+          characterSpacing: 1.5,
+          alignment: 'center',
+          margin: [0, 0, 0, 8],
+        },
+        studentName: {
+          fontSize: 26,
+          bold: true,
+          color: '#0A192F',
+          alignment: 'center',
+          margin: [0, 0, 0, 2],
+        },
+        completionText: {
+          fontSize: 10.5,
+          color: '#475569',
+          alignment: 'center',
+          margin: [0, 0, 0, 6],
+        },
+        courseName: {
+          fontSize: 18,
+          bold: true,
+          color: '#007AFF',
+          alignment: 'center',
+          margin: [0, 0, 0, 8],
+        },
+        metaText: {
+          fontSize: 8,
+          color: '#64748B',
+          margin: [0, 0, 0, 2],
+        },
+        metaTextBold: {
+          fontSize: 8,
+          bold: true,
+          color: '#1E293B',
+          margin: [0, 0, 0, 2],
+        },
+        metaTextHash: {
+          fontSize: 7.5,
+          color: '#007AFF',
+        },
+        sealText: {
+          fontSize: 7,
+          bold: true,
+          color: '#C5A059',
+          characterSpacing: 1,
+          alignment: 'center',
+          margin: [0, 4, 0, 0],
+        },
+        signatureScript: {
+          fontSize: 13,
+          bold: true,
+          color: '#0A192F',
+          alignment: 'center',
+          margin: [0, 0, 0, 4],
+        },
+        sigLabel: {
+          fontSize: 7.5,
+          bold: true,
+          color: '#475569',
+          characterSpacing: 1,
+          alignment: 'center',
+          margin: [0, 0, 0, 2],
+        },
+        sigSub: {
+          fontSize: 7,
+          color: '#94A3B8',
+          alignment: 'center',
+        },
       },
-      defaultStyle: { font: 'NotoSans', fontSize: 12 },
-    });
+      defaultStyle: { font: 'NotoSans', fontSize: 10 },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doc = pdfmake.createPdf(docDefinition as any);
     return Buffer.from(await doc.getBuffer());
   }
 

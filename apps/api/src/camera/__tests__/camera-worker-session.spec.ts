@@ -1037,3 +1037,40 @@ describe('CameraWorkerSession fail-closed engine policy (C)', () => {
     expect(attendanceEngine.processRecognition).not.toHaveBeenCalled();
   });
 });
+
+describe('CameraWorkerSession reconnect failure budget (M-EDU-CAM-003)', () => {
+  it('does not reset reconnectAttempts on stream spawn until healthy frames arrive', () => {
+    const faceEngine = makeFaceEngine();
+    const attendanceEngine = makeAttendanceEngine();
+    const prisma = makePrisma([]);
+    const encryption = makeEncryption();
+
+    const session = makeSession(
+      faceEngine,
+      attendanceEngine,
+      prisma,
+      encryption,
+    );
+
+    const sessionAny = session as any;
+    // Simulate previous failures
+    sessionAny.healthTracker.recordStreamFailure('RTSP connection lost');
+    sessionAny.healthTracker.recordStreamFailure('RTSP connection lost');
+    expect(sessionAny.healthTracker.reconnectAttempts).toBe(2);
+
+    // Stream spawns (reconnectStream)
+    sessionAny.consecutiveHealthyFrames = 0;
+    expect(sessionAny.healthTracker.reconnectAttempts).toBe(2);
+
+    // Receive 4 frames (under threshold of 5)
+    for (let i = 0; i < 4; i++) {
+      sessionAny.handleIncomingFrame(makeFrame());
+    }
+    expect(sessionAny.healthTracker.reconnectAttempts).toBe(2);
+
+    // 5th healthy frame triggers reset
+    sessionAny.handleIncomingFrame(makeFrame());
+    expect(sessionAny.healthTracker.reconnectAttempts).toBe(0);
+  });
+});
+

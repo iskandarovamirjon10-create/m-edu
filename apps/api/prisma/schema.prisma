@@ -419,6 +419,7 @@ model StudentGroup {
   @@id([studentId, groupId])
   @@index([groupId])
   @@index([studentId])
+  @@index([organizationId])
 }
 
 model Schedule {
@@ -436,8 +437,9 @@ model Schedule {
   @@index([groupId])
 }
 
-/// Note: Attendance is currently granular to the (student, group, date) level.
-/// If a group has multiple lessons per day, attendance will only be recorded once per day.
+/// Attendance records for students.
+/// Scoped uniquely per (studentId, lessonId) for multi-lesson precision.
+/// Unlinked attendance (lessonId = NULL) is protected by a PostgreSQL partial unique index on (studentId, groupId, date).
 model Attendance {
   id                   String           @id @default(uuid()) @db.Uuid
   organizationId       String           @db.Uuid
@@ -461,14 +463,18 @@ model Attendance {
   organization         Organization     @relation(fields: [organizationId], references: [id])
   student              Student          @relation(fields: [studentId], references: [id])
 
-  @@unique([studentId, groupId, date])
+  @@unique([studentId, lessonId])
   @@index([organizationId])
   @@index([organizationId, date])
   @@index([studentId])
   @@index([groupId])
   @@index([groupId, date])
+  @@index([studentId, groupId, date])
   @@index([date])
   @@index([lessonId])
+  @@index([cameraId])
+  @@index([deviceId])
+  @@index([recognitionAttemptId])
 }
 
 model Payment {
@@ -697,6 +703,9 @@ model RecognitionSession {
 
   @@index([organizationId])
   @@index([groupId])
+  @@index([deviceId])
+  @@index([actorId])
+  @@index([lessonId])
 }
 
 model RecognitionAttempt {
@@ -877,7 +886,7 @@ model LibraryBook {
   title          String
   author         String?
   isbn           String?
-  barcode        String          @unique
+  barcode        String
   category       String
   quantity       Int             @default(1)
   available      Int             @default(1)
@@ -892,6 +901,7 @@ model LibraryBook {
   organization   Organization    @relation(fields: [organizationId], references: [id])
   borrowRecords  LibraryBorrow[]
 
+  @@unique([organizationId, barcode])
   @@index([organizationId])
   @@index([category])
   @@index([isbn])
@@ -929,7 +939,7 @@ model Employee {
   id              String         @id @default(uuid()) @db.Uuid
   organizationId  String         @db.Uuid
   userId          String         @unique @db.Uuid
-  employeeNumber  String         @unique
+  employeeNumber  String
   department      String
   position        String
   hireDate        DateTime
@@ -947,6 +957,7 @@ model Employee {
   salaryRecords   SalaryRecord[]
   Teacher         Teacher?
 
+  @@unique([organizationId, employeeNumber])
   @@index([organizationId])
   @@index([department])
   @@index([position(ops: raw("gin_trgm_ops"))], map: "employee_position_trgm_idx", type: Gin)
@@ -1050,7 +1061,7 @@ model Certificate {
   organizationId    String       @db.Uuid
   studentId         String       @db.Uuid
   courseId          String       @db.Uuid
-  certificateNumber String       @unique
+  certificateNumber String
   issueDate         DateTime     @default(now())
   templateId        String?      @db.Uuid
   pdfUrl            String?
@@ -1063,6 +1074,7 @@ model Certificate {
   organization      Organization @relation(fields: [organizationId], references: [id])
   student           Student      @relation(fields: [studentId], references: [id])
 
+  @@unique([organizationId, certificateNumber])
   @@index([organizationId])
   @@index([studentId])
   @@index([certificateNumber])
@@ -2223,6 +2235,9 @@ model NotificationDelivery {
   @@index([telegramAccountId])
   @@index([status, deferredUntil])
   @@index([createdAt])
+  @@index([eventId])
+  @@index([entityId])
+  @@index([principalId])
 }
 
 model HomeworkSubmission {
@@ -3344,4 +3359,7 @@ model SecurityEvent {
   @@index([timestamp])
   @@index([organizationId])
   @@index([eventType])
+  @@index([userId])
+  @@index([resourceId])
+  @@index([correlationId])
 }

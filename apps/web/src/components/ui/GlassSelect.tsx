@@ -1,91 +1,122 @@
-/**
- * GlassSelect — Custom styled select with glass aesthetic.
- */
-import { type SelectHTMLAttributes, type ReactNode, forwardRef, useId } from 'react';
+import { forwardRef, useId, type SelectHTMLAttributes } from 'react';
+import { cn } from '@/lib/design';
 
-interface GlassSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+export type SelectStatus = 'default' | 'error' | 'warning' | 'success';
+export type SelectSize = 'sm' | 'md' | 'lg';
+
+export interface GlassSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
   label?: string;
   error?: string;
   hint?: string;
-  /** Declarative options. Optional — pages may instead pass <option> children. */
-  options?: Array<{ value: string; label: string }>;
-  /** Legacy-style children (<option> elements). Rendered when provided. */
-  children?: ReactNode;
+  required?: boolean;
+  status?: SelectStatus;
+  size?: SelectSize;
+  options?: Array<{ label: string; value: string | number; disabled?: boolean }>;
   placeholder?: string;
+  /** @deprecated accepted for compatibility; not used */
+  disableRefraction?: boolean;
+  /** @deprecated accepted for compatibility; not used */
+  disableMotion?: boolean;
+  /** @deprecated accepted for compatibility; not used */
+  decorative?: boolean;
+  /** @deprecated accepted for compatibility; not used */
+  noReflection?: boolean;
 }
 
-export const GlassSelect = forwardRef<HTMLSelectElement, GlassSelectProps>(
-  ({ label, error, hint, options, children, placeholder, className = '', id, ...rest }, ref) => {
-    const generatedId = useId();
-    const inputId = id || generatedId;
+const SIZE: Record<SelectSize, string> = {
+  sm: 'h-8 text-xs px-2.5',
+  md: 'h-10 text-sm px-3',
+  lg: 'h-12 text-[15px] px-3.5',
+};
 
-    return (
-      <div className="flex flex-col gap-1.5">
-        {label && (
-          <label htmlFor={inputId} className="text-sm font-medium text-[var(--text-secondary)]">
-            {label}
-          </label>
-        )}
-        <div className="relative">
-          <select
-            ref={ref}
-            id={inputId}
-            className={[
-              'w-full px-4 py-2.5 pr-10',
-              'bg-[var(--bg-glass)]',
-              'backdrop-blur-xl',
-              'border rounded-xl',
-              'text-[var(--text-primary)]',
-              'font-sans text-[0.9375rem]',
-              'outline-none cursor-pointer',
-              'transition-[border-color,box-shadow] duration-200',
-              'appearance-none',
-              error
-                ? 'border-[var(--state-error)] focus:shadow-[0_0_0_3px_rgba(240,112,112,0.18)]'
-                : 'border-[var(--border-medium)]',
-              'hover:border-[var(--border-strong)] hover:bg-[var(--bg-glass-hover)]',
-              'focus:border-brand-700 focus:shadow-[0_0_0_3px_rgba(84,115,252,0.18)] focus:bg-[var(--bg-elevated)]',
-              'disabled:opacity-45 disabled:cursor-not-allowed disabled:bg-[var(--state-disabled)]',
-              className,
-            ].join(' ')}
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238899A8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'right 12px center',
-            }}
-            aria-invalid={!!error}
-            aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
-            {...rest}
-          >
-            {placeholder && (
-              <option value="" disabled>
-                {placeholder}
-              </option>
-            )}
-            {options?.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-            {children}
-          </select>
-        </div>
-        {error && (
-          <p id={`${inputId}-error`} className="text-xs text-[var(--state-error)] flex items-center gap-1" role="alert">
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-            </svg>
-            {error}
-          </p>
-        )}
-        {!error && hint && (
-          <p id={`${inputId}-hint`} className="text-xs text-[var(--text-muted)]">{hint}</p>
-        )}
-      </div>
-    );
+const STATUS: Record<SelectStatus, string> = {
+  default:
+    'border-black/[0.08] dark:border-white/[0.10] hover:border-black/[0.15] dark:hover:border-white/[0.20] focus:border-apple-blue focus:shadow-[0_0_0_3px_var(--focus-ring)]',
+  error: 'border-apple-red focus:border-apple-red focus:shadow-[0_0_0_3px_var(--focus-ring-danger)]',
+  warning:
+    'border-apple-orange focus:border-apple-orange focus:shadow-[0_0_0_3px_var(--focus-ring)]',
+  success: 'border-apple-green focus:border-apple-green focus:shadow-[0_0_0_3px_var(--focus-ring)]',
+};
+
+/**
+ * Native select in a restrained shell. `placeholder` renders a disabled
+ * empty-value option; `options` render plain <option> children.
+ */
+export const GlassSelect = forwardRef<HTMLSelectElement, GlassSelectProps>(function GlassSelect(
+  {
+    label,
+    error,
+    hint,
+    required,
+    status = 'default',
+    size = 'md',
+    options = [],
+    placeholder,
+    className,
+    children,
+    id: idProp,
+    ...props
   },
-);
+  ref,
+) {
+  const autoId = useId();
+  const id = idProp ?? autoId;
+  const effective: SelectStatus = error ? 'error' : status;
 
-GlassSelect.displayName = 'GlassSelect';
+  return (
+    <div className="w-full">
+      {label && (
+        <label htmlFor={id} className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
+          {label}
+          {required && (
+            <span aria-hidden="true" className="ml-1 text-apple-red">
+              *
+            </span>
+          )}
+        </label>
+      )}
+      <div className="relative">
+        <select
+          ref={ref}
+          id={id}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-err` : hint ? `${id}-hint` : undefined}
+          aria-required={required || undefined}
+          className={cn(
+            'w-full appearance-none rounded-xl border bg-white/70 dark:bg-white/[0.05] dark:focus:bg-surface-900/90 backdrop-blur-xl backdrop-saturate-150 pr-9 text-[var(--text-primary)] outline-none shadow-[inset_0_1px_1px_rgba(0,0,0,0.03)] dark:shadow-[inset_0_1px_1px_rgba(0,0,0,0.2)] transition-[border-color,box-shadow,background-color] duration-150 disabled:cursor-not-allowed disabled:opacity-50',
+            SIZE[size],
+            STATUS[effective],
+            className,
+          )}
+          {...props}
+        >
+          {placeholder && <option value="">{placeholder}</option>}
+          {options.map((o) => (
+            <option key={String(o.value)} value={o.value} disabled={o.disabled}>
+              {o.label}
+            </option>
+          ))}
+          {children}
+        </select>
+        {/* Chevron */}
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </span>
+      </div>
+      {error && (
+        <p id={`${id}-err`} role="alert" className="mt-1 text-xs text-apple-red">
+          {error}
+        </p>
+      )}
+      {hint && !error && (
+        <p id={`${id}-hint`} className="mt-1 text-xs text-[var(--text-tertiary)]">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+});
 
 export default GlassSelect;

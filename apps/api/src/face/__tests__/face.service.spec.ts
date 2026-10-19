@@ -37,6 +37,13 @@ function makePrisma() {
     },
 
     faceEnrollment: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+    },
+
+    faceAuditEvent: {
+      create: vi.fn().mockImplementation((args) => Promise.resolve({ id: 'audit-1', createdAt: new Date(), ...args?.data })),
       findMany: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
     },
@@ -292,6 +299,75 @@ describe('FaceService', () => {
 
       expect(args.skip).toBe(20);
       expect(args.take).toBe(10);
+    });
+
+    it('strips templateData and templateHash from returned templates (M-EDU-BIO-002)', async () => {
+      const { service, prisma } = await makeService();
+
+      prisma.faceEnrollment.findMany.mockResolvedValue([
+        {
+          id: 'env-1',
+          organizationId: 'org-1',
+          studentId: 's-1',
+          status: 'ACTIVE',
+          faceTemplates: [
+            {
+              id: 'tmpl-1',
+              templateData: 'ENCRYPTED_SECRET_CIPHERTEXT',
+              templateHash: 'HASH_SECRET_VECTOR',
+              version: 1,
+              status: 'ACTIVE',
+              modelVersion: 'sface-v1',
+              qualityScore: 0.95,
+            },
+          ],
+          student: null,
+        },
+      ]);
+      prisma.faceEnrollment.count.mockResolvedValue(1);
+
+      const result = await service.listEnrollments(manager, { page: 1, limit: 10 });
+      expect(result.items).toHaveLength(1);
+      const enrollment = result.items[0];
+      expect(enrollment.templates).toHaveLength(1);
+      const template = enrollment.templates[0];
+      expect(template.id).toBe('tmpl-1');
+      expect(template.version).toBe(1);
+      expect((template as any).templateData).toBeUndefined();
+      expect((template as any).templateHash).toBeUndefined();
+    });
+  });
+
+  describe('getEnrollment (M-EDU-BIO-002)', () => {
+    it('strips templateData and templateHash from getEnrollment', async () => {
+      const { service, prisma } = await makeService();
+
+      prisma.faceEnrollment.findFirst.mockResolvedValue({
+        id: 'env-1',
+        organizationId: 'org-1',
+        studentId: 's-1',
+        status: 'ACTIVE',
+        faceTemplates: [
+          {
+            id: 'tmpl-1',
+            templateData: 'ENCRYPTED_SECRET_CIPHERTEXT',
+            templateHash: 'HASH_SECRET_VECTOR',
+            version: 1,
+            status: 'ACTIVE',
+            modelVersion: 'sface-v1',
+            qualityScore: 0.95,
+          },
+        ],
+        student: null,
+      });
+
+      const enrollment = await service.getEnrollment(manager, 'env-1');
+      expect(enrollment).toBeDefined();
+      expect(enrollment.templates).toHaveLength(1);
+      const template = enrollment.templates[0];
+      expect(template.id).toBe('tmpl-1');
+      expect((template as any).templateData).toBeUndefined();
+      expect((template as any).templateHash).toBeUndefined();
     });
   });
 

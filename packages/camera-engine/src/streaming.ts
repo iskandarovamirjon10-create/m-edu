@@ -307,6 +307,8 @@ export class FfmpegStreamIngester {
     if (streamUri.toLowerCase().startsWith('rtsp://')) {
       args.push(
         '-rtsp_transport', transport,
+        // Socket timeout: 5 seconds (5000000 microseconds) to prevent unmonitored TCP freeze
+        '-stimeout', '5000000',
         // Hikvision RTSP optimization: reduces initial delay and prevents stream stalling
         '-analyzeduration', '5000000',
         '-probesize', '5000000'

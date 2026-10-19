@@ -3,7 +3,10 @@ import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { studentsApi, paymentsApi } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys.factory';
 import { useToast } from '@/components/ui/GlassToast';
+import { useVoiceFeedback } from '@/hooks/useVoiceFeedback';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 const PRESET_AMOUNTS = [
   { label: '100 ming', value: 100000 },
@@ -20,12 +23,14 @@ const METHODS = [
   { id: 'CARD', label: 'Plastik karta', icon: '💳' },
   { id: 'CLICK', label: 'Click', icon: '🔵' },
   { id: 'PAYME', label: 'Payme', icon: '🟢' },
-  { id: 'BANK_TRANSFER', label: 'Bank o’tkazmasi', icon: '🏦' },
+  { id: 'BANK_TRANSFER', label: 'Bank o\'tkazmasi', icon: '🏦' },
 ];
 
 export function QuickPaymentModal() {
   const queryClient = useQueryClient();
   const { push } = useToast();
+  const voice = useVoiceFeedback();
+  const { playSuccess } = usePremiumSound();
 
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -69,16 +74,18 @@ export function QuickPaymentModal() {
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('open-quick-payment', handleCustomOpen);
+    window.addEventListener('medu:open-quick-payment', handleCustomOpen);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('open-quick-payment', handleCustomOpen);
+      window.removeEventListener('medu:open-quick-payment', handleCustomOpen);
     };
   }, [open]);
 
   // Fetch students matching search term
   const { data: studentsData, isFetching: loadingStudents } = useQuery({
-    queryKey: ['quick-payment-students-search', searchTerm],
+    queryKey: ['students', 'quick-search', searchTerm],
     queryFn: async () => {
       if (!searchTerm || searchTerm.trim().length < 2) return { items: [] };
       return studentsApi.list({ search: searchTerm.trim(), limit: 8 }) as Promise<{ items: any[]; total: number }>;
@@ -107,11 +114,11 @@ export function QuickPaymentModal() {
   const recordPayment = useMutation({
     mutationFn: async () => {
       if (!selectedStudent?.id) {
-        throw new Error('Iltimos, o’quvchini tanlang');
+        throw new Error('Iltimos, o\'quvchini tanlang');
       }
       const numAmount = parseFloat(amount.replace(/[^0-9.]/g, ''));
       if (!numAmount || isNaN(numAmount) || numAmount <= 0) {
-        throw new Error('Iltimos, to’g’ri to’lov summasini kiriting');
+        throw new Error('Iltimos, to\'g\'ri to\'lov summasini kiriting');
       }
 
       return paymentsApi.create({
@@ -124,21 +131,32 @@ export function QuickPaymentModal() {
     onSuccess: () => {
       const sName = selectedStudent?.user
         ? `${selectedStudent.user.firstName} ${selectedStudent.user.lastName}`
-        : (selectedStudent?.firstName ? `${selectedStudent.firstName} ${selectedStudent.lastName || ''}` : 'O’quvchi');
+        : (selectedStudent?.firstName ? `${selectedStudent.firstName} ${selectedStudent.lastName || ''}` : 'O\'quvchi');
       const formattedAmount = Number(amount.replace(/[^0-9.]/g, '')).toLocaleString('uz-UZ');
 
-      push('success', `✅ ${sName} uchun ${formattedAmount} so’m to’lov qabul qilindi!`);
+      playSuccess();
+      voice.speakPaymentSuccess();
+
+      window.dispatchEvent(
+        new CustomEvent('medu:payment-received', {
+          detail: {
+            studentName: sName,
+            amount: formattedAmount,
+          },
+        }),
+      );
+
+      push('success', `✅ ${sName} uchun ${formattedAmount} so'm to'lov qabul qilindi!`);
 
       // Invalidate queries so tables update everywhere
-      queryClient.invalidateQueries({ queryKey: ['payments'] });
-      queryClient.invalidateQueries({ queryKey: ['students'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['finance'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.students.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
 
       setOpen(false);
     },
     onError: (err: any) => {
-      push('error', err?.message || 'To’lovni kiritishda xatolik yuz berdi');
+      push('error', err?.message || 'To\'lovni kiritishda xatolik yuz berdi');
     },
   });
 
@@ -160,7 +178,7 @@ export function QuickPaymentModal() {
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-black/10 bg-white/95 p-6 shadow-2xl backdrop-blur-2xl text-slate-900 dark:border-white/15 dark:bg-[#121826]/95 dark:text-white"
+        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-6 shadow-2xl backdrop-blur-md text-slate-900 dark:border-white/15 dark:bg-[#121826]/95 dark:text-white"
         style={{
           boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.25), 0 0 40px -10px rgba(99, 102, 241, 0.2)',
         }}
@@ -173,13 +191,13 @@ export function QuickPaymentModal() {
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                Tezkor To’lov (3 soniya)
+                Tezkor To'lov (3 soniya)
                 <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
                   Instant
                 </span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                O’quvchidan to’lovni qabul qilish va avtomat chek yuborish
+                O'quvchidan to'lovni qabul qilish va avtomat chek yuborish
               </p>
             </div>
           </div>
@@ -196,7 +214,7 @@ export function QuickPaymentModal() {
           {/* Step 1: Student Selection */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-              1. O’quvchi
+              1. O'quvchi
             </label>
 
             {selectedStudent ? (
@@ -212,10 +230,10 @@ export function QuickPaymentModal() {
                       {selectedStudent.user?.lastName || selectedStudent.lastName || ''}
                     </div>
                     <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                      <span>📞 {selectedStudent.user?.phone || selectedStudent.phone || 'Telefon yo’q'}</span>
+                      <span>📞 {selectedStudent.user?.phone || selectedStudent.phone || 'Telefon yo\'q'}</span>
                       {selectedStudent.balance !== undefined && (
                         <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                          Balans: {Number(selectedStudent.balance).toLocaleString('uz-UZ')} so’m
+                          Balans: {Number(selectedStudent.balance).toLocaleString('uz-UZ')} so'm
                         </span>
                       )}
                     </div>
@@ -229,7 +247,7 @@ export function QuickPaymentModal() {
                   }}
                   className="rounded-lg bg-black/5 text-slate-700 hover:bg-black/10 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20 dark:hover:text-white transition-colors px-2.5 py-1 text-xs"
                 >
-                  O’zgartirish
+                  O'zgartirish
                 </button>
               </div>
             ) : (
@@ -282,7 +300,7 @@ export function QuickPaymentModal() {
           {/* Step 2: Amount with Quick Presets */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-              2. To’lov Summasi (UZS)
+              2. To'lov Summasi (UZS)
             </label>
             <div className="relative">
               <input
@@ -297,7 +315,7 @@ export function QuickPaymentModal() {
                 placeholder="0"
               />
               <span className="absolute right-4 top-3 text-sm font-semibold text-slate-400">
-                so’m
+                so'm
               </span>
             </div>
 
@@ -319,7 +337,7 @@ export function QuickPaymentModal() {
           {/* Step 3: Payment Method */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-              3. To’lov turi
+              3. To'lov turi
             </label>
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
               {METHODS.map((m) => {
@@ -365,7 +383,7 @@ export function QuickPaymentModal() {
                 <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
               ) : (
                 <>
-                  <span>To’lovni qabul qilish</span>
+                  <span>To'lovni qabul qilish</span>
                   <span className="rounded-lg bg-black/20 px-2 py-0.5 text-xs font-mono">
                     ↵ Enter
                   </span>

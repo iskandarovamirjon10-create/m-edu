@@ -13,6 +13,7 @@ import { ApiError } from '@/lib/api';
 import type { AiChatResponse, AiWireMessage } from '@/types/ai';
 import AiCopilot from '../AiCopilot';
 import { I18nProvider } from '@/i18n/I18nProvider';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const { aiChatMock, confirmMock } = vi.hoisted(() => ({
   aiChatMock: vi.fn(),
@@ -85,10 +86,15 @@ function pendingConfirmationResponse(): AiChatResponse {
 }
 
 function renderCopilot() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <I18nProvider initialLocale="uz">
-      <AiCopilot />
-    </I18nProvider>,
+    <QueryClientProvider client={queryClient}>
+      <I18nProvider initialLocale="uz">
+        <AiCopilot />
+      </I18nProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -123,7 +129,7 @@ describe('AiCopilot empty state', () => {
     const prompts = screen.getAllByRole('button', { name: /— / });
     expect(prompts).toHaveLength(6);
     expect(screen.getByRole('button', { name: /^Davomat — / })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /^To’lovlar — / })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^To'lovlar — / })).toBeInTheDocument();
   });
 
   it('sends a quick prompt straight to the API', async () => {
@@ -136,7 +142,7 @@ describe('AiCopilot empty state', () => {
     expect(await screen.findByText('Davomat tayyor.')).toBeInTheDocument();
     expect(aiChatMock).toHaveBeenCalledTimes(1);
     expect(aiChatMock.mock.calls[0][0]).toEqual([
-      { role: 'user', content: 'Bugungi davomatni ko’rsat' },
+      { role: 'user', content: 'Bugungi davomatni ko\'rsat' },
     ]);
   });
 });
@@ -154,12 +160,12 @@ describe('AiCopilot sending and replies', () => {
     const user = userEvent.setup();
     renderCopilot();
 
-    await typeAndSend(user, 'Bugungi davomatni ko’rsat');
+    await typeAndSend(user, 'Bugungi davomatni ko\'rsat');
 
-    expect(await screen.findByText('Bugungi davomatni ko’rsat')).toBeInTheDocument();
+    expect(await screen.findByText('Bugungi davomatni ko\'rsat')).toBeInTheDocument();
     expect(aiChatMock).toHaveBeenCalledTimes(1);
     expect(aiChatMock.mock.calls[0][0]).toEqual([
-      { role: 'user', content: 'Bugungi davomatni ko’rsat' },
+      { role: 'user', content: 'Bugungi davomatni ko\'rsat' },
     ]);
 
     const thinking = within(messageList()).getByRole('status');
@@ -221,14 +227,14 @@ describe('AiCopilot errors and retry', () => {
     const user = userEvent.setup();
     renderCopilot();
 
-    await typeAndSend(user, 'Bugungi davomatni ko’rsat');
+    await typeAndSend(user, 'Bugungi davomatni ko\'rsat');
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(
-      'AI bilan bog’lanib bo’lmadi. Internet aloqasini tekshirib, qayta urinib ko’ring.',
+      'AI bilan bog\'lanib bo\'lmadi. Internet aloqasini tekshirib, qayta urinib ko\'ring.',
     );
-    expect(alert).toHaveTextContent('So’rov:');
-    expect(alert).toHaveTextContent('Bugungi davomatni ko’rsat');
+    expect(alert).toHaveTextContent('So\'rov:');
+    expect(alert).toHaveTextContent('Bugungi davomatni ko\'rsat');
     expect(screen.getByTestId('ai-retry')).toBeInTheDocument();
     expect(composer()).toBeEnabled();
   });
@@ -314,7 +320,7 @@ describe('AiCopilot tool calls', () => {
 
     await typeAndSend(user, 'Bugungi davomat?');
 
-    expect(await screen.findByText('Davomat ma’lumotlari olindi')).toBeInTheDocument();
+    expect(await screen.findByText('Davomat ma\'lumotlari olindi')).toBeInTheDocument();
     expect(aiChatMock).toHaveBeenCalledTimes(2);
 
     const secondHistory = aiChatMock.mock.calls[1][0] as AiWireMessage[];

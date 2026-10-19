@@ -25,6 +25,14 @@ export class ScheduleController {
   }
 
   @AllowAnyRole()
+  @Get('room-utilization')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
+  @ApiOperation({ summary: 'Room occupancy heatmap and dead hours analytics' })
+  getRoomUtilization(@CurrentUser('organizationId') orgId: string) {
+    return this.scheduleService.getRoomUtilization(orgId);
+  }
+
+  @AllowAnyRole()
   @Get(':id')
   @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER', 'ASSISTANT', 'STUDENT')
   @ApiOperation({ summary: 'Get schedule entry' })

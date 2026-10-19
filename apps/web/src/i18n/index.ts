@@ -29,7 +29,7 @@ export interface LocaleMeta {
 }
 
 export const LOCALE_META: Record<Locale, LocaleMeta> = {
-  uz: { code: 'uz', label: 'O’zbekcha', htmlLang: 'uz' },
+  uz: { code: 'uz', label: 'O\'zbekcha', htmlLang: 'uz' },
   ru: { code: 'ru', label: 'Русский', htmlLang: 'ru' },
   en: { code: 'en', label: 'English', htmlLang: 'en' },
 };

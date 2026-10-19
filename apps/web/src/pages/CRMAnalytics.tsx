@@ -38,7 +38,9 @@ import type {
   CRMAgingLead,
 } from '@/types/analytics';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '../i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { useI18n } from '@/i18n/I18nProvider';
 import { getErrorMessage } from '@/lib/errorMessages';
 
 /* ============================================================================
@@ -151,16 +153,16 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald' | 'amber' | 'indigo' | 'rose';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string; gradient: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)', gradient: 'linear-gradient(90deg, #32ADE6, #007AFF)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)',  gradient: 'linear-gradient(90deg, #30D158, #34C759)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)',  gradient: 'linear-gradient(90deg, #FFB340, #FF9500)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)',  gradient: 'linear-gradient(90deg, #FF6961, #FF3B30)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)', gradient: 'linear-gradient(90deg, #BF5AF2, #AF52DE)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)', gradient: 'linear-gradient(90deg, #64D2FF, #32ADE6)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)', gradient: 'linear-gradient(90deg, #A1A1A6, #86868B)' },
+  blue:    { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)', border: 'rgba(37,99,235,0.20)', gradient: 'linear-gradient(90deg, #0284C7, #2563EB)' },
+  green:   { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)',  border: 'rgba(16,185,129,0.20)',  gradient: 'linear-gradient(90deg, #30D158, #10B981)' },
+  orange:  { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)',  border: 'rgba(245,158,11,0.20)',  gradient: 'linear-gradient(90deg, #FFB340, #F59E0B)' },
+  red:     { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)',  gradient: 'linear-gradient(90deg, #FF6961, #EF4444)' },
+  purple:  { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)', gradient: 'linear-gradient(90deg, #BF5AF2, #6366F1)' },
+  cyan:    { fg: '#0284C7', bg: 'rgba(2,132,199,0.10)', glow: 'rgba(2,132,199,0.28)', border: 'rgba(2,132,199,0.20)', gradient: 'linear-gradient(90deg, #64D2FF, #0284C7)' },
+  gray:    { fg: '#64748B', bg: 'rgba(100,116,139,0.10)', glow: 'rgba(100,116,139,0.22)', border: 'rgba(100,116,139,0.20)', gradient: 'linear-gradient(90deg, #A1A1A6, #64748B)' },
   emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)', gradient: 'linear-gradient(90deg, #34D399, #10B981)' },
   amber:   { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)', glow: 'rgba(245,158,11,0.28)', border: 'rgba(245,158,11,0.20)', gradient: 'linear-gradient(90deg, #FBBF24, #F59E0B)' },
-  indigo:  { fg: '#5856D6', bg: 'rgba(88,86,214,0.10)',  glow: 'rgba(88,86,214,0.28)',  border: 'rgba(88,86,214,0.20)',  gradient: 'linear-gradient(90deg, #818CF8, #5856D6)' },
+  indigo:  { fg: '#6366F1', bg: 'rgba(88,86,214,0.10)',  glow: 'rgba(88,86,214,0.28)',  border: 'rgba(88,86,214,0.20)',  gradient: 'linear-gradient(90deg, #818CF8, #6366F1)' },
   rose:    { fg: '#F43F5E', bg: 'rgba(244,63,94,0.10)',  glow: 'rgba(244,63,94,0.28)',  border: 'rgba(244,63,94,0.20)',  gradient: 'linear-gradient(90deg, #FB7185, #F43F5E)' },
 };
 
@@ -214,28 +216,7 @@ const TABS: { id: TabId; labelKey: string; icon: string[]; tone: Tone }[] = [
  * ========================================================================== */
 
 function AmbientOrbs() {
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <motion.div
-        className="absolute -left-[8%] top-[6%] h-[44%] w-[40%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(0,122,255,0.14), transparent 70%)',
-          filter: 'blur(70px)',
-        }}
-        animate={{ x: [0, 24, 0], y: [0, 18, 0], opacity: [0.85, 1, 0.85] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute -bottom-[10%] -right-[8%] h-[46%] w-[42%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(175,82,222,0.12), transparent 70%)',
-          filter: 'blur(80px)',
-        }}
-        animate={{ x: [0, -28, 0], y: [0, -22, 0], opacity: [0.8, 1, 0.8] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </div>
-  );
+  return null;
 }
 
 function CountUp({ value, duration = 1.1, suffix = '', decimals = 0 }: { value: number; duration?: number; suffix?: string; decimals?: number }) {
@@ -277,7 +258,7 @@ function KpiTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       style={{
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
       }}
@@ -311,11 +292,11 @@ function KpiTile({
             stringValue
           )}
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B]">
           {label}
         </div>
         {secondary && (
-          <div className="mt-0.5 truncate text-[10.5px] font-semibold tracking-tight text-[#86868B]/80">
+          <div className="mt-0.5 truncate text-[10.5px] font-semibold tracking-tight text-[#64748B]/80">
             {secondary}
           </div>
         )}
@@ -357,7 +338,7 @@ function PremiumTabs({
   return (
     <div
       role="tablist"
-      className="flex w-full items-center gap-1 overflow-x-auto rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-1 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="flex w-full items-center gap-1 overflow-x-auto rounded-2xl border border-black/[0.04] bg-black/[0.04] p-1 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.06]"
       style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)' }}
     >
       {TABS.map((tab) => {
@@ -374,7 +355,7 @@ function PremiumTabs({
             whileTap={{ scale: 0.97 }}
             transition={SPRING.snappy}
             className="relative shrink-0 overflow-hidden rounded-xl px-3.5 py-2 text-[12.5px] font-bold tracking-tight outline-none transition-colors whitespace-nowrap"
-            style={{ color: isActive ? c.fg : '#86868B' }}
+            style={{ color: isActive ? c.fg : '#64748B' }}
             tabIndex={0}
             onKeyDown={(e: any) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -493,12 +474,12 @@ function FunnelBar({
           <span className="text-[14px] font-bold tabular-nums tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {count}
           </span>
-          <span className="text-[11px] font-semibold tabular-nums text-[#86868B]">
+          <span className="text-[11px] font-semibold tabular-nums text-[#64748B]">
             {conversionFromTop}%
           </span>
         </div>
       </div>
-      <div className="h-10 overflow-hidden rounded-xl border border-[#00000008] bg-[#00000004] dark:border-[#ffffff08] dark:bg-[#ffffff04]">
+      <div className="h-10 overflow-hidden rounded-xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.04]">
         <motion.div
           className="flex h-full items-center justify-end rounded-xl px-4"
           style={{
@@ -552,7 +533,7 @@ function FunnelTab({ data }: { data: CRMFunnelResponse }) {
 
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-8"
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-8"
         style={{
           boxShadow:
             'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -566,14 +547,14 @@ function FunnelTab({ data }: { data: CRMFunnelResponse }) {
           }}
         />
         <div className="relative mb-6 flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2563EB]/10 text-[#2563EB]">
             <Icon paths={I.funnel} size={16} strokeWidth={2} />
           </div>
           <div>
             <h3 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
               {t('crm.pipelineConversionFunnel')}
             </h3>
-            <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+            <p className="mt-0.5 text-[11px] font-medium text-[#64748B]">
               {t('crm.stageProgression')}
             </p>
           </div>
@@ -609,20 +590,20 @@ function SourcesTab({ data }: { data: CRMSources[] }) {
         variants={cardVariants}
         initial="hidden"
         animate="visible"
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-12 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-12 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
         style={{
           boxShadow:
             'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
         }}
       >
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#32ADE6]/10 text-[#32ADE6]">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#0284C7]/10 text-[#0284C7]">
             <Icon paths={I.empty} size={26} strokeWidth={1.8} />
           </div>
           <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {t('crm.noSources')}
           </p>
-          <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+          <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
             {t('crm.noSourcesHint')}
           </p>
         </div>
@@ -635,7 +616,7 @@ function SourcesTab({ data }: { data: CRMSources[] }) {
       variants={cardVariants}
       initial="hidden"
       animate="visible"
-      className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       style={{
         boxShadow:
           'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -667,10 +648,10 @@ function SourcesTab({ data }: { data: CRMSources[] }) {
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                className="transition-colors hover:bg-[#32ADE6]/[0.03]"
+                className="transition-colors hover:bg-[#0284C7]/[0.03]"
               >
                 <GlassTD>
-                  <span className="inline-flex items-center rounded-lg bg-[#32ADE6]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.10em] text-[#32ADE6]" style={{ border: '1px solid rgba(50,173,230,0.22)' }}>
+                  <span className="inline-flex items-center rounded-lg bg-[#0284C7]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.10em] text-[#0284C7]" style={{ border: '1px solid rgba(2,132,199,0.22)' }}>
                     {src.source}
                   </span>
                 </GlassTD>
@@ -693,7 +674,7 @@ function SourcesTab({ data }: { data: CRMSources[] }) {
                   <ConversionText rate={src.conversionRate} size="lg" />
                 </GlassTD>
                 <GlassTD className="text-right">
-                  <span className="font-mono text-[12.5px] font-semibold tabular-nums text-[#86868B]">
+                  <span className="font-mono text-[12.5px] font-semibold tabular-nums text-[#64748B]">
                     {src.avgDaysToConvert}
                     <span className="ml-1 text-[10px] uppercase">d</span>
                   </span>
@@ -732,7 +713,7 @@ function VelocityTab({ data }: { data: CRMVelocityResponse }) {
 
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
         style={{
           boxShadow:
             'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -779,7 +760,7 @@ function VelocityTab({ data }: { data: CRMVelocityResponse }) {
                     </span>
                   </GlassTD>
                   <GlassTD className="text-right">
-                    <span className="font-mono text-[12.5px] font-semibold tabular-nums text-[#86868B]">
+                    <span className="font-mono text-[12.5px] font-semibold tabular-nums text-[#64748B]">
                       {sv.avgDays}
                       <span className="ml-1 text-[10px] uppercase">d</span>
                     </span>
@@ -809,20 +790,20 @@ function LostReasonsTab({ data }: { data: CRMLostReasonsResponse }) {
         variants={cardVariants}
         initial="hidden"
         animate="visible"
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-12 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-12 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
         style={{
           boxShadow:
             'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
         }}
       >
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#F43F5E]/10 text-[#F43F5E]">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F43F5E]/10 text-[#F43F5E]">
             <Icon paths={I.checkCircle} size={26} strokeWidth={1.8} />
           </div>
           <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {t('crm.noLostLeads')}
           </p>
-          <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+          <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
             {t('crm.noLostLeadsHint')}
           </p>
         </div>
@@ -843,7 +824,7 @@ function LostReasonsTab({ data }: { data: CRMLostReasonsResponse }) {
 
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-8"
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-8"
         style={{
           boxShadow:
             'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -864,7 +845,7 @@ function LostReasonsTab({ data }: { data: CRMLostReasonsResponse }) {
             <h3 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
               {t('crm.primaryLossReasons')}
             </h3>
-            <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+            <p className="mt-0.5 text-[11px] font-medium text-[#64748B]">
               {t('crm.mostCommonReasonsLost')}
             </p>
           </div>
@@ -888,7 +869,7 @@ function LostReasonsTab({ data }: { data: CRMLostReasonsResponse }) {
                     {reason.count}
                   </span>
                 </div>
-                <div className="h-6 overflow-hidden rounded-lg border border-[#00000008] bg-[#00000004] dark:border-[#ffffff08] dark:bg-[#ffffff04]">
+                <div className="h-6 overflow-hidden rounded-lg border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.04]">
                   <motion.div
                     className="h-full rounded-lg"
                     style={{
@@ -913,6 +894,37 @@ function LostReasonsTab({ data }: { data: CRMLostReasonsResponse }) {
  * TAB: AGING
  * ========================================================================== */
 
+function handleOpenLeadSidecar(lead: CRMAgingLead) {
+  const sidecarData: QuickLookData = {
+    id: lead.id,
+    type: 'lead',
+    title: lead.name,
+    subtitle: `${lead.stage} bosqich · ${lead.source || 'Manba ko\'rsatilmagan'}`,
+    badge: {
+      text: lead.status,
+      tone: lead.status === 'FRESH' ? 'emerald' : lead.status === 'WARMING' ? 'amber' : 'rose',
+    },
+    avatar: {
+      text: lead.name.slice(0, 2).toUpperCase(),
+      color: '#6366F1',
+    },
+    metrics: [
+      { label: 'Pipeline davomiyligi', value: `${lead.daysInPipeline} kun` },
+      { label: 'Oxirgi yangilanish', value: `${lead.daysSinceUpdate} kun oldin` },
+      { label: 'Bosqich', value: lead.stage },
+      { label: 'Holati', value: lead.status },
+    ],
+    details: [
+      { label: 'Lead ID', value: lead.id, copyable: true },
+      { label: 'F.I.Sh.', value: lead.name },
+      { label: 'Manba', value: lead.source || '—' },
+      { label: 'Bosqich', value: lead.stage },
+      { label: 'Holat', value: lead.status },
+    ],
+  };
+  openSidecar(sidecarData);
+}
+
 function AgingTab({ data }: { data: CRMAgingResponse }) {
   const { t } = useI18n();
 
@@ -922,20 +934,20 @@ function AgingTab({ data }: { data: CRMAgingResponse }) {
         variants={cardVariants}
         initial="hidden"
         animate="visible"
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-12 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-12 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
         style={{
           boxShadow:
             'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
         }}
       >
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#F59E0B]/10 text-[#F59E0B]">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F59E0B]/10 text-[#F59E0B]">
             <Icon paths={I.empty} size={26} strokeWidth={1.8} />
           </div>
           <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {t('crm.noActiveLeads')}
           </p>
-          <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+          <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
             {t('crm.noActiveLeadsHint')}
           </p>
         </div>
@@ -978,7 +990,7 @@ function AgingTab({ data }: { data: CRMAgingResponse }) {
 
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
         style={{
           boxShadow:
             'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -1013,20 +1025,30 @@ function AgingTab({ data }: { data: CRMAgingResponse }) {
                   className="transition-colors hover:bg-[#F59E0B]/[0.03]"
                 >
                   <GlassTD>
-                    <span className="block max-w-[12rem] truncate text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                      {lead.name}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleOpenLeadSidecar(lead); }}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-white/[0.08]"
+                        title="Split View Sidecar"
+                      >
+                        <span className="text-xs font-mono font-bold">◨</span>
+                      </button>
+                      <span className="block max-w-[12rem] truncate text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        {lead.name}
+                      </span>
+                    </div>
                   </GlassTD>
                   <GlassTD>
                     <StageBadge stage={lead.stage} />
                   </GlassTD>
                   <GlassTD>
-                    <span className="inline-flex items-center rounded-lg bg-[#00000006] px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-[#86868B] dark:bg-[#ffffff08]">
+                    <span className="inline-flex items-center rounded-lg bg-slate-100 dark:bg-slate-800/60 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-[#64748B] dark:bg-[#ffffff08]">
                       {lead.source || '—'}
                     </span>
                   </GlassTD>
                   <GlassTD className="text-center">
-                    <span className="font-mono text-[12.5px] font-semibold tabular-nums text-[#86868B]">
+                    <span className="font-mono text-[12.5px] font-semibold tabular-nums text-[#64748B]">
                       {lead.daysInPipeline}
                       <span className="ml-0.5 text-[10px] uppercase">d</span>
                     </span>
@@ -1066,20 +1088,20 @@ function ModeratorsTab({ data }: { data: CRMModeratorStats[] }) {
         variants={cardVariants}
         initial="hidden"
         animate="visible"
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-12 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-12 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
         style={{
           boxShadow:
             'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
         }}
       >
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#AF52DE]/10 text-[#AF52DE]">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#6366F1]/10 text-[#6366F1]">
             <Icon paths={I.users} size={26} strokeWidth={1.8} />
           </div>
           <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {t('crm.noModerators')}
           </p>
-          <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+          <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
             {t('crm.noModeratorsHint')}
           </p>
         </div>
@@ -1092,7 +1114,7 @@ function ModeratorsTab({ data }: { data: CRMModeratorStats[] }) {
       variants={cardVariants}
       initial="hidden"
       animate="visible"
-      className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       style={{
         boxShadow:
           'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -1124,14 +1146,14 @@ function ModeratorsTab({ data }: { data: CRMModeratorStats[] }) {
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                className="transition-colors hover:bg-[#AF52DE]/[0.03]"
+                className="transition-colors hover:bg-[#6366F1]/[0.03]"
               >
                 <GlassTD>
                   <div className="flex items-center gap-3">
                     <div
-                      className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
+                      className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ring-2 ring-white/50 dark:ring-slate-900/50"
                       style={{
-                        background: 'linear-gradient(135deg, #5856D6 0%, #AF52DE 100%)',
+                        background: 'linear-gradient(135deg, #6366F1 0%, #6366F1 100%)',
                         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)',
                       }}
                     >
@@ -1157,7 +1179,7 @@ function ModeratorsTab({ data }: { data: CRMModeratorStats[] }) {
                         {mod.name}
                       </p>
                       {mod.email && (
-                        <p className="mt-0.5 truncate text-[11.5px] font-medium text-[#86868B]">
+                        <p className="mt-0.5 truncate text-[11.5px] font-medium text-[#64748B]">
                           {mod.email}
                         </p>
                       )}
@@ -1170,7 +1192,7 @@ function ModeratorsTab({ data }: { data: CRMModeratorStats[] }) {
                   </span>
                 </GlassTD>
                 <GlassTD className="text-center">
-                  <span className="font-mono text-[12.5px] font-semibold tabular-nums text-[#86868B]">
+                  <span className="font-mono text-[12.5px] font-semibold tabular-nums text-[#64748B]">
                     {mod.activeLeads}
                   </span>
                 </GlassTD>
@@ -1210,6 +1232,21 @@ export function CRMAnalyticsPage() {
   const { t } = useI18n();
   usePageTitle(t('crm.title'));
   const [activeTab, setActiveTab] = useState<TabId>('funnel');
+  const { playTick } = usePremiumSound();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      if (e.key === '1') { setActiveTab('funnel'); playTick(); }
+      else if (e.key === '2') { setActiveTab('sources'); playTick(); }
+      else if (e.key === '3') { setActiveTab('velocity'); playTick(); }
+      else if (e.key === '4') { setActiveTab('lost-reasons'); playTick(); }
+      else if (e.key === '5') { setActiveTab('aging'); playTick(); }
+      else if (e.key === '6') { setActiveTab('moderators'); playTick(); }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playTick]);
 
   /* ── Queries (preserved, tab-gated) ───────────────────────────────── */
   const funnelQuery = useQuery({
@@ -1327,12 +1364,13 @@ export function CRMAnalyticsPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
+          className="liquid-glass-surface relative overflow-hidden rounded-2xl p-6 sm:p-7"
           style={{
             boxShadow:
               'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
           }}
         >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
           <span
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-0 h-24"
@@ -1347,9 +1385,9 @@ export function CRMAnalyticsPage() {
               transition={SPRING.smooth}
               className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
               style={{
-                background: 'linear-gradient(135deg, #007AFF 0%, #AF52DE 100%)',
+                background: 'linear-gradient(135deg, #2563EB 0%, #6366F1 100%)',
                 boxShadow:
-                  '0 12px 28px -10px rgba(0,122,255,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
+                  '0 12px 28px -10px rgba(37,99,235,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
               }}
             >
               <span
@@ -1364,12 +1402,12 @@ export function CRMAnalyticsPage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   {t('crm.analytics')}
                 </span>
                 {totalLeads > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#AF52DE]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#6366F1]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#6366F1]">
                     <Icon paths={I.users} size={11} strokeWidth={2.5} />
                     {totalLeads} leads
                   </span>
@@ -1385,7 +1423,7 @@ export function CRMAnalyticsPage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('crm.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {t('crm.subtitle')}
               </p>
             </div>
@@ -1397,7 +1435,7 @@ export function CRMAnalyticsPage() {
           TABS
       ============================================================ */}
       <motion.div variants={cardVariants}>
-        <PremiumTabs active={activeTab} onChange={setActiveTab} />
+        <PremiumTabs active={activeTab} onChange={(id) => { playTick(); setActiveTab(id); }} />
       </motion.div>
 
       {/* ============================================================

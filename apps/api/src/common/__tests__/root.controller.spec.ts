@@ -7,7 +7,7 @@ describe('RootController', () => {
     const result = controller.getRoot();
 
     expect(result.name).toBe('M-EDU API');
-    expect(result.version).toBe('1.0.0');
+    expect(result.version).toBe('2.0.0');
     expect(result.docs).toBe('/api/docs');
     expect(result.health).toBe('/api/health');
     expect(result.readiness).toBe('/api/readiness');

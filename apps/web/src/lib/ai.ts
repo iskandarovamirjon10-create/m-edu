@@ -20,37 +20,42 @@ import type {
 /* ── Tool vocabulary ───────────────────────────────────────────────────── */
 
 interface ToolMeta {
-  /** Human subject, e.g. "Davomat ma’lumotlari". */
+  /** Human subject, e.g. "Davomat ma'lumotlari". */
   subject: string;
   /** Title of the confirmation card when this tool changes data. */
   proposal?: string;
 }
 
 const TOOL_META: Record<string, ToolMeta> = {
-  'attendance.today': { subject: 'Davomat ma’lumotlari' },
+  'attendance.today': { subject: 'Davomat ma\'lumotlari' },
   'attendance.summary': { subject: 'Davomat hisoboti' },
   'schedule.today': { subject: 'Darslar jadvali' },
-  'students.search': { subject: 'O’quvchilar ro’yxati' },
-  'groups.list': { subject: 'Guruhlar ro’yxati' },
-  'finance.debtors': { subject: 'Qarzdorlar ro’yxati' },
+  'students.search': { subject: 'O\'quvchilar ro\'yxati' },
+  'groups.list': { subject: 'Guruhlar ro\'yxati' },
+  'finance.debtors': { subject: 'Qarzdorlar ro\'yxati' },
   'finance.summary': { subject: 'Moliyaviy hisobot' },
   'reports.summary': { subject: 'Kunlik hisobot' },
   'telegram.prepareMessage': {
     subject: 'Telegram xabari',
     proposal: 'Telegram xabari tayyorlash',
   },
+  'students.create': {
+    subject: 'Yangi o\'quvchi',
+    proposal: 'Yangi o\'quvchi qo\'shish',
+  },
 };
 
 const TOOL_SUCCESS: Record<string, string> = {
-  'attendance.today': 'Davomat ma’lumotlari olindi',
+  'attendance.today': 'Davomat ma\'lumotlari olindi',
   'attendance.summary': 'Davomat hisoboti olindi',
   'schedule.today': 'Darslar jadvali olindi',
-  'students.search': 'O’quvchilar ro’yxati olindi',
-  'groups.list': 'Guruhlar ro’yxati olindi',
-  'finance.debtors': 'Qarzdorlar ro’yxati olindi',
+  'students.search': 'O\'quvchilar ro\'yxati olindi',
+  'groups.list': 'Guruhlar ro\'yxati olindi',
+  'finance.debtors': 'Qarzdorlar ro\'yxati olindi',
   'finance.summary': 'Moliyaviy hisobot olindi',
   'reports.summary': 'Hisobot tayyorlandi',
   'telegram.prepareMessage': 'Telegram xabari tayyorlandi',
+  'students.create': 'Yangi o\'quvchi qo\'shish tayyorlandi',
 };
 
 /** Parameter labels used by both confirmation and result cards. */
@@ -59,8 +64,12 @@ const PARAMETER_LABELS: Record<string, string> = {
   audience: 'Olchov',
   group: 'Guruh',
   groupId: 'Guruh',
-  student: 'O’quvchi',
-  studentId: 'O’quvchi',
+  student: 'O\'quvchi',
+  studentId: 'O\'quvchi',
+  firstName: 'Ism',
+  lastName: 'Familiya',
+  email: 'Elektron pochta',
+  phone: 'Telefon',
   amount: 'Summa',
   date: 'Sana',
   time: 'Vaqt',
@@ -111,11 +120,11 @@ export function aiToolStatusText(toolName: string, status: AiToolActivityStatus)
 
   switch (status) {
     case 'success':
-      return TOOL_SUCCESS[toolName] ?? (subject ? `${subject} olindi` : 'Ma’lumot olindi');
+      return TOOL_SUCCESS[toolName] ?? (subject ? `${subject} olindi` : 'Ma\'lumot olindi');
     case 'running':
-      return subject ? `${subject} olinmoqda...` : 'Ma’lumot olinmoqda...';
+      return subject ? `${subject} olinmoqda...` : 'Ma\'lumot olinmoqda...';
     case 'error':
-      return subject ? `${subject} olinmadi` : 'Ma’lumotni olib bo’lmadi';
+      return subject ? `${subject} olinmadi` : 'Ma\'lumotni olib bo\'lmadi';
     case 'pending_confirmation':
       return subject ? `${subject} tasdiqlashni kutmoqda` : 'Tasdiqlash kutilmoqda';
     case 'cancelled':
@@ -188,7 +197,7 @@ export function buildActionResult(result: Record<string, unknown> | null | undef
 export type AiErrorContext = 'chat' | 'confirm';
 
 const NETWORK_ERROR: AiErrorInfo = {
-  message: 'AI bilan bog’lanib bo’lmadi. Internet aloqasini tekshirib, qayta urinib ko’ring.',
+  message: 'AI bilan bog\'lanib bo\'lmadi. Internet aloqasini tekshirib, qayta urinib ko\'ring.',
   retryable: true,
   code: 'network',
 };
@@ -208,7 +217,7 @@ export function toAiErrorInfo(error: unknown, context: AiErrorContext = 'chat'):
       case 400:
       case 422:
         return {
-          message: 'So’rovni qabul qilib bo’lmadi. Savolni boshqacha shaklda yozib ko’ring.',
+          message: 'So\'rovni qabul qilib bo\'lmadi. Savolni boshqacha shaklda yozib ko\'ring.',
           retryable: false,
           code: 'validation',
         };
@@ -220,7 +229,7 @@ export function toAiErrorInfo(error: unknown, context: AiErrorContext = 'chat'):
         };
       case 403:
         return {
-          message: 'Bu amal uchun sizda ruxsat yo’q.',
+          message: 'Bu amal uchun sizda ruxsat yo\'q.',
           retryable: false,
           code: 'forbidden',
         };
@@ -232,19 +241,19 @@ export function toAiErrorInfo(error: unknown, context: AiErrorContext = 'chat'):
               code: 'action_expired',
             }
           : {
-              message: 'So’ralgan ma’lumot topilmadi.',
+              message: 'So\'ralgan ma\'lumot topilmadi.',
               retryable: false,
               code: 'not_found',
             };
       case 408:
         return {
-          message: 'AI javob berishga ulgurmadi. Qayta urinib ko’ring.',
+          message: 'AI javob berishga ulgurmadi. Qayta urinib ko\'ring.',
           retryable: true,
           code: 'timeout',
         };
       case 429:
         return {
-          message: 'So’rovlar soni juda ko’p. Biroz kutib, qayta urinib ko’ring.',
+          message: 'So\'rovlar soni juda ko\'p. Biroz kutib, qayta urinib ko\'ring.',
           retryable: true,
           code: 'rate_limited',
         };
@@ -257,13 +266,13 @@ export function toAiErrorInfo(error: unknown, context: AiErrorContext = 'chat'):
       default:
         if (error.status >= 500 || context === 'chat') {
           return {
-            message: 'AI xizmatida xatolik yuz berdi. Keyinroq qayta urinib ko’ring.',
+            message: 'AI xizmatida xatolik yuz berdi. Keyinroq qayta urinib ko\'ring.',
             retryable: true,
             code: 'server',
           };
         }
         return {
-          message: 'Amalni tasdiqlashning iloji bo’lmadi. Qayta urinib ko’ring.',
+          message: 'Amalni tasdiqlashning iloji bo\'lmadi. Qayta urinib ko\'ring.',
           retryable: false,
           code: 'confirm_failed',
         };
@@ -273,7 +282,7 @@ export function toAiErrorInfo(error: unknown, context: AiErrorContext = 'chat'):
   if (isNetworkFailure(error)) return NETWORK_ERROR;
 
   return {
-    message: 'Kutilmagan xatolik yuz berdi. Qayta urinib ko’ring.',
+    message: 'Kutilmagan xatolik yuz berdi. Qayta urinib ko\'ring.',
     retryable: true,
     code: 'unknown',
   };

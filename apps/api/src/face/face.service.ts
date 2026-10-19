@@ -59,6 +59,9 @@ const ENV = {
   FACE_AMBIGUITY_MARGIN: 'FACE_AMBIGUITY_MARGIN',
   FACE_UNCERTAIN_MARGIN: 'FACE_UNCERTAIN_MARGIN',
   FACE_DUPLICATE_WINDOW_MINUTES: 'FACE_DUPLICATE_WINDOW_MINUTES',
+  FACE_LIVENESS_ACCEPT_UNCERTAIN: 'FACE_LIVENESS_ACCEPT_UNCERTAIN',
+  FACE_LIVENESS_PASS_THRESHOLD: 'FACE_LIVENESS_PASS_THRESHOLD',
+  FACE_LIVENESS_THRESHOLD: 'FACE_LIVENESS_THRESHOLD',
 } as const;
 
 const AES_256_KEY_BYTES = 32;
@@ -313,6 +316,12 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
    * Shared vocabulary with the camera worker so both pipelines are tuned with
    * the SAME knobs.
    */
+  private readBooleanEnv(name: string, fallback: boolean): boolean {
+    const raw = process.env[name];
+    if (raw === undefined || raw === '') return fallback;
+    return raw === 'true' || raw === '1';
+  }
+
   private readNumberEnv(
     name: string,
     fallback: number,
@@ -333,9 +342,29 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
    */
   private buildRecognitionConfig(): FaceRecognitionConfig {
     const base = DEFAULT_FACE_RECOGNITION_CONFIG;
+    const acceptUncertain = this.readBooleanEnv(
+      ENV.FACE_LIVENESS_ACCEPT_UNCERTAIN,
+      process.env[ENV.NODE_ENV] !== 'production',
+    );
+    const livenessThreshold = this.readNumberEnv(
+      ENV.FACE_LIVENESS_PASS_THRESHOLD,
+      this.readNumberEnv(
+        ENV.FACE_LIVENESS_THRESHOLD,
+        base.livenessPolicy.threshold,
+        0,
+        1,
+      ),
+      0,
+      1,
+    );
 
     return {
       ...base,
+      livenessPolicy: {
+        ...base.livenessPolicy,
+        threshold: livenessThreshold,
+        acceptUncertain,
+      },
       qualityThreshold: this.readNumberEnv(
         ENV.FACE_QUALITY_THRESHOLD,
         base.qualityThreshold,
@@ -609,6 +638,22 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
+  /**
+   * Sanitizes an enrollment entity for client consumption.
+   * Strips raw encrypted template ciphertext and vector hash (M-EDU-BIO-002).
+   */
+  private sanitizeEnrollment<T extends { templates?: any[] }>(enrollment: T): T {
+    if (!enrollment) return enrollment;
+    const sanitized = { ...enrollment };
+    if (Array.isArray(sanitized.templates)) {
+      sanitized.templates = sanitized.templates.map((template: any) => {
+        const { templateData, templateHash, ...safeTemplate } = template;
+        return safeTemplate;
+      });
+    }
+    return sanitized;
+  }
+
   async listEnrollments(
     tenant: TenantContext,
     filters: Parameters<EnrollmentRepository['list']>[1],
@@ -619,7 +664,8 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
       tenant.organizationId,
       filters,
     );
-    return this.paginated(items, total, filters);
+    const sanitizedItems = items.map((item) => this.sanitizeEnrollment(item));
+    return this.paginated(sanitizedItems, total, filters);
   }
 
   async getEnrollment(tenant: TenantContext, id: string) {
@@ -628,7 +674,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
       id,
     );
     if (!enrollment) throw new NotFoundException('Enrollment not found');
-    return enrollment;
+    return this.sanitizeEnrollment(enrollment);
   }
 
   // ---------------------------------------------------------------------------
@@ -874,6 +920,19 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
+    // Emit notifications for any additional students identified in multi-face capture
+    if ((result as any).matches && Array.isArray((result as any).matches)) {
+      for (const m of (result as any).matches) {
+        if (m.student?.id && m.student.id !== studentId && m.attendanceRecorded && m.attendanceRecordId) {
+          void this.emitAttendanceNotification(
+            tenant.organizationId,
+            m.attendanceRecordId,
+            m.student.id,
+          );
+        }
+      }
+    }
+
     const response = { ...result, accessDenied: false };
     await this.attachIdempotencyRecord(clientAttemptId, result.attemptId, response);
     return response;
@@ -1044,6 +1103,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
         refundedAmount: true,
         dueDate: true,
       },
+      take: 100,
     });
 
     const { overdue, outstanding } = computeInvoiceOutstanding(openInvoices);

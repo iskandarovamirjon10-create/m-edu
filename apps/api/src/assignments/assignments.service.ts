@@ -26,6 +26,7 @@ export class AssignmentsService {
     // SECURITY: family roles must never list every assignment in the org
     // (titles, due dates, submission counts of other groups). Scope them to
     // their own enrolled groups (student) / linked children's groups (parent).
+    let allowedGroupIds: string[] | undefined;
     if (requester?.role === 'STUDENT') {
       const student = await this.prisma.student.findUnique({
         where: { userId: requester.id },
@@ -37,7 +38,8 @@ export class AssignmentsService {
         where: { studentId: student.id, isActive: true },
         select: { groupId: true },
       });
-      where.groupId = { in: enrollments.map((e) => e.groupId) };
+      allowedGroupIds = enrollments.map((e) => e.groupId);
+      where.groupId = { in: allowedGroupIds };
     } else if (requester?.role === 'PARENT') {
       const children = await this.prisma.parentStudent.findMany({
         where: { parentId: requester.id },
@@ -50,10 +52,20 @@ export class AssignmentsService {
         },
         select: { groupId: true },
       });
-      where.groupId = { in: enrollments.map((e) => e.groupId) };
+      allowedGroupIds = enrollments.map((e) => e.groupId);
+      where.groupId = { in: allowedGroupIds };
     }
 
-    if (query.groupId) where.groupId = query.groupId;
+    // SECURITY: intersect the requested group with the allowed set instead of
+    // overwriting it, otherwise `?groupId=other` bypasses the family scoping.
+    if (query.groupId) {
+      where.groupId =
+        allowedGroupIds !== undefined
+          ? allowedGroupIds.includes(query.groupId)
+            ? query.groupId
+            : { in: [] }
+          : query.groupId;
+    }
     if (query.lessonId) where.lessonId = query.lessonId;
     if (query.status) where.status = query.status;
 

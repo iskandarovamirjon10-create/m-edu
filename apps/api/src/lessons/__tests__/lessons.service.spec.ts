@@ -22,14 +22,7 @@ describe('LessonsService (Pedagogical Lifecycle)', () => {
       lessonMaterial: { create: vi.fn() },
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        LessonsService,
-        { provide: PrismaService, useValue: prisma },
-      ],
-    }).compile();
-
-    service = module.get<LessonsService>(LessonsService);
+    service = new LessonsService(prisma as any);
   });
 
   it('updates lesson status from PLANNED to CONDUCTED', async () => {
@@ -116,6 +109,38 @@ describe('LessonsService (Pedagogical Lifecycle)', () => {
       ).rejects.toThrow(NotFoundException);
 
       expect(prisma.lesson.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findAll querying and teacher scoping', () => {
+    it('queries lessons for a specific date and matches teacher by teacherId or userId', async () => {
+      prisma.lesson.findMany.mockResolvedValue([
+        { id: 'les-1', startTime: '09:00', endTime: '10:30', status: 'PLANNED' },
+      ]);
+      prisma.lesson.count.mockResolvedValue(1);
+
+      const result = await service.findAll('org-1', {
+        date: '2026-10-13',
+        teacherId: 'teacher-or-user-uuid',
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(prisma.lesson.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            organizationId: 'org-1',
+            OR: [
+              { teacherId: 'teacher-or-user-uuid' },
+              { teacher: { userId: 'teacher-or-user-uuid' } },
+            ],
+            date: expect.objectContaining({
+              gte: expect.any(Date),
+              lt: expect.any(Date),
+            }),
+          }),
+        }),
+      );
     });
   });
 });

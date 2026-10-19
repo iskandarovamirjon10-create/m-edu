@@ -189,8 +189,8 @@ const open = openProp ?? isOpen ?? false;
         ref={modalRef}
         className={[
           'relative w-full',
-          'bg-[var(--bg-card)] backdrop-blur-2xl',
-          'border border-[var(--border-glass)] rounded-3xl',
+          'bg-[var(--bg-card)] backdrop-blur-md',
+          'border border-[var(--border-glass)] rounded-2xl',
           'shadow-[var(--shadow-lg)]',
           'max-h-[90vh] overflow-y-auto',
           'animate-[scale-in_0.25s_cubic-bezier(.25,.46,.45,.94)_forwards]',

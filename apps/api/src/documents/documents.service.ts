@@ -19,19 +19,24 @@ export class DocumentsService {
     const where: Prisma.DocumentWhereInput = { organizationId: user.organizationId };
 
     if (user.role === 'STUDENT') {
+      const student = await this.prisma.student?.findUnique({
+        where: { userId: user.sub },
+        select: { id: true },
+      });
+      const studentIds = student ? [student.id, user.sub] : [user.sub];
       where.OR = [
-        { relatedEntityId: user.sub, relatedEntityType: 'STUDENT' },
-        { category: 'PUBLIC' }
+        { relatedEntityId: { in: studentIds }, relatedEntityType: 'STUDENT' },
+        { category: 'PUBLIC' },
       ];
     } else if (user.role === 'PARENT') {
-      const children = await this.prisma.parentStudent.findMany({
-        where: { parentId: user.sub },
-        select: { studentId: true }
+      const children = await this.prisma.parentStudent?.findMany({
+        where: { OR: [{ parentId: user.sub }, { userId: user.sub }] },
+        select: { studentId: true },
       });
-      const childrenIds = children.map(c => c.studentId);
+      const childrenIds = (children || []).map((c) => c.studentId);
       where.OR = [
         { relatedEntityId: { in: childrenIds }, relatedEntityType: 'STUDENT' },
-        { category: 'PUBLIC' }
+        { category: 'PUBLIC' },
       ];
     }
 
@@ -71,19 +76,24 @@ export class DocumentsService {
     const where: Prisma.DocumentWhereInput = { id, organizationId: user.organizationId };
     
     if (user.role === 'STUDENT') {
+      const student = await this.prisma.student?.findUnique({
+        where: { userId: user.sub },
+        select: { id: true },
+      });
+      const studentIds = student ? [student.id, user.sub] : [user.sub];
       where.OR = [
-        { relatedEntityId: user.sub, relatedEntityType: 'STUDENT' },
-        { category: 'PUBLIC' }
+        { relatedEntityId: { in: studentIds }, relatedEntityType: 'STUDENT' },
+        { category: 'PUBLIC' },
       ];
     } else if (user.role === 'PARENT') {
-      const children = await this.prisma.parentStudent.findMany({
-        where: { parentId: user.sub },
-        select: { studentId: true }
+      const children = await this.prisma.parentStudent?.findMany({
+        where: { OR: [{ parentId: user.sub }, { userId: user.sub }] },
+        select: { studentId: true },
       });
-      const childrenIds = children.map(c => c.studentId);
+      const childrenIds = (children || []).map((c) => c.studentId);
       where.OR = [
         { relatedEntityId: { in: childrenIds }, relatedEntityType: 'STUDENT' },
-        { category: 'PUBLIC' }
+        { category: 'PUBLIC' },
       ];
     }
 

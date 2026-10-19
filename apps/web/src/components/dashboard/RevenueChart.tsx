@@ -1,3 +1,9 @@
+/**
+ * ============================================================================
+ * RevenueChart v2.1 — Executive financial chart (Hyper-Refractive Liquid Glass)
+ * ============================================================================
+ */
+
 import { useMemo } from 'react';
 import {
   Area,
@@ -71,11 +77,11 @@ function RevenueTooltip({
   }
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3.5 py-2.5 shadow-lg backdrop-blur-xl">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+    <div className="rounded-[1.25rem] border border-white/70 bg-white/85 px-4 py-3 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25),inset_0_1px_1px_rgba(255,255,255,0.95)] backdrop-blur-3xl backdrop-saturate-[210%] dark:border-white/20 dark:bg-[#1C1C1E]/90 dark:shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.25)]">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted,#86868B)]">
         {dateLabel}
       </p>
-      <p className="mt-0.5 text-base font-bold tracking-tight text-[var(--text-primary)]">
+      <p className="mt-0.5 text-base font-bold tracking-tight text-[var(--text-primary,#1D1D1F)] dark:text-[var(--text-primary,#F5F5F7)]">
         {formatCurrency(value)}
       </p>
     </div>
@@ -131,28 +137,28 @@ export function RevenueChart({
         >
           <defs>
             <linearGradient id="meduRevenueArea" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.28} />
-              <stop offset="60%" stopColor="var(--primary)" stopOpacity={0.06} />
-              <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+              <stop offset="0%" stopColor="#0A84FF" stopOpacity={0.35} />
+              <stop offset="60%" stopColor="#0A84FF" stopOpacity={0.08} />
+              <stop offset="100%" stopColor="#0A84FF" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="meduRevenueBar" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--info)" stopOpacity={0.7} />
-              <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.4} />
+              <stop offset="0%" stopColor="#5E5CE6" stopOpacity={0.8} />
+              <stop offset="100%" stopColor="#0A84FF" stopOpacity={0.45} />
             </linearGradient>
           </defs>
 
           <CartesianGrid
             strokeDasharray="3 3"
             vertical={false}
-            stroke="var(--border-subtle)"
-            opacity={0.6}
+            stroke="var(--border-subtle, rgba(120,120,128,0.18))"
+            opacity={0.7}
           />
 
           <XAxis
             dataKey="label"
             axisLine={false}
             tickLine={false}
-            tick={{ fill: 'var(--text-muted)', fontSize: 11, fontWeight: 500 }}
+            tick={{ fill: 'var(--text-muted, #86868B)', fontSize: 11, fontWeight: 600 }}
             minTickGap={16}
             interval="preserveStartEnd"
             dy={8}
@@ -161,13 +167,13 @@ export function RevenueChart({
           <YAxis
             axisLine={false}
             tickLine={false}
-            tick={{ fill: 'var(--text-muted)', fontSize: 10, fontWeight: 500 }}
+            tick={{ fill: 'var(--text-muted, #86868B)', fontSize: 10, fontWeight: 600 }}
             tickFormatter={yAxisFormatter}
             width={44}
           />
 
           <Tooltip
-            cursor={{ stroke: 'var(--border)', strokeWidth: 1, strokeDasharray: '4 4' }}
+            cursor={{ stroke: 'var(--border, rgba(120,120,128,0.3))', strokeWidth: 1.5, strokeDasharray: '4 4' }}
             content={<RevenueTooltip period={period} />}
           />
 
@@ -176,21 +182,21 @@ export function RevenueChart({
             maxBarSize={22}
             radius={[6, 6, 0, 0]}
             fill="url(#meduRevenueBar)"
-            opacity={0.7}
+            opacity={0.75}
           />
 
           <Area
             type="monotone"
             dataKey="numericTotal"
-            stroke="var(--primary)"
+            stroke="#0A84FF"
             strokeWidth={2.5}
             fill="url(#meduRevenueArea)"
             activeDot={{
-              r: 5,
+              r: 6,
               fill: '#FFFFFF',
-              stroke: 'var(--primary)',
-              strokeWidth: 2.5,
-              style: { filter: 'drop-shadow(0px 2px 6px rgba(0,122,255,0.4))' },
+              stroke: '#0A84FF',
+              strokeWidth: 3,
+              style: { filter: 'drop-shadow(0px 4px 10px rgba(10,132,255,0.55))' },
             }}
           />
         </ComposedChart>

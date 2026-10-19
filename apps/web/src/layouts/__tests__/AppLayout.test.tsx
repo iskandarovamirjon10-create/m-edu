@@ -1,4 +1,6 @@
 /**
+ * @vitest-environment jsdom
+ *
  * AppLayout navigation tests:
  *  - ADMIN sees the full nav (primary + administration sections)
  *  - STUDENT never sees administration/management routes
@@ -6,7 +8,8 @@
  *  - logout signs out and redirects to /login
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -59,6 +62,7 @@ function renderLayout() {
 
 describe('AppLayout navigation by role', () => {
   beforeEach(() => {
+    cleanup();
     logoutMock.mockReset();
     currentUser.role = 'SUPER_ADMIN';
     // These assertions target the *desktop* sidebar (full labels + the
@@ -70,14 +74,29 @@ describe('AppLayout navigation by role', () => {
       writable: true,
       value: 1440,
     });
+    window.matchMedia = vi.fn().mockImplementation((query: string) => {
+      const minMatch = query.match(/min-width:\s*(\d+)px/);
+      const min = minMatch ? parseInt(minMatch[1], 10) : 0;
+      return {
+        matches: window.innerWidth >= min,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      };
+    });
+    window.dispatchEvent(new Event('resize'));
     window.localStorage.clear();
   });
 
   it('renders primary + administration nav for an admin', () => {
     renderLayout();
     // Primary nav
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Students' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Dashboard' })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Students' })[0]).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Teachers' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Face Recognition' })).toBeInTheDocument();
     // Administration nav
@@ -92,12 +111,12 @@ describe('AppLayout navigation by role', () => {
     renderLayout();
 
     // Student-visible
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Students' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Groups' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Attendance' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Face Recognition' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Payments' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Dashboard' })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Students' })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Groups' })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Attendance' })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Face Recognition' })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Payments' })[0]).toBeInTheDocument();
 
     // Hidden for students (must not exist in the DOM at all)
     for (const label of [
@@ -118,7 +137,8 @@ describe('AppLayout navigation by role', () => {
   it('logs out and redirects to /login', async () => {
     const user = userEvent.setup();
     renderLayout();
-    await user.click(screen.getByRole('button', { name: /log out|sign out|logout/i }));
+    const logoutBtn = screen.getAllByRole('button', { name: /log out|sign out|logout/i })[0];
+    await user.click(logoutBtn);
     expect(logoutMock).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('login page')).toBeInTheDocument();
   });

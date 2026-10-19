@@ -121,3 +121,10 @@ scratch/
 /playwright-report/
 /test-results/
 /apps/api/pg-dev.err
+
+# Repo hygiene: generated audit/report artifacts and ad-hoc patch files.
+# Ignore only — any already-tracked file is left in place on purpose.
+/apps/web/route-sweep-report.json
+/apps/web/.claude/
+/docs/reports/
+*.patch

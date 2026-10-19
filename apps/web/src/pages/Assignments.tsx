@@ -1,22 +1,27 @@
 /**
- * M-EDU AssignmentsPage — Apple Design Award Edition
+ * ============================================================================
+ * M-EDU AssignmentsPage — Apple Design Award Edition (macOS Sequoia & Liquid Glass)
+ * ============================================================================
  *
- * Premium craft:
- *  - Hero with animated clipboard icon + status chips
- *  - Stats bar (Total, Active, Overdue, Submissions) with CountUp
- *  - Due-date countdown with urgency tones
- *  - Premium assignment cards with submission progress bars
- *  - Group selector dropdown (no more raw UUID!)
- *  - Custom SVG icons in SF Symbols proportions
- *  - Shimmer skeletons (not pulse)
- *  - Framer Motion spring physics + stagger
+ * Senior craft:
+ *  - Apple Liquid Glass materials (.liquid-glass-surface, .liquid-glass-card)
+ *  - Real-time tunable optics (--liquid-glass-opacity, --liquid-glass-blur)
+ *  - macOS Split-View Detail Sidecar (`openSidecar` with submission progress & deadlines)
+ *  - Superhuman keyboard-first navigation (j/k, x, Enter, c to create)
+ *  - Web Audio tactile haptics (playTick, playPop, playSuccess)
+ *  - Due-date urgency tones with subtle optical glow
+ *  - Shimmer skeletons with specular hairline reflections
+ * ============================================================================
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
-import { assignmentsApi, groupsApi } from '../lib/api';
-import { useI18n, type TranslateFn } from '../i18n/I18nProvider';
+import { assignmentsApi, groupsApi } from '@/lib/api';
+import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -34,34 +39,15 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 16, filter: 'blur(8px)' },
-  visible: { opacity: 1, y: 0, filter: 'blur(0px)', transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -10, filter: 'blur(6px)' },
-  visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: SPRING.smooth },
-  exit:   { opacity: 0, x: 20, filter: 'blur(6px)', transition: { duration: 0.22 } },
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
+  exit:   { opacity: 0, x: 20, transition: { duration: 0.22 } },
 };
-
-/* ============================================================================
- * REDUCED MOTION
- * ========================================================================== */
-
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(() =>
-    typeof window !== 'undefined'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-  return reduced;
-}
 
 /* ============================================================================
  * TYPES
@@ -83,10 +69,6 @@ interface Group {
 }
 
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'slate';
-
-/* ============================================================================
- * TONE PALETTES
- * ========================================================================== */
 
 const TONE: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
   blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)',  glow: 'rgba(0,122,255,0.28)',  border: 'rgba(0,122,255,0.22)' },
@@ -121,17 +103,17 @@ function getDueInfo(dueDateStr: string, t: TranslateFn): DueInfo {
     const overdueDays = Math.abs(daysLeft);
     return {
       tone: 'red',
-      label: overdueDays === 0 ? t('assignments.due.overdue') : t('assignments.due.overdueDays', { days: overdueDays }),
+      label: overdueDays === 0 ? t('assignments.due.overdueToday') : t('assignments.due.overdueDays', { days: overdueDays }),
       daysLeft,
       isOverdue: true,
       isDueToday: false,
     };
   }
 
-  if (hoursLeft < 24) {
+  if (hoursLeft <= 12) {
     return {
-      tone: 'orange',
-      label: hoursLeft <= 1 ? t('assignments.due.dueSoon') : t('assignments.due.hoursLeft', { hours: hoursLeft }),
+      tone: 'red',
+      label: hoursLeft <= 1 ? t('assignments.due.lessThanHour') : t('assignments.due.hoursLeft', { hours: hoursLeft }),
       daysLeft: 0,
       isOverdue: false,
       isDueToday: true,
@@ -139,66 +121,79 @@ function getDueInfo(dueDateStr: string, t: TranslateFn): DueInfo {
     };
   }
 
+  if (daysLeft === 0) {
+    return {
+      tone: 'orange',
+      label: t('assignments.due.today'),
+      daysLeft: 0,
+      isOverdue: false,
+      isDueToday: true,
+    };
+  }
+
   if (daysLeft === 1) {
-    return { tone: 'orange', label: t('assignments.due.tomorrow'), daysLeft, isOverdue: false, isDueToday: false };
+    return {
+      tone: 'orange',
+      label: t('assignments.due.tomorrow'),
+      daysLeft: 1,
+      isOverdue: false,
+      isDueToday: false,
+    };
   }
 
   if (daysLeft <= 3) {
-    return { tone: 'orange', label: t('assignments.due.daysLeft', { days: daysLeft }), daysLeft, isOverdue: false, isDueToday: false };
+    return {
+      tone: 'purple',
+      label: t('assignments.due.daysLeft', { days: daysLeft }),
+      daysLeft,
+      isOverdue: false,
+      isDueToday: false,
+    };
   }
 
-  if (daysLeft <= 7) {
-    return { tone: 'blue', label: t('assignments.due.daysLeft', { days: daysLeft }), daysLeft, isOverdue: false, isDueToday: false };
-  }    return { tone: 'green', label: t('assignments.due.daysLeft', { days: daysLeft }), daysLeft, isOverdue: false, isDueToday: false };
-}
-
-function assignmentTone(title: string): Tone {
-  let h = 0;
-  for (let i = 0; i < title.length; i++) h = (h * 31 + title.charCodeAt(i)) | 0;
-  const palettes: Tone[] = ['blue', 'purple', 'green', 'orange', 'red'];
-  return palettes[Math.abs(h) % palettes.length];
+  return {
+    tone: 'blue',
+    label: t('assignments.due.daysLeft', { days: daysLeft }),
+    daysLeft,
+    isOverdue: false,
+    isDueToday: false,
+  };
 }
 
 /* ============================================================================
- * CUSTOM ICONS
+ * CUSTOM ICONS (SF Symbols proportions)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;
 
 const I = {
-  clipboard: [
-    'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2',
-    'M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z',
-  ],
   pencil: [
     'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
     'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z',
   ],
+  calendar: [
+    'M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z',
+    'M16 2v4', 'M8 2v4', 'M3 10h18',
+  ],
   clock: [
-    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+    'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z',
     'M12 6v6l4 2',
   ],
-  calendar: [
-    'M8 2v4', 'M16 2v4', 'M3 10h18',
-    'M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z',
+  award: [
+    'M12 15l-2 5 4-2 4 2-2-5',
+    'M12 15a7 7 0 1 0 0-14 7 7 0 0 0 0 14z',
   ],
   users: [
     'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2',
     'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-    'M23 21v-2a4 4 0 0 0-3-3.9',
-    'M16 3.1a4 4 0 0 1 0 7.8',
-  ],
-  target: [
-    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
-    'M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12z',
-    'M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+    'M23 21v-2a4 4 0 0 0-3-3.87',
+    'M16 3.13a4 4 0 0 1 0 7.75',
   ],
   layers: [
     'M12 2 2 7l10 5 10-5-10-5z',
     'M2 17l10 5 10-5',
     'M2 12l10 5 10-5',
   ],
-  plus: ['M12 5v14', 'M5 12h14'],
   checkCircle: [
     'M22 11.08V12a10 10 0 1 1-5.93-9.14',
     'M22 4 12 14.01l-3-3',
@@ -207,33 +202,17 @@ const I = {
     'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z',
     'M12 9v4', 'M12 17h.01',
   ],
+  plus: ['M12 5v14', 'M5 12h14'],
   refresh: [
     'M23 4v6h-6',
     'M1 20v-6h6',
     'M3.51 9a9 9 0 0 1 14.85-3.36L23 10',
     'M20.49 15a9 9 0 0 1-14.85 3.36L1 14',
   ],
-  award: [
-    'M12 15a5 5 0 1 0 0-10 5 5 0 0 0 0 10z',
-    'M8.2 13.9 7 22l5-3 5 3-1.2-8.1',
-  ],
   sparkles: [
     'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
     'M18.5 3.5v3', 'M20 5h-3',
     'M5.5 18v2.5', 'M6.75 19.25h-2.5',
-  ],
-  graduationCap: [
-    'M22 10 12 5 2 10l10 5 10-5z',
-    'M6 12v5c3 3 9 3 12 0v-5',
-  ],
-  send: [
-    'M22 2 11 13',
-    'M22 2l-7 20-4-9-9-4z',
-  ],
-  barChart: [
-    'M12 20V10',
-    'M18 20V4',
-    'M6 20v-4',
   ],
 };
 
@@ -252,6 +231,18 @@ function Icon({
       {paths.map((d, i) => <path key={i} d={d} />)}
     </svg>
   );
+}
+
+function codeHash(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+const ASSIGNMENT_PALETTES: Tone[] = ['green', 'blue', 'purple', 'orange', 'red'];
+
+function assignmentTone(title: string): Tone {
+  return ASSIGNMENT_PALETTES[codeHash(title) % ASSIGNMENT_PALETTES.length];
 }
 
 /* ============================================================================
@@ -281,20 +272,16 @@ function CountUp({
   return <span className="tabular-nums">{Math.round(n).toLocaleString()}{suffix}</span>;
 }
 
-/* ============================================================================
- * SHIMMER + SKELETON
- * ========================================================================== */
-
 function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
   return (
     <div
-      className={`relative overflow-hidden bg-[#E5E5EA]/60 dark:bg-[#2C2C2E]/60 ${className}`}
+      className={`relative overflow-hidden bg-neutral-200/50 dark:bg-white/5 ${className}`}
       style={{ borderRadius: radius }}
     >
       <motion.div
         className="absolute inset-0"
         style={{
-          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.65) 50%, transparent 100%)',
+          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
         }}
         animate={{ x: ['-100%', '100%'] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
@@ -306,57 +293,51 @@ function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; r
 function AssignmentsSkeleton() {
   return (
     <div className="space-y-5">
-      <Shimmer className="h-40 w-full" radius="2rem" />
+      <Shimmer className="h-40 w-full" radius="1.75rem" />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[68px]" radius="1rem" />)}
+        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[74px]" radius="1.25rem" />)}
       </div>
-      <div className="space-y-2">
-        {[1, 2, 3, 4, 5].map((i) => <Shimmer key={i} className="h-24" radius="1rem" />)}
+      <div className="space-y-2.5">
+        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-28" radius="1.25rem" />)}
       </div>
     </div>
   );
 }
 
 /* ============================================================================
- * STAT TILE
+ * STAT TILE (Liquid Glass Substrate)
  * ========================================================================== */
 
 function StatTile({
   label, value, icon, tone = 'blue',
 }: { label: string; value: number; icon: string[]; tone?: Tone }) {
   const c = TONE[tone];
+  const { playTick } = usePremiumSound();
 
   return (
     <motion.div
       variants={rowVariants}
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -2 }}
+      onMouseEnter={playTick}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="liquid-glass-card group relative flex items-center gap-3.5 p-4"
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
-      />
       <div
-        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl"
         style={{
           background: c.bg,
           color: c.fg,
           border: `1px solid ${c.border}`,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px -6px ${c.glow}`,
         }}
       >
-        <Icon paths={icon} size={18} strokeWidth={2} />
+        <Icon paths={icon} size={20} strokeWidth={2} />
       </div>
       <div className="relative min-w-0 flex-1">
-        <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
+        <div className="text-[24px] font-bold tracking-tight leading-none text-neutral-900 dark:text-white">
           <CountUp value={value} />
         </div>
-        <div className="mt-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B] truncate">
+        <div className="mt-1.5 text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 truncate">
           {label}
         </div>
       </div>
@@ -365,11 +346,24 @@ function StatTile({
 }
 
 /* ============================================================================
- * SUBJECT ROW / ASSIGNMENT CARD
+ * ASSIGNMENT CARD (Liquid Glass & macOS Sidecar)
  * ========================================================================== */
 
-function AssignmentCard({ assignment }: { assignment: Assignment }) {
+function AssignmentCard({
+  assignment,
+  onOpenSidecar,
+  isFocused = false,
+  isSelected = false,
+  onToggleSelect,
+}: {
+  assignment: Assignment;
+  onOpenSidecar: (a: Assignment) => void;
+  isFocused?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
+}) {
   const { t, locale } = useI18n();
+  const { playTick, playPop } = usePremiumSound();
   const tone = assignmentTone(assignment.title);
   const c = TONE[tone];
   const due = getDueInfo(assignment.dueDate, t);
@@ -385,7 +379,6 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
   const statusLabel = t(statusKey);
   const statusText = statusLabel === statusKey ? assignment.status : statusLabel;
 
-  // Real submissions progress based on genuine group size if present
   const groupStudents = (assignment as any).group?.studentCount || (assignment as any).group?._count?.students || 0;
   const progress = groupStudents > 0 ? Math.min(100, Math.round((submissionCount / groupStudents) * 100)) : (submissionCount > 0 ? 100 : 0);
 
@@ -395,71 +388,111 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
       variants={rowVariants}
       whileHover={{ y: -2 }}
       transition={SPRING.snappy}
-      className="group relative flex flex-col gap-3 rounded-2xl border border-[#00000008] bg-[#00000002] p-4 transition-all hover:border-[#007AFF]/25 hover:bg-[#007AFF]/[0.02] dark:border-[#ffffff08] dark:bg-[#ffffff04]"
+      onClick={() => {
+        playPop();
+        onOpenSidecar(assignment);
+      }}
+      className={`liquid-glass-card group relative flex flex-col gap-3.5 p-4 cursor-pointer ${
+        isSelected
+          ? 'ring-2 ring-blue-500 bg-blue-500/10'
+          : isFocused
+          ? 'ring-2 ring-blue-500/60'
+          : ''
+      }`}
     >
       {/* Left accent bar — tone by due urgency */}
       <span
         aria-hidden
-        className="absolute left-0 top-4 bottom-4 w-[3px] rounded-r-full"
-        style={{ background: dc.fg, boxShadow: `0 0 8px ${dc.glow}` }}
+        className="absolute left-0 top-3.5 bottom-3.5 w-[3.5px] rounded-r-full"
+        style={{ background: dc.fg, boxShadow: `0 0 10px ${dc.glow}` }}
       />
 
-      <div className="flex items-start gap-3 pl-2">
+      <div className="flex items-start gap-3.5 pl-1">
+        {/* Row Selection checkbox */}
+        {onToggleSelect && (
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              playTick();
+              onToggleSelect();
+            }}
+            className="flex items-center pt-3 shrink-0"
+          >
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => {}}
+              className="h-4 w-4 rounded-md accent-blue-600 cursor-pointer"
+              aria-label={`Select ${assignment.title}`}
+            />
+          </div>
+        )}
+
         {/* Icon tile */}
         <div
-          className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+          className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm"
           style={{
-            background: `linear-gradient(135deg, ${c.fg} 0%, ${c.fg}CC 100%)`,
-            boxShadow: `0 6px 16px -6px ${c.glow}, inset 0 1px 0 rgba(255,255,255,0.35)`,
+            background: `linear-gradient(135deg, ${c.fg} 0%, ${c.fg}DD 100%)`,
+            boxShadow: `0 6px 18px -4px ${c.glow}, inset 0 1px 0 rgba(255,255,255,0.4)`,
           }}
         >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-2xl"
-            style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)' }}
-          />
-          <Icon paths={I.pencil} size={20} strokeWidth={2} className="relative" />
+          <Icon paths={I.pencil} size={22} strokeWidth={2} className="relative z-10" />
         </div>
 
         <div className="min-w-0 flex-1">
           {/* Title row */}
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-[14.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-              {assignment.title}
-            </h3>
-            <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-              style={{
-                background: sc.bg,
-                color: sc.fg,
-                border: `1px solid ${sc.border}`,
-              }}
-            >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-[15px] font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
+                {assignment.title}
+              </h3>
               <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: sc.fg, boxShadow: `0 0 6px ${sc.glow}` }}
-              />
-              {statusText}
-            </span>
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                style={{
+                  background: sc.bg,
+                  color: sc.fg,
+                  border: `1px solid ${sc.border}`,
+                }}
+              >
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ background: sc.fg, boxShadow: `0 0 6px ${sc.glow}` }}
+                />
+                {statusText}
+              </span>
+            </div>
+
+            {/* Split-View Sidecar Trigger */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                playPop();
+                onOpenSidecar(assignment);
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/5 bg-white/70 text-xs font-bold text-neutral-600 transition-all hover:border-black/20 hover:bg-white hover:text-black hover:shadow-xs active:scale-95 dark:border-white/10 dark:bg-white/5 dark:text-neutral-400 dark:hover:border-white/20 dark:hover:bg-white/10 dark:hover:text-white"
+              title="macOS Split-View Sidecar (Enter / e)"
+              aria-label="Split-View Sidecar"
+            >
+              ◨
+            </button>
           </div>
 
           {/* Meta chips row */}
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            {/* Due date chip — urgency tone */}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {/* Due date chip */}
             <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold tabular-nums"
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold tabular-nums"
               style={{
                 background: dc.bg,
                 color: dc.fg,
                 border: `1px solid ${dc.border}`,
-                boxShadow: due.tone === 'red' || due.tone === 'orange'
-                  ? `0 0 12px -2px ${dc.glow}`
-                  : undefined,
+                boxShadow: due.tone === 'red' || due.tone === 'orange' ? `0 0 10px -2px ${dc.glow}` : undefined,
               }}
             >
               <Icon
                 paths={due.isOverdue || due.isDueToday ? I.alertTriangle : I.clock}
-                size={9}
+                size={10}
                 strokeWidth={2.5}
               />
               {due.label}
@@ -468,57 +501,52 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
             {/* Group chip */}
             {assignment.group && (
               <span
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold"
+                className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold"
                 style={{
                   background: 'rgba(0,122,255,0.08)',
                   color: '#007AFF',
                 }}
               >
-                <Icon paths={I.users} size={9} strokeWidth={2.5} />
+                <Icon paths={I.users} size={10} strokeWidth={2.5} />
                 {assignment.group.name}
               </span>
             )}
 
             {/* Max score */}
             <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold tabular-nums"
+              className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold tabular-nums"
               style={{
                 background: 'rgba(255,149,0,0.08)',
                 color: '#FF9500',
               }}
             >
-              <Icon paths={I.award} size={9} strokeWidth={2.5} />
+              <Icon paths={I.award} size={10} strokeWidth={2.5} />
               {t('assignments.maxScore', { score: assignment.maxScore })}
             </span>
           </div>
 
-          {/* Due date full + submission progress */}
+          {/* Progress bar */}
           <div className="mt-3 flex items-center gap-3">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2 text-[10.5px] font-bold">
-                <span className="inline-flex items-center gap-1 uppercase tracking-wider text-[#86868B]">
-                  <Icon paths={I.calendar} size={9} strokeWidth={2.5} />
+              <div className="flex items-center justify-between gap-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                <span className="inline-flex items-center gap-1">
+                  <Icon paths={I.calendar} size={10} strokeWidth={2.5} />
                   {new Date(assignment.dueDate).toLocaleDateString(
                     locale === 'uz' ? 'uz-UZ' : locale === 'ru' ? 'ru-RU' : 'en-US',
                     { month: 'short', day: 'numeric', year: 'numeric' },
                   )}
                 </span>
-                <span className="tabular-nums text-[#86868B]">
-                  <span className="text-[#1D1D1F] dark:text-[#F5F5F7]">{submissionCount}</span> {t('assignments.submitted')}
+                <span className="tabular-nums">
+                  <span className="font-bold text-neutral-900 dark:text-white">{submissionCount}</span> {t('assignments.submitted')}
                 </span>
               </div>
 
-              {/* Progress bar */}
-              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#0000000A] dark:bg-[#ffffff10]">
+              <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-neutral-200/60 dark:bg-white/10">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${progress}%` }}
                   transition={{ duration: 1, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
-                  className="h-full rounded-full"
-                  style={{
-                    background: `linear-gradient(90deg, #32ADE6 0%, #007AFF 100%)`,
-                    boxShadow: '0 0 8px rgba(0,122,255,0.5)',
-                  }}
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 shadow-sm"
                 />
               </div>
             </div>
@@ -536,7 +564,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
 export default function AssignmentsPage() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const reduced = usePrefersReducedMotion();
+  const { playPop, playTick, playSuccess } = usePremiumSound();
 
   const [title, setTitle] = useState('');
   const [groupId, setGroupId] = useState('');
@@ -581,6 +609,80 @@ export default function AssignmentsPage() {
     return { total, active, overdue, submissions };
   }, [assignments, t]);
 
+  /* ---------------- macOS Split-View Detail Sidecar ---------------- */
+  const handleOpenAssignmentSidecar = useCallback((assignment: Assignment) => {
+    const due = getDueInfo(assignment.dueDate, t);
+    const data: QuickLookData = {
+      id: assignment.id,
+      type: 'general',
+      title: assignment.title,
+      subtitle: assignment.group?.name ? `Guruh: ${assignment.group.name}` : 'Umumiy topshiriq',
+      badge: {
+        text: assignment.status,
+        tone: assignment.status === 'ACTIVE' ? 'emerald' : 'amber',
+      },
+      avatar: {
+        text: '📝',
+        color: '#10B981',
+      },
+      metrics: [
+        { label: 'Maks. ball', value: `${assignment.maxScore} ball` },
+        { label: 'Topshirdi', value: `${assignment._count?.submissions || 0} ta` },
+        { label: 'Guruh', value: assignment.group?.name || 'Biriktirilmagan' },
+        { label: 'Muddati', value: due.label },
+      ],
+      details: [
+        { label: 'Topshiriq ID', value: assignment.id, copyable: true },
+        { label: 'Sarlavha', value: assignment.title },
+        { label: 'Yakunlanish sanasi', value: new Date(assignment.dueDate).toLocaleString() },
+        { label: 'Holati', value: assignment.status },
+      ],
+      primaryAction: {
+        label: 'Topshiriqni tahrirlash',
+        onExecute: () => {
+          setIsModalOpen(true);
+          setTitle(assignment.title);
+          if (assignment.group?.id) setGroupId(assignment.group.id);
+          setMaxScore(assignment.maxScore);
+        },
+      },
+    };
+    openSidecar(data);
+  }, [t]);
+
+  /* ---------------- Keyboard Navigation ---------------- */
+  const {
+    focusedIndex,
+    isSelected,
+    toggleSelection,
+  } = useListKeyboardNavigation<Assignment>({
+    items: assignments,
+    getItemId: (a) => a.id,
+    rowIdPrefix: 'assignment-row-',
+    onSelect: (a) => handleOpenAssignmentSidecar(a),
+    onQuickLook: (a) => handleOpenAssignmentSidecar(a),
+    onEdit: (a) => {
+      setIsModalOpen(true);
+      setTitle(a.title);
+      if (a.group?.id) setGroupId(a.group.id);
+      setMaxScore(a.maxScore);
+    },
+  });
+
+  /* ---------------- Keyboard shortcut for 'c' ---------------- */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        playPop();
+        setIsModalOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playPop]);
+
   /* ---------------- Mutations ---------------- */
   const createMutation = useMutation({
     mutationFn: (payload: any) => assignmentsApi.create(payload),
@@ -592,6 +694,7 @@ export default function AssignmentsPage() {
       setDueDate('');
       setMaxScore(100);
       setFormErrors({});
+      playSuccess();
     },
   });
 
@@ -623,7 +726,8 @@ export default function AssignmentsPage() {
     setDueDate('');
     setMaxScore(100);
     setFormErrors({});
-  }, []);
+    playPop();
+  }, [playPop]);
 
   /* ---------------- Loading ---------------- */
   if (isLoading && !assignments.length) {
@@ -642,47 +746,36 @@ export default function AssignmentsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={SPRING.smooth}
-          className="flex flex-col items-center gap-4 rounded-3xl border p-10 text-center"
-          style={{
-            borderColor: 'rgba(255,59,48,0.2)',
-            background: 'rgba(255,59,48,0.04)',
-          }}
+          className="liquid-glass-card flex flex-col items-center gap-4 p-10 text-center border-red-500/20"
         >
-          <div
-            className="flex h-14 w-14 items-center justify-center rounded-2xl"
-            style={{ background: 'rgba(255,59,48,0.12)', color: '#FF3B30' }}
-          >
-            <Icon paths={I.alertTriangle} size={26} strokeWidth={2} />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 text-red-500">
+            <Icon paths={I.alertTriangle} size={28} strokeWidth={2} />
           </div>
           <div>
-            <h3 className="text-[17px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+            <h3 className="text-lg font-bold tracking-tight text-neutral-900 dark:text-white">
               {t('assignments.loadErrorTitle')}
             </h3>
-            <p className="mt-1 text-[13px] font-medium text-[#86868B]">
+            <p className="mt-1 text-sm font-medium text-neutral-500 dark:text-neutral-400">
               {(error as Error)?.message || t('common.error')}
             </p>
           </div>
-          <motion.button
+          <button
             type="button"
-            onClick={() => void refetch()}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            transition={SPRING.snappy}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white outline-none"
-            style={{
-              background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
-              boxShadow: '0 8px 24px -8px rgba(0,122,255,0.5)',
+            onClick={() => {
+              playTick();
+              void refetch();
             }}
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-blue-700 active:scale-95"
           >
             <Icon paths={I.refresh} size={14} strokeWidth={2.4} />
             {t('common.retry')}
-          </motion.button>
+          </button>
         </motion.div>
       </div>
     );
   }
 
-  /* ---------------- Main ---------------- */
+  /* ---------------- Main View ---------------- */
   return (
     <motion.div
       variants={containerVariants}
@@ -690,58 +783,13 @@ export default function AssignmentsPage() {
       animate="visible"
       className="page-container space-y-5"
     >
-      {/* HERO */}
+      {/* HERO (Apple Liquid Glass Header) */}
       <motion.div variants={cardVariants}>
-        <div
-          className="relative overflow-hidden rounded-3xl border p-6 sm:p-7"
-          style={{
-            borderColor: 'rgba(255,255,255,0.5)',
-            background: 'linear-gradient(145deg, rgba(255,255,255,0.85), rgba(255,255,255,0.65))',
-            backdropFilter: 'blur(30px) saturate(1.6)',
-            WebkitBackdropFilter: 'blur(30px) saturate(1.6)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 20px 60px -20px rgba(15,23,42,0.14)',
-          }}
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-6 top-0 h-px"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)' }}
-          />
-
+        <div className="liquid-glass-surface rounded-3xl p-6 sm:p-8">
           <div className="relative flex flex-col items-center gap-6 sm:flex-row sm:items-start">
-            {/* Animated icon */}
-            <div className="relative" style={{ width: 88, height: 88 }}>
-              <motion.div
-                className="absolute inset-[-4px] rounded-full p-[3px]"
-                animate={reduced ? {} : { rotate: 360 }}
-                transition={{ duration: 14, repeat: Infinity, ease: 'linear' }}
-              >
-                <span
-                  className="absolute inset-0 rounded-full"
-                  style={{
-                    background: 'conic-gradient(from 0deg, #34C759, #32ADE6, #007AFF, #5856D6, #34C759)',
-                  }}
-                  aria-hidden
-                />
-              </motion.div>
-
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={SPRING.smooth}
-                className="relative flex h-full w-full items-center justify-center rounded-full text-white ring-2 ring-white/70 dark:ring-black/50"
-                style={{
-                  background: 'linear-gradient(135deg, #34C759 0%, #32ADE6 100%)',
-                  boxShadow: '0 12px 32px -8px rgba(52,199,89,0.5), inset 0 2px 0 rgba(255,255,255,0.4)',
-                }}
-              >
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 rounded-full"
-                  style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)' }}
-                />
-                <Icon paths={I.pencil} size={34} strokeWidth={2} className="relative" />
-              </motion.div>
+            {/* Hero icon */}
+            <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md sm:h-20 sm:w-20">
+              <Icon paths={I.pencil} size={32} strokeWidth={2} className="relative z-10" />
             </div>
 
             {/* Text */}
@@ -762,7 +810,7 @@ export default function AssignmentsPage() {
                   />
                   {t('assignments.badge.active', { count: stats.active })}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#00000008] bg-[#00000004] px-2.5 py-1 text-[11px] font-semibold text-[#86868B] dark:border-[#ffffff10] dark:bg-[#ffffff06]">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-black/5 bg-neutral-100/70 px-2.5 py-1 text-[11px] font-semibold text-neutral-600 dark:border-white/10 dark:bg-white/5 dark:text-neutral-400">
                   <Icon paths={I.layers} size={10} strokeWidth={2.5} />
                   {t('assignments.badge.total', { count: stats.total })}
                 </span>
@@ -782,102 +830,114 @@ export default function AssignmentsPage() {
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-2.5 text-3xl font-bold tracking-tight text-neutral-900 dark:text-white sm:text-4xl">
                 {t('assignments.heroTitle')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-sm font-medium text-neutral-500 dark:text-neutral-400">
                 {t('assignments.heroSubtitle')}
               </p>
             </div>
 
             {/* Actions */}
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white outline-none"
-                  style={{
-                    background: 'linear-gradient(135deg, #34C759 0%, #32ADE6 100%)',
-                    boxShadow: '0 8px 24px -8px rgba(52,199,89,0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
-                  }}
-                >
-                  <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                  {t('assignments.create')}
-                </button>
-              </motion.div>
+              <button
+                type="button"
+                onClick={() => {
+                  playPop();
+                  setIsModalOpen(true);
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 text-xs font-bold text-white shadow-md transition-all hover:opacity-95 active:scale-95"
+              >
+                <Icon paths={I.plus} size={15} strokeWidth={2.5} />
+                {t('assignments.create')}
+                <kbd className="hidden sm:inline rounded-md bg-white/20 px-1.5 py-0.5 text-[10px] font-mono">
+                  C
+                </kbd>
+              </button>
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* STATS */}
-      <motion.div variants={containerVariants} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label={t('assignments.stat.total')} value={stats.total} icon={I.pencil} tone="green" />
-        <StatTile label={t('assignments.stat.active')} value={stats.active} icon={I.checkCircle} tone="blue" />
-        <StatTile label={t('assignments.stat.overdue')} value={stats.overdue} icon={I.alertTriangle} tone={stats.overdue > 0 ? 'red' : 'slate'} />
-        <StatTile label={t('assignments.stat.submissions')} value={stats.submissions} icon={I.send} tone="purple" />
+      {/* STATS (Liquid Glass Cards) */}
+      <motion.div variants={containerVariants} className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+        <StatTile label={t('assignments.stat.total')} value={stats.total} icon={I.layers} tone="blue" />
+        <StatTile label={t('assignments.stat.active')} value={stats.active} icon={I.checkCircle} tone="green" />
+        <StatTile label={t('assignments.stat.overdue')} value={stats.overdue} icon={I.alertTriangle} tone="red" />
+        <StatTile label={t('assignments.stat.submissions')} value={stats.submissions} icon={I.award} tone="purple" />
       </motion.div>
 
-      {/* LIST */}
+      {/* KEYBOARD SHORTCUTS HINTS */}
+      <div className="hidden sm:flex items-center justify-end gap-2 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+        <span className="rounded-md border border-black/10 bg-black/5 px-1.5 py-0.5 font-mono text-[10px] dark:border-white/10 dark:bg-white/5">
+          J / K
+        </span>
+        <span>Harakat</span>
+        <span className="rounded-md border border-black/10 bg-black/5 px-1.5 py-0.5 font-mono text-[10px] dark:border-white/10 dark:bg-white/5">
+          ↵ / E
+        </span>
+        <span>Sidecar</span>
+        <span className="rounded-md border border-black/10 bg-black/5 px-1.5 py-0.5 font-mono text-[10px] dark:border-white/10 dark:bg-white/5">
+          X
+        </span>
+        <span>Tanlash</span>
+      </div>
+
+      {/* ASSIGNMENTS LIST */}
       <motion.div variants={cardVariants}>
-        <div
-          className="overflow-hidden rounded-3xl border"
-          style={{
-            borderColor: 'rgba(255,255,255,0.5)',
-            background: 'rgba(255,255,255,0.75)',
-            backdropFilter: 'blur(30px) saturate(1.6)',
-            WebkitBackdropFilter: 'blur(30px) saturate(1.6)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 20px 60px -20px rgba(15,23,42,0.14)',
-          }}
-        >
-          <div className="flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#34C759]/10 text-[#34C759]">
-              <Icon paths={I.pencil} size={15} strokeWidth={2} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                {t('assignments.listTitle')}
-              </h2>
-              <p className="text-[11px] font-medium text-[#86868B]">
-                {t(assignments.length === 1 ? 'assignments.countOne' : 'assignments.countMany', { count: assignments.length })}
-              </p>
+        <div className="liquid-glass-card p-4 sm:p-5">
+          <div className="flex items-center justify-between pb-3.5 mb-3 border-b border-black/5 dark:border-white/10">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+                <Icon paths={I.pencil} size={16} strokeWidth={2} />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold tracking-tight text-neutral-900 dark:text-white">
+                  {t('assignments.listTitle')}
+                </h2>
+                <p className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+                  {t(assignments.length === 1 ? 'assignments.countOne' : 'assignments.countMany', { count: assignments.length })}
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="p-3">
+          <div>
             {assignments.length === 0 ? (
               <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#34C759]/10 text-[#34C759]">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-500">
                   <Icon paths={I.pencil} size={26} strokeWidth={2} />
                 </div>
-                <p className="text-[14px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <p className="text-sm font-bold text-neutral-900 dark:text-white">
                   {t('assignments.emptyTitle')}
                 </p>
-                <p className="max-w-sm text-[12px] font-medium text-[#86868B]">
+                <p className="max-w-sm text-xs font-medium text-neutral-500 dark:text-neutral-400">
                   {t('assignments.emptyHint')}
                 </p>
-                <motion.button
+                <button
                   type="button"
-                  onClick={() => setIsModalOpen(true)}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  transition={SPRING.snappy}
-                  className="mt-2 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[12.5px] font-semibold text-white outline-none"
-                  style={{
-                    background: 'linear-gradient(135deg, #34C759 0%, #32ADE6 100%)',
-                    boxShadow: '0 8px 24px -8px rgba(52,199,89,0.5)',
+                  onClick={() => {
+                    playPop();
+                    setIsModalOpen(true);
                   }}
+                  className="mt-2 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-emerald-700 active:scale-95"
                 >
-                  <Icon paths={I.plus} size={13} strokeWidth={2.5} />
+                  <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                   {t('assignments.create')}
-                </motion.button>
+                </button>
               </div>
             ) : (
-              <motion.div layout className="space-y-2">
+              <motion.div layout className="space-y-3">
                 <AnimatePresence initial={false} mode="popLayout">
-                  {assignments.map((a) => (
-                    <AssignmentCard key={a.id} assignment={a} />
+                  {assignments.map((a, idx) => (
+                    <AssignmentCard
+                      key={a.id}
+                      assignment={a}
+                      onOpenSidecar={handleOpenAssignmentSidecar}
+                      isFocused={focusedIndex === idx}
+                      isSelected={isSelected(a.id)}
+                      onToggleSelect={() => toggleSelection(a.id)}
+                    />
                   ))}
                 </AnimatePresence>
               </motion.div>
@@ -889,57 +949,36 @@ export default function AssignmentsPage() {
       {/* CREATE MODAL */}
       <AnimatePresence>
         {isModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="fixed inset-0 z-[200] grid place-items-center p-4"
-            style={{
-              background: 'rgba(15,23,42,0.5)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-            }}
-            onClick={handleCloseModal}
-          >
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 20 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleCloseModal}
+              className="fixed inset-0 bg-black/45 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 20 }}
+              exit={{ opacity: 0, scale: 0.94, y: 16 }}
               transition={SPRING.smooth}
               onClick={(e) => e.stopPropagation()}
-              className="relative w-full max-w-lg overflow-hidden rounded-3xl border p-6"
-              style={{
-                borderColor: 'rgba(255,255,255,0.6)',
-                background: 'rgba(255,255,255,0.95)',
-                backdropFilter: 'blur(40px) saturate(1.8)',
-                WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,1), 0 32px 80px -20px rgba(15,23,42,0.35)',
-              }}
-              role="dialog"
-              aria-modal="true"
-              aria-label={t('assignments.createAria')}
+              className="liquid-glass-surface relative z-10 w-full max-w-lg overflow-hidden rounded-3xl p-6 shadow-2xl dark:text-white"
             >
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-x-6 top-0 h-px"
-                style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent)' }}
-              />
-
               {/* Header hint */}
-              <div className="flex items-center gap-3 rounded-2xl border border-[#34C75933] bg-[#34C759]/[0.06] px-4 py-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#34C759]/15 text-[#34C759]">
+              <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 mb-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-500">
                   <Icon paths={I.sparkles} size={18} strokeWidth={2} />
                 </div>
-                <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <p className="text-xs font-semibold leading-snug">
                   {t('assignments.createHint')}
                 </p>
               </div>
 
-              <form onSubmit={handleCreate} className="mt-5 space-y-4" noValidate>
+              <form onSubmit={handleCreate} className="space-y-4" noValidate>
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                    {t('assignments.form.title')} <span className="text-[#FF3B30]">*</span>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    {t('assignments.form.title')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -951,23 +990,20 @@ export default function AssignmentsPage() {
                     }}
                     placeholder={t('assignments.form.titlePlaceholder')}
                     aria-invalid={Boolean(formErrors.title)}
-                    className="w-full rounded-xl border bg-white/80 px-3.5 py-2.5 text-[13.5px] font-medium text-[#1D1D1F] outline-none transition-all placeholder:text-[#86868B] focus:border-[#34C759]/40 focus:shadow-[0_0_0_4px_rgba(52,199,89,0.1)] dark:bg-[#1c1c1e80] dark:text-[#F5F5F7]"
-                    style={{
-                      borderColor: formErrors.title ? '#FF3B30' : 'rgba(0,0,0,0.10)',
-                    }}
+                    className="w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
                   />
                   {formErrors.title && (
-                    <p className="mt-1 text-[11.5px] font-medium text-[#FF3B30]">{formErrors.title}</p>
+                    <p className="mt-1 text-xs font-medium text-red-500">{formErrors.title}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                    {t('assignments.form.group')} <span className="text-[#FF3B30]">*</span>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    {t('assignments.form.group')} <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]">
-                      <Icon paths={I.users} size={14} strokeWidth={2.2} />
+                    <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400">
+                      <Icon paths={I.users} size={15} strokeWidth={2.2} />
                     </span>
                     <select
                       required
@@ -977,33 +1013,25 @@ export default function AssignmentsPage() {
                         setFormErrors((p) => ({ ...p, groupId: undefined }));
                       }}
                       aria-invalid={Boolean(formErrors.groupId)}
-                      className="w-full appearance-none rounded-xl border bg-white/80 py-2.5 pl-10 pr-10 text-[13.5px] font-medium text-[#1D1D1F] outline-none transition-all focus:border-[#34C759]/40 focus:shadow-[0_0_0_4px_rgba(52,199,89,0.1)] dark:bg-[#1c1c1e80] dark:text-[#F5F5F7]"
-                      style={{
-                        borderColor: formErrors.groupId ? '#FF3B30' : 'rgba(0,0,0,0.10)',
-                      }}
+                      className="w-full appearance-none rounded-2xl border border-black/10 bg-white/70 py-2.5 pl-10 pr-10 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
                     >
                       <option value="">{t('assignments.form.chooseGroup')}</option>
                       {groups.map((g) => (
-                        <option key={g.id} value={g.id}>
+                        <option key={g.id} value={g.id} className="dark:bg-zinc-900">
                           {g.name}
                         </option>
                       ))}
                     </select>
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#86868B]">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                        <path d="M6 9l6 6 6-6" />
-                      </svg>
-                    </span>
                   </div>
                   {formErrors.groupId && (
-                    <p className="mt-1 text-[11.5px] font-medium text-[#FF3B30]">{formErrors.groupId}</p>
+                    <p className="mt-1 text-xs font-medium text-red-500">{formErrors.groupId}</p>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                      {t('assignments.form.dueDate')} <span className="text-[#FF3B30]">*</span>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                      {t('assignments.form.dueDate')} <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="datetime-local"
@@ -1014,17 +1042,14 @@ export default function AssignmentsPage() {
                         setFormErrors((p) => ({ ...p, dueDate: undefined }));
                       }}
                       aria-invalid={Boolean(formErrors.dueDate)}
-                      className="w-full rounded-xl border bg-white/80 px-3.5 py-2.5 text-[13.5px] font-medium text-[#1D1D1F] outline-none transition-all focus:border-[#34C759]/40 focus:shadow-[0_0_0_4px_rgba(52,199,89,0.1)] dark:bg-[#1c1c1e80] dark:text-[#F5F5F7]"
-                      style={{
-                        borderColor: formErrors.dueDate ? '#FF3B30' : 'rgba(0,0,0,0.10)',
-                      }}
+                      className="w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
                     />
                     {formErrors.dueDate && (
-                      <p className="mt-1 text-[11.5px] font-medium text-[#FF3B30]">{formErrors.dueDate}</p>
+                      <p className="mt-1 text-xs font-medium text-red-500">{formErrors.dueDate}</p>
                     )}
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
                       {t('assignments.form.maxScore')}
                     </label>
                     <input
@@ -1032,34 +1057,24 @@ export default function AssignmentsPage() {
                       min={1}
                       value={maxScore}
                       onChange={(e) => setMaxScore(Number(e.target.value))}
-                      className="w-full rounded-xl border border-[#00000010] bg-white/80 px-3.5 py-2.5 text-[13.5px] font-medium tabular-nums text-[#1D1D1F] outline-none transition-all focus:border-[#34C759]/40 focus:shadow-[0_0_0_4px_rgba(52,199,89,0.1)] dark:border-[#ffffff10] dark:bg-[#1c1c1e80] dark:text-[#F5F5F7]"
+                      className="w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-2.5 text-sm font-semibold tabular-nums outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
                     />
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2">
-                  <motion.button
+                <div className="flex justify-end gap-2.5 pt-3">
+                  <button
                     type="button"
                     onClick={handleCloseModal}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={SPRING.snappy}
                     disabled={createMutation.isPending}
-                    className="rounded-xl border border-[#00000010] bg-[#00000004] px-4 py-2.5 text-[13px] font-semibold text-[#1D1D1F] outline-none transition-colors hover:bg-[#00000008] disabled:opacity-50 dark:border-[#ffffff10] dark:bg-[#ffffff06] dark:text-[#F5F5F7]"
+                    className="rounded-xl border border-black/5 bg-neutral-100 px-4 py-2 text-xs font-bold text-neutral-700 transition-colors hover:bg-neutral-200 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300 dark:hover:bg-white/10"
                   >
                     {t('common.cancel')}
-                  </motion.button>
-                  <motion.button
+                  </button>
+                  <button
                     type="submit"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={SPRING.snappy}
                     disabled={createMutation.isPending}
-                    className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white outline-none disabled:opacity-70"
-                    style={{
-                      background: 'linear-gradient(135deg, #34C759 0%, #32ADE6 100%)',
-                      boxShadow: '0 8px 24px -8px rgba(52,199,89,0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
-                    }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-emerald-700 active:scale-95 disabled:opacity-70"
                   >
                     {createMutation.isPending ? (
                       <>
@@ -1076,11 +1091,11 @@ export default function AssignmentsPage() {
                         {t('assignments.create')}
                       </>
                     )}
-                  </motion.button>
+                  </button>
                 </div>
               </form>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </motion.div>

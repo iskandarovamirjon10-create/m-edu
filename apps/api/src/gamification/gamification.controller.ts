@@ -144,6 +144,7 @@ export class GamificationController {
   /** GET /api/gamification/rewards — catalog of available items in coin shop */
   @AllowAnyRole()
   @Get('rewards')
+  @Roles(Role.STUDENT)
   @ApiOperation({ summary: 'M-Coins reward shop catalog' })
   async getRewards() {
     const items = await this.gamification.getRewards();
@@ -153,6 +154,7 @@ export class GamificationController {
   /** POST /api/gamification/rewards/:id/claim — redeem a reward */
   @AllowAnyRole()
   @Post('rewards/:id/claim')
+  @Roles(Role.STUDENT)
   @ApiOperation({ summary: 'Redeem an item using M-Coins' })
   async claimReward(
     @CurrentUser('organizationId') organizationId: string,

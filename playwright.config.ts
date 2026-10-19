@@ -39,7 +39,11 @@ export default defineConfig({
     {
       command: 'node apps/api/dist/main.js',
       url: `${API_ORIGIN}/api/health`,
-      reuseExistingServer: !process.env.CI,
+      // CI starts the API in the background for the vitest API e2e suite and
+      // exports E2E_API_URL. Reuse that instance instead of refusing to start
+      // against the already-occupied health URL. Local runs keep reusing when
+      // a server is up (same as before) and start one otherwise.
+      reuseExistingServer: Boolean(process.env.E2E_API_URL) || !process.env.CI,
       timeout: 120_000,
     },
     {

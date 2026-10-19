@@ -475,6 +475,11 @@ export class MarkAttendanceDto {
   @ApiProperty() @IsDateString()
   date: string;
 
+  @ApiPropertyOptional({ description: 'Specific lesson ID when recording attendance for a planned/conducted lesson' })
+  @IsOptional()
+  @IsUUID()
+  lessonId?: string;
+
   @ApiProperty({ type: [AttendanceRecordDto] }) @IsArray()
   records: AttendanceRecordDto[];
 }

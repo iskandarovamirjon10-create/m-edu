@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite';
+/// <reference types="vitest" />
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 
@@ -15,14 +16,14 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:3001',
         changeOrigin: true,
         // Enable sending cookies/credentials for cross-origin OAuth callback
         cookieDomainRewrite: 'localhost',
       },
       // Socket.IO (chat) handshake + websocket upgrade must reach the API in dev
       '/socket.io': {
-        target: 'http://localhost:3001',
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:3001',
         changeOrigin: true,
         ws: true,
       },
@@ -35,6 +36,10 @@ export default defineConfig({
     cssCodeSplit: true,
     target: 'es2022',
     minify: 'esbuild',
+    modulePreload: {
+      polyfill: false,
+    },
+    reportCompressedSize: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -79,5 +84,11 @@ export default defineConfig({
         },
       },
     },
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: [fileURLToPath(new URL('./src/test-setup.ts', import.meta.url))],
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
   },
 });

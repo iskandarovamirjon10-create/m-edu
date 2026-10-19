@@ -64,6 +64,45 @@ export class PayrollRunController {
   }
 
   @AllowAnyRole()
+  @Get('revenue-share')
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER)
+  async getRevenueShare(
+    @CurrentUser('organizationId') orgId: string,
+    @Query('teacherId') teacherId: string,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('sharePercent') sharePercent?: string,
+    @Query('retentionBonus') retentionBonus?: string,
+  ) {
+    if (!teacherId) throw new BadRequestException('teacherId is required');
+    const y = year ? Number(year) : new Date().getFullYear();
+    const m = month ? Number(month) : new Date().getMonth() + 1;
+    return this.payrollService.calculateRevenueShare(orgId, {
+      teacherId,
+      year: y,
+      month: m,
+      revenueSharePercentage: sharePercent ? Number(sharePercent) : 40,
+      retentionBonusPercentage: retentionBonus ? Number(retentionBonus) : 10,
+    });
+  }
+
+  @Post('revenue-share')
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
+  async createRevenueShareRun(
+    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: {
+      teacherId: string;
+      year: number;
+      month: number;
+      revenueSharePercentage?: number;
+      retentionBonusPercentage?: number;
+    },
+  ) {
+    return this.payrollService.createRevenueShareRun(orgId, userId, body);
+  }
+
+  @AllowAnyRole()
   @Get(':id')
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER)
   async getRun(

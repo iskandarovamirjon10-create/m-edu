@@ -22,10 +22,14 @@ export interface SearchResponse {
 
 const EMPTY: SearchResponse = { query: '', results: [], total: 0, byType: {}, tookMs: 0 };
 
-export function useUniversalSearch(query: string, types?: string[], limit = 20) {
+export function useUniversalSearch(query: string, typeFilter?: string, limit = 20) {
   const [results, setResults] = useState<SearchResponse>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Derive a stable `types` reference so the query effect below does not
+  // re-run on every render when the caller passes an inline array.
+  const types = useMemo(() => (typeFilter ? [typeFilter] : []), [typeFilter]);
 
   // Monotonic sequence + unmount flag so a slow older response can never
   // overwrite a newer keystroke's results (classic race).
@@ -109,4 +113,3 @@ export function useUniversalSearch(query: string, types?: string[], limit = 20) 
     runSearch,
   }), [results, loading, error, runSearch]);
 }
-

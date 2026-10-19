@@ -26,6 +26,9 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import request from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useI18n } from '@/i18n/I18nProvider';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -98,25 +101,25 @@ const STATUS_PALETTE: Record<StatusTone, {
   track: string;
 }> = {
   warning: {
-    fg: '#FF9500',
-    bg: 'rgba(255,149,0,0.12)',
-    glow: 'rgba(255,149,0,0.35)',
-    stroke: '#FF9500',
-    track: 'rgba(255,149,0,0.14)',
+    fg: '#F59E0B',
+    bg: 'rgba(245,158,11,0.12)',
+    glow: 'rgba(245,158,11,0.35)',
+    stroke: '#F59E0B',
+    track: 'rgba(245,158,11,0.14)',
   },
   success: {
-    fg: '#34C759',
-    bg: 'rgba(52,199,89,0.12)',
-    glow: 'rgba(52,199,89,0.35)',
-    stroke: '#34C759',
-    track: 'rgba(52,199,89,0.14)',
+    fg: '#10B981',
+    bg: 'rgba(16,185,129,0.12)',
+    glow: 'rgba(16,185,129,0.35)',
+    stroke: '#10B981',
+    track: 'rgba(16,185,129,0.14)',
   },
   error: {
-    fg: '#FF3B30',
-    bg: 'rgba(255,59,48,0.12)',
-    glow: 'rgba(255,59,48,0.35)',
-    stroke: '#FF3B30',
-    track: 'rgba(255,59,48,0.14)',
+    fg: '#EF4444',
+    bg: 'rgba(239,68,68,0.12)',
+    glow: 'rgba(239,68,68,0.35)',
+    stroke: '#EF4444',
+    track: 'rgba(239,68,68,0.14)',
   },
 };
 
@@ -251,14 +254,12 @@ function nameHash(str: string): number {
 }
 
 const AVATAR_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
-  ['#FF2D55', '#FF9500'],
-  ['#30D158', '#34C759'],
+  ['#2563EB', '#1D4ED8'],
+  ['#475569', '#334155'],
+  ['#059669', '#047857'],
+  ['#0D9488', '#0F766E'],
+  ['#4F46E5', '#4338CA'],
+  ['#1E293B', '#0F172A'],
 ];
 
 function avatarGradient(name: string): string {
@@ -267,33 +268,12 @@ function avatarGradient(name: string): string {
 }
 
 /* ============================================================================
- * PREMIUM SUB-COMPONENTS
+ * SUB-COMPONENTS
  * ========================================================================== */
 
-/** Ambient gradient orbs — consistent with suite */
+/** Quiet luxury - no ambient orbs */
 function AmbientOrbs() {
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <motion.div
-        className="absolute -left-[8%] top-[6%] h-[44%] w-[40%] rounded-full"
-        style={{
-          background:
-            'radial-gradient(closest-side, rgba(0,122,255,0.14), transparent 70%)',
-          }}
-        animate={{ x: [0, 24, 0], y: [0, 18, 0], opacity: [0.85, 1, 0.85] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute -bottom-[10%] -right-[8%] h-[46%] w-[42%] rounded-full"
-        style={{
-          background:
-            'radial-gradient(closest-side, rgba(175,82,222,0.12), transparent 70%)',
-          }}
-        animate={{ x: [0, -28, 0], y: [0, -22, 0], opacity: [0.8, 1, 0.8] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </div>
-  );
+  return null;
 }
 
 /** Animated count-up number */
@@ -391,11 +371,11 @@ function StatTile({
   format?: 'number' | 'percent' | 'string';
 }) {
   const palette: Record<string, { fg: string; bg: string; glow: string }> = {
-    blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)' },
-    green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)' },
-    orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)' },
-    red:    { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)' },
-    purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)' },
+    blue:   { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)' },
+    green:  { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)' },
+    orange: { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)' },
+    red:    { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)' },
+    purple: { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)' },
   };
   const c = palette[tone];
 
@@ -404,7 +384,7 @@ function StatTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="liquid-glass-card group relative flex items-center gap-3 overflow-hidden rounded-2xl px-4 py-3"
       style={{
         boxShadow:
           'inset 0 1px 0 rgba(255,255,255,0.6), ' +
@@ -442,7 +422,7 @@ function StatTile({
               : <CountUp value={value} />
           ) : value}
         </div>
-        <div className="mt-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B] truncate">
+        <div className="mt-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B] truncate">
           {label}
         </div>
       </div>
@@ -471,7 +451,7 @@ function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; r
 }
 
 /** Premium workload row with KPI metrics & Smart Salary breakdown */
-function WorkloadRow({ teacher, index }: { teacher: TeacherWorkload; index: number }) {
+function WorkloadRow({ teacher, index, onSidecar }: { teacher: TeacherWorkload; index: number; onSidecar: (t: TeacherWorkload) => void; }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const tone = STATUS_TONE[teacher.status];
@@ -505,7 +485,7 @@ function WorkloadRow({ teacher, index }: { teacher: TeacherWorkload; index: numb
         <motion.div
           whileHover={{ scale: 1.06 }}
           transition={SPRING.snappy}
-          className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
+          className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white/50 dark:ring-slate-900/50"
           style={{
             background: avatarGradient(teacher.teacherName),
             fontSize: '13px',
@@ -532,7 +512,7 @@ function WorkloadRow({ teacher, index }: { teacher: TeacherWorkload; index: numb
             </GlassBadge>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11.5px] font-medium text-[#86868B]">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11.5px] font-medium text-[#64748B]">
             <span className="inline-flex items-center gap-1">
               <Icon paths={I.groups} size={12} strokeWidth={2} className="opacity-60" />
               <span className="tabular-nums">{teacher.groupsCount}</span>
@@ -553,7 +533,7 @@ function WorkloadRow({ teacher, index }: { teacher: TeacherWorkload; index: numb
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-500 dark:text-emerald-400">
               🎯 {retention}% Retention
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-blue-500 dark:text-blue-400">
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-blue-500 dark:text-brand-400">
               📋 {attendance}% Davomat
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-purple-500 dark:text-purple-400">
@@ -579,7 +559,15 @@ function WorkloadRow({ teacher, index }: { teacher: TeacherWorkload; index: numb
         </div>
 
         {/* Right side: Ring + Salary preview button */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onSidecar(teacher); }}
+            className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-white/[0.08]"
+            title="Split-View Sidecar (Enter / Space)"
+          >
+            <span className="text-[13px] leading-none">◨</span>
+          </button>
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
@@ -603,39 +591,39 @@ function WorkloadRow({ teacher, index }: { teacher: TeacherWorkload; index: numb
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={SPRING.smooth}
-            className="relative z-10 mt-3 overflow-hidden border-t border-[#00000010] pt-3 dark:border-white/10"
+            className="relative z-10 mt-3 overflow-hidden border-t border-black/[0.06] pt-3 dark:border-white/[0.08]"
           >
             <div className="grid grid-cols-2 gap-3 rounded-2xl bg-black/[0.03] p-3.5 text-xs dark:bg-white/[0.04] sm:grid-cols-4">
               <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#64748B]">
                   Fiksa Oklad
                 </span>
                 <span className="tabular-nums font-bold text-[#1D1D1F] dark:text-white">
-                  {baseSalary.toLocaleString()} so’m
+                  {baseSalary.toLocaleString()} so'm
                 </span>
               </div>
               <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#64748B]">
                   Dars soatlari ({teacher.hoursPerWeek}h/h)
                 </span>
                 <span className="tabular-nums font-bold text-[#1D1D1F] dark:text-white">
-                  {Math.round(teacher.hoursPerWeek * 4.2 * hourlyRate).toLocaleString()} so’m
+                  {Math.round(teacher.hoursPerWeek * 4.2 * hourlyRate).toLocaleString()} so'm
                 </span>
               </div>
               <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#64748B]">
                   KPI Bonuslari
                 </span>
                 <span className="tabular-nums font-bold text-emerald-600 dark:text-emerald-400">
-                  +{bonusSalary.toLocaleString()} so’m
+                  +{bonusSalary.toLocaleString()} so'm
                 </span>
               </div>
               <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#64748B]">
                   Jami Hisoblangan
                 </span>
                 <span className="text-sm font-black tabular-nums text-emerald-600 dark:text-emerald-300">
-                  {estimatedSalary.toLocaleString()} so’m
+                  {estimatedSalary.toLocaleString()} so'm
                 </span>
               </div>
             </div>
@@ -658,16 +646,16 @@ function ModelLegend() {
   ];
 
   const palette: Record<string, { fg: string; bg: string }> = {
-    blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)' },
-    purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)' },
-    green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)' },
-    orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)' },
+    blue:   { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)' },
+    purple: { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)' },
+    green:  { fg: '#10B981', bg: 'rgba(16,185,129,0.10)' },
+    orange: { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)' },
   };
 
   return (
     <GlassCard className="p-5 sm:p-6">
       <div className="mb-4 flex items-center gap-3">
-        <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
+        <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-[#2563EB]/10 text-[#2563EB]">
           <span
             aria-hidden
             className="pointer-events-none absolute inset-0 rounded-xl"
@@ -682,7 +670,7 @@ function ModelLegend() {
           <h3 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {t('teacherWorkload.modelTitle')}
           </h3>
-          <p className="text-[11.5px] font-medium text-[#86868B]">
+          <p className="text-[11.5px] font-medium text-[#64748B]">
             {t('teacherWorkload.modelSubtitle') || 'How utilization is calculated'}
           </p>
         </div>
@@ -694,7 +682,7 @@ function ModelLegend() {
           return (
             <div
               key={item.key}
-              className="flex items-start gap-3 rounded-xl border border-[#00000008] bg-[#00000003] px-3 py-2.5 dark:border-[#ffffff08] dark:bg-[#ffffff04]"
+              className="flex items-start gap-3 rounded-xl border border-black/[0.04] bg-black/[0.02] px-3 py-2.5 dark:border-white/[0.06] dark:bg-white/[0.04]"
             >
               <div
                 className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
@@ -706,7 +694,7 @@ function ModelLegend() {
                 <p className="text-[12px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {t(`teacherWorkload.model.${item.key}`)}
                 </p>
-                <p className="mt-0.5 text-[11.5px] leading-snug text-[#86868B]">
+                <p className="mt-0.5 text-[11.5px] leading-snug text-[#64748B]">
                   {t(`teacherWorkload.model.${item.key}Desc`)}
                 </p>
               </div>
@@ -751,7 +739,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
     <GlassCard className="relative overflow-hidden border border-emerald-500/25 bg-gradient-to-br from-emerald-950/15 via-slate-900/40 to-slate-950/60 p-6 sm:p-7">
       <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl" />
 
-      <div className="relative z-10 flex flex-col justify-between gap-4 border-b border-[#00000010] pb-5 dark:border-white/10 md:flex-row md:items-center">
+      <div className="relative z-10 flex flex-col justify-between gap-4 border-b border-black/[0.06] pb-5 dark:border-white/[0.08] md:flex-row md:items-center">
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/20 text-2xl text-emerald-400 shadow-lg shadow-emerald-500/10">
             💎
@@ -765,14 +753,14 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
                 {t('workload.autoCalc') || 'Auto-calc'}
               </span>
             </div>
-            <p className="text-xs text-[#86868B]">
+            <p className="text-xs text-[#64748B]">
               {t('workload.calcDesc') || 'Transparent salary calculation based on teacher hours and KPI'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-[#86868B]">{t('workload.teacher') || 'Teacher:'}</label>
+          <label className="text-xs font-medium text-[#64748B]">{t('workload.teacher') || 'Teacher:'}</label>
           <select
             value={selectedTeacherId}
             onChange={(e) => handleTeacherChange(e.target.value)}
@@ -790,7 +778,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
 
       <div className="relative z-10 mt-6 grid grid-cols-1 items-center gap-6 lg:grid-cols-12">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-7">
-          <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
+          <div className="rounded-2xl border border-black/5 bg-slate-50 dark:bg-slate-900/40 p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
             <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-[#1D1D1F] dark:text-slate-300">
               <span>⏱️ Haftalik dars:</span>
               <span className="font-bold text-emerald-600 dark:text-emerald-400">{hoursPerWeek} soat/hafta</span>
@@ -803,17 +791,17 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
               onChange={(e) => { setSelectedTeacherId('custom'); setHoursPerWeek(Number(e.target.value)); }}
               className="w-full accent-emerald-500 cursor-pointer"
             />
-            <div className="mt-1 flex justify-between text-[10px] text-[#86868B]">
+            <div className="mt-1 flex justify-between text-[10px] text-[#64748B]">
               <span>2 soat</span>
               <span>Oyiga ~{Math.round(hoursPerWeek * 4.2)} soat</span>
               <span>45 soat</span>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
+          <div className="rounded-2xl border border-black/5 bg-slate-50 dark:bg-slate-900/40 p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
             <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-[#1D1D1F] dark:text-slate-300">
               <span>💵 Soatlik stavka:</span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">{hourlyRate.toLocaleString()} so’m</span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">{hourlyRate.toLocaleString()} so'm</span>
             </div>
             <input
               type="range"
@@ -824,14 +812,14 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
               onChange={(e) => { setSelectedTeacherId('custom'); setHourlyRate(Number(e.target.value)); }}
               className="w-full accent-emerald-500 cursor-pointer"
             />
-            <div className="mt-1 flex justify-between text-[10px] text-[#86868B]">
-              <span>50k so’m</span>
+            <div className="mt-1 flex justify-between text-[10px] text-[#64748B]">
+              <span>50k so'm</span>
               <span>Stavka</span>
-              <span>300k so’m</span>
+              <span>300k so'm</span>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
+          <div className="rounded-2xl border border-black/5 bg-slate-50 dark:bg-slate-900/40 p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
             <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-[#1D1D1F] dark:text-slate-300">
               <span>🎯 Retention (Saqlash):</span>
               <span className={`font-bold ${retentionRate >= 90 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}`}>
@@ -846,16 +834,16 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
               onChange={(e) => { setSelectedTeacherId('custom'); setRetentionRate(Number(e.target.value)); }}
               className="w-full accent-emerald-500 cursor-pointer"
             />
-            <div className="mt-1 flex justify-between text-[10px] text-[#86868B]">
+            <div className="mt-1 flex justify-between text-[10px] text-[#64748B]">
               <span>60%</span>
               <span>Chegara: ≥90% (+500k)</span>
               <span>100%</span>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
+          <div className="rounded-2xl border border-black/5 bg-slate-50 dark:bg-slate-900/40 p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
             <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-[#1D1D1F] dark:text-slate-300">
-              <span>📋 Davomat ko’rsatkichi:</span>
+              <span>📋 Davomat ko'rsatkichi:</span>
               <span className={`font-bold ${attendanceRate >= 85 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}`}>
                 {attendanceRate}% {attendanceRate >= 85 ? '⭐ Bonus bor!' : ''}
               </span>
@@ -868,7 +856,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
               onChange={(e) => { setSelectedTeacherId('custom'); setAttendanceRate(Number(e.target.value)); }}
               className="w-full accent-emerald-500 cursor-pointer"
             />
-            <div className="mt-1 flex justify-between text-[10px] text-[#86868B]">
+            <div className="mt-1 flex justify-between text-[10px] text-[#64748B]">
               <span>60%</span>
               <span>Chegara: ≥85% (+400k)</span>
               <span>100%</span>
@@ -876,7 +864,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
           </div>
         </div>
 
-        <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-slate-900/60 to-slate-950/90 p-5 shadow-xl lg:col-span-5">
+        <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-slate-900/60 to-slate-950/90 p-5 shadow-xl lg:col-span-5">
           <div className="mb-3 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-emerald-400">
             <span>Oylik Maosh Tarkibi</span>
             <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] text-emerald-300">Shaffof formula</span>
@@ -888,14 +876,14 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
                 <span className="h-2 w-2 rounded-full bg-blue-400" />
                 Asosiy oklad (Fiksa):
               </span>
-              <span className="font-semibold text-white">{baseSalary.toLocaleString()} so’m</span>
+              <span className="font-semibold text-white">{baseSalary.toLocaleString()} so'm</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
                 Dars soatlari ({Math.round(hoursPerWeek * 4.2)} soat):
               </span>
-              <span className="font-semibold text-white">{hoursEarnings.toLocaleString()} so’m</span>
+              <span className="font-semibold text-white">{hoursEarnings.toLocaleString()} so'm</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span className="flex items-center gap-1.5">
@@ -903,7 +891,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
                 Retention Bonusi (≥90%):
               </span>
               <span className={`font-semibold ${retentionBonus > 0 ? 'text-amber-300' : 'text-slate-500 line-through'}`}>
-                {retentionBonus > 0 ? `+${retentionBonus.toLocaleString()} so’m` : '0 so’m'}
+                {retentionBonus > 0 ? `+${retentionBonus.toLocaleString()} so'm` : '0 so\'m'}
               </span>
             </div>
             <div className="flex justify-between text-slate-300">
@@ -912,7 +900,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
                 Davomat Bonusi (≥85%):
               </span>
               <span className={`font-semibold ${attendanceBonus > 0 ? 'text-purple-300' : 'text-slate-500 line-through'}`}>
-                {attendanceBonus > 0 ? `+${attendanceBonus.toLocaleString()} so’m` : '0 so’m'}
+                {attendanceBonus > 0 ? `+${attendanceBonus.toLocaleString()} so'm` : '0 so\'m'}
               </span>
             </div>
           </div>
@@ -925,7 +913,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
               <span className="bg-gradient-to-r from-emerald-300 via-teal-200 to-white bg-clip-text text-2xl font-black tracking-tight text-transparent">
                 {totalSalary.toLocaleString()}
               </span>
-              <span className="ml-1 text-xs font-semibold text-slate-400">so’m</span>
+              <span className="ml-1 text-xs font-semibold text-slate-400">so'm</span>
             </div>
             <div className="text-right">
               <span className="inline-block rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
@@ -961,6 +949,55 @@ export function TeacherWorkloadPage() {
     () => teachersQuery.data?.items ?? [],
     [teachersQuery.data],
   );
+
+  const { playTick } = usePremiumSound();
+
+  const handleOpenTeacherWorkloadSidecar = (tw: TeacherWorkload) => {
+    const statusLabel =
+      tw.status === 'BALANCED' ? t('teacherWorkload.balanced') :
+      tw.status === 'OVERLOADED' ? t('teacherWorkload.overloaded') :
+      t('teacherWorkload.underutilized');
+    const tone =
+      tw.status === 'BALANCED' ? 'emerald' :
+      tw.status === 'OVERLOADED' ? 'rose' : 'amber';
+    const sidecarData: QuickLookData = {
+      id: tw.teacherId,
+      type: 'teacher',
+      title: tw.teacherName,
+      subtitle: `${statusLabel} · ${tw.hoursPerWeek} soat/hafta (${Math.round(tw.utilization * 100)}% bandlik)`,
+      badge: {
+        text: statusLabel,
+        tone,
+      },
+      avatar: {
+        text: getInitials(tw.teacherName),
+        color: '#2563EB',
+      },
+      metrics: [
+        { label: 'Yuklama', value: `${Math.round(tw.utilization * 100)}%` },
+        { label: 'Haftalik soat', value: `${tw.hoursPerWeek} soat` },
+        { label: 'Guruhlar', value: String(tw.groupsCount) },
+        { label: 'O\'quvchilar', value: String(tw.studentsCount) },
+      ],
+      details: [
+        { label: 'O\'qituvchi ID', value: tw.teacherId, copyable: true },
+        { label: 'F.I.Sh.', value: tw.teacherName },
+        { label: 'Maksimal quvvat', value: `${tw.capacityHours} soat` },
+        { label: 'O\'rtacha baho', value: `${tw.avgGrade ?? 86} ball` },
+        { label: 'Retention (Saqlash)', value: `${tw.retentionRate ?? 92}%` },
+        { label: 'Davomat', value: `${tw.attendanceRate ?? 88}%` },
+      ],
+    };
+    openSidecar(sidecarData);
+  };
+
+  useListKeyboardNavigation<TeacherWorkload>({
+    items: teachers,
+    getItemId: (tw) => tw.teacherId,
+    rowIdPrefix: 'teacher-workload-',
+    onSelect: (tw) => { playTick(); handleOpenTeacherWorkloadSidecar(tw); },
+    onQuickLook: (tw) => { playTick(); handleOpenTeacherWorkloadSidecar(tw); },
+  });
   const summary = summaryQuery.data;
 
   const avgUtilPercent = Math.round((summary?.avgUtilization ?? 0) * 100);
@@ -979,12 +1016,13 @@ export function TeacherWorkloadPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
+          className="liquid-glass-surface relative overflow-hidden rounded-2xl p-6 sm:p-7"
           style={{
             boxShadow:
               'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
           }}
         >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
           <span
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-0 h-24"
@@ -1001,9 +1039,9 @@ export function TeacherWorkloadPage() {
               transition={SPRING.smooth}
               className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
               style={{
-                background: 'linear-gradient(135deg, #007AFF 0%, #AF52DE 100%)',
+                background: 'linear-gradient(135deg, #2563EB 0%, #6366F1 100%)',
                 boxShadow:
-                  '0 12px 28px -10px rgba(0,122,255,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
+                  '0 12px 28px -10px rgba(37,99,235,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
               }}
             >
               <span
@@ -1019,26 +1057,26 @@ export function TeacherWorkloadPage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   Workload
                 </span>
                 {(summary?.overloaded ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF3B30]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#FF3B30]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EF4444]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#EF4444]">
                     <span className="relative flex h-1.5 w-1.5">
                       <motion.span
-                        className="absolute inset-0 rounded-full bg-[#FF3B30]"
+                        className="absolute inset-0 rounded-full bg-[#EF4444]"
                         animate={{ scale: [1, 2.4, 1], opacity: [0.6, 0, 0.6] }}
                         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
                       />
-                      <span className="relative h-1.5 w-1.5 rounded-full bg-[#FF3B30]" />
+                      <span className="relative h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
                     </span>
                     {summary?.overloaded ?? 0} {t('teacherWorkload.overloaded')}
                   </span>
                 )}
                 {(summary?.balanced ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#34C759]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
                     {summary?.balanced ?? 0} {t('teacherWorkload.balanced')}
                   </span>
                 )}
@@ -1047,7 +1085,7 @@ export function TeacherWorkloadPage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('teacherWorkload.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {t('teacherWorkload.subtitle')}
               </p>
             </div>
@@ -1133,7 +1171,7 @@ export function TeacherWorkloadPage() {
               {[1, 2, 3, 4, 5].map((i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-4 rounded-2xl border border-[#00000008] p-4 dark:border-[#ffffff08]"
+                  className="flex items-center gap-4 rounded-2xl border border-black/[0.06] p-4 dark:border-white/[0.08]"
                 >
                   <Shimmer className="h-12 w-12" radius="9999px" />
                   <div className="flex-1 space-y-2">
@@ -1180,7 +1218,7 @@ export function TeacherWorkloadPage() {
               className="m-0 list-none p-0"
             >
               {teachers.map((teacher, idx) => (
-                <WorkloadRow key={teacher.teacherId} teacher={teacher} index={idx} />
+                <WorkloadRow key={teacher.teacherId} teacher={teacher} index={idx} onSidecar={handleOpenTeacherWorkloadSidecar} />
               ))}
             </motion.ul>
           )}

@@ -17,7 +17,13 @@ export class GroupsService {
     if (query.teacherId) where.teacherId = query.teacherId;
     if (query.isActive !== undefined) where.isActive = query.isActive === 'true';
     if (query.search) {
-      where.OR = [{ name: { contains: query.search, mode: 'insensitive' } }];
+      where.OR = [
+        { name: { contains: query.search, mode: 'insensitive' } },
+        { room: { contains: query.search, mode: 'insensitive' } },
+        { course: { name: { contains: query.search, mode: 'insensitive' } } },
+        { teacher: { user: { firstName: { contains: query.search, mode: 'insensitive' } } } },
+        { teacher: { user: { lastName: { contains: query.search, mode: 'insensitive' } } } },
+      ];
     }
 
     const [items, total] = await Promise.all([
@@ -135,5 +141,130 @@ export class GroupsService {
   async remove(organizationId: string, id: string) {
     await this.findOne(organizationId, id);
     return this.prisma.group.update({ where: { id, organizationId }, data: { isActive: false } });
+  }
+
+  // ------------------------------------------------------------------
+  // Group Capacity, Occupancy & Waitlist Insights
+  // ------------------------------------------------------------------
+
+  async getGroupCapacityAndOccupancy(organizationId: string, id: string) {
+    const group = await this.findOne(organizationId, id);
+    const capacity = group.capacity ?? 20;
+    const activeCount = await this.prisma.studentGroup.count({
+      where: { groupId: id, isActive: true },
+    });
+
+    const availableSeats = Math.max(0, capacity - activeCount);
+    const isFull = activeCount >= capacity;
+    const occupancyPercent = capacity > 0 ? Math.min(100, Math.round((activeCount / capacity) * 100)) : 100;
+
+    return {
+      groupId: id,
+      name: group.name,
+      room: group.room,
+      capacity,
+      activeCount,
+      availableSeats,
+      isFull,
+      occupancyPercent,
+    };
+  }
+
+  // ------------------------------------------------------------------
+  // Level Progression & Batch Graduation (Bosqichdan bosqichga o'tish)
+  // ------------------------------------------------------------------
+
+  async graduateAndPromote(
+    organizationId: string,
+    id: string,
+    data: {
+      studentIds: string[];
+      targetGroupId?: string;
+      targetGroupName?: string;
+      targetCourseId?: string;
+      archiveOldGroup?: boolean;
+    },
+  ) {
+    const sourceGroup = await this.findOne(organizationId, id);
+    if (!data.studentIds || data.studentIds.length === 0) {
+      throw new BadRequestException("O'tkaziladigan o'quvchilar ro'yxati (studentIds) bo'sh bo'lishi mumkin emas");
+    }
+
+    let targetGroupId = data.targetGroupId;
+
+    return this.prisma.$transaction(async (tx) => {
+      // If no targetGroupId provided, create the new group automatically
+      if (!targetGroupId) {
+        if (!data.targetCourseId || !data.targetGroupName) {
+          throw new BadRequestException("Yangi guruh yaratish uchun targetCourseId va targetGroupName talab qilinadi");
+        }
+
+        const newGroup = await tx.group.create({
+          data: {
+            organizationId,
+            name: data.targetGroupName,
+            courseId: data.targetCourseId,
+            teacherId: sourceGroup.teacherId,
+            capacity: sourceGroup.capacity,
+            room: sourceGroup.room,
+            startDate: new Date(),
+            isActive: true,
+          },
+        });
+        targetGroupId = newGroup.id;
+      }
+
+      const now = new Date();
+
+      // Deactivate students in source group
+      await tx.studentGroup.updateMany({
+        where: {
+          groupId: id,
+          studentId: { in: data.studentIds },
+        },
+        data: {
+          isActive: false,
+          leftAt: now,
+        },
+      });
+
+      // Enroll students into target group
+      for (const studentId of data.studentIds) {
+        await tx.studentGroup.upsert({
+          where: {
+            studentId_groupId: {
+              studentId,
+              groupId: targetGroupId!,
+            },
+          },
+          update: {
+            isActive: true,
+            leftAt: null,
+          },
+          create: {
+            organizationId,
+            studentId,
+            groupId: targetGroupId!,
+            isActive: true,
+            joinedAt: now,
+          },
+        });
+      }
+
+      if (data.archiveOldGroup) {
+        await tx.group.update({
+          where: { id },
+          data: { isActive: false, endDate: now },
+        });
+      }
+
+      return {
+        success: true,
+        sourceGroupId: id,
+        targetGroupId,
+        promotedCount: data.studentIds.length,
+        message: `${data.studentIds.length} nafar o'quvchi keyingi bosqich guruhiga muvaffaqiyatli o'tkazildi`,
+      };
+    });
   }
 }

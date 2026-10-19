@@ -14,7 +14,7 @@
  */
 
 import { formatDate } from '../lib/format';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
 import { Printer } from 'lucide-react';
@@ -29,7 +29,12 @@ import {
   GlassButton,
   useToast,
   GlassTabs,
+  FloatingActionIsland,
 } from '@/components/ui';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { ExecutivePDFStudio, type PDFStudioDocData } from '@/components/pdf-studio';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -162,6 +167,22 @@ const I: Record<string, string[]> = {
     'M19 19v-2a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v2',
     'M10 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   ],
+  qrCode: [
+    'M3 3h6v6H3z', 'M15 3h6v6h-6z', 'M3 15h6v6H3z',
+    'M7 7h.01', 'M19 7h.01', 'M7 19h.01',
+    'M15 15h2v2h-2z', 'M19 15h2v2h-2z', 'M15 19h2v2h-2z', 'M19 19h2v2h-2z',
+  ],
+  copy: [
+    'M8 4v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7.242a2 2 0 0 0-.602-1.43L16.083 2.57A2 2 0 0 0 14.685 2H10a2 2 0 0 0-2 2z',
+    'M16 18v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2',
+  ],
+  calculator: [
+    'M4 2h16a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z',
+    'M8 6h8', 'M16 14v4', 'M16 10h.01', 'M12 10h.01', 'M8 10h.01', 'M12 14h.01', 'M8 14h.01', 'M12 18h.01', 'M8 18h.01',
+  ],
+  telegram: [
+    'M21.5 2 2 9.5l7 3 3 7.5 2.5-4 7-14z',
+  ],
 };
 
 function Icon({
@@ -188,17 +209,17 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald' | 'amber' | 'rose' | 'indigo';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
+  blue:    { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)', border: 'rgba(37,99,235,0.20)' },
+  green:   { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)',  border: 'rgba(16,185,129,0.20)' },
+  orange:  { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)',  border: 'rgba(245,158,11,0.20)' },
+  red:     { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)' },
+  purple:  { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)' },
+  cyan:    { fg: '#0284C7', bg: 'rgba(2,132,199,0.10)', glow: 'rgba(2,132,199,0.28)', border: 'rgba(2,132,199,0.20)' },
+  gray:    { fg: '#64748B', bg: 'rgba(100,116,139,0.10)', glow: 'rgba(100,116,139,0.22)', border: 'rgba(100,116,139,0.20)' },
   emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
   amber:   { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)', glow: 'rgba(245,158,11,0.28)', border: 'rgba(245,158,11,0.20)' },
   rose:    { fg: '#F43F5E', bg: 'rgba(244,63,94,0.10)',  glow: 'rgba(244,63,94,0.28)',  border: 'rgba(244,63,94,0.20)' },
-  indigo:  { fg: '#5856D6', bg: 'rgba(88,86,214,0.10)',  glow: 'rgba(88,86,214,0.28)',  border: 'rgba(88,86,214,0.20)' },
+  indigo:  { fg: '#6366F1', bg: 'rgba(88,86,214,0.10)',  glow: 'rgba(88,86,214,0.28)',  border: 'rgba(88,86,214,0.20)' },
 };
 
 const STATUS_TONE: Record<string, Tone> = {
@@ -262,12 +283,12 @@ function nameHash(str: string): number {
 }
 
 const INV_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
+  ['#1E293B', '#334155'], // Slate
+  ['#1D4ED8', '#2563EB'], // Sapphire
+  ['#047857', '#059669'], // Emerald
+  ['#0F766E', '#0D9488'], // Teal
+  ['#4338CA', '#4F46E5'], // Indigo
+  ['#0F172A', '#1E293B'], // Obsidian
 ];
 
 function invGradient(seed: string): string {
@@ -280,26 +301,7 @@ function invGradient(seed: string): string {
  * ========================================================================== */
 
 function AmbientOrbs() {
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <motion.div
-        className="absolute -left-[8%] top-[6%] h-[44%] w-[40%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(0,122,255,0.14), transparent 70%)',
-          }}
-        animate={{ x: [0, 24, 0], y: [0, 18, 0], opacity: [0.85, 1, 0.85] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute -bottom-[10%] -right-[8%] h-[46%] w-[42%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(175,82,222,0.12), transparent 70%)',
-          }}
-        animate={{ x: [0, -28, 0], y: [0, -22, 0], opacity: [0.8, 1, 0.8] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </div>
-  );
+  return null;
 }
 
 function CountUp({ value, duration = 1.1, suffix = '', currency = false }: { value: number; duration?: number; suffix?: string; currency?: boolean }) {
@@ -333,25 +335,16 @@ function KpiTile({
   return (
     <motion.div
       variants={rowVariants}
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -2 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
-      />
       <div
-        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
         style={{
           background: c.bg,
           color: c.fg,
           border: `1px solid ${c.border}`,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
         }}
       >
         <span
@@ -365,11 +358,11 @@ function KpiTile({
         <div className="text-[18px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
           <CountUp value={value} currency={currency} />
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B]">
           {label}
         </div>
         {secondary && (
-          <div className="mt-0.5 truncate text-[10.5px] font-semibold tracking-tight text-[#86868B]/80">
+          <div className="mt-0.5 truncate text-[10.5px] font-semibold tracking-tight text-[#64748B]/80">
             {secondary}
           </div>
         )}
@@ -425,18 +418,12 @@ function StatusPill({ status, label }: { status: string; label: string }) {
 function InvoiceTile({ seed }: { seed: string }) {
   return (
     <div
-      className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
       style={{
         background: invGradient(seed),
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px -6px rgba(0,0,0,0.25)',
       }}
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-2xl"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)' }}
-      />
-      <Icon paths={I.invoice} size={20} strokeWidth={2} className="relative" />
+      <Icon paths={I.invoice} size={18} strokeWidth={2} className="relative" />
     </div>
   );
 }
@@ -489,6 +476,40 @@ export function InvoicesPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [createForm, setCreateForm] = useState<any>({ description: '', unitPrice: '' });
   const [createErrors, setCreateErrors] = useState<any>({});
+  const [paymentLinksTarget, setPaymentLinksTarget] = useState<Invoice | null>(null);
+  const [prorateOpen, setProrateOpen] = useState(false);
+  const [prorateForm, setProrateForm] = useState({
+    studentId: '',
+    monthlyTuition: '',
+    totalLessons: '12',
+    attendedLessons: '6',
+    reason: 'Oy o\'rtasidan qo\'shilgan talaba uchun kunbay hisob',
+  });
+
+  const paymentLinksQuery = useQuery({
+    queryKey: ['invoice-payment-links', paymentLinksTarget?.id],
+    queryFn: () => (paymentLinksTarget ? (invoicesApi.getPaymentLinks(paymentLinksTarget.id) as Promise<any>) : null),
+    enabled: !!paymentLinksTarget,
+  });
+
+  const createProratedInvoice = useMutation({
+    mutationFn: (data: any) => invoicesApi.createProrated(data),
+    onSuccess: () => {
+      push('success', 'Kunbay hisob-faktura muvaffaqiyatli shakllantirildi');
+      setProrateOpen(false);
+      setProrateForm({
+        studentId: '',
+        monthlyTuition: '',
+        totalLessons: '12',
+        attendedLessons: '6',
+        reason: 'Oy o\'rtasidan qo\'shilgan talaba uchun kunbay hisob',
+      });
+      invalidateAll();
+    },
+    onError: (err: any) => {
+      push('error', getErrorMessage(err));
+    },
+  });
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all() });
@@ -591,11 +612,138 @@ export function InvoicesPage() {
     return { total, paid, outstanding, overdue, count: items.length };
   }, [items]);
 
+  const sound = usePremiumSound();
+  const [studioDocData, setStudioDocData] = useState<PDFStudioDocData | null>(null);
+
+  /* ── Executive PDF Studio ─────────────────────────────────────────── */
+  const openExecutiveInvoiceStudio = useCallback((inv: any) => {
+    sound.playPop();
+    const studentName = inv.student?.user
+      ? `${inv.student.user.firstName} ${inv.student.user.lastName}`
+      : inv.studentId?.slice(0, 8) ?? 'Talaba';
+    setStudioDocData({
+      id: inv.number || `INV-${inv.id.slice(0, 8)}`,
+      docType: 'receipt',
+      title: `Rasmiy Hisob-faktura (Invoice #${inv.number || inv.id.slice(0, 6)})`,
+      recipientName: studentName,
+      recipientId: inv.studentId ? `STD-${inv.studentId.slice(0, 8)}` : undefined,
+      amount: formatCurrency(inv.total),
+      courseName: inv.items?.[0]?.description || 'Ta\'lim xizmati to\'lovi',
+      dateStr: formatDate(inv.createdAt),
+      items: [
+        { label: 'Hisob-faktura raqami', value: inv.number || inv.id.slice(0, 8) },
+        { label: 'Jami summa', value: formatCurrency(inv.total) },
+        { label: 'To\'langan summa', value: formatCurrency(inv.paidAmount || 0) },
+        { label: 'Qoldiq qarzdorlik', value: formatCurrency(remaining(inv)) },
+        { label: 'To\'lov holati', value: inv.status },
+        { label: 'Muddati', value: inv.dueDate ? formatDate(inv.dueDate) : 'Ko\'rsatilmagan' },
+      ],
+    });
+  }, [sound]);
+
+  /* ── macOS Split-View Detail Sidecar ──────────────────────────────── */
+  const handleOpenInvoiceSidecar = useCallback((inv: any) => {
+    sound.playTick();
+    const studentName = inv.student?.user
+      ? `${inv.student.user.firstName} ${inv.student.user.lastName}`
+      : inv.studentId?.slice(0, 8) ?? 'Talaba';
+    const bal = remaining(inv);
+    const data: QuickLookData = {
+      id: inv.id,
+      type: 'general',
+      title: `${inv.number || 'Invoys'} — ${formatCurrency(inv.total)}`,
+      subtitle: `${studentName} · ${inv.status}`,
+      badge: {
+        text: inv.status,
+        tone: inv.status === 'PAID' ? 'emerald' : inv.status === 'OVERDUE' ? 'rose' : 'amber',
+      },
+      metrics: [
+        { label: 'Jami', value: formatCurrency(inv.total) },
+        { label: 'To\'langan', value: formatCurrency(inv.paidAmount || 0), trend: 'up' },
+        { label: 'Qoldiq', value: formatCurrency(bal), trend: bal > 0 ? 'down' : 'neutral' },
+        { label: 'Holat', value: inv.status },
+      ],
+      details: [
+        { label: 'Invoys raqami', value: inv.number || inv.id, copyable: true },
+        { label: 'Talaba', value: studentName },
+        { label: 'Yaratilgan sana', value: formatDate(inv.createdAt) },
+        { label: 'To\'lov muddati', value: inv.dueDate ? formatDate(inv.dueDate) : '—' },
+      ],
+      primaryAction: {
+        label: 'Executive PDF Studio',
+        onExecute: () => openExecutiveInvoiceStudio(inv),
+      },
+      secondaryAction: bal > 0 ? {
+        label: 'To\'lov qabul qilish',
+        onExecute: () => {
+          setPayTarget(inv);
+          setPaymentForm({
+            amount: String(bal),
+            method: 'CASH',
+            description: '',
+            reference: '',
+          });
+        },
+      } : undefined,
+    };
+    openSidecar(data);
+  }, [sound, openExecutiveInvoiceStudio]);
+
+  /* ── Superhuman Keyboard Navigation ───────────────────────────────── */
+  const {
+    focusedIndex,
+    selectedIds,
+    selectedCount,
+    isSelected,
+    toggleSelection,
+    clearSelection,
+  } = useListKeyboardNavigation<any>({
+    items,
+    getItemId: (inv) => inv.id,
+    rowIdPrefix: 'invoice-row-',
+    onSelect: (inv) => openExecutiveInvoiceStudio(inv),
+    onQuickLook: (inv) => handleOpenInvoiceSidecar(inv),
+    onEdit: (inv) => {
+      setPayTarget(inv);
+      setPaymentForm({
+        amount: String(remaining(inv)),
+        method: 'CASH',
+        description: '',
+        reference: '',
+      });
+    },
+  });
+
+  const handleExportSelectedInvoicesCsv = useCallback(() => {
+    const selectedList = items.filter((inv) => selectedIds.has(inv.id));
+    if (!selectedList.length) return;
+    const headers = ['ID', 'Number', 'Student', 'Total', 'Paid', 'Status', 'CreatedAt'];
+    const rows = selectedList.map((inv) => [
+      inv.id,
+      inv.number || '',
+      inv.student?.user ? `${inv.student.user.firstName} ${inv.student.user.lastName}` : inv.studentId || '',
+      inv.total,
+      inv.paidAmount || 0,
+      inv.status,
+      inv.createdAt,
+    ]);
+    const csvContent = [headers.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `medu-invoices-${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    push('success', `${selectedList.length} ta hisob-faktura CSV ga eksport qilindi`);
+  }, [items, selectedIds, push]);
+
   /* ── Loading ──────────────────────────────────────────────────────── */
   if (invoices.isLoading) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80" />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[88px]" radius="1rem" />)}
         </div>
@@ -628,11 +776,7 @@ export function InvoicesPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-7"
         >
           <span
             aria-hidden
@@ -648,7 +792,7 @@ export function InvoicesPage() {
               transition={SPRING.smooth}
               className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
               style={{
-                background: 'linear-gradient(135deg, #5856D6 0%, #AF52DE 100%)',
+                background: 'linear-gradient(135deg, #6366F1 0%, #6366F1 100%)',
                 boxShadow:
                   '0 12px 28px -10px rgba(88,86,214,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
               }}
@@ -665,23 +809,23 @@ export function InvoicesPage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#5856D6]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#5856D6]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#6366F1]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#6366F1]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   {t('invoices.billing')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
                   {stats.count} total
                 </span>
                 {stats.overdue > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF3B30]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#FF3B30]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EF4444]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#EF4444]">
                     <span className="relative flex h-1.5 w-1.5">
                       <motion.span
-                        className="absolute inset-0 rounded-full bg-[#FF3B30]"
+                        className="absolute inset-0 rounded-full bg-[#EF4444]"
                         animate={{ scale: [1, 2.4, 1], opacity: [0.6, 0, 0.6] }}
                         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
                       />
-                      <span className="relative h-1.5 w-1.5 rounded-full bg-[#FF3B30]" />
+                      <span className="relative h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
                     </span>
                     {stats.overdue} overdue
                   </span>
@@ -691,11 +835,35 @@ export function InvoicesPage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('nav.invoices')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {t('invoices.subtitle')}
               </p>
             </div>
 
+            <div className="flex flex-wrap items-center gap-2.5">
+              <motion.div
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
+              >
+                <GlassButton
+                  variant="secondary"
+                  onClick={() => setProrateOpen(true)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Icon paths={I.calculator} size={15} strokeWidth={2.2} />
+                    Kunbay Hisob (Prorate)
+                  </span>
+                </GlassButton>
+              </motion.div>
             <motion.div
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
@@ -718,6 +886,7 @@ export function InvoicesPage() {
                 </span>
               </GlassButton>
             </motion.div>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -742,8 +911,7 @@ export function InvoicesPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-3 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-          style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)' }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm"
         >
           <div className="overflow-x-auto">
             <GlassTabs
@@ -763,11 +931,7 @@ export function InvoicesPage() {
       ============================================================ */}
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-        style={{
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-        }}
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       >
         <span
           aria-hidden
@@ -781,7 +945,7 @@ export function InvoicesPage() {
           <div className="relative p-10">
             <div className="flex flex-col items-center text-center">
               <div
-                className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#5856D6]/10 text-[#5856D6]"
+                className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#6366F1]/10 text-[#6366F1]"
                 style={{
                   boxShadow:
                     'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(88,86,214,0.4)',
@@ -792,7 +956,7 @@ export function InvoicesPage() {
               <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                 {t('invoices.emptyTitle')}
               </p>
-              <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+              <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
                 {statusFilter ? t('invoices.emptyFiltered') : t('invoices.emptyHint')}
               </p>
               {!statusFilter && (
@@ -821,44 +985,78 @@ export function InvoicesPage() {
             </div>
           </div>
         ) : (
-          <div className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+          <div className="relative divide-y divide-slate-200/80 dark:divide-slate-800 dark:divide-[#ffffff08]">
             {items.map((inv: any, idx: number) => {
               const bal = remaining(inv);
               const seed = inv.number || inv.id || 'invoice';
               const studentName = inv.student?.user
                 ? `${inv.student.user.firstName} ${inv.student.user.lastName}`
                 : inv.studentId?.slice(0, 8) ?? '—';
+              const isRowSelected = isSelected(inv.id);
+              const isRowFocused = focusedIndex === idx;
 
               return (
                 <motion.div
                   key={inv.id}
+                  id={`invoice-row-${inv.id}`}
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                  className="group flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#5856D6]/[0.03]"
+                  className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-3.5 transition-all ${
+                    isRowFocused
+                      ? 'ring-2 ring-primary bg-primary/[0.06] rounded-xl'
+                      : isRowSelected
+                      ? 'bg-primary/[0.04]'
+                      : 'hover:bg-primary/[0.03]'
+                  }`}
                 >
-                  <InvoiceTile seed={seed} />
+                  {/* Top / Left: Selection + Tile + Details */}
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    {/* Selection Checkbox */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelection(inv.id);
+                      }}
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
+                        isRowSelected
+                          ? 'border-primary bg-primary text-white'
+                          : 'border-zinc-300 bg-white/50 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800/50'
+                      }`}
+                      aria-label={isRowSelected ? 'Tanlovni bekor qilish' : 'Tanlash'}
+                    >
+                      {isRowSelected && (
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </button>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-mono text-[13.5px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {inv.number || inv.id.slice(0, 8)}
-                      </p>
-                      <StatusPill status={inv.status} label={t(invoiceStatusKey(inv.status))} />
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#86868B]">
-                      <span className="inline-flex items-center gap-1">
-                        <Icon paths={I.user} size={10} strokeWidth={2.2} className="opacity-60" />
-                        {studentName}
-                      </span>
-                      <span className="inline-flex items-center gap-1 tabular-nums">
-                        <Icon paths={I.calendar} size={10} strokeWidth={2.2} className="opacity-60" />
-                        {inv.issueDate ? formatDate(inv.issueDate) : inv.createdAt ? formatDate(inv.createdAt) : '—'}
-                      </span>
+                    <InvoiceTile seed={seed} />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate font-mono text-[13.5px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                          {inv.number || inv.id.slice(0, 8)}
+                        </p>
+                        <StatusPill status={inv.status} label={t(invoiceStatusKey(inv.status))} />
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#64748B]">
+                        <span className="inline-flex items-center gap-1">
+                          <Icon paths={I.user} size={10} strokeWidth={2.2} className="opacity-60" />
+                          {studentName}
+                        </span>
+                        <span className="inline-flex items-center gap-1 tabular-nums">
+                          <Icon paths={I.calendar} size={10} strokeWidth={2.2} className="opacity-60" />
+                          {inv.issueDate ? formatDate(inv.issueDate) : inv.createdAt ? formatDate(inv.createdAt) : '—'}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="hidden flex-col items-end sm:flex">
+                  {/* Desktop Column: Total Paid */}
+                  <div className="hidden flex-col items-end sm:flex shrink-0">
                     <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
                       {t('invoices.col.totalPaid')}
                     </span>
@@ -867,28 +1065,106 @@ export function InvoicesPage() {
                     </span>
                   </div>
 
-                  <div className="flex flex-col items-end">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#F43F5E]">
-                      {t('invoices.col.balanceDue')}
-                    </span>
-                    <span className="mt-0.5 font-mono text-[14px] font-bold tabular-nums tracking-tight text-[#F43F5E]">
-                      {formatCurrency(bal)}
-                    </span>
-                  </div>
+                  {/* Bottom / Right: Balance Due + Actions */}
+                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0 shrink-0">
+                    <div className="flex flex-col items-start sm:items-end shrink-0">
+                      <span className="text-[9.5px] sm:text-[10px] font-bold uppercase tracking-[0.14em] text-[#F43F5E]">
+                        {t('invoices.col.balanceDue')}
+                      </span>
+                      <span className="mt-0.5 font-mono text-[13.5px] sm:text-[14px] font-bold tabular-nums tracking-tight text-[#F43F5E]">
+                        {formatCurrency(bal)}
+                      </span>
+                    </div>
 
-                  <div className="flex flex-wrap gap-1.5">
-                    {inv.status === 'DRAFT' && (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {inv.status === 'DRAFT' && (
+                        <motion.button
+                          type="button"
+                          onClick={() => setIssueTarget(inv)}
+                          whileHover={{ scale: 1.06, y: -1 }}
+                          whileTap={{ scale: 0.94 }}
+                          transition={SPRING.snappy}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 sm:px-2.5 text-[11px] font-bold tracking-tight outline-none"
+                          style={{
+                            background: 'rgba(37,99,235,0.10)',
+                            color: '#2563EB',
+                            border: '1px solid rgba(37,99,235,0.22)',
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
+                          <Icon paths={I.upload} size={12} strokeWidth={2.4} />
+                          <span className="hidden sm:inline">{t('invoices.confirmIssue')}</span>
+                        </motion.button>
+                      )}
+                      {inv.status !== 'DRAFT' && bal > 0 && (
+                        <motion.button
+                          type="button"
+                          onClick={() => setPayTarget(inv)}
+                          whileHover={{ scale: 1.06, y: -1 }}
+                          whileTap={{ scale: 0.94 }}
+                          transition={SPRING.snappy}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 sm:px-2.5 text-[11px] font-bold tracking-tight outline-none"
+                          style={{
+                            background: 'rgba(16,185,129,0.10)',
+                            color: '#10B981',
+                            border: '1px solid rgba(16,185,129,0.22)',
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
+                          <Icon paths={I.cash} size={12} strokeWidth={2.4} />
+                          <span className="hidden sm:inline">{t('invoices.recordPayment')}</span>
+                        </motion.button>
+                      )}
+                      {Number(inv.paidAmount || 0) > 0 && (
+                        <motion.button
+                          type="button"
+                          onClick={() => setRefundTarget(inv)}
+                          whileHover={{ scale: 1.06, y: -1 }}
+                          whileTap={{ scale: 0.94 }}
+                          transition={SPRING.snappy}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 sm:px-2.5 text-[11px] font-bold tracking-tight outline-none"
+                          style={{
+                            background: 'rgba(244,63,94,0.10)',
+                            color: '#F43F5E',
+                            border: '1px solid rgba(244,63,94,0.22)',
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: any) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}>
+                          <Icon paths={I.refresh} size={12} strokeWidth={2.4} />
+                          <span className="hidden sm:inline">{t('invoices.recordRefund')}</span>
+                        </motion.button>
+                      )}
                       <motion.button
                         type="button"
-                        onClick={() => setIssueTarget(inv)}
-                        whileHover={{ scale: 1.06, y: -1 }}
-                        whileTap={{ scale: 0.94 }}
+                        onClick={() => setPaymentLinksTarget(inv)}
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.92 }}
                         transition={SPRING.snappy}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold tracking-tight outline-none"
+                        aria-label="Payme & Click to'lov"
+                        title="Payme & Click to'lov havolalari va QR"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
                         style={{
-                          background: 'rgba(0,122,255,0.10)',
-                          color: '#007AFF',
-                          border: '1px solid rgba(0,122,255,0.22)',
+                          background: 'rgba(2,132,199,0.12)',
+                          color: '#2563EB',
+                          border: '1px solid rgba(37,99,235,0.22)',
                         }}
                         role="button"
                         tabIndex={0}
@@ -898,84 +1174,35 @@ export function InvoicesPage() {
                             e.currentTarget.click();
                           }
                         }}>
-                        <Icon paths={I.upload} size={12} strokeWidth={2.4} />
-                        <span className="hidden sm:inline">{t('invoices.confirmIssue')}</span>
+                        <Icon paths={I.qrCode} size={13} strokeWidth={2.2} />
                       </motion.button>
-                    )}
-                    {inv.status !== 'DRAFT' && bal > 0 && (
+
+                      {/* Sidecar Split-View trigger */}
                       <motion.button
                         type="button"
-                        onClick={() => setPayTarget(inv)}
-                        whileHover={{ scale: 1.06, y: -1 }}
-                        whileTap={{ scale: 0.94 }}
-                        transition={SPRING.snappy}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold tracking-tight outline-none"
-                        style={{
-                          background: 'rgba(16,185,129,0.10)',
-                          color: '#10B981',
-                          border: '1px solid rgba(16,185,129,0.22)',
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e: any) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            e.currentTarget.click();
-                          }
-                        }}>
-                        <Icon paths={I.cash} size={12} strokeWidth={2.4} />
-                        <span className="hidden sm:inline">{t('invoices.recordPayment')}</span>
+                        onClick={() => handleOpenInvoiceSidecar(inv)}
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.92 }}
+                        aria-label="Sidecar tafsilotlarini ochish"
+                        title="Sidecar tafsilotlari (Split-View · Space)"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-subtle bg-surface/80 text-secondary hover:text-primary hover:border-primary/40 transition-colors"
+                      >
+                        <span className="text-[13px] leading-none">◨</span>
                       </motion.button>
-                    )}
-                    {Number(inv.paidAmount || 0) > 0 && (
+
+                      {/* Executive PDF Studio button */}
                       <motion.button
                         type="button"
-                        onClick={() => setRefundTarget(inv)}
-                        whileHover={{ scale: 1.06, y: -1 }}
-                        whileTap={{ scale: 0.94 }}
-                        transition={SPRING.snappy}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold tracking-tight outline-none"
-                        style={{
-                          background: 'rgba(244,63,94,0.10)',
-                          color: '#F43F5E',
-                          border: '1px solid rgba(244,63,94,0.22)',
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e: any) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            e.currentTarget.click();
-                          }
-                        }}>
-                        <Icon paths={I.refresh} size={12} strokeWidth={2.4} />
-                        <span className="hidden sm:inline">{t('invoices.recordRefund')}</span>
+                        onClick={() => openExecutiveInvoiceStudio(inv)}
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.92 }}
+                        aria-label="Rasmiy PDF Studio"
+                        title="Executive PDF Studio (A4 Guilloché & QR · Enter)"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
                       </motion.button>
-                    )}
-                    <motion.button
-                      type="button"
-                      onClick={() => setPreviewTarget(inv)}
-                      whileHover={{ scale: 1.08 }}
-                      whileTap={{ scale: 0.92 }}
-                      transition={SPRING.snappy}
-                      aria-label={t('invoices.preview')}
-                      title={t('invoices.preview') || 'Preview'}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
-                      style={{
-                        background: 'rgba(88,86,214,0.10)',
-                        color: '#5856D6',
-                        border: '1px solid rgba(88,86,214,0.20)',
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e: any) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          e.currentTarget.click();
-                        }
-                      }}>
-                      <Printer className="h-3.5 w-3.5" />
-                    </motion.button>
+                    </div>
                   </div>
                 </motion.div>
               );
@@ -1020,9 +1247,9 @@ export function InvoicesPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 rounded-2xl border border-[#00000008] bg-[#00000002] p-4 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
+          <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-500/[0.02] p-4 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
             <div>
-              <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+              <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                 {t('invoices.invoiceLabel')}
               </p>
               <p className="mt-1 font-mono text-[13.5px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -1030,7 +1257,7 @@ export function InvoicesPage() {
               </p>
             </div>
             <div className="text-right">
-              <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+              <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                 {t('invoices.col.balanceDue')}
               </p>
               <p className="mt-1 font-mono text-[15px] font-bold text-[#F43F5E]">
@@ -1099,7 +1326,7 @@ export function InvoicesPage() {
             </div>
           </GlassField>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"
@@ -1150,8 +1377,8 @@ export function InvoicesPage() {
         title={t('invoices.issueTitle')}
       >
         <div className="space-y-5">
-          <div className="flex items-start gap-3 rounded-2xl border border-[#007AFF33] bg-[#007AFF]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#007AFF]/15 text-[#007AFF]">
+          <div className="flex items-start gap-3 rounded-2xl border border-[#2563EB33] bg-[#2563EB]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#2563EB]/15 text-[#2563EB]">
               <Icon paths={I.upload} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12.5px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -1159,7 +1386,7 @@ export function InvoicesPage() {
             </p>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"
@@ -1236,9 +1463,9 @@ export function InvoicesPage() {
           />
         ) : invoiceDetail.data ? (
           <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-3 rounded-2xl border border-[#00000008] bg-[#00000002] p-4 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
+            <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-500/[0.02] p-4 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
               <div>
-                <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                   {t('invoices.invoiceLabel')}
                 </p>
                 <p className="mt-1 font-mono text-[13.5px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -1246,7 +1473,7 @@ export function InvoicesPage() {
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                   {t('invoices.refundable')}
                 </p>
                 <p className="mt-1 font-mono text-[15px] font-bold text-[#F43F5E]">
@@ -1293,7 +1520,7 @@ export function InvoicesPage() {
                         </span>
                         <span
                           className="shrink-0 text-[10px] font-bold uppercase tracking-wider"
-                          style={{ color: isSucceeded ? '#10B981' : '#86868B' }}
+                          style={{ color: isSucceeded ? '#10B981' : '#64748B' }}
                         >
                           {t(invoiceStatusKey(p.status))}
                         </span>
@@ -1302,7 +1529,7 @@ export function InvoicesPage() {
                   })}
                 </div>
               ) : (
-                <p className="text-[12px] font-medium text-[#86868B]">{t('invoices.noPayments')}</p>
+                <p className="text-[12px] font-medium text-[#64748B]">{t('invoices.noPayments')}</p>
               )}
             </GlassField>
 
@@ -1335,14 +1562,14 @@ export function InvoicesPage() {
             </div>
 
             {(invoiceDetail.data as any).refunds && (invoiceDetail.data as any).refunds.length > 0 && (
-              <div className="space-y-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
-                <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+              <div className="space-y-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
+                <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                   {t('invoices.refundHistory')}
                 </p>
                 {(invoiceDetail.data as any).refunds.map((r: InvoiceRefund) => (
                   <div
                     key={r.id}
-                    className="flex flex-col gap-2 rounded-xl border border-[#00000008] bg-[#00000002] p-3.5 dark:border-[#ffffff08] dark:bg-[#ffffff04] sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-500/[0.02] p-3.5 dark:border-[#ffffff08] dark:bg-[#ffffff04] sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -1363,16 +1590,16 @@ export function InvoicesPage() {
                                 ? '#10B981'
                                 : r.status === 'REQUESTED'
                                 ? '#F59E0B'
-                                : '#86868B',
+                                : '#64748B',
                           }}
                         >
                           {t(`invoices.refundStatus.${r.status}`)}
                         </span>
                       </div>
                       {r.reason && (
-                        <p className="mt-1 truncate text-[11.5px] font-medium text-[#86868B]">{r.reason}</p>
+                        <p className="mt-1 truncate text-[11.5px] font-medium text-[#64748B]">{r.reason}</p>
                       )}
-                      <p className="mt-0.5 text-[10.5px] text-[#86868B]">
+                      <p className="mt-0.5 text-[10.5px] text-[#64748B]">
                         {t('invoices.requested', { date: r.requestedAt ? formatDate(r.requestedAt) : '' })}
                         {r.processedAt ? t('invoices.processed', { date: formatDate(r.processedAt) }) : ''}
                       </p>
@@ -1420,7 +1647,7 @@ export function InvoicesPage() {
               </div>
             )}
 
-            <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+            <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <GlassButton
                   type="button"
@@ -1518,7 +1745,7 @@ export function InvoicesPage() {
             </div>
           </GlassField>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"
@@ -1599,14 +1826,18 @@ export function InvoicesPage() {
             }
             setCreateErrors(newCreateErrors);
             if (Object.keys(newCreateErrors).length === 0) {
-              createInvoice.mutate(createForm);
+              const { description, unitPrice, ...rest } = createForm;
+              createInvoice.mutate({
+                ...rest,
+                items: [{ description, unitPrice: Number(unitPrice), quantity: 1 }],
+              });
             }
           }}
           className="space-y-5"
           noValidate
         >
-          <div className="flex items-center gap-3 rounded-2xl border border-[#5856D633] bg-[#5856D6]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#5856D6]/15 text-[#5856D6]">
+          <div className="flex items-center gap-3 rounded-2xl border border-[#6366F133] bg-[#6366F1]/[0.06] px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#6366F1]/15 text-[#6366F1]">
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
             <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -1689,12 +1920,12 @@ export function InvoicesPage() {
           </GlassField>
 
           {createErrors._error && (
-            <p className="text-[12.5px] font-medium text-[#FF3B30]" role="alert">
+            <p className="text-[12.5px] font-medium text-[#EF4444]" role="alert">
               {createErrors._error}
             </p>
           )}
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"
@@ -1750,19 +1981,19 @@ export function InvoicesPage() {
           <div className="space-y-5">
             <div
               id="medu-printable-invoice"
-              className="relative overflow-hidden rounded-2xl border border-[#00000008] bg-white p-6 text-[#1D1D1F] dark:border-[#ffffff10] dark:bg-[#1c1c1e] dark:text-[#F5F5F7] sm:p-8"
+              className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white p-6 text-[#1D1D1F] dark:border-slate-800 dark:bg-[#131622] dark:text-[#F5F5F7] sm:p-8"
               style={{
                 boxShadow:
                   'inset 0 1px 0 rgba(255,255,255,0.5), 0 10px 30px -18px rgba(0,0,0,0.15)',
               }}
             >
               {/* Header */}
-              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#00000008] pb-5 dark:border-[#ffffff08]">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800 pb-5 dark:border-[#ffffff08]">
                 <div className="flex items-start gap-3">
                   <div
                     className="flex h-11 w-11 items-center justify-center rounded-xl text-[16px] font-black text-white"
                     style={{
-                      background: 'linear-gradient(135deg, #5856D6 0%, #AF52DE 100%)',
+                      background: 'linear-gradient(135deg, #6366F1 0%, #6366F1 100%)',
                       boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)',
                     }}
                   >
@@ -1770,7 +2001,7 @@ export function InvoicesPage() {
                   </div>
                   <div>
                     <h2 className="text-[16px] font-bold tracking-tight">{t('common.meduAcademy')}</h2>
-                    <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+                    <p className="mt-0.5 text-[11px] font-medium text-[#64748B]">
                       Official Tuition & Billing Document
                     </p>
                   </div>
@@ -1779,7 +2010,7 @@ export function InvoicesPage() {
                   <h1 className="text-[20px] font-black uppercase tracking-tight">
                     {t('invoices.preview.invoice')}
                   </h1>
-                  <p className="mt-1 font-mono text-[12.5px] font-semibold text-[#86868B]">
+                  <p className="mt-1 font-mono text-[12.5px] font-semibold text-[#64748B]">
                     #{previewTarget.number || previewTarget.id.slice(0, 8)}
                   </p>
                   <div className="mt-2 flex justify-end">
@@ -1791,7 +2022,7 @@ export function InvoicesPage() {
               {/* Meta */}
               <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
-                  <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                  <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                     {t('invoices.preview.billedTo')}
                   </p>
                   <p className="mt-1 text-[13px] font-bold">
@@ -1800,11 +2031,11 @@ export function InvoicesPage() {
                       : previewTarget.studentId || '—'}
                   </p>
                   {previewTarget.student?.user?.email && (
-                    <p className="text-[11px] text-[#86868B]">{previewTarget.student.user.email}</p>
+                    <p className="text-[11px] text-[#64748B]">{previewTarget.student.user.email}</p>
                   )}
                 </div>
                 <div>
-                  <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                  <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                     {t('invoices.preview.issueDate')}
                   </p>
                   <p className="mt-1 text-[13px] font-medium">
@@ -1814,7 +2045,7 @@ export function InvoicesPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                  <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                     {t('invoices.preview.dueDate')}
                   </p>
                   <p className="mt-1 text-[13px] font-medium">
@@ -1826,9 +2057,9 @@ export function InvoicesPage() {
               </div>
 
               {/* Line items */}
-              <div className="mt-5 overflow-hidden rounded-xl border border-[#00000008] dark:border-[#ffffff08]">
+              <div className="mt-5 overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 dark:border-[#ffffff08]">
                 <table className="w-full text-[12.5px]">
-                  <thead className="bg-[#00000003] text-[10.5px] font-bold uppercase tracking-wider text-[#86868B] dark:bg-[#ffffff04]">
+                  <thead className="bg-[#00000003] text-[10.5px] font-bold uppercase tracking-wider text-[#64748B] dark:bg-[#ffffff04]">
                     <tr>
                       <th className="px-4 py-2.5 text-left">{t('invoices.preview.description')}</th>
                       <th className="px-4 py-2.5 text-right">{t('invoices.preview.amount')}</th>
@@ -1850,21 +2081,21 @@ export function InvoicesPage() {
               {/* Totals */}
               <div className="mt-5 flex justify-end">
                 <div className="w-full max-w-[280px] space-y-1.5 text-[12.5px]">
-                  <div className="flex justify-between border-b border-[#00000008] py-1.5 dark:border-[#ffffff08]">
-                    <span className="text-[#86868B]">{t('invoices.preview.subtotal')}</span>
+                  <div className="flex justify-between border-b border-slate-200/80 dark:border-slate-800 py-1.5 dark:border-[#ffffff08]">
+                    <span className="text-[#64748B]">{t('invoices.preview.subtotal')}</span>
                     <span className="font-mono font-medium">
                       {formatCurrency(Number(previewTarget.subtotal || previewTarget.total || 0))}
                     </span>
                   </div>
-                  <div className="flex justify-between border-b border-[#00000008] py-1.5 dark:border-[#ffffff08]">
-                    <span className="text-[#86868B]">{t('invoices.preview.paidAmount')}</span>
+                  <div className="flex justify-between border-b border-slate-200/80 dark:border-slate-800 py-1.5 dark:border-[#ffffff08]">
+                    <span className="text-[#64748B]">{t('invoices.preview.paidAmount')}</span>
                     <span className="font-mono font-medium text-[#10B981]">
                       {formatCurrency(Number(previewTarget.paidAmount || 0))}
                     </span>
                   </div>
                   {Number(previewTarget.refundedAmount || 0) > 0 && (
-                    <div className="flex justify-between border-b border-[#00000008] py-1.5 dark:border-[#ffffff08]">
-                      <span className="text-[#86868B]">{t('invoices.preview.refunded')}</span>
+                    <div className="flex justify-between border-b border-slate-200/80 dark:border-slate-800 py-1.5 dark:border-[#ffffff08]">
+                      <span className="text-[#64748B]">{t('invoices.preview.refunded')}</span>
                       <span className="font-mono font-medium text-[#F43F5E]">
                         {formatCurrency(Number(previewTarget.refundedAmount))}
                       </span>
@@ -1880,7 +2111,7 @@ export function InvoicesPage() {
               </div>
 
               {/* Footer */}
-              <div className="mt-6 flex flex-col gap-3 border-t border-[#00000008] pt-4 text-[10.5px] text-[#86868B] dark:border-[#ffffff08] sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-6 flex flex-col gap-3 border-t border-slate-200/80 dark:border-slate-800 pt-4 text-[10.5px] text-[#64748B] dark:border-[#ffffff08] sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-bold text-[#4A4A4F] dark:text-[#C7C7CC]">
                     {t('invoices.preview.paymentInstructions')}
@@ -1938,6 +2169,279 @@ export function InvoicesPage() {
           </div>
         )}
       </GlassModal>
+
+      {/* ============================================================
+          PRORATE TUITION MODAL (Kunbay Biling)
+      ============================================================ */}
+      <GlassModal
+        open={prorateOpen}
+        onClose={() => setProrateOpen(false)}
+        title="Kunbay Hisob-faktura (Prorated Tuition)"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!prorateForm.studentId) {
+              push('error', 'Iltimos, talabani tanlang');
+              return;
+            }
+            createProratedInvoice.mutate({
+              studentId: prorateForm.studentId,
+              monthlyTuition: Number(prorateForm.monthlyTuition) || 0,
+              totalLessonsInMonth: Number(prorateForm.totalLessons) || 12,
+              attendedLessons: Number(prorateForm.attendedLessons) || 0,
+              reason: prorateForm.reason,
+            });
+          }}
+          className="space-y-4"
+        >
+          <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-3.5 text-xs text-sky-800 dark:text-sky-200">
+            <p className="font-semibold">Oy o'rtasida qo'shilgan talabalar uchun kunbay biling</p>
+            <p className="mt-1 text-[11px] opacity-80">
+              Talaba to'liq oy emas, faqat o'zining dars boshlagan kunidan boshlab qolgan darslar soni bo'yicha to'lov qiladi.
+            </p>
+          </div>
+
+          <GlassField label="Talabani tanlang" required>
+            <GlassSelect
+              value={prorateForm.studentId}
+              onChange={(e) => setProrateForm({ ...prorateForm, studentId: e.target.value })}
+              required
+            >
+              <option value="">Talabani tanlang...</option>
+              {((students.data as any)?.items || []).map((s: any) => (
+                <option key={s.id} value={s.id}>
+                  {s.user?.firstName} {s.user?.lastName} {s.phone ? `(${s.phone})` : ''}
+                </option>
+              ))}
+            </GlassSelect>
+          </GlassField>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <GlassField label="Oylik to'lov (UZS)" required>
+              <GlassInput
+                type="number"
+                placeholder="800 000"
+                value={prorateForm.monthlyTuition}
+                onChange={(e) => setProrateForm({ ...prorateForm, monthlyTuition: e.target.value })}
+                required
+              />
+            </GlassField>
+
+            <GlassField label="Oydagi jami darslar" required>
+              <GlassInput
+                type="number"
+                value={prorateForm.totalLessons}
+                onChange={(e) => setProrateForm({ ...prorateForm, totalLessons: e.target.value })}
+                required
+              />
+            </GlassField>
+
+            <GlassField label="Qatnashadigan darslar" required>
+              <GlassInput
+                type="number"
+                value={prorateForm.attendedLessons}
+                onChange={(e) => setProrateForm({ ...prorateForm, attendedLessons: e.target.value })}
+                required
+              />
+            </GlassField>
+          </div>
+
+          {Number(prorateForm.monthlyTuition) > 0 && Number(prorateForm.totalLessons) > 0 && (
+            <div className="rounded-2xl border border-black/[0.08] bg-slate-50 dark:bg-slate-900/40 p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+              <div className="flex items-center justify-between text-xs text-[#64748B]">
+                <span>1 ta dars narxi:</span>
+                <span className="font-mono font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  {formatCurrency(Math.round(Number(prorateForm.monthlyTuition) / (Number(prorateForm.totalLessons) || 1)))}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between border-t border-black/[0.05] pt-2 text-sm font-bold dark:border-white/[0.05]">
+                <span className="text-[#1D1D1F] dark:text-[#F5F5F7]">Hisoblangan summa:</span>
+                <span className="font-mono text-base text-emerald-600 dark:text-emerald-400">
+                  {formatCurrency(
+                    Math.round(
+                      (Number(prorateForm.monthlyTuition) / (Number(prorateForm.totalLessons) || 1)) *
+                        (Number(prorateForm.attendedLessons) || 0)
+                    )
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <GlassField label="Izoh / Asos">
+            <GlassInput
+              value={prorateForm.reason}
+              onChange={(e) => setProrateForm({ ...prorateForm, reason: e.target.value })}
+              placeholder="Oy o'rtasidan kelgan talaba uchun..."
+            />
+          </GlassField>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <GlassButton type="button" variant="secondary" onClick={() => setProrateOpen(false)}>
+              Bekor qilish
+            </GlassButton>
+            <GlassButton type="submit" variant="primary" disabled={createProratedInvoice.isPending}>
+              {createProratedInvoice.isPending ? 'Hisoblanmoqda...' : 'Hisoblash va Invoys yaratish'}
+            </GlassButton>
+          </div>
+        </form>
+      </GlassModal>
+
+      {/* ============================================================
+          PAYME & CLICK PAYMENT LINKS MODAL
+      ============================================================ */}
+      <GlassModal
+        open={!!paymentLinksTarget}
+        onClose={() => setPaymentLinksTarget(null)}
+        title="To'lov havolasi va QR kod (Payme / Click)"
+      >
+        {paymentLinksTarget && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-4 dark:border-white/[0.06] dark:bg-white/[0.03]">
+              <div className="flex items-center justify-between text-xs text-[#64748B]">
+                <span>Invoys raqami:</span>
+                <span className="font-mono font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  {paymentLinksTarget.number || paymentLinksTarget.id.slice(0, 8)}
+                </span>
+              </div>
+              <div className="mt-1.5 flex items-center justify-between text-xs text-[#64748B]">
+                <span>Qolgan to'lov summasi:</span>
+                <span className="font-mono text-sm font-bold text-[#F43F5E]">
+                  {formatCurrency(remaining(paymentLinksTarget))}
+                </span>
+              </div>
+            </div>
+
+            {paymentLinksQuery.isLoading ? (
+              <div className="flex h-32 items-center justify-center">
+                <span className="text-xs text-[#64748B]">Havolalar generatsiya qilinmoqda...</span>
+              </div>
+            ) : paymentLinksQuery.data ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/10 p-3.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-cyan-800 dark:text-cyan-200 text-sm">Payme</span>
+                      <a
+                        href={paymentLinksQuery.data.paymeUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg bg-cyan-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-cyan-700"
+                      >
+                        To'lash
+                      </a>
+                    </div>
+                    <p className="mt-1 text-[10px] text-cyan-900/70 dark:text-cyan-200/70">
+                      Ilova yoki brauzerda to'g'ridan-to'g'ri ochiladi
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(paymentLinksQuery.data.paymeUrl);
+                        push('success', 'Payme havolasi nusxalandi');
+                      }}
+                      className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-cyan-700 dark:text-cyan-300 hover:underline"
+                    >
+                      <Icon paths={I.copy} size={11} strokeWidth={2} />
+                      Havolani nusxalash
+                    </button>
+                  </div>
+
+                  <div className="rounded-2xl border border-brand-500/25 bg-brand-500/10 p-3.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-blue-800 dark:text-blue-200 text-sm">Click</span>
+                      <a
+                        href={paymentLinksQuery.data.clickUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-blue-700"
+                      >
+                        To'lash
+                      </a>
+                    </div>
+                    <p className="mt-1 text-[10px] text-blue-900/70 dark:text-blue-200/70">
+                      Click Up yoki veb interfeys orqali tezkor to'lov
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(paymentLinksQuery.data.clickUrl);
+                        push('success', 'Click havolasi nusxalandi');
+                      }}
+                      className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300 hover:underline"
+                    >
+                      <Icon paths={I.copy} size={11} strokeWidth={2} />
+                      Havolani nusxalash
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white p-5 text-center shadow-sm dark:border-white/[0.08] dark:bg-black/40">
+                  <img
+                    src={paymentLinksQuery.data.qrCodeUrl}
+                    alt="To'lov QR Kodi"
+                    className="h-44 w-44 rounded-xl border border-black/[0.08] p-2 dark:border-white/[0.08]"
+                  />
+                  <p className="mt-3 text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    Payme yoki Click kamerasi orqali skanerlang
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-[#64748B]">
+                    Ota-ona telefonidan skaner qilib bir zumda to'lov qila oladi
+                  </p>
+                </div>
+
+                <a
+                  href={`https://t.me/share/url?url=${encodeURIComponent(paymentLinksQuery.data.paymeUrl)}&text=${encodeURIComponent(
+                    `Hurmatli ota-ona! ${paymentLinksTarget.number || 'Invoys'} uchun to'lov miqdori: ${formatCurrency(
+                      remaining(paymentLinksTarget)
+                    )}. Quyidagi havola orqali to'lashingiz mumkin:`
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-sky-600"
+                >
+                  <Icon paths={I.telegram} size={14} strokeWidth={2} />
+                  Ota-onaga Telegram orqali yuborish
+                </a>
+              </div>
+            ) : null}
+
+            <div className="flex justify-end pt-2">
+              <GlassButton type="button" variant="secondary" onClick={() => setPaymentLinksTarget(null)}>
+                Yopish
+              </GlassButton>
+            </div>
+          </div>
+        )}
+      </GlassModal>
+
+      {/* Floating Action Island for batch operations */}
+      <FloatingActionIsland
+        selectedCount={selectedCount}
+        onClearSelection={clearSelection}
+        actions={[
+          {
+            label: 'CSV Eksport',
+            icon: (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            ),
+            onClick: handleExportSelectedInvoicesCsv,
+            shortcutBadge: 'e',
+          },
+        ]}
+      />
+
+      {/* Executive PDF Studio Modal */}
+      <ExecutivePDFStudio
+        open={studioDocData !== null}
+        onClose={() => setStudioDocData(null)}
+        initialData={studioDocData ?? undefined}
+      />
     </motion.div>
   );
 }

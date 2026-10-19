@@ -26,6 +26,9 @@ ENV VITE_API_URL=${VITE_API_URL}
 RUN npx turbo build --filter=@medu/web...
 
 FROM nginx:alpine AS runner
+RUN apk add --no-cache libcap && \
+    setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx
+
 # Copy custom nginx config
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 
@@ -34,6 +37,14 @@ WORKDIR /usr/share/nginx/html
 RUN rm -rf ./*
 # Copy static build from installer
 COPY --from=installer /app/apps/web/dist .
+
+# Configure Nginx directories and pid for non-root execution (M-EDU-OPS-004)
+RUN sed -i 's|/var/run/nginx.pid|/tmp/nginx.pid|g' /etc/nginx/nginx.conf 2>/dev/null || true && \
+    mkdir -p /var/cache/nginx /var/log/nginx /var/run && \
+    touch /tmp/nginx.pid && \
+    chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx /var/run /tmp/nginx.pid /etc/nginx/conf.d
+
+USER nginx
 
 EXPOSE 80
 

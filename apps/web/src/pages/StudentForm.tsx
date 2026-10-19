@@ -681,7 +681,7 @@ export function StudentFormPage() {
   --------------------------------------------------------------- */
   return (
     <>
-      <div className="page-container mx-auto max-w-3xl space-y-5 pb-28">
+      <div className="page-container mx-auto max-w-3xl space-y-5 pb-36 sm:pb-28">
         <GlassPageHeader
           title={isEdit ? t('studentForm.editTitle') : t('studentForm.addTitle')}
           subtitle={t('studentForm.subtitle')}
@@ -992,12 +992,12 @@ export function StudentFormPage() {
             initial={{ y: 60, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ ...SPRING.smooth, delay: 0.25 }}
-            className="fixed inset-x-0 bottom-0 z-30 lg:pl-[290px]"
+            className="fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-0 z-40 lg:pl-[290px]"
             style={{ pointerEvents: 'none' }}
           >
-            <div className="mx-auto max-w-3xl px-6 pb-4" style={{ pointerEvents: 'auto' }}>
+            <div className="mx-auto max-w-3xl px-3 sm:px-6 pb-2 sm:pb-4" style={{ pointerEvents: 'auto' }}>
               <div
-                className="flex items-center justify-between gap-3 rounded-2xl border border-[#ffffff70] bg-[#ffffffd9] px-4 py-3 shadow-[0_20px_60px_-20px_rgba(0,0,0,0.25)] backdrop-blur-2xl dark:border-[#ffffff15] dark:bg-[#1c1c1ee6]"
+                className="flex items-center justify-between gap-3 rounded-2xl border border-black/[0.06] bg-white/90 px-4 py-3 shadow-2xl backdrop-blur-2xl dark:border-white/[0.08] dark:bg-surface-900/90"
               >
                 <div className="hidden min-w-0 items-center gap-2.5 sm:flex">
                   <div
@@ -1010,7 +1010,7 @@ export function StudentFormPage() {
                     />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[12px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    <p className="text-[12px] font-semibold tracking-tight text-[var(--text-primary)]">
                       {isEdit ? t('studentForm.editTitle') : t('studentForm.addTitle')}
                     </p>
                     <p className="text-[10.5px] font-medium text-[#86868B] tabular-nums">

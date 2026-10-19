@@ -16,7 +16,7 @@
  *  - 100% logic preserved (queries, tabs, state, i18n, data shapes)
  */
 
-import { toLocalISOString } from '../lib/format';
+import { toLocalISOString } from '@/lib/format';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
@@ -35,6 +35,8 @@ import {
 import { analyticsApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { useI18n } from '@/i18n/I18nProvider';
 import type {
   CashFlowData,
@@ -175,16 +177,16 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald' | 'amber' | 'indigo' | 'rose';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string; gradient: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)', gradient: 'linear-gradient(90deg, #32ADE6, #007AFF)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)',  gradient: 'linear-gradient(90deg, #30D158, #34C759)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)',  gradient: 'linear-gradient(90deg, #FFB340, #FF9500)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)',  gradient: 'linear-gradient(90deg, #FF6961, #FF3B30)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)', gradient: 'linear-gradient(90deg, #BF5AF2, #AF52DE)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)', gradient: 'linear-gradient(90deg, #64D2FF, #32ADE6)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)', gradient: 'linear-gradient(90deg, #A1A1A6, #86868B)' },
+  blue:    { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)', border: 'rgba(37,99,235,0.20)', gradient: 'linear-gradient(90deg, #0284C7, #2563EB)' },
+  green:   { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)',  border: 'rgba(16,185,129,0.20)',  gradient: 'linear-gradient(90deg, #30D158, #10B981)' },
+  orange:  { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)',  border: 'rgba(245,158,11,0.20)',  gradient: 'linear-gradient(90deg, #FFB340, #F59E0B)' },
+  red:     { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)',  gradient: 'linear-gradient(90deg, #FF6961, #EF4444)' },
+  purple:  { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)', gradient: 'linear-gradient(90deg, #BF5AF2, #6366F1)' },
+  cyan:    { fg: '#0284C7', bg: 'rgba(2,132,199,0.10)', glow: 'rgba(2,132,199,0.28)', border: 'rgba(2,132,199,0.20)', gradient: 'linear-gradient(90deg, #64D2FF, #0284C7)' },
+  gray:    { fg: '#64748B', bg: 'rgba(100,116,139,0.10)', glow: 'rgba(100,116,139,0.22)', border: 'rgba(100,116,139,0.20)', gradient: 'linear-gradient(90deg, #A1A1A6, #64748B)' },
   emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)', gradient: 'linear-gradient(90deg, #34D399, #10B981)' },
   amber:   { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)', glow: 'rgba(245,158,11,0.28)', border: 'rgba(245,158,11,0.20)', gradient: 'linear-gradient(90deg, #FBBF24, #F59E0B)' },
-  indigo:  { fg: '#5856D6', bg: 'rgba(88,86,214,0.10)',  glow: 'rgba(88,86,214,0.28)',  border: 'rgba(88,86,214,0.20)',  gradient: 'linear-gradient(90deg, #818CF8, #5856D6)' },
+  indigo:  { fg: '#6366F1', bg: 'rgba(88,86,214,0.10)',  glow: 'rgba(88,86,214,0.28)',  border: 'rgba(88,86,214,0.20)',  gradient: 'linear-gradient(90deg, #818CF8, #6366F1)' },
   rose:    { fg: '#F43F5E', bg: 'rgba(244,63,94,0.10)',  glow: 'rgba(244,63,94,0.28)',  border: 'rgba(244,63,94,0.20)',  gradient: 'linear-gradient(90deg, #FB7185, #F43F5E)' },
 };
 
@@ -230,26 +232,7 @@ function fmtUZS(val: number) {
  * ========================================================================== */
 
 function AmbientOrbs() {
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <motion.div
-        className="absolute -left-[8%] top-[6%] h-[44%] w-[40%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(0,122,255,0.14), transparent 70%)',
-          }}
-        animate={{ x: [0, 24, 0], y: [0, 18, 0], opacity: [0.85, 1, 0.85] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute -bottom-[10%] -right-[8%] h-[46%] w-[42%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(175,82,222,0.12), transparent 70%)',
-          }}
-        animate={{ x: [0, -28, 0], y: [0, -22, 0], opacity: [0.8, 1, 0.8] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </div>
-  );
+  return null;
 }
 
 function CountUp({ value, duration = 1.1, suffix = '', decimals = 0, currency = false }: { value: number; duration?: number; suffix?: string; decimals?: number; currency?: boolean }) {
@@ -295,10 +278,7 @@ function KpiTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3.5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
       <span
         aria-hidden
@@ -333,11 +313,11 @@ function KpiTile({
             stringValue
           )}
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B]">
           {label}
         </div>
         {secondary && (
-          <div className="mt-0.5 truncate text-[10.5px] font-semibold tracking-tight text-[#86868B]/80">
+          <div className="mt-0.5 truncate text-[10.5px] font-semibold tracking-tight text-[#64748B]/80">
             {secondary}
           </div>
         )}
@@ -378,8 +358,7 @@ function PremiumTabs({
   return (
     <div
       role="tablist"
-      className="flex w-full items-center gap-1 overflow-x-auto rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-1 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)' }}
+      className="flex w-full items-center gap-1 overflow-x-auto rounded-xl border border-black/[0.04] bg-black/[0.04] p-1 dark:border-white/[0.06] dark:bg-white/[0.06]"
     >
       {TABS.map((tab) => {
         const isActive = active === tab.id;
@@ -395,7 +374,7 @@ function PremiumTabs({
             whileTap={{ scale: 0.97 }}
             transition={SPRING.snappy}
             className="relative shrink-0 overflow-hidden rounded-xl px-3.5 py-2 text-[12.5px] font-bold tracking-tight outline-none transition-colors whitespace-nowrap"
-            style={{ color: isActive ? c.fg : '#86868B' }}
+            style={{ color: isActive ? c.fg : '#64748B' }}
             tabIndex={0}
             onKeyDown={(e: any) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -460,11 +439,7 @@ function OverviewTab({ data, t }: { data: CashFlowData | undefined; t: (key: str
       {/* Flow visualization */}
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-8"
-        style={{
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-        }}
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-8"
       >
         <span
           aria-hidden
@@ -474,14 +449,14 @@ function OverviewTab({ data, t }: { data: CashFlowData | undefined; t: (key: str
           }}
         />
         <div className="relative mb-6 flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2563EB]/10 text-[#2563EB]">
             <Icon paths={I.activity} size={16} strokeWidth={2} />
           </div>
           <div>
             <h3 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
               {t('analytics.cashFlowBreakdown')}
             </h3>
-            <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+            <p className="mt-0.5 text-[11px] font-medium text-[#64748B]">
               Period: {data.period?.startDate?.slice(0, 10)} → {data.period?.endDate?.slice(0, 10)}
             </p>
           </div>
@@ -506,7 +481,7 @@ function OverviewTab({ data, t }: { data: CashFlowData | undefined; t: (key: str
                 {fmtUZS(inflow)}
               </span>
             </div>
-            <div className="h-9 overflow-hidden rounded-xl border border-[#00000008] bg-[#00000004] dark:border-[#ffffff08] dark:bg-[#ffffff04]">
+            <div className="h-9 overflow-hidden rounded-xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.04]">
               <motion.div
                 className="h-full rounded-xl"
                 style={{
@@ -538,7 +513,7 @@ function OverviewTab({ data, t }: { data: CashFlowData | undefined; t: (key: str
                 {fmtUZS(outflow)}
               </span>
             </div>
-            <div className="h-9 overflow-hidden rounded-xl border border-[#00000008] bg-[#00000004] dark:border-[#ffffff08] dark:bg-[#ffffff04]">
+            <div className="h-9 overflow-hidden rounded-xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.04]">
               <motion.div
                 className="h-full rounded-xl"
                 style={{
@@ -576,7 +551,7 @@ function CashFlowTab({ data, t }: { data: CashFlowData | undefined; t: (key: str
       variants={cardVariants}
       initial="hidden"
       animate="visible"
-      className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       style={{
         boxShadow:
           'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -589,7 +564,7 @@ function CashFlowTab({ data, t }: { data: CashFlowData | undefined; t: (key: str
           background: 'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
         }}
       />
-      <div className="relative flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+      <div className="relative flex items-center gap-3 border-b border-black/[0.06] px-5 py-4 dark:border-white/[0.08]">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#10B981]/10 text-[#10B981]">
           <Icon paths={I.cash} size={16} strokeWidth={2} />
         </div>
@@ -597,7 +572,7 @@ function CashFlowTab({ data, t }: { data: CashFlowData | undefined; t: (key: str
           <h3 className="text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {t('analytics.cashFlowBreakdown')}
           </h3>
-          <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+          <p className="mt-0.5 text-[11px] font-medium text-[#64748B]">
             {breakdownData.length} categories
           </p>
         </div>
@@ -627,7 +602,7 @@ function CashFlowTab({ data, t }: { data: CashFlowData | undefined; t: (key: str
                     initial={{ opacity: 0, x: -6 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ ...SPRING.smooth, delay: i * 0.04 }}
-                    className="transition-colors hover:bg-[#007AFF]/[0.03]"
+                    className="transition-colors hover:bg-[#2563EB]/[0.03]"
                   >
                     <GlassTD>
                       <span className="text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -667,6 +642,35 @@ function CashFlowTab({ data, t }: { data: CashFlowData | undefined; t: (key: str
  * TAB: ANOMALIES — premium cards
  * ═══════════════════════════════════════════════════════════════════════ */
 
+function handleOpenAnomalySidecar(a: FinancialAnomaly) {
+  const sidecarData: QuickLookData = {
+    id: `${a.type}-${a.metric || Math.random()}`,
+    type: 'payment',
+    title: a.type ? a.type.replace(/_/g, ' ') : 'Moliyaviy anomaliya',
+    subtitle: `${a.severity} daraja · ${a.metric || 'Moliyaviy ko\'rsatkich'}`,
+    badge: {
+      text: a.severity,
+      tone: a.severity === 'CRITICAL' || a.severity === 'HIGH' ? 'rose' : 'amber',
+    },
+    avatar: {
+      text: a.severity.slice(0, 2),
+      color: '#EF4444',
+    },
+    metrics: [
+      { label: 'Anomaliya turi', value: a.type },
+      { label: 'Metrika', value: a.metric || '—' },
+      { label: 'Xavf darajasi', value: a.severity },
+    ],
+    details: [
+      { label: 'Turi', value: a.type },
+      { label: 'Metrika', value: a.metric || '—' },
+      { label: 'Tavsif', value: a.description || 'Izohsiz' },
+      { label: 'Daraja', value: a.severity },
+    ],
+  };
+  openSidecar(sidecarData);
+}
+
 function AnomaliesTab({ data, t }: { data: FinancialAnomaly[] | undefined; t: (key: string) => string }) {
   const items = Array.isArray(data) ? data : [];
 
@@ -682,7 +686,7 @@ function AnomaliesTab({ data, t }: { data: FinancialAnomaly[] | undefined; t: (k
       variants={cardVariants}
       initial="hidden"
       animate="visible"
-      className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       style={{
         boxShadow:
           'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -695,7 +699,7 @@ function AnomaliesTab({ data, t }: { data: FinancialAnomaly[] | undefined; t: (k
           background: 'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
         }}
       />
-      <div className="relative flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
+      <div className="relative flex items-center gap-3 border-b border-black/[0.06] px-5 py-4 dark:border-white/[0.08]">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F43F5E]/10 text-[#F43F5E]">
           <Icon paths={I.alert} size={16} strokeWidth={2} />
         </div>
@@ -703,7 +707,7 @@ function AnomaliesTab({ data, t }: { data: FinancialAnomaly[] | undefined; t: (k
           <h3 className="text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {t('analytics.detectedAnomalies')}
           </h3>
-          <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+          <p className="mt-0.5 text-[11px] font-medium text-[#64748B]">
             {items.length} detected
           </p>
         </div>
@@ -711,7 +715,7 @@ function AnomaliesTab({ data, t }: { data: FinancialAnomaly[] | undefined; t: (k
 
       {items.length === 0 ? (
         <div className="p-12 flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#10B981]/10 text-[#10B981]">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#10B981]/10 text-[#10B981]">
             <Icon paths={I.checkCircle} size={26} strokeWidth={1.8} />
           </div>
           <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -719,7 +723,7 @@ function AnomaliesTab({ data, t }: { data: FinancialAnomaly[] | undefined; t: (k
           </p>
         </div>
       ) : (
-        <div className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+        <div className="relative divide-y divide-slate-200/80 dark:divide-slate-800 dark:divide-[#ffffff08]">
           {items.map((a, i) => {
             const tone = getSeverityTone(a.severity);
             const c = TONES[tone];
@@ -765,11 +769,19 @@ function AnomaliesTab({ data, t }: { data: FinancialAnomaly[] | undefined; t: (k
                     </span>
                   </div>
                   {a.description && (
-                    <p className="mt-1 text-[12px] font-medium leading-snug text-[#86868B]">
+                    <p className="mt-1 text-[12px] font-medium leading-snug text-[#64748B]">
                       {a.description}
                     </p>
                   )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => handleOpenAnomalySidecar(a)}
+                  title="Split View Sidecar"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-emerald-600 dark:hover:bg-white/[0.08]"
+                >
+                  <span className="text-xs font-mono font-bold">◨</span>
+                </button>
               </motion.div>
             );
           })}
@@ -810,7 +822,7 @@ function WhatIfTab({
       variants={cardVariants}
       initial="hidden"
       animate="visible"
-      className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-8"
+      className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-8"
       style={{
         boxShadow:
           'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -824,14 +836,14 @@ function WhatIfTab({
         }}
       />
       <div className="relative mb-6 flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#AF52DE]/10 text-[#AF52DE]">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#6366F1]/10 text-[#6366F1]">
           <Icon paths={I.sparkles} size={16} strokeWidth={2} />
         </div>
         <div>
           <h3 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {t('analytics.whatIfSimulation')}
           </h3>
-          <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+          <p className="mt-0.5 text-[11px] font-medium text-[#64748B]">
             {t('finance.adjustVariables')}
           </p>
         </div>
@@ -878,13 +890,13 @@ function WhatIfTab({
       </div>
 
       {loadingWhatIf ? (
-        <div className="h-40 flex items-center justify-center rounded-2xl border border-dashed border-[#00000015] dark:border-[#ffffff15]">
+        <div className="h-40 flex items-center justify-center rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 dark:border-[#ffffff15]">
           <GlassPageLoader label={t('analytics.simulating')} />
         </div>
       ) : errWhatIf ? (
         <GlassErrorState title={t('common.error')} message={getErrorMessage(eWhatIf as Error)} />
       ) : sim?.status === 'INSUFFICIENT_DATA' ? (
-        <div className="rounded-2xl border border-dashed border-[#00000015] bg-[#00000002] p-8 text-center dark:border-[#ffffff15] dark:bg-[#ffffff04]">
+        <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-500/[0.02] p-8 text-center dark:border-[#ffffff15] dark:bg-[#ffffff04]">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F59E0B]/10 text-[#F59E0B]">
             <Icon paths={I.info} size={22} strokeWidth={1.8} />
           </div>
@@ -939,7 +951,8 @@ function ForecastView({ forecastDays, setForecastDays, t }: { forecastDays: numb
 
   if (isLoading) {
     return (
-      <div className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-12 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]">
+      <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-12 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
         <div className="space-y-4">
           <Shimmer className="h-8 w-48" radius="0.5rem" />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -965,20 +978,20 @@ function ForecastView({ forecastDays, setForecastDays, t }: { forecastDays: numb
         variants={cardVariants}
         initial="hidden"
         animate="visible"
-        className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-12 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-12 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
         style={{
           boxShadow:
             'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
         }}
       >
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#32ADE6]/10 text-[#32ADE6]">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#0284C7]/10 text-[#0284C7]">
             <Icon paths={I.forecast} size={26} strokeWidth={1.8} />
           </div>
           <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {t('analytics.insufficientData')}
           </p>
-          <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+          <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#64748B]">
             {t('analytics.insufficientDataDesc')}
           </p>
         </div>
@@ -994,7 +1007,7 @@ function ForecastView({ forecastDays, setForecastDays, t }: { forecastDays: numb
       variants={cardVariants}
       initial="hidden"
       animate="visible"
-      className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-8"
+      className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-8"
       style={{
         boxShadow:
           'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -1009,14 +1022,14 @@ function ForecastView({ forecastDays, setForecastDays, t }: { forecastDays: numb
       />
       <div className="relative mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#32ADE6]/10 text-[#32ADE6]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0284C7]/10 text-[#0284C7]">
             <Icon paths={I.forecast} size={16} strokeWidth={2} />
           </div>
           <div>
             <h3 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
               {t('analytics.financialForecast')}
             </h3>
-            <p className="mt-0.5 text-[11px] font-medium text-[#86868B]">
+            <p className="mt-0.5 text-[11px] font-medium text-[#64748B]">
               {forecastDays} {t('common.days')} projection
             </p>
           </div>
@@ -1095,15 +1108,15 @@ function ReconciliationView({ t }: { t: (key: string) => string }) {
       {/* Toolbar */}
       <motion.div
         variants={cardVariants}
-        className="relative overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
         style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)' }}
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#5856D6]/10 text-[#5856D6]">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#6366F1]/10 text-[#6366F1]">
               <Icon paths={I.calendar} size={14} strokeWidth={2.2} />
             </div>
-            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
               {t('finance.period')}
             </span>
           </div>
@@ -1165,7 +1178,7 @@ function ReconciliationView({ t }: { t: (key: string) => string }) {
 
           <motion.div
             variants={cardVariants}
-            className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+            className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
             style={{
               boxShadow:
                 'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -1202,7 +1215,7 @@ function ReconciliationView({ t }: { t: (key: string) => string }) {
                         initial={{ opacity: 0, x: -6 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ ...SPRING.smooth, delay: i * 0.04 }}
-                        className="transition-colors hover:bg-[#5856D6]/[0.03]"
+                        className="transition-colors hover:bg-[#6366F1]/[0.03]"
                       >
                         <GlassTD>
                           <span
@@ -1268,6 +1281,7 @@ function ReconciliationView({ t }: { t: (key: string) => string }) {
  * ═══════════════════════════════════════════════════════════════════════ */
 
 export function FinancialAnalyticsPage() {
+  const { playTick } = usePremiumSound();
   const { t } = useI18n();
   usePageTitle(t('nav.financialAnalytics'));
   const [activeTab, setActiveTab] = useState<TabId>('overview');
@@ -1318,12 +1332,13 @@ export function FinancialAnalyticsPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
+          className="liquid-glass-surface relative overflow-hidden rounded-2xl p-6 sm:p-7"
           style={{
             boxShadow:
               'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
           }}
         >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
           <span
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-0 h-24"
@@ -1338,7 +1353,7 @@ export function FinancialAnalyticsPage() {
               transition={SPRING.smooth}
               className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
               style={{
-                background: 'linear-gradient(135deg, #10B981 0%, #007AFF 100%)',
+                background: 'linear-gradient(135deg, #10B981 0%, #2563EB 100%)',
                 boxShadow:
                   '0 12px 28px -10px rgba(16,185,129,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
               }}
@@ -1359,7 +1374,7 @@ export function FinancialAnalyticsPage() {
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   {t('finance.title')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
                   <Icon paths={I.calendar} size={11} strokeWidth={2.5} />
                   {periodLabel}
                 </span>
@@ -1383,7 +1398,7 @@ export function FinancialAnalyticsPage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('nav.financialAnalytics')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {t('analytics.financialSubtitle')}
               </p>
             </div>
@@ -1395,7 +1410,7 @@ export function FinancialAnalyticsPage() {
           TABS
       ============================================================ */}
       <motion.div variants={cardVariants}>
-        <PremiumTabs active={activeTab} onChange={setActiveTab} />
+        <PremiumTabs active={activeTab} onChange={(id) => { playTick(); setActiveTab(id); }} />
       </motion.div>
 
       {/* ============================================================

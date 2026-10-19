@@ -63,6 +63,8 @@ const ALLOWED_PUBLIC_ROUTES: readonly string[] = [
   // webhooks (own shared-secret authentication, CSRF-exempt by policy)
   'POST /api/webhooks/telegram',
   'POST /api/webhooks/terminal/event',
+  // public certificate verification (anonymously verifiable via QR / verification code)
+  'GET /api/certificates/verify/:code',
 ];
 
 /** Routes that must NEVER become anonymous, asserted explicitly below. */

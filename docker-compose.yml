@@ -36,7 +36,7 @@ services:
     restart: "no"
     command: ["npx", "prisma", "migrate", "deploy"]
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-medu}:${POSTGRES_PASSWORD:-medu_pass}@db:5432/${POSTGRES_DB:-medu}?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-medu}:${POSTGRES_PASSWORD:?put a strong POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-medu}?schema=public
     depends_on:
       db:
         condition: service_healthy
@@ -52,10 +52,10 @@ services:
       - NODE_ENV=production
       # Pin the INTERNAL port to 3000: the host port mapping, the nginx proxy
       # (apps/web/nginx.conf → http://api:3000) and the Docker HEALTHCHECK all
-      # target 3000, but the root `.env` can inject PORT=3001 via env_file —
-      # which previously made the container listen on a dead port.
+      # target 3000, but a stray PORT=3001 in the environment previously made
+      # the container listen on a dead port. Pin it explicitly here.
       - PORT=3000
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-medu}:${POSTGRES_PASSWORD:-medu_pass}@db:5432/${POSTGRES_DB:-medu}?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-medu}:${POSTGRES_PASSWORD:?put a strong POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-medu}?schema=public
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET}
       - CORS_ORIGIN=${CORS_ORIGIN}
@@ -81,7 +81,10 @@ services:
         condition: service_healthy
       migration:
         condition: service_completed_successfully
-    env_file: .env
+    # NOTE: no `env_file: .env` here. `.env` is git-ignored and absent on a fresh
+    # clone, which made `docker compose up` fail with "env file ... not found".
+    # Compose already reads the project `.env` (or --env-file) for the `${...}`
+    # substitutions below; the explicit `environment` block is the source of truth.
 
   web:
     build:

@@ -83,11 +83,6 @@ export class ProgressService {
             },
           },
         },
-        attendance: {
-          select: { status: true, date: true },
-          orderBy: { date: 'desc' },
-          take: 50,
-        },
         grades: {
           select: { id: true, value: true, createdAt: true, label: true },
           orderBy: { createdAt: 'desc' },
@@ -119,12 +114,19 @@ export class ProgressService {
       if (!link) throw new NotFoundException('Student not found');
     }
 
-    // 1. Attendance aggregation
-    const attendanceList = student.attendance ?? [];
-    const totalAtt = attendanceList.length;
-    const presentCount = attendanceList.filter(a => a.status === 'PRESENT').length;
-    const absentCount = attendanceList.filter(a => a.status === 'ABSENT').length;
-    const lateCount = attendanceList.filter(a => a.status === 'LATE').length;
+    // 1. Attendance aggregation — over the FULL history. The previous
+    // `take: 50` window made both the rate and the derived risk signal wrong
+    // for any student with more than 50 attendance rows.
+    const attendanceGroups = await this.prisma.attendance.groupBy({
+      by: ['status'],
+      where: { organizationId, studentId: student.id },
+      _count: { _all: true },
+    });
+    const attendanceCounts = new Map(attendanceGroups.map((g) => [g.status, g._count._all]));
+    const presentCount = attendanceCounts.get('PRESENT') ?? 0;
+    const absentCount = attendanceCounts.get('ABSENT') ?? 0;
+    const lateCount = attendanceCounts.get('LATE') ?? 0;
+    const totalAtt = attendanceGroups.reduce((sum, g) => sum + g._count._all, 0);
     const attendanceRate = totalAtt > 0 ? Math.round(((presentCount + lateCount * 0.5) / totalAtt) * 100) : 100;
 
     // 2. Mastery by Subject aggregation

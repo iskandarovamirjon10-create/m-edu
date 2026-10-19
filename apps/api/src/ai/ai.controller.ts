@@ -19,14 +19,31 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-interface ChatHistoryItem {
+export class ChatHistoryItemDto {
+  @IsString()
+  @IsIn(['user', 'model', 'assistant', 'system'])
   role: string;
+
+  @IsString()
+  @MaxLength(10000)
   content: string;
 }
 
-interface ChatBody {
+export class ChatBodyDto {
+  @IsString()
+  @MaxLength(4000)
   message: string;
-  history?: ChatHistoryItem[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => ChatHistoryItemDto)
+  history?: ChatHistoryItemDto[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
   conversationId?: string;
 }
 
@@ -166,7 +183,7 @@ export class AiController {
     @CurrentUser('organizationId') organizationId: string,
     @CurrentUser('sub') userId: string,
     @CurrentUser('role') role: string,
-    @Body() body: ChatBody,
+    @Body() body: ChatBodyDto,
   ) {
     if (!organizationId) throw new HttpException('Tenant context required', HttpStatus.FORBIDDEN);
     try {
@@ -192,7 +209,7 @@ export class AiController {
     @CurrentUser('organizationId') organizationId: string,
     @CurrentUser('sub') userId: string,
     @CurrentUser('role') role: string,
-    @Body() body: ChatBody,
+    @Body() body: ChatBodyDto,
     @Res() res: Response
   ) {
     if (!organizationId) throw new HttpException('Tenant context required', HttpStatus.FORBIDDEN);
@@ -209,6 +226,7 @@ export class AiController {
         body.conversationId,
         res,
         isAdminRole(role),
+        role,
       );
     } catch (e: unknown) {
       if (e instanceof HttpException) throw e;

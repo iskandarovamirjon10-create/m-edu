@@ -15,6 +15,9 @@ export interface DashboardStats {
   totalPaid: number;
   totalPending: number;
   totalOverdue: number;
+  todayRevenue?: number;
+  todayPaymentsCount?: number;
+  todayLessonsCount?: number;
   monthlyRevenue: MonthlyRevenue[];
   recentPayments: Payment[];
   totalLeads: number;
@@ -24,6 +27,7 @@ export interface DashboardStats {
   attendanceRate: number;
   upcomingFollowUps: FollowUp[];
   attendanceStats: AttendanceStat[];
+  todayAttendanceStats?: AttendanceStat[];
   leadByStage: { stage: LeadStage; count: number }[];
 }
 

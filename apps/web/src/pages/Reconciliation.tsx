@@ -21,6 +21,9 @@ import {
 import { getErrorMessage} from'@/lib/errorMessages';
 import { usePageTitle} from'@/hooks/usePageTitle';
 import { useI18n} from'@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { useEffect } from 'react';
 
 type TabId ='overview' |'discrepancies' |'studentBalances' |'history';
 
@@ -180,6 +183,33 @@ function OverviewTab({ t}: { t: (key: string) => string}) {
  );
 }
 
+function handleOpenDiscrepancySidecar(d: any) {
+  const sidecarData: QuickLookData = {
+    id: d.id || 'discrepancy-' + Math.random(),
+    type: 'payment',
+    title: d.type ? d.type.replace(/_/g, ' ') : 'Tafovut',
+    subtitle: `${d.severity} · Moliyaviy solishtirish`,
+    badge: {
+      text: d.severity,
+      tone: d.severity === 'CRITICAL' ? 'rose' : d.severity === 'HIGH' ? 'amber' : 'blue',
+    },
+    avatar: {
+      text: (d.type || 'TF').slice(0, 2).toUpperCase(),
+      color: '#F59E0B',
+    },
+    metrics: [
+      { label: 'Tafovut turi', value: d.type || '—' },
+      { label: 'Xavf darajasi', value: d.severity || '—' },
+      { label: 'Summa', value: d.amount ? fmtCurrency(d.amount) : '—' },
+    ],
+    details: [
+      { label: 'Tavsif', value: d.description || 'Izohsiz' },
+      { label: 'Daraja', value: d.severity || '—' },
+    ],
+  };
+  openSidecar(sidecarData);
+}
+
 function DiscrepanciesTab({ t}: { t: (key: string) => string}) {
  const defaultYM = getDefaultYearMonth();
  const [year, setYear] = useState(defaultYM.year);
@@ -257,7 +287,19 @@ function DiscrepanciesTab({ t}: { t: (key: string) => string}) {
  <GlassTBody>
  {(result.discrepancies || []).map((d: any, i: number) => (
  <GlassTR key={i}>
- <GlassTD className="font-semibold whitespace-nowrap">{typeLabel(d.type)}</GlassTD>
+ <GlassTD className="font-semibold whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleOpenDiscrepancySidecar(d); }}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-amber-600 dark:hover:bg-white/[0.08]"
+                            title="Split View Sidecar"
+                          >
+                            <span className="text-xs font-mono font-bold">◨</span>
+                          </button>
+                          <span>{typeLabel(d.type)}</span>
+                        </div>
+                      </GlassTD>
  <GlassTD className="max-w-md">{d.description}</GlassTD>
  <GlassTD>
  <GlassBadge variant={severityColor(d.severity)} dot>{d.severity}</GlassBadge>
@@ -269,6 +311,38 @@ function DiscrepanciesTab({ t}: { t: (key: string) => string}) {
  )}
  </div>
  );
+}
+
+function handleOpenStudentBalanceSidecar(s: any) {
+  const sidecarData: QuickLookData = {
+    id: s.studentId || 'student-balance',
+    type: 'student',
+    title: s.studentName || 'O\'quvchi',
+    subtitle: s.outstandingAmount > 0 ? `Qarzdorlik: ${fmtCurrency(s.outstandingAmount)}` : 'Balans to\'liq yopilgan',
+    badge: {
+      text: s.outstandingAmount > 0 ? 'QARZDOR' : 'TO\'LANGAN',
+      tone: s.outstandingAmount > 0 ? 'rose' : 'emerald',
+    },
+    avatar: {
+      text: (s.studentName || 'OQ').slice(0, 2).toUpperCase(),
+      color: s.outstandingAmount > 0 ? '#EF4444' : '#10B981',
+    },
+    metrics: [
+      { label: 'Qarzdorlik', value: fmtCurrency(s.outstandingAmount) },
+      { label: 'Jami hisoblangan', value: fmtCurrency(s.totalInvoiced) },
+      { label: 'Jami to\'langan', value: fmtCurrency(s.totalPaid) },
+      { label: 'Eng eski qarz', value: fmtDate(s.oldestDebtDate) },
+    ],
+    details: [
+      { label: 'O\'quvchi ID', value: s.studentId || '—', copyable: true },
+      { label: 'F.I.Sh.', value: s.studentName },
+      { label: 'Hisoblangan', value: fmtCurrency(s.totalInvoiced) },
+      { label: 'To\'langan', value: fmtCurrency(s.totalPaid) },
+      { label: 'Qoldiq qarz', value: fmtCurrency(s.outstandingAmount) },
+      { label: 'Eng eski sana', value: fmtDate(s.oldestDebtDate) },
+    ],
+  };
+  openSidecar(sidecarData);
 }
 
 function StudentBalancesTab({ t}: { t: (key: string) => string}) {
@@ -309,7 +383,19 @@ function StudentBalancesTab({ t}: { t: (key: string) => string}) {
  <GlassTBody>
  {result.students.map((s: any) => (
  <GlassTR key={s.studentId}>
- <GlassTD className="font-semibold">{s.studentName}</GlassTD>
+ <GlassTD className="font-semibold">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleOpenStudentBalanceSidecar(s); }}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-white/[0.08]"
+                          title="Split View Sidecar"
+                        >
+                          <span className="text-xs font-mono font-bold">◨</span>
+                        </button>
+                        <span>{s.studentName}</span>
+                      </div>
+                    </GlassTD>
  <GlassTD className="text-right">{fmtCurrency(s.totalInvoiced)}</GlassTD>
  <GlassTD className="text-right">{fmtCurrency(s.totalPaid)}</GlassTD>
  <GlassTD className={`text-right font-semibold ${s.outstandingAmount > 0 ?'text-rose-600' :'text-emerald-600'}`}>
@@ -391,6 +477,19 @@ export function ReconciliationPage() {
  usePageTitle(t('reconciliation.title'));
 
  const [activeTab, setActiveTab] = useState<TabId>('overview');
+ const { playTick } = usePremiumSound();
+
+ useEffect(() => {
+   const handleKeyDown = (e: KeyboardEvent) => {
+     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+     if (e.key === '1') { setActiveTab('overview'); playTick(); }
+     else if (e.key === '2') { setActiveTab('discrepancies'); playTick(); }
+     else if (e.key === '3') { setActiveTab('studentBalances'); playTick(); }
+     else if (e.key === '4') { setActiveTab('history'); playTick(); }
+   };
+   window.addEventListener('keydown', handleKeyDown);
+   return () => window.removeEventListener('keydown', handleKeyDown);
+ }, [playTick]);
 
  const tabs = [
  { id:'overview', label: t('reconciliation.tab.overview')},
@@ -416,13 +515,13 @@ export function ReconciliationPage() {
 
  return (
  <div className="min-h-screen bg-transparent">
- <div className="relative z-10 w-full max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500">
+ <div className="relative z-10 w-full max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500 liquid-glass-surface rounded-3xl">
  <GlassPageHeader
  title={t('reconciliation.title')}
  subtitle={t('reconciliation.subtitle')}
  />
 
- <GlassTabs tabs={tabs} active={activeTab} onChange={(id) => setActiveTab(id as TabId)} />
+ <GlassTabs tabs={tabs} active={activeTab} onChange={(id) => { playTick(); setActiveTab(id as TabId); }} />
 
  <div className="mt-2">
  {renderTab()}

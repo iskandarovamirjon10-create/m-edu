@@ -19,8 +19,8 @@
  */
 
 import { lazy, Suspense, type ReactNode, type ComponentType } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { ErrorBoundaryWrapper, Protected, PublicOnly } from '../App';
 import { STAFF_ROLES } from '@/lib/roles';
 
@@ -84,6 +84,7 @@ const ForgotPasswordPage   = lazyPage(() => import('@/pages/ForgotPassword'), 'F
 const ResetPasswordPage    = lazyPage(() => import('@/pages/ResetPassword'), 'ResetPasswordPage');
 const TermsPage            = lazyPage(() => import('@/pages/Terms'), 'TermsPage');
 const PrivacyPage          = lazyPage(() => import('@/pages/Privacy'), 'PrivacyPage');
+const CertificateVerifyPage = lazyPage(() => import('@/pages/CertificateVerify'), 'CertificateVerifyPage');
 
 // Dashboard & core
 const DashboardPage        = lazyPage(() => import('@/pages/Dashboard'), 'DashboardPage');
@@ -96,6 +97,7 @@ const GroupDetailPage      = lazyPage(() => import('@/pages/GroupDetail'), 'Grou
 const GroupFormPage        = lazyPage(() => import('@/pages/GroupForm'), 'GroupFormPage');
 const CoursesPage          = lazyPage(() => import('@/pages/Courses'), 'CoursesPage');
 const AttendancePage       = lazyPage(() => import('@/pages/Attendance'), 'AttendancePage');
+const TeacherCockpitPage   = lazyPage(() => import('@/pages/TeacherCockpit'), 'TeacherCockpitPage');
 const FaceRecognitionPage  = lazyPage(() => import('@/pages/FaceRecognition'), 'FaceRecognitionPage');
 const FaceEnrollmentPage   = lazyPage(() => import('@/pages/FaceEnrollment'), 'FaceEnrollmentPage');
 const PaymentsPage         = lazyPage(() => import('@/pages/Payments'), 'PaymentsPage');
@@ -206,6 +208,8 @@ export const routeConfig: RouteConfig[] = [
   { path: '/terms', element: <TermsPage />, type: 'none', title: 'Terms of Service', titleKey: 'terms.title' },
   { path: '/privacy', element: <PrivacyPage />, type: 'none', title: 'Privacy Policy', titleKey: 'privacy.title' },
   { path: '/tg-app', element: <TelegramWebAppPage />, type: 'none', title: 'Telegram WebApp Hub' },
+  { path: '/verify', element: <CertificateVerifyPage />, type: 'none', title: 'Verify Certificate', titleKey: 'certificates.verifyTitle' },
+  { path: '/verify/:code', element: <CertificateVerifyPage />, type: 'none', title: 'Verify Certificate', titleKey: 'certificates.verifyTitle' },
 
   /* -------- Protected (AppLayout) -------- */
   {
@@ -216,11 +220,11 @@ export const routeConfig: RouteConfig[] = [
       { index: true, element: <DashboardPage />, title: 'Dashboard', titleKey: 'nav.dashboard' },
 
       // Students
-      { path: 'students', element: <StudentsPage />, title: 'Students', titleKey: 'nav.students' },
-      { path: 'students/new', element: <StudentFormPage />, title: 'New Student', titleKey: 'students.formTitle' },
-      { path: 'students/:id', element: <StudentDetailPage />, title: 'Student', titleKey: 'students.detailsTitle' },
-      { path: 'students/:id/360', element: <Student360Page />, title: 'Student 360', titleKey: 'students.detailsTitle' },
-      { path: 'students/:id/edit', element: <StudentFormPage />, title: 'Edit Student', titleKey: 'students.formTitle' },
+      { path: 'students', element: <StudentsPage />, title: 'Students', titleKey: 'nav.students', roles: STAFF_ROLES },
+      { path: 'students/new', element: <StudentFormPage />, title: 'New Student', titleKey: 'students.formTitle', roles: STAFF_ROLES },
+      { path: 'students/:id', element: <StudentDetailPage />, title: 'Student', titleKey: 'students.detailsTitle', roles: STAFF_ROLES },
+      { path: 'students/:id/360', element: <Student360Page />, title: 'Student 360', titleKey: 'students.detailsTitle', roles: STAFF_ROLES },
+      { path: 'students/:id/edit', element: <StudentFormPage />, title: 'Edit Student', titleKey: 'students.formTitle', roles: STAFF_ROLES },
 
       // Education Core (Academic Operating System)
       { path: 'subjects', element: <SubjectsPage />, title: 'Subjects', titleKey: 'nav.subjects' },
@@ -229,28 +233,33 @@ export const routeConfig: RouteConfig[] = [
       { path: 'assessment', element: <AssessmentPage />, title: 'Assessment', titleKey: 'nav.assessment' },
 
       // Teachers / Groups / Courses
-      { path: 'teachers', element: <TeachersPage />, title: 'Teachers', titleKey: 'nav.teachers' },
+      { path: 'teachers', element: <TeachersPage />, title: 'Teachers', titleKey: 'nav.teachers', roles: STAFF_ROLES },
+      { path: 'teachers/:id', element: <TeachersPage />, title: 'Teachers', titleKey: 'nav.teachers', roles: STAFF_ROLES },
       { path: 'groups', element: <GroupsPage />, title: 'Groups', titleKey: 'nav.groups' },
-      { path: 'groups/new', element: <GroupFormPage />, title: 'New Group', titleKey: 'groups.title' },
+      { path: 'groups/new', element: <GroupFormPage />, title: 'New Group', titleKey: 'groups.title', roles: STAFF_ROLES },
       { path: 'groups/:id', element: <GroupDetailPage />, title: 'Group', titleKey: 'groups.detailsTitle' },
-      { path: 'groups/:id/edit', element: <GroupFormPage />, title: 'Edit Group', titleKey: 'groups.title' },
+      { path: 'groups/:id/edit', element: <GroupFormPage />, title: 'Edit Group', titleKey: 'groups.title', roles: STAFF_ROLES },
       { path: 'courses', element: <CoursesPage />, title: 'Courses', titleKey: 'nav.courses' },
+      { path: 'courses/:id', element: <CoursesPage />, title: 'Courses', titleKey: 'nav.courses' },
 
       // Attendance / Face
       { path: 'attendance', element: <AttendancePage />, title: 'Attendance', titleKey: 'nav.attendance' },
-      { path: 'face', element: <FaceRecognitionPage />, title: 'Face Recognition', titleKey: 'nav.faceRecognition' },
-      { path: 'face/enroll', element: <FaceEnrollmentPage />, title: 'Face Enrollment', titleKey: 'faceEnrollment.title' },
+      { path: 'face', element: <FaceRecognitionPage />, title: 'Face Recognition', titleKey: 'nav.faceRecognition', roles: STAFF_ROLES },
+      { path: 'face/enroll', element: <FaceEnrollmentPage />, title: 'Face Enrollment', titleKey: 'faceEnrollment.title', roles: STAFF_ROLES },
 
       // Finance
-      { path: 'payments', element: <PaymentsPage />, title: 'Payments', titleKey: 'nav.payments' },
-      { path: 'invoices', element: <InvoicesPage />, title: 'Invoices', titleKey: 'nav.invoices' },
-      { path: 'reports', element: <ReportsPage />, title: 'Reports', titleKey: 'nav.reports' },
-      { path: 'expenses', element: <ExpensesPage />, title: 'Expenses', titleKey: 'nav.expenses' },
-      { path: 'leads', element: <LeadsPage />, title: 'Leads', titleKey: 'nav.leads' },
+      { path: 'payments', element: <PaymentsPage />, title: 'Payments', titleKey: 'nav.payments', roles: STAFF_ROLES },
+      { path: 'payments/:id', element: <PaymentsPage />, title: 'Payments', titleKey: 'nav.payments', roles: STAFF_ROLES },
+      { path: 'invoices', element: <InvoicesPage />, title: 'Invoices', titleKey: 'nav.invoices', roles: STAFF_ROLES },
+      { path: 'reports', element: <ReportsPage />, title: 'Reports', titleKey: 'nav.reports', roles: STAFF_ROLES },
+      { path: 'expenses', element: <ExpensesPage />, title: 'Expenses', titleKey: 'nav.expenses', roles: STAFF_ROLES },
+      { path: 'leads', element: <LeadsPage />, title: 'Leads', titleKey: 'nav.leads', roles: STAFF_ROLES },
+      { path: 'leads/:id', element: <LeadsPage />, title: 'Leads', titleKey: 'nav.leads', roles: STAFF_ROLES },
 
       // Security / system (staff-only via roles — applied via Protected wrapper)
       { path: 'cameras', element: <CamerasPage />, title: 'Cameras', titleKey: 'nav.cameras', roles: STAFF_ROLES },
       { path: 'users', element: <UsersPage />, title: 'Users', titleKey: 'nav.users', roles: STAFF_ROLES },
+      { path: 'users/:id', element: <UsersPage />, title: 'Users', titleKey: 'nav.users', roles: STAFF_ROLES },
       { path: 'audit', element: <AuditPage />, title: 'Audit Log', titleKey: 'nav.audit', roles: STAFF_ROLES },
       { path: 'audit-timeline', element: <AuditTimelinePage />, title: 'Audit Timeline', titleKey: 'auditTimeline.title', roles: STAFF_ROLES },
       { path: 'search', element: <UniversalSearchPage />, title: 'Search', titleKey: 'search.title' },
@@ -263,18 +272,22 @@ export const routeConfig: RouteConfig[] = [
       { path: 'settings', element: <SettingsPage />, title: 'Settings', titleKey: 'nav.settings' },
 
       // Academic
+      { path: 'teacher-cockpit', element: <TeacherCockpitPage />, title: 'Teacher Cockpit', titleKey: 'nav.teacherCockpit', roles: STAFF_ROLES },
       { path: 'homework', element: <HomeworkPage />, title: 'Homework', titleKey: 'nav.homework' },
       { path: 'grades', element: <GradesPage />, title: 'Grades', titleKey: 'grades.title' },
       { path: 'schedule', element: <SchedulePage />, title: 'Schedule', titleKey: 'nav.schedule' },
       { path: 'library', element: <LibraryPage />, title: 'Library', titleKey: 'nav.library' },
+      { path: 'library/books/:id', element: <LibraryPage />, title: 'Library', titleKey: 'nav.library' },
       { path: 'exams', element: <ExamsPage />, title: 'Exams', titleKey: 'nav.exams' },
       { path: 'certificates', element: <CertificatesPage />, title: 'Certificates', titleKey: 'nav.certificates' },
+      { path: 'certificates/:id', element: <CertificatesPage />, title: 'Certificates', titleKey: 'nav.certificates' },
 
       // Operations
       { path: 'hr', element: <HRPage />, title: 'HR & Payroll', titleKey: 'nav.hrPayroll', roles: STAFF_ROLES },
-      { path: 'inventory', element: <InventoryPage />, title: 'Inventory', titleKey: 'nav.inventory' },
-      { path: 'early-warning', element: <EarlyWarningPage />, title: 'Early Warning', titleKey: 'earlyWarning.title' },
-      { path: 'academic-risk', element: <AcademicRiskPage />, title: 'Academic Risk', titleKey: 'academicRisk.title' },
+      { path: 'hr/employees/:id', element: <HRPage />, title: 'HR & Payroll', titleKey: 'nav.hrPayroll', roles: STAFF_ROLES },
+      { path: 'inventory', element: <InventoryPage />, title: 'Inventory', titleKey: 'nav.inventory', roles: STAFF_ROLES },
+      { path: 'early-warning', element: <EarlyWarningPage />, title: 'Early Warning', titleKey: 'earlyWarning.title', roles: STAFF_ROLES },
+      { path: 'academic-risk', element: <AcademicRiskPage />, title: 'Academic Risk', titleKey: 'academicRisk.title', roles: STAFF_ROLES },
       { path: 'gamification', element: <GamificationHubPage />, title: 'Gamification & M-Coins', titleKey: 'nav.gamification' },
       { path: 'teacher-workload', element: <TeacherWorkloadPage />, title: 'Teacher Workload', titleKey: 'teacherWorkload.title', roles: STAFF_ROLES },
       { path: 'forecast', element: <ForecastingPage />, title: 'Forecasting', titleKey: 'forecasting.title', roles: STAFF_ROLES },
@@ -289,6 +302,7 @@ export const routeConfig: RouteConfig[] = [
       { path: 'parent-portal', element: <ParentPortalPage />, roles: ['PARENT'], title: 'Parent Portal', titleKey: 'parentPortal.title' },
       { path: 'telegram', element: <TelegramPage />, title: 'Telegram', titleKey: 'nav.telegram' },
       { path: 'executive-dashboard', element: <ExecutiveDashboardPage />, title: 'Executive Dashboard', titleKey: 'nav.executiveDashboard', roles: STAFF_ROLES },
+      { path: 'executive', element: <Navigate to="/executive-dashboard" replace /> },
       { path: 'automation', element: <AutomationEnginePage />, title: 'Automation', titleKey: 'nav.automation', roles: STAFF_ROLES },
       { path: 'payroll', element: <PayrollPage />, title: 'Payroll', titleKey: 'nav.payrollRuns', roles: STAFF_ROLES },
       { path: 'financial-analytics', element: <FinancialAnalyticsPage />, title: 'Financial Analytics', titleKey: 'nav.financialAnalytics', roles: STAFF_ROLES },
@@ -304,7 +318,7 @@ export const routeConfig: RouteConfig[] = [
       { path: 'observability', element: <ObservabilityPage />, title: 'Observability', titleKey: 'obs.title', roles: STAFF_ROLES },
       { path: 'performance', element: <PerformanceMonitorPage />, title: 'Performance Monitor', titleKey: 'performance.title', roles: STAFF_ROLES },
       { path: 'reconciliation', element: <ReconciliationPage />, title: 'Reconciliation', titleKey: 'reconciliation.title', roles: STAFF_ROLES },
-      { path: 'communication-history', element: <CommunicationHistoryPage />, title: 'Communication History', titleKey: 'communication.title' },
+      { path: 'communication-history', element: <CommunicationHistoryPage />, title: 'Communication History', titleKey: 'communication.title', roles: STAFF_ROLES },
 
       // Errors
       { path: 'unauthorized', element: <UnauthorizedPage />, type: 'none', title: 'Unauthorized', titleKey: 'error.forbiddenTitle' },
@@ -498,9 +512,7 @@ export function AppRoutes() {
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
       {isPublicRoute ? (
-        <AnimatePresence mode="wait" initial={false}>
-          <RouteMotion key={location.pathname}>{routes}</RouteMotion>
-        </AnimatePresence>
+        <RouteMotion key={location.pathname}>{routes}</RouteMotion>
       ) : (
         routes
       )}

@@ -24,6 +24,8 @@ import {
 } from '@/components/ui';
 import { analyticsApi } from '@/lib/api';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { useI18n } from '@/i18n/I18nProvider';
 import { getErrorMessage } from '@/lib/errorMessages';
 
@@ -774,6 +776,36 @@ function SummaryTab({ t }: { t: (k: string) => string }) {
  * TAB: BY TEACHER
  * ========================================================================== */
 
+function handleOpenTeacherPayrollAnalyticsSidecar(row: any) {
+  const sidecarData: QuickLookData = {
+    id: row.teacherId || row.name || 'teacher-analytics',
+    type: 'teacher',
+    title: row.name || 'O\'qituvchi',
+    subtitle: `${row.totalLessons ?? 0} ta dars o'tildi · ${row.runs ?? 0} ta hisoblash`,
+    badge: {
+      text: 'FAOL',
+      tone: 'emerald',
+    },
+    avatar: {
+      text: (row.name || 'OQ').slice(0, 2).toUpperCase(),
+      color: '#007AFF',
+    },
+    metrics: [
+      { label: 'Jami to\'langan', value: formatCurrency(row.totalNet ?? 0) },
+      { label: 'Brut summa', value: formatCurrency(row.totalGross ?? 0) },
+      { label: 'O\'tilgan darslar', value: `${row.totalLessons ?? 0} ta` },
+      { label: 'Hisoblashlar', value: `${row.runs ?? 0} ta` },
+    ],
+    details: [
+      { label: 'O\'qituvchi', value: row.name || '—' },
+      { label: 'Jami to\'lov', value: formatCurrency(row.totalNet ?? 0) },
+      { label: 'Jami brut', value: formatCurrency(row.totalGross ?? 0) },
+      { label: 'Darslar', value: `${row.totalLessons ?? 0} ta` },
+    ],
+  };
+  openSidecar(sidecarData);
+}
+
 function ByTeacherTab({ t }: { t: (k: string) => string }) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['payroll-by-teacher'],
@@ -873,8 +905,16 @@ function ByTeacherTab({ t }: { t: (k: string) => string }) {
                 </div>
               </div>
 
-              <div className="w-full sm:w-auto">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <StatusChips statuses={row.statuses} />
+                <button
+                  type="button"
+                  onClick={() => handleOpenTeacherPayrollAnalyticsSidecar(row)}
+                  title="Split View Sidecar"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-emerald-600 dark:hover:bg-white/[0.08]"
+                >
+                  <span className="text-xs font-mono font-bold">◨</span>
+                </button>
               </div>
             </motion.div>
           ))}
@@ -1321,6 +1361,7 @@ function EfficiencyTab({ t }: { t: (k: string) => string }) {
  * ========================================================================== */
 
 export function PayrollAnalyticsPage() {
+  const { playTick } = usePremiumSound();
   const { t } = useI18n();
   usePageTitle(t('payrollAnalytics.title'));
   const [activeTab, setActiveTab] = useState<Tab>('summary');
@@ -1413,7 +1454,7 @@ export function PayrollAnalyticsPage() {
         <GlassTabs
           tabs={tabs}
           active={activeTab}
-          onChange={(id) => setActiveTab(id as Tab)}
+          onChange={(id) => { playTick(); setActiveTab(id as Tab); }}
         />
       </motion.div>
 

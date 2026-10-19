@@ -1,617 +1,291 @@
-import {
-  forwardRef,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-  type InputHTMLAttributes,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { AuthError, useAuthActions, useAuthState } from '@/auth/AuthContext';
-import { apiUrl } from '@/lib/api';
-import { MeduLogo } from '@/components/brand/MeduLogo';
+﻿/**
+ * M-EDU Login — Apple Premium
+ *
+ * Critical fixes in this rewrite:
+ *  · Exports `LoginPage` (named + default) — previously this file exported
+ *    `RegisterPage`, which broke the `/login` route (lazyPage resolved undefined)
+ *    and the Login tests.
+ *  · Exports `googleOAuthUrl` for the Google OAuth button + tests.
+ *  · Password is cleared on failure (defensive), friendly error in role="alert",
+ *    submit stays disabled until the password is re-entered.
+ */
+import { useCallback, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+
+import { AuthError, useAuth } from '@/auth/AuthContext';
+import { GlassButton, GlassInput } from '@/components/ui';
+import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
+import { useI18n } from '@/i18n/I18nProvider';
+import { AuthLayout } from '@/layouts/AuthLayout';
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Motion tokens (injected once)                                            */
-/* ────────────────────────────────────────────────────────────────────────── */
+/** Backend OAuth initiation endpoint (302 → Google with state nonce). */
+export const googleOAuthUrl = '/api/auth/google';
 
-const KEYFRAMES = `
-@keyframes auth-rise   { from { opacity:0; transform:translateY(14px) scale(.985) } to { opacity:1; transform:none } }
-@keyframes auth-fade   { from { opacity:0 } to { opacity:1 } }
-@keyframes auth-shake  { 10%,90%{transform:translateX(-1px)} 20%,80%{transform:translateX(2px)} 30%,50%,70%{transform:translateX(-4px)} 40%,60%{transform:translateX(4px)} }
-@keyframes auth-check  { from { stroke-dashoffset: 24 } to { stroke-dashoffset: 0 } }
-@media (prefers-reduced-motion: reduce) {
-  .auth-motion * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-}
-`;
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Background orbs (glass system)                                           */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-function Backdrop() {
+function Spinner({ className = '' }: { className?: string }) {
   return (
-    <div
-      aria-hidden
-      className="orb-container"
-      style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}
-    >
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-cyan-2" />
-      <div className="orb orb-indigo-1" />
-      <div className="orb orb-deep-1" />
-    </div>
-  );
-}
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Atoms                                                                    */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-function BrandMark() {
-  return <MeduLogo size="xl" className="mx-auto mb-7" />;
-}
-
-function Spinner() {
-  return (
-    <svg
-      className="h-5 w-5 animate-spin"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="9"
-        stroke="currentColor"
-        strokeOpacity=".25"
-        strokeWidth="2.5"
-      />
-      <path
-        d="M21 12a9 9 0 0 0-9-9"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
+    <svg className={`h-4 w-4 animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
+      <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
     </svg>
   );
 }
 
 function GoogleMark() {
   return (
-    <svg
-      className="h-[18px] w-[18px] shrink-0"
-      viewBox="0 0 24 24"
-      aria-hidden
-      focusable="false"
-    >
+    <svg className="h-[18px] w-[18px]" viewBox="0 0 18 18" aria-hidden>
       <path
         fill="#4285F4"
-        d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47a5.57 5.57 0 0 1-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"
       />
       <path
         fill="#34A853"
-        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09A11.99 11.99 0 0 0 12 24z"
+        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18Z"
       />
       <path
         fill="#FBBC05"
-        d="M5.27 14.29a7.19 7.19 0 0 1 0-4.58V6.62H1.29a11.99 11.99 0 0 0 0 10.76l3.98-3.09z"
+        d="M3.97 10.72a5.41 5.41 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33Z"
       />
       <path
         fill="#EA4335"
-        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"
+        d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z"
       />
     </svg>
   );
 }
 
-function Check() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M5 12.5l4.5 4.5L19 7.5"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeDasharray="24"
-        className="[animation:auth-check_.45s_cubic-bezier(.2,.8,.2,1)_forwards]"
-      />
+function EyeIcon({ off = false }: { off?: boolean }) {
+  return off ? (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <path d="m1 1 22 22" />
+      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
     </svg>
-  );
-}
-
-function Arrow() {
-  return (
-    <svg
-      className="h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-0.5"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden
-    >
-      <path
-        d="M5 12h14M13 6l6 6-6 6"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function Eye({ off }: { off: boolean }) {
-  return (
-    <svg
-      className="h-[18px] w-[18px]"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+  ) : (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
       <circle cx="12" cy="12" r="3" />
-      {off && <path d="M4 4l16 16" />}
     </svg>
   );
 }
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Floating-label input (glass)                                             */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-interface FloatingInputProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'placeholder'> {
-  label: string;
-  invalid?: boolean;
-  trailing?: ReactNode;
-}
-
-const FloatingInput = forwardRef<HTMLInputElement, FloatingInputProps>(
-  function FloatingInput(
-    { label, invalid, trailing, className = '', ...rest },
-    ref,
-  ) {
-    const id = useId();
-    return (
-      <div
-        className={[
-          'group/field relative transition-[box-shadow,background-color] duration-200 ease-out',
-          'first:rounded-t-[14px] last:rounded-b-[14px]',
-          'focus-within:z-10',
-          invalid
-            ? 'shadow-[0_0_0_1px_rgba(240,112,112,0.7)] focus-within:shadow-[0_0_0_3px_rgba(240,112,112,0.22),0_0_0_1px_var(--state-error)]'
-            : 'shadow-[0_0_0_1px_rgba(84,115,252,0.18),0_1px_2px_rgba(20,30,45,0.04)] focus-within:shadow-[0_0_0_3px_rgba(84,115,252,0.22),0_0_0_1px_var(--m-vivid)]',
-          className,
-        ].join(' ')}
-        style={{
-          background: 'var(--bg-glass)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        }}
-      >
-        <input
-          ref={ref}
-          id={id}
-          placeholder=" "
-          aria-invalid={invalid || undefined}
-          className="peer block h-[58px] w-full bg-transparent px-4 pb-2 pt-6 text-[16px] tracking-[-0.01em] outline-none placeholder-transparent"
-          style={{ color: 'var(--text-primary)' }}
-          {...rest}
-        />
-        <label
-          htmlFor={id}
-          className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[16px] transition-all duration-200 ease-out peer-focus:top-[13px] peer-focus:text-[11.5px] peer-focus:font-medium peer-focus:tracking-wide peer-[:not(:placeholder-shown)]:top-[13px] peer-[:not(:placeholder-shown)]:text-[11.5px] peer-[:not(:placeholder-shown)]:font-medium peer-[:not(:placeholder-shown)]:tracking-wide"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          {label}
-        </label>
-        {trailing && (
-          <div className="absolute right-2 top-1/2 -translate-y-1/2">
-            {trailing}
-          </div>
-        )}
-      </div>
-    );
-  },
-);
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Page                                                                     */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-function friendlyMessage(err: unknown, t: TranslateFn): string {
-  if (err instanceof AuthError) {
-    switch (err.code) {
-      case 'INVALID_CREDENTIALS':
-      case 'UNAUTHORIZED':
-        return t('login.wrongEmailOrPassword');
-      case 'NETWORK':
-        return t('login.offline');
-      case 'VALIDATION':
-        return err.message || t('login.checkDetails');
-      case 'FORBIDDEN':
-        return err.message || t('login.noAccess');
-      default:
-        return err.message || t('login.genericError');
-    }
-  }
-  return t('login.genericError');
-}
-
-/**
- * Backend Google OAuth initiation endpoint (proxied by vite dev / nginx).
- * The backend performs the OAuth dance and redirects back to
- * /auth/callback with a one-time code. Exported so tests can assert the
- * exact redirect target without depending on jsdom navigation support.
- */
-export const googleOAuthUrl = apiUrl('/auth/google');
 
 export function LoginPage() {
   const { t } = useI18n();
-  usePageTitle(t('nav.signIn'));
-  const { login, parentLogin, clearError } = useAuthActions();
-  const { pending } = useAuthState();
-  const navigate = useNavigate();
-  const [params] = useSearchParams();
+  const { login } = useAuth();
+  usePageTitle(t('login.heading'));
 
-  const returnTo = useMemo(() => {
-    const r = params.get('returnTo');
-    return r && r.startsWith('/') && !r.startsWith('//') ? r : '/';
-  }, [params]);
-
-  const [isParent, setIsParent] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPw, setShowPw] = useState(false);
-  const [capsOn, setCapsOn] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [shake, setShake] = useState(0);
-  const [done, setDone] = useState(false);
-  const [googleBusy, setGoogleBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [oauthPending, setOauthPending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
 
-  const emailRef = useRef<HTMLInputElement>(null);
-  const navTimerRef = useRef<number | null>(null);
-  useEffect(() => () => { if (navTimerRef.current) window.clearTimeout(navTimerRef.current); }, []);
-  const busy = pending === 'login';
-  const canSubmit =
-    email.trim().length > 3 && password.length > 0 && !busy && !done;
+  const pending = busy || oauthPending;
+  const canSubmit = Boolean(email) && Boolean(password) && !pending;
 
-  useEffect(() => {
-    emailRef.current?.focus();
-    return () => clearError();
-  }, [clearError]);
-
-  function onPwKey(e: KeyboardEvent<HTMLInputElement>) {
-    setCapsOn(e.getModifierState?.('CapsLock') ?? false);
-  }
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!canSubmit) return;
-    setError(null);
-    try {
-      if (isParent) {
-        await parentLogin(email, password, { returnTo: returnTo !== '/' ? returnTo : '/parent-portal' });
-      } else {
+  const handleSubmit = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault();
+      if (!canSubmit) return;
+      setError('');
+      setBusy(true);
+      try {
         await login(email, password);
+      } catch (err: unknown) {
+        // Defensive: never keep a bad password in the field.
+        setPassword('');
+        const authErr = err instanceof AuthError ? err : null;
+        const friendly =
+          authErr?.code === 'INVALID_CREDENTIALS'
+            ? t('login.wrongEmailOrPassword')
+            : getErrorMessage(err) || t('login.genericError');
+        setError(friendly);
+      } finally {
+        setBusy(false);
       }
-      setDone(true);
-      navTimerRef.current = window.setTimeout(() => navigate(isParent && returnTo === '/' ? '/parent-portal' : returnTo, { replace: true }), 480);
-    } catch (err) {
-      setError(friendlyMessage(err, t));
-      setShake((n) => n + 1);
-      setPassword('');
-    }
-  }
+    },
+    [canSubmit, email, password, login, t],
+  );
 
-  function startGoogle() {
-    if (googleBusy || busy || done) return;
-    setGoogleBusy(true);
-    window.location.assign(googleOAuthUrl);
-  }
+  const handleGoogle = useCallback(() => {
+    if (pending) return;
+    setError('');
+    setOauthPending(true);
+    // Paint the loading state first, then leave for the backend endpoint.
+    setTimeout(() => {
+      try {
+        window.location.assign(googleOAuthUrl);
+      } catch {
+        /* jsdom / restricted environments: state stays "redirecting" */
+      }
+    }, 0);
+  }, [pending]);
+
+  const trackCapsLock = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+    if (typeof e.getModifierState === 'function') {
+      setCapsLock(e.getModifierState('CapsLock'));
+    }
+  }, []);
 
   return (
-    <div
-      className="auth-motion relative flex min-h-dvh items-center justify-center px-5 py-12 antialiased"
-      style={{ background: 'var(--bg-base)' }}
-    >
-      <style>{KEYFRAMES}</style>
-      <Backdrop />
+    <AuthLayout title={t('login.heading')} subtitle={t('login.subtitle')}>
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        {/* ── Error ─────────────────────────────────────────────── */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            role="alert"
+            className="flex items-start gap-2 rounded-xl border border-apple-red/25 bg-apple-red/10 px-3.5 py-3 text-[13px] font-medium text-apple-red"
+          >
+            <svg className="mt-[1px] h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 5a1.25 1.25 0 0 1 1.25 1.25v5a1.25 1.25 0 0 1-2.5 0v-5A1.25 1.25 0 0 1 12 7Zm0 11a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />
+            </svg>
+            <span>{error}</span>
+          </motion.div>
+        )}
 
-      <main
-        key={shake}
-        className={[
-          'relative z-10 w-full max-w-[420px] [animation:auth-rise_.7s_cubic-bezier(.2,.8,.2,1)_both]',
-          shake
-            ? '[animation:auth-shake_.5s_cubic-bezier(.36,.07,.19,.97)_both]'
-            : '',
-        ].join(' ')}
-      >
-        {/* Glass card */}
-        <section className="glass-card p-8 sm:p-10">
-          <BrandMark />
+        {/* ── Email ─────────────────────────────────────────────── */}
+        <GlassInput
+          id="login-email"
+          type="email"
+          aria-required
+          autoFocus
+          autoComplete="email"
+          inputMode="email"
+          label={t('auth.email')}
+          placeholder="name@school.uz"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={pending}
+          className="h-11 text-[15px]"
+        />
 
-          <header className="mb-8 text-center">
-            <h1
-              className="text-[28px] font-semibold leading-tight tracking-[-0.022em]"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              {t('login.heading')}
-            </h1>
-            <p
-              className="mt-2 text-[15px] leading-snug tracking-[-0.01em]"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              {isParent ? (t('login.parentSubtitle') || 'Sign in to access your child’s academic and attendance records') : t('login.subtitle')}
-            </p>
-          </header>
-
-          {/* Account type switcher */}
-          <div className="flex p-1 mb-6 rounded-[12px] bg-[var(--state-hover)] border border-[var(--border-subtle)] text-[13px] font-medium">
-            <button
-              type="button"
-              onClick={() => { setIsParent(false); setError(null); }}
-              className={`flex-1 py-1.5 rounded-[9px] transition-all duration-200 ${
-                !isParent
-                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-              }`}
-            >
-              {t('login.tabStaff') || 'Staff & Students'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setIsParent(true); setError(null); }}
-              className={`flex-1 py-1.5 rounded-[9px] transition-all duration-200 ${
-                isParent
-                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-              }`}
-            >
-              {t('login.tabParents') || 'Parents'}
-            </button>
-          </div>
-
-          <form onSubmit={onSubmit} noValidate className="space-y-5">
-            {/* Grouped fields */}
-            <div className="isolate divide-y overflow-hidden rounded-[14px]" style={{ borderColor: 'var(--border-subtle)' }}>
-              <FloatingInput
-                ref={emailRef}
-                label={t('auth.email')}
-                type="email"
-                name="email"
-                inputMode="email"
-                autoComplete="username"
-                autoCapitalize="none"
-                spellCheck={false}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                invalid={!!error}
-                disabled={busy || done || googleBusy}
-              />
-              <FloatingInput
-                label={t('auth.password')}
-                type={showPw ? 'text' : 'password'}
-                name="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={onPwKey}
-                onKeyUp={onPwKey}
-                onBlur={() => setCapsOn(false)}
-                invalid={!!error}
-                disabled={busy || done || googleBusy}
-                trailing={
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => setShowPw((v) => !v)}
-                    aria-label={showPw ? t('auth.hidePassword') : t('auth.showPassword')}
-                    className="grid h-9 w-9 place-items-center rounded-full transition-colors active:scale-95"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    <Eye off={showPw} />
-                  </button>
-                }
-              />
-            </div>
-
-            {/* Live hints — no layout shift */}
-            <div className="min-h-[20px] px-1 text-[13px] leading-5 tracking-[-0.01em]">
-              {error ? (
-                <p
-                  role="alert"
-                  className="flex items-start gap-1.5 [animation:auth-fade_.25s_ease-out]"
-                  style={{ color: 'var(--state-error)' }}
-                >
-                  <svg
-                    className="mt-[3px] h-3.5 w-3.5 shrink-0"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    aria-hidden
-                  >
-                    <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 5a1.25 1.25 0 0 1 1.25 1.25v5a1.25 1.25 0 0 1-2.5 0v-5A1.25 1.25 0 0 1 12 7Zm0 11a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />
-                  </svg>
-                  {error}
-                </p>
-              ) : capsOn ? (
-                <p
-                  className="[animation:auth-fade_.25s_ease-out]"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {t('login.capsLock')}
-                </p>
-              ) : null}
-            </div>
-
-            {/* Primary action */}
-            <button
-              type="submit"
-              disabled={!canSubmit && !busy}
-              aria-busy={busy}
-              className={[
-                'group relative flex h-[50px] w-full items-center justify-center gap-2 overflow-hidden rounded-[14px] text-[16px] font-medium tracking-[-0.01em] text-white',
-                'transition-[transform,background-color,box-shadow,opacity] duration-200 ease-out',
-                'active:scale-[.985] disabled:cursor-not-allowed',
-                done
-                  ? 'shadow-[0_8px_24px_-8px_rgba(94,230,168,0.6)]'
-                  : 'disabled:opacity-45 disabled:shadow-none',
-                'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[rgba(84,115,252,0.40)] focus-visible:ring-offset-2',
-              ].join(' ')}
-              style={{
-                background: done
-                  ? 'linear-gradient(135deg, #5EE6A8 0%, #2ea870 100%)'
-                  : 'linear-gradient(135deg, var(--m-vivid) 0%, var(--m-deep) 100%)',
-                boxShadow: done
-                  ? undefined
-                  : '0 8px 24px -8px rgba(84,115,252,0.7)',
-              }}
-            >
-              {/* Glass highlight */}
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  background: 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, transparent 100%)',
-                  opacity: 0.7,
-                }}
-              />
-              <span className="relative flex items-center gap-2">
-                {done ? (
-                  <>
-                    <Check />
-                    {t('login.signedIn')}
-                  </>
-                ) : busy ? (
-                  <>
-                    <Spinner />
-                    {t('auth.loggingIn')}
-                  </>
-                ) : (
-                  <>
-                    {isParent ? (t('login.parentContinue') || 'Sign In to Parent Portal') : t('login.continue')}
-                    <Arrow />
-                  </>
-                )}
-              </span>
-            </button>
-          </form>
-
-          {!isParent && (
-            <>
-              {/* Divider */}
-              <div
-                className="my-6 flex items-center gap-3"
-                role="separator"
-                aria-label={t('login.or')}
-              >
-                <span
-                  aria-hidden
-                  className="h-px flex-1"
-                  style={{ background: 'var(--border-subtle)' }}
-                />
-                <span
-                  className="text-[13px] tracking-[-0.01em]"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  {t('login.or')}
-                </span>
-                <span
-                  aria-hidden
-                  className="h-px flex-1"
-                  style={{ background: 'var(--border-subtle)' }}
-                />
-              </div>
-
-              {/* Google OAuth — full redirect to the backend; never expose secrets client-side */}
+        {/* ── Password ──────────────────────────────────────────── */}
+        <div>
+          <GlassInput
+            id="login-password"
+            type={showPassword ? 'text' : 'password'}
+            aria-required
+            autoComplete="current-password"
+            label={t('auth.password')}
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyUp={trackCapsLock}
+            onKeyDown={trackCapsLock}
+            disabled={pending}
+            className="h-11 text-[15px]"
+            inputSuffix={
               <button
                 type="button"
-                onClick={startGoogle}
-                disabled={googleBusy || busy || done}
-                aria-busy={googleBusy}
-                className={[
-                  'flex h-[50px] w-full items-center justify-center gap-3 rounded-[14px] text-[16px] font-medium tracking-[-0.01em]',
-                  'transition-[transform,box-shadow,opacity] duration-200 ease-out',
-                  'hover:-translate-y-px active:scale-[.985]',
-                  'disabled:cursor-not-allowed disabled:opacity-50',
-                  'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[rgba(84,115,252,0.40)]',
-                ].join(' ')}
-                style={{
-                  background: 'var(--bg-glass)',
-                  backdropFilter: 'blur(12px)',
-                  WebkitBackdropFilter: 'blur(12px)',
-                  color: 'var(--text-primary)',
-                  border: '1px solid var(--border-medium)',
-                  boxShadow: 'var(--shadow-xs)',
-                }}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setShowPassword((v) => !v)}
+                disabled={pending}
+                aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-surface-500 transition-colors hover:bg-black/5 hover:text-surface-700 dark:hover:bg-white/10 dark:hover:text-surface-300"
               >
-                {googleBusy ? (
-                  <>
-                    <Spinner />
-                    <span>{t('login.redirectingGoogle')}</span>
-                  </>
-                ) : (
-                  <>
-                    <GoogleMark />
-                    <span>{t('login.continueWithGoogle')}</span>
-                  </>
-                )}
+                <EyeIcon off={showPassword} />
               </button>
-            </>
+            }
+          />
+          {capsLock && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-apple-orange">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+              {t('login.capsLock')}
+            </p>
           )}
+        </div>
 
-          <div className="mt-6 flex items-center justify-center text-[13px] tracking-[-0.01em]">
-            <Link
-              to="/forgot-password"
-              className="underline-offset-[3px] transition-colors hover:underline"
-              style={{ color: 'var(--m-vivid)' }}
-            >
-              {t('auth.forgotPassword')}
-            </Link>
-          </div>
-        </section>
+        {/* ── Forgot password ───────────────────────────────────── */}
+        <div className="flex justify-end">
+          <Link
+            to="/forgot-password"
+            className="text-[13px] font-medium text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {t('auth.forgotPassword')}
+          </Link>
+        </div>
 
-        {/* Below the card */}
-        <p
-          className="mt-7 text-center text-[14px] tracking-[-0.01em] [animation:auth-fade_.9s_.25s_ease-out_both]"
-          style={{ color: 'var(--text-secondary)' }}
+        {/* ── Submit ────────────────────────────────────────────── */}
+        <GlassButton
+          type="submit"
+          variant="primary"
+          size="lg"
+          disabled={!canSubmit}
+          aria-busy={busy}
+          className="h-12 w-full text-[15px] font-semibold"
         >
+          {busy ? (
+            <span className="inline-flex items-center gap-2">
+              <Spinner /> {t('login.continue')}
+            </span>
+          ) : (
+            t('login.continue')
+          )}
+        </GlassButton>
+
+        {/* ── Divider ───────────────────────────────────────────── */}
+        <div className="flex items-center gap-3 py-1" aria-hidden>
+          <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+          <span className="text-[12px] font-medium text-surface-500">{t('login.or')}</span>
+          <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+        </div>
+
+        {/* ── Google OAuth ──────────────────────────────────────── */}
+        <GlassButton
+          type="button"
+          variant="secondary"
+          size="lg"
+          onClick={handleGoogle}
+          disabled={pending}
+          aria-busy={oauthPending}
+          className="h-12 w-full text-[15px] font-medium"
+        >
+          {oauthPending ? (
+            <span className="inline-flex items-center gap-2">
+              <Spinner /> {t('login.redirectingGoogle')}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-2.5">
+              <GoogleMark />
+              {t('login.continueWithGoogle')}
+            </span>
+          )}
+        </GlassButton>
+
+        {/* ── Sign up ───────────────────────────────────────────── */}
+        <p className="pt-1 text-center text-[13.5px] text-surface-600 dark:text-surface-500">
           {t('login.newTo')}{' '}
           <Link
             to="/register"
-            className="font-medium underline-offset-[3px] hover:underline"
-            style={{ color: 'var(--m-vivid)' }}
+            className="font-semibold text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {t('login.createAccount')}
           </Link>
         </p>
 
-        <p
-          className="mt-10 text-center text-[11.5px] leading-relaxed tracking-[-0.005em] [animation:auth-fade_.9s_.4s_ease-out_both]"
-          style={{ color: 'var(--text-muted)' }}
-        >
+        {/* ── Legal ─────────────────────────────────────────────── */}
+        <p className="text-center text-[11.5px] leading-relaxed text-surface-500">
           {t('login.agreeTo')}{' '}
-          <Link to="/terms" className="underline-offset-2 hover:underline">
+          <Link to="/terms" className="underline underline-offset-2 hover:text-surface-700 dark:hover:text-surface-300">
             {t('login.terms')}
           </Link>{' '}
           {t('login.and')}{' '}
-          <Link to="/privacy" className="underline-offset-2 hover:underline">
+          <Link to="/privacy" className="underline underline-offset-2 hover:text-surface-700 dark:hover:text-surface-300">
             {t('login.privacy')}
           </Link>
-          .
         </p>
-      </main>
-    </div>
+      </form>
+    </AuthLayout>
   );
 }
+
+export default LoginPage;

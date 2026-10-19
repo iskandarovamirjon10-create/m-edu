@@ -67,9 +67,12 @@ describe('RegisterDto (ValidationPipe whitelist + forbidNonWhitelisted)', () => 
     expect(dto.organizationName).toBe(VALID.organizationName);
   });
 
-  it('rejects missing inviteCode', async () => {
+  it('accepts a valid payload without inviteCode (optional)', async () => {
     const { inviteCode, ...missingInvite } = VALID;
-    await expectValidationError(transform(missingInvite), /inviteCode/);
+    const dto = await transform(missingInvite);
+    expect(dto).toBeInstanceOf(RegisterDto);
+    expect(dto.inviteCode).toBeUndefined();
+    expect(dto.email).toBe(VALID.email);
   });
 
   it('rejects an invalid email (400-class BadRequestException)', async () => {

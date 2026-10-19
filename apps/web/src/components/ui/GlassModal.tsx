@@ -1,15 +1,23 @@
 /**
- * GlassModal V2 — Focus-trapped modal with V2 animation and size system.
- * Sizes: sm | md | lg | xl | full
+ * GlassModal — Apple-premium dialog.
+ *
+ * Portal · focus trap · Escape · scroll lock · focus restore.
+ * Restrained surface: card token + hairline border + `shadow-modal`,
+ * backdrop `bg-black/40 backdrop-blur-sm`, entrance `animate-modal-in`.
  */
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { cn, usePrefersReducedMotion } from '@/lib/design';
 import { GlassButton } from './GlassButton';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 
+/* ─────────────────────────────────────────────────────────────
+ * Public types
+ * ───────────────────────────────────────────────────────────── */
+
 export type GlassModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
 
-interface GlassModalProps {
+export interface GlassModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
@@ -17,25 +25,30 @@ interface GlassModalProps {
   children: ReactNode;
   footer?: ReactNode;
   size?: GlassModalSize;
-  /** @deprecated use size="lg" */
+  /** @deprecated use size="lg" (kept as an alias) */
   wide?: boolean;
-  /** Prevent closing on backdrop click */
+  /** Prevent closing on backdrop click. */
   persistent?: boolean;
+  /** @deprecated no-op — the surface no longer renders an SVG filter. */
+  disableRefraction?: boolean;
+  /** Extra class for the panel. */
+  className?: string;
 }
 
 const SIZE_CLASSES: Record<GlassModalSize, string> = {
-  sm:   'max-w-sm',
-  md:   'max-w-lg',
-  lg:   'max-w-2xl',
-  xl:   'max-w-4xl',
+  sm: 'max-w-sm',
+  md: 'max-w-lg',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
   full: 'max-w-[calc(100vw-2rem)]',
 };
 
-const CloseIcon = () => (
-  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <path d="M18 6 6 18M6 6l12 12" />
-  </svg>
-);
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/* ─────────────────────────────────────────────────────────────
+ * GlassModal
+ * ───────────────────────────────────────────────────────────── */
 
 export function GlassModal({
   open,
@@ -47,57 +60,64 @@ export function GlassModal({
   size: sizeProp,
   wide,
   persistent = false,
+  className,
 }: GlassModalProps) {
   const { t } = useSafeI18n();
+  const reduced = usePrefersReducedMotion();
   const dialogRef = useRef<HTMLDivElement>(null);
   const prevFocus = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+  const descriptionId = useId();
 
-  // Resolve size
   const size: GlassModalSize = sizeProp ?? (wide ? 'lg' : 'md');
 
-  // Body scroll lock
+  /* ── Body scroll lock ──────────────────────────────── */
   useEffect(() => {
     if (!open) return;
-    const orig = document.body.style.overflow;
+    const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = orig; };
+    return () => {
+      document.body.style.overflow = original;
+    };
   }, [open]);
 
-  // Focus trap + Escape
+  /* ── Focus trap + Escape + focus restore ───────────── */
   useEffect(() => {
     if (!open) return;
-    prevFocus.current = document.activeElement as HTMLElement;
+    prevFocus.current = document.activeElement as HTMLElement | null;
     const el = dialogRef.current;
     if (!el) return;
-    const initialFocusable = Array.from(
-      el.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    );
-    initialFocusable[0]?.focus();
+
+    const focusables = () =>
+      Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+    focusables()[0]?.focus();
 
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !persistent) { onClose(); return; }
+      if (e.key === 'Escape' && !persistent) {
+        onClose();
+        return;
+      }
       if (e.key !== 'Tab') return;
-      const focusable = Array.from(
-        el.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      );
-      if (focusable.length === 0) {
+      const list = focusables();
+      if (list.length === 0) {
         e.preventDefault();
         return;
       }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault(); last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault(); first.focus();
-      } else if (!e.shiftKey && !focusable.includes(document.activeElement as HTMLElement)) {
-        e.preventDefault(); first.focus();
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (!list.includes(active as HTMLElement)) {
+        e.preventDefault();
+        first.focus();
       }
     };
+
     document.addEventListener('keydown', handleKey);
     return () => {
       document.removeEventListener('keydown', handleKey);
@@ -109,88 +129,96 @@ export function GlassModal({
 
   return createPortal(
     <div
-      // Mobile safety: safe-area padding on notched devices, a smaller gutter
-      // on phones (p-3 instead of p-4) so a 320px viewport keeps usable width,
-      // and `items-end` on phones turns the dialog into a bottom sheet that the
-      // thumb can reach. Desktop keeps the centred dialog.
-      className="fixed inset-0 flex items-end justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.75rem,env(safe-area-inset-top,0px))] sm:items-center sm:p-4"
-      style={{ zIndex: 'var(--z-modal)' } as React.CSSProperties}
+      className={cn(
+        'fixed inset-0 flex items-end justify-center p-3',
+        'pt-[max(0.75rem,env(safe-area-inset-top,0px))]',
+        'pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]',
+        'sm:items-center sm:p-4',
+        'z-[var(--z-modal,1000)]',
+      )}
       role="dialog"
       aria-modal="true"
-      aria-labelledby={title ? 'modal-title' : undefined}
-      aria-describedby={description ? 'modal-description' : undefined}
+      aria-labelledby={title ? titleId : undefined}
+      aria-label={title ? undefined : 'Dialog'}
+      aria-describedby={description ? descriptionId : undefined}
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-[var(--bg-overlay)] backdrop-blur-[4px] [-webkit-backdrop-filter:blur(4px)]"
-        style={{ animation: 'overlay-in var(--duration-normal) var(--ease-enter) both' }}
-        aria-hidden
-        onClick={!persistent ? onClose : undefined}
+        aria-hidden="true"
+        className={cn(
+          'absolute inset-0 bg-black/40 backdrop-blur-md backdrop-saturate-150',
+          !reduced && 'animate-overlay-in',
+        )}
+        onClick={persistent ? undefined : onClose}
       />
 
       {/* Panel */}
       <div
         ref={dialogRef}
-        className={[
-          'relative z-10 w-full min-w-0 max-w-full',
+        className={cn(
+          'relative z-10 flex max-h-[min(88dvh,100%)] w-full min-w-0 flex-col overflow-hidden',
+          'rounded-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white/85 dark:bg-surface-900/85 backdrop-blur-2xl backdrop-saturate-150 shadow-modal shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
+          'text-primary outline-none',
+          !reduced && 'animate-modal-in',
           SIZE_CLASSES[size],
-          'bg-[var(--bg-card)]',
-          'backdrop-blur-[24px] [-webkit-backdrop-filter:blur(24px)_saturate(1.6)]',
-          'border border-[var(--border)]',
-          'rounded-[var(--radius-2xl)]',
-          'shadow-[var(--shadow-xl)]',
-          // 100dvh - gutters, so the panel never extends under the browser UI
-          // or off the top of a short landscape viewport.
-          'max-h-[min(88dvh,100%)] flex flex-col',
-          'overflow-hidden',
-        ].join(' ')}
-        style={{ animation: 'modal-in var(--duration-slow) var(--ease-enter) both' }}
+          className,
+        )}
       >
-        {/* Reflection */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[inherit] z-0"
-          style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.12) 0%, transparent 50%)' }}
-        />
-
         {/* Header */}
         {title && (
-          <div className="relative flex flex-shrink-0 items-start justify-between gap-3 px-4 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4">
-            <div>
-              <h2 id="modal-title" className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] leading-tight">
+          <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-black/[0.06] dark:border-white/[0.08] px-5 pt-5 pb-4 sm:px-6">
+            <div className="min-w-0">
+              <h2
+                id={titleId}
+                className="text-base font-semibold leading-snug tracking-tight text-primary"
+              >
                 {title}
               </h2>
               {description && (
-                <p id="modal-description" className="mt-1 text-[var(--text-body-sm)] text-[var(--text-primary)] opacity-80">
+                <p id={descriptionId} className="mt-1 text-sm leading-relaxed text-secondary">
                   {description}
                 </p>
               )}
             </div>
             <GlassButton
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               onClick={onClose}
-              aria-label={t('a11y.closeModal')}
-              className="flex-shrink-0 ml-4"
+              aria-label={t('a11y.closeModal', 'Close modal')}
+              className="flex-shrink-0"
             >
-              <CloseIcon />
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
             </GlassButton>
           </div>
         )}
 
         {/* Body */}
         <div
-          className={[
-            'relative min-w-0 flex-1 overflow-y-auto overscroll-contain',
-            title ? 'px-4 pb-4 sm:px-6' : 'px-4 py-5 sm:px-6 sm:py-6',
-          ].join(' ')}
+          className={cn(
+            'min-w-0 flex-1 overflow-y-auto overscroll-contain px-5 sm:px-6',
+            title ? 'pb-5' : 'py-5 sm:py-6',
+          )}
         >
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="relative mt-2 flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[var(--border-subtle)] px-4 pb-4 pt-3 sm:gap-3 sm:px-6 sm:pb-6 sm:pt-4">
+          <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-black/[0.06] dark:border-white/[0.08] px-5 py-4 sm:gap-3 sm:px-6">
             {footer}
           </div>
         )}

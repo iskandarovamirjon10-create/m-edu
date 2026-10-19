@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationQuery } from '../common/dto/query';
@@ -61,9 +61,23 @@ export interface StartImportDto {
 
 @Injectable()
 export class ImportExportService {
+  private readonly logger = new Logger(ImportExportService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   // ---- Imports -------------------------------------------------------------
+
+  /**
+   * Map a Prisma write failure to a client-safe message. The raw
+   * `err.message` exposes table/constraint names and may echo submitted
+   * values, so it is only written to the server log.
+   */
+  private safeImportError(err: unknown): string {
+    const code = (err as { code?: string })?.code;
+    if (code === 'P2002') return 'A record with the same unique value already exists';
+    if (code === 'P2003') return 'A referenced record does not exist';
+    return 'The row could not be imported';
+  }
 
   async listImports(_orgId: string, _query: ImportListQuery) {
     // Return recent activity summary
@@ -78,6 +92,14 @@ export class ImportExportService {
 
     const entityType = (dto.entityType || 'STUDENT').toUpperCase();
     const filename = (file.originalname || '').toLowerCase();
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.buffer.length > MAX_FILE_SIZE) {
+      throw new BadRequestException('Import file size exceeds maximum limit of 10MB');
+    }
+
+    const MAX_ALLOWED_ROWS = 5000;
+    const MAX_ALLOWED_CELLS = 50000;
+
     const isExcel = filename.endsWith('.xlsx') || filename.endsWith('.xls') ||
       file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -91,14 +113,29 @@ export class ImportExportService {
         throw new BadRequestException('Excel file is empty or missing data rows');
       }
 
+      if (worksheet.rowCount > MAX_ALLOWED_ROWS + 1) {
+        throw new BadRequestException(`Excel file exceeds maximum allowed limit of ${MAX_ALLOWED_ROWS} rows`);
+      }
+
       let headers: string[] = [];
+      let totalCells = 0;
       worksheet.eachRow((row, rowNumber) => {
         const values = row.values as unknown[];
         if (rowNumber === 1) {
           headers = (Array.isArray(values) ? values.slice(1) : []).map(v => String(v ?? '').trim());
+          if (headers.length > 50) {
+            throw new BadRequestException('Excel file exceeds maximum limit of 50 columns');
+          }
         } else if (headers.length > 0) {
+          if (rawRows.length >= MAX_ALLOWED_ROWS) {
+            throw new BadRequestException(`Import file exceeds maximum allowed limit of ${MAX_ALLOWED_ROWS} rows`);
+          }
           const rowObj: Record<string, string> = {};
           headers.forEach((h, idx) => {
+            totalCells++;
+            if (totalCells > MAX_ALLOWED_CELLS) {
+              throw new BadRequestException(`Import file exceeds maximum allowed cell limit (${MAX_ALLOWED_CELLS})`);
+            }
             const val = Array.isArray(values) ? values[idx + 1] : undefined;
             rowObj[h] = val !== undefined && val !== null ? String(val).trim() : '';
           });
@@ -111,6 +148,10 @@ export class ImportExportService {
       const lines = content.split(/\r?\n/).filter(line => line.trim().length > 0);
       if (lines.length < 2) {
         throw new BadRequestException('CSV file must have at least a header row and one data row');
+      }
+
+      if (lines.length > MAX_ALLOWED_ROWS + 1) {
+        throw new BadRequestException(`CSV file exceeds maximum allowed limit of ${MAX_ALLOWED_ROWS} rows`);
       }
 
       const parseCsvLine = (line: string): string[] => {
@@ -138,10 +179,22 @@ export class ImportExportService {
       };
 
       const headers = parseCsvLine(lines[0]);
+      if (headers.length > 50) {
+        throw new BadRequestException('CSV file exceeds maximum limit of 50 columns');
+      }
+
+      let totalCells = 0;
       for (let i = 1; i < lines.length; i++) {
+        if (rawRows.length >= MAX_ALLOWED_ROWS) {
+          throw new BadRequestException(`Import file exceeds maximum allowed limit of ${MAX_ALLOWED_ROWS} rows`);
+        }
         const values = parseCsvLine(lines[i]);
         const rowObj: Record<string, string> = {};
         headers.forEach((h, idx) => {
+          totalCells++;
+          if (totalCells > MAX_ALLOWED_CELLS) {
+            throw new BadRequestException(`Import file exceeds maximum allowed cell limit (${MAX_ALLOWED_CELLS})`);
+          }
           rowObj[h] = values[idx] ?? '';
         });
         rawRows.push(rowObj);
@@ -225,8 +278,10 @@ export class ImportExportService {
           });
           importedCount++;
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          errors.push(`Row ${index + 2}: ${msg}`);
+          this.logger.error(
+            `Import STUDENT row ${index + 2} failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          errors.push(`Row ${index + 2}: ${this.safeImportError(err)}`);
           skippedCount++;
         }
       }
@@ -272,8 +327,10 @@ export class ImportExportService {
           });
           importedCount++;
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          errors.push(`Row ${index + 2}: ${msg}`);
+          this.logger.error(
+            `Import TEACHER row ${index + 2} failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          errors.push(`Row ${index + 2}: ${this.safeImportError(err)}`);
           skippedCount++;
         }
       }
@@ -504,10 +561,16 @@ export class ImportExportService {
       const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
       const sheet = workbook.addWorksheet(upper);
       
+      // CWE-1236: sanitize cells starting with formula triggers (=, +, -, @, \t, \r)
+      const sanitizeExcelCell = (v: unknown): string => {
+        const s = String(v ?? '');
+        return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+      };
+
       sheet.addRow(headers);
       for await (const chunk of this.streamEntityForExport(orgId, upper)) {
         for (const row of chunk) {
-          sheet.addRow(headers.map(h => row[h] || ""));
+          sheet.addRow(headers.map(h => sanitizeExcelCell(row[h])));
         }
         sheet.commit(); // Optional: clears memory for written rows
       }

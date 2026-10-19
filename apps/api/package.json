@@ -1,10 +1,11 @@
 {
   "name": "@medu/api",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "build": "nest build && node scripts/copy-assets.js",
     "dev": "nest start --watch",
+    "db:dev": "tsx scripts/start-dev-db.ts",
     "start:prod": "node dist/main",
     "db:migrate:deploy": "prisma migrate deploy",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
@@ -54,7 +55,7 @@
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
     "multer": "^2.4.0",
-    "nodemailer": "^10.0.0",
+    "nodemailer": "^10.1.2",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "passport-jwt": "^4.0.1",

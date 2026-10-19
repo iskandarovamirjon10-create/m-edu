@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useAuthState } from '@/auth/AuthContext';
+import { useOptionalAuthState } from '@/auth/AuthContext';
 import { usersApi } from '@/lib/api';
 
 export interface PersistableSettings {
@@ -21,8 +21,8 @@ export interface PersistableSettings {
  * successful write (or the Settings page save) reconciles the server row.
  */
 export function usePersistSettings() {
-  const { user } = useAuthState();
-  const userId = user?.id;
+  const auth = useOptionalAuthState();
+  const userId = auth?.user?.id;
 
   return useCallback(
     (prefs: PersistableSettings) => {

@@ -72,6 +72,18 @@ describe('Config Module Suite', () => {
       expect(errorVars).toContain('BIOMETRIC_ENCRYPTION_KEY');
     });
 
+    it('rejects committed .env.docker biometric key in production mode (M-EDU-SEC-006)', () => {
+      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/medu';
+      process.env.JWT_SECRET = 'valid-random-secret-at-least-32-chars-long';
+      process.env.BIOMETRIC_ENCRYPTION_KEY = '8Q3ZqgJUXHmTHdnJY8uAZgsjuVRPjYo0';
+      process.env.FACE_ENGINE_PROVIDER = 'real-local';
+
+      const problems = validateConfig('production');
+      const bioProblem = problems.find((p) => p.variable === 'BIOMETRIC_ENCRYPTION_KEY');
+      expect(bioProblem?.severity).toBe('error');
+      expect(bioProblem?.message).toContain('Unsafe placeholder encryption key detected');
+    });
+
     it('assertValidConfig throws aggregated error when errors exist', () => {
       delete process.env.DATABASE_URL;
       delete process.env.JWT_SECRET;

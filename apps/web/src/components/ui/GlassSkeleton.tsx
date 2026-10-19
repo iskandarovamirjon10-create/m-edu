@@ -1,19 +1,50 @@
 /**
- * GlassSkeleton V2 — Loading placeholder with shimmer animation.
- * variant: 'text' | 'rect' | 'circle' | 'card'
+ * GlassSkeleton — Apple-premium shimmer placeholders.
  */
+import { cn } from '@/lib/design';
 import { GlassSpinner } from './GlassSpinner';
 
-type SkeletonVariant = 'text' | 'rect' | 'circle' | 'card';
+export type SkeletonVariant = 'text' | 'rect' | 'circle' | 'card';
+export type SkeletonIntensity = 'subtle' | 'default' | 'strong';
 
-interface GlassSkeletonProps {
+export interface GlassSkeletonProps {
   variant?: SkeletonVariant;
   width?: string | number;
   height?: string | number;
   rounded?: string;
   className?: string;
-  /** Number of lines for text skeleton */
+  /** Number of lines for text skeleton. */
   lines?: number;
+  /** @deprecated no-op — intensity is now uniform. */
+  intensity?: SkeletonIntensity;
+  /** @deprecated no-op */
+  disableRefraction?: boolean;
+}
+
+const toCss = (v: string | number) => (typeof v === 'number' ? `${v}px` : v);
+
+function Bar({
+  width,
+  height,
+  radius,
+  className,
+}: {
+  width: string | number;
+  height: string | number;
+  radius?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn('skeleton-shimmer rounded-lg', className)}
+      style={{
+        width: toCss(width),
+        height: toCss(height),
+        ...(radius ? { borderRadius: radius } : null),
+      }}
+    />
+  );
 }
 
 export function GlassSkeleton({
@@ -24,34 +55,32 @@ export function GlassSkeleton({
   className = '',
   lines = 1,
 }: GlassSkeletonProps) {
-  const shimmerClass = 'skeleton-shimmer inline-block align-middle';
-
   if (variant === 'circle') {
-    const size = typeof width === 'number' ? `${width}px` : width;
+    const size = toCss(width);
     return (
-      <span
-        className={[shimmerClass, className].join(' ')}
-        style={{ width: size, height: size, borderRadius: '50%', display: 'inline-block' }}
-        aria-hidden
+      <Bar
+        width={size}
+        height={size}
+        radius="50%"
+        className={cn('inline-block', className)}
       />
     );
   }
 
   if (variant === 'text') {
     return (
-      <span className={['flex flex-col gap-2 w-full', className].join(' ')} aria-hidden>
-        {Array.from({ length: lines }, (_, i) => (
-          <span
-            key={i}
-            className={shimmerClass}
-            style={{
-              width: i === lines - 1 && lines > 1 ? '66%' : (typeof width === 'number' ? `${width}px` : width),
-              height: typeof height === 'number' ? `${height}px` : height,
-              borderRadius: rounded ?? 'var(--radius-sm)',
-              display: 'block',
-            }}
-          />
-        ))}
+      <span className={cn('flex w-full flex-col gap-2', className)} aria-hidden="true">
+        {Array.from({ length: lines }, (_, i) => {
+          const isLast = i === lines - 1 && lines > 1;
+          return (
+            <Bar
+              key={i}
+              width={isLast ? '66%' : width}
+              height={height}
+              radius={rounded}
+            />
+          );
+        })}
       </span>
     );
   }
@@ -59,48 +88,43 @@ export function GlassSkeleton({
   if (variant === 'card') {
     return (
       <div
-        className={[
-          'bg-[var(--bg-card)] border border-[var(--border-subtle)]',
-          'rounded-[var(--radius-xl)] p-5 shadow-[var(--shadow-sm)]',
+        aria-hidden="true"
+        className={cn(
+          'bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-card p-5',
           className,
-        ].join(' ')}
-        aria-hidden
+        )}
       >
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex flex-col gap-2 flex-1">
-            <span className="skeleton-shimmer h-4 w-32 rounded-[var(--radius-sm)] block" />
-            <span className="skeleton-shimmer h-8 w-24 rounded-[var(--radius-sm)] block" />
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="flex flex-1 flex-col gap-2">
+            <Bar width="8rem" height="1rem" />
+            <Bar width="6rem" height="2rem" radius="8px" />
           </div>
-          <span className="skeleton-shimmer w-9 h-9 rounded-[var(--radius-md)] flex-shrink-0" />
+          <Bar width="36px" height="36px" radius="10px" />
         </div>
-        <span className="skeleton-shimmer h-3.5 w-20 rounded-[var(--radius-sm)] block" />
+        <Bar width="5rem" height="0.875rem" />
       </div>
     );
   }
 
-  return (
-    <span
-      className={[shimmerClass, className].join(' ')}
-      style={{
-        width: typeof width === 'number' ? `${width}px` : width,
-        height: typeof height === 'number' ? `${height}px` : height,
-        borderRadius: rounded ?? 'var(--radius-md)',
-        display: 'block',
-      }}
-      aria-hidden
-    />
-  );
+  return <Bar width={width} height={height} radius={rounded} className={className} />;
 }
 
-/** Full-page loading state */
-export function GlassPageLoader({ label = 'Loading…' }: { label?: string }) {
+export interface GlassPageLoaderProps {
+  label?: string;
+  /** @deprecated no-op */
+  glass?: boolean;
+}
+
+export function GlassPageLoader({ label = 'Loading…' }: GlassPageLoaderProps) {
   return (
-    <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-live="polite">
+    <div
+      className="flex min-h-[50vh] items-center justify-center"
+      role="status"
+      aria-live="polite"
+    >
       <div className="flex flex-col items-center gap-4">
         <GlassSpinner size="lg" />
-        {label && (
-          <p className="text-[var(--text-body-sm)] text-[var(--text-secondary)] font-medium">{label}</p>
-        )}
+        {label && <p className="text-sm font-medium text-secondary">{label}</p>}
       </div>
     </div>
   );

@@ -77,7 +77,19 @@ export function friendlyHttpMessage(status: number, serverMessage: string | null
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
-export type RequestOptions = RequestInit & { timeout?: number; defaultFilename?: string };
+export type RequestOptions = RequestInit & {
+  timeout?: number;
+  defaultFilename?: string;
+  _isCsrfRetry?: boolean;
+  idempotencyKey?: string;
+};
+
+export function generateIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'idemp_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+}
 
 /**
  * API base path. Production builds honour `VITE_API_URL` (set in the Dockerfile
@@ -108,8 +120,9 @@ export function readXsrfCookie(): string | null {
  * Concurrent callers share one in-flight request.
  */
 let csrfSeed: Promise<void> | null = null;
-export async function ensureCsrfCookie(): Promise<void> {
-  if (typeof document === 'undefined' || readXsrfCookie()) return;
+export async function ensureCsrfCookie(force = false): Promise<void> {
+  if (typeof document === 'undefined') return;
+  if (!force && readXsrfCookie()) return;
   if (!csrfSeed) {
     csrfSeed = fetch(`${API_BASE}/csrf-token`, { credentials: 'include', headers: { Accept: 'application/json' } })
       .then(() => undefined)
@@ -139,6 +152,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (token) {
       headers['x-xsrf-token'] = token;
     }
+  }
+
+  const idempotencyKey =
+    options.idempotencyKey ||
+    (options.headers as Record<string, string> | undefined)?.['idempotency-key'] ||
+    (options.headers as Record<string, string> | undefined)?.['Idempotency-Key'];
+  if (idempotencyKey) {
+    headers['Idempotency-Key'] = idempotencyKey;
   }
 
   const controller = new AbortController();
@@ -182,10 +203,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       path.startsWith('/auth/oauth') ||
       path.startsWith('/auth/forgot') ||
       path.startsWith('/auth/reset') ||
-      path.startsWith('/auth/parent-login');
+      path.startsWith('/auth/parent-login') ||
+      path.startsWith('/telegram/webapp');
     const onPublic =
       typeof window !== 'undefined' &&
-      /^\/(login|register|forgot-password|reset-password|terms|privacy|auth\/callback)/.test(
+      /^\/(login|register|forgot-password|reset-password|terms|privacy|auth\/callback|tg-app|kiosk)/.test(
         window.location.pathname,
       );
     if (!isAuthProbe && !onPublic) {
@@ -204,6 +226,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     body = await res.json().catch(() => null);
   } else {
     body = await res.text().catch(() => null);
+  }
+
+  if (res.status === 403 && !options._isCsrfRetry) {
+    const serverMessage = (body as { message?: string } | null)?.message || (typeof body === 'string' ? body : '');
+    if (typeof serverMessage === 'string' && (serverMessage.includes('CSRF') || serverMessage.includes('XSRF'))) {
+      await ensureCsrfCookie(true);
+      const freshToken = readXsrfCookie();
+      const retryHeaders = { ...headers, ...(freshToken ? { 'x-xsrf-token': freshToken } : {}) };
+      return request<T>(path, { ...options, headers: retryHeaders, _isCsrfRetry: true });
+    }
   }
 
   if (!res.ok) {
@@ -235,7 +267,7 @@ export const authApi = {
   parentLogin: (email: string, password: string) =>
     request<{ user: unknown }>('/auth/parent-login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   register: (data: {
-    email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string;
+    email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string; inviteCode?: string;
   }) =>
     request<{ user: unknown }>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   me: () => request<unknown>('/auth/me'),
@@ -316,9 +348,12 @@ function crud<T>(base: string) {
   return {
     list: (params?: object) => request<T>(`${base}${buildQuery(params)}`),
     get: (id: string) => request<T>(`${base}/${id}`),
-    create: (data: unknown) => request<T>(`${base}`, { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: unknown) => request<T>(`${base}/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    remove: (id: string) => request<unknown>(`${base}/${id}`, { method: 'DELETE' }),
+    create: (data: unknown, options?: RequestOptions) =>
+      request<T>(`${base}`, { method: 'POST', body: JSON.stringify(data), ...options }),
+    update: (id: string, data: unknown, options?: RequestOptions) =>
+      request<T>(`${base}/${id}`, { method: 'PATCH', body: JSON.stringify(data), ...options }),
+    remove: (id: string, options?: RequestOptions) =>
+      request<unknown>(`${base}/${id}`, { method: 'DELETE', ...options }),
   };
 }
 
@@ -336,14 +371,42 @@ export const studentsApi = {
     request<any>(`/students/${studentId}/parents/${parentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   unlinkParent: (studentId: string, parentId: string) =>
     request<{ success: boolean }>(`/students/${studentId}/parents/${parentId}`, { method: 'DELETE' }),
+  freeze: (studentId: string, data: { startDate?: string; endDate?: string; reason?: string }) =>
+    request<any>(`/students/${studentId}/freeze`, { method: 'POST', body: JSON.stringify(data) }),
+  unfreeze: (studentId: string) =>
+    request<any>(`/students/${studentId}/unfreeze`, { method: 'POST' }),
 };
 export const teachersApi = crud('/teachers');
 export const coursesApi = crud('/courses');
-export const groupsApi = { ...crud('/groups') };
-export const scheduleApi = crud('/schedule');
-export const paymentsApi = crud('/payments');
+export const groupsApi = {
+  ...crud('/groups'),
+  getCapacity: (id: string) => request<any>(`/groups/${id}/capacity`),
+  graduate: (id: string, data: unknown) =>
+    request<any>(`/groups/${id}/graduate`, { method: 'POST', body: JSON.stringify(data) }),
+};
+export const scheduleApi = {
+  ...crud('/schedule'),
+  getRoomUtilization: () => request<any>('/schedule/room-utilization'),
+};
+export const paymentsApi = {
+  ...crud('/payments'),
+  create: (data: unknown, options?: RequestOptions) =>
+    request<any>('/payments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      idempotencyKey: options?.idempotencyKey || generateIdempotencyKey(),
+      ...options,
+    }),
+};
 export const expensesApi = {
   ...crud('/expenses'),
+  create: (data: unknown, options?: RequestOptions) =>
+    request<any>('/expenses', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      idempotencyKey: options?.idempotencyKey || generateIdempotencyKey(),
+      ...options,
+    }),
   summary: (params?: object) => request(`/expenses/summary${buildQuery(params)}`),
 };
 export const leadsApi = {
@@ -360,6 +423,14 @@ export const leadsApi = {
   deleteFollowUpRule: (id: string) => request(`/leads/follow-up-rules/${id}`, { method: 'DELETE' }),
   evaluateFollowUpRules: () => request('/leads/follow-up-rules/evaluate', { method: 'POST' }),
   completeFollowUp: (id: string, data?: unknown) => request(`/leads/follow-ups/${id}/complete`, { method: 'POST', body: JSON.stringify(data ?? {}) }),
+  trialAnalytics: () => request<any>('/leads/trial-analytics'),
+  getTrialAnalytics: () => request<any>('/leads/trial-analytics'),
+  scheduleTrial: (id: string, data: unknown) =>
+    request<any>(`/leads/${id}/trial-schedule`, { method: 'POST', body: JSON.stringify(data) }),
+  recordTrialAttendance: (id: string, data: unknown) =>
+    request<any>(`/leads/${id}/trial-attendance`, { method: 'POST', body: JSON.stringify(data) }),
+  markTrialAttendance: (id: string, data: unknown) =>
+    request<any>(`/leads/${id}/trial-attendance`, { method: 'POST', body: JSON.stringify(data) }),
 };
 export const usersApi = {
   ...crud('/users'),
@@ -721,17 +792,13 @@ export const communicationApi = {
   getTimeline: (entityType: string, entityId: string) => request(`/communication/timeline${buildQuery({ entityType, entityId })}`),
   getHistory: (params?: object) => request(`/communication/history${buildQuery(params)}`),
   getStats: () => request('/communication/stats'),
-  messages: (studentId: string) => request<any>(`/communication/messages/${studentId}`),
+  messages: (studentId: string) => request<any>(`/communication/messages/student/${studentId}`),
   sendMessage: (data: object) => request<any>('/communication/messages', { method: 'POST', body: JSON.stringify(data) }),
   announcements: () => request<any>('/communication/announcements'),
   createAnnouncement: (data: object) => request<any>('/communication/announcements', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const dataGovernanceApi = {
-  listPolicies: (params?: object) => request<DataGovernancePolicy[]>(`/data-governance/policies${buildQuery(params)}`),
-  createPolicy: (data: unknown) => request('/data-governance/policies', { method: 'POST', body: JSON.stringify(data) }),
-  updatePolicy: (id: string, data: unknown) => request(`/data-governance/policies/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deletePolicy: (id: string) => request(`/data-governance/policies/${id}`, { method: 'DELETE' }),
   exportLogs: (params?: object) => request<Paginated<ExportLog>>(`/data-governance/export-log${buildQuery(params)}`),
   getRetentionPolicies: () => request<DataGovernancePolicy[]>('/data-governance/retention-policies'),
   // Backend exposes this as PUT /data-governance/retention-policies (upsert).
@@ -744,29 +811,57 @@ export const dataGovernanceApi = {
 export const invoicesApi = {
   list: (params?: object) => request(`/invoices${buildQuery(params)}`),
   get: (id: string) => request(`/invoices/${id}`),
-  create: (data: unknown) => request('/invoices', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: unknown) => request(`/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  remove: (id: string) => request(`/invoices/${id}`, { method: 'DELETE' }),
-  issue: (id: string) => request(`/invoices/${id}/issue`, { method: 'POST' }),
-  cancel: (id: string, reason?: string) =>
-    request(`/invoices/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
-  recordPayment: (id: string, data: unknown) =>
+  create: (data: unknown, options?: RequestOptions) =>
+    request('/invoices', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      idempotencyKey: options?.idempotencyKey || generateIdempotencyKey(),
+      ...options,
+    }),
+  update: (id: string, data: unknown, options?: RequestOptions) =>
+    request(`/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data), ...options }),
+  remove: (id: string, options?: RequestOptions) =>
+    request(`/invoices/${id}`, { method: 'DELETE', ...options }),
+  issue: (id: string, options?: RequestOptions) =>
+    request(`/invoices/${id}/issue`, { method: 'POST', ...options }),
+  cancel: (id: string, reason?: string, options?: RequestOptions) =>
+    request(`/invoices/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }), ...options }),
+  recordPayment: (id: string, data: unknown, options?: RequestOptions) =>
     request(`/invoices/${id}/payments`, {
       method: 'POST',
-      // invoiceId is set AFTER the spread so a caller-supplied invoiceId cannot
-      // overwrite the route ID (controller requires dto.invoiceId === URL id).
       body: JSON.stringify({ ...(data as Record<string, unknown>), invoiceId: id }),
+      idempotencyKey: options?.idempotencyKey || generateIdempotencyKey(),
+      ...options,
     }),
-  requestRefund: (data: { paymentId: string; amount: number; reason?: string }) =>
-    request('/invoices/refunds', { method: 'POST', body: JSON.stringify(data) }),
-  processRefund: (id: string, gatewayExternalId?: string) =>
+  requestRefund: (data: { paymentId: string; amount: number; reason?: string }, options?: RequestOptions) =>
+    request('/invoices/refunds', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      idempotencyKey: options?.idempotencyKey || generateIdempotencyKey(),
+      ...options,
+    }),
+  processRefund: (id: string, gatewayExternalId?: string, options?: RequestOptions) =>
     request(`/invoices/refunds/${id}/process`, {
       method: 'POST',
       body: JSON.stringify(gatewayExternalId ? { gatewayExternalId } : {}),
+      idempotencyKey: options?.idempotencyKey || generateIdempotencyKey(),
+      ...options,
     }),
-  rejectRefund: (id: string, reason?: string) =>
-    request(`/invoices/refunds/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  rejectRefund: (id: string, reason?: string, options?: RequestOptions) =>
+    request(`/invoices/refunds/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }), ...options }),
   totals: (params?: object) => request(`/invoices/totals${buildQuery(params)}`),
+  getPaymentLinks: (id: string) => request<any>(`/invoices/${id}/payment-links`),
+  proratePreview: (data: unknown) =>
+    request<any>('/invoices/prorate-preview', { method: 'POST', body: JSON.stringify(data) }),
+  createProrated: (data: unknown, options?: RequestOptions) =>
+    request<any>('/invoices/prorate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      idempotencyKey: options?.idempotencyKey || generateIdempotencyKey(),
+      ...options,
+    }),
+  debtorStatus: (studentId: string, graceDays?: number) =>
+    request<any>(`/invoices/students/${studentId}/debtor-status${buildQuery({ graceDays })}`),
 };
 
 export async function downloadFile(path: string, options: RequestOptions = {}): Promise<void> {
@@ -875,6 +970,14 @@ export const payrollApi = {
   pay: (id: string) => request(`/payroll/runs/${id}/pay`, { method: 'POST' }),
   cancel: (id: string, reason: string) => request(`/payroll/runs/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
   periodSummary: (params?: object) => request(`/payroll/period-summary${buildQuery(params)}`),
+  revenueShare: (params: any) =>
+    request<any>(`/payroll/runs/revenue-share${buildQuery(params)}`),
+  getRevenueShare: (params: any) =>
+    request<any>(`/payroll/runs/revenue-share${buildQuery(params)}`),
+  createRevenueShare: (data: unknown) =>
+    request<any>('/payroll/runs/revenue-share', { method: 'POST', body: JSON.stringify(data) }),
+  createRevenueShareRun: (data: unknown) =>
+    request<any>('/payroll/runs/revenue-share', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const performanceApi = {
@@ -950,12 +1053,27 @@ export const curriculumApi = {
   addObjective: (id: string, topicId: string, data: object) => request<any>(`/curriculum/${id}/topics/${topicId}/objectives`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
-export const materialsApi = {
-  list: (params?: object) => request<any>(`/learning-materials${buildQuery(params)}`),
-  get: (id: string) => request<any>(`/learning-materials/${id}`),
-  create: (data: object) => request<any>('/learning-materials', { method: 'POST', body: JSON.stringify(data) }),
-  folders: (params?: object) => request<any>(`/learning-materials/folders${buildQuery(params)}`),
-  createFolder: (data: object) => request<any>('/learning-materials/folders', { method: 'POST', body: JSON.stringify(data) }),
+export const lessonsApi = {
+  list: (params?: { groupId?: string; teacherId?: string; date?: string; from?: string; to?: string; limit?: number; page?: number }) =>
+    request<{ items: any[]; total: number; page: number; limit: number; totalPages: number }>(`/lessons${buildQuery(params)}`),
+  get: (id: string) => request<any>(`/lessons/${id}`),
+  updateStatus: (id: string, status: 'PLANNED' | 'CONDUCTED' | 'CANCELLED', cancellationReason?: string) =>
+    request<any>(`/lessons/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, cancellationReason }),
+    }),
+  updateContent: (id: string, data: { notes?: string; room?: string }) =>
+    request<any>(`/lessons/${id}/content`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  linkMaterial: (id: string, materialId: string) =>
+    request<any>(`/lessons/${id}/materials`, {
+      method: 'POST',
+      body: JSON.stringify({ materialId }),
+    }),
+  unlinkMaterial: (id: string, materialId: string) =>
+    request<any>(`/lessons/${id}/materials/${materialId}`, { method: 'DELETE' }),
 };
 
 export const assignmentsApi = {
@@ -963,7 +1081,7 @@ export const assignmentsApi = {
   get: (id: string) => request<any>(`/assignments/${id}`),
   create: (data: object) => request<any>('/assignments', { method: 'POST', body: JSON.stringify(data) }),
   submit: (id: string, data: object) => request<any>(`/assignments/${id}/submit`, { method: 'POST', body: JSON.stringify(data) }),
-  grade: (id: string, data: object) => request<any>(`/assignments/submissions/${id}/grade`, { method: 'POST', body: JSON.stringify(data) }),
+  grade: (id: string, data: object) => request<any>(`/assignments/submissions/${id}/grade`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 export const assessmentApi = {
@@ -978,13 +1096,11 @@ export const assessmentApi = {
 
 export const progressApi = {
   student360: (studentId: string) => request<any>(`/progress/student-360/${studentId}`),
-  recordMastery: (studentId: string, data: object) => request<any>(`/progress/mastery/${studentId}`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const calendarApi = {
   list: (params?: object) => request<any>(`/calendar/events${buildQuery(params)}`),
   create: (data: object) => request<any>('/calendar/events', { method: 'POST', body: JSON.stringify(data) }),
-  delete: (id: string) => request<any>(`/calendar/events/${id}`, { method: 'DELETE' }),
 };
 
 export default request;

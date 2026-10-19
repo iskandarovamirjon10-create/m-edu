@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SearchController } from '../search.controller';
 import { SearchService, SearchResponse } from '../search.service';
@@ -16,17 +16,7 @@ describe('SearchController', () => {
       search: vi.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [SearchController],
-      providers: [
-        {
-          provide: SearchService,
-          useValue: service,
-        },
-      ],
-    }).compile();
-
-    controller = module.get<SearchController>(SearchController);
+    controller = new SearchController(service as unknown as SearchService);
   });
 
   it('should be defined', () => {

@@ -1,99 +1,180 @@
 /**
- * M-EDU Brand Component — v12 "Titanium"
- * Liquid Glass lockup: logo mark + wordmark, with magnetic physics and
- * Apple-grade focus, shadow and reduced-motion handling.
+ * M-EDU Brand lockup — logo mark + wordmark + tone badge.
+ * Clean Apple-premium chrome: no injected styles, no refraction filters,
+ * no emoji, no chromatic bloom. `forwardRef`, Link integration and every
+ * prop from the previous version are preserved.
  */
-
-import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import {
+  forwardRef,
+  type ComponentPropsWithoutRef,
+  type ReactNode,
+} from 'react';
+import { Link, type LinkProps } from 'react-router-dom';
 import { MeduLogo } from '@/components/brand/MeduLogo';
+import { cn, usePrefersReducedMotion } from '@/lib/design';
 import { Magnetic } from './Icons';
-import { SPRING } from '../core/tokens';
-import { usePrefersReducedMotion } from '../core/singletons';
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Tone tokens — matches TopBar v12                                          */
-/* ────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+ * Public types
+ * ───────────────────────────────────────────────────────────── */
 
-const TONE = {
-  label: 'text-[#1D1D1F] dark:text-[#F5F5F7]',
-  focus:
-    'outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/55 dark:focus-visible:ring-[#0A84FF]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent',
-} as const;
+export type BrandSize = 'sm' | 'md';
+export type BrandBadgeTone = 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Brand                                                                     */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-export interface BrandProps {
-  size?: 'sm' | 'md';
+export interface BrandProps
+  extends Omit<ComponentPropsWithoutRef<'a'>, 'href' | 'color'> {
+  /** Visual scale of the logo mark and typography. */
+  size?: BrandSize;
+  /** Hides the wordmark and badge, rendering only the interactive logo mark. */
   compact?: boolean;
+  /** Version or environment pill (e.g. "v2", "Beta"). Pass `null` to hide. */
+  badge?: ReactNode;
+  /** Tone of the badge chip. Default `brand`. */
+  badgeTone?: BrandBadgeTone;
+  /** Custom router destination (defaults to "/"). */
+  to?: LinkProps['to'];
+  /** Disables magnetic cursor pull when used in tight/dense containers. */
+  magnetic?: boolean;
+  /** Wraps the lockup in a subtle glass pill (useful on busy backdrops). */
+  glass?: boolean;
+  /** @deprecated no-op — SVG refraction was removed. */
+  disableRefraction?: boolean;
 }
 
-export function Brand({ size = 'md', compact = false }: BrandProps) {
+/* ─────────────────────────────────────────────────────────────
+ * Tokens
+ * ───────────────────────────────────────────────────────────── */
+
+const BADGE_TONES: Record<BrandBadgeTone, string> = {
+  brand: 'border-brand-500/25 bg-brand-500/10 text-brand-600 dark:text-brand-400',
+  neutral: 'border-black/10 bg-black/[0.05] text-secondary dark:border-white/10 dark:bg-white/[0.08]',
+  success: 'border-apple-green/25 bg-apple-green/10 text-apple-green',
+  warning: 'border-apple-orange/25 bg-apple-orange/10 text-apple-orange',
+  danger: 'border-apple-red/25 bg-apple-red/10 text-apple-red',
+};
+
+const SIZES: Record<BrandSize, { gap: string; wordmark: string; badgeX: string }> = {
+  sm: { gap: 'gap-2', wordmark: 'text-[17px] tracking-[-0.02em]', badgeX: 'px-1.5' },
+  md: { gap: 'gap-2.5', wordmark: 'text-[19px] tracking-[-0.024em]', badgeX: 'px-2' },
+};
+
+/* ─────────────────────────────────────────────────────────────
+ * Pieces
+ * ───────────────────────────────────────────────────────────── */
+
+function BrandBadge({
+  children,
+  tone,
+  size,
+}: {
+  children: ReactNode;
+  tone: BrandBadgeTone;
+  size: BrandSize;
+}) {
+  return (
+    <span
+      data-part="brand-badge"
+      data-tone={tone}
+      className={cn(
+        'inline-flex items-center rounded-full border py-0.5 text-[11px] font-medium leading-none',
+        SIZES[size].badgeX,
+        BADGE_TONES[tone],
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Brand
+ * ───────────────────────────────────────────────────────────── */
+
+export const Brand = forwardRef<HTMLAnchorElement, BrandProps>(function Brand(
+  {
+    size = 'md',
+    compact = false,
+    badge = 'v2',
+    badgeTone = 'brand',
+    to = '/',
+    magnetic = true,
+    glass = false,
+    disableRefraction: _disableRefraction = false,
+    className,
+    'aria-label': ariaLabel,
+    ...rest
+  },
+  ref,
+) {
   const reduced = usePrefersReducedMotion();
+  const styles = SIZES[size];
+  const hasBadge = badge !== null && badge !== false;
+  const hasShell = glass && !compact;
 
-  const logoSize = size === 'sm' ? 'sm' : 'md';
-  const wordmarkClass =
-    size === 'sm'
-      ? 'text-[17px] tracking-[-0.022em]'
-      : 'text-[19px] tracking-[-0.024em]';
+  const logoMark = (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center justify-center rounded-xl',
+        !reduced &&
+          'transition-transform duration-150 ease-apple-spring hover:scale-[1.03] active:scale-95 motion-reduce:transition-none',
+      )}
+    >
+      <MeduLogo
+        size={size}
+        alt=""
+        className="block select-none"
+      />
+    </span>
+  );
 
-  const tap = reduced ? undefined : { scale: 0.92 };
-  const logoHover = reduced
-    ? undefined
-    : { scale: 1.04, rotate: -2 } as const;
+  const wordmark = !compact ? (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 font-semibold leading-none text-primary',
+        styles.wordmark,
+      )}
+    >
+      <span>M-EDU</span>
+      {hasBadge && (
+        <BrandBadge tone={badgeTone} size={size}>
+          {badge}
+        </BrandBadge>
+      )}
+    </span>
+  ) : null;
+
+  const lockup = (
+    <>
+      {magnetic && !reduced ? <Magnetic strength={0.32}>{logoMark}</Magnetic> : logoMark}
+      {wordmark}
+    </>
+  );
 
   return (
     <Link
-      to="/"
-      aria-label="M-EDU — Home"
-      className={[
-        'group inline-flex items-center gap-3 rounded-xl no-underline',
-        'transition-opacity duration-200',
-        TONE.focus,
-      ].join(' ')}
+      ref={ref}
+      to={to}
+      aria-label={ariaLabel ?? 'M-EDU — Bosh sahifa'}
+      className={cn(
+        'group inline-flex select-none items-center rounded-xl no-underline outline-none',
+        styles.gap,
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-focus)]',
+        !reduced && 'transition-transform duration-150 ease-apple-spring active:scale-[0.98]',
+        className,
+      )}
+      {...rest}
     >
-      <Magnetic strength={0.4}>
-        <motion.div
-          whileHover={logoHover}
-          whileTap={tap}
-          transition={SPRING.snappy}
-          className="relative will-change-transform"
-        >
-          {/* Soft accent bloom — only visible on hover, feels alive */}
-          <span
-            aria-hidden
-            className={[
-              'pointer-events-none absolute inset-0 -z-10 rounded-full',
-              'bg-[radial-gradient(circle_at_center,rgba(0,122,255,0.35),transparent_70%)]',
-              'opacity-0 blur-md transition-opacity duration-300',
-              'group-hover:opacity-100',
-              'dark:bg-[radial-gradient(circle_at_center,rgba(10,132,255,0.45),transparent_70%)]',
-            ].join(' ')}
-          />
-          <MeduLogo
-            size={logoSize}
-            alt=""
-            className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]"
-          />
-        </motion.div>
-      </Magnetic>
-
-      {!compact && (
-        <span
-          className={[
-            'font-semibold',
-            wordmarkClass,
-            TONE.label,
-            // Subtle optical lift on hover — Apple marketing site technique
-            'transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
-            reduced ? '' : 'group-hover:translate-x-[1px]',
-          ].join(' ')}
-        >
-          M-EDU
+      {hasShell ? (
+        <span className="inline-flex items-center rounded-xl border border-subtle bg-[var(--glass-surface-bg)] px-2.5 py-1 shadow-card backdrop-blur-xl">
+          {lockup}
         </span>
+      ) : (
+        lockup
       )}
     </Link>
   );
-}
+});
+
+Brand.displayName = 'Brand';
+
+export default Brand;

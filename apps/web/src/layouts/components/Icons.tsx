@@ -1,31 +1,69 @@
 /**
- * M-EDU Layout Icons & Micro-Interactions — v13 "Artisan Titanium"
- * Metallic gradient strokes, luminous active states, magnetic 3D physics.
+ * M-EDU Layout Icons & Micro-Interactions — Apple-premium rewrite (v2).
+ *
+ * Design principles:
+ * - `I` registry: plain 24×24 stroke paths (every key preserved, untouched).
+ * - `StaticIcon`: crisp `currentColor` vector primitive — zero motion cost.
+ * - `PremiumIcon`: monochrome icon whose stroke weight / scale / opacity
+ *   glide toward the active state via spring physics (not CSS transitions) —
+ *   color always comes from the surrounding token. No gradients, no glows.
+ * - `Magnetic` / `IconButton`: restrained, physically-plausible press & hover
+ *   feedback — the kind of motion you feel more than you see.
+ *
+ * No injected `<style>` blocks, no feTurbulence, no emoji.
  */
 
 import {
   useRef,
   useCallback,
   useEffect,
-  useId,
+  useLayoutEffect,
+  useMemo,
   memo,
+  forwardRef,
   type ReactNode,
+  type PointerEvent as ReactPointerEvent,
+  type ButtonHTMLAttributes,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 import {
   motion,
   useMotionValue,
   useSpring,
   useTransform,
+  type MotionValue,
+  type Transition,
 } from 'framer-motion';
-import { SPRING, ACCENTS, type AccentKey } from '../core/tokens';
-import {
-  useDeviceProfile,
-  usePrefersReducedMotion,
-} from '../core/singletons';
+import { cn } from '@/lib/design';
+import type { AccentKey } from '../core/tokens';
+import { useDeviceProfile, usePrefersReducedMotion } from '../core/singletons';
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Icon registry — type-safe                                                 */
-/* ────────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+ * ENVIRONMENT & SMALL UTILITIES
+ * ════════════════════════════════════════════════════════════════════ */
+
+const useIsomorphicLayoutEffect =
+  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+const clamp = (v: number, min: number, max: number): number =>
+  v < min ? min : v > max ? max : v;
+
+function mergeRefs<T>(
+  ...refs: Array<
+    React.MutableRefObject<T> | React.LegacyRef<T> | undefined | null
+  >
+): React.RefCallback<T> {
+  return (value) => {
+    for (const ref of refs) {
+      if (typeof ref === 'function') ref(value);
+      else if (ref != null) (ref as React.MutableRefObject<T | null>).current = value;
+    }
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+ * ICON REGISTRY — every key preserved (same shapes as before)
+ * ════════════════════════════════════════════════════════════════════ */
 
 export const I = {
   dashboard: [
@@ -76,6 +114,10 @@ export const I = {
     'M9.5 10v.5',
     'M14.5 10v.5',
     'M9 15a4 4 0 0 0 6 0',
+  ],
+  camera: [
+    'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z',
+    'M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   ],
   library: [
     'M4 4v16',
@@ -232,280 +274,483 @@ export const I = {
   star: [
     'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z',
   ],
+  chevronDown: ['M6 9l6 6 6-6'],
+  arrowRight: ['M5 12h14', 'M12 5l7 7-7 7'],
+  schedule: [
+    'M8 2v4',
+    'M16 2v4',
+    'M3 10h18',
+    'M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z',
+  ],
+  telegram: ['M22 2L11 13', 'M22 2l-7 20-4-9-9-4 20-7z'],
+  earlyWarning: [
+    'M12 9v4',
+    'M12 17h.01',
+    'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z',
+  ],
+  notifications: [
+    'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9',
+    'M13.73 21a2 2 0 0 1-3.46 0',
+  ],
+  grades: [
+    'M9 11l3 3L22 4',
+    'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
+  ],
 } as const satisfies Record<string, readonly string[]>;
 
 export type IconKey = keyof typeof I;
 export type IconPaths = readonly string[];
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Constants — no scattered hex                                              */
-/* ────────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+ * SIZE & STROKE TOKENS
+ * ════════════════════════════════════════════════════════════════════ */
+
+export const ICON_SIZE = {
+  xs: 14,
+  sm: 16,
+  md: 20,
+  lg: 24,
+  xl: 28,
+} as const;
+
+export type IconSizeKey = keyof typeof ICON_SIZE;
 
 const STROKE_BASE = 1.75;
-const STROKE_ACTIVE = 2.1;
-const HIGHLIGHT = '#FFFFFF';
-const HIGHLIGHT_SOFT = '#F8FBFF';
-const SHEEN_INACTIVE = 0.32;
-const SHEEN_ACTIVE = 0.6;
+const STROKE_ACTIVE = 2;
+const DEFAULT_ICON_SIZE = ICON_SIZE.md;
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  StaticIcon — zero-frills, memoized                                        */
-/* ────────────────────────────────────────────────────────────────────────── */
+/** Snappy, low-travel spring — used for press feedback. */
+const SPRING_TAP: Transition = { type: 'spring', stiffness: 520, damping: 32, mass: 0.6 };
+/** Slightly looser spring — used for tilt / lift / icon-state transitions. */
+const SPRING_SOFT: Transition = { type: 'spring', stiffness: 260, damping: 24, mass: 0.75 };
+/** Used when the user prefers reduced motion — effectively instant, no bounce. */
+const SPRING_INSTANT: Transition = { type: 'tween', duration: 0 };
+
+/* ══════════════════════════════════════════════════════════════════════
+ * LEGACY SHARED DEFS
+ * ════════════════════════════════════════════════════════════════════ */
+
+/**
+ * @deprecated Optical-refraction filter ids were removed with the v27 look
+ * (no `feTurbulence` anywhere). Kept so existing imports keep compiling.
+ */
+export const REFRACTION_FILTER = {
+  subtle: 'medu-refract-subtle',
+  default: 'medu-refract-default',
+  strong: 'medu-refract-strong',
+} as const;
+
+/**
+ * @deprecated Renders nothing — the icon system no longer needs shared SVG
+ * gradients or filters. Mounted once at the app root for API compatibility.
+ */
+export const IconDefsHost = memo(function IconDefsHost() {
+  return null;
+});
+
+/* ══════════════════════════════════════════════════════════════════════
+ * StaticIcon — crisp vector primitive
+ * ════════════════════════════════════════════════════════════════════ */
+
+export interface StaticIconProps {
+  paths: IconPaths;
+  className?: string;
+  size?: number;
+  strokeWidth?: number;
+  /** Optional accessible name. When omitted the icon stays `aria-hidden`. */
+  title?: string;
+}
 
 export const StaticIcon = memo(function StaticIcon({
   paths,
   className = '',
-}: {
-  paths: IconPaths;
-  className?: string;
-}) {
+  size = DEFAULT_ICON_SIZE,
+  strokeWidth = STROKE_BASE,
+  title,
+}: StaticIconProps) {
+  const isDecorative = !title;
+
   return (
     <svg
-      className={`h-[1.25rem] w-[1.25rem] shrink-0 ${className}`}
+      className={cn('shrink-0 select-none', className)}
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={STROKE_BASE}
+      strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      aria-hidden="true"
+      shapeRendering="geometricPrecision"
+      role={isDecorative ? undefined : 'img'}
+      aria-hidden={isDecorative || undefined}
+      focusable="false"
     >
-      {paths.map((d, index) => (
+      {title ? <title>{title}</title> : null}
+      {(paths ?? []).map((d, index) => (
         <path key={index} d={d} />
       ))}
     </svg>
   );
 });
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  PremiumIcon — metallic gradient stroke + luminous active glow             */
-/* ────────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+ * PremiumIcon — monochrome icon that glides toward the active state
+ *
+ * Rather than toggling Tailwind transition classes, stroke width / scale /
+ * opacity are driven by `useSpring`, so the icon settles the same way a
+ * native control would — no discrete "jump", just physically-plausible
+ * motion that respects `prefers-reduced-motion`.
+ * ════════════════════════════════════════════════════════════════════ */
 
 export interface PremiumIconProps {
   paths: IconPaths;
   isActive?: boolean;
+  /**
+   * @deprecated Accent is carried by the surrounding token (active rows set
+   * `text-brand-600`); the prop stays for API compatibility.
+   */
   accent?: AccentKey;
-  /** Optional explicit id — falls back to React's useId (SSR-safe). */
-  id?: string;
   className?: string;
+  size?: number;
+  /** @deprecated no-op */
+  revealOnActivate?: boolean;
+  /** @deprecated no-op (refraction filters were removed) */
+  refraction?: 'off' | 'subtle' | 'default';
 }
 
 export const PremiumIcon = memo(function PremiumIcon({
   paths,
   isActive = false,
-  accent = 'blue',
-  id,
   className = '',
+  size = DEFAULT_ICON_SIZE,
 }: PremiumIconProps) {
-  const color = ACCENTS[accent];
   const reduced = usePrefersReducedMotion();
-  const reactId = useId();
-  const uid = (id ?? reactId).replace(/[:]/g, '');
+  const transition = reduced ? SPRING_INSTANT : SPRING_SOFT;
 
-  const gradientId = `medu-ic-grad-${uid}`;
-  const sheenId = `medu-ic-sheen-${uid}`;
-  const glowId = `medu-ic-glow-${uid}`;
-
-  const strokeWidth = isActive ? STROKE_ACTIVE : STROKE_BASE;
-  const scale = isActive && !reduced ? 1.08 : 1;
+  const strokeWidth = useSpring(isActive ? STROKE_ACTIVE : STROKE_BASE, transition);
+  const scale = useSpring(isActive ? 1.08 : 1, transition);
+  const opacity = useSpring(isActive ? 1 : 0.85, transition);
 
   return (
-    <svg
-      className={`h-[1.25rem] w-[1.25rem] shrink-0 ${className}`}
+    <motion.svg
+      className={cn('shrink-0 select-none', className)}
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
-      aria-hidden="true"
+      shapeRendering="geometricPrecision"
       style={{
-        transform: `scale(${scale})`,
-        transformOrigin: 'center',
-        transition: reduced
-          ? undefined
-          : 'transform 320ms cubic-bezier(0.22, 1, 0.36, 1)',
-        filter: isActive
-          ? `drop-shadow(0 0 7px ${color.glow})`
-          : 'none',
-        willChange: isActive ? 'transform, filter' : undefined,
+        scale,
+        transformOrigin: '50% 50%',
+        filter: isActive ? 'drop-shadow(0 2px 6px rgba(0, 122, 255, 0.35))' : 'none',
       }}
+      aria-hidden="true"
+      focusable="false"
     >
-      <defs>
-        {/* Metallic pipe gradient — white caps → accent core → white cap */}
-        <linearGradient
-          id={gradientId}
-          x1="2"
-          y1="2"
-          x2="22"
-          y2="22"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop offset="0%" stopColor={HIGHLIGHT} stopOpacity="0.95" />
-          <stop offset="18%" stopColor={color.from} />
-          <stop offset="62%" stopColor={color.to} />
-          <stop offset="84%" stopColor={HIGHLIGHT_SOFT} stopOpacity="0.9" />
-          <stop offset="100%" stopColor={color.from} />
-        </linearGradient>
-
-        {/* Top-left sheen — subtle light source */}
-        <linearGradient
-          id={sheenId}
-          x1="4"
-          y1="2"
-          x2="20"
-          y2="22"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop offset="0%" stopColor={HIGHLIGHT} stopOpacity="0.8" />
-          <stop offset="35%" stopColor={HIGHLIGHT} stopOpacity="0.08" />
-          <stop offset="100%" stopColor={HIGHLIGHT} stopOpacity="0" />
-        </linearGradient>
-
-        {/* Soft radial bloom behind the icon when active */}
-        <radialGradient id={glowId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={color.glow} stopOpacity="0.42" />
-          <stop offset="65%" stopColor={color.glow} stopOpacity="0.12" />
-          <stop offset="100%" stopColor={color.glow} stopOpacity="0" />
-        </radialGradient>
-      </defs>
-
-      {/* Luminous halo — fades in when active */}
-      <motion.circle
-        cx="12"
-        cy="12"
-        r="11"
-        fill={`url(#${glowId})`}
-        initial={false}
-        animate={{ opacity: isActive ? 1 : 0 }}
-        transition={{
-          duration: reduced ? 0 : 0.42,
-          ease: [0.22, 1, 0.36, 1],
-        }}
-        pointerEvents="none"
-      />
-
-      {/* Main stroke — metallic gradient */}
-      <g
-        fill="none"
-        stroke={`url(#${gradientId})`}
-        strokeWidth={strokeWidth}
+      <motion.g
+        stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
+        style={{ strokeWidth, opacity }}
       >
-        {paths.map((d, index) => (
-          <motion.path
-            key={index}
-            d={d}
-            initial={false}
-            animate={{
-              opacity: isActive ? 1 : 0.86,
-            }}
-            transition={{
-              duration: reduced ? 0 : 0.42,
-              delay: reduced ? 0 : index * 0.035,
-              ease: [0.22, 1, 0.36, 1],
-            }}
-          />
+        {(paths ?? []).map((d, index) => (
+          <path key={index} d={d} />
         ))}
-      </g>
-
-      {/* Sheen overlay — subtle top-left light, kept low-opacity to avoid haze */}
-      {!reduced && (
-        <g
-          fill="none"
-          stroke={`url(#${sheenId})`}
-          strokeWidth={isActive ? 0.72 : 0.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          opacity={isActive ? SHEEN_ACTIVE : SHEEN_INACTIVE}
-          pointerEvents="none"
-        >
-          {paths.map((d, index) => (
-            <path key={index} d={d} />
-          ))}
-        </g>
-      )}
-    </svg>
+      </motion.g>
+    </motion.svg>
   );
 });
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Magnetic — 3D tilt physics on hover                                       */
-/* ────────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+ * Magnetic — subtle pointer tilt (mouse + fine pointers only)
+ * ════════════════════════════════════════════════════════════════════ */
 
 export interface MagneticProps {
   children: ReactNode;
   strength?: number;
   className?: string;
   disabled?: boolean;
+  maxTilt?: number;
+  /** @deprecated no-op (specular glare layer was removed) */
+  glare?: boolean;
 }
 
-export const Magnetic = memo(function Magnetic({
+const MagneticInner = memo(function MagneticInner({
   children,
-  strength = 0.35,
+  strength = 0.34,
   className = '',
-  disabled = false,
-}: MagneticProps) {
+  maxTilt = 8,
+}: Omit<MagneticProps, 'disabled' | 'glare'>) {
   const ref = useRef<HTMLSpanElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const pointerRef = useRef({ x: 0, y: 0 });
+  const baseRectRef = useRef<{ cx: number; cy: number } | null>(null);
+
   const x = useMotionValue(0);
   const y = useMotionValue(0);
+  const springX = useSpring(x, SPRING_SOFT);
+  const springY = useSpring(y, SPRING_SOFT);
+  const hover = useMotionValue(0);
+  const springHover = useSpring(hover, SPRING_SOFT);
+  const scale = useTransform(springHover, [0, 1], [1, 1.02]);
 
-  const springX = useSpring(x, SPRING.magnetic);
-  const springY = useSpring(y, SPRING.magnetic);
+  const tiltRange = clamp(strength * 18, 0, maxTilt);
+  const rotateX = useTransform(springY, [-16, 16], [tiltRange, -tiltRange]);
+  const rotateY = useTransform(springX, [-16, 16], [-tiltRange, tiltRange]);
 
-  const rotateX = useTransform(springY, [-18, 18], [7, -7]);
-  const rotateY = useTransform(springX, [-18, 18], [-7, 7]);
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    baseRectRef.current = {
+      cx: rect.left - springX.get() + rect.width / 2,
+      cy: rect.top - springY.get() + rect.height / 2,
+    };
+  }, [springX, springY]);
 
-  const profile = useDeviceProfile();
-  const reduced = usePrefersReducedMotion();
-  const isDisabled = disabled || reduced || !profile.hoverCapable;
+  const flush = useCallback(() => {
+    rafRef.current = null;
+    if (!baseRectRef.current) measure();
+    const base = baseRectRef.current;
+    if (!base) return;
+    x.set(clamp((pointerRef.current.x - base.cx) * strength, -16, 16));
+    y.set(clamp((pointerRef.current.y - base.cy) * strength, -16, 16));
+  }, [strength, x, y, measure]);
 
-  /* Reset springs when the interaction is disabled mid-flight */
-  useEffect(() => {
-    if (isDisabled) {
-      x.set(0);
-      y.set(0);
-    }
-  }, [isDisabled, x, y]);
-
-  const onMove = useCallback(
-    (event: React.MouseEvent<HTMLSpanElement>) => {
-      if (isDisabled) return;
-      const element = ref.current;
-      if (!element) return;
-
-      const rect = element.getBoundingClientRect();
-      const nextX = (event.clientX - (rect.left + rect.width / 2)) * strength;
-      const nextY = (event.clientY - (rect.top + rect.height / 2)) * strength;
-
-      x.set(Math.max(-18, Math.min(18, nextX)));
-      y.set(Math.max(-18, Math.min(18, nextY)));
+  useEffect(
+    () => () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     },
-    [isDisabled, strength, x, y],
+    [],
   );
 
-  const onLeave = useCallback(() => {
+  const onPointerEnter = useCallback(
+    (e: ReactPointerEvent<HTMLSpanElement>) => {
+      if (e.pointerType !== 'mouse') return;
+      measure();
+      hover.set(1);
+    },
+    [hover, measure],
+  );
+
+  const onPointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLSpanElement>) => {
+      if (e.pointerType !== 'mouse') return;
+      pointerRef.current = { x: e.clientX, y: e.clientY };
+      if (rafRef.current !== null) return;
+      rafRef.current = requestAnimationFrame(flush);
+    },
+    [flush],
+  );
+
+  const onPointerLeave = useCallback(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    baseRectRef.current = null;
     x.set(0);
     y.set(0);
-  }, [x, y]);
+    hover.set(0);
+  }, [x, y, hover]);
 
   return (
     <motion.span
       ref={ref}
-      onMouseMove={onMove}
-      onMouseLeave={onLeave}
-      style={
-        isDisabled
-          ? undefined
-          : {
-              x: springX,
-              y: springY,
-              rotateX,
-              rotateY,
-              transformPerspective: 700,
-              willChange: 'transform',
-            }
-      }
-      className={`inline-flex ${className}`}
+      onPointerEnter={onPointerEnter}
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
+      onPointerCancel={onPointerLeave}
+      style={{
+        x: springX,
+        y: springY,
+        rotateX,
+        rotateY,
+        scale,
+        transformPerspective: 820,
+      }}
+      className={cn('relative inline-flex', className)}
     >
       {children}
     </motion.span>
   );
 });
+
+export const Magnetic = memo(function Magnetic({
+  children,
+  strength = 0.34,
+  className = '',
+  disabled = false,
+  maxTilt = 8,
+  glare: _glare,
+}: MagneticProps) {
+  const profile = useDeviceProfile();
+  const reduced = usePrefersReducedMotion();
+  const isDisabled =
+    disabled || reduced || !profile.hoverCapable || Boolean(profile.lowPowerMode);
+
+  if (isDisabled) {
+    return <span className={cn('relative inline-flex', className)}>{children}</span>;
+  }
+
+  return (
+    <MagneticInner strength={strength} className={className} maxTilt={maxTilt}>
+      {children}
+    </MagneticInner>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════
+ * IconButton — square tile control
+ * ════════════════════════════════════════════════════════════════════ */
+
+const ICON_BUTTON_SIZE_CLASS: Record<'sm' | 'md' | 'lg', string> = {
+  sm: 'h-8 w-8 rounded-lg text-xs',
+  md: 'h-10 w-10 rounded-xl text-sm',
+  lg: 'h-12 w-12 rounded-2xl text-base',
+};
+
+export type IconButtonSize = keyof typeof ICON_BUTTON_SIZE_CLASS;
+export type IconButtonVariant = 'tile' | 'ghost';
+
+export interface IconButtonProps
+  extends Omit<
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    | 'onClick'
+    | 'disabled'
+    | 'className'
+    | 'title'
+    | 'children'
+    | 'style'
+    | 'onDrag'
+    | 'onDragStart'
+    | 'onDragEnd'
+    | 'onAnimationStart'
+  > {
+  children: ReactNode;
+  onClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  ariaLabel: string;
+  ariaPressed?: boolean;
+  active?: boolean;
+  disabled?: boolean;
+  className?: string;
+  title?: string;
+  /** Visual size preset. Defaults to `md` (10×10, same as before). */
+  size?: IconButtonSize;
+  /** `tile` keeps the original bordered square look; `ghost` drops bg/border. */
+  variant?: IconButtonVariant;
+  /** @deprecated no-op (magnetic tilt is opt-in via `<Magnetic />`) */
+  magnetic?: boolean;
+  leading?: ReactNode;
+  trailing?: ReactNode;
+  /** @deprecated no-op (refraction filters were removed) */
+  refraction?: 'off' | 'subtle' | 'default';
+  /** @deprecated no-op (press ripple was removed) */
+  ripple?: boolean;
+}
+
+export const IconButton = memo(
+  forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+    {
+      children,
+      onClick,
+      ariaLabel,
+      ariaPressed,
+      active = false,
+      disabled = false,
+      className = '',
+      title,
+      size = 'md',
+      variant = 'tile',
+      magnetic: _magnetic,
+      leading,
+      trailing,
+      refraction: _refraction,
+      ripple: _ripple,
+      ...restProps
+    },
+    forwardedRef,
+  ) {
+    const reduced = usePrefersReducedMotion();
+    const internalRef = useRef<HTMLButtonElement | null>(null);
+    const mergedRef = useMemo(
+      () => mergeRefs(internalRef, forwardedRef),
+      [forwardedRef],
+    );
+
+    const canAnimate = !reduced && !disabled;
+
+    return (
+      <motion.button
+        ref={mergedRef}
+        type="button"
+        onClick={disabled ? undefined : onClick}
+        disabled={disabled}
+        title={title}
+        aria-label={ariaLabel}
+        aria-pressed={ariaPressed}
+        data-active={active || undefined}
+        whileHover={canAnimate ? { y: -1, scale: 1.02 } : undefined}
+        whileTap={canAnimate ? { scale: 0.92, y: 0 } : undefined}
+        transition={SPRING_TAP}
+        className={cn(
+          'relative flex items-center justify-center select-none outline-none',
+          'transition-all duration-150 ease-apple-spring',
+          ICON_BUTTON_SIZE_CLASS[size],
+          variant === 'ghost' &&
+            (active
+              ? 'text-apple-blue bg-apple-blue/10 border border-transparent'
+              : cn(
+                  'text-[var(--text-secondary)] border border-transparent',
+                  'hover:text-[var(--text-primary)] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]',
+                )),
+          variant === 'tile' &&
+            (active
+              ? 'bg-apple-blue/15 text-apple-blue border border-apple-blue/30 shadow-[0_2px_8px_rgba(0,122,255,0.25),inset_0_1px_0_rgba(255,255,255,0.4)]'
+              : cn(
+                  'border border-black/[0.08] dark:border-white/[0.12] bg-white/70 dark:bg-white/[0.06] backdrop-blur-xl backdrop-saturate-150 text-[var(--text-secondary)]',
+                  'shadow-[0_1px_2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
+                  'hover:text-[var(--text-primary)] hover:border-black/[0.12] dark:hover:border-white/[0.18] hover:bg-white/90 dark:hover:bg-white/[0.10]',
+                )),
+          'disabled:cursor-not-allowed disabled:opacity-40 disabled:pointer-events-none',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--border-focus)]',
+          className,
+        )}
+        {...restProps}
+      >
+        <span className="relative z-10 inline-flex items-center justify-center gap-1.5">
+          {leading}
+          {children}
+          {trailing}
+        </span>
+      </motion.button>
+    );
+  }),
+);
+
+IconButton.displayName = 'IconButton';
+
+/* ══════════════════════════════════════════════════════════════════════
+ * useMotionSubscribe — returns an unsubscribe function
+ * ════════════════════════════════════════════════════════════════════ */
+
+export function useMotionSubscribe<T = number>(
+  motionValue: MotionValue<T>,
+  callback: (value: T) => void,
+): () => void {
+  const callbackRef = useRef(callback);
+
+  useIsomorphicLayoutEffect(() => {
+    callbackRef.current = callback;
+  });
+
+  useEffect(
+    () => motionValue.on('change', (value) => callbackRef.current(value)),
+    [motionValue],
+  );
+
+  return useCallback(() => {
+    motionValue.clearListeners();
+  }, [motionValue]);
+}

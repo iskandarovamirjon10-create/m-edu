@@ -395,4 +395,39 @@ describe('RecognitionService hardening guards', () => {
     expect(attendancePolicy.validate).toHaveBeenCalledWith(tenant, 'student-1', 'group-1', null, 'sess-1');
     expect(createAttendance).toHaveBeenCalled();
   });
+  it('processes multiple faces in the frame and identifies all matching students', async () => {
+    const student1 = makeTemplate('t1', 'student-1', 1);
+    const student2 = makeTemplate('t2', 'student-2', 2);
+    const { svc, faceEngine, attendancePolicy } = buildService({
+      templates: [student1, student2],
+      similarities: {},
+    });
+
+    faceEngine.detectFaces = vi.fn().mockResolvedValue([
+      { boundingBox: { x: 0, y: 0, width: 20, height: 20 }, confidence: 0.99 },
+      { boundingBox: { x: 30, y: 0, width: 20, height: 20 }, confidence: 0.98 },
+    ]);
+
+    let genCount = 0;
+    faceEngine.generateEmbedding = vi.fn().mockImplementation(async () => {
+      genCount++;
+      return new FaceEmbedding([genCount]);
+    });
+
+    faceEngine.compareEmbeddings = vi.fn(async ({ embeddingA, embeddingB }: any) => {
+      const probeTag = Number(embeddingA.getData()[0]);
+      const storedTag = Number(embeddingB.getData()[0]);
+      return probeTag === storedTag ? 0.95 : 0.1;
+    });
+
+    const result = await svc.processAttempt(tenant, 'sess-1', Buffer.from('img'));
+
+    expect(result.faceCount).toBe(2);
+    expect(result.matches).toHaveLength(2);
+    expect(result.matches![0].identified).toBe(true);
+    expect(result.matches![0].student?.id).toBe('student-1');
+    expect(result.matches![1].identified).toBe(true);
+    expect(result.matches![1].student?.id).toBe('student-2');
+    expect(attendancePolicy.validate).toHaveBeenCalledTimes(2);
+  });
 });

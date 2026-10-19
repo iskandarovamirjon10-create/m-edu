@@ -129,7 +129,7 @@ function MagicOrb({ open, onClick, orbRef, streaming }: MagicOrbProps) {
       whileHover={reduced ? undefined : { scale: 1.06 }}
       whileTap={{ scale: 0.94 }}
       transition={SPRING.snappy}
-      className="group fixed bottom-6 right-6 z-[150] outline-none focus-visible:ring-4 focus-visible:ring-[#007AFF]/40"
+      className="group hidden md:flex fixed bottom-6 right-6 z-[150] outline-none focus-visible:ring-4 focus-visible:ring-[#007AFF]/40"
       style={{
         width: 64,
         height: 64,
@@ -643,6 +643,10 @@ export function GlobalAiCopilot() {
     visible: { opacity: 1, transition: { duration: 0.35, ease: EASE_APPLE } },
     exit: { opacity: 0, transition: { duration: 0.22, ease: EASE_APPLE } },
   };
+
+  if (pathname === '/ai-copilot') {
+    return null;
+  }
 
   return (
     <>

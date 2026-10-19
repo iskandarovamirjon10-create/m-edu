@@ -100,6 +100,53 @@ describe('findAll', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(prisma.payment.create).not.toHaveBeenCalled();
     });
+
+    it('returns existing payment when called with identical reference, studentId, and amount (idempotent replay)', async () => {
+      prisma.student.findFirst.mockResolvedValue({ id: 's1' });
+      const existingPayment = {
+        id: 'p-existing',
+        organizationId: 'org-1',
+        studentId: 's1',
+        amount: 150,
+        reference: 'ref-custom-123',
+        status: 'PENDING',
+      };
+      prisma.payment.findFirst.mockResolvedValue(existingPayment);
+
+      const result = await svc.create('org-1', {
+        studentId: 's1',
+        amount: 150,
+        reference: 'ref-custom-123',
+      });
+
+      expect(prisma.payment.findFirst).toHaveBeenCalledWith({
+        where: { organizationId: 'org-1', reference: 'ref-custom-123' },
+        include: expect.any(Object),
+      });
+      expect(prisma.payment.create).not.toHaveBeenCalled();
+      expect(result).toEqual(existingPayment);
+    });
+
+    it('throws ConflictException when called with existing reference but different amount or student', async () => {
+      prisma.student.findFirst.mockResolvedValue({ id: 's1' });
+      const existingPayment = {
+        id: 'p-existing',
+        organizationId: 'org-1',
+        studentId: 's1',
+        amount: 150,
+        reference: 'ref-custom-123',
+      };
+      prisma.payment.findFirst.mockResolvedValue(existingPayment);
+
+      await expect(
+        svc.create('org-1', {
+          studentId: 's1',
+          amount: 200, // Different amount
+          reference: 'ref-custom-123',
+        }),
+      ).rejects.toThrow('A payment with this reference already exists with different parameters');
+      expect(prisma.payment.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('update', () => {
@@ -178,6 +225,55 @@ describe('findAll', () => {
           data: { balance: { increment: -100 } },
         }),
       );
+    });
+
+    it('throws BadRequestException when reducing payment amount below active/processed refunds (M-EDU-FIN-004)', async () => {
+      const existing = {
+        id: 'p1',
+        organizationId: 'org-1',
+        studentId: 's1',
+        status: 'PAID',
+        amount: 100,
+        paidAt: new Date(),
+        dueDate: null,
+        createdAt: new Date(),
+        reference: null,
+      };
+      prisma.payment.findFirst.mockResolvedValue(existing);
+      prisma.$queryRaw.mockResolvedValue([
+        { id: 'p1', status: 'PAID', amount: 100, studentId: 's1' },
+      ]);
+      // Active refunds sum to 60
+      prisma.refund.aggregate.mockResolvedValue({ _sum: { amount: 60 } });
+
+      await expect(
+        svc.update('org-1', 'p1', { amount: 50 }),
+      ).rejects.toThrow('Cannot reduce payment amount below active or processed refunds');
+      expect(prisma.payment.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when attempting to change payment status away from PAID when refunds exist (M-EDU-FIN-004)', async () => {
+      const existing = {
+        id: 'p1',
+        organizationId: 'org-1',
+        studentId: 's1',
+        status: 'PAID',
+        amount: 100,
+        paidAt: new Date(),
+        dueDate: null,
+        createdAt: new Date(),
+        reference: null,
+      };
+      prisma.payment.findFirst.mockResolvedValue(existing);
+      prisma.$queryRaw.mockResolvedValue([
+        { id: 'p1', status: 'PAID', amount: 100, studentId: 's1' },
+      ]);
+      prisma.refund.aggregate.mockResolvedValue({ _sum: { amount: 20 } });
+
+      await expect(
+        svc.update('org-1', 'p1', { status: 'CANCELLED' }),
+      ).rejects.toThrow('Cannot change status of payment with active or processed refunds away from PAID');
+      expect(prisma.payment.updateMany).not.toHaveBeenCalled();
     });
   });
 });

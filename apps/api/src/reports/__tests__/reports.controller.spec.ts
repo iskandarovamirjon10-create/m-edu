@@ -62,7 +62,7 @@ describe('ReportsController', () => {
       ],
     }).compile();
 
-    controller = module.get<ReportsController>(ReportsController);
+    controller = new ReportsController(service as unknown as ReportBuilderService);
   });
 
   it('should be defined', () => {

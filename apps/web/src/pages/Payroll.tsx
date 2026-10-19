@@ -16,7 +16,7 @@
  */
 
 import { fetchAllPaginated } from '@/lib/fetchAllPaginated';
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
 import { payrollApi, teachersApi } from '@/lib/api';
@@ -34,6 +34,9 @@ import {
 import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { PayrollRun, PayrollPeriodSummary } from '@/lib/types';
 
@@ -702,6 +705,77 @@ export function PayrollPage() {
     cancel.mutate({ id: cancelTarget.id, reason: cancelReason });
   };
 
+  const { playPop, playTick } = usePremiumSound();
+
+  const handleOpenPayrollSidecar = useCallback((run: PayrollRun) => {
+    const teacherName = run.teacher?.user
+      ? `${run.teacher.user.firstName} ${run.teacher.user.lastName}`.trim()
+      : 'O\'qituvchi';
+    const statusLabel = t(PAYROLL_STATUS_KEYS[run.status] || run.status);
+    const salaryTypeLabel = run.salaryType && SALARY_TYPE_KEYS[run.salaryType]
+      ? t(SALARY_TYPE_KEYS[run.salaryType])
+      : run.salaryType || '—';
+    const sidecarData: QuickLookData = {
+      id: run.id,
+      type: 'payment',
+      title: teacherName,
+      subtitle: `${statusLabel} · ${run.periodYear}-${String(run.periodMonth).padStart(2, '0')}`,
+      badge: {
+        text: statusLabel,
+        tone: run.status === 'PAID' ? 'emerald' : run.status === 'APPROVED' ? 'blue' : run.status === 'CANCELLED' ? 'rose' : 'amber',
+      },
+      avatar: {
+        text: teacherName.slice(0, 2).toUpperCase(),
+        color: '#007AFF',
+      },
+      metrics: [
+        { label: 'Net to\'lov', value: formatCurrency(run.netPay || run.netAmount || 0) },
+        { label: 'Brut summa', value: formatCurrency(run.grossAmount || 0) },
+        { label: 'Ushlanmalar', value: formatCurrency(run.deductions || 0) },
+        { label: 'Oylik turi', value: salaryTypeLabel },
+      ],
+      details: [
+        { label: 'Payroll ID', value: run.id, copyable: true },
+        { label: 'O\'qituvchi', value: teacherName },
+        { label: 'Davr', value: `${run.periodYear} / ${run.periodMonth}-oy` },
+        { label: 'Asosiy oklad', value: formatCurrency(run.baseSalary || 0) },
+        { label: 'Qo\'shimchalar', value: formatCurrency(run.adjustments || 0) },
+        { label: 'Izohlar', value: run.notes || 'Izohsiz' },
+      ],
+      primaryAction: {
+        label: run.status === 'DRAFT' ? 'Ko\'rib chiqish' : run.status === 'REVIEWED' ? 'Tasdiqlash' : 'To\'lov qilish',
+        onExecute: () => {
+          if (run.status === 'DRAFT') transition.mutate({ id: run.id, action: 'review' });
+          else if (run.status === 'REVIEWED') transition.mutate({ id: run.id, action: 'approve' });
+          else if (run.status === 'APPROVED') transition.mutate({ id: run.id, action: 'pay' });
+        },
+      },
+    };
+    openSidecar(sidecarData);
+  }, [t, transition]);
+
+  /* Keyboard shortcut 'c' to calculate new */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        playPop();
+        handleOpenCalculate();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playPop]);
+
+  useListKeyboardNavigation<PayrollRun>({
+    items: runs.data?.items ?? [],
+    getItemId: (r) => r.id,
+    rowIdPrefix: 'payroll-row-',
+    onSelect: (r) => { playTick(); handleOpenPayrollSidecar(r); },
+    onQuickLook: (r) => { playTick(); handleOpenPayrollSidecar(r); },
+  });
+
   /* ── Render ────────────────────────────────────────────────────────── */
   return (
     <motion.div
@@ -717,7 +791,7 @@ export function PayrollPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
+          className="liquid-glass-surface relative overflow-hidden rounded-3xl p-6 sm:p-7"
           style={{
             boxShadow:
               'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
@@ -957,126 +1031,131 @@ export function PayrollPage() {
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                      className="flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#34C759]/[0.03]"
+                      className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3.5 transition-colors hover:bg-[#34C759]/[0.03]"
                     >
-                      {/* Avatar */}
-                      <div
-                        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
-                        style={{
-                          background: gradient,
-                          boxShadow:
-                            'inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 12px -4px rgba(0,0,0,0.25)',
-                        }}
-                      >
-                        <span
-                          aria-hidden
-                          className="pointer-events-none absolute inset-0 rounded-full"
+                      {/* Top / Left: Avatar + Employee */}
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div
+                          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
                           style={{
-                            background:
-                              'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)',
+                            background: gradient,
+                            boxShadow:
+                              'inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 12px -4px rgba(0,0,0,0.25)',
                           }}
-                        />
-                        <span className="relative">{initials}</span>
-                      </div>
-
-                      {/* Employee */}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                          {teacherName}
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#86868B]">
-                          <span className="inline-flex items-center gap-1 tabular-nums">
-                            <Icon paths={I.calendar} size={10} strokeWidth={2.2} className="opacity-60" />
-                            {run.periodYear}-{String(run.periodMonth).padStart(2, '0')}
-                          </span>
+                        >
                           <span
-                            className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                            aria-hidden
+                            className="pointer-events-none absolute inset-0 rounded-full"
                             style={{
-                              background: 'rgba(0,0,0,0.04)',
-                              color: '#86868B',
+                              background:
+                                'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)',
                             }}
-                          >
-                            {t(salaryKey)}
-                          </span>
+                          />
+                          <span className="relative">{initials}</span>
+                        </div>
+
+                        {/* Employee */}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                            {teacherName}
+                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-[#86868B]">
+                            <span className="inline-flex items-center gap-1 tabular-nums">
+                              <Icon paths={I.calendar} size={10} strokeWidth={2.2} className="opacity-60" />
+                              {run.periodYear}-{String(run.periodMonth).padStart(2, '0')}
+                            </span>
+                            <span
+                              className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                              style={{
+                                background: 'rgba(0,0,0,0.04)',
+                                color: '#86868B',
+                              }}
+                            >
+                              {t(salaryKey)}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Gross */}
-                      <div className="hidden flex-col items-end sm:flex">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                          {t('payroll.col.gross')}
-                        </span>
-                        <span className="mt-0.5 text-[12.5px] font-semibold tabular-nums text-[#86868B]">
-                          {formatCurrency(Number(run.grossAmount))}
-                        </span>
-                      </div>
+                      {/* Bottom / Right: Amounts + Status + Actions */}
+                      <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0 shrink-0">
+                        {/* Gross (hidden on mobile, visible on desktop) */}
+                        <div className="hidden flex-col items-end sm:flex">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                            {t('payroll.col.gross')}
+                          </span>
+                          <span className="mt-0.5 text-[12.5px] font-semibold tabular-nums text-[#86868B]">
+                            {formatCurrency(Number(run.grossAmount))}
+                          </span>
+                        </div>
 
-                      {/* Net */}
-                      <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
-                          {t('payroll.col.net')}
-                        </span>
-                        <span className="mt-0.5 text-[15px] font-bold tabular-nums tracking-tight text-[#10B981]">
-                          {formatCurrency(Number(run.netAmount))}
-                        </span>
-                      </div>
+                        {/* Net */}
+                        <div className="flex flex-col items-start sm:items-end">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
+                            {t('payroll.col.net')}
+                          </span>
+                          <span className="mt-0.5 text-[14px] sm:text-[15px] font-bold tabular-nums tracking-tight text-[#10B981]">
+                            {formatCurrency(Number(run.netAmount))}
+                          </span>
+                        </div>
 
-                      {/* Status */}
-                      <StatusBadge status={run.status} label={t(statusKey)} />
+                        {/* Status */}
+                        <StatusBadge status={run.status} label={t(statusKey)} />
 
-                      {/* Actions */}
-                      <div className="flex w-full flex-wrap items-center justify-end gap-1.5 sm:w-auto">
-                        {run.status === 'CALCULATED' && (
-                          <WorkflowButton
-                            tone="orange"
-                            icon={I.play}
-                            label={t('payroll.approveReview')}
-                            disabled={isPending}
-                            onClick={() =>
-                              transition.mutate({ id: run.id, action: 'review' })
-                            }
-                          />
-                        )}
-                        {run.status === 'REVIEWED' && (
-                          <WorkflowButton
-                            tone="blue"
-                            icon={I.check}
-                            label={t('payroll.finalApprove')}
-                            disabled={isPending}
-                            onClick={() =>
-                              transition.mutate({ id: run.id, action: 'approve' })
-                            }
-                          />
-                        )}
-                        {run.status === 'APPROVED' && (
-                          <WorkflowButton
-                            tone="emerald"
-                            icon={I.cash}
-                            label={t('payroll.markPaid')}
-                            disabled={isPending}
-                            onClick={() => transition.mutate({ id: run.id, action: 'pay' })}
-                            primary
-                          />
-                        )}
-                        {!['PAID', 'CANCELLED'].includes(run.status) && (
-                          <motion.button
-                            type="button"
-                            onClick={() => setCancelTarget(run)}
-                            whileHover={{ scale: 1.06 }}
-                            whileTap={{ scale: 0.94 }}
-                            transition={SPRING.snappy}
-                            aria-label={t('common.cancel')}
-                            title={t('common.cancel')}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
-                            style={{
-                              background: 'rgba(255,59,48,0.10)',
-                              color: '#FF3B30',
-                              border: '1px solid rgba(255,59,48,0.2)',
-                            }}
-                          >
-                            <Icon paths={I.ban} size={13} strokeWidth={2} />
-                          </motion.button>
-                        )}
+                        {/* Actions */}
+                        <div className="flex items-center justify-end gap-1.5 shrink-0">
+                          {run.status === 'CALCULATED' && (
+                            <WorkflowButton
+                              tone="orange"
+                              icon={I.play}
+                              label={t('payroll.approveReview')}
+                              disabled={isPending}
+                              onClick={() =>
+                                transition.mutate({ id: run.id, action: 'review' })
+                              }
+                            />
+                          )}
+                          {run.status === 'REVIEWED' && (
+                            <WorkflowButton
+                              tone="blue"
+                              icon={I.check}
+                              label={t('payroll.finalApprove')}
+                              disabled={isPending}
+                              onClick={() =>
+                                transition.mutate({ id: run.id, action: 'approve' })
+                              }
+                            />
+                          )}
+                          {run.status === 'APPROVED' && (
+                            <WorkflowButton
+                              tone="emerald"
+                              icon={I.cash}
+                              label={t('payroll.markPaid')}
+                              disabled={isPending}
+                              onClick={() => transition.mutate({ id: run.id, action: 'pay' })}
+                              primary
+                            />
+                          )}
+                          {!['PAID', 'CANCELLED'].includes(run.status) && (
+                            <motion.button
+                              type="button"
+                              onClick={() => setCancelTarget(run)}
+                              whileHover={{ scale: 1.06 }}
+                              whileTap={{ scale: 0.94 }}
+                              transition={SPRING.snappy}
+                              aria-label={t('common.cancel')}
+                              title={t('common.cancel')}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
+                              style={{
+                                background: 'rgba(255,59,48,0.10)',
+                                color: '#FF3B30',
+                                border: '1px solid rgba(255,59,48,0.2)',
+                              }}
+                            >
+                              <Icon paths={I.ban} size={13} strokeWidth={2} />
+                            </motion.button>
+                          )}
+                        </div>
                       </div>
                     </motion.div>
                   );

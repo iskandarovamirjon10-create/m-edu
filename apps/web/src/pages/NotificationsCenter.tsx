@@ -60,9 +60,11 @@ const rowVariants: Variants = {
  * TYPES
  * ========================================================================== */
 
+type AppKind = 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+
 interface AppNotification {
   id: string;
-  kind: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+  kind: AppKind;
   title: string;
   message: string;
   link?: string;
@@ -70,9 +72,37 @@ interface AppNotification {
   createdAt: string;
 }
 
+// Raw Prisma row returned by GET /notifications: `type` (e.g. "info") and
+// `isRead` — not the page's `kind`/`read` view model.
+interface RawNotification {
+  id?: string;
+  type?: string | null;
+  title?: string | null;
+  message?: string | null;
+  link?: string | null;
+  isRead?: boolean;
+  createdAt?: string;
+}
+
 interface NotificationsListResponse {
-  items: AppNotification[];
-  unread: number;
+  items: RawNotification[];
+  unread?: number;
+}
+
+const APP_KINDS: AppKind[] = ['INFO', 'SUCCESS', 'WARNING', 'ERROR'];
+
+/** Normalize a backend notification row into the page's view model. */
+function mapNotification(raw: RawNotification): AppNotification {
+  const upper = String(raw?.type ?? '').toUpperCase();
+  return {
+    id: String(raw?.id ?? ''),
+    kind: APP_KINDS.includes(upper as AppKind) ? (upper as AppKind) : 'INFO',
+    title: raw?.title ?? '',
+    message: raw?.message ?? '',
+    link: raw?.link ?? undefined,
+    read: Boolean(raw?.isRead),
+    createdAt: raw?.createdAt ?? '',
+  };
 }
 
 type FilterKey = 'ALL' | 'UNREAD' | AppNotification['kind'];
@@ -197,11 +227,11 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'slate';
 
 const TONE: Record<Tone, { fg: string; bg: string; glow: string; ring: string }> = {
-  blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)',  glow: 'rgba(0,122,255,0.28)',  ring: 'rgba(0,122,255,0.22)' },
-  green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',   glow: 'rgba(52,199,89,0.28)',   ring: 'rgba(52,199,89,0.22)' },
-  orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',   glow: 'rgba(255,149,0,0.28)',   ring: 'rgba(255,149,0,0.22)' },
-  red:    { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',   glow: 'rgba(255,59,48,0.28)',   ring: 'rgba(255,59,48,0.22)' },
-  purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)',  glow: 'rgba(175,82,222,0.28)',  ring: 'rgba(175,82,222,0.22)' },
+  blue:   { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)',  glow: 'rgba(37,99,235,0.28)',  ring: 'rgba(37,99,235,0.22)' },
+  green:  { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',   glow: 'rgba(16,185,129,0.28)',   ring: 'rgba(16,185,129,0.22)' },
+  orange: { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',   glow: 'rgba(245,158,11,0.28)',   ring: 'rgba(245,158,11,0.22)' },
+  red:    { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',   glow: 'rgba(239,68,68,0.28)',   ring: 'rgba(239,68,68,0.22)' },
+  purple: { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)',  glow: 'rgba(99,102,241,0.28)',  ring: 'rgba(99,102,241,0.22)' },
   slate:  { fg: '#8E8E93', bg: 'rgba(142,142,147,0.10)', glow: 'rgba(142,142,147,0.28)', ring: 'rgba(142,142,147,0.22)' },
 };
 
@@ -225,6 +255,19 @@ const KIND_BADGE_COLOR: Record<AppNotification['kind'], 'muted' | 'success' | 'w
   WARNING: 'warning',
   ERROR:   'error',
 };
+
+// Defensive accessors: an unexpected/unknown kind must never crash the UI.
+function toneForKind(kind: string): Tone {
+  return KIND_TONE[kind as AppNotification['kind']] ?? 'slate';
+}
+
+function iconForKind(kind: string): string[] {
+  return KIND_ICON[kind as AppNotification['kind']] ?? I.info;
+}
+
+function badgeColorForKind(kind: string): 'muted' | 'success' | 'warning' | 'error' {
+  return KIND_BADGE_COLOR[kind as AppNotification['kind']] ?? 'muted';
+}
 
 /* ============================================================================
  * HELPERS
@@ -320,50 +363,9 @@ function NotificationsHero({ unread, total, t }: { unread: number; total: number
   return (
     <GlassCard className="overflow-hidden p-6 sm:p-7" interactive>
       <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
-        {/* Animated bell with conic ring */}
-        <div className="relative" style={{ width: 88, height: 88 }}>
-          <motion.div
-            className="absolute inset-[-4px] rounded-full p-[3px]"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 14, repeat: Infinity, ease: 'linear' }}
-          >
-            <span
-              className="absolute inset-0 rounded-full"
-              style={{
-                background: hasUnread
-                  ? 'conic-gradient(from 0deg, #FF3B30, #FF9500, #FF2D55, #AF52DE, #FF3B30)'
-                  : 'conic-gradient(from 0deg, #007AFF, #5856D6, #32ADE6, #007AFF)',
-              }}
-              aria-hidden
-            />
-          </motion.div>
-
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={SPRING.smooth}
-            className="relative flex h-full w-full items-center justify-center rounded-full text-white ring-2 ring-white/70 dark:ring-black/50"
-            style={{
-              background: hasUnread
-                ? 'linear-gradient(135deg, #FF3B30 0%, #FF9500 100%)'
-                : 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
-              boxShadow:
-                '0 12px 32px -8px rgba(0,0,0,0.3), ' +
-                'inset 0 2px 0 rgba(255,255,255,0.4)',
-            }}
-          >
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 rounded-full"
-              style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)' }}
-            />
-            <motion.div
-              animate={hasUnread ? { rotate: [0, -12, 12, -8, 8, 0] } : {}}
-              transition={{ duration: 0.9, repeat: Infinity, repeatDelay: 3 }}
-            >
-              <Icon paths={I.bell} size={34} strokeWidth={2} className="relative" />
-            </motion.div>
-          </motion.div>
+        {/* Hero bell icon */}
+        <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10 sm:h-20 sm:w-20">
+          <Icon paths={I.bell} size={32} strokeWidth={2} className="relative z-10" />
 
           {/* Unread badge */}
           <AnimatePresence>
@@ -373,11 +375,7 @@ function NotificationsHero({ unread, total, t }: { unread: number; total: number
                 animate={{ scale: 1 }}
                 exit={{ scale: 0 }}
                 transition={{ ...SPRING.snappy, delay: 0.2 }}
-                className="absolute -right-1 -top-1 flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] font-bold text-white ring-4 ring-white dark:ring-[#1c1c1e]"
-                style={{
-                  background: '#FF3B30',
-                  boxShadow: '0 4px 12px -2px rgba(255,59,48,0.6)',
-                }}
+                className="absolute -right-1.5 -top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white ring-2 ring-white shadow-sm dark:ring-[#121623]"
               >
                 {unread > 99 ? '99+' : unread}
               </motion.span>
@@ -392,7 +390,7 @@ function NotificationsHero({ unread, total, t }: { unread: number; total: number
               <span className="inline-flex items-center gap-1">
                 <span
                   className="h-1.5 w-1.5 rounded-full"
-                  style={{ background: hasUnread ? '#FF3B30' : '#34C759' }}
+                  style={{ background: hasUnread ? '#EF4444' : '#10B981' }}
                 />
                 {hasUnread ? (t('notifications.actionNeeded') || 'Action needed') : (t('notifications.allCaughtUp') || 'All caught up')}
               </span>
@@ -408,7 +406,7 @@ function NotificationsHero({ unread, total, t }: { unread: number; total: number
           </div>
 
           <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
-            {/* i18n title */}
+            {t('notifications.title')}
           </h1>
         </div>
       </div>
@@ -435,7 +433,7 @@ function StatTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] px-4 py-3 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       style={{
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
       }}
@@ -460,7 +458,7 @@ function StatTile({
         <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
           {typeof value === 'number' ? <CountUp value={value} /> : value}
         </div>
-        <div className="mt-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B] truncate">
+        <div className="mt-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B] truncate">
           {label}
         </div>
       </div>
@@ -482,7 +480,7 @@ function SegmentedFilter({
 }) {
   return (
     <div
-      className="inline-flex flex-wrap gap-1 rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-1 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="inline-flex flex-wrap gap-1 rounded-2xl border border-black/[0.04] bg-black/[0.04] p-1 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.06]"
       style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)' }}
     >
       {options.map((opt) => {
@@ -500,7 +498,7 @@ function SegmentedFilter({
             transition={SPRING.snappy}
             className="relative flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold outline-none transition-colors"
             style={{
-              color: active ? c.fg : '#86868B',
+              color: active ? c.fg : '#64748B',
               background: active ? c.bg : 'transparent',
               boxShadow: active ? `inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 8px -4px ${c.glow}` : undefined,
             }}
@@ -512,7 +510,7 @@ function SegmentedFilter({
                 className="ml-0.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold tabular-nums"
                 style={{
                   background: active ? `${c.fg}25` : 'rgba(142,142,147,0.15)',
-                  color: active ? c.fg : '#86868B',
+                  color: active ? c.fg : '#64748B',
                 }}
               >
                 {count}
@@ -545,23 +543,23 @@ function SourcesCard({ t }: { t: (k: string) => string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 border-b border-[#00000008] px-5 py-4 text-left outline-none dark:border-[#ffffff08]"
+        className="flex w-full items-center gap-3 border-b border-black/[0.06] px-5 py-4 text-left outline-none dark:border-white/[0.08]"
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#AF52DE]/10 text-[#AF52DE]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#6366F1]/10 text-[#6366F1]">
           <Icon paths={I.sparkles} size={15} strokeWidth={2} />
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
             {t('notifications.sourcesTitle')}
           </h3>
-          <p className="text-[11px] font-medium text-[#86868B]">
+          <p className="text-[11px] font-medium text-[#64748B]">
             {t('notifications.sourcesSubtitle') || 'Where these notifications come from'}
           </p>
         </div>
         <motion.div
           animate={{ rotate: open ? 180 : 0 }}
           transition={SPRING.snappy}
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#00000005] text-[#86868B] dark:bg-[#ffffff08]"
+          className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#00000005] text-[#64748B] dark:bg-[#ffffff08]"
         >
           <Icon paths={['M6 9l6 6 6-6']} size={14} strokeWidth={2.2} />
         </motion.div>
@@ -585,7 +583,7 @@ function SourcesCard({ t }: { t: (k: string) => string }) {
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
-                    className="flex items-start gap-2.5 rounded-xl border border-[#00000008] bg-[#00000002] px-3 py-2.5 dark:border-[#ffffff08] dark:bg-[#ffffff04]"
+                    className="flex items-start gap-2.5 rounded-xl border border-black/[0.04] bg-black/[0.02] px-3 py-2.5 dark:border-white/[0.06] dark:bg-white/[0.04]"
                   >
                     <div
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
@@ -597,7 +595,7 @@ function SourcesCard({ t }: { t: (k: string) => string }) {
                       <p className="text-[12.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                         {t(src.titleKey)}
                       </p>
-                      <p className="mt-0.5 text-[11px] font-medium leading-snug text-[#86868B]">
+                      <p className="mt-0.5 text-[11px] font-medium leading-snug text-[#64748B]">
                         {t(src.descKey)}
                       </p>
                     </div>
@@ -624,9 +622,9 @@ function NotificationRow({
   isMarkingRead: boolean;
   t: TranslateFn;
 }) {
-  const tone = KIND_TONE[n.kind];
+  const tone = toneForKind(n.kind);
   const c = TONE[tone];
-  const icon = KIND_ICON[n.kind];
+  const icon = iconForKind(n.kind);
 
   return (
     <motion.li
@@ -637,7 +635,7 @@ function NotificationRow({
       exit="exit"
       className={[
         'group relative flex items-start gap-3 px-4 py-4 transition-colors',
-        !n.read ? 'bg-[#007AFF]/[0.03] dark:bg-[#007AFF]/[0.06]' : '',
+        !n.read ? 'bg-[#2563EB]/[0.03] dark:bg-[#2563EB]/[0.06]' : '',
       ].join(' ')}
     >
       {/* Unread left accent bar */}
@@ -667,7 +665,7 @@ function NotificationRow({
         <Icon paths={icon} size={16} strokeWidth={2.2} />
         {!n.read && (
           <span
-            className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-[#1c1c1e]"
+            className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-[#131622]"
             style={{ background: c.fg }}
           />
         )}
@@ -676,7 +674,7 @@ function NotificationRow({
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <GlassBadge color={KIND_BADGE_COLOR[n.kind]}>{n.kind}</GlassBadge>
+          <GlassBadge color={badgeColorForKind(n.kind)}>{n.kind}</GlassBadge>
           {!n.read && (
             <span
               className="text-[10px] font-bold uppercase tracking-wider"
@@ -690,11 +688,11 @@ function NotificationRow({
         <h4 className="mt-1.5 text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
           {n.title}
         </h4>
-        <p className="mt-0.5 text-[12.5px] font-medium leading-snug text-[#86868B]">
+        <p className="mt-0.5 text-[12.5px] font-medium leading-snug text-[#64748B]">
           {n.message}
         </p>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] font-medium text-[#86868B]">
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] font-medium text-[#64748B]">
           <span className="inline-flex items-center gap-1" title={formatFullTime(n.createdAt)}>
             <Icon paths={I.clock} size={11} strokeWidth={2} className="opacity-70" />
             {formatRelativeTime(n.createdAt, t)}
@@ -704,7 +702,7 @@ function NotificationRow({
               <span className="opacity-40">·</span>
               <a
                 href={n.link}
-                className="inline-flex items-center gap-1 font-semibold text-[#007AFF] hover:underline"
+                className="inline-flex items-center gap-1 font-semibold text-[#2563EB] hover:underline"
               >
                 {t('notifications.open')}
                 <Icon paths={I.externalLink} size={11} strokeWidth={2.2} />
@@ -728,9 +726,9 @@ function NotificationRow({
             title={t('notifications.markRead')}
             className="flex h-8 w-8 items-center justify-center rounded-lg outline-none disabled:opacity-50"
             style={{
-              background: 'rgba(0,122,255,0.10)',
-              color: '#007AFF',
-              border: '1px solid rgba(0,122,255,0.22)',
+              background: 'rgba(37,99,235,0.10)',
+              color: '#2563EB',
+              border: '1px solid rgba(37,99,235,0.22)',
             }}
           >
             {isMarkingRead ? (
@@ -784,10 +782,10 @@ export function NotificationsCenterPage() {
     onError: (e) => push('error', getErrorMessage(e)),
   });
 
-  const items = useMemo(
-    () => (listQuery.data as NotificationsListResponse | undefined)?.items ?? [],
-    [listQuery.data],
-  );
+  const items = useMemo<AppNotification[]>(() => {
+    const raw = (listQuery.data as NotificationsListResponse | undefined)?.items;
+    return Array.isArray(raw) ? raw.map(mapNotification) : [];
+  }, [listQuery.data]);
   const unread = (listQuery.data as NotificationsListResponse | undefined)?.unread ?? 0;
 
   const counts = useMemo<Record<FilterKey, number>>(() => {
@@ -796,7 +794,9 @@ export function NotificationsCenterPage() {
       UNREAD: items.filter((n) => !n.read).length,
       INFO: 0, SUCCESS: 0, WARNING: 0, ERROR: 0,
     };
-    for (const n of items) base[n.kind]++;
+    for (const n of items) {
+      if (base[n.kind] !== undefined) base[n.kind] += 1;
+    }
     return base;
   }, [items]);
 
@@ -911,15 +911,15 @@ export function NotificationsCenterPage() {
         {/* LIST */}
         <motion.div variants={cardVariants}>
           <GlassCard className="overflow-hidden p-0" interactive>
-            <div className="flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
+            <div className="flex items-center gap-3 border-b border-black/[0.06] px-5 py-4 dark:border-white/[0.08]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#2563EB]/10 text-[#2563EB]">
                 <Icon paths={I.inbox} size={15} strokeWidth={2} />
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {t('notifications.title')}
                 </h2>
-                <p className="text-[11px] font-medium text-[#86868B]">
+                <p className="text-[11px] font-medium text-[#64748B]">
                   {filtered.length} {filtered.length === 1 ? 'item' : 'items'}
                 </p>
               </div>
@@ -947,14 +947,14 @@ export function NotificationsCenterPage() {
               </div>
             ) : filtered.length === 0 ? (
               <div className="p-8">
-                <div className="rounded-2xl border border-dashed border-[#00000015] p-6 text-center dark:border-[#ffffff15]">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#007AFF]/10 text-[#007AFF]">
+                <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center dark:border-[#ffffff15]">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2563EB]/10 text-[#2563EB]">
                     <Icon paths={I.filter} size={20} strokeWidth={2} />
                   </div>
                   <p className="mt-3 text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
                     {t('notifications.noMatch')}
                   </p>
-                  <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#86868B]">
+                  <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#64748B]">
                     {t('notifications.noMatchHint')}
                   </p>
                   <div className="mt-4 flex justify-center">
@@ -965,7 +965,7 @@ export function NotificationsCenterPage() {
                 </div>
               </div>
             ) : (
-              <ul className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+              <ul className="divide-y divide-slate-200/80 dark:divide-slate-800 dark:divide-[#ffffff08]">
                 <AnimatePresence initial={false} mode="popLayout">
                   {filtered.map((n) => (
                     <NotificationRow

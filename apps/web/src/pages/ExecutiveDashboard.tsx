@@ -22,7 +22,7 @@ import { analyticsApi } from '@/lib/api';
 import { GlassErrorState } from '@/components/ui';
 import { formatCurrency } from '@/lib/format';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '../i18n/I18nProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -190,13 +190,13 @@ function Icon({
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald' | 'amber' | 'rose';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
+  blue:    { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)', border: 'rgba(37,99,235,0.20)' },
+  green:   { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)',  border: 'rgba(16,185,129,0.20)' },
+  orange:  { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)',  border: 'rgba(245,158,11,0.20)' },
+  red:     { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)' },
+  purple:  { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)' },
+  cyan:    { fg: '#0284C7', bg: 'rgba(2,132,199,0.10)', glow: 'rgba(2,132,199,0.28)', border: 'rgba(2,132,199,0.20)' },
+  gray:    { fg: '#64748B', bg: 'rgba(100,116,139,0.10)', glow: 'rgba(100,116,139,0.22)', border: 'rgba(100,116,139,0.20)' },
   emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
   amber:   { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)', glow: 'rgba(245,158,11,0.28)', border: 'rgba(245,158,11,0.20)' },
   rose:    { fg: '#F43F5E', bg: 'rgba(244,63,94,0.10)',  glow: 'rgba(244,63,94,0.28)',  border: 'rgba(244,63,94,0.20)' },
@@ -215,28 +215,8 @@ const SEVERITY_TONE: Record<string, Tone> = {
  * PREMIUM SUB-COMPONENTS
  * ========================================================================== */
 
-/** Ambient gradient orbs — consistent with suite */
 function AmbientOrbs() {
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <motion.div
-        className="absolute -left-[8%] top-[6%] h-[44%] w-[40%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(0,122,255,0.14), transparent 70%)',
-          }}
-        animate={{ x: [0, 24, 0], y: [0, 18, 0], opacity: [0.85, 1, 0.85] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute -bottom-[10%] -right-[8%] h-[46%] w-[42%] rounded-full"
-        style={{
-          background: 'radial-gradient(closest-side, rgba(175,82,222,0.12), transparent 70%)',
-          }}
-        animate={{ x: [0, -28, 0], y: [0, -22, 0], opacity: [0.8, 1, 0.8] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </div>
-  );
+  return null;
 }
 
 function CountUp({
@@ -343,7 +323,7 @@ function KpiTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.smooth}
-      className="group relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
+      className="group relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
       style={{
         boxShadow:
           'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
@@ -366,7 +346,7 @@ function KpiTile({
         >
           <Icon paths={icon} size={16} strokeWidth={2.2} />
         </div>
-        <p className="truncate text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+        <p className="truncate text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
           {label}
         </p>
       </div>
@@ -428,11 +408,7 @@ function RevenueExpenseChart({
   return (
     <motion.div
       variants={cardVariants}
-      className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-      }}
+      className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
       <span
         aria-hidden
@@ -444,7 +420,7 @@ function RevenueExpenseChart({
 
       <div className="relative mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#2563EB]/10 text-[#2563EB]">
             <Icon paths={I.chart} size={15} strokeWidth={2.2} />
           </div>
           <h3 className="text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -476,7 +452,7 @@ function RevenueExpenseChart({
               y1={toY(tick)}
               x2={w - pad.right}
               y2={toY(tick)}
-              stroke="rgba(134,134,139,0.14)"
+              stroke="rgba(100,116,139,0.14)"
               strokeDasharray="3 4"
               strokeWidth="0.5"
             />
@@ -486,7 +462,7 @@ function RevenueExpenseChart({
               textAnchor="end"
               fontSize="10"
               fontWeight="600"
-              fill="#86868B"
+              fill="#64748B"
             >
               {formatCurrency(tick)}
             </text>
@@ -501,7 +477,7 @@ function RevenueExpenseChart({
               y1={pad.top + chartH}
               x2={toX(i)}
               y2={pad.top + chartH + 4}
-              stroke="#86868B"
+              stroke="#64748B"
               strokeWidth="1"
             />
             <text
@@ -510,7 +486,7 @@ function RevenueExpenseChart({
               textAnchor="middle"
               fontSize="10"
               fontWeight="600"
-              fill="#86868B"
+              fill="#64748B"
             >
               {d.month}
             </text>
@@ -592,7 +568,7 @@ function RevenueExpenseChart({
               y1={pad.top}
               x2={toX(hoverIdx)}
               y2={pad.top + chartH}
-              stroke="#86868B"
+              stroke="#64748B"
               strokeWidth="1"
               strokeDasharray="4 4"
               opacity="0.6"
@@ -614,7 +590,7 @@ function RevenueExpenseChart({
             <text x={toX(hoverIdx)} y={pad.top + 22} textAnchor="middle" fontSize="10" fill="#f43f5e" fontWeight="700">
               {t('executive.exp')} {formatCurrency(data[hoverIdx].expenses)}
             </text>
-            <text x={toX(hoverIdx)} y={pad.top + 38} textAnchor="middle" fontSize="10" fill="#86868B" fontWeight="600">
+            <text x={toX(hoverIdx)} y={pad.top + 38} textAnchor="middle" fontSize="10" fill="#64748B" fontWeight="600">
               {data[hoverIdx].month}
             </text>
           </g>
@@ -622,7 +598,7 @@ function RevenueExpenseChart({
       </svg>
 
       {/* Legend */}
-      <div className="relative mt-3 flex items-center gap-6 text-[11.5px] font-semibold text-[#86868B]">
+      <div className="relative mt-3 flex items-center gap-6 text-[11.5px] font-semibold text-[#64748B]">
         <span className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" style={{ boxShadow: '0 0 8px rgba(16,185,129,0.6)' }} />
           {t('executive.revenue')}
@@ -652,11 +628,7 @@ function MetricCard({
       variants={cardVariants}
       whileHover={{ y: -2 }}
       transition={SPRING.smooth}
-      className="group relative overflow-hidden rounded-2xl border border-[#ffffff60] bg-[#ffffff80] p-4 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="group relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
     >
       <span
         aria-hidden
@@ -676,7 +648,7 @@ function MetricCard({
           <Icon paths={icon} size={18} strokeWidth={2} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+          <p className="truncate text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
             {label}
           </p>
           <p className="mt-0.5 text-[20px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
@@ -685,7 +657,7 @@ function MetricCard({
         </div>
       </div>
       {sub && (
-        <p className="relative mt-2 text-[11px] font-medium text-[#86868B]">
+        <p className="relative mt-2 text-[11px] font-medium text-[#64748B]">
           {sub}
         </p>
       )}
@@ -739,7 +711,7 @@ export function ExecutiveDashboardPage() {
   if (isLoading) {
     return (
       <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
+        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80" />
         <ExecutiveSkeleton />
       </div>
     );
@@ -764,8 +736,8 @@ export function ExecutiveDashboardPage() {
   if (!data) {
     return (
       <div className="page-container space-y-5">
-        <div className="rounded-3xl border border-dashed border-[#00000015] bg-[#ffffff80] p-12 text-center backdrop-blur-xl dark:border-[#ffffff15] dark:bg-[#1c1c1e80]">
-          <p className="text-[13.5px] font-medium text-[#86868B]">{t('executive.empty')}</p>
+        <div className="rounded-2xl border border-dashed border-black/15 bg-white/80 p-12 text-center backdrop-blur-xl dark:border-white/15 dark:bg-surface-900/80 shadow-card">
+          <p className="text-[13.5px] font-medium text-[var(--text-secondary)]">{t('executive.empty')}</p>
         </div>
       </div>
     );
@@ -786,12 +758,9 @@ export function ExecutiveDashboardPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-6 backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80] sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-7"
         >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
           <span
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-0 h-24"
@@ -806,9 +775,9 @@ export function ExecutiveDashboardPage() {
               transition={SPRING.smooth}
               className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
               style={{
-                background: 'linear-gradient(135deg, #007AFF 0%, #AF52DE 100%)',
+                background: 'linear-gradient(135deg, #2563EB 0%, #6366F1 100%)',
                 boxShadow:
-                  '0 12px 28px -10px rgba(0,122,255,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
+                  '0 12px 28px -10px rgba(37,99,235,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
               }}
             >
               <span
@@ -823,25 +792,25 @@ export function ExecutiveDashboardPage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   {t('executive.title')}
                 </span>
                 {data.topAlerts.length > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF9500]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#FF9500]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F59E0B]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#F59E0B]">
                     <span className="relative flex h-1.5 w-1.5">
                       <motion.span
-                        className="absolute inset-0 rounded-full bg-[#FF9500]"
+                        className="absolute inset-0 rounded-full bg-[#F59E0B]"
                         animate={{ scale: [1, 2.4, 1], opacity: [0.6, 0, 0.6] }}
                         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
                       />
-                      <span className="relative h-1.5 w-1.5 rounded-full bg-[#FF9500]" />
+                      <span className="relative h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
                     </span>
                     {data.topAlerts.length} alerts
                   </span>
                 )}
                 {data.branchComparison && data.branchComparison.length > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#AF52DE]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#6366F1]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#6366F1]">
                     <Icon paths={I.building} size={11} strokeWidth={2.5} />
                     {data.branchComparison.length} branches
                   </span>
@@ -851,7 +820,7 @@ export function ExecutiveDashboardPage() {
               <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('executive.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {t('executive.subtitle')}
               </p>
             </div>
@@ -867,9 +836,9 @@ export function ExecutiveDashboardPage() {
               title="Refresh"
               className="flex h-10 w-10 items-center justify-center rounded-xl outline-none disabled:opacity-60"
               style={{
-                background: 'rgba(0,122,255,0.10)',
-                color: '#007AFF',
-                border: '1px solid rgba(0,122,255,0.2)',
+                background: 'rgba(37,99,235,0.10)',
+                color: '#2563EB',
+                border: '1px solid rgba(37,99,235,0.2)',
               }}
               role="button"
               tabIndex={0}
@@ -991,26 +960,14 @@ export function ExecutiveDashboardPage() {
       {data.topAlerts.length > 0 && (
         <motion.div
           variants={cardVariants}
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
         >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-16 rounded-t-3xl"
-            style={{
-              background: 'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-            }}
-          />
-
           <div className="relative mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FF9500]/10 text-[#FF9500]">
                 <Icon paths={I.bell} size={15} strokeWidth={2.2} />
               </div>
-              <h3 className="text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+              <h3 className="text-[13px] font-semibold tracking-tight text-[var(--text-primary)]">
                 {t('executive.topAlerts')}
               </h3>
             </div>
@@ -1027,14 +984,14 @@ export function ExecutiveDashboardPage() {
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
-                className="flex items-start gap-3 rounded-2xl border border-[#00000008] bg-[#00000002] px-4 py-3 dark:border-[#ffffff08] dark:bg-[#ffffff04]"
+                className="flex items-start gap-3 rounded-xl border border-black/[0.05] bg-black/[0.02] px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.03]"
               >
                 <SeverityBadge severity={alert.severity} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  <p className="truncate text-[13px] font-semibold tracking-tight text-[var(--text-primary)]">
                     {alert.message}
                   </p>
-                  <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-[#86868B]">
+                  <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">
                     {alert.type}
                   </p>
                 </div>
@@ -1050,46 +1007,34 @@ export function ExecutiveDashboardPage() {
       {data.branchComparison && data.branchComparison.length > 0 && (
         <motion.div
           variants={cardVariants}
-          className="relative overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] p-5 backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
+          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
         >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-16 rounded-t-3xl"
-            style={{
-              background: 'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-            }}
-          />
-
           <div className="relative mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#AF52DE]/10 text-[#AF52DE]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
                 <Icon paths={I.building} size={15} strokeWidth={2.2} />
               </div>
-              <h3 className="text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+              <h3 className="text-[13px] font-semibold tracking-tight text-[var(--text-primary)]">
                 {t('executive.branchComparison')}
               </h3>
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-2xl border border-[#00000008] dark:border-[#ffffff08]">
+          <div className="relative overflow-hidden rounded-xl border border-black/[0.05] dark:border-white/[0.06]">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="border-b border-[#00000008] dark:border-[#ffffff08]">
-                    <th className="px-4 py-3 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                  <tr className="border-b border-black/[0.05] dark:border-white/[0.05]">
+                    <th className="px-4 py-3 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                       {t('executive.branch')}
                     </th>
-                    <th className="px-4 py-3 text-right text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                    <th className="px-4 py-3 text-right text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                       {t('executive.revenue')}
                     </th>
-                    <th className="px-4 py-3 text-right text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                    <th className="px-4 py-3 text-right text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                       {t('executive.students')}
                     </th>
-                    <th className="px-4 py-3 text-right text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+                    <th className="px-4 py-3 text-right text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                       {t('executive.attendanceRate')}
                     </th>
                   </tr>
@@ -1101,7 +1046,7 @@ export function ExecutiveDashboardPage() {
                       initial={{ opacity: 0, x: -6 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                      className="border-b border-[#00000008] transition-colors hover:bg-[#007AFF]/[0.03] last:border-0 dark:border-[#ffffff08]"
+                      className="border-b border-slate-200/80 dark:border-slate-800 transition-colors hover:bg-[#2563EB]/[0.03] last:border-0 dark:border-[#ffffff08]"
                     >
                       <td className="px-4 py-3 text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                         {branch.name}

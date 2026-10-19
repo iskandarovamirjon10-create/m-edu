@@ -85,6 +85,21 @@ describe('NetworkSecurity — CIDR matching regression', () => {
     await expect(sec.validateHost('169.254.169.254')).rejects.toThrow(/Private/);
   });
 
+  it('blocks cloud metadata IP 169.254.169.254 even when allowPrivateIps=true (M-EDU-CAM-002)', async () => {
+    const sec = new NetworkSecurity({ allowPrivateIps: true, allowLoopback: false });
+    await expect(sec.validateHost('169.254.169.254')).rejects.toThrow(/cloud metadata/);
+  });
+
+  it('blocks IPv6 link-local fe80::1 even when allowPrivateIps=true (M-EDU-CAM-002)', async () => {
+    const sec = new NetworkSecurity({ allowPrivateIps: true, allowLoopback: false });
+    await expect(sec.validateHost('fe80::1')).rejects.toThrow(/cloud metadata/);
+  });
+
+  it('blocks multicast 224.0.0.1 even when allowPrivateIps=true', async () => {
+    const sec = new NetworkSecurity({ allowPrivateIps: true, allowLoopback: false });
+    await expect(sec.validateHost('224.0.0.1')).rejects.toThrow(/cloud metadata/);
+  });
+
   it('blocks IPv6 loopback ::1 when allowLoopback=false', async () => {
     const sec = new NetworkSecurity({ allowPrivateIps: true, allowLoopback: false });
     await expect(sec.validateHost('::1')).rejects.toThrow(/Loopback|not allowed/);

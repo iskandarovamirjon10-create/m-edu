@@ -18,15 +18,13 @@
  * ----------------------------------------------------------
  *  1. NEVER write a raw array as a `queryKey` in a component/page.
  *     Import `queryKeys` from `@/lib/query-keys.factory` instead.
- *  2. A namespace's `.all()` returns the ROOT prefix. Invalidating it also
- *     invalidates every child key (`list`, `detail`, …) — but NOT sibling
- *     namespaces whose first element differs (e.g. `students-selector`).
- *  3. Selector keys are their own namespace (`students.selector()` →
- *     `['students-selector']`) precisely because they do not live under
- *     `['students']`.
- *  4. Detail keys root at the singular resource (`student.detail(id)` →
- *     `['student', id]`) so `.details()` → `['student']` invalidates all of
- *     them at once.
+ *  2. A namespace's `.all()` returns the ROOT prefix (e.g. `['students']`).
+ *     Invalidating it also automatically invalidates every child key (`list`,
+ *     `selectors`, `details`, `faces`, …) by TanStack Query's prefix matching.
+ *  3. Child keys are structured hierarchically (e.g. `['students', 'selectors']`)
+ *     so that mutations to a resource cascade down to all pickers and views.
+ *  4. Detail keys root under the resource (`students.detail(id)` →
+ *     `['students', 'detail', id]`) so `.all()` invalidates all of them at once.
  *
  * Adding a key: extend the matching namespace, never inline an array.
  */
@@ -43,24 +41,24 @@ export const queryKeys = {
     /** Root prefix `['students']` — invalidates list + every param variant. */
     all: (): QueryKey => ['students'],
     list: (params?: ListParams): QueryKey => ['students', params],
-    /** Student picker/selector, `['students-selector']`. */
-    selectors: (): QueryKey => ['students-selector'],
-    selector: (params?: ListParams): QueryKey => ['students-selector', params],
-    /** Singular root `['student']` — invalidates all detail entries. */
-    details: (): QueryKey => ['student'],
-    detail: (id: string): QueryKey => ['student', id],
+    /** Student picker/selector, `['students', 'selectors']`. */
+    selectors: (): QueryKey => ['students', 'selectors'],
+    selector: (params?: ListParams): QueryKey => ['students', 'selectors', params],
+    /** Singular root `['students', 'detail']` — invalidates all detail entries. */
+    details: (): QueryKey => ['students', 'detail'],
+    detail: (id: string): QueryKey => ['students', 'detail', id],
     /** Parents list for student detail screen. */
-    parents: (id: string): QueryKey => ['student-parents', id],
+    parents: (id: string): QueryKey => ['students', 'parents', id],
     /** Enrolled-faces picker used by the face-enrollment screen. */
-    faces: (): QueryKey => ['students-face'],
+    faces: (): QueryKey => ['students', 'faces'],
   },
 
   /* ── Teachers ─────────────────────────────────────────────────────────── */
   teachers: {
     all: (): QueryKey => ['teachers'],
     list: (params?: ListParams): QueryKey => ['teachers', params],
-    selectors: (): QueryKey => ['teachers-selector'],
-    selector: (params?: ListParams): QueryKey => ['teachers-selector', params],
+    selectors: (): QueryKey => ['teachers', 'selectors'],
+    selector: (params?: ListParams): QueryKey => ['teachers', 'selectors', params],
   },
 
   /* ── Groups ───────────────────────────────────────────────────────────── */
@@ -69,11 +67,11 @@ export const queryKeys = {
     /** Paginated list uses discrete page/search segments for readable devtools. */
     paged: (page: number, search?: string): QueryKey => ['groups', page, search],
     list: (params?: ListParams): QueryKey => ['groups', params],
-    selectors: (): QueryKey => ['groups-selector'],
-    selector: (params?: ListParams): QueryKey => ['groups-selector', params],
-    details: (): QueryKey => ['group'],
-    detail: (id: string): QueryKey => ['group', id],
-    homework: (): QueryKey => ['groups-homework'],
+    selectors: (): QueryKey => ['groups', 'selectors'],
+    selector: (params?: ListParams): QueryKey => ['groups', 'selectors', params],
+    details: (): QueryKey => ['groups', 'detail'],
+    detail: (id: string): QueryKey => ['groups', 'detail', id],
+    homework: (): QueryKey => ['groups', 'homework'],
   },
 
   /* ── Courses ──────────────────────────────────────────────────────────── */
@@ -81,8 +79,8 @@ export const queryKeys = {
     all: (): QueryKey => ['courses'],
     paged: (page: number, search?: string): QueryKey => ['courses', page, search],
     list: (params?: ListParams): QueryKey => ['courses', params],
-    selectors: (): QueryKey => ['courses-selector'],
-    selector: (params?: ListParams): QueryKey => ['courses-selector', params],
+    selectors: (): QueryKey => ['courses', 'selectors'],
+    selector: (params?: ListParams): QueryKey => ['courses', 'selectors', params],
   },
 
   /* ── Dashboard ────────────────────────────────────────────────────────── */
@@ -210,10 +208,10 @@ export const queryKeys = {
   /* ── Operations ───────────────────────────────────────────────────────── */
   face: {
     all: (): QueryKey => ['face'],
-    engine: (): QueryKey => ['face-engine'],
-    history: (params?: ListParams): QueryKey => ['face-history', params],
-    enrollments: (params?: ListParams): QueryKey => ['face-enrollments', params],
-    studentEnrollments: (id?: string): QueryKey => ['face-student-enrollments', id],
+    engine: (): QueryKey => ['face', 'engine'],
+    history: (params?: ListParams): QueryKey => ['face', 'history', params],
+    enrollments: (params?: ListParams): QueryKey => ['face', 'enrollments', params],
+    studentEnrollments: (id?: string): QueryKey => ['face', 'student-enrollments', id],
   },
   cameras: {
     all: (): QueryKey => ['cameras'],

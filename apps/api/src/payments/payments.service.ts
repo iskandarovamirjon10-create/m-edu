@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FinancialPeriodService } from '../analytics/financial-period.service';
@@ -34,10 +35,13 @@ export class PaymentsService {
               OR: [
                 { firstName: { contains: query.search, mode: 'insensitive' } },
                 { lastName: { contains: query.search, mode: 'insensitive' } },
+                { email: { contains: query.search, mode: 'insensitive' } },
+                { phone: { contains: query.search, mode: 'insensitive' } },
               ],
             },
           },
         },
+        { student: { parentPhone: { contains: query.search, mode: 'insensitive' } } },
       ];
     }
 
@@ -84,8 +88,20 @@ export class PaymentsService {
     });
     if (!student) throw new NotFoundException('Student not found');
 
-    const reference = data.reference || 
-      `idemp-${data.studentId}-${data.amount}-${Math.floor(Date.now() / 15000)}`;
+    if (data.reference) {
+      const existing = await this.prisma.payment.findFirst({
+        where: { organizationId, reference: data.reference },
+        include: { student: { include: { user: { select: { firstName: true, lastName: true } } } } },
+      });
+      if (existing) {
+        if (existing.studentId === data.studentId && Number(existing.amount) === Number(data.amount)) {
+          return existing;
+        }
+        throw new ConflictException('A payment with this reference already exists with different parameters');
+      }
+    }
+
+    const reference = data.reference || `PAY-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
     try {
       const created = await this.prisma.payment.create({
@@ -192,17 +208,36 @@ export class PaymentsService {
             }
           }
 
-          const refundAgg = await tx.refund.aggregate({
-            where: { paymentId: id, status: 'PROCESSED' },
+          // TOCTOU guard (M-EDU-FIN-004): check all active/processed refunds before amount or status modification
+          const allRefundsAgg = await tx.refund.aggregate({
+            where: { paymentId: id, status: { in: ['REQUESTED', 'APPROVED', 'PROCESSED'] } },
             _sum: { amount: true },
           });
-          const processedRefundMinor = toMinor(refundAgg._sum.amount ?? 0);
+          const totalRefundsMinor = toMinor(allRefundsAgg._sum.amount ?? 0);
 
           const wasPaid = row.status === 'PAID';
           const willBePaid = newStatus === 'PAID' || (newStatus === undefined && wasPaid);
           const oldAmountMinor = toMinor(row.amount);
           const newAmountMinor =
             data.amount !== undefined ? toMinor(data.amount) : oldAmountMinor;
+
+          if (data.amount !== undefined && newAmountMinor < totalRefundsMinor) {
+            throw new BadRequestException(
+              `Cannot reduce payment amount below active or processed refunds (refunds: ${fromMinor(totalRefundsMinor)})`,
+            );
+          }
+
+          if (newStatus !== undefined && newStatus !== 'PAID' && totalRefundsMinor > 0) {
+            throw new ConflictException(
+              `Cannot change status of payment with active or processed refunds away from PAID`,
+            );
+          }
+
+          const processedRefundAgg = await tx.refund.aggregate({
+            where: { paymentId: id, status: 'PROCESSED' },
+            _sum: { amount: true },
+          });
+          const processedRefundMinor = toMinor(processedRefundAgg._sum.amount ?? 0);
 
           const balanceDeltaMinor = paymentStatusBalanceDeltaMinor({
             wasPaid,

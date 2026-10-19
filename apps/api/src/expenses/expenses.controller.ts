@@ -8,6 +8,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ADMIN_ROLES } from '../auth/authorization.policy';
+import { Idempotent } from '../common/idempotency';
 import type { RequestUser } from '../auth/types';
 
 @ApiTags('Expenses')
@@ -39,6 +40,7 @@ export class ExpensesController {
   }
 
   @Post()
+  @Idempotent({ ttlSeconds: 86400 })
   @Roles(...ADMIN_ROLES)
   @ApiOperation({ summary: 'Create an expense' })
   create(@CurrentUser('organizationId') orgId: string, @Body() dto: CreateExpenseDto) {

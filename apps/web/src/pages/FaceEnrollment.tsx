@@ -15,6 +15,7 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { faceApi, studentsApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
 import {
@@ -34,11 +35,12 @@ import { formatDate } from '@/lib/format';
 import { friendlyFaceError } from '@/lib/faceErrors';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Student, FaceEnrollment, FaceEnrollmentStatus } from '@/lib/types';
-import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n';
 import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { useVoiceFeedback } from '@/hooks/useVoiceFeedback';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -158,22 +160,7 @@ function Icon({
  * ========================================================================== */
 
 function AmbientOrbs() {
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-      <div
-        className="absolute -top-[10%] left-[5%] h-[32rem] w-[32rem] rounded-full blur-[100px]"
-        style={{
-          background: 'radial-gradient(circle, rgba(52,199,89,0.12) 0%, transparent 70%)',
-        }}
-      />
-      <div
-        className="absolute top-[35%] -right-[5%] h-[36rem] w-[36rem] rounded-full blur-[110px]"
-        style={{
-          background: 'radial-gradient(circle, rgba(0,122,255,0.12) 0%, transparent 70%)',
-        }}
-      />
-    </div>
-  );
+  return null;
 }
 
 /* ============================================================================
@@ -187,21 +174,19 @@ const FACE_ENROLLMENT_EN_FALLBACK: Record<string, string> = {
 };
 
 function useT(): (key: string, vars?: Record<string, string | number>) => string {
-  try {
-    const { t } = useI18n();
-    return t;
-  } catch {
-    return (key: string, vars?: Record<string, string | number>) => {
-      const viaEn = translate('en', key, vars);
-      if (viaEn !== key) return viaEn;
-      const template = FACE_ENROLLMENT_EN_FALLBACK[key];
-      if (!template) return key;
-      if (!vars) return template;
-      return template.replace(/\{(\w+)\}/g, (match, name: string) =>
-        name in vars ? String(vars[name]) : match,
-      );
-    };
-  }
+  const { t } = useSafeI18n();
+  return (key: string, vars?: Record<string, string | number>) => {
+    const res = t(key, vars);
+    if (res && res !== key) return res;
+    const viaEn = translate('en', key, vars);
+    if (viaEn !== key) return viaEn;
+    const template = FACE_ENROLLMENT_EN_FALLBACK[key];
+    if (!template) return key;
+    if (!vars) return template;
+    return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+      name in vars ? String(vars[name]) : match,
+    );
+  };
 }
 
 interface EnrollmentFormState {
@@ -239,11 +224,11 @@ function getInitials(name: string) {
 }
 
 const AVATAR_PALETTES = [
-  ['#34C759', '#30D158'],
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#FF9500', '#FF2D55'],
-  ['#32ADE6', '#007AFF'],
+  ['#10B981', '#30D158'],
+  ['#2563EB', '#6366F1'],
+  ['#6366F1', '#FF2D55'],
+  ['#F59E0B', '#FF2D55'],
+  ['#0284C7', '#2563EB'],
 ];
 
 function getAvatarGradient(name: string): string {
@@ -293,7 +278,7 @@ function KpiCard({
       variants={cardVariants}
       whileHover={{ y: -2 }}
       transition={SPRING.smooth}
-      className="relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#1C1C1E]/70"
+      className="relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-[#131622]/70"
     >
       <div
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
@@ -310,11 +295,11 @@ function KpiCard({
         <div className="text-[22px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
           {value}
         </div>
-        <div className="text-[11px] font-bold uppercase tracking-wider text-[#86868B]">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">
           {label}
         </div>
         {secondary && (
-          <div className="text-[11px] font-medium text-[#86868B]/80 truncate">
+          <div className="text-[11px] font-medium text-[#64748B]/80 truncate">
             {secondary}
           </div>
         )}
@@ -333,6 +318,7 @@ export function FaceEnrollmentPage() {
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
   const { playSuccess, playTick, playError } = usePremiumSound();
+  const voice = useVoiceFeedback();
   const haptics = useHaptics();
 
   // Form state
@@ -361,13 +347,16 @@ export function FaceEnrollmentPage() {
     queryKey: queryKeys.students.faces(),
     queryFn: () => studentsApi.list({ limit: 100 }),
     placeholderData: (previousData) => previousData,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const enrollments = useQuery({
     queryKey: queryKeys.face.enrollments(),
     queryFn: () => faceApi.enrollments({ limit: 100 }),
     placeholderData: (previousData) => previousData,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const studentList = useMemo(
@@ -422,6 +411,7 @@ export function FaceEnrollmentPage() {
     onSuccess: () => {
       playSuccess();
       haptics.heavy();
+      voice.speakEnrollmentSuccess();
       setCaptureSucceeded(true);
       push('success', t('faceEnrollment.capturedToast'));
       invalidateFaceQueries();
@@ -456,16 +446,20 @@ export function FaceEnrollmentPage() {
   // Form handlers
   const handleStudentChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const selectedId = e.target.value;
+      const existingPending = enrollmentList.find(
+        (enr) => enr.student?.id === selectedId && enr.status === 'PENDING',
+      );
       setForm((prev) => ({
         ...prev,
-        studentId: e.target.value,
-        enrollmentId: '',
+        studentId: selectedId,
+        enrollmentId: existingPending ? (existingPending.enrollmentId ?? existingPending.id) : '',
       }));
       setFormErrors((prev) => ({ ...prev, studentId: undefined }));
       setCaptureSucceeded(false);
-      enrollmentStartedRef.current = false;
+      enrollmentStartedRef.current = Boolean(existingPending);
     },
-    [],
+    [enrollmentList],
   );
 
   const handleStartEnrollment = useCallback(() => {
@@ -518,6 +512,41 @@ export function FaceEnrollmentPage() {
     void refetchEnrollments();
   }, [refetchEnrollments]);
 
+  const handleOpenEnrollmentSidecar = useCallback((enrollment: FaceEnrollment) => {
+    const studentName = formatStudentName(enrollment.student);
+    const sidecarData: QuickLookData = {
+      id: enrollment.id,
+      type: 'student',
+      title: studentName,
+      subtitle: `${t('face.biometricEnrollment')} · ${formatDate(enrollment.enrolledAt)}`,
+      badge: {
+        text: enrollment.status,
+        tone: enrollment.status === 'ACTIVE' ? 'emerald' : 'rose',
+      },
+      avatar: {
+        text: getInitials(studentName),
+        color: '#10B981',
+      },
+      metrics: [
+        { label: 'O\'quvchi', value: studentName },
+        { label: 'Holati', value: enrollment.status },
+        { label: 'Ro\'yxatdan o\'tgan', value: formatDate(enrollment.enrolledAt) },
+        { label: 'Biometrik ID', value: enrollment.id.slice(0, 8) },
+      ],
+      details: [
+        { label: 'Enrollment ID', value: enrollment.id, copyable: true },
+        { label: 'Talaba ID', value: enrollment.studentId || '—', copyable: true },
+        { label: 'Holati', value: enrollment.status },
+        { label: 'Sana', value: formatDate(enrollment.enrolledAt) },
+      ],
+      primaryAction: enrollment.status === 'ACTIVE' ? {
+        label: t('faceEnrollment.revoke') || 'Bekor qilish',
+        onExecute: () => handleRevoke(enrollment.id),
+      } : undefined,
+    };
+    openSidecar(sidecarData);
+  }, [t, handleRevoke]);
+
   // Filtered enrollments
   const filteredEnrollments = useMemo(() => {
     return enrollmentList.filter((item) => {
@@ -552,7 +581,7 @@ export function FaceEnrollmentPage() {
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div
-          className="relative overflow-hidden rounded-3xl border border-white/60 bg-white/75 p-6 backdrop-blur-2xl shadow-sm dark:border-white/10 dark:bg-[#1C1C1E]/75 sm:p-7"
+          className="liquid-glass-surface relative overflow-hidden rounded-2xl p-6 sm:p-7"
         >
           <span
             aria-hidden
@@ -563,8 +592,8 @@ export function FaceEnrollmentPage() {
             <div
               className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg"
               style={{
-                background: 'linear-gradient(135deg, #34C759 0%, #007AFF 100%)',
-                boxShadow: '0 12px 28px -8px rgba(52,199,89,0.4)',
+                background: 'linear-gradient(135deg, #10B981 0%, #2563EB 100%)',
+                boxShadow: '0 12px 28px -8px rgba(16,185,129,0.4)',
               }}
             >
               <Icon paths={I.faceId} size={30} strokeWidth={2} />
@@ -572,11 +601,11 @@ export function FaceEnrollmentPage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#34C759] dark:text-[#30D158]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#10B981] dark:text-[#30D158]">
                   <Icon paths={I.sparkles} size={12} strokeWidth={2.4} />
                   {t('face.biometricEnrollment')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-black/5 px-2.5 py-1 text-[11px] font-semibold text-[#86868B] dark:bg-white/5">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-black/5 px-2.5 py-1 text-[11px] font-semibold text-[#64748B] dark:bg-white/5">
                   {t('face.appleNeuralBiometrics')}
                 </span>
               </div>
@@ -584,7 +613,7 @@ export function FaceEnrollmentPage() {
               <h1 className="mt-2 text-2xl font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-3xl">
                 {t('faceEnrollment.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
                 {t('faceEnrollment.subtitle')}
               </p>
             </div>
@@ -601,10 +630,10 @@ export function FaceEnrollmentPage() {
           value={stats.total}
           icon={I.users}
           color={{
-            fg: '#007AFF',
-            bg: 'rgba(0,122,255,0.1)',
-            border: 'rgba(0,122,255,0.25)',
-            glow: 'rgba(0,122,255,0.2)',
+            fg: '#2563EB',
+            bg: 'rgba(37,99,235,0.1)',
+            border: 'rgba(37,99,235,0.25)',
+            glow: 'rgba(37,99,235,0.2)',
           }}
         />
         <KpiCard
@@ -612,10 +641,10 @@ export function FaceEnrollmentPage() {
           value={stats.active}
           icon={I.shieldCheck}
           color={{
-            fg: '#34C759',
-            bg: 'rgba(52,199,89,0.1)',
-            border: 'rgba(52,199,89,0.25)',
-            glow: 'rgba(52,199,89,0.2)',
+            fg: '#10B981',
+            bg: 'rgba(16,185,129,0.1)',
+            border: 'rgba(16,185,129,0.25)',
+            glow: 'rgba(16,185,129,0.2)',
           }}
         />
         <KpiCard
@@ -624,10 +653,10 @@ export function FaceEnrollmentPage() {
           secondary={`${stats.active} / ${studentList.length} talaba`}
           icon={I.activity}
           color={{
-            fg: '#AF52DE',
-            bg: 'rgba(175,82,222,0.1)',
-            border: 'rgba(175,82,222,0.25)',
-            glow: 'rgba(175,82,222,0.2)',
+            fg: '#6366F1',
+            bg: 'rgba(99,102,241,0.1)',
+            border: 'rgba(99,102,241,0.25)',
+            glow: 'rgba(99,102,241,0.2)',
           }}
         />
         <KpiCard
@@ -635,10 +664,10 @@ export function FaceEnrollmentPage() {
           value={stats.revoked}
           icon={I.xCircle}
           color={{
-            fg: '#FF3B30',
-            bg: 'rgba(255,59,48,0.1)',
-            border: 'rgba(255,59,48,0.25)',
-            glow: 'rgba(255,59,48,0.2)',
+            fg: '#EF4444',
+            bg: 'rgba(239,68,68,0.1)',
+            border: 'rgba(239,68,68,0.25)',
+            glow: 'rgba(239,68,68,0.2)',
           }}
         />
       </motion.div>
@@ -649,17 +678,17 @@ export function FaceEnrollmentPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* LEFT COLUMN: Biometric Capture Studio */}
         <motion.div variants={cardVariants} className="lg:col-span-6 space-y-4">
-          <div className="overflow-hidden rounded-3xl border border-white/60 bg-white/75 p-6 backdrop-blur-2xl shadow-sm dark:border-white/10 dark:bg-[#1C1C1E]/75">
-            <div className="flex items-center justify-between border-b border-black/[0.06] pb-4 dark:border-white/[0.06]">
+          <div className="overflow-hidden rounded-2xl border border-white/60 bg-white/75 p-6 backdrop-blur-md shadow-sm dark:border-white/10 dark:bg-[#131622]/75">
+            <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-4 dark:border-white/[0.06]">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#34C759]/10 text-[#34C759] dark:text-[#30D158]">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#10B981]/10 text-[#10B981] dark:text-[#30D158]">
                   <Icon paths={I.camera} size={18} strokeWidth={2.2} />
                 </div>
                 <div>
                   <h2 className="text-[15px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
                     {t('faceEnrollment.newEnrollment')}
                   </h2>
-                  <p className="text-[12px] font-medium text-[#86868B]">
+                  <p className="text-[12px] font-medium text-[#64748B]">
                     Yuz ma'lumotlarini yuqori aniqlikda skanerlash va shifrlash
                   </p>
                 </div>
@@ -687,7 +716,7 @@ export function FaceEnrollmentPage() {
                   </GlassSelect>
                 </div>
                 {formErrors.studentId && (
-                  <span id="student-error" className="mt-1.5 block text-[12px] font-semibold text-[#FF3B30]">
+                  <span id="student-error" className="mt-1.5 block text-[12px] font-semibold text-[#EF4444]">
                     {formErrors.studentId}
                   </span>
                 )}
@@ -698,7 +727,7 @@ export function FaceEnrollmentPage() {
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-3 rounded-2xl border border-black/[0.05] bg-black/[0.02] p-3 dark:border-white/[0.06] dark:bg-white/[0.02]"
+                  className="flex items-center gap-3 rounded-2xl border border-black/[0.05] bg-slate-50 dark:bg-slate-900/40 p-3 dark:border-white/[0.06] dark:bg-white/[0.02]"
                 >
                   <div
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold text-white shadow-xs"
@@ -710,7 +739,7 @@ export function FaceEnrollmentPage() {
                     <div className="truncate text-[13.5px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
                       {formatStudentName(selectedStudent)}
                     </div>
-                    <div className="text-[11px] font-semibold text-[#86868B]">
+                    <div className="text-[11px] font-semibold text-[#64748B]">
                       ID: {selectedStudent.id.slice(0, 12)}…
                     </div>
                   </div>
@@ -754,7 +783,7 @@ export function FaceEnrollmentPage() {
               ) : (
                 <div className="space-y-4 pt-1">
                   {/* Active telemetric indicator bar */}
-                  <div className="flex items-center justify-between rounded-2xl border border-[#34C759]/25 bg-[#34C759]/[0.08] px-4 py-2.5">
+                  <div className="flex items-center justify-between rounded-2xl border border-[#10B981]/25 bg-[#10B981]/[0.08] px-4 py-2.5">
                     <GlassBadge color="green">
                       {t('faceEnrollment.inProgress', { id: truncateEnrollmentId(form.enrollmentId) })}
                     </GlassBadge>
@@ -794,7 +823,7 @@ export function FaceEnrollmentPage() {
                           exit={{ opacity: 0, scale: 0.95 }}
                           className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-[2.25rem] bg-black/75 backdrop-blur-md p-6 text-center text-white"
                         >
-                          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#34C759] text-white shadow-xl shadow-[#34C759]/40 mb-3">
+                          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#10B981] text-white shadow-xl shadow-[#10B981]/40 mb-3">
                             <Icon paths={I.checkCircle} size={32} strokeWidth={2.6} />
                           </div>
                           <h3 className="text-[17px] font-bold">Face ID Muvaffaqiyatli Saqlandi!</h3>
@@ -806,13 +835,26 @@ export function FaceEnrollmentPage() {
                     </AnimatePresence>
                   </div>
 
+                  <div className="flex items-center gap-2 rounded-xl bg-brand-500/10 border border-blue-500/20 px-3 py-2 text-[12px] text-brand-600 dark:text-brand-400 font-medium">
+                    <Icon paths={I.sparkles} size={14} className="shrink-0" strokeWidth={2.2} />
+                    <span>Kameraga to'g'ri qarang, yuz yaxshi yoritilgan bo'lsin (50–70 sm masofada).</span>
+                  </div>
+
                   {capture.isError && (
                     <div
-                      className="flex items-start gap-2.5 rounded-2xl border border-[#FF3B30]/30 bg-[#FF3B30]/10 px-4 py-3 text-[12.5px] font-medium leading-5 text-[#FF3B30]"
+                      className="space-y-1.5 rounded-2xl border border-[#EF4444]/30 bg-[#EF4444]/10 px-4 py-3 text-[12.5px] font-medium leading-5 text-[#EF4444]"
                       role="alert"
                     >
-                      <Icon paths={I.xCircle} size={16} strokeWidth={2.2} className="mt-0.5 shrink-0" />
-                      <span>{friendlyFaceError(capture.error as Error)}</span>
+                      <div className="flex items-start gap-2.5">
+                        <Icon paths={I.xCircle} size={16} strokeWidth={2.2} className="mt-0.5 shrink-0" />
+                        <span>{friendlyFaceError(capture.error as Error)}</span>
+                      </div>
+                      {(String((capture.error as Error)?.message || '').toLowerCase().includes('liveness') ||
+                        friendlyFaceError(capture.error as Error).toLowerCase().includes('liveness')) && (
+                        <p className="pl-6 text-[11.5px] text-[#EF4444]/85">
+                          Tavsiya: Xona yorug'ligini yaxshilang, ekranga juda yaqin turmang va kameraga to'g'ridan-to'g'ri qarang.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -820,9 +862,9 @@ export function FaceEnrollmentPage() {
             </div>
 
             {/* Privacy & Safety Note */}
-            <div className="mt-5 rounded-2xl border border-black/[0.05] bg-black/[0.02] p-3.5 dark:border-white/[0.06] dark:bg-white/[0.02]">
-              <div className="flex items-start gap-2.5 text-[12px] font-medium leading-5 text-[#86868B]">
-                <Icon paths={I.shieldCheck} size={16} className="mt-0.5 text-[#34C759] shrink-0" strokeWidth={2} />
+            <div className="mt-5 rounded-2xl border border-black/[0.05] bg-slate-50 dark:bg-slate-900/40 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.02]">
+              <div className="flex items-start gap-2.5 text-[12px] font-medium leading-5 text-[#64748B]">
+                <Icon paths={I.shieldCheck} size={16} className="mt-0.5 text-[#10B981] shrink-0" strokeWidth={2} />
                 <span>{t('faceEnrollment.pipelineHint')}</span>
               </div>
             </div>
@@ -831,15 +873,15 @@ export function FaceEnrollmentPage() {
 
         {/* RIGHT COLUMN: Enrolled Face Directory */}
         <motion.div variants={cardVariants} className="lg:col-span-6 space-y-4">
-          <div className="flex flex-col h-full overflow-hidden rounded-3xl border border-white/60 bg-white/75 p-6 backdrop-blur-2xl shadow-sm dark:border-white/10 dark:bg-[#1C1C1E]/75">
+          <div className="flex flex-col h-full overflow-hidden rounded-2xl border border-white/60 bg-white/75 p-6 backdrop-blur-md shadow-sm dark:border-white/10 dark:bg-[#131622]/75">
             {/* Header + Search bar */}
-            <div className="flex flex-col gap-3 border-b border-black/[0.06] pb-4 dark:border-white/[0.06]">
+            <div className="flex flex-col gap-3 border-b border-slate-200/80 dark:border-slate-800 pb-4 dark:border-white/[0.06]">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-[15px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
                     {t('faceEnrollment.listTitle')}
                   </h2>
-                  <p className="text-[12px] font-medium text-[#86868B]">
+                  <p className="text-[12px] font-medium text-[#64748B]">
                     Ro'yxatdan o'tgan o'quvchilar ({filteredEnrollments.length})
                   </p>
                 </div>
@@ -848,7 +890,7 @@ export function FaceEnrollmentPage() {
               {/* Search & Filter pills */}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="relative flex-1">
-                  <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]">
+                  <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]">
                     <Icon paths={I.search} size={14} strokeWidth={2.2} />
                   </div>
                   <input
@@ -856,7 +898,7 @@ export function FaceEnrollmentPage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Talabani qidirish..."
-                    className="w-full rounded-xl border border-black/10 bg-white/80 py-2 pl-9 pr-3 text-[12.5px] font-medium text-[#1D1D1F] placeholder-[#86868B] outline-none transition-all focus:border-[#007AFF] dark:border-white/10 dark:bg-black/40 dark:text-[#F5F5F7]"
+                    className="w-full rounded-xl border border-black/10 bg-white/80 py-2 pl-9 pr-3 text-[12.5px] font-medium text-[#1D1D1F] placeholder-[#64748B] outline-none transition-all focus:border-[#2563EB] dark:border-white/10 dark:bg-black/40 dark:text-[#F5F5F7]"
                   />
                 </div>
 
@@ -869,7 +911,7 @@ export function FaceEnrollmentPage() {
                       className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
                         statusFilter === tab
                           ? 'bg-white text-[#1D1D1F] shadow-xs dark:bg-[#2C2C2E] dark:text-[#F5F5F7]'
-                          : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
+                          : 'text-[#64748B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
                       }`}
                       role="button"
                       tabIndex={0}
@@ -932,7 +974,7 @@ export function FaceEnrollmentPage() {
                             <h4 className="truncate text-[13.5px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
                               {studentName}
                             </h4>
-                            <div className="flex items-center gap-2 text-[11px] text-[#86868B]">
+                            <div className="flex items-center gap-2 text-[11px] text-[#64748B]">
                               <span>{formatDate(enrollment.enrolledAt)}</span>
                               <span>•</span>
                               <GlassBadge color={statusBadge.color}>
@@ -942,7 +984,15 @@ export function FaceEnrollmentPage() {
                           </div>
                         </div>
 
-                        <div className="shrink-0">
+                        <div className="shrink-0 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEnrollmentSidecar(enrollment)}
+                            title="Split View Sidecar"
+                            className="flex h-8 w-8 items-center justify-center rounded-xl text-[#64748B] transition-colors hover:bg-black/5 hover:text-[#10B981] dark:hover:bg-white/10"
+                          >
+                            <span className="text-xs font-mono font-bold">◨</span>
+                          </button>
                           {enrollment.status === 'ACTIVE' && (
                             <GlassButton
                               type="button"

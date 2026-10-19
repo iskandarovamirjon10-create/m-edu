@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import { branchesApi, usersApi } from '@/lib/api';
 import {
   GlassPageHeader,
@@ -14,11 +15,17 @@ import {
   ConfirmDialog,
   useToasts,
 } from '@/components/ui';
-import { useI18n } from '../i18n/I18nProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Branch } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useAuthState } from '@/auth/AuthContext';
+
+const SPRING = {
+  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
+  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
+  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
+} as const;
 
 interface BranchFormState {
   name: string;
@@ -63,25 +70,24 @@ function GlassSurface({
   return (
     <div
       className={[
-        'relative overflow-hidden rounded-[2rem]',
-        'bg-white/55 dark:bg-white/[0.035]',
-        'backdrop-blur-2xl backdrop-saturate-[1.8]',
-        'ring-1 ring-inset ring-white/60 dark:ring-white/[0.08]',
-        'shadow-[0_8px_32px_-8px_rgba(15,23,42,0.12),inset_0_1px_0_0_rgba(255,255,255,0.75)]',
-        'dark:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.06)]',
+        'liquid-glass-surface relative overflow-hidden rounded-2xl',
+        'border border-black/[0.08] dark:border-white/[0.12]',
+        'bg-white/75 dark:bg-surface-900/75 backdrop-blur-xl backdrop-saturate-150',
+        'shadow-[0_8px_32px_-8px_rgba(15,23,42,0.08),inset_0_1px_0_0_rgba(255,255,255,0.85)]',
+        'dark:shadow-[0_12px_40px_-10px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.12)]',
         hover
-          ? 'transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-1 hover:shadow-[0_20px_60px_-15px_rgba(15,23,42,0.22),inset_0_1px_0_0_rgba(255,255,255,0.85)]'
+          ? 'transition-all duration-300 ease-apple-spring hover:-translate-y-1 hover:shadow-[0_20px_60px_-15px_rgba(15,23,42,0.15),inset_0_1px_0_0_rgba(255,255,255,0.95)] hover:border-black/[0.14] dark:hover:border-white/[0.2]'
           : '',
         className,
-      ].join(' ')}
+      ].filter(Boolean).join(' ')}
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/25"
+        className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/25"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[140%] -translate-x-1/2 rounded-full bg-gradient-to-b from-white/50 to-transparent blur-2xl dark:from-white/[0.06]"
+        className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[140%] -translate-x-1/2 rounded-full bg-gradient-to-b from-white/40 to-transparent blur-2xl dark:from-white/[0.05]"
       />
       {children}
     </div>
@@ -186,7 +192,7 @@ function StatCard({
           'group relative overflow-hidden rounded-2xl p-4',
           'bg-white/50 dark:bg-white/[0.035]',
           'ring-1 ring-inset ring-white/60 dark:ring-white/[0.08]',
-          'backdrop-blur-xl',
+          'backdrop-blur-md',
           'transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
           'hover:-translate-y-0.5 hover:shadow-[0_12px_32px_-10px_rgba(15,23,42,0.2)]',
         ].join(' ')}
@@ -375,7 +381,12 @@ export function BranchesPage() {
         />
       </div>
 
-      <div className="page-container relative z-10 space-y-5 animate-in fade-in duration-700">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={SPRING.smooth}
+        className="page-container relative z-10 space-y-5"
+      >
         {toastNode}
 
         <ConfirmDialog
@@ -418,6 +429,34 @@ export function BranchesPage() {
             ) : undefined
           }
         />
+
+        {/* ── Apple V2 KPI Strip ── */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('common.total') || 'Jami filiallar'}</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
+              {branches.length}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('branches.statusActive') || 'Faol filiallar'}</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-[#34C759] dark:text-[#30D158] tabular-nums">
+              {branches.filter(b => b.isActive).length}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('branches.students') || 'Jami o\'quvchilar'}</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-[#AF52DE] tabular-nums">
+              {branches.reduce((acc, b) => acc + (b._count?.students ?? 0), 0)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('branches.manager') || 'Menejerlar'}</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-[#007AFF] tabular-nums">
+              {branches.filter(b => !!b.manager).length}
+            </p>
+          </div>
+        </div>
 
         {/* ── Branches Table ── */}
         <GlassSurface>
@@ -977,7 +1016,7 @@ export function BranchesPage() {
             </div>
           )}
         </GlassModal>
-      </div>
+      </motion.div>
 
       <style>{`
         @keyframes slideUp {

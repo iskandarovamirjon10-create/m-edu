@@ -47,11 +47,11 @@ export interface RecognitionParams {
 interface DurableEventParams {
   /**
    * Organization-local timezone used to resolve this event's calendar date.
-   * Must be the SAME timezone that produced the Attendance row this event
-   * refers to — otherwise a recognition between local midnight and the UTC
-   * offset (05:00 for Asia/Tashkent) is dated one day earlier than its row.
+   * Must be the SAME timezone and anchorDayOffset that produced the Attendance
+   * row this event refers to.
    */
   timezone?: string | null;
+  anchorDayOffset?: number;
   organizationId: string;
   cameraId: string;
   studentId: string;
@@ -68,7 +68,7 @@ interface DurableEventParams {
   faceQuality?: number | null;
 }
 
-type AttendanceDecision =
+export type AttendanceDecision =
   | 'RECORDED'
   | 'STUDENT_INACTIVE'
   | 'STUDENT_NOT_IN_GROUP'
@@ -116,10 +116,18 @@ interface DurableEventShape {
   studentId: string | null;
   cameraId: string | null;
   groupId: string | null;
+  attendanceId?: string | null;
+}
+
+interface RecordedDurableEventResult {
+  id: string;
+  decision: AttendanceDecision;
+  attendanceId: string | null;
+  reusedExisting: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// CONSTANTS
+// CONSTANTS & FORMATTER CACHES
 // ---------------------------------------------------------------------------
 
 /**
@@ -135,11 +143,15 @@ const SCHEDULE_GRACE_MINUTES = 30;
 /** Minutes after the scheduled start before the row becomes LATE. */
 const LATE_THRESHOLD_MINUTES = 15;
 
+/** Maximum allowed clock skew for incoming camera frame timestamps. */
+const MAX_FUTURE_DRIFT_MS = 5_000;
+
 const MINUTES_PER_DAY = 24 * 60;
 
 const DEFAULT_TIMEZONE = 'UTC';
 
 const ATTENDANCE_UNIQUE_TARGET = 'studentId_groupId_date';
+const ATTENDANCE_LESSON_UNIQUE_TARGET = 'studentId_lessonId';
 
 const DAY_BEFORE: Readonly<Record<string, string>> = Object.freeze({
   SUNDAY: 'SATURDAY',
@@ -156,9 +168,9 @@ const DAY_AFTER: Readonly<Record<string, string>> = Object.freeze({
   MONDAY: 'TUESDAY',
   TUESDAY: 'WEDNESDAY',
   WEDNESDAY: 'THURSDAY',
-  THURSDAY: 'FRIDAY',
   FRIDAY: 'SATURDAY',
   SATURDAY: 'SUNDAY',
+  THURSDAY: 'FRIDAY',
 });
 
 const DECISION_MESSAGES: Readonly<Record<AttendanceDecision, string>> =
@@ -179,6 +191,14 @@ const DECISION_MESSAGES: Readonly<Record<AttendanceDecision, string>> =
       'Student has overdue invoices; attendance denied by financial gate',
   });
 
+/**
+ * High-performance Intl caches to avoid V8 ICU instantiation overhead
+ * on high-frequency camera frame streams.
+ */
+const validTimezoneCache = new Map<string, boolean>();
+const dateFormatterCache = new Map<string, Intl.DateTimeFormat>();
+const dateTimeFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
 // ---------------------------------------------------------------------------
 // SERVICE
 // ---------------------------------------------------------------------------
@@ -186,15 +206,13 @@ const DECISION_MESSAGES: Readonly<Record<AttendanceDecision, string>> =
 /**
  * AttendanceDecisionEngine
  *
- * 1. Validate recognition context.
+ * 1. Validate recognition context & biometric score bounds.
  * 2. Validate student tenant ownership and active status.
- * 3. Resolve the correct academic group from the current schedule.
- * 4. Respect manual attendance as authoritative.
- * 5. Prevent duplicates/concurrent duplicate creation.
+ * 3. Resolve the correct academic group from the current schedule (with multi-slot disambiguation).
+ * 4. Respect manual attendance as authoritative across both lesson-linked and date-linked rows.
+ * 5. Prevent duplicates, concurrent races, and cooldown idempotency collisions.
  * 6. Persist attendance + camera event atomically.
- * 7. Provide deterministic idempotency.
- *
- * Deliberately does NOT silently guess a group.
+ * 7. Emit real-time pub/sub & notification events outside the DB transaction.
  */
 @Injectable()
 export class AttendanceDecisionEngine {
@@ -218,28 +236,30 @@ export class AttendanceDecisionEngine {
 
     const recognizedAt = new Date(params.recognizedAt.getTime());
 
-    const organization = await this.prisma.organization.findUnique({
-      where: { id: params.organizationId },
-      select: { id: true, timezone: true },
-    });
+    // Parallelize independent tenant + camera verification queries
+    const [organization, camera] = await Promise.all([
+      this.prisma.organization.findUnique({
+        where: { id: params.organizationId },
+        select: { id: true, timezone: true },
+      }),
+      this.prisma.camera.findFirst({
+        where: {
+          id: params.cameraId,
+          organizationId: params.organizationId,
+        },
+        select: { id: true, name: true, location: true },
+      }),
+    ]);
 
     if (!organization) {
       throw new Error('Recognition organization not found');
     }
 
-    // Verify the camera belongs to the same organization (cross-tenant guard).
-    const camera = await this.prisma.camera.findFirst({
-      where: {
-        id: params.cameraId,
-        organizationId: organization.id,
-      },
-      select: { id: true, name: true, location: true },
-    });
-
     if (!camera) {
       throw new Error('Recognition camera not found in organization');
     }
 
+    const timezone = this.normalizeTimezone(organization.timezone);
     const cameraLocation = this.normalizeOptional(camera.location);
     const cameraName =
       this.normalizeOptional(camera.name) ??
@@ -247,6 +267,7 @@ export class AttendanceDecisionEngine {
       'IP Camera';
 
     // Canonical eligibility: active user, not PAUSED/DROPPED.
+    // Also select `balance` upfront to avoid a redundant round-trip in financial gate.
     const student = await this.prisma.student.findFirst({
       where: {
         id: params.studentId,
@@ -257,6 +278,7 @@ export class AttendanceDecisionEngine {
       select: {
         id: true,
         userId: true,
+        balance: true,
         user: { select: { firstName: true, lastName: true } },
       },
     });
@@ -269,12 +291,12 @@ export class AttendanceDecisionEngine {
       faceQuality: this.assertScore(params.qualityScore, 'qualityScore'),
       confidence: this.assertScore(params.confidence, 'confidence'),
       similarityScore: this.assertScore(params.similarityScore, 'similarityScore'),
-      timezone: organization.timezone,
+      timezone,
       cameraLocation,
       cameraName,
     };
 
-    // ---- Student missing / inactive --------------------------------------
+    // ---- 1. Student missing / inactive -----------------------------------
     if (!student) {
       return this.persistDecisionEvent({
         ...baseEvent,
@@ -285,19 +307,13 @@ export class AttendanceDecisionEngine {
           studentId: params.studentId,
           groupId: 'inactive',
           recognizedAt,
-          timezone: organization.timezone,
+          timezone,
         }),
       });
     }
 
-    // ---- Active group memberships ----------------------------------------
-    // Canonical membership window — identical to AttendanceService.markAttendance
-    // and PrismaStudentAdapter.isStudentInGroup: membership active, group
-    // active, joinedAt <= END of the org-local day, leftAt IS NULL or >= START.
-    const membershipDayStart = this.getOrganizationDate(
-      recognizedAt,
-      organization.timezone,
-    );
+    // ---- 2. Active group memberships -------------------------------------
+    const membershipDayStart = this.getOrganizationDate(recognizedAt, timezone);
 
     const enrollments = await this.prisma.studentGroup.findMany({
       where: canonicalMembershipWhere({
@@ -336,39 +352,36 @@ export class AttendanceDecisionEngine {
           studentId: student.id,
           groupId: 'no-group',
           recognizedAt,
-          timezone: organization.timezone,
+          timezone,
         }),
       });
     }
 
-    // ---- Resolve group strictly from the schedule ------------------------
+    // ---- 3. Resolve group strictly from the schedule ---------------------
     const resolvedGroup = this.resolveTargetGroup(
       enrollments,
       recognizedAt,
-      organization.timezone ?? DEFAULT_TIMEZONE,
+      timezone,
       cameraLocation,
     );
 
-    // ---- Holiday gate ----------------------------------------------------
-    // Resolved against the ORGANIZATION-LOCAL calendar date, shifted by the
-    // schedule anchor (overnight classes belong to the anchor day).
-    const holidayCheckDate = resolvedGroup.anchorDayOffset
-      ? this.getOrganizationDateWithOffset(
-          recognizedAt,
-          organization.timezone,
-          resolvedGroup.anchorDayOffset,
-        )
+    const anchorDayOffset = resolvedGroup.anchorDayOffset ?? 0;
+
+    // ---- 4. Holiday gate -------------------------------------------------
+    const holidayCheckDate = anchorDayOffset
+      ? this.getOrganizationDateWithOffset(recognizedAt, timezone, anchorDayOffset)
       : recognizedAt;
 
     if (
       await this.isOrganizationHoliday(
         organization.id,
         holidayCheckDate,
-        organization.timezone,
+        timezone,
       )
     ) {
       return this.persistDecisionEvent({
         ...baseEvent,
+        anchorDayOffset,
         decision: 'HOLIDAY',
         idempotencyKey: this.buildIdempotencyKey({
           organizationId: organization.id,
@@ -376,8 +389,8 @@ export class AttendanceDecisionEngine {
           studentId: student.id,
           groupId: 'holiday',
           recognizedAt,
-          timezone: organization.timezone,
-          anchorDayOffset: resolvedGroup.anchorDayOffset,
+          timezone,
+          anchorDayOffset,
         }),
       });
     }
@@ -392,7 +405,7 @@ export class AttendanceDecisionEngine {
           studentId: student.id,
           groupId: 'no-schedule',
           recognizedAt,
-          timezone: organization.timezone,
+          timezone,
         }),
       });
     }
@@ -407,29 +420,26 @@ export class AttendanceDecisionEngine {
           studentId: student.id,
           groupId: 'ambiguous-schedule',
           recognizedAt,
-          timezone: organization.timezone,
+          timezone,
         }),
       });
     }
 
     const groupId = resolvedGroup.groupId;
 
-    // ---- Financial / overdue gate (parity with face-session path) -------
-    // The face-session path (FaceService.processAttempt) denies entry when
-    // the student has overdue invoices. The camera path MUST apply the same
-    // business rule — otherwise an overdue student walks in through the
-    // camera door but is blocked at the kiosk.
-    //
-    // FAIL-CLOSED: if the financial lookup fails, deny attendance rather
-    // than silently recording for a potentially delinquent student.
+    // ---- 5. Financial / overdue gate (TRUE FAIL-CLOSED) ------------------
     const financial = await this.loadStudentFinancial(
       organization.id,
       student.id,
+      student.balance,
     );
 
-    if (financial && financial.overdue > 0) {
+    // Fail-closed: if financial is null (lookup failed or student missing) OR overdue > 0
+    if (!financial || financial.overdue > 0) {
       return this.persistDecisionEvent({
         ...baseEvent,
+        groupId,
+        anchorDayOffset,
         decision: 'INSUFFICIENT_FUNDS',
         idempotencyKey: this.buildIdempotencyKey({
           organizationId: organization.id,
@@ -437,16 +447,16 @@ export class AttendanceDecisionEngine {
           studentId: student.id,
           groupId,
           recognizedAt,
-          timezone: organization.timezone,
-          anchorDayOffset: resolvedGroup.anchorDayOffset,
+          timezone,
+          anchorDayOffset,
         }),
       });
     }
 
     const attendanceDate = this.getOrganizationDateWithOffset(
       recognizedAt,
-      organization.timezone ?? DEFAULT_TIMEZONE,
-      resolvedGroup.anchorDayOffset ?? 0,
+      timezone,
+      anchorDayOffset,
     );
 
     const idempotencyKey = this.buildIdempotencyKey({
@@ -455,39 +465,38 @@ export class AttendanceDecisionEngine {
       studentId: student.id,
       groupId,
       recognizedAt,
-      timezone: organization.timezone,
-      anchorDayOffset: resolvedGroup.anchorDayOffset,
+      timezone,
+      anchorDayOffset,
     });
 
-    // Enrichment only — never a gate. Resolve the Lesson row running for this
-    // group/date; returns null when ambiguous.
+    // Resolve the Lesson row running for this group/date (with grace window support)
     const linkedLessonId = await this.resolveLessonForAttendance(
       organization.id,
       groupId,
       attendanceDate,
       recognizedAt,
-      organization.timezone,
+      timezone,
     );
 
-    // ---- Attendance + durable event — atomic -----------------------------
+    const statusToRecord = resolvedGroup.isLate ? 'LATE' : 'PRESENT';
+
+    // ---- 6. Attendance + durable event — atomic --------------------------
     try {
       const decisionResult = await this.prisma.$transaction(
         async (tx) => {
-          const existingAttendance = await tx.attendance.findUnique({
-            where: {
-              studentId_groupId_date: {
-                studentId: student.id,
-                groupId,
-                date: attendanceDate,
-              },
-            },
+          const existingAttendance = await this.findExistingAttendance(tx, {
+            studentId: student.id,
+            groupId,
+            attendanceDate,
+            lessonId: linkedLessonId,
           });
 
-          // Manual attendance is authoritative.
+          // Existing attendance found (either MANUAL or earlier biometric frame)
           if (existingAttendance) {
             if (existingAttendance.source === 'MANUAL') {
-              const eventId = await this.recordDurableEvent(tx, {
+              const evt = await this.recordDurableEvent(tx, {
                 ...baseEvent,
+                anchorDayOffset,
                 groupId,
                 attendanceId: existingAttendance.id,
                 decision: 'MANUAL_PRESERVED',
@@ -510,12 +519,15 @@ export class AttendanceDecisionEngine {
                 groupId,
                 message:
                   'Authoritative manual attendance preserved; automatic overwrite skipped',
-                eventId,
+                eventId: evt.id,
+                isNewRecord: false,
               };
             }
 
-            const eventId = await this.recordDurableEvent(tx, {
+            // Biometric duplicate (e.g. 2nd frame in same cooldown bucket or next bucket)
+            const evt = await this.recordDurableEvent(tx, {
               ...baseEvent,
+              anchorDayOffset,
               groupId,
               attendanceId: existingAttendance.id,
               decision: 'DUPLICATE_PREVENTED',
@@ -528,29 +540,31 @@ export class AttendanceDecisionEngine {
               groupId,
               message:
                 'Attendance already exists for this student and group on this date',
-              eventId,
+              eventId: evt.id,
+              isNewRecord: false,
             };
           }
 
+          // Create new biometric attendance row
           const attendance = await tx.attendance.create({
             data: {
               organizationId: organization.id,
               studentId: student.id,
               groupId,
               date: attendanceDate,
-              status: resolvedGroup.isLate ? 'LATE' : 'PRESENT',
+              status: statusToRecord,
               source: 'FACE',
               confidence: baseEvent.confidence,
               similarityScore: baseEvent.similarityScore,
               cameraId: camera.id,
-              // null when no single lesson could be resolved — never guessed.
               lessonId: linkedLessonId,
               note: this.buildAttendanceNote(cameraName, cameraLocation),
             },
           });
 
-          const eventId = await this.recordDurableEvent(tx, {
+          const evt = await this.recordDurableEvent(tx, {
             ...baseEvent,
+            anchorDayOffset,
             groupId,
             attendanceId: attendance.id,
             decision: 'RECORDED',
@@ -563,28 +577,32 @@ export class AttendanceDecisionEngine {
             groupId,
             attendanceId: attendance.id,
             cameraId: camera.id,
+            status: statusToRecord,
           });
 
           return {
             decision: 'RECORDED' as const,
             attendanceId: attendance.id,
             groupId,
-            message: 'Attendance successfully recorded',
-            eventId,
+            message: DECISION_MESSAGES.RECORDED,
+            eventId: evt.id,
+            isNewRecord: !evt.reusedExisting,
           };
         },
         { maxWait: 5_000, timeout: 10_000 },
       );
 
-      // Side-effects OUTSIDE the transaction (best-effort, never blocking).
+      // Side-effects OUTSIDE the transaction (only when a brand-new row was created)
       if (
         decisionResult.decision === 'RECORDED' &&
+        decisionResult.isNewRecord &&
         decisionResult.attendanceId
       ) {
         this.publishAttendanceCreated(organization.id, {
           attendanceId: decisionResult.attendanceId,
           studentId: student.id,
           groupId,
+          status: statusToRecord,
           recognizedAt,
         });
 
@@ -592,11 +610,13 @@ export class AttendanceDecisionEngine {
           attendanceId: decisionResult.attendanceId,
           studentId: student.id,
           studentName: this.formatStudentName(student.user),
+          status: statusToRecord,
           recognizedAt,
         });
       }
 
-      return decisionResult;
+      const { isNewRecord: _, ...publicResult } = decisionResult;
+      return publicResult;
     } catch (err: unknown) {
       // Concurrent create won the unique attendance race.
       if (
@@ -609,6 +629,8 @@ export class AttendanceDecisionEngine {
           studentId: student.id,
           groupId,
           attendanceDate,
+          lessonId: linkedLessonId,
+          anchorDayOffset,
           baseEvent,
           idempotencyKey,
         });
@@ -692,10 +714,9 @@ export class AttendanceDecisionEngine {
       };
     }
 
-    // Organization timezone is authoritative — caller timezone is only a
-    // fallback when the org has none configured.
-    const timezone =
-      organization.timezone?.trim() || opts.timezone?.trim() || DEFAULT_TIMEZONE;
+    const timezone = this.normalizeTimezone(
+      organization.timezone?.trim() || opts.timezone?.trim(),
+    );
 
     const student = await this.prisma.student.findFirst({
       where: {
@@ -765,21 +786,25 @@ export class AttendanceDecisionEngine {
       return { valid: false, isLate: false, deniedReason: 'NO_SCHEDULE' };
     }
 
-    if (await this.isOrganizationHoliday(organization.id, at, timezone)) {
-      this.logger.warn('Schedule gate denied: organization holiday', {
-        organizationId: organization.id,
-        groupId,
-      });
-      return { valid: false, isLate: false, deniedReason: 'HOLIDAY' };
-    }
-
-    // Reuse the camera-path resolver so both gates can never drift apart.
+    // Reuse the camera-path resolver first so overnight anchorDayOffset is known for holiday check
     const resolved = this.resolveTargetGroup(
       enrollments,
       at,
       timezone,
       opts.cameraLocation,
     );
+
+    const holidayCheckDate = resolved.anchorDayOffset
+      ? this.getOrganizationDateWithOffset(at, timezone, resolved.anchorDayOffset)
+      : at;
+
+    if (await this.isOrganizationHoliday(organization.id, holidayCheckDate, timezone)) {
+      this.logger.warn('Schedule gate denied: organization holiday', {
+        organizationId: organization.id,
+        groupId,
+      });
+      return { valid: false, isLate: false, deniedReason: 'HOLIDAY' };
+    }
 
     if (resolved.status !== 'MATCHED') {
       this.logger.warn('Schedule gate denied: no unambiguous schedule window', {
@@ -795,8 +820,6 @@ export class AttendanceDecisionEngine {
       };
     }
 
-    // The resolved group must be the group that attendance is about to be
-    // written for — anything else means the wrong lesson would receive it.
     if (resolved.groupId !== groupId) {
       this.logger.warn('Schedule gate denied: resolved a different group', {
         organizationId: organization.id,
@@ -815,15 +838,7 @@ export class AttendanceDecisionEngine {
   // =========================================================================
 
   /**
-   * Strict schedule resolution.
-   *
-   * 1. Student membership alone is NOT enough.
-   * 2. Current local day must match (or anchor as previous/next day).
-   * 3. Current local time must fall within schedule ± grace.
-   * 4. Camera room is a strong disambiguation signal.
-   * 5. Room matching still requires time matching.
-   * 6. Multiple valid groups are ambiguous.
-   * 7. Never randomly select the first enrollment.
+   * Strict schedule resolution with same-group multi-slot disambiguation.
    */
   public resolveTargetGroup(
     enrollments: Array<{
@@ -860,7 +875,9 @@ export class AttendanceDecisionEngine {
         room: string | null;
       };
       startMinutes: number;
+      endMinutes: number;
       minutesSinceStart: number;
+      isCurrentlyRunning: boolean;
       isLate: boolean;
       anchorDayOffset: number;
     }
@@ -887,28 +904,27 @@ export class AttendanceDecisionEngine {
         let matched = false;
         let anchorDayOffset = 0;
         let minutesSinceStart = 0;
+        let isCurrentlyRunning = false;
 
         // Case 1 — schedule anchored TODAY.
         if (scheduleDay === currentDay) {
           if (!isOvernight) {
             const windowStart = startMinutes - SCHEDULE_GRACE_MINUTES;
             const windowEnd = endMinutes + SCHEDULE_GRACE_MINUTES;
-            if (
-              currentMinutes >= windowStart &&
-              currentMinutes <= windowEnd
-            ) {
+            if (currentMinutes >= windowStart && currentMinutes <= windowEnd) {
               matched = true;
               anchorDayOffset = 0;
               minutesSinceStart = currentMinutes - startMinutes;
+              isCurrentlyRunning =
+                currentMinutes >= startMinutes && currentMinutes <= endMinutes;
             }
           } else {
-            // Overnight schedule starting today: 23:00 → 01:00, arrival
-            // permitted from 22:30 today.
             const windowStart = startMinutes - SCHEDULE_GRACE_MINUTES;
             if (currentMinutes >= windowStart) {
               matched = true;
               anchorDayOffset = 0;
               minutesSinceStart = currentMinutes - startMinutes;
+              isCurrentlyRunning = currentMinutes >= startMinutes;
             }
           }
         }
@@ -925,6 +941,7 @@ export class AttendanceDecisionEngine {
             anchorDayOffset = -1;
             minutesSinceStart =
               MINUTES_PER_DAY - startMinutes + currentMinutes;
+            isCurrentlyRunning = currentMinutes <= endMinutes;
           }
         }
 
@@ -939,6 +956,7 @@ export class AttendanceDecisionEngine {
               minutesSinceStart = -(
                 MINUTES_PER_DAY - currentMinutes + startMinutes
               );
+              isCurrentlyRunning = false;
             }
           }
         }
@@ -956,7 +974,9 @@ export class AttendanceDecisionEngine {
             room: this.normalizeOptional(schedule.room),
           },
           startMinutes,
+          endMinutes,
           minutesSinceStart,
+          isCurrentlyRunning,
           isLate: minutesSinceStart > LATE_THRESHOLD_MINUTES,
           anchorDayOffset,
         });
@@ -966,6 +986,20 @@ export class AttendanceDecisionEngine {
     if (candidates.length === 0) {
       return { status: 'NO_MATCH', groupId: '' };
     }
+
+    /**
+     * When the SAME group has two back-to-back slots whose grace windows overlap,
+     * pick the slot that is actively running right now, or closest to its start time.
+     */
+    const pickBestSlotForSameGroup = (list: Candidate[]): Candidate => {
+      if (list.length === 1) return list[0];
+      return [...list].sort((a, b) => {
+        if (a.isCurrentlyRunning !== b.isCurrentlyRunning) {
+          return a.isCurrentlyRunning ? -1 : 1;
+        }
+        return Math.abs(a.minutesSinceStart) - Math.abs(b.minutesSinceStart);
+      })[0];
+    };
 
     // Room matching is a strong signal when the camera location is known.
     if (normalizedCameraLocation) {
@@ -984,38 +1018,26 @@ export class AttendanceDecisionEngine {
       }
 
       if (roomCandidates.length > 1) {
-        const uniqueGroupIds = new Set(
-          roomCandidates.map((c) => c.groupId),
-        );
-
+        const uniqueGroupIds = new Set(roomCandidates.map((c) => c.groupId));
         if (uniqueGroupIds.size === 1) {
-          return this.toMatched(roomCandidates[0]);
+          return this.toMatched(pickBestSlotForSameGroup(roomCandidates));
         }
-
         return { status: 'AMBIGUOUS', groupId: '' };
       }
 
-      // Room mismatch fallback: the camera location did not match any
-      // candidate's room, but if there is EXACTLY ONE time-valid group,
-      // the time signal is unambiguous and we accept it. This handles the
-      // common case where a camera's location field is stale/incorrect but
-      // the schedule still uniquely identifies the group.
-      //
-      // When multiple time-valid groups exist, room is the only
-      // disambiguator — without it the result stays NO_MATCH (fail-closed).
+      // Room mismatch fallback: accept ONLY when time uniquely identifies 1 group
       const uniqueFallbackIds = new Set(candidates.map((c) => c.groupId));
       if (uniqueFallbackIds.size === 1) {
-        return this.toMatched(candidates[0]);
+        return this.toMatched(pickBestSlotForSameGroup(candidates));
       }
 
       return { status: 'NO_MATCH', groupId: '' };
     }
 
-    // Without a camera location we can only match exactly one distinct group.
+    // Without a camera location we can only match when there is 1 distinct group
     const uniqueGroupIds = new Set(candidates.map((c) => c.groupId));
-
     if (uniqueGroupIds.size === 1) {
-      return this.toMatched(candidates[0]);
+      return this.toMatched(pickBestSlotForSameGroup(candidates));
     }
 
     return { status: 'AMBIGUOUS', groupId: '' };
@@ -1039,21 +1061,91 @@ export class AttendanceDecisionEngine {
   }
 
   // =========================================================================
-  // PRIVATE — DECISION EVENT (non-attendance paths)
+  // PRIVATE — ATTENDANCE LOOKUP (Unified Lesson + Date/Group lookup)
   // =========================================================================
 
   /**
-   * Persist a decision event outside the attendance creation path
-   * (inactive student, no group, no schedule, ambiguous schedule, holiday).
-   *
-   * Wrapped in a transaction so the durable-event idempotency validation can
-   * roll back its own write if a conflicting key exists.
+   * Finds any existing attendance row for this student on this lesson OR group+date.
+   * Prevents split-brain duplicates when a MANUAL attendance row was created
+   * with `lessonId = null` before a Lesson record was linked.
    */
+  private async findExistingAttendance(
+    tx: any,
+    params: {
+      studentId: string;
+      groupId: string;
+      attendanceDate: Date;
+      lessonId?: string | null;
+    },
+  ): Promise<any | null> {
+    if (params.lessonId) {
+      if (tx.attendance.findUnique) {
+        const byLesson = await tx.attendance.findUnique({
+          where: {
+            studentId_lessonId: {
+              studentId: params.studentId,
+              lessonId: params.lessonId,
+            },
+          },
+        });
+        if (byLesson) return byLesson;
+      }
+      if (tx.attendance.findFirst) {
+        const byLessonOrDate = await tx.attendance.findFirst({
+          where: {
+            studentId: params.studentId,
+            OR: [
+              { lessonId: params.lessonId },
+              {
+                groupId: params.groupId,
+                date: params.attendanceDate,
+                lessonId: null,
+              },
+            ],
+          },
+        });
+        if (byLessonOrDate) return byLessonOrDate;
+      }
+    }
+
+    if (tx.attendance.findFirst) {
+      const byGroupDate = await tx.attendance.findFirst({
+        where: {
+          studentId: params.studentId,
+          groupId: params.groupId,
+          date: params.attendanceDate,
+          lessonId: null,
+        },
+      });
+      if (byGroupDate) return byGroupDate;
+    }
+
+    if (tx.attendance.findUnique) {
+      return tx.attendance.findUnique({
+        where: {
+          studentId_groupId_date: {
+            studentId: params.studentId,
+            groupId: params.groupId,
+            date: params.attendanceDate,
+          },
+        },
+      });
+    }
+
+    return null;
+  }
+
+  // =========================================================================
+  // PRIVATE — DECISION EVENT (non-attendance paths)
+  // =========================================================================
+
   private async persistDecisionEvent(params: {
     timezone?: string | null;
+    anchorDayOffset?: number;
     organizationId: string;
     cameraId: string;
     studentId: string;
+    groupId?: string | null;
     recognizedAt: Date;
 
     decision: AttendanceDecision;
@@ -1066,11 +1158,12 @@ export class AttendanceDecisionEngine {
     cameraLocation?: string | null;
     cameraName?: string | null;
   }) {
-    const eventId = await this.prisma.$transaction((tx) =>
+    const evt = await this.prisma.$transaction((tx) =>
       this.recordDurableEvent(tx, {
         organizationId: params.organizationId,
         cameraId: params.cameraId,
         studentId: params.studentId,
+        groupId: params.groupId ?? null,
         recognizedAt: params.recognizedAt,
         decision: params.decision,
         idempotencyKey: params.idempotencyKey,
@@ -1078,13 +1171,14 @@ export class AttendanceDecisionEngine {
         similarityScore: params.similarityScore,
         faceQuality: params.faceQuality,
         timezone: params.timezone,
+        anchorDayOffset: params.anchorDayOffset,
       }),
     );
 
     return {
       decision: params.decision,
       message: DECISION_MESSAGES[params.decision],
-      eventId,
+      eventId: evt.id,
     };
   }
 
@@ -1092,19 +1186,14 @@ export class AttendanceDecisionEngine {
   // PRIVATE — CONCURRENT DUPLICATE
   // =========================================================================
 
-  /**
-   * Handles the race where another transaction created the attendance
-   * between our existence check and create().
-   *
-   * The re-read and the durable-event write share ONE transaction so the
-   * invariant "event.attendanceId points to a real attendance row" holds.
-   */
   private async resolveConcurrentDuplicate(params: {
     organizationId: string;
     cameraId: string;
     studentId: string;
     groupId: string;
     attendanceDate: Date;
+    lessonId?: string | null;
+    anchorDayOffset?: number;
 
     baseEvent: {
       timezone?: string | null;
@@ -1122,26 +1211,22 @@ export class AttendanceDecisionEngine {
     idempotencyKey: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      const concurrentAttendance = await tx.attendance.findUnique({
-        where: {
-          studentId_groupId_date: {
-            studentId: params.studentId,
-            groupId: params.groupId,
-            date: params.attendanceDate,
-          },
-        },
+      const concurrentAttendance = await this.findExistingAttendance(tx, {
+        studentId: params.studentId,
+        groupId: params.groupId,
+        attendanceDate: params.attendanceDate,
+        lessonId: params.lessonId,
       });
 
       if (!concurrentAttendance) {
-        // The P2002 did not correspond to the expected constraint —
-        // never fabricate a duplicate result.
         throw new Error(
           'Attendance uniqueness conflict occurred but the concurrent attendance could not be resolved',
         );
       }
 
-      const eventId = await this.recordDurableEvent(tx, {
+      const evt = await this.recordDurableEvent(tx, {
         ...params.baseEvent,
+        anchorDayOffset: params.anchorDayOffset,
         groupId: params.groupId,
         attendanceId: concurrentAttendance.id,
         decision: 'DUPLICATE_PREVENTED',
@@ -1153,7 +1238,7 @@ export class AttendanceDecisionEngine {
         attendanceId: concurrentAttendance.id,
         groupId: params.groupId,
         message: 'Concurrent recognition resolved: attendance already recorded',
-        eventId,
+        eventId: evt.id,
       };
     });
   }
@@ -1165,18 +1250,18 @@ export class AttendanceDecisionEngine {
   /**
    * Idempotent durable-event persistence.
    *
-   * MUST be called inside a transaction when the caller cares about the
-   * mismatch-throw rolling back its own write. The upsert is atomic, but
-   * attribute validation happens after the write returns — a mismatch is
-   * only safely undone inside a transaction.
+   * Safely handles same-bucket cooldown replays where frame #1 recorded
+   * `RECORDED` and frame #2 (1 second later) attempts `DUPLICATE_PREVENTED`
+   * on the exact same idempotencyKey and attendanceId.
    */
   private async recordDurableEvent(
     prisma: Pick<PrismaService, 'cameraAttendanceEvent'>,
     params: DurableEventParams,
-  ): Promise<string> {
-    const eventDate = this.getOrganizationDate(
+  ): Promise<RecordedDurableEventResult> {
+    const eventDate = this.getOrganizationDateWithOffset(
       params.recognizedAt,
       params.timezone,
+      params.anchorDayOffset ?? 0,
     );
 
     try {
@@ -1206,7 +1291,18 @@ export class AttendanceDecisionEngine {
       });
 
       this.assertEventMatches(event, params);
-      return event.id;
+
+      const reusedExisting =
+        event.decision !== params.decision ||
+        (event as { recognizedAt?: Date }).recognizedAt?.getTime() !==
+          params.recognizedAt.getTime();
+
+      return {
+        id: event.id,
+        decision: (event.decision as AttendanceDecision) ?? params.decision,
+        attendanceId: event.attendanceId ?? params.attendanceId ?? null,
+        reusedExisting,
+      };
     } catch (err: unknown) {
       if (
         err instanceof Error &&
@@ -1223,7 +1319,6 @@ export class AttendanceDecisionEngine {
         error: getErrorMessage(err),
       });
 
-      // Never return a fabricated event id.
       throw err;
     }
   }
@@ -1232,9 +1327,6 @@ export class AttendanceDecisionEngine {
     event: DurableEventShape,
     params: DurableEventParams,
   ): void {
-    const decisionMismatch = Boolean(
-      event.decision && event.decision !== params.decision,
-    );
     const studentMismatch = Boolean(
       event.studentId && event.studentId !== params.studentId,
     );
@@ -1245,7 +1337,28 @@ export class AttendanceDecisionEngine {
       params.groupId && event.groupId && event.groupId !== params.groupId,
     );
 
-    if (!decisionMismatch && !studentMismatch && !cameraMismatch && !groupMismatch) {
+    // Legitimate Cooldown Replay: Frame 1 wrote `RECORDED` for this attendanceId,
+    // and Frame 2 (within the same 5-minute bucket) hit `existingAttendance` and
+    // passed `DUPLICATE_PREVENTED` for the exact same student/camera/group.
+    const isBenignCooldownReplay =
+      !studentMismatch &&
+      !cameraMismatch &&
+      !groupMismatch &&
+      ((event.decision === 'RECORDED' &&
+        params.decision === 'DUPLICATE_PREVENTED') ||
+        (event.decision === 'DUPLICATE_PREVENTED' &&
+          params.decision === 'RECORDED'));
+
+    const decisionMismatch =
+      !isBenignCooldownReplay &&
+      Boolean(event.decision && event.decision !== params.decision);
+
+    if (
+      !decisionMismatch &&
+      !studentMismatch &&
+      !cameraMismatch &&
+      !groupMismatch
+    ) {
       return;
     }
 
@@ -1270,11 +1383,6 @@ export class AttendanceDecisionEngine {
   // PRIVATE — IDEMPOTENCY KEY
   // =========================================================================
 
-  /**
-   * Deterministic idempotency key.
-   *
-   * Canonical format: org | camera | student | group | local-date | bucket.
-   */
   private buildIdempotencyKey(params: {
     organizationId: string;
     cameraId: string;
@@ -1312,10 +1420,8 @@ export class AttendanceDecisionEngine {
 
   /**
    * Resolve the Lesson row running for this group/date at `at`.
-   *
-   * Returns an id ONLY when the answer is UNAMBIGUOUS — anything else
-   * resolves to null. Lesson linkage is enrichment, never a gate on recording
-   * attendance; lookup failures also resolve to null.
+   * Applies ±SCHEDULE_GRACE_MINUTES so early arrivals (e.g. 10 min before class)
+   * still link to the proper Lesson row when multiple lessons exist on the same date.
    */
   private async resolveLessonForAttendance(
     organizationId: string,
@@ -1325,6 +1431,7 @@ export class AttendanceDecisionEngine {
     timezone?: string | null,
   ): Promise<string | null> {
     try {
+      if (!this.prisma.lesson?.findMany) return null;
       const lessons = await this.prisma.lesson.findMany({
         where: {
           organizationId,
@@ -1340,18 +1447,31 @@ export class AttendanceDecisionEngine {
 
       const minutes = this.getLocalDateTime(at, timezone).minutes;
 
-      const running = lessons.filter((lesson) => {
+      // 1. Exact running window
+      const exactRunning = lessons.filter((lesson) => {
         const start = this.parseTimeToMinutes(lesson.startTime);
         const end = this.parseTimeToMinutes(lesson.endTime);
-
         if (start === null || end === null) return false;
-
         return start <= end
           ? minutes >= start && minutes <= end
           : minutes >= start || minutes <= end;
       });
 
-      return running.length === 1 ? running[0].id : null;
+      if (exactRunning.length === 1) return exactRunning[0].id;
+
+      // 2. Grace-expanded window (±30 min) for early/late arrivals
+      const graceMatching = lessons.filter((lesson) => {
+        const start = this.parseTimeToMinutes(lesson.startTime);
+        const end = this.parseTimeToMinutes(lesson.endTime);
+        if (start === null || end === null) return false;
+        const wStart = start - SCHEDULE_GRACE_MINUTES;
+        const wEnd = end + SCHEDULE_GRACE_MINUTES;
+        return start <= end
+          ? minutes >= wStart && minutes <= wEnd
+          : minutes >= wStart || minutes <= wEnd;
+      });
+
+      return graceMatching.length === 1 ? graceMatching[0].id : null;
     } catch (err: unknown) {
       this.logger.warn(
         'Failed to resolve lesson for camera attendance — continuing without lesson linkage',
@@ -1365,13 +1485,6 @@ export class AttendanceDecisionEngine {
   // PRIVATE — HOLIDAY
   // =========================================================================
 
-  /**
-   * True when the ORGANIZATION-LOCAL calendar date of `at` is a configured
-   * OrganizationHoliday.
-   *
-   * Fails CLOSED on error: a lookup failure must not silently authorize
-   * attendance on a holiday.
-   */
   private async isOrganizationHoliday(
     organizationId: string,
     at: Date,
@@ -1396,67 +1509,81 @@ export class AttendanceDecisionEngine {
   }
 
   // =========================================================================
-  // PRIVATE — FINANCIAL GATE
+  // PRIVATE — FINANCIAL GATE (Fail-Closed)
   // =========================================================================
 
-  /**
-   * Load the student's overdue / outstanding amounts from open invoices.
-   *
-   * Uses the canonical `computeInvoiceOutstanding` formula shared with the
-   * face-session path so both pipelines produce identical financial
-   * verdicts. Returns null when the student does not belong to this
-   * organization (fail-closed: caller treats null as "deny").
-   */
   private async loadStudentFinancial(
     organizationId: string,
     studentId: string,
+    preloadedBalance?: unknown,
   ): Promise<{ balance: number; outstanding: number; overdue: number } | null> {
-    const student = await this.prisma.student.findFirst({
-      where: { id: studentId, organizationId },
-      select: { balance: true },
-    });
-    if (!student) return null;
+    try {
+      let balanceNum: number;
 
-    const openInvoices = await this.prisma.invoice.findMany({
-      where: {
+      if (preloadedBalance !== undefined && preloadedBalance !== null) {
+        balanceNum = Number(preloadedBalance);
+      } else {
+        const student = await this.prisma.student.findFirst({
+          where: { id: studentId, organizationId },
+          select: { balance: true },
+        });
+        if (!student) return null;
+        balanceNum = Number(student.balance);
+      }
+
+      const openInvoices = await this.prisma.invoice.findMany({
+        where: {
+          organizationId,
+          studentId,
+          status: { notIn: [...NON_BILLABLE_INVOICE_STATUSES] },
+        },
+        select: {
+          status: true,
+          total: true,
+          paidAmount: true,
+          refundedAmount: true,
+          dueDate: true,
+        },
+      });
+
+      const { overdue, outstanding } = computeInvoiceOutstanding(openInvoices);
+
+      return {
+        balance: Number.isFinite(balanceNum) ? balanceNum : 0,
+        outstanding,
+        overdue,
+      };
+    } catch (err: unknown) {
+      this.logger.error('Financial gate lookup failed; failing closed', {
         organizationId,
         studentId,
-        status: { notIn: [...NON_BILLABLE_INVOICE_STATUSES] },
-      },
-      select: {
-        status: true,
-        total: true,
-        paidAmount: true,
-        refundedAmount: true,
-        dueDate: true,
-      },
-    });
-
-    const { overdue, outstanding } = computeInvoiceOutstanding(openInvoices);
-
-    return {
-      balance: Number(student.balance),
-      outstanding,
-      overdue,
-    };
+        error: getErrorMessage(err),
+      });
+      return null;
+    }
   }
 
   // =========================================================================
-  // PRIVATE — TIMEZONE / DATE
+  // PRIVATE — CACHED TIMEZONE / DATE ENGINE
   // =========================================================================
 
   private isValidTimezone(tz?: string | null): boolean {
-    if (!tz || typeof tz !== 'string' || !tz.trim()) return false;
+    if (!tz || typeof tz !== 'string') return false;
+    const trimmed = tz.trim();
+    if (!trimmed) return false;
+
+    const cached = validTimezoneCache.get(trimmed);
+    if (cached !== undefined) return cached;
 
     try {
-      Intl.DateTimeFormat(undefined, { timeZone: tz.trim() });
+      Intl.DateTimeFormat(undefined, { timeZone: trimmed });
+      validTimezoneCache.set(trimmed, true);
       return true;
     } catch {
-      // Intl throws a RangeError for unknown zones — log so misconfigured
-      // organizations are visible instead of silently falling back to UTC.
       this.logger.warn('Invalid timezone; falling back to UTC', {
         timezone: tz,
       });
+      validTimezoneCache.set(trimmed, false);
       return false;
     }
   }
@@ -1467,22 +1594,39 @@ export class AttendanceDecisionEngine {
     return DEFAULT_TIMEZONE;
   }
 
-  /**
-   * Organization-local calendar date, represented as UTC midnight.
-   *
-   * Uses Intl (not a fixed UTC offset) so DST-aware timezones work.
-   */
+  private getDateFormatter(tz: string): Intl.DateTimeFormat {
+    let fmt = dateFormatterCache.get(tz);
+    if (!fmt) {
+      fmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      dateFormatterCache.set(tz, fmt);
+    }
+    return fmt;
+  }
+
+  private getDateTimeFormatter(tz: string): Intl.DateTimeFormat {
+    let fmt = dateTimeFormatterCache.get(tz);
+    if (!fmt) {
+      fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        weekday: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      dateTimeFormatterCache.set(tz, fmt);
+    }
+    return fmt;
+  }
+
   private getOrganizationDate(date: Date, timezone?: string | null): Date {
     const tz = this.normalizeTimezone(timezone);
+    const parts = this.getDateFormatter(tz).formatToParts(date);
 
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-
-    const parts = formatter.formatToParts(date);
     const year = this.getDatePart(parts, 'year');
     const month = this.getDatePart(parts, 'month');
     const day = this.getDatePart(parts, 'day');
@@ -1507,24 +1651,12 @@ export class AttendanceDecisionEngine {
     );
   }
 
-  /**
-   * Organization-local weekday + minutes-since-midnight.
-   */
   private getLocalDateTime(
     date: Date,
     timezone?: string | null,
   ): { dayOfWeek: string; minutes: number } {
     const tz = this.normalizeTimezone(timezone);
-
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      weekday: 'long',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-
-    const parts = formatter.formatToParts(date);
+    const parts = this.getDateTimeFormatter(tz).formatToParts(date);
 
     const weekday =
       parts
@@ -1538,7 +1670,6 @@ export class AttendanceDecisionEngine {
       parts.find((part) => part.type === 'minute')?.value ?? 0,
     );
 
-    // Some Intl implementations emit "24" for midnight.
     if (hour === 24) hour = 0;
 
     return {
@@ -1562,7 +1693,6 @@ export class AttendanceDecisionEngine {
   // PRIVATE — PARSING / NORMALIZATION
   // =========================================================================
 
-  /** Strict HH:mm parser. Returns null on malformed input. */
   private parseTimeToMinutes(
     value: string | null | undefined,
   ): number | null {
@@ -1587,13 +1717,6 @@ export class AttendanceDecisionEngine {
     return trimmed.length > 0 ? trimmed : null;
   }
 
-  /**
-   * Validate a biometric score and return it (or null when absent).
-   *
-   * Scores must be in [0, 1]. Out-of-range values are client input errors,
-   * not server faults — but they also indicate an upstream pipeline defect,
-   * so they are surfaced as a hard failure rather than silently clamped.
-   */
   private assertScore(
     value: number | null | undefined,
     field: string,
@@ -1653,11 +1776,10 @@ export class AttendanceDecisionEngine {
     ) {
       throw new Error('recognizedAt must be a valid Date');
     }
-    if (params.recognizedAt.getTime() > Date.now() + 5_000) {
+    if (params.recognizedAt.getTime() > Date.now() + MAX_FUTURE_DRIFT_MS) {
       throw new Error('recognizedAt cannot be significantly in the future');
     }
 
-    // Validate every score here so a malformed value never reaches the DB.
     this.assertScore(params.qualityScore, 'qualityScore');
     this.assertScore(params.confidence, 'confidence');
     this.assertScore(params.similarityScore, 'similarityScore');
@@ -1675,13 +1797,6 @@ export class AttendanceDecisionEngine {
     return typeof code === 'string' ? code : undefined;
   }
 
-  /**
-   * True ONLY when `err` is a P2002 on the Attendance unique constraint.
-   *
-   * The previous fallback returned `true` whenever `meta` was missing, which
-   * would treat unrelated P2002s (e.g. an idempotency-key collision on
-   * CameraAttendanceEvent) as concurrent attendance duplicates.
-   */
   private isAttendanceUniqueConstraintViolation(err: unknown): boolean {
     if (typeof err !== 'object' || err === null || !('code' in err)) {
       return false;
@@ -1703,14 +1818,22 @@ export class AttendanceDecisionEngine {
 
     if (Array.isArray(target)) {
       const fields = target.map(String).map((s) => s.toLowerCase());
-      // Attendance unique constraint is exactly (studentId, groupId, date).
-      return ATTENDANCE_UNIQUE_TARGET.split('_').every((part) =>
-        fields.some((f) => f.includes(part.toLowerCase())),
+      const isLessonTarget = ATTENDANCE_LESSON_UNIQUE_TARGET.split('_').every(
+        (part) => fields.some((f) => f.includes(part.toLowerCase())),
       );
+      const isGroupDateTarget = ATTENDANCE_UNIQUE_TARGET.split('_').every(
+        (part) => fields.some((f) => f.includes(part.toLowerCase())),
+      );
+      return isLessonTarget || isGroupDateTarget;
     }
 
     if (typeof target === 'string') {
-      return target.toLowerCase().includes('attendance');
+      const lower = target.toLowerCase();
+      return (
+        lower.includes('attendance') ||
+        lower.includes('lesson') ||
+        lower.includes('studentid')
+      );
     }
 
     return false;
@@ -1726,19 +1849,19 @@ export class AttendanceDecisionEngine {
       attendanceId: string;
       studentId: string;
       groupId: string;
+      status: 'PRESENT' | 'LATE';
       recognizedAt: Date;
     },
   ): void {
     if (!this.redisPubSub) return;
 
-    // Pass a RAW payload — RedisPubSubService owns serialization (mixing raw
-    // objects and pre-stringified JSON double-serializes downstream).
     this.redisPubSub
       .publish(ATTENDANCE_CREATED_EVENT, {
         organizationId,
         attendanceId: payload.attendanceId,
         studentId: payload.studentId,
         groupId: payload.groupId,
+        status: payload.status,
         recognizedAt: payload.recognizedAt.toISOString(),
       })
       .catch((e: unknown) =>
@@ -1754,6 +1877,7 @@ export class AttendanceDecisionEngine {
       attendanceId: string;
       studentId: string;
       studentName: string;
+      status: 'PRESENT' | 'LATE';
       recognizedAt: Date;
     },
   ): void {
@@ -1769,6 +1893,7 @@ export class AttendanceDecisionEngine {
         data: {
           studentId: payload.studentId,
           studentName: payload.studentName,
+          status: payload.status,
         },
       })
       .catch((e: unknown) =>

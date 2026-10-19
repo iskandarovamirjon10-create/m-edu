@@ -211,7 +211,10 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
       });
 
       if (existing) {
-        throw new ConflictException('An active or pending enrollment already exists for this student.');
+        if (existing.status === 'ACTIVE') {
+          throw new ConflictException('An active enrollment already exists for this student.');
+        }
+        return this.mapEnrollmentEntity(existing);
       }
 
       const row = await tx.faceEnrollment.create({

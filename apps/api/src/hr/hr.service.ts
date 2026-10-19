@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { Prisma, LeaveStatus, LeaveType } from '@prisma/client';
+import { computePayroll } from '@medu/financial-engine';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmployeeDto, UpdateEmployeeDto, CreateLeaveRequestDto } from './dto/employee.dto';
 import { GeneratePayrollDto } from './dto/payroll.dto';
@@ -102,39 +103,79 @@ export class HremployeeService {
       throw new BadRequestException('User is already an employee');
     }
 
-    return this.prisma.employee.create({
-      data: {
-        ...dto,
+    // Check if employeeNumber is already in use in this organization
+    const duplicateNumber = await this.prisma.employee.findFirst({
+      where: {
         organizationId,
-      },
-      include: {
-        user: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
+        employeeNumber: dto.employeeNumber,
       },
     });
+
+    if (duplicateNumber) {
+      throw new BadRequestException('Employee number already in use in this organization');
+    }
+
+    try {
+      return await this.prisma.employee.create({
+        data: {
+          ...dto,
+          organizationId,
+        },
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new BadRequestException('Employee number already in use in this organization');
+      }
+      throw error;
+    }
   }
 
   async updateEmployee(organizationId: string, id: string, dto: UpdateEmployeeDto) {
     await this.findEmployeeById(organizationId, id);
 
-    return this.prisma.employee.update({
-      where: { id, organizationId },
-      data: dto,
-      include: {
-        user: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
+    if (dto.employeeNumber) {
+      const duplicateNumber = await this.prisma.employee.findFirst({
+        where: {
+          organizationId,
+          employeeNumber: dto.employeeNumber,
+          id: { not: id },
+        },
+      });
+
+      if (duplicateNumber) {
+        throw new BadRequestException('Employee number already in use in this organization');
+      }
+    }
+
+    try {
+      return await this.prisma.employee.update({
+        where: { id, organizationId },
+        data: dto,
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
           },
         },
-      },
-    });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new BadRequestException('Employee number already in use in this organization');
+      }
+      throw error;
+    }
   }
 
   async terminateEmployee(organizationId: string, id: string, reason: string) {
@@ -361,11 +402,15 @@ export class HremployeeService {
         employees.map(async (employee) => {
           const bonuses = dto.bonuses?.[employee.id] || 0;
           const deductions = dto.deductions?.[employee.id] || 0;
-          // Round tax/net to 2 decimal places to avoid float drift in money.
-          const taxRate = 0.12;
-          const taxableIncome = Number(employee.salary) + bonuses - deductions;
-          const tax = Math.round(taxableIncome * taxRate * 100) / 100;
-          const netSalary = Math.round((taxableIncome - tax) * 100) / 100;
+          const payrollResult = computePayroll({
+            salaryType: 'MONTHLY',
+            baseAmount: employee.salary,
+            bonus: bonuses,
+            otherDeduction: deductions,
+            taxBasisPoints: 1200, // 12% standard income tax
+          });
+          const tax = payrollResult.taxAmount;
+          const netSalary = payrollResult.netAmount;
           return tx.salaryRecord.create({
             data: {
               organizationId,

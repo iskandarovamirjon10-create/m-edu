@@ -1,0 +1,1 @@
+export { SplitViewSidecar } from './SplitViewSidecar';

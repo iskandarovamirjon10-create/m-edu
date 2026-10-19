@@ -143,7 +143,7 @@ describe('Access Control & Whitelist (AuthService)', () => {
       prisma.accessWhitelist.findUnique.mockResolvedValue(null);
       prisma.accessControlConfig.findUnique.mockResolvedValue({
         id: 'global',
-        inviteOnly: true,
+        inviteOnly: false,
         requireApproval: true,
       });
 
