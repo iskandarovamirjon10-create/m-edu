@@ -36,6 +36,7 @@ import request, {
   telegramApi,
 } from '@/lib/api';
 import { useToast } from '@/components/ui';
+import { RealQrCode } from '@/components/ui/RealQrCode';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useAuth } from '@/auth/AuthContext';
@@ -2324,53 +2325,17 @@ function AiCopilotView({
 const QR_WINDOW_MS = 60_000;
 
 function QrCodeMatrix({ value }: { value: string }) {
-  const size = 21;
-  const hash = useMemo(() => {
-    let h = 0;
-    for (let i = 0; i < value.length; i++) h = (Math.imul(31, h) + value.charCodeAt(i)) | 0;
-    return Math.abs(h);
-  }, [value]);
-
-  const grid = useMemo(() => {
-    const m: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false));
-
-    const drawCorner = (startX: number, startY: number) => {
-      for (let y = 0; y < 7; y++) {
-        for (let x = 0; x < 7; x++) {
-          if (y === 0 || y === 6 || x === 0 || x === 6 || (y >= 2 && y <= 4 && x >= 2 && x <= 4)) {
-            m[startY + y][startX + x] = true;
-          }
-        }
-      }
-    };
-    drawCorner(0, 0);
-    drawCorner(size - 7, 0);
-    drawCorner(0, size - 7);
-
-    for (let i = 8; i < size - 8; i++) {
-      m[6][i] = i % 2 === 0;
-      m[i][6] = i % 2 === 0;
-    }
-
-    let seed = hash;
-    for (let r = 0; r < size; r++) {
-      for (let c = 0; c < size; c++) {
-        if (r < 8 && (c < 8 || c >= size - 8)) continue;
-        if (r >= size - 8 && c < 8) continue;
-        if (r === 6 || c === 6) continue;
-        seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff;
-        m[r][c] = seed % 3 === 0;
-      }
-    }
-    return m;
-  }, [hash]);
-
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="h-48 w-48 rounded-xl bg-white p-2.5 shadow-inner" role="img" aria-label="Raqamli ruxsatnoma QR kodi">
-      {grid.map((row, r) =>
-        row.map((cell, c) => (cell ? <rect key={`${r}-${c}`} x={c} y={r} width={1} height={1} fill="#0F172A" /> : null)),
-      )}
-    </svg>
+    <div className="flex h-48 w-48 items-center justify-center rounded-xl bg-white p-2.5 shadow-inner">
+      <RealQrCode
+        value={value}
+        className="h-full w-full"
+        fgColor="#0F172A"
+        bgColor="#FFFFFF"
+        margin={1}
+        title="Raqamli ruxsatnoma QR kodi"
+      />
+    </div>
   );
 }
 

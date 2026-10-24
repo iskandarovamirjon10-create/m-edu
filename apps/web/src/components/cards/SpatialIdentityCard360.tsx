@@ -2,44 +2,36 @@
 
 /**
  * ============================================================================
- * M-EDU SpatialIdentityCard360 — iOS 27 / visionOS Spatial Liquid Glass
+ * M-EDU SpatialIdentityCard360 — v2 (Wallet-grade iOS pass)
  * ============================================================================
  *
- * Ultra-luxury 360° interactive 3D spatial glass identity pass for:
- *   • Students (Talabalar)      • Teachers (O'qituvchilar)
- *   • Admin / Management        • Staff (Xodimlar)
- *   • Parents (Ota-onalar)      • Generic profiles
+ * Design intent
+ *  • One calm material, one accent. Role colour appears only in the wash,
+ *    the role label and the fallback avatar — never as a rainbow gradient.
+ *  • SF type hierarchy (semibold, not 800/900), sentence-case labels,
+ *    nothing below 12px, grouped-list back side like iOS Settings / Wallet.
+ *  • Glass is a *surface treatment* (specular edge + moving sheen), not
+ *    `backdrop-filter` — blur inside a 3D-transformed tree breaks in
+ *    WKWebView (Telegram iOS) and is the #1 GPU cost of the old version.
  *
- * ─── What changed vs. the previous revision ─────────────────────────────
- *  [perf]  Glare now moves via GPU `transform`, not per-frame string
- *          concatenation of `radial-gradient` (was: 60×/s style recalc +
- *          paint; now: pure compositor).
- *  [perf]  `getBoundingClientRect()` is cached via `ResizeObserver` +
- *          scroll capture instead of being read on every `pointermove`
- *          (was: forced layout every frame).
- *  [fix]   `toggleFlip` no longer performs a side effect inside a
- *          `setState` updater — flip target is derived in a `useEffect`.
- *          React StrictMode safe.
- *  [fix]   `DockButton` properly accepts `(e: MouseEvent) => void` —
- *          removed `as unknown as () => void` escape hatch.
- *  [a11y]  Card is keyboard-flippable: `role="button"`, `tabIndex`,
- *          Enter / Space handled, `aria-pressed` reflects state.
- *  [a11y]  `animate-ping` pulse respects `prefers-reduced-motion`.
- *  [a11y]  NFC chip gains a `title` + `aria-describedby` status line.
- *  [a11y]  Avatar `<img>` declares intrinsic size to prevent CLS.
- *  [a11y]  Copy button gets `aria-live` status in its own slot, no
- *          duplicate announcements.
- *  [perf]  `SpatialIdentityCard360` wrapped in `React.memo`.
- *  [fix]   `coursesCount` clamped to `>= 0` — no more negative groups.
- *  [fix]   Teacher specialty fallback is `'—'` instead of guessing
- *          "Kafedra O'qituvchisi" (which may be factually wrong).
- *  [style] STAFF and ADMIN palette differentiated so roles are
- *          visually distinguishable at a glance.
+ * Interaction
+ *  • Tap = spin forward 180° (two taps is a true 360°).
+ *  • Drag horizontally = spin with the finger, release snaps to the nearest
+ *    face with fling velocity.
+ *  • Mouse hover = restrained tilt + sheen. Touch never tilts (scroll-safe).
+ *  • Haptics via Telegram WebApp, falling back to navigator.vibrate.
+ *
+ * Props
+ *  • `qr` — pass a REAL QR (e.g. <QRCodeSVG value={…} />). The previous
+ *    version drew a random, non-scannable pattern that looked like a QR on
+ *    an ID card. That is removed; without `qr` the tile is simply omitted.
  * ============================================================================
  */
 
 import * as React from 'react';
 import { motion, useReducedMotion, useSpring, useTransform } from 'framer-motion';
+import type { MotionValue } from 'framer-motion';
+import { RealQrCode } from '../ui/RealQrCode';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * TYPES
@@ -89,100 +81,179 @@ export interface SpatialIdentityCard360Props {
   data: IdentityCardData;
   className?: string;
   onShare?: () => void;
+  /** A real, scannable QR element (SVG / canvas / img). If omitted, an authentic ISO/IEC 18004 QR is generated automatically. */
+  qr?: React.ReactNode;
+  /** Explicit payload or URL to encode in the real QR code. Defaults to `${origin}/verify/${data.codeOrId || data.id}` */
+  qrValue?: string;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
  * UTILITIES
  * ════════════════════════════════════════════════════════════════════════ */
 
+const isBrowser = typeof window !== 'undefined';
+
 const clamp = (value: number, min = 0, max = 100): number =>
   Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : min;
 
-/** FNV-1a — deterministic, tiny, dependency-free. */
-function hash32(input: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/** Cumulative angle (multiple of 180) → which face is toward the viewer. */
+const isBackSide = (angle: number): boolean => Math.abs(Math.round(angle / 180)) % 2 === 1;
+
+function formatDate(value?: string | null): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}`;
 }
 
-/** Mulberry32 PRNG — stable across renders & SSR. */
-function makeRng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+interface TelegramHaptics {
+  impactOccurred(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft'): void;
+  notificationOccurred(type: 'error' | 'success' | 'warning'): void;
 }
 
-/** True on the server / during the first client paint. */
-const isBrowser = typeof window !== 'undefined';
-
-/* ══════════════════════════════════════════════════════════════════════════
- * DETERMINISTIC QR MATRIX (visually authentic, non-encodable by design)
- * ════════════════════════════════════════════════════════════════════════ */
-
-function buildQrMatrix(seed: string, size = 21): boolean[][] {
-  const rng = makeRng(hash32(`qr:${seed}`));
-  const grid: boolean[][] = Array.from({ length: size }, () =>
-    Array<boolean>(size).fill(false),
-  );
-
-  const finderZones: Array<[number, number]> = [
-    [0, 0],
-    [0, size - 7],
-    [size - 7, 0],
-  ];
-
-  const inFinder = (row: number, col: number): boolean =>
-    finderZones.some(
-      ([r0, c0]) => row >= r0 && row < r0 + 7 && col >= c0 && col < c0 + 7,
-    );
-
-  for (let row = 0; row < size; row += 1) {
-    for (let col = 0; col < size; col += 1) {
-      if (inFinder(row, col)) continue;
-      if (row === 6 || col === 6) {
-        grid[row][col] = (row + col) % 2 === 0; // timing pattern
-        continue;
-      }
-      grid[row][col] = rng() > 0.52;
+/** Best-effort haptics: Telegram WebApp → Vibration API → nothing. */
+function haptic(kind: 'light' | 'success'): void {
+  if (!isBrowser) return;
+  try {
+    const hf = (
+      window as unknown as { Telegram?: { WebApp?: { HapticFeedback?: TelegramHaptics } } }
+    ).Telegram?.WebApp?.HapticFeedback;
+    if (hf) {
+      if (kind === 'success') hf.notificationOccurred('success');
+      else hf.impactOccurred('light');
+      return;
     }
+    navigator.vibrate?.(kind === 'success' ? [10, 40, 10] : 8);
+  } catch {
+    /* haptics are optional */
   }
+}
 
-  finderZones.forEach(([r0, c0]) => {
-    for (let r = 0; r < 7; r += 1) {
-      for (let c = 0; c < 7; c += 1) {
-        const isEdge = r === 0 || r === 6 || c === 0 || c === 6;
-        const isCore = r >= 2 && r <= 4 && c >= 2 && c <= 4;
-        grid[r0 + r][c0 + c] = isEdge || isCore;
-      }
+/** Clipboard with a fallback for WebViews / non-secure contexts. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
     }
-  });
-
-  return grid;
+  } catch {
+    /* fall through to legacy path */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * ICONS
+ * DESIGN TOKENS (iOS system palette, contrast-checked text variants)
  * ════════════════════════════════════════════════════════════════════════ */
+
+const FONT =
+  '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", Roboto, sans-serif';
+
+const INK = 'text-[#1C1C1E] dark:text-white';
+const SUB = 'text-[#636366] dark:text-[#98989D]';
+const ACC_TEXT = 'text-[color:var(--acc-l)] dark:text-[color:var(--acc-d)]';
+const HAIR_B = 'border-[rgba(60,60,67,0.14)] dark:border-[rgba(84,84,88,0.5)]';
+const HAIR_DIVIDE = 'divide-[rgba(60,60,67,0.12)] dark:divide-[rgba(84,84,88,0.5)]';
+const CELL = 'bg-white dark:bg-[#1C1C1E]';
+
+const FACE =
+  'absolute inset-0 overflow-hidden rounded-[36px] ' +
+  'shadow-[0_0_0_0.5px_rgba(60,60,67,0.16),0_2px_4px_rgba(0,0,0,0.04),0_22px_44px_-14px_rgba(0,0,0,0.28)] ' +
+  'dark:shadow-[0_0_0_0.5px_rgba(255,255,255,0.14),0_2px_4px_rgba(0,0,0,0.3),0_26px_52px_-14px_rgba(0,0,0,0.75)]';
+
+const EDGE =
+  'pointer-events-none absolute inset-0 rounded-[inherit] ' +
+  'shadow-[inset_0_1px_0_rgba(255,255,255,0.95),inset_0_0_0_0.5px_rgba(255,255,255,0.5)] ' +
+  'dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.14),inset_0_0_0_0.5px_rgba(255,255,255,0.05)]';
+
+type Tone = 'ink' | 'good' | 'warn' | 'bad' | 'info' | 'muted';
+
+const TONE: Record<Tone, { text: string; bar: string }> = {
+  ink: { text: INK, bar: 'bg-[#1C1C1E] dark:bg-white' },
+  good: { text: 'text-[#1E7B34] dark:text-[#30D158]', bar: 'bg-[#34C759]' },
+  warn: { text: 'text-[#B25000] dark:text-[#FF9F0A]', bar: 'bg-[#FF9F0A]' },
+  bad: { text: 'text-[#D70015] dark:text-[#FF453A]', bar: 'bg-[#FF453A]' },
+  info: { text: 'text-[#0062CC] dark:text-[#409CFF]', bar: 'bg-[#0A84FF]' },
+  muted: { text: SUB, bar: 'bg-[#8E8E93]' },
+};
+
+const PILL: Record<'good' | 'warn' | 'bad', { box: string; dot: string }> = {
+  good: {
+    box: 'bg-[#34C759]/15 text-[#1E7B34] dark:bg-[#30D158]/20 dark:text-[#30D158]',
+    dot: 'bg-[#34C759]',
+  },
+  warn: {
+    box: 'bg-[#FF9F0A]/15 text-[#B25000] dark:bg-[#FF9F0A]/20 dark:text-[#FF9F0A]',
+    dot: 'bg-[#FF9F0A]',
+  },
+  bad: {
+    box: 'bg-[#FF453A]/15 text-[#D70015] dark:bg-[#FF453A]/20 dark:text-[#FF453A]',
+    dot: 'bg-[#FF453A]',
+  },
+};
+
+interface RoleTheme {
+  badge: string;
+  accent: string; // fills
+  textL: string; // text on light surfaces (≥4.5:1)
+  textD: string; // text on dark surfaces
+}
+
+const ROLE_THEME: Record<ResolvedRole, RoleTheme> = {
+  STUDENT: { badge: 'Talaba', accent: '#0A84FF', textL: '#0062CC', textD: '#409CFF' },
+  TEACHER: { badge: "O'qituvchi", accent: '#AF52DE', textL: '#8E3FB8', textD: '#BF5AF2' },
+  ADMIN: { badge: 'Administrator', accent: '#5E5CE6', textL: '#4B49C8', textD: '#7D7AFF' },
+  STAFF: { badge: 'Xodim', accent: '#FF9F0A', textL: '#B25000', textD: '#FF9F0A' },
+  PARENT: { badge: 'Ota-ona', accent: '#FF2D55', textL: '#C8123F', textD: '#FF6482' },
+  USER: { badge: 'Foydalanuvchi', accent: '#8E8E93', textL: '#636366', textD: '#AEAEB2' },
+};
+
+function resolveRole(raw: unknown): ResolvedRole {
+  // Strip every apostrophe variant so O'QITUVCHI / OʻQITUVCHI / OQITUVCHI all match.
+  const r = String(raw ?? '')
+    .toUpperCase()
+    .replace(/[’'`ʻʼ‘]/g, '');
+  if (/TEACHER|USTOZ|OQITUVCHI|MUALLIM/.test(r)) return 'TEACHER';
+  if (/ADMIN|MANAGER|RAHBAR|DIREKTOR/.test(r)) return 'ADMIN';
+  if (/STAFF|XODIM/.test(r)) return 'STAFF';
+  if (/PARENT|OTA[\s_-]?ONA/.test(r)) return 'PARENT';
+  if (/STUDENT|TALABA|OQUVCHI/.test(r)) return 'STUDENT';
+  return 'USER';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * ICONS (SF-Symbols-like, 1.8 stroke)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const svgBase = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.8,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+};
 
 function NfcWaveIcon({ className = '' }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.1}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
+    <svg {...svgBase} className={className}>
       <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36" />
       <path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58" />
       <path d="M12.91 4.1a15.91 15.91 0 0 1 .01 15.8" />
@@ -191,18 +262,9 @@ function NfcWaveIcon({ className = '' }: { className?: string }) {
   );
 }
 
-function Rotate3DIcon({ className = '' }: { className?: string }) {
+function FlipIcon({ className = '' }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.1}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
+    <svg {...svgBase} className={className}>
       <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
       <path d="M3 3v5h5" />
       <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
@@ -211,49 +273,22 @@ function Rotate3DIcon({ className = '' }: { className?: string }) {
   );
 }
 
-function CopyIcon({ copied }: { copied: boolean }) {
+function CopyIcon({ copied, className = 'h-4 w-4' }: { copied: boolean; className?: string }) {
   return copied ? (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.6}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-3.5 w-3.5 text-emerald-500"
-      aria-hidden="true"
-    >
+    <svg {...svgBase} strokeWidth={2.4} className={`${className} text-[#34C759]`}>
       <path d="M20 6 9 17l-5-5" />
     </svg>
   ) : (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.1}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-3.5 w-3.5"
-      aria-hidden="true"
-    >
-      <rect width="14" height="14" x="8" y="8" rx="2.5" ry="2.5" />
+    <svg {...svgBase} className={className}>
+      <rect width="14" height="14" x="8" y="8" rx="3" />
       <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
     </svg>
   );
 }
 
-function ShareIcon() {
+function ShareIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-3.5 w-3.5"
-      aria-hidden="true"
-    >
+    <svg {...svgBase} className={className}>
       <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
       <polyline points="16 6 12 2 8 6" />
       <line x1="12" x2="12" y1="2" y2="15" />
@@ -262,361 +297,125 @@ function ShareIcon() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * EMV NFC CHIP
- * ════════════════════════════════════════════════════════════════════════ */
-
-function EmvNfcChip({
-  metallic = 'gold',
-  enabled = true,
-}: {
-  metallic?: 'gold' | 'platinum';
-  enabled?: boolean;
-}) {
-  const isPlatinum = metallic === 'platinum';
-
-  return (
-    <div
-      className={[
-        'relative h-8 w-11 shrink-0 overflow-hidden rounded-[9px]',
-        'border border-white/70',
-        'shadow-[0_4px_10px_rgba(15,23,42,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)]',
-        'transition-opacity duration-300',
-        enabled ? 'opacity-100' : 'opacity-40 grayscale',
-      ].join(' ')}
-      style={{
-        background: isPlatinum
-          ? 'linear-gradient(135deg, #F8FAFC 0%, #CBD5E1 48%, #94A3B8 100%)'
-          : 'linear-gradient(135deg, #FDE68A 0%, #F59E0B 50%, #B45309 100%)',
-      }}
-      role="img"
-      aria-label={enabled ? 'EMV NFC chip faol' : 'EMV NFC chip faol emas'}
-    >
-      <svg
-        viewBox="0 0 44 32"
-        className="h-full w-full opacity-55"
-        fill="none"
-        stroke={isPlatinum ? '#334155' : '#78350F'}
-        strokeWidth={1}
-        aria-hidden="true"
-      >
-        <rect x="14" y="7" width="16" height="18" rx="3" />
-        <line x1="0" y1="11" x2="14" y2="11" />
-        <line x1="0" y1="21" x2="14" y2="21" />
-        <line x1="30" y1="11" x2="44" y2="11" />
-        <line x1="30" y1="21" x2="44" y2="21" />
-        <line x1="22" y1="0" x2="22" y2="7" />
-        <line x1="22" y1="25" x2="22" y2="32" />
-      </svg>
-      <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/45 to-transparent" />
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
- * DETERMINISTIC QR + BARCODE RENDERERS
- * ════════════════════════════════════════════════════════════════════════ */
-
-const QrMatrix = React.memo(function QrMatrix({
-  seed,
-  className = '',
-}: {
-  seed: string;
-  className?: string;
-}) {
-  const cells = React.useMemo(() => {
-    const size = 21;
-    const grid = buildQrMatrix(seed, size);
-    const out: Array<{ x: number; y: number }> = [];
-    for (let y = 0; y < size; y += 1) {
-      for (let x = 0; x < size; x += 1) {
-        if (grid[y][x]) out.push({ x, y });
-      }
-    }
-    return out;
-  }, [seed]);
-
-  return (
-    <svg
-      viewBox="0 0 21 21"
-      shapeRendering="crispEdges"
-      className={className}
-      role="img"
-      aria-label="Shaxsiy identifikatsiya QR kodi"
-    >
-      <rect width="21" height="21" fill="#FFFFFF" />
-      {cells.map(({ x, y }) => (
-        <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill="#0B0F1A" />
-      ))}
-    </svg>
-  );
-});
-
-const Barcode = React.memo(function Barcode({
-  seed,
-  className = '',
-}: {
-  seed: string;
-  className?: string;
-}) {
-  const { bars, total } = React.useMemo(() => {
-    const rng = makeRng(hash32(`barcode:${seed}`));
-    const list: Array<{ x: number; w: number }> = [];
-    let cursor = 0;
-    for (let i = 0; i < 38; i += 1) {
-      const width = rng() > 0.55 ? 2 : 1;
-      list.push({ x: cursor, w: width });
-      cursor += width + (rng() > 0.5 ? 2 : 1);
-    }
-    return { bars: list, total: cursor };
-  }, [seed]);
-
-  return (
-    <svg
-      viewBox={`0 0 ${total} 16`}
-      preserveAspectRatio="none"
-      className={className}
-      shapeRendering="crispEdges"
-      aria-hidden="true"
-    >
-      {bars.map((bar, index) => (
-        <rect
-          key={index}
-          x={bar.x}
-          y={0}
-          width={bar.w}
-          height={16}
-          fill="currentColor"
-        />
-      ))}
-    </svg>
-  );
-});
-
-/* ══════════════════════════════════════════════════════════════════════════
  * PRESENTATIONAL PIECES
  * ════════════════════════════════════════════════════════════════════════ */
 
-interface MetricTileProps {
+interface Metric {
   label: string;
   value: string;
   hint?: string;
-  toneClass: string;
+  tone?: Tone;
   progress?: number;
-  barClass?: string;
 }
 
-function MetricTile({ label, value, hint, toneClass, progress, barClass }: MetricTileProps) {
+function MetricCell({ label, value, hint, tone = 'ink', progress }: Metric) {
+  const t = TONE[tone];
+  const size =
+    value.length <= 6
+      ? 'truncate text-[22px] leading-7'
+      : value.length <= 12
+        ? 'truncate text-[17px] leading-7'
+        : 'line-clamp-2 text-[15px] leading-[18px]';
+
   return (
-    <div className="rounded-2xl border border-slate-900/[0.06] bg-white/60 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05] dark:shadow-none">
-      <p className="truncate text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-        {label}
-      </p>
-      <p className={`mt-0.5 truncate text-[19px] font-black leading-tight tabular-nums ${toneClass}`}>
-        {value}
-      </p>
-      {progress !== undefined && (
-        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-900/[0.07] dark:bg-white/10">
+    <div className={`flex min-h-[80px] min-w-0 flex-col justify-between px-3.5 py-2.5 ${CELL}`}>
+      <p className={`truncate text-[12px] font-medium leading-4 ${SUB}`}>{label}</p>
+      <p className={`${size} font-semibold tabular-nums tracking-[-0.02em] ${t.text}`}>{value}</p>
+      {progress !== undefined ? (
+        <>
           <div
-            className={`h-full rounded-full ${barClass ?? 'bg-slate-900'}`}
-            style={{ width: `${clamp(progress)}%` }}
-          />
-        </div>
-      )}
-      {hint && (
-        <p className="mt-1 truncate text-[9px] font-semibold text-slate-400 dark:text-slate-500">
-          {hint}
-        </p>
+            role="progressbar"
+            aria-label={label}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(clamp(progress))}
+            className="h-1 w-full overflow-hidden rounded-full bg-[rgba(120,120,128,0.18)]"
+          >
+            <div
+              className={`h-full rounded-full ${t.bar}`}
+              style={{ width: `${clamp(progress)}%` }}
+            />
+          </div>
+          {hint && <span className="sr-only">{hint}</span>}
+        </>
+      ) : (
+        hint && <p className={`truncate text-[12px] leading-4 ${SUB}`}>{hint}</p>
       )}
     </div>
   );
 }
 
-interface DockButtonProps {
-  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  children: React.ReactNode;
-  ariaLabel: string;
-  ariaPressed?: boolean;
-  variant?: 'ghost' | 'primary';
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-h-[38px] items-center justify-between gap-4 px-3.5 py-2">
+      <span className={`shrink-0 text-[14px] ${SUB}`}>{label}</span>
+      <span className={`min-w-0 truncate text-[14px] font-medium ${INK}`}>{value}</span>
+    </div>
+  );
 }
 
 function DockButton({
   onClick,
+  label,
   children,
-  ariaLabel,
-  ariaPressed,
-  variant = 'ghost',
-}: DockButtonProps) {
-  const base =
-    'inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[11.5px] font-bold ' +
-    'transition-all duration-200 active:scale-[0.96] focus-visible:outline-none ' +
-    'focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500/70 ' +
-    'dark:focus-visible:ring-offset-[#0B0F1A]';
-
-  const styles =
-    variant === 'primary'
-      ? 'bg-gradient-to-r from-[#0A84FF] to-[#2563EB] text-white shadow-[0_6px_16px_-4px_rgba(10,132,255,0.55),inset_0_1px_0_rgba(255,255,255,0.45)] hover:brightness-110'
-      : 'text-slate-900 hover:bg-slate-900/[0.05] dark:text-white dark:hover:bg-white/[0.08]';
-
+  primary = false,
+}: {
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  label: string;
+  children: React.ReactNode;
+  primary?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={ariaLabel}
-      aria-pressed={ariaPressed}
-      className={`${base} ${styles}`}
+      aria-label={label}
+      className={
+        'inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-[14px] font-semibold ' +
+        'transition-[background-color,transform] duration-150 active:scale-[0.96] motion-reduce:transition-none ' +
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF] ' +
+        (primary
+          ? 'bg-[#1C1C1E] text-white dark:bg-white dark:text-[#1C1C1E]'
+          : `${INK} hover:bg-black/[0.05] dark:hover:bg-white/10`)
+      }
     >
       {children}
     </button>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
- * ROLE THEME — every role has a distinct signature palette
- * ════════════════════════════════════════════════════════════════════════ */
-
-interface RoleTheme {
-  title: string;
-  badge: string;
-  accent: string;
-  accent2: string;
-  gradient: string;
-  chip: 'gold' | 'platinum';
-}
-
-const ROLE_THEME: Record<ResolvedRole, RoleTheme> = {
-  STUDENT: {
-    title: 'TALABA',
-    badge: 'Talaba',
-    accent: '#0A84FF',
-    accent2: '#00C7BE',
-    gradient: 'linear-gradient(135deg, #0A84FF 0%, #2563EB 55%, #00C7BE 100%)',
-    chip: 'gold',
-  },
-  TEACHER: {
-    title: "O'QITUVCHI",
-    badge: "O'qituvchi",
-    accent: '#AF52DE',
-    accent2: '#5856D6',
-    gradient: 'linear-gradient(135deg, #AF52DE 0%, #7C3AED 55%, #5856D6 100%)',
-    chip: 'gold',
-  },
-  ADMIN: {
-    title: 'ADMINISTRATOR',
-    badge: 'Administrator',
-    accent: '#10B981',
-    accent2: '#0EA5E9',
-    gradient: 'linear-gradient(135deg, #10B981 0%, #059669 55%, #0EA5E9 100%)',
-    chip: 'gold',
-  },
-  /* STAFF deliberately differs from ADMIN so roles are distinguishable. */
-  STAFF: {
-    title: 'XODIM',
-    badge: 'Xodim',
-    accent: '#F97316',
-    accent2: '#FACC15',
-    gradient: 'linear-gradient(135deg, #F97316 0%, #EA580C 55%, #FACC15 100%)',
-    chip: 'gold',
-  },
-  PARENT: {
-    title: 'OTA-ONA',
-    badge: 'Ota-ona',
-    accent: '#F59E0B',
-    accent2: '#EF4444',
-    gradient: 'linear-gradient(135deg, #F59E0B 0%, #F97316 55%, #EF4444 100%)',
-    chip: 'platinum',
-  },
-  USER: {
-    title: 'FOYDALANUVCHI',
-    badge: 'Foydalanuvchi',
-    accent: '#6366F1',
-    accent2: '#3B82F6',
-    gradient: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 55%, #3B82F6 100%)',
-    chip: 'platinum',
-  },
-};
-
-/* ══════════════════════════════════════════════════════════════════════════
- * Rect cache — one measurement per layout change, never per frame
- * ════════════════════════════════════════════════════════════════════════ */
-
-interface CachedRect {
-  width: number;
-  height: number;
-  left: number;
-  top: number;
-}
-
-function useCachedRect(ref: React.RefObject<HTMLElement | null>): React.MutableRefObject<CachedRect | null> {
-  const rectRef = React.useRef<CachedRect | null>(null);
-
-  React.useEffect(() => {
-    const el = ref.current;
-    if (!el || !isBrowser) return;
-
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      rectRef.current = { width: r.width, height: r.height, left: r.left, top: r.top };
-    };
-
-    measure();
-
-    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
-    observer?.observe(el);
-
-    const onScrollOrResize = () => measure();
-    window.addEventListener('scroll', onScrollOrResize, { passive: true, capture: true });
-    window.addEventListener('resize', onScrollOrResize, { passive: true });
-
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('scroll', onScrollOrResize, true);
-      window.removeEventListener('resize', onScrollOrResize);
-    };
-  }, [ref]);
-
-  return rectRef;
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
- * GLARE LAYER — GPU-only movement
- *
- * The gradient string is written ONCE. Motion is applied purely via
- * `transform: translate3d(...)` driven by springs → compositor-only,
- * zero paint per frame.
- * ════════════════════════════════════════════════════════════════════════ */
-
-const GLARE_GRADIENT =
-  'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.55) 18%, rgba(255,255,255,0.22) 38%, rgba(255,255,255,0) 62%)';
-
-const GlareLayer = React.memo(function GlareLayer({
+/**
+ * Specular sheen. The clip wrapper is STATIC; only the inner gradient moves,
+ * so rounded corners never detach from the card (the old version translated
+ * the clipped layer itself). Compositor-only: transform + opacity.
+ */
+const Sheen = React.memo(function Sheen({
   x,
   y,
-  opacity,
-  rounded = '2.5rem',
+  o,
 }: {
-  x: React.MutableRefObject<number> | { get(): number };
-  y: React.MutableRefObject<number> | { get(): number };
-  opacity: React.MutableRefObject<number> | { get(): number };
-  rounded?: string;
+  x: MotionValue<number>;
+  y: MotionValue<number>;
+  o: MotionValue<number>;
 }) {
-  // `x`/`y` are MotionValues from the parent — forwarded as-is.
-  const tx = useTransform(x as never, (v: number) => `${(v - 50)}%`);
-  const ty = useTransform(y as never, (v: number) => `${(v - 50)}%`);
-
+  const tx = useTransform(x, (v) => `${(v - 0.5) * 100}%`);
+  const ty = useTransform(y, (v) => `${(v - 0.5) * 100}%`);
   return (
-    <motion.div
+    <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-20 mix-blend-overlay"
-      style={{
-        x: tx,
-        y: ty,
-        opacity: opacity as never,
-        background: GLARE_GRADIENT,
-        willChange: 'transform, opacity',
-        clipPath: `inset(0 round ${rounded})`,
-        WebkitClipPath: `inset(0 round ${rounded})`,
-      }}
-    />
+      className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-[inherit]"
+    >
+      <motion.div
+        className="absolute inset-0 [--sheen:rgba(255,255,255,0.85)] dark:[--sheen:rgba(255,255,255,0.13)]"
+        style={{
+          x: tx,
+          y: ty,
+          opacity: o,
+          background:
+            'radial-gradient(ellipse 60% 45% at 50% 50%, var(--sheen), transparent 70%)',
+        }}
+      />
+    </div>
   );
 });
 
@@ -624,249 +423,146 @@ const GlareLayer = React.memo(function GlareLayer({
  * MAIN COMPONENT
  * ════════════════════════════════════════════════════════════════════════ */
 
+const INTERACTIVE = 'button, a, input, [data-no-flip]';
+const DEG_PER_PX = 0.55; // ≈ 330px of drag for a half turn on a 380px card
+const HIDE_BACKFACE: React.CSSProperties = {
+  backfaceVisibility: 'hidden',
+  WebkitBackfaceVisibility: 'hidden',
+};
+
+interface Gesture {
+  down: boolean;
+  moved: boolean;
+  x0: number;
+  y0: number;
+  a0: number;
+  lastX: number;
+  lastT: number;
+  v: number; // smoothed px/ms
+}
+
 function SpatialIdentityCard360Impl({
   data,
   className = '',
   onShare,
+  qr,
+  qrValue,
 }: SpatialIdentityCard360Props) {
   /* ── refs ────────────────────────────────────────────────────────────── */
-  const cardRef = React.useRef<HTMLDivElement>(null);
-  const rectRef = useCachedRect(cardRef);
-
-  const dragRef = React.useRef({ down: false, moved: false, x: 0, y: 0 });
-  const copyTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stageRef = React.useRef<HTMLDivElement>(null);
+  const frontRef = React.useRef<HTMLDivElement>(null);
+  const backRef = React.useRef<HTMLDivElement>(null);
+  const rectRef = React.useRef<DOMRect | null>(null);
+  const rectStale = React.useRef(true);
+  const angleRef = React.useRef(0);
+  const gesture = React.useRef<Gesture>({
+    down: false,
+    moved: false,
+    x0: 0,
+    y0: 0,
+    a0: 0,
+    lastX: 0,
+    lastT: 0,
+    v: 0,
+  });
+  const copyTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* ── state ───────────────────────────────────────────────────────────── */
   const [isFlipped, setIsFlipped] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [avatarFailed, setAvatarFailed] = React.useState(false);
 
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = Boolean(useReducedMotion());
 
   /* ── motion values ───────────────────────────────────────────────────── */
-  const tiltX = useSpring(0, { stiffness: 320, damping: 30, mass: 0.5 });
-  const tiltY = useSpring(0, { stiffness: 320, damping: 30, mass: 0.5 });
   const flip = useSpring(0, {
-    stiffness: reduceMotion ? 1200 : 230,
-    damping: reduceMotion ? 90 : 26,
-    mass: reduceMotion ? 0.2 : 0.9,
+    stiffness: reduceMotion ? 800 : 210,
+    damping: reduceMotion ? 80 : 25,
+    mass: reduceMotion ? 0.3 : 0.9,
   });
-  const glareX = useSpring(50, { stiffness: 200, damping: 24 });
-  const glareY = useSpring(50, { stiffness: 200, damping: 24 });
-  const glareOpacity = useSpring(0, { stiffness: 220, damping: 28 });
+  const tiltX = useSpring(0, { stiffness: 220, damping: 26, mass: 0.6 });
+  const tiltY = useSpring(0, { stiffness: 220, damping: 26, mass: 0.6 });
+  const press = useSpring(1, { stiffness: 380, damping: 30 });
+  const sheenX = useSpring(0.5, { stiffness: 180, damping: 24 });
+  const sheenY = useSpring(0.5, { stiffness: 180, damping: 24 });
+  const sheenO = useSpring(0, { stiffness: 200, damping: 28 });
 
   const rotateY = useTransform([flip, tiltY], (latest: number[]) => {
-    const [flipValue = 0, tiltValue = 0] = latest;
-    return flipValue + tiltValue;
+    const [f = 0, t = 0] = latest;
+    return f + t;
   });
 
-  /* ── derived data (memoized) ─────────────────────────────────────────── */
-  const resolvedRole = React.useMemo<ResolvedRole>(() => {
-    const role = String(data.role ?? '').toUpperCase();
-    if (role.includes('TEACHER') || role.includes('USTOZ') || role.includes("O'QITUVCHI")) {
-      return 'TEACHER';
-    }
-    if (role.includes('ADMIN') || role.includes('MANAGER') || role.includes('RAHBAR')) {
-      return 'ADMIN';
-    }
-    if (role.includes('STAFF') || role.includes('XODIM')) return 'STAFF';
-    if (role.includes('PARENT') || role.includes('OTA')) return 'PARENT';
-    if (role.includes('STUDENT') || role.includes('TALABA') || role.includes('OQUVCHI')) {
-      return 'STUDENT';
-    }
-    return 'USER';
-  }, [data.role]);
+  /* ── derived data ────────────────────────────────────────────────────── */
+  const role = React.useMemo(() => resolveRole(data.role), [data.role]);
+  const theme = ROLE_THEME[role];
 
-  const theme = ROLE_THEME[resolvedRole];
-  const safeId = React.useMemo(() => String(data.id ?? '').trim(), [data.id]);
-
-  const seed = React.useMemo(
-    () => safeId || data.codeOrId || data.fullName || 'M-EDU',
-    [safeId, data.codeOrId, data.fullName],
-  );
-
-  const displayId = React.useMemo(() => {
-    if (data.codeOrId) return data.codeOrId;
-    if (safeId) {
-      const compact = safeId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase();
-      return compact ? `ID-${compact}` : 'ID-—';
-    }
-    return 'ID-—';
-  }, [data.codeOrId, safeId]);
-
-  const initials = React.useMemo(() => {
-    const parts = String(data.fullName ?? '')
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? '');
-    return parts.join('') || 'ME';
-  }, [data.fullName]);
-
+  const name = data.fullName?.trim() || 'Ism kiritilmagan';
+  const safeId = String(data.id ?? '').trim();
   const orgName = data.organizationName || data.orgName || 'M-EDU';
   const isVerified = Boolean(data.biometricVerified);
   const nfcEnabled = Boolean(data.nfcEnabled);
   const showAvatar = Boolean(data.avatarUrl) && !avatarFailed;
+  const joined = formatDate(data.joinedDate);
 
-  const subtitle =
-    data.groupName
-      ? `Guruh: ${data.groupName}`
-      : data.specialty || data.department || (data.email ? data.email : undefined);
+  const displayId = React.useMemo(() => {
+    if (data.codeOrId) return data.codeOrId;
+    const compact = safeId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase();
+    return compact ? `ID-${compact}` : 'ID-—';
+  }, [data.codeOrId, safeId]);
 
-  /* ── effects ─────────────────────────────────────────────────────────── */
-  React.useEffect(() => {
-    setAvatarFailed(false);
-  }, [data.avatarUrl]);
+  const computedQrValue = React.useMemo(() => {
+    if (qrValue) return qrValue;
+    const origin =
+      typeof window !== 'undefined' && window.location.origin
+        ? window.location.origin
+        : 'https://m-edu.uz';
+    const cleanId = data.codeOrId || data.id;
+    return `${origin}/verify/${encodeURIComponent(cleanId)}`;
+  }, [qrValue, data.codeOrId, data.id]);
 
-  /* Sync spring target with state — no side effect in updater. */
-  React.useEffect(() => {
-    flip.set(isFlipped ? 180 : 0);
-  }, [isFlipped, flip]);
+  const initials = React.useMemo(() => {
+    const letters = name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() ?? '')
+      .join('');
+    return letters || 'M';
+  }, [name]);
 
-  /* Timer cleanup on unmount. */
-  React.useEffect(
-    () => () => {
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-    },
-    [],
-  );
+  const subtitle = data.groupName
+    ? `Guruh: ${data.groupName}`
+    : data.specialty || data.department || data.email || undefined;
 
-  /* ── interaction handlers ────────────────────────────────────────────── */
-  const resetTilt = React.useCallback(() => {
-    tiltX.set(0);
-    tiltY.set(0);
-    glareOpacity.set(0);
-  }, [tiltX, tiltY, glareOpacity]);
+  const statusText = data.status?.trim() || 'Faol';
+  const statusTone: 'good' | 'warn' | 'bad' = /blok|nofaol|inactive|suspend|arxiv|expired|tugagan/i.test(
+    statusText,
+  )
+    ? 'bad'
+    : /kut|pending|wait|tekshir/i.test(statusText)
+      ? 'warn'
+      : 'good';
 
-  const toggleFlip = React.useCallback(() => {
-    resetTilt();
-    setIsFlipped((prev) => !prev);
-  }, [resetTilt]);
-
-  const handlePointerMove = React.useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      const drag = dragRef.current;
-
-      if (drag.down) {
-        const dx = event.clientX - drag.x;
-        const dy = event.clientY - drag.y;
-        if (!drag.moved && Math.hypot(dx, dy) > 8) drag.moved = true;
-      }
-
-      if (event.pointerType !== 'mouse' && !drag.down) return;
-      if (reduceMotion) return;
-
-      const rect = rectRef.current;
-      if (!rect || rect.width === 0 || rect.height === 0) return;
-
-      const px = (event.clientX - rect.left) / rect.width;
-      const py = (event.clientY - rect.top) / rect.height;
-
-      tiltX.set(-(py - 0.5) * 20);
-      tiltY.set(-(px - 0.5) * 24);
-      glareX.set(clamp(px * 100));
-      glareY.set(clamp(py * 100));
-      glareOpacity.set(0.85);
-    },
-    [reduceMotion, rectRef, tiltX, tiltY, glareX, glareY, glareOpacity],
-  );
-
-  const handlePointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('button, a, input, [data-no-flip]')) return;
-    dragRef.current = {
-      down: true,
-      moved: false,
-      x: event.clientX,
-      y: event.clientY,
-    };
-  }, []);
-
-  const handlePointerUp = React.useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      const drag = dragRef.current;
-      dragRef.current.down = false;
-
-      if (!drag.down) return;
-      if ((event.target as HTMLElement).closest('button, a, input, [data-no-flip]')) return;
-      if (drag.moved) return;
-
-      toggleFlip();
-    },
-    [toggleFlip],
-  );
-
-  const handlePointerLeave = React.useCallback(() => {
-    dragRef.current.down = false;
-    resetTilt();
-  }, [resetTilt]);
-
-  const handleKeyDown = React.useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      if ((event.target as HTMLElement).closest('button, a, input, [data-no-flip]')) return;
-      event.preventDefault();
-      toggleFlip();
-    },
-    [toggleFlip],
-  );
-
-  const handleCopy = React.useCallback(
-    async (event?: React.MouseEvent) => {
-      event?.stopPropagation();
-
-      const value = data.codeOrId || safeId;
-      if (!value) return;
-
-      try {
-        if (isBrowser && navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(value);
-          setCopied(true);
-          if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-          copyTimerRef.current = setTimeout(() => setCopied(false), 1800);
-        }
-      } catch {
-        /* Clipboard permissions denied — silent fallback. */
-      }
-    },
-    [data.codeOrId, safeId],
-  );
-
-  /* Stable identity for the dock's onClick type. */
-  const handleDockCopy = React.useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      void handleCopy(event);
-    },
-    [handleCopy],
-  );
-
-  const handleDockShare = React.useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation();
-      onShare?.();
-    },
-    [onShare],
-  );
+  const themeVars = {
+    '--acc': theme.accent,
+    '--acc-l': theme.textL,
+    '--acc-d': theme.textD,
+  } as React.CSSProperties;
 
   /* ── metrics ─────────────────────────────────────────────────────────── */
-  const metrics = React.useMemo<MetricTileProps[]>(() => {
-    if (resolvedRole === 'STUDENT') {
-      const hasAttendance =
-        typeof data.attendanceRate === 'number' &&
-        Number.isFinite(data.attendanceRate) &&
-        data.attendanceRate >= 0;
-      const attendance = hasAttendance ? clamp(data.attendanceRate!) : 0;
+  const metrics = React.useMemo<Metric[]>(() => {
+    const faceId: Metric = {
+      label: 'Face ID',
+      value: isVerified ? 'Tasdiqlangan' : 'Kiritilmagan',
+      hint: isVerified ? 'Biometriya faol' : 'Kutish holatida',
+      tone: isVerified ? 'good' : 'muted',
+    };
 
-      const hasMastery =
-        typeof data.gpaOrMastery === 'number' &&
-        Number.isFinite(data.gpaOrMastery) &&
-        data.gpaOrMastery >= 0;
-      const mastery = hasMastery ? clamp(data.gpaOrMastery!) : 0;
-
-      const groupsCount =
-        typeof data.coursesCount === 'number' &&
-        Number.isFinite(data.coursesCount) &&
-        data.coursesCount >= 0
+    if (role === 'STUDENT') {
+      const att = isNum(data.attendanceRate) && data.attendanceRate >= 0 ? clamp(data.attendanceRate) : null;
+      const mas = isNum(data.gpaOrMastery) && data.gpaOrMastery >= 0 ? clamp(data.gpaOrMastery) : null;
+      const groups =
+        isNum(data.coursesCount) && data.coursesCount >= 0
           ? Math.floor(data.coursesCount)
           : data.groupName
             ? 1
@@ -875,543 +571,544 @@ function SpatialIdentityCard360Impl({
       return [
         {
           label: 'Davomat',
-          value: hasAttendance ? `${Math.round(attendance)}%` : '—',
-          hint: hasAttendance
-            ? attendance >= 80
-              ? "A'lo qatnashish"
-              : attendance >= 60
-                ? "O'rtacha"
-                : 'Past davomat'
-            : 'Darslar kutilmoqda',
-          toneClass: hasAttendance
-            ? attendance >= 80
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : attendance >= 60
-                ? 'text-amber-500'
-                : 'text-red-500'
-            : 'text-slate-400 dark:text-slate-500',
-          progress: hasAttendance ? attendance : undefined,
-          barClass:
-            attendance >= 80
-              ? 'bg-emerald-500'
-              : attendance >= 60
-                ? 'bg-amber-500'
-                : 'bg-red-500',
+          value: att === null ? '—' : `${Math.round(att)}%`,
+          hint:
+            att === null
+              ? 'Darslar kutilmoqda'
+              : att >= 80
+                ? "A'lo qatnashish"
+                : att >= 60
+                  ? "O'rtacha"
+                  : 'Past davomat',
+          tone: att === null ? 'muted' : att >= 80 ? 'good' : att >= 60 ? 'warn' : 'bad',
+          progress: att ?? undefined,
         },
         {
           label: "O'zlashtirish",
-          value: hasMastery ? `${Math.round(mastery)}%` : '—',
-          hint: hasMastery
-            ? mastery >= 85
-              ? "Yuqori ko'rsatkich"
-              : 'Joriy natija'
-            : 'Hali baholanmagan',
-          toneClass: hasMastery
-            ? mastery >= 80
-              ? 'text-blue-600 dark:text-blue-400'
-              : 'text-amber-500'
-            : 'text-slate-400 dark:text-slate-500',
-          progress: hasMastery ? mastery : undefined,
-          barClass: 'bg-blue-500',
+          value: mas === null ? '—' : `${Math.round(mas)}%`,
+          hint: mas === null ? 'Hali baholanmagan' : mas >= 85 ? "Yuqori ko'rsatkich" : 'Joriy natija',
+          tone: mas === null ? 'muted' : mas >= 80 ? 'info' : 'warn',
+          progress: mas ?? undefined,
         },
-        {
-          label: 'Guruhlar',
-          value: `${groupsCount} ta`,
-          hint: data.groupName || 'Biriktirilgan kurslar',
-          toneClass: 'text-slate-900 dark:text-white',
-        },
-        {
-          label: 'Face ID',
-          value: isVerified ? 'Tasdiqlangan' : 'Kiritilmagan',
-          hint: isVerified ? 'Biometriya faol' : 'Kutish holatida',
-          toneClass: isVerified
-            ? 'text-emerald-600 dark:text-emerald-400'
-            : 'text-slate-400 dark:text-slate-500',
-        },
+        { label: 'Guruhlar', value: `${groups} ta`, hint: data.groupName || 'Biriktirilgan kurslar' },
+        faceId,
       ];
     }
 
-    if (resolvedRole === 'TEACHER') {
-      const hasRating =
-        typeof data.rating === 'number' && Number.isFinite(data.rating) && data.rating > 0;
-      const hasLessons =
-        typeof data.lessonsCount === 'number' &&
-        Number.isFinite(data.lessonsCount) &&
-        data.lessonsCount >= 0;
-      const hasGroups =
-        typeof data.activeGroupsCount === 'number' &&
-        Number.isFinite(data.activeGroupsCount) &&
-        data.activeGroupsCount >= 0;
+    if (role === 'TEACHER') {
+      const groups =
+        isNum(data.activeGroupsCount) && data.activeGroupsCount >= 0
+          ? Math.floor(data.activeGroupsCount)
+          : 0;
+      const lessons = isNum(data.lessonsCount) && data.lessonsCount >= 0 ? Math.floor(data.lessonsCount) : null;
+      const rating = isNum(data.rating) && data.rating > 0 ? data.rating : null;
 
-      const activityLabel = hasLessons ? 'Darslar' : 'Reyting';
-      const activityValue = hasLessons
-        ? `${Math.floor(data.lessonsCount!)} ta`
-        : hasRating
-          ? `★ ${Number(data.rating).toFixed(1)}`
-          : '—';
-      const activityHint = hasLessons
-        ? "O'tilgan darslar"
-        : hasRating
-          ? 'Talabalar bahosi'
-          : 'Baholanmagan';
+      const activity: Metric =
+        lessons !== null
+          ? { label: 'Darslar', value: `${lessons} ta`, hint: "O'tilgan darslar", tone: 'good' }
+          : rating !== null
+            ? { label: 'Reyting', value: rating.toFixed(1), hint: 'Talabalar bahosi', tone: 'warn' }
+            : { label: 'Reyting', value: '—', hint: 'Baholanmagan', tone: 'muted' };
 
       return [
-        {
-          label: 'Guruhlar',
-          value: hasGroups ? `${Math.floor(data.activeGroupsCount!)} ta` : '0 ta',
-          hint: 'Faol guruhlar',
-          toneClass: 'text-blue-600 dark:text-blue-400',
-        },
+        { label: 'Faol guruhlar', value: `${groups} ta`, hint: 'Hozirgi yuklama', tone: 'info' },
         {
           label: 'Mutaxassislik',
           value: data.specialty || '—',
           hint: data.department || "Akademik yo'nalish",
-          toneClass: data.specialty
-            ? 'text-purple-600 dark:text-purple-400'
-            : 'text-slate-400 dark:text-slate-500',
+          tone: data.specialty ? 'ink' : 'muted',
         },
-        {
-          label: activityLabel,
-          value: activityValue,
-          hint: activityHint,
-          toneClass: hasLessons
-            ? 'text-emerald-600 dark:text-emerald-400'
-            : hasRating
-              ? 'text-amber-500'
-              : 'text-slate-400 dark:text-slate-500',
-        },
-        {
-          label: 'Face ID',
-          value: isVerified ? 'Tasdiqlangan' : 'Kiritilmagan',
-          hint: isVerified ? 'Biometriya faol' : 'Kutish holatida',
-          toneClass: isVerified
-            ? 'text-emerald-600 dark:text-emerald-400'
-            : 'text-slate-400 dark:text-slate-500',
-        },
+        activity,
+        faceId,
       ];
     }
 
     return [
-      {
-        label: 'Rol',
-        value: String(data.role || 'Foydalanuvchi').replace(/_/g, ' '),
-        hint: data.department || 'Tizim foydalanuvchisi',
-        toneClass: 'text-blue-600 dark:text-blue-400',
-      },
-      {
-        label: 'Holat',
-        value: data.status || 'Faol',
-        hint: isVerified ? 'Xavfsiz autentifikatsiya' : 'Standart kirish',
-        toneClass: 'text-emerald-600 dark:text-emerald-400',
-      },
-      {
-        label: "Bo'lim",
-        value: data.department || data.specialty || data.organizationName || 'M-EDU',
-        hint: 'Tashkiliy tuzilma',
-        toneClass: 'text-slate-900 dark:text-white',
-      },
-      {
-        label: 'Face ID',
-        value: isVerified ? 'Tasdiqlangan' : 'Kiritilmagan',
-        hint: isVerified ? 'Biometrik shlyuz faol' : 'Kutish holatida',
-        toneClass: isVerified
-          ? 'text-emerald-600 dark:text-emerald-400'
-          : 'text-slate-400 dark:text-slate-500',
-      },
+      { label: 'Rol', value: theme.badge, hint: 'Tizimdagi huquq' },
+      data.department || data.specialty
+        ? {
+            label: "Bo'lim",
+            value: (data.department || data.specialty) as string,
+            hint: 'Tashkiliy tuzilma',
+          }
+        : { label: 'Tashkilot', value: orgName, hint: 'Biriktirilgan' },
+      data.clearanceLevel
+        ? { label: 'Ruxsat darajasi', value: data.clearanceLevel, hint: 'Kirish huquqi' }
+        : {
+            label: 'Holat',
+            value: statusText,
+            hint: isVerified ? 'Xavfsiz autentifikatsiya' : 'Standart kirish',
+            tone: statusTone === 'good' ? 'good' : statusTone,
+          },
+      faceId,
     ];
-  }, [resolvedRole, data, isVerified]);
+  }, [role, theme.badge, orgName, isVerified, statusText, statusTone, data]);
 
-  /* ── style helpers (module-level behaviour, cheap to rebuild) ────────── */
-  const faceStyle = (rotation: string): React.CSSProperties => ({
-    transform: `rotateY(${rotation})`,
-    transformStyle: 'preserve-3d',
-    backfaceVisibility: 'hidden',
-    WebkitBackfaceVisibility: 'hidden',
-  });
+  /* ── effects ─────────────────────────────────────────────────────────── */
+  React.useEffect(() => {
+    setAvatarFailed(false);
+  }, [data.avatarUrl]);
 
-  const contentStyle: React.CSSProperties = {
-    transformStyle: 'preserve-3d',
-    backfaceVisibility: 'hidden',
-    WebkitBackfaceVisibility: 'hidden',
-  };
+  // The hidden face must not be focusable or readable by assistive tech.
+  React.useEffect(() => {
+    frontRef.current?.toggleAttribute('inert', isFlipped);
+    backRef.current?.toggleAttribute('inert', !isFlipped);
+  }, [isFlipped]);
 
-  const depth = (z: number): React.CSSProperties => ({ transform: `translateZ(${z}px)` });
+  // Rect cache: measured lazily from the UNROTATED stage, invalidated by scroll/resize.
+  React.useEffect(() => {
+    if (!isBrowser) return;
+    const stale = () => {
+      rectStale.current = true;
+    };
+    window.addEventListener('scroll', stale, { passive: true, capture: true });
+    window.addEventListener('resize', stale, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', stale, true);
+      window.removeEventListener('resize', stale);
+    };
+  }, []);
+
+  React.useEffect(
+    () => () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  /* ── interaction ─────────────────────────────────────────────────────── */
+  const readRect = React.useCallback((): DOMRect | null => {
+    if (rectStale.current && stageRef.current) {
+      rectRef.current = stageRef.current.getBoundingClientRect();
+      rectStale.current = false;
+    }
+    return rectRef.current;
+  }, []);
+
+  const resetHover = React.useCallback(() => {
+    tiltX.set(0);
+    tiltY.set(0);
+    sheenO.set(0);
+  }, [tiltX, tiltY, sheenO]);
+
+  /** Single place that changes the face — keeps angle, state and spring in sync. */
+  const commit = React.useCallback(
+    (target: number) => {
+      const before = isBackSide(angleRef.current);
+      angleRef.current = target;
+      flip.set(target);
+      const after = isBackSide(target);
+      if (after !== before) {
+        setIsFlipped(after);
+        haptic('light');
+      }
+    },
+    [flip],
+  );
+
+  const spin = React.useCallback(() => {
+    resetHover();
+    commit(angleRef.current + 180);
+  }, [commit, resetHover]);
+
+  const track = React.useCallback(
+    (e: React.PointerEvent, withTilt: boolean) => {
+      const rect = readRect();
+      if (!rect || rect.width === 0 || rect.height === 0) return;
+      const px = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+      const py = clamp((e.clientY - rect.top) / rect.height, 0, 1);
+      sheenX.set(px);
+      sheenY.set(py);
+      sheenO.set(1);
+      if (withTilt) {
+        tiltX.set(-(py - 0.5) * 14);
+        tiltY.set(-(px - 0.5) * 16);
+      }
+    },
+    [readRect, sheenX, sheenY, sheenO, tiltX, tiltY],
+  );
+
+  const onPointerEnter = React.useCallback(() => {
+    rectStale.current = true;
+  }, []);
+
+  const onPointerDown = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if ((e.target as HTMLElement).closest(INTERACTIVE)) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      rectStale.current = true;
+      gesture.current = {
+        down: true,
+        moved: false,
+        x0: e.clientX,
+        y0: e.clientY,
+        a0: angleRef.current,
+        lastX: e.clientX,
+        lastT: e.timeStamp,
+        v: 0,
+      };
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* capture is a nicety */
+      }
+      if (!reduceMotion) press.set(0.985);
+    },
+    [press, reduceMotion],
+  );
+
+  const onPointerMove = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const g = gesture.current;
+
+      if (g.down) {
+        const dx = e.clientX - g.x0;
+        const dy = e.clientY - g.y0;
+        if (!g.moved && Math.hypot(dx, dy) > 6) g.moved = true;
+        if (g.moved) {
+          const dt = e.timeStamp - g.lastT;
+          if (dt > 0) g.v = 0.8 * g.v + 0.2 * ((e.clientX - g.lastX) / dt);
+          g.lastX = e.clientX;
+          g.lastT = e.timeStamp;
+          tiltX.set(0);
+          tiltY.set(0);
+          flip.set(g.a0 + dx * DEG_PER_PX);
+          if (!reduceMotion) track(e, false);
+        }
+        return;
+      }
+
+      if (e.pointerType !== 'mouse' || reduceMotion) return;
+      track(e, true);
+    },
+    [flip, reduceMotion, tiltX, tiltY, track],
+  );
+
+  const onPointerUp = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const g = gesture.current;
+      if (!g.down) return;
+      g.down = false;
+      press.set(1);
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+
+      if (!g.moved) {
+        spin(); // tap
+        return;
+      }
+
+      const dx = e.clientX - g.x0;
+      const projected = g.a0 + dx * DEG_PER_PX + g.v * DEG_PER_PX * 220; // ~220ms of fling
+      const snapped = Math.round(projected / 180) * 180;
+      commit(Math.min(g.a0 + 180, Math.max(g.a0 - 180, snapped)));
+      if (e.pointerType !== 'mouse') sheenO.set(0);
+    },
+    [commit, press, sheenO, spin],
+  );
+
+  const onPointerCancel = React.useCallback(() => {
+    // Browser took the gesture (vertical scroll) — return to the current face.
+    const g = gesture.current;
+    if (g.down) {
+      g.down = false;
+      flip.set(angleRef.current);
+    }
+    press.set(1);
+    resetHover();
+  }, [flip, press, resetHover]);
+
+  const onPointerLeave = React.useCallback(() => {
+    if (!gesture.current.down) resetHover();
+  }, [resetHover]);
+
+  const handleCopy = React.useCallback(
+    async (event?: React.SyntheticEvent) => {
+      event?.stopPropagation();
+      const value = data.codeOrId || safeId;
+      if (!value) return;
+      if (await copyText(value)) {
+        haptic('success');
+        setCopied(true);
+        if (copyTimer.current) clearTimeout(copyTimer.current);
+        copyTimer.current = setTimeout(() => setCopied(false), 1800);
+      }
+    },
+    [data.codeOrId, safeId],
+  );
+
+  const handleShare = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      haptic('light');
+      onShare?.();
+    },
+    [onShare],
+  );
 
   /* ── render ──────────────────────────────────────────────────────────── */
   return (
-    <div className={`relative flex select-none flex-col items-center justify-center p-2 ${className}`}>
-      {/* Ambient spatial halo */}
+    <div
+      className={`relative flex flex-col items-center p-2 antialiased ${className}`}
+      style={{ fontFamily: FONT, ...themeVars }}
+    >
+      {/* 3D stage (never rotated — used for pointer measurements) */}
       <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[430px] w-[330px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-30 blur-[90px] dark:opacity-45"
-        style={{
-          background: `radial-gradient(circle, ${theme.accent} 0%, ${theme.accent2} 55%, transparent 100%)`,
-        }}
-      />
-
-      {/* 3D stage */}
-      <div
-        style={{ perspective: 1600, perspectiveOrigin: '50% 50%' }}
-        className="h-[540px] w-full max-w-[392px]"
+        ref={stageRef}
+        style={{ perspective: 1400, perspectiveOrigin: '50% 50%' }}
+        className="relative h-[520px] w-full max-w-[380px]"
       >
         <motion.div
-          ref={cardRef}
-          onPointerMove={handlePointerMove}
-          onPointerDown={handlePointerDown}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerLeave}
-          onPointerCancel={handlePointerLeave}
-          onKeyDown={handleKeyDown}
-          role="button"
-          tabIndex={0}
-          aria-pressed={isFlipped}
-          aria-label={`${data.fullName} — kartani 360° aylantirish uchun bosing yoki Enter bosing`}
+          role="group"
+          aria-roledescription="Ikki tomonlama identifikatsiya kartasi"
+          aria-label={`${name} — ${theme.badge}`}
+          onPointerEnter={onPointerEnter}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
+          onPointerLeave={onPointerLeave}
           style={{
             rotateX: tiltX,
             rotateY,
+            scale: press,
             transformStyle: 'preserve-3d',
-            willChange: 'transform',
+            touchAction: 'pan-y',
+            WebkitTouchCallout: 'none',
           }}
-          className="relative h-full w-full cursor-pointer rounded-[2.5rem] outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white/60 dark:focus-visible:ring-offset-[#0B0F1A]/60"
+          className="absolute inset-0 cursor-grab select-none active:cursor-grabbing"
         >
-          {/* ════════════════════════════════════════════════════════════
-           * FRONT
-           * ══════════════════════════════════════════════════════════ */}
+          {/* ═══════════════════════════ FRONT ═══════════════════════════ */}
           <div
-            className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-b from-white/90 via-white/45 to-white/85 shadow-[0_28px_60px_-18px_rgba(15,23,42,0.35)] dark:from-white/25 dark:via-white/[0.06] dark:to-white/15 dark:shadow-[0_34px_80px_-18px_rgba(0,0,0,0.85)]"
-            style={faceStyle('0deg')}
+            ref={frontRef}
+            aria-hidden={isFlipped}
+            className={`${FACE} bg-gradient-to-b from-white to-[#F3F4F8] dark:from-[#2C2C2E] dark:to-[#1C1C1E]`}
+            style={HIDE_BACKFACE}
           >
-            {/* Flat glass background — kept separate so it can't flatten 3D */}
-            <div className="pointer-events-none absolute inset-[1.5px] overflow-hidden rounded-[calc(2.5rem-1.5px)] border border-white/60 bg-white/75 backdrop-blur-2xl backdrop-saturate-[1.8] dark:border-white/10 dark:bg-[#0B0F1A]/85">
-              <div
-                className="absolute -right-16 -top-20 h-56 w-56 rounded-full opacity-40 blur-3xl"
-                style={{ background: theme.accent }}
-              />
-              <div
-                className="absolute -bottom-24 -left-16 h-56 w-56 rounded-full opacity-30 blur-3xl"
-                style={{ background: theme.accent2 }}
-              />
-              <div className="absolute inset-x-6 top-0 h-24 bg-gradient-to-b from-white/70 to-transparent dark:from-white/[0.07]" />
-              <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/40" />
-            </div>
-
-            {/* Prismatic glare — GPU-translated */}
-            <GlareLayer x={glareX} y={glareY} opacity={glareOpacity} />
-
-            {/* Content */}
+            {/* Role wash — the only place the accent colours the surface */}
             <div
-              className="absolute inset-0 z-10 flex flex-col justify-between p-5 sm:p-6"
-              style={contentStyle}
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between gap-3" style={depth(24)}>
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background: `radial-gradient(130% 55% at 0% 0%, ${theme.accent}26 0%, transparent 70%)`,
+              }}
+            />
+            <div aria-hidden="true" className={EDGE} />
+            <Sheen x={sheenX} y={sheenY} o={sheenO} />
+
+            <div className="relative z-10 flex h-full flex-col p-6">
+              {/* Brand row */}
+              <div className="flex items-center justify-between">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <div
-                    className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-[15px] font-black text-white shadow-[0_8px_20px_-6px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.5)] ring-1 ring-white/40"
-                    style={{ backgroundImage: theme.gradient }}
                     aria-hidden="true"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[#1C1C1E] text-[15px] font-bold text-white dark:bg-white dark:text-[#1C1C1E]"
                   >
-                    M
+                    {orgName.charAt(0).toUpperCase()}
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                      {orgName}
-                    </p>
-                    <p className="truncate text-[12.5px] font-extrabold tracking-tight text-slate-900 dark:text-white">
-                      {theme.title}
-                    </p>
-                  </div>
+                  <span className={`truncate text-[15px] font-semibold tracking-[-0.01em] ${INK}`}>
+                    {orgName}
+                  </span>
                 </div>
-
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {nfcEnabled && (
-                    <NfcWaveIcon className="h-3 w-3 text-slate-500 dark:text-slate-400" />
-                  )}
-                  <EmvNfcChip metallic={theme.chip} enabled={nfcEnabled} />
-                </div>
+                {nfcEnabled && (
+                  <span
+                    title="NFC faol"
+                    className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-[rgba(120,120,128,0.12)] px-2.5 text-[12px] font-semibold ${SUB}`}
+                  >
+                    <NfcWaveIcon className="h-3.5 w-3.5" />
+                    NFC
+                  </span>
+                )}
               </div>
 
-              {/* Center */}
-              <div
-                className="flex flex-1 flex-col items-center justify-center py-2 text-center"
-                style={depth(38)}
-              >
-                <div className="relative">
-                  <div
-                    aria-hidden="true"
-                    className="absolute -inset-3 rounded-full opacity-40 blur-xl"
-                    style={{ backgroundImage: theme.gradient }}
-                  />
-
-                  <div className="relative rounded-full border border-white/90 bg-white/45 p-1.5 shadow-[0_18px_38px_-12px_rgba(15,23,42,0.35),inset_0_1px_2px_rgba(255,255,255,0.95)] backdrop-blur-xl dark:border-white/20 dark:bg-white/10">
-                    {showAvatar ? (
-                      <img
-                        src={data.avatarUrl as string}
-                        alt={data.fullName}
-                        width={96}
-                        height={96}
-                        loading="lazy"
-                        decoding="async"
-                        draggable={false}
-                        onError={() => setAvatarFailed(true)}
-                        className="h-24 w-24 rounded-full object-cover shadow-inner"
-                      />
-                    ) : (
-                      <div
-                        className="grid h-24 w-24 place-items-center rounded-full text-[26px] font-black tracking-tight text-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.45)]"
-                        style={{ backgroundImage: theme.gradient }}
-                        aria-hidden="true"
-                      >
-                        {initials}
-                      </div>
-                    )}
-                  </div>
-
+              {/* Identity */}
+              <div className="mt-auto">
+                <div className="relative inline-block">
+                  {showAvatar ? (
+                    <img
+                      src={data.avatarUrl as string}
+                      alt={name}
+                      width={112}
+                      height={112}
+                      loading="eager"
+                      decoding="async"
+                      draggable={false}
+                      onError={() => setAvatarFailed(true)}
+                      className="h-28 w-28 rounded-[32px] object-cover shadow-[0_10px_24px_-10px_rgba(0,0,0,0.4),0_0_0_0.5px_rgba(0,0,0,0.1)]"
+                    />
+                  ) : (
+                    <div
+                      aria-hidden="true"
+                      className={`grid h-28 w-28 place-items-center rounded-[32px] text-[36px] font-semibold tracking-[-0.02em] shadow-[0_0_0_0.5px_rgba(0,0,0,0.08)] ${ACC_TEXT}`}
+                      style={{ background: `${theme.accent}22` }}
+                    >
+                      {initials}
+                    </div>
+                  )}
                   {isVerified && (
                     <div
-                      className="absolute -bottom-0.5 -right-0.5 grid h-8 w-8 place-items-center rounded-full border-2 border-white bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white shadow-[0_6px_16px_rgba(16,185,129,0.55),inset_0_1px_0_rgba(255,255,255,0.6)] dark:border-[#0B0F1A]"
                       title="Face ID bilan tasdiqlangan"
+                      role="img"
+                      aria-label="Face ID bilan tasdiqlangan"
+                      className="absolute -bottom-1.5 -right-1.5 grid h-8 w-8 place-items-center rounded-full bg-[#34C759] text-white ring-[3px] ring-white dark:ring-[#222224]"
                     >
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={3}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
+                      <svg {...svgBase} strokeWidth={2.6} className="h-4 w-4">
                         <path d="M20 6 9 17l-5-5" />
                       </svg>
                     </div>
                   )}
                 </div>
 
-                <h3 className="mt-4 line-clamp-1 text-[21px] font-extrabold tracking-tight text-slate-900 dark:text-white">
-                  {data.fullName}
-                </h3>
-
-                <div className="mt-1.5 flex items-center justify-center">
+                <h2
+                  className={`mt-5 line-clamp-2 text-[30px] font-semibold leading-[34px] tracking-[-0.022em] ${INK}`}
+                >
+                  {name}
+                </h2>
+                <p className={`mt-2 flex items-center gap-2 text-[15px] font-semibold ${ACC_TEXT}`}>
                   <span
-                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-extrabold tracking-wide shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur-md"
-                    style={{
-                      background: `${theme.accent}18`,
-                      color: theme.accent,
-                      border: `1px solid ${theme.accent}38`,
-                    }}
-                  >
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span
-                        className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 motion-reduce:animate-none"
-                        style={{ background: theme.accent }}
-                      />
-                      <span
-                        className="relative inline-flex h-1.5 w-1.5 rounded-full"
-                        style={{ background: theme.accent }}
-                      />
-                    </span>
-                    {theme.badge}
-                  </span>
-                </div>
-
-                {subtitle && (
-                  <p className="mt-2.5 max-w-full truncate rounded-xl border border-slate-900/[0.05] bg-white/60 px-3 py-1 text-[11.5px] font-semibold text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-slate-300">
-                    {subtitle}
-                  </p>
-                )}
+                    aria-hidden="true"
+                    className="h-2 w-2 rounded-full bg-[color:var(--acc)]"
+                  />
+                  {theme.badge}
+                </p>
+                {subtitle && <p className={`mt-1 truncate text-[15px] ${SUB}`}>{subtitle}</p>}
               </div>
 
-              {/* Footer */}
-              <div
-                className="rounded-2xl border border-slate-900/[0.06] bg-white/60 p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.85)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05] dark:shadow-none"
-                style={depth(18)}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="block text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                      Shaxsiy raqamli ID
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCopy}
-                      data-no-flip
-                      className="group mt-0.5 flex items-center gap-1.5 rounded-md font-mono text-[12.5px] font-extrabold text-slate-900 transition-colors hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 dark:text-white dark:hover:text-blue-400"
-                      title="ID raqamidan nusxa olish"
-                      aria-label={`ID ${displayId} ni nusxalash`}
-                    >
-                      <span className="truncate">{displayId}</span>
-                      <span className="inline-flex items-center gap-1 font-sans text-[10px] font-bold text-blue-600 opacity-80 transition-opacity group-hover:opacity-100 dark:text-blue-400">
-                        <CopyIcon copied={copied} />
-                        <span className="sr-only">{copied ? 'Nusxalandi' : 'Nusxalash'}</span>
-                      </span>
-                    </button>
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-2.5">
-                    <Barcode
-                      seed={seed}
-                      className="hidden h-6 w-[72px] text-slate-900 opacity-70 sm:block dark:text-white"
-                    />
-                    <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-900/[0.06] bg-white/80 px-2.5 py-1 text-[10px] font-extrabold text-slate-600 dark:border-white/10 dark:bg-white/[0.08] dark:text-slate-200">
-                      <span>360°</span>
-                      <Rotate3DIcon className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-                    </div>
-                  </div>
+              {/* Details */}
+              <div className={`mt-6 grid grid-cols-2 gap-4 border-t pt-4 ${HAIR_B}`}>
+                <div className="min-w-0">
+                  <p className={`text-[12px] font-medium ${SUB}`}>
+                    {joined ? "Ro'yxatga olingan" : 'Holat'}
+                  </p>
+                  <p className={`mt-0.5 truncate text-[16px] font-semibold ${INK}`}>
+                    {joined ?? statusText}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-[12px] font-medium ${SUB}`}>ID raqam</p>
+                  <button
+                    type="button"
+                    data-no-flip
+                    onClick={handleCopy}
+                    aria-label={`ID ${displayId} ni nusxalash`}
+                    className={`-my-1 flex max-w-full items-center gap-1.5 rounded-lg py-1 text-left text-[16px] font-semibold tabular-nums ${INK} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84FF]`}
+                  >
+                    <span className="truncate">{displayId}</span>
+                    <CopyIcon copied={copied} className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ════════════════════════════════════════════════════════════
-           * BACK
-           * ══════════════════════════════════════════════════════════ */}
+          {/* ═══════════════════════════ BACK ════════════════════════════ */}
           <div
-            className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-b from-white/90 via-white/45 to-white/85 shadow-[0_28px_60px_-18px_rgba(15,23,42,0.35)] dark:from-white/25 dark:via-white/[0.06] dark:to-white/15 dark:shadow-[0_34px_80px_-18px_rgba(0,0,0,0.85)]"
-            style={faceStyle('180deg')}
+            ref={backRef}
+            aria-hidden={!isFlipped}
+            className={`${FACE} bg-[#F2F2F7] dark:bg-[#0A0A0C]`}
+            style={{ ...HIDE_BACKFACE, transform: 'rotateY(180deg)' }}
           >
-            <div className="pointer-events-none absolute inset-[1.5px] overflow-hidden rounded-[calc(2.5rem-1.5px)] border border-white/60 bg-white/80 backdrop-blur-2xl backdrop-saturate-[1.8] dark:border-white/10 dark:bg-[#0B0F1A]/88">
-              <div
-                className="absolute -left-20 -top-24 h-56 w-56 rounded-full opacity-30 blur-3xl"
-                style={{ background: theme.accent2 }}
-              />
-              <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/40" />
-            </div>
+            <div aria-hidden="true" className={EDGE} />
+            <Sheen x={sheenX} y={sheenY} o={sheenO} />
 
-            <GlareLayer x={glareX} y={glareY} opacity={glareOpacity} />
-
-            <div
-              className="absolute inset-0 z-10 flex flex-col justify-between gap-3 p-5 sm:p-6"
-              style={contentStyle}
-            >
+            <div className="relative z-10 flex h-full flex-col gap-3 p-5">
               {/* Header */}
-              <div
-                className="flex items-center justify-between gap-3 border-b border-slate-900/[0.06] pb-3 dark:border-white/[0.08]"
-                style={depth(20)}
-              >
+              <div className="flex items-center justify-between gap-3 px-1">
                 <div className="min-w-0">
-                  <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                    360° Telemetriya
+                  <p className={`truncate text-[17px] font-semibold tracking-[-0.01em] ${INK}`}>
+                    {name}
                   </p>
-                  <p className="truncate text-[14px] font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    {data.fullName}
-                  </p>
+                  <p className={`truncate text-[13px] font-medium ${ACC_TEXT}`}>{theme.badge}</p>
                 </div>
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-extrabold text-emerald-700 dark:text-emerald-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10B981]" />
-                  {data.status || 'Faol'}
+                <span
+                  className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[13px] font-semibold ${PILL[statusTone].box}`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`h-1.5 w-1.5 rounded-full ${PILL[statusTone].dot}`}
+                  />
+                  {statusText}
                 </span>
               </div>
 
-              {/* Metrics */}
-              <div className="grid grid-cols-2 gap-2.5" style={depth(30)}>
-                {metrics.map((metric) => (
-                  <MetricTile key={metric.label} {...metric} />
+              {/* Metrics — hairline grid via 1px gaps over a separator colour */}
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[20px] bg-[rgba(60,60,67,0.12)] dark:bg-[rgba(84,84,88,0.5)]">
+                {metrics.map((m) => (
+                  <MetricCell key={m.label} {...m} />
                 ))}
               </div>
 
               {/* Contact */}
               <div
-                className="space-y-1.5 rounded-2xl border border-slate-900/[0.06] bg-white/60 px-3 py-2.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05]"
-                style={depth(22)}
+                className={`divide-y overflow-hidden rounded-[20px] ${CELL} ${HAIR_DIVIDE}`}
               >
-                <div className="flex items-center justify-between gap-2 text-[10.5px]">
-                  <span className="font-semibold text-slate-500 dark:text-slate-400">Telefon</span>
-                  <span className="truncate font-bold text-slate-900 dark:text-white">
-                    {data.phone || '—'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-2 text-[10.5px]">
-                  <span className="font-semibold text-slate-500 dark:text-slate-400">Email</span>
-                  <span className="truncate font-bold text-slate-900 dark:text-white">
-                    {data.email || '—'}
-                  </span>
-                </div>
-                {data.joinedDate && (
-                  <div className="flex items-center justify-between gap-2 text-[10.5px]">
-                    <span className="font-semibold text-slate-500 dark:text-slate-400">
-                      Ro&apos;yxatga olingan
-                    </span>
-                    <span className="truncate font-bold text-slate-900 dark:text-white">
-                      {data.joinedDate}
-                    </span>
-                  </div>
-                )}
+                <InfoRow label="Telefon" value={data.phone || '—'} />
+                <InfoRow label="Email" value={data.email || '—'} />
+                {joined && <InfoRow label="Ro'yxatga olingan" value={joined} />}
               </div>
 
-              {/* ID + QR */}
-              <div
-                className="flex items-center justify-between gap-3 rounded-2xl border border-slate-900/[0.06] bg-white/65 p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.85)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05] dark:shadow-none"
-                style={depth(26)}
-              >
-                <div className="min-w-0">
+              {/* Identifier & Real Scannable QR Code */}
+              <div className={`mt-auto flex items-center gap-3 rounded-[20px] p-3.5 ${CELL}`}>
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    <span className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                      Raqamli identifikator
-                    </span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]" />
+                    <p className={`text-[12px] font-medium ${SUB}`}>Haqiqiy QR pass</p>
                   </div>
-                  <p className="mt-0.5 truncate font-mono text-[10.5px] font-bold text-slate-900 dark:text-white">
-                    ID: {displayId}
+                  <p
+                    className={`mt-0.5 truncate font-mono text-[15px] font-semibold tracking-wide ${INK}`}
+                  >
+                    {displayId}
                   </p>
-                  <p className="mt-0.5 truncate text-[9.5px] font-medium text-slate-500 dark:text-slate-400">
-                    M-EDU Ta&apos;lim platformasi
-                  </p>
+                  <p className={`mt-0.5 truncate text-[11px] ${SUB}`}>Skanerlash orqali tekshirish</p>
                 </div>
-
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-slate-900/10 bg-white p-1 shadow-sm dark:border-white/15">
-                  <QrMatrix seed={seed} className="h-full w-full" />
+                <div
+                  className="group/qr relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-white p-1 shadow-sm ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95 dark:ring-white/20"
+                  title={`Skanerlash havolasi: ${computedQrValue}`}
+                  data-no-flip
+                >
+                  {qr ? (
+                    <div className="h-full w-full [&>*]:h-full [&>*]:w-full">{qr}</div>
+                  ) : (
+                    <RealQrCode
+                      value={computedQrValue}
+                      className="h-full w-full"
+                      fgColor="#0A0A0C"
+                      bgColor="#FFFFFF"
+                      margin={1}
+                      title={`Haqiqiy raqamli QR pass: ${displayId}`}
+                    />
+                  )}
                 </div>
-              </div>
-
-              {/* Footer */}
-              <div
-                className="flex items-center justify-between pt-0.5 text-[10.5px] font-semibold text-slate-500 dark:text-slate-400"
-                style={depth(16)}
-              >
-                <span>Old tomonga qaytish uchun bosing</span>
-                <span className="inline-flex items-center gap-1 font-extrabold text-blue-600 dark:text-blue-400">
-                  360° Pass
-                  <Rotate3DIcon className="h-3 w-3" />
-                </span>
               </div>
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════
-       * Floating spatial control dock
-       * ════════════════════════════════════════════════════════════════ */}
-      <div className="mt-5 inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/70 p-1.5 shadow-[0_16px_36px_-12px_rgba(15,23,42,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-2xl backdrop-saturate-[2] dark:border-white/[0.12] dark:bg-[#0B0F1A]/80 dark:shadow-[0_20px_40px_-14px_rgba(0,0,0,0.7)]">
+      {/* Control dock — 44pt targets, outside the 3D tree so blur is safe here */}
+      <div className="mt-5 inline-flex items-center gap-0.5 rounded-full bg-white/75 p-1 shadow-[0_0_0_0.5px_rgba(60,60,67,0.16),0_10px_30px_-10px_rgba(0,0,0,0.25)] backdrop-blur-xl backdrop-saturate-150 dark:bg-[#1C1C1E]/75 dark:shadow-[0_0_0_0.5px_rgba(255,255,255,0.14),0_12px_32px_-10px_rgba(0,0,0,0.7)]">
         <DockButton
-          onClick={toggleFlip}
-          ariaLabel="Kartani 360 daraja aylantirish"
-          ariaPressed={isFlipped}
+          onClick={spin}
+          label={isFlipped ? "Kartaning old tomonini ko'rsatish" : "Kartaning orqa tomonini ko'rsatish"}
         >
-          <Rotate3DIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-          <span>360°</span>
+          <FlipIcon className="h-4 w-4" />
+          Aylantirish
         </DockButton>
-
-        <span aria-hidden="true" className="h-4 w-px bg-slate-900/10 dark:bg-white/10" />
-
-        <DockButton onClick={handleDockCopy} ariaLabel="ID raqamidan nusxa olish">
+        <DockButton onClick={(e) => void handleCopy(e)} label="ID raqamidan nusxa olish">
           <CopyIcon copied={copied} />
-          <span>{copied ? 'Nusxalandi!' : 'ID nusxalash'}</span>
+          {copied ? 'Nusxalandi' : 'Nusxalash'}
         </DockButton>
-
         {onShare && (
-          <>
-            <span aria-hidden="true" className="h-4 w-px bg-slate-900/10 dark:bg-white/10" />
-            <DockButton onClick={handleDockShare} ariaLabel="Kartani ulashish" variant="primary">
-              <span>Ulashish</span>
-              <ShareIcon />
-            </DockButton>
-          </>
+          <DockButton onClick={handleShare} label="Kartani ulashish" primary>
+            <ShareIcon />
+            Ulashish
+          </DockButton>
         )}
       </div>
 
-      {/* Polite screen-reader announcement for copy feedback */}
       <span aria-live="polite" className="sr-only">
         {copied ? 'ID raqami nusxalandi' : ''}
       </span>
