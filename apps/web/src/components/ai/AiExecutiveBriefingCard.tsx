@@ -13,8 +13,6 @@ import {
   Sparkles,
   RefreshCw,
   AlertTriangle,
-  CheckCircle2,
-  TrendingUp,
   ArrowRight,
   ChevronDown,
   ChevronUp,
@@ -24,10 +22,8 @@ import {
 } from 'lucide-react';
 import { aiApi, type AiExecutiveBriefing } from '@/lib/api';
 import { cn } from '@/lib/design';
-import { useSafeI18n } from '@/i18n/I18nProvider';
 
 export function AiExecutiveBriefingCard() {
-  const { t } = useSafeI18n();
   const [briefing, setBriefing] = useState<AiExecutiveBriefing | null>(null);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);

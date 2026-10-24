@@ -626,7 +626,7 @@ export function StudentDetailPage() {
 
   // Deep AI Parent Message Modal state
   const [isAiMessageModalOpen, setIsAiMessageModalOpen] = useState(false);
-  const [aiMessageTopic, setAiMessageTopic] = useState<'attendance' | 'debt' | 'praise' | 'exam'>('attendance');
+  const [aiMessageTopic, setAiMessageTopic] = useState<'attendance' | 'debt' | 'praise' | 'exam' | 'custom'>('attendance');
   const [aiMessageDetails, setAiMessageDetails] = useState('');
   const [editingLink, setEditingLink] = useState<{
     id: string; parentId: string; relationship?: string; isPrimary?: boolean;
@@ -1139,8 +1139,12 @@ export function StudentDetailPage() {
             studentId={id!}
             studentName={studentName}
             onOpenMessageModal={(opts) => {
-              if (opts?.topic) setAiMessageTopic(opts.topic);
-              if (opts?.initialDraft) setAiMessageDetails(opts.initialDraft);
+              if (typeof opts === 'object' && opts) {
+                if (opts.topic) setAiMessageTopic(opts.topic);
+                if (opts.initialDraft) setAiMessageDetails(opts.initialDraft);
+              } else if (typeof opts === 'string') {
+                setAiMessageDetails(opts);
+              }
               setIsAiMessageModalOpen(true);
             }}
           />
@@ -2092,12 +2096,12 @@ export function StudentDetailPage() {
 
       {/* Deep AI Parent Message Drafter Modal */}
       <AiParentMessageModal
-        isOpen={isAiMessageModalOpen}
+        open={isAiMessageModalOpen}
         onClose={() => setIsAiMessageModalOpen(false)}
         studentName={studentName}
         initialTopic={aiMessageTopic}
         initialDetails={aiMessageDetails}
-        balanceDue={studentData?.balance ? Math.abs(studentData.balance) : undefined}
+        balanceDue={(studentData as any)?.balance ? Math.abs((studentData as any).balance) : undefined}
       />
 
       {toastNode}

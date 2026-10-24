@@ -1418,18 +1418,15 @@ export function FaceRecognitionPage() {
           }
         }
 
-        // 2-minute cooldown per student to eliminate repetitive scans & attendance spam
-        if (now - lastSeen < 120000) {
+        // 5-minute cooldown per student to eliminate repetitive scans & attendance spam
+        if (now - lastSeen < 300000) {
           return;
         }
 
         cooldownMapRef.current.set(studentId, now);
         persistCooldowns(cooldownMapRef.current);
-        // Silent match: haptic pulse without annoying audio chime
+        // Silent match: haptic pulse without annoying audio chime or voice
         haptics.heavy();
-        if (voice.enabled) {
-          voice.speakSuccess(studentName, parsed?.group?.name);
-        }
 
         const confidence = formatConfidence(parsed?.confidence);
         pushFeed({
@@ -1500,16 +1497,13 @@ export function FaceRecognitionPage() {
         const studentId = parsed?.student?.id || studentName;
         const now = Date.now();
         const lastSeen = cooldownMapRef.current.get(studentId) || 0;
-        // 2-minute cooldown for duplicate warning to stop endless repeating banners/voice
-        if (now - lastSeen < 120000) {
+        // 10-minute cooldown for duplicate warning to stop endless repeating banners/voice
+        if (now - lastSeen < 600000) {
           return;
         }
         cooldownMapRef.current.set(studentId, now);
         persistCooldowns(cooldownMapRef.current);
         haptics.medium();
-        if (voice.enabled) {
-          voice.speakDuplicate(studentName);
-        }
         pushFeed({
           studentName,
           time: timeStr,
@@ -1527,16 +1521,13 @@ export function FaceRecognitionPage() {
         const studentId = parsed?.student?.id || studentName;
         const now = Date.now();
         const lastSeen = cooldownMapRef.current.get(studentId) || 0;
-        // 1-minute cooldown for denied warning
-        if (now - lastSeen < 60000) {
+        // 5-minute cooldown for denied warning
+        if (now - lastSeen < 300000) {
           return;
         }
         cooldownMapRef.current.set(studentId, now);
         persistCooldowns(cooldownMapRef.current);
         haptics.error();
-        if (voice.enabled) {
-          voice.speakAccessDenied(parsed?.accessReason);
-        }
         const reasonText = accessReasonLabel(parsed?.accessReason);
         pushFeed({
           studentName,
@@ -1555,17 +1546,14 @@ export function FaceRecognitionPage() {
       } else if (outcome === 'UNKNOWN') {
         const now = Date.now();
         const lastUnknown = cooldownMapRef.current.get('__unknown__') || 0;
-        // 15-second cooldown for unknown faces to avoid rapid screen flicker
-        if (now - lastUnknown < 15000) {
-          lastCaptureTimeRef.current = Date.now() + 1500;
+        // 30-second cooldown for unknown faces to avoid rapid screen flicker
+        if (now - lastUnknown < 30000) {
+          lastCaptureTimeRef.current = Date.now() + 2500;
           return;
         }
         cooldownMapRef.current.set('__unknown__', now);
         persistCooldowns(cooldownMapRef.current);
         haptics.error();
-        if (voice.enabled) {
-          voice.speakUnknown();
-        }
         const guidance = getUnknownOutcomeGuidance(parsed?.status);
         pushFeed({
           studentName: guidance.title,

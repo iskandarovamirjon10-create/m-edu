@@ -581,6 +581,22 @@ export const aiApi = {
       body: JSON.stringify(body),
       ...options,
     }),
+  getExecutiveBriefing: (options: RequestOptions = {}) =>
+    request<AiExecutiveBriefing>('/ai/executive-briefing', options),
+  diagnoseStudent: (studentId: string, options: RequestOptions = {}) =>
+    request<AiStudentDiagnostic>(`/ai/diagnose/student/${encodeURIComponent(studentId)}`, options),
+  draftParentMessage: (body: { studentName: string; topic: string; details?: string; balanceDue?: number }, options: RequestOptions = {}) =>
+    request<AiDraftMessageResponse>('/ai/draft-parent-message', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
+  generateQuiz: (body: { topic: string; subject?: string; gradeLevel?: string }, options: RequestOptions = {}) =>
+    request<AiGeneratedQuizResponse>('/ai/generate-quiz', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
 };
 export interface AiExecutiveBriefing {
   summary: string;

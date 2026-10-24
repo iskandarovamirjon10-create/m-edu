@@ -319,7 +319,7 @@ export function AiCopilot() {
   /* ── V2 Interactive Spotlight Tracker (Desktop Fine Pointer) ──── */
   const handleShellPointerMove = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!isDesktop || preferences.calmMotion) return;
+      if (!isDesktop || preferences.reduceMotion) return;
       const el = shellRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
@@ -328,7 +328,7 @@ export function AiCopilot() {
       el.style.setProperty('--cp-spot-x', `${x.toFixed(1)}%`);
       el.style.setProperty('--cp-spot-y', `${y.toFixed(1)}%`);
     },
-    [isDesktop, preferences.calmMotion],
+    [isDesktop, preferences.reduceMotion],
   );
 
   /* ── Data & Conversation Handlers ─────────────────────────────── */
@@ -619,7 +619,7 @@ export function AiCopilot() {
 
     const modelSwitchers: CopilotCommand[] = AI_MODELS.map((model) => ({
       id: `model-${model.id}`,
-      label: `Model: ${model.name}`,
+      label: `Model: ${model.label}`,
       hint:
         selectedModel.id === model.id
           ? '✓ Hozir faol model'

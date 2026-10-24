@@ -31,11 +31,10 @@ export interface DynamicIslandAlert {
 }
 
 const TELEMETRY_FEED = [
-  { text: "Payme Webhook: +1,450,000 UZS qabul qilindi", tone: "text-emerald-400", dot: "bg-emerald-400" },
-  { text: "Face ID Engine: 99.4% aniqlik bilan tekshirildi", tone: "text-blue-400", dot: "bg-blue-400" },
-  { text: "Yangi lid: 'IELTS Intensive' so'rovi tushdi", tone: "text-amber-400", dot: "bg-amber-400" },
-  { text: "Davomat: Bugun 96.8% talabalar hozir", tone: "text-emerald-400", dot: "bg-emerald-400" },
-  { text: "Sinxronizatsiya: Barcha 8 modul faol", tone: "text-purple-400", dot: "bg-purple-400" },
+  { text: "Baza holati: PostgreSQL barqaror ulandi", tone: "text-emerald-400", dot: "bg-emerald-400" },
+  { text: "Face ID Engine: Real ONNX dvigateli tayyor", tone: "text-blue-400", dot: "bg-blue-400" },
+  { text: "Tizim barqarorligi: Barcha xizmatlar faol", tone: "text-purple-400", dot: "bg-purple-400" },
+  { text: "AI Copilot: Gemini tahlil dvigateli faol", tone: "text-amber-400", dot: "bg-amber-400" },
 ] as const;
 
 const WALLPAPERS = [
@@ -127,11 +126,20 @@ export const DynamicIsland = memo(function DynamicIsland() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    const pingInterval = setInterval(() => {
-      if (navigator.onLine) {
-        setPingMs(Math.floor(14 + Math.random() * 10));
+    const pingHealth = async () => {
+      if (!navigator.onLine) return;
+      const t0 = performance.now();
+      try {
+        const res = await fetch('/api/health', { method: 'GET', cache: 'no-store' });
+        if (res.ok) {
+          setPingMs(Math.round(performance.now() - t0));
+        }
+      } catch {
+        /* offline */
       }
-    }, 8000);
+    };
+    void pingHealth();
+    const pingInterval = setInterval(() => void pingHealth(), 10000);
 
     return () => {
       window.removeEventListener('online', handleOnline);

@@ -307,7 +307,7 @@ export function WebcamCapture({
   isKiosk = false,
 }: WebcamCaptureProps) {
   const { t } = useSafeI18n();
-  const { playSuccess, playTick } = usePremiumSound();
+  const { playTick } = usePremiumSound();
   const haptics = useHaptics();
   const reduced = usePrefersReducedMotion();
   const docVisible = useDocumentVisibility();

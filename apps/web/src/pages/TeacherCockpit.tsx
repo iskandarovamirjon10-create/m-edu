@@ -1636,7 +1636,7 @@ export function TeacherCockpitPage() {
 
       {/* Deep AI Lesson & Quiz Studio Modal */}
       <AiLessonQuizStudioModal
-        isOpen={aiStudioOpen}
+        open={aiStudioOpen}
         onClose={() => setAiStudioOpen(false)}
         defaultTopic={activeDetail?.notes || activeDetail?.Group?.course?.name || ''}
         defaultSubject={activeDetail?.Group?.course?.name || activeDetail?.Group?.name || ''}

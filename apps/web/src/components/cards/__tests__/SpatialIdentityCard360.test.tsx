@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import * as React from 'react';
 import { SpatialIdentityCard360 } from '../SpatialIdentityCard360';
 import { RealQrCode } from '../../ui/RealQrCode';
 

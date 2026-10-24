@@ -109,7 +109,7 @@ const SPRING_TOUCH = { type: 'spring', stiffness: 640, damping: 32, mass: 0.45 }
 const SPRING_GEL = { type: 'spring', stiffness: 720, damping: 26, mass: 0.35 } as const;
 
 /** Large surfaces: drawer slab */
-const SPRING_SLAB = {
+export const SPRING_SLAB = {
   type: 'spring',
   stiffness: 360,
   damping: 36,
@@ -636,7 +636,7 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
   orgName,
   userName,
   userInitials,
-  userEmail,
+  userEmail: _userEmail,
   onLogout,
 }: {
   open: boolean;

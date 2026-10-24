@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import { cn, usePrefersReducedMotion } from '@/lib/design';
 import { useI18n } from '@/i18n/I18nProvider';
-import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 type CameraStatus = 'STANDBY' | 'CONNECTING' | 'STREAMING' | 'ERROR';
 
@@ -49,7 +48,6 @@ const STATUS_META: Record<
 
 export function LiveFaceCamera() {
   const { t } = useI18n();
-  const sound = usePremiumSound();
   const reduced = usePrefersReducedMotion();
   const [status, setStatus] = useState<CameraStatus>('STANDBY');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -63,11 +61,6 @@ export function LiveFaceCamera() {
       const custom = event as CustomEvent<RecentAttendanceRecord>;
       if (custom.detail) {
         setRecentAttendee(custom.detail);
-        try {
-          sound.playFaceIdMatch();
-        } catch {
-          /* sound optional */
-        }
 
         if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
         dismissTimerRef.current = setTimeout(() => {
@@ -81,7 +74,7 @@ export function LiveFaceCamera() {
       window.removeEventListener('medu:attendance-logged', handleDetection);
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
     };
-  }, [sound]);
+  }, []);
 
   const startWebcam = useCallback(async () => {
     setStatus('CONNECTING');
@@ -102,7 +95,6 @@ export function LiveFaceCamera() {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         setStatus('STREAMING');
-        sound.playFaceIdMatch();
       }
     } catch (err: unknown) {
       setStatus('ERROR');
@@ -118,7 +110,7 @@ export function LiveFaceCamera() {
         setErrorMessage(t('face.cameraError') || 'Kamerani yoqishda xatolik yuz berdi.');
       }
     }
-  }, [t, sound]);
+  }, [t]);
 
   const stopWebcam = useCallback(() => {
     if (videoRef.current?.srcObject) {

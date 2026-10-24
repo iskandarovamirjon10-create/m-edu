@@ -62,7 +62,6 @@ export const FloatingPiPCamera = memo(function FloatingPiPCamera() {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         setIsCameraActive(true);
-        sound.playFaceIdMatch();
       }
     } catch {
       // Fallback demo simulation mode so UI is always functional
@@ -97,16 +96,13 @@ export const FloatingPiPCamera = memo(function FloatingPiPCamera() {
       const custom = event as CustomEvent<RecentAttendanceRecord>;
       if (custom.detail) {
         setRecentAttendee(custom.detail);
-        if (!isMuted) {
-          sound.playFaceIdMatch();
-        }
       }
     };
     window.addEventListener('medu:attendance-logged', handleDetection);
     return () => {
       window.removeEventListener('medu:attendance-logged', handleDetection);
     };
-  }, [isOpen, isMuted, sound]);
+  }, [isOpen]);
 
   const handleClose = useCallback(() => {
     sound.playPop();

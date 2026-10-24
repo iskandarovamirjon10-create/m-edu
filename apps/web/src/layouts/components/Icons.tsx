@@ -111,7 +111,7 @@ interface ArtisanProfile {
  * Deterministic "hand" for an icon.
  * Values are small enough to read as craftsmanship, large enough to be felt.
  */
-function createArtisanProfile(paths: readonly string[]): ArtisanProfile {
+export function createArtisanProfile(paths: readonly string[]): ArtisanProfile {
   const seed = hashPaths(paths);
   const rand = (bit: number) => ((seed >> bit) & 0xff) / 255;
 
@@ -135,7 +135,7 @@ function createArtisanProfile(paths: readonly string[]): ArtisanProfile {
   };
 }
 
-const ARTISAN = {
+export const ARTISAN = {
   ghostOpacity: 0.34,
   bleedOpacity: 0.18,
   ghostThickness: 0.78,

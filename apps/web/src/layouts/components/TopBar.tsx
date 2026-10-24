@@ -507,13 +507,36 @@ const TelemetryChip = memo(function TelemetryChip() {
   const { t } = useSafeI18n();
   const online = useOnline();
   const reduced = usePrefersReducedMotion();
-  const [latency, setLatency] = useState(24);
+  const [latency, setLatency] = useState<number | null>(null);
+  const [healthData, setHealthData] = useState<{ database?: string; uptime?: number; status?: string } | null>(null);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!online) return;
-    const id = setInterval(() => setLatency(18 + Math.floor(Math.random() * 12)), 8000);
+    if (!online) {
+      setLatency(null);
+      return;
+    }
+
+    const checkRealHealth = async () => {
+      const t0 = performance.now();
+      try {
+        const res = await fetch('/api/health', { method: 'GET', cache: 'no-store' });
+        const delta = Math.round(performance.now() - t0);
+        if (res.ok) {
+          const json = await res.json();
+          setLatency(delta);
+          setHealthData(json);
+        } else {
+          setLatency(delta);
+        }
+      } catch {
+        setLatency(null);
+      }
+    };
+
+    void checkRealHealth();
+    const id = setInterval(() => void checkRealHealth(), 10000);
     return () => clearInterval(id);
   }, [online]);
 
@@ -551,7 +574,7 @@ const TelemetryChip = memo(function TelemetryChip() {
         <LiveClock />
         <span className="hidden h-3 w-px bg-black/[0.08] dark:bg-white/[0.12] xl:inline" aria-hidden="true" />
         <span className="hidden tabular-nums text-[var(--text-secondary)] xl:inline">
-          {online ? `${latency}ms` : t('common.offline', 'Offline')}
+          {online && latency !== null ? `${latency}ms` : t('common.offline', 'Offline')}
         </span>
       </motion.button>
 
@@ -576,31 +599,52 @@ const TelemetryChip = memo(function TelemetryChip() {
                 <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
                   {t('nav.systemTelemetry', 'System Telemetry')}
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-apple-green/15 px-2 py-0.5 text-[10.5px] font-semibold text-apple-green">
-                  99.98% SLA
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold',
+                    healthData?.status === 'ok'
+                      ? 'bg-apple-green/15 text-apple-green'
+                      : 'bg-amber-500/15 text-amber-500',
+                  )}
+                >
+                  {healthData?.status === 'ok' ? '100% Barqaror' : 'Kutilmoqda'}
                 </span>
               </div>
               <div className="mt-3 space-y-2 text-xs">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-[var(--text-tertiary)]">API Latency:</span>
                   <span className="font-semibold tabular-nums text-[var(--text-primary)]">
-                    {latency} ms
+                    {latency !== null ? `${latency} ms` : '—'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--text-tertiary)]">WebSocket:</span>
-                  <span className="font-semibold text-apple-green">Connected (Active)</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--text-tertiary)]">Security:</span>
-                  <span className="font-semibold text-brand-600 dark:text-brand-400">
-                    Ed25519 Verified
+                  <span className="text-[var(--text-tertiary)]">PostgreSQL:</span>
+                  <span
+                    className={cn(
+                      'font-semibold',
+                      healthData?.database === 'up' ? 'text-apple-green' : 'text-amber-500',
+                    )}
+                  >
+                    {healthData?.database === 'up' ? 'Ulangan (Up)' : 'Ulanmoqda'}
                   </span>
                 </div>
+                {healthData?.uptime !== undefined && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[var(--text-tertiary)]">Server Uptime:</span>
+                    <span className="font-semibold tabular-nums text-[var(--text-primary)]">
+                      {Math.floor(healthData.uptime / 60)}m {Math.floor(healthData.uptime % 60)}s
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--text-tertiary)]">Platform:</span>
-                  <span className="font-semibold text-[var(--text-primary)]">
-                    Apple Sequoia Pro
+                  <span className="text-[var(--text-tertiary)]">Tarmoq:</span>
+                  <span
+                    className={cn(
+                      'font-semibold',
+                      online ? 'text-apple-green' : 'text-rose-500',
+                    )}
+                  >
+                    {online ? 'Online' : 'Offline'}
                   </span>
                 </div>
               </div>
@@ -1450,7 +1494,7 @@ export const TopBar = memo(function TopBar({
     <motion.header
       style={{
         y: reduced ? 0 : headerY,
-        scale: 1,
+        scale: reduced ? 1 : (headerScale ?? 1),
         transformOrigin: 'top center',
         willChange: 'transform',
       }}
