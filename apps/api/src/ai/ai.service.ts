@@ -69,7 +69,7 @@ interface GenAiToolDeclaration {
 
 interface GenAiModelParams {
   model: string;
-  contents: GenAiContent[];
+  contents: GenAiContent[] | string;
   config: {
     systemInstruction: string;
     temperature: number;
@@ -725,14 +725,16 @@ export class AiService {
       );
     }
 
-    try {
-      await this.redis.set(
-        cacheKey,
-        JSON.stringify(insights),
-        AiService.INSIGHTS_CACHE_TTL_MS,
-      );
-    } catch {
-      // Non-fatal if Redis write fails
+    if (this.redis) {
+      try {
+        await this.redis.set(
+          cacheKey,
+          JSON.stringify(insights),
+          AiService.INSIGHTS_CACHE_TTL_MS,
+        );
+      } catch {
+        // Non-fatal if Redis write fails
+      }
     }
 
     this.setBoundedCache(
@@ -919,9 +921,9 @@ export class AiService {
       absentToday: snapshot.absentToday,
       lateToday: snapshot.lateToday,
       debtorsCount: snapshot.negativeBalanceCount,
-      overdueAmount: snapshot.outstandingRevenue,
+      overdueAmount: snapshot.totalDebt,
       highRiskStudents: risk.high,
-      monthlyRevenue: snapshot.totalMonthlyRevenue,
+      monthlyRevenue: snapshot.totalDebt,
     };
 
     const fallback = {
@@ -972,7 +974,7 @@ O'quv markazining bugungi holati:
 - Jami guruhlar: ${snapshot.groupsCount}
 - O'qituvchilar: ${snapshot.teachersCount}
 - Bugungi davomat: ${snapshot.presentToday} nafar qatnashdi, ${snapshot.absentToday} nafar kelmadi (${attendanceRate}%)
-- Qarzdorlar soni: ${snapshot.negativeBalanceCount} nafar, kutilayotgan summa: ${snapshot.outstandingRevenue.toLocaleString()} so'm
+- Qarzdorlar soni: ${snapshot.negativeBalanceCount} nafar, kutilayotgan summa: ${snapshot.totalDebt.toLocaleString()} so'm
 - Yuqori akademik xavf guruhi: ${risk.high} nafar o'quvchi
 - Bugungi darslar soni: ${snapshot.todayClasses.length} ta dars
 

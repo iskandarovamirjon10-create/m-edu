@@ -1162,6 +1162,43 @@ function ResultRow({
   );
 }
 
+const KIOSK_COOLDOWN_STORAGE_KEY = 'medu:face_cooldown_map';
+
+function loadPersistedCooldowns(): Map<string, number> {
+  const map = new Map<string, number>();
+  if (typeof window === 'undefined') return map;
+  try {
+    const raw = window.sessionStorage.getItem(KIOSK_COOLDOWN_STORAGE_KEY);
+    if (!raw) return map;
+    const parsed = JSON.parse(raw);
+    const now = Date.now();
+    for (const [id, ts] of Object.entries(parsed)) {
+      if (typeof ts === 'number' && now - ts < 120000) {
+        map.set(id, ts);
+      }
+    }
+  } catch {
+    // sessionStorage unavailable or corrupted
+  }
+  return map;
+}
+
+function persistCooldowns(map: Map<string, number>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const now = Date.now();
+    const obj: Record<string, number> = {};
+    for (const [id, ts] of map.entries()) {
+      if (now - ts < 120000) {
+        obj[id] = ts;
+      }
+    }
+    window.sessionStorage.setItem(KIOSK_COOLDOWN_STORAGE_KEY, JSON.stringify(obj));
+  } catch {
+    // quota exceeded or private mode
+  }
+}
+
 /* ══════════════════════════════════════════════════════════════════════
  * MAIN PAGE
  * ════════════════════════════════════════════════════════════════════ */
@@ -1182,8 +1219,7 @@ export function FaceRecognitionPage() {
   const reduced = usePrefersReducedMotion();
   const { push, toastNode } = useToasts();
   const queryClient = useQueryClient();
-  const { playTick, playError, playFaceIdMatch, playFaceIdDenied, playFaceIdDuplicate } =
-    usePremiumSound();
+  const { playTick, playError } = usePremiumSound();
   const haptics = useHaptics();
   const voice = useVoiceFeedback();
   useAttendanceSocket();
@@ -1203,7 +1239,7 @@ export function FaceRecognitionPage() {
   const [detectedFaceBoxes, setDetectedFaceBoxes] = useState<FaceBoxItem[]>([]);
 
   const lastCaptureTimeRef = useRef<number>(0);
-  const cooldownMapRef = useRef<Map<string, number>>(new Map());
+  const cooldownMapRef = useRef<Map<string, number>>(loadPersistedCooldowns());
   const detectedFaceBoxesTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const feedSeq = useRef(0);
   const bannerSeq = useRef(0);
@@ -1375,23 +1411,25 @@ export function FaceRecognitionPage() {
         const lastSeen = cooldownMapRef.current.get(studentId) || 0;
         const now = Date.now();
 
-        // Prevent memory leak in long-running kiosk mode: prune entries older than 60s
-        if (cooldownMapRef.current.size > 150) {
+        // Prevent memory leak in long-running kiosk mode: prune entries older than 5 minutes (300s)
+        if (cooldownMapRef.current.size > 200) {
           for (const [sId, time] of cooldownMapRef.current.entries()) {
-            if (now - time > 60000) cooldownMapRef.current.delete(sId);
+            if (now - time > 300000) cooldownMapRef.current.delete(sId);
           }
         }
 
-        if (now - lastSeen < 18000) {
-          playFaceIdDuplicate();
-          haptics.light();
+        // 2-minute cooldown per student to eliminate repetitive scans & attendance spam
+        if (now - lastSeen < 120000) {
           return;
         }
 
         cooldownMapRef.current.set(studentId, now);
-        playFaceIdMatch();
+        persistCooldowns(cooldownMapRef.current);
+        // Silent match: haptic pulse without annoying audio chime
         haptics.heavy();
-        voice.speakSuccess(studentName, parsed?.group?.name);
+        if (voice.enabled) {
+          voice.speakSuccess(studentName, parsed?.group?.name);
+        }
 
         const confidence = formatConfidence(parsed?.confidence);
         pushFeed({
@@ -1432,8 +1470,9 @@ export function FaceRecognitionPage() {
             const mStudentName = formatStudentName(m.student);
             const mStudentId = m.student.id;
             const mLastSeen = cooldownMapRef.current.get(mStudentId) || 0;
-            if (now - mLastSeen >= 18000) {
+            if (now - mLastSeen >= 120000) {
               cooldownMapRef.current.set(mStudentId, now);
+              persistCooldowns(cooldownMapRef.current);
               const mConfidence = formatConfidence(m.confidence || m.similarityScore);
               pushFeed({
                 studentName: mStudentName,
@@ -1458,9 +1497,19 @@ export function FaceRecognitionPage() {
           }
         }
       } else if (outcome === 'DUPLICATE') {
-        playFaceIdDuplicate();
+        const studentId = parsed?.student?.id || studentName;
+        const now = Date.now();
+        const lastSeen = cooldownMapRef.current.get(studentId) || 0;
+        // 2-minute cooldown for duplicate warning to stop endless repeating banners/voice
+        if (now - lastSeen < 120000) {
+          return;
+        }
+        cooldownMapRef.current.set(studentId, now);
+        persistCooldowns(cooldownMapRef.current);
         haptics.medium();
-        voice.speakDuplicate(studentName);
+        if (voice.enabled) {
+          voice.speakDuplicate(studentName);
+        }
         pushFeed({
           studentName,
           time: timeStr,
@@ -1475,9 +1524,19 @@ export function FaceRecognitionPage() {
           time: timeStr,
         });
       } else if (outcome === 'DENIED') {
-        playFaceIdDenied();
+        const studentId = parsed?.student?.id || studentName;
+        const now = Date.now();
+        const lastSeen = cooldownMapRef.current.get(studentId) || 0;
+        // 1-minute cooldown for denied warning
+        if (now - lastSeen < 60000) {
+          return;
+        }
+        cooldownMapRef.current.set(studentId, now);
+        persistCooldowns(cooldownMapRef.current);
         haptics.error();
-        voice.speakAccessDenied(parsed?.accessReason);
+        if (voice.enabled) {
+          voice.speakAccessDenied(parsed?.accessReason);
+        }
         const reasonText = accessReasonLabel(parsed?.accessReason);
         pushFeed({
           studentName,
@@ -1494,9 +1553,19 @@ export function FaceRecognitionPage() {
           time: timeStr,
         });
       } else if (outcome === 'UNKNOWN') {
-        playFaceIdDenied();
+        const now = Date.now();
+        const lastUnknown = cooldownMapRef.current.get('__unknown__') || 0;
+        // 15-second cooldown for unknown faces to avoid rapid screen flicker
+        if (now - lastUnknown < 15000) {
+          lastCaptureTimeRef.current = Date.now() + 1500;
+          return;
+        }
+        cooldownMapRef.current.set('__unknown__', now);
+        persistCooldowns(cooldownMapRef.current);
         haptics.error();
-        voice.speakUnknown();
+        if (voice.enabled) {
+          voice.speakUnknown();
+        }
         const guidance = getUnknownOutcomeGuidance(parsed?.status);
         pushFeed({
           studentName: guidance.title,
@@ -1510,9 +1579,8 @@ export function FaceRecognitionPage() {
           subtitle: guidance.subtitle,
           time: timeStr,
         });
-        lastCaptureTimeRef.current = Date.now() + 1000;
+        lastCaptureTimeRef.current = Date.now() + 1500;
       } else {
-        playTick();
         haptics.medium();
         push('success', t('faceRecognition.attemptProcessed'));
       }
@@ -1524,9 +1592,12 @@ export function FaceRecognitionPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
     },
     onError: (error: Error) => {
-      playError();
       haptics.error();
-      push('error', friendlyFaceError(error));
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      const message = isOffline
+        ? 'Internet aloqasi uzildi. Aloqa tiklangach davomat avtomatik davom etadi.'
+        : friendlyFaceError(error);
+      push('error', message);
     },
   });
 

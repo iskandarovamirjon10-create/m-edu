@@ -40,16 +40,16 @@ export const AUDIO_FILE_MAP: Readonly<Record<VoiceAudioKey, string>> = {
 // ============================================================================
 
 const storeListeners = new Set<() => void>();
-let isVoiceEnabledState = true;
+let isVoiceEnabledState = false;
 let isStoreInitialized = false;
 
 function readEnabledFromStorage(): boolean {
-  if (typeof window === 'undefined') return true;
+  if (typeof window === 'undefined') return false;
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    return stored !== null ? stored === 'true' : true;
+    return stored !== null ? stored === 'true' : false;
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -81,7 +81,7 @@ function getVoiceEnabledSnapshot(): boolean {
 }
 
 function getServerVoiceEnabledSnapshot(): boolean {
-  return true; // SSR Hydration xatosini 100% oldini oladi
+  return false; // Default silent to prevent audio spam during auto-scanning
 }
 
 export function setVoiceFeedbackEnabled(nextState: boolean): void {

@@ -82,6 +82,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
+    if (!this.prisma) {
+      throw new UnauthorizedException('Authentication database service unavailable');
+    }
+
     // Parent tokens are resolved against the ParentAccount table
     if (payload.accountType === 'parent') {
       const parent = await this.prisma.parentAccount.findUnique({

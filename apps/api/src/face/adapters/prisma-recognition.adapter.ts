@@ -138,7 +138,7 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
       where: { id: organizationId },
       select: { timezone: true },
     });
-    const tz = org?.timezone?.trim() || 'UTC';
+    const tz = org?.timezone?.trim() || process.env.DEFAULT_TIMEZONE || 'Asia/Tashkent';
 
     const parts = new Intl.DateTimeFormat('en-CA', {
       timeZone: tz,

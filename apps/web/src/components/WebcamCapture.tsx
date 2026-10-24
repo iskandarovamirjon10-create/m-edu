@@ -376,15 +376,14 @@ export function WebcamCapture({
 
     setCaptureFailure('');
     setIsCapturing(true);
-    // Single haptic (was double: medium + heavy)
-    haptics.medium();
-    if (!reduced) playSuccess();
+    // Silent capture — no repetitive camera shutter sound during scanning
+    haptics.light();
     onCapture(frame.base64);
 
     window.setTimeout(() => setIsCapturing(false), SHUTTER_COOLDOWN_MS);
   }, [
     busy, isCapturing, status, captureFrame, isMirrored,
-    haptics, playSuccess, reduced, onCapture, t,
+    haptics, onCapture, t,
   ]);
 
   /* ── Auto-scan loop ────────────────────────────────────────── */

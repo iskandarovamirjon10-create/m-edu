@@ -115,7 +115,7 @@ export class TelegramService {
    * Returns null when it is not configured (deep links then cannot be built).
    */
   getBotUsername(): string | null {
-    const raw = this.configService.get<string>('TELEGRAM_BOT_USERNAME')?.trim();
+    const raw = this.configService?.get<string>('TELEGRAM_BOT_USERNAME')?.trim();
     if (raw) return raw.startsWith('@') ? raw.slice(1) : raw;
     if (this.isMock) return 'medu_education_bot';
     return null;

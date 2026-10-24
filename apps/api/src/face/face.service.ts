@@ -42,6 +42,7 @@ import { PrismaEnrollmentAdapter } from './adapters/prisma-enrollment.adapter';
 import { PrismaRecognitionAdapter } from './adapters/prisma-recognition.adapter';
 import { PrismaStudentAdapter } from './adapters/prisma-student.adapter';
 import { SimpleAuthorizationAdapter } from './adapters/authorization.adapter';
+import { InferenceConcurrencyLimiter } from './inference-limiter';
 
 import type { RecognitionHistoryQueryDto } from './dto/recognition.dto';
 import type { FaceAuditQueryDto } from './dto/audit.dto';
@@ -120,6 +121,11 @@ type AuditActor = {
 export class FaceService implements OnModuleInit, OnModuleDestroy {
   private readonly nestLogger = new Logger(FaceService.name);
   private readonly authAdapter = new SimpleAuthorizationAdapter();
+  private readonly inferenceLimiter = new InferenceConcurrencyLimiter({
+    maxConcurrency: Number(process.env.FACE_INFERENCE_CONCURRENCY || 2),
+    maxQueueSize: Number(process.env.FACE_INFERENCE_QUEUE_LIMIT || 12),
+    queueTimeoutMs: 5000,
+  });
 
   private enrollmentService: EnrollmentService | null = null;
   private recognitionService: RecognitionService | null = null;
@@ -522,11 +528,13 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     provider: EngineProvider;
     isReal: boolean;
     initialized: boolean;
+    limiter: { active: number; queued: number; maxConcurrency: number; maxQueueSize: number };
   } {
     return {
       provider: this.engineProvider,
       isReal: this.engineProvider === 'real-local',
       initialized: this.enrollmentService !== null,
+      limiter: this.inferenceLimiter.stats,
     };
   }
 
@@ -789,11 +797,17 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
 
     const imageBuffer = decodeValidatedImage(imageBase64);
 
-    const result = await this.getRecognitionService().processAttempt(
-      tenant,
-      sessionId,
-      imageBuffer,
-    );
+    const releaseInference = await this.inferenceLimiter.acquire();
+    let result: any;
+    try {
+      result = await this.getRecognitionService().processAttempt(
+        tenant,
+        sessionId,
+        imageBuffer,
+      );
+    } finally {
+      releaseInference();
+    }
 
     // ---- Non-identified attempts: nothing to gate ----------------------
     if (result.status !== 'IDENTIFIED' || !result.student?.id) {
@@ -876,6 +890,31 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (financial.overdue > 0) {
+      const financialGatePolicy = process.env.FACE_FINANCIAL_GATE_POLICY || 'STRICT_BLOCK';
+      if (financialGatePolicy === 'WARN_AND_ALLOW') {
+        this.nestLogger.warn(
+          `Student ${studentId} has overdue debt ${financial.overdue}, but policy is WARN_AND_ALLOW. Attendance allowed with warning.`,
+        );
+        const response = {
+          ...result,
+          accessDenied: false,
+          financialWarning: true,
+          accessReason: 'INSUFFICIENT_FUNDS_WARNED',
+          balance: financial.balance,
+          outstanding: financial.outstanding,
+          overdue: financial.overdue,
+        };
+        await this.attachIdempotencyRecord(clientAttemptId, result.attemptId, response);
+        if (result.attendanceRecorded && result.attendanceRecordId) {
+          void this.emitAttendanceNotification(
+            tenant.organizationId,
+            result.attendanceRecordId,
+            studentId,
+          );
+        }
+        return response;
+      }
+
       await this.rollbackAttemptAttendance(
         { organizationId: tenant.organizationId, userId: tenant.userId },
         studentId,
