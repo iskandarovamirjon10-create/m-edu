@@ -59,12 +59,12 @@ export class TelegramCallbackService {
   private readonly logger = new Logger(TelegramCallbackService.name);
   private readonly secret: Buffer | null;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(private readonly config?: ConfigService) {
     // Prefer a dedicated secret; fall back to JWT_SECRET (always present) so
     // the feature cannot silently break on an existing deployment.
     const raw =
-      this.config.get<string>('TELEGRAM_CALLBACK_SECRET') ||
-      this.config.get<string>('JWT_SECRET');
+      this.config?.get<string>('TELEGRAM_CALLBACK_SECRET') ||
+      this.config?.get<string>('JWT_SECRET');
     this.secret = raw ? Buffer.from(raw, 'utf8') : null;
     if (!this.secret) {
       this.logger.error(

@@ -54,6 +54,7 @@ export type LogoutReason =
   | 'interceptor'
   | 'tab-sync'
   | 'error'
+  | 'unauthenticated'
   | 'unknown';
 
 export interface RegisterPayload {
@@ -435,14 +436,8 @@ function useTabLeader(
       setIsLeader(false);
     };
 
-    const previousOnMessage = ch?.onmessage ?? null;
     if (ch) {
-      ch.onmessage = (e) => {
-        handleMessage(e);
-        if (typeof previousOnMessage === 'function') {
-          previousOnMessage.call(ch, e);
-        }
-      };
+      ch.addEventListener('message', handleMessage);
     }
 
     const heartbeat = window.setInterval(() => {
@@ -470,8 +465,8 @@ function useTabLeader(
 
     return () => {
       clearInterval(heartbeat);
-      if (ch && previousOnMessage !== null) {
-        ch.onmessage = previousOnMessage;
+      if (ch) {
+        ch.removeEventListener('message', handleMessage);
       }
     };
   }, [channelRef, enabled]);
@@ -491,6 +486,7 @@ export interface AuthStateValue extends AuthState {
   roles: string[];
   hasRole: (role: string) => boolean;
   hasAnyRole: (...roles: string[]) => boolean;
+  hasAllRoles: (...roles: string[]) => boolean;
 }
 
 export interface AuthActionsValue {
@@ -818,9 +814,11 @@ export function AuthProvider({
       }
     };
 
+    let onMessage: ((e: MessageEvent<SyncMessage>) => void) | null = null;
     if (typeof BroadcastChannel !== 'undefined') {
       const ch = new BroadcastChannel(SYNC_CHANNEL);
-      ch.onmessage = (e: MessageEvent<SyncMessage>) => handle(e.data);
+      onMessage = (e: MessageEvent<SyncMessage>) => handle(e.data);
+      ch.addEventListener('message', onMessage);
       channelRef.current = ch;
     }
 
@@ -839,6 +837,9 @@ export function AuthProvider({
     window.addEventListener('storage', onStorage);
 
     return () => {
+      if (channelRef.current && onMessage) {
+        channelRef.current.removeEventListener('message', onMessage);
+      }
       channelRef.current?.close();
       channelRef.current = null;
       window.removeEventListener('storage', onStorage);
@@ -1039,6 +1040,7 @@ export function AuthProvider({
       roles,
       hasRole: (r) => roles.includes(r),
       hasAnyRole: (...rs) => rs.some((r) => roles.includes(r)),
+      hasAllRoles: (...rs) => rs.every((r) => roles.includes(r)),
     }),
     [state, roles],
   );
@@ -1157,9 +1159,17 @@ export function useAuthOnlineStatus(): boolean {
   return online;
 }
 
-/** Session expiry countdown in ms (or null). */
-export function useSessionExpiry(): number | null {
+/** Session expiry countdown in ms with auto-tick (or null). */
+export function useSessionExpiry(tickIntervalMs = 15_000): number | null {
   const { user, verifiedAt } = useAuthState();
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!user && !verifiedAt) return;
+    const timer = setInterval(() => setTick((t) => t + 1), tickIntervalMs);
+    return () => clearInterval(timer);
+  }, [user, verifiedAt, tickIntervalMs]);
+
   const expiresAt = (user as unknown as { expiresAt?: number | string } | null)?.expiresAt;
   if (expiresAt) {
     const ts = typeof expiresAt === 'string' ? Date.parse(expiresAt) : expiresAt;
@@ -1189,13 +1199,15 @@ export function AuthGate({
   forbidden = null,
 }: AuthGateProps) {
   const { status, hasAnyRole } = useAuthState();
-  const { logout } = useAuthActions();
+  const { logout, gotoLogin } = useAuthActions();
 
   useEffect(() => {
     if (status === 'unauthenticated' && fallback === undefined) {
-      logout({ redirect: true, reason: 'expired' });
+      logout({ redirect: true, reason: 'unauthenticated' }).catch(() => {
+        gotoLogin();
+      });
     }
-  }, [status, fallback, logout]);
+  }, [status, fallback, logout, gotoLogin]);
 
   if (status === 'booting') return <>{loading}</>;
   if (status === 'unauthenticated') return <>{fallback ?? null}</>;

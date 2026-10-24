@@ -98,15 +98,17 @@ function schedulePersist() {
 type ScrollTarget = {
   el: HTMLElement | Window;
   getY: () => number;
+  getMaxY: () => number;
   setY: (y: number, behavior: ScrollBehavior) => void;
-  addScrollListener: (cb: () => void) => () => void;
+  addScrollListener: (cb: (e?: Event) => void) => () => void;
 };
 
 function getScrollTarget(containerSelector: string): ScrollTarget {
   if (typeof window === 'undefined') {
     return {
-      el: window,
+      el: {} as Window,
       getY: () => 0,
+      getMaxY: () => 1,
       setY: () => {},
       addScrollListener: () => () => {},
     };
@@ -117,6 +119,7 @@ function getScrollTarget(containerSelector: string): ScrollTarget {
     return {
       el: container,
       getY: () => container.scrollTop,
+      getMaxY: () => Math.max(1, container.scrollHeight - container.clientHeight),
       setY: (y, behavior) =>
         container.scrollTo({ top: y, left: 0, behavior }),
       addScrollListener: (cb) => {
@@ -129,6 +132,8 @@ function getScrollTarget(containerSelector: string): ScrollTarget {
   return {
     el: window,
     getY: () => window.scrollY,
+    getMaxY: () =>
+      Math.max(1, document.documentElement.scrollHeight - window.innerHeight),
     setY: (y, behavior) => window.scrollTo({ top: y, left: 0, behavior }),
     addScrollListener: (cb) => {
       window.addEventListener('scroll', cb, { passive: true });
@@ -143,6 +148,7 @@ function getScrollTarget(containerSelector: string): ScrollTarget {
 
 function scrollToHash(
   hash: string,
+  target: ScrollTarget,
   { smooth, headerOffset }: { smooth: boolean; headerOffset: number },
 ) {
   const id = decodeURIComponent(hash.slice(1));
@@ -165,9 +171,10 @@ function scrollToHash(
       return;
     }
 
-    // Compute absolute Y minus header offset.
+    // Compute absolute Y relative to target minus header offset.
     const rect = el.getBoundingClientRect();
-    const absoluteY = rect.top + window.scrollY - headerOffset;
+    const currentY = target.getY();
+    const targetY = currentY + rect.top - headerOffset;
 
     if (smooth) {
       // Abort smooth scroll on any user input — feels native, not hijacked.
@@ -182,11 +189,7 @@ function scrollToHash(
         events.forEach((ev) => window.removeEventListener(ev, onUserInput));
     }
 
-    window.scrollTo({
-      top: Math.max(0, absoluteY),
-      left: 0,
-      behavior: smooth ? 'smooth' : INSTANT,
-    });
+    target.setY(Math.max(0, targetY), smooth ? 'smooth' : INSTANT);
   };
 
   tryScroll();
@@ -246,39 +249,40 @@ export function ScrollToTop({
     return targetRef.current;
   }, [containerSelector]);
 
-  /* ── 2. Track scroll position per history entry (rAF-batched) ── */
+  /* ── 2. Track scroll position per history entry (rAF-batched, capture-phase) ── */
   useEffect(() => {
-    const target = getTarget();
     let raf = 0;
     let lastY = -1;
 
-    const emitTelemetry = (y: number, dir: 'up' | 'down' | 'idle') => {
+    const emitTelemetry = (y: number, dir: 'up' | 'down' | 'idle', max: number) => {
       if (typeof window === 'undefined') return;
       window.dispatchEvent(
         new CustomEvent('medu:scroll', {
-          detail: { y, dir, key: keyRef.current, pathname },
+          detail: { y, dir, max, key: keyRef.current, pathname },
         }),
       );
     };
 
-    const onScroll = () => {
+    const handleScroll = () => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
+        const target = getTarget();
         const y = target.getY();
+        const max = target.getMaxY();
         positions.set(keyRef.current, y);
         if (persistAcrossReloads) schedulePersist();
 
         const dir: 'up' | 'down' | 'idle' =
           y > lastY + 2 ? 'down' : y < lastY - 2 ? 'up' : 'idle';
         lastY = y;
-        emitTelemetry(y, dir);
+        emitTelemetry(y, dir, max);
       });
     };
 
-    const remove = target.addScrollListener(onScroll);
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
     return () => {
-      remove();
+      window.removeEventListener('scroll', handleScroll, { capture: true });
       if (raf) cancelAnimationFrame(raf);
     };
   }, [getTarget, persistAcrossReloads, pathname]);
@@ -306,7 +310,7 @@ export function ScrollToTop({
 
       // Deep link to a section.
       if (hash) {
-        scrollToHash(hash, {
+        scrollToHash(hash, target, {
           smooth: !reduced && !pathChanged,
           headerOffset,
         });
@@ -327,13 +331,12 @@ export function ScrollToTop({
     }
   }, [pathname, hash, key, navType, getTarget, headerOffset, viewTransitions]);
 
-  /* ── 4. Focus management on route change (a11y, non-hijacking) ── */
+  /* ── 4. Focus management on initial mount & route change (a11y, non-hijacking) ── */
   useEffect(() => {
-    if (pathname === prevPath.current) return;
     const raf = requestAnimationFrame(() => {
       const el = document.querySelector<HTMLElement>(focusSelector);
       if (!el) return;
-      // Only focus if user hasn't already engaged with the new page.
+      // Only focus if user hasn't already engaged with an interactive element
       const active = document.activeElement;
       const bodyActive = !active || active === document.body;
       if (!bodyActive) return;
@@ -364,11 +367,12 @@ export function useScrollProgress(): number {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const update = (e: Event) => {
-      const { y } = (e as CustomEvent<{ y: number }>).detail;
-      const max = Math.max(
-        1,
-        document.documentElement.scrollHeight - window.innerHeight,
-      );
+      const detail = (e as CustomEvent<{ y?: number; max?: number }>).detail ?? {};
+      const y = detail.y ?? 0;
+      const max =
+        typeof detail.max === 'number' && detail.max > 0
+          ? detail.max
+          : Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
       setProgress(Math.min(1, Math.max(0, y / max)));
     };
     window.addEventListener('medu:scroll', update);
@@ -378,23 +382,41 @@ export function useScrollProgress(): number {
   return progress;
 }
 
-/** Scroll direction with hysteresis. `'idle'` prevents flapping. */
+let globalScrollDir: 'up' | 'down' | 'idle' = 'idle';
+let lastGlobalScrollY = 0;
+const scrollDirListeners = new Set<() => void>();
+
+function updateGlobalScrollDir(y: number) {
+  const dir: 'up' | 'down' | 'idle' =
+    y > lastGlobalScrollY + 4 ? 'down' : y < lastGlobalScrollY - 4 ? 'up' : 'idle';
+  lastGlobalScrollY = y;
+  if (dir !== globalScrollDir) {
+    globalScrollDir = dir;
+    scrollDirListeners.forEach((fn) => fn());
+  }
+}
+
+/** Scroll direction with hysteresis. `'idle'` prevents flapping. 100% pure React 18 store. */
 export function useScrollDirection(): 'up' | 'down' | 'idle' {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleScroll = (e: Event) => {
+      const detail = (e as CustomEvent<{ y: number }>).detail;
+      if (typeof detail?.y === 'number') {
+        updateGlobalScrollDir(detail.y);
+      }
+    };
+    window.addEventListener('medu:scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('medu:scroll', handleScroll);
+  }, []);
+
   return useSyncExternalStore(
     (notify) => {
-      if (typeof window === 'undefined') return () => {};
-      const handler = () => notify();
-      window.addEventListener('medu:scroll', handler);
-      return () => window.removeEventListener('medu:scroll', handler);
+      scrollDirListeners.add(notify);
+      return () => scrollDirListeners.delete(notify);
     },
-    () => {
-      if (typeof window === 'undefined') return 'idle';
-      const y = window.scrollY;
-      const last = (useScrollDirection as any)._last ?? y;
-      const dir = y > last + 4 ? 'down' : y < last - 4 ? 'up' : 'idle';
-      (useScrollDirection as any)._last = y;
-      return dir;
-    },
+    () => globalScrollDir,
+    () => 'idle',
   );
 }
 

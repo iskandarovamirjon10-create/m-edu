@@ -122,6 +122,40 @@ describe('TeachersService', () => {
         }),
       );
     });
+
+    it('creates teacher with password, salaryType and normalized lowercase email', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+      const created = { id: 't1', organizationId: 'org-1' };
+      prisma.teacher.create.mockResolvedValue(created);
+
+      const result = await svc.create('org-1', {
+        firstName: 'Dilshod',
+        lastName: 'Rakhimov',
+        email: 'Dilshod.Rakhimov@Example.COM',
+        password: 'securePassword123',
+        salaryType: 'PER_LESSON',
+        lessonRate: 75000,
+        hourlyRate: 150000,
+      });
+
+      expect(result).toBe(created);
+      expect(prisma.teacher.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            salaryType: 'PER_LESSON',
+            lessonRate: 75000,
+            hourlyRate: 150000,
+            user: expect.objectContaining({
+              create: expect.objectContaining({
+                email: 'dilshod.rakhimov@example.com',
+                passwordHash: expect.any(String),
+                role: 'TEACHER',
+              }),
+            }),
+          }),
+        }),
+      );
+    });
   });
 
   describe('update', () => {
@@ -149,6 +183,48 @@ describe('TeachersService', () => {
         include: { user: userPublicSelect },
       });
       expect(result.bio).toBe('Math Teacher');
+    });
+
+    it('updates teacher email, password, isActive status and salary parameters', async () => {
+      const existing = { id: 't1', organizationId: 'org-1', userId: 'u1' };
+      prisma.teacher.findFirst.mockResolvedValue(existing);
+      prisma.user.findFirst.mockResolvedValue(null); // No collision
+      prisma.teacher.update.mockResolvedValue({ ...existing, salaryType: 'HOURLY' });
+
+      await svc.update('org-1', 't1', {
+        email: 'New.Email@School.uz',
+        password: 'newPassword321',
+        isActive: false,
+        salaryType: 'HOURLY',
+        hourlyRate: 180000,
+      });
+
+      expect(prisma.teacher.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 't1', organizationId: 'org-1' },
+          data: expect.objectContaining({
+            salaryType: 'HOURLY',
+            hourlyRate: 180000,
+            user: expect.objectContaining({
+              update: expect.objectContaining({
+                email: 'new.email@school.uz',
+                passwordHash: expect.any(String),
+                isActive: false,
+              }),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('rejects email update if email is already taken by another user', async () => {
+      const existing = { id: 't1', organizationId: 'org-1', userId: 'u1' };
+      prisma.teacher.findFirst.mockResolvedValue(existing);
+      prisma.user.findFirst.mockResolvedValue({ id: 'u2', email: 'taken@school.uz' }); // Collision
+
+      await expect(
+        svc.update('org-1', 't1', { email: 'taken@school.uz' }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

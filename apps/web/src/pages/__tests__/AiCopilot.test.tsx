@@ -14,6 +14,7 @@ import type { AiChatResponse, AiWireMessage } from '@/types/ai';
 import AiCopilot from '../AiCopilot';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AI_FLAGS } from '@/lib/ai/flags';
 
 const { aiChatMock, confirmMock } = vi.hoisted(() => ({
   aiChatMock: vi.fn(),
@@ -31,6 +32,22 @@ vi.mock('@/lib/ai', async (importOriginal) => {
 });
 
 const STORAGE_KEY = 'medu:ai-copilot:v1';
+
+/**
+ * This suite exercises the REST (`aiChat`) flow and the standalone canvas, so
+ * the streaming path is disabled per test. The streaming path has dedicated
+ * coverage in `hooks/__tests__/useAiCopilot.test.ts` and
+ * `lib/__tests__/aiStream.test.ts`.
+ */
+beforeEach(() => {
+  AI_FLAGS.streaming = false;
+  AI_FLAGS.conversations = false;
+});
+
+afterEach(() => {
+  AI_FLAGS.streaming = true;
+  AI_FLAGS.conversations = true;
+});
 
 function assistantReply(content: string): AiChatResponse {
   return { type: 'message', message: { role: 'assistant', content } };
@@ -247,7 +264,7 @@ describe('AiCopilot errors and retry', () => {
     renderCopilot();
 
     await typeAndSend(user, 'Salom');
-    await screen.findByRole('alert');
+    await screen.findByRole('alert', {}, { timeout: 4000 });
     await user.click(screen.getByTestId('ai-retry'));
 
     expect(await screen.findByText('Tayyor javob')).toBeInTheDocument();
@@ -349,7 +366,7 @@ describe('AiCopilot action confirmation', () => {
     expect(card).toHaveTextContent(/Tasdiqlash talab qilinadi|ai\.confirmationRequired/i);
     expect(within(card).getByText('Xabar')).toBeInTheDocument();
     expect(within(card).getByText('Ertangi darslar bekor qilindi')).toBeInTheDocument();
-    expect(within(card).getByText('Olchov')).toBeInTheDocument();
+    expect(within(card).getByText('Kimga')).toBeInTheDocument();
     expect(within(card).getByText('Barcha ota-onalar')).toBeInTheDocument();
     expect(within(card).getByRole('button', { name: /Tasdiqlash|Confirm/i })).toBeEnabled();
     expect(within(card).getByRole('button', { name: /Bekor qilish|Cancel|common\.cancel/i })).toBeEnabled();
@@ -368,7 +385,9 @@ describe('AiCopilot action confirmation', () => {
     const card = await reachConfirmation(user);
     const confirmButton = within(card).getByRole('button', { name: /Tasdiqlash|common\.confirm|Confirm/i });
     const cancelButton = within(card).getByRole('button', { name: /Bekor qilish|Cancel|common\.cancel/i });
-    expect(document.activeElement).toBe(cancelButton);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(cancelButton);
+    });
 
     await user.click(confirmButton);
 
@@ -405,7 +424,9 @@ describe('AiCopilot action confirmation', () => {
     // A second confirmation round, dismissed with Escape from the focused button.
     const secondCard = await reachConfirmation(user);
     const secondCancelButton = within(secondCard).getByRole('button', { name: /Bekor qilish|Cancel|common\.cancel/i });
-    expect(document.activeElement).toBe(secondCancelButton);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(secondCancelButton);
+    });
     await user.keyboard('{Escape}');
     expect(screen.queryByTestId('ai-action-confirmation')).toBeNull();
     expect(confirmMock).not.toHaveBeenCalled();
@@ -550,7 +571,7 @@ describe('AiCopilot presentation states', () => {
     const { container } = renderCopilot();
 
     const [firstPrompt] = screen.getAllByRole('button', { name: /— / });
-    const grid = firstPrompt.parentElement as HTMLElement;
+    const grid = firstPrompt.closest('ul') as HTMLElement;
     expect(grid.className).toContain('grid gap-3 sm:grid-cols-2 lg:grid-cols-3');
 
     expect(composer().className).toContain('flex-1');

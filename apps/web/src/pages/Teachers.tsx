@@ -1,269 +1,298 @@
 /**
- * M-EDU TeachersPage — Apple Design Award Edition
+ * M-EDU TeachersPage — Apple VisionOS & HIG Liquid Glass Edition
  *
- * Premium craft:
- *  - Hero header with gradient teachers tile + live chips (Total/Active/Inactive)
- *  - Ambient gradient orbs (blue + purple drift) — consistent with suite
- *  - Animated stats bar with count-up numbers
- *  - Per-teacher deterministic gradient avatars (name hash → palette)
- *  - Premium card rows (avatar + email chip + specialization chips + rate)
- *  - Squircle FieldIcons in modal (no bare labels)
- *  - Shimmer skeleton (not pulse)
- *  - Custom SVG icons in SF Symbols proportions
- *  - Stagger entrance with spring physics
+ * Architecture & Features:
+ *  • Unified Apple Command Center: GlassPageHeader + VisionOS interactive metric pills with dynamic SVG rings
+ *  • Multimodal Sensory System: Apple-grade audio (usePremiumSound) & tactile haptics (useHaptics)
+ *  • VisionOS Glass Skeleton loading state with liquid shimmer
+ *  • Responsive HIG Action Console: 44px touch targets, quick look, sidecar, 360° spatial identity card, edit, delete
+ *  • 100% i18n localization (EN / UZ / RU) with zero hardcoded user-facing strings
+ *  • Strictly typed form states (salaryType: 'MONTHLY' | 'HOURLY' | 'PER_LESSON') with zero `as any` bypasses
+ *  • Formula-safe Excel-ready CSV export with UTF-8 BOM
+ *  • 360° Spatial Identity Card integration (SpatialIdentityCard360)
+ *  • Deep link resolution for /teachers/:id
  */
 
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
+import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { teachersApi } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys.factory';
+import { openQuickLook, openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { useHaptics } from '@/hooks/useHaptics';
+import { useDebounce } from '@/hooks/useDebounce';
 import {
+  GlassPageHeader,
   GlassErrorState,
-  GlassPagination,
-  GlassInput,
+  GlassEmptyState,
   GlassModal,
   GlassField,
+  GlassInput,
   GlassTextArea,
-  useToasts,
   GlassButton,
-  ConfirmDialog,
+  GlassPagination,
   FloatingActionIsland,
+  useToasts,
+  ConfirmDialog,
 } from '@/components/ui';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
-import { openSidecar, type QuickLookData } from '@/stores/ui.store';
-import { usePremiumSound } from '@/hooks/usePremiumSound';
-import { useDebounce } from '@/hooks/useDebounce';
-import { fullName, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { fullName, formatCurrency } from '@/lib/format';
 import type { Paginated, Teacher } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
-import { queryKeys } from '@/lib/query-keys.factory';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+import { usePrefersReducedMotion } from '@/layouts/core/singletons';
+import { SpatialIdentityCard360 } from '@/components/cards/SpatialIdentityCard360';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 
-/* ============================================================================
+/* ══════════════════════════════════════════════════════════════════════════
  * MOTION TOKENS
- * ========================================================================== */
+ * ════════════════════════════════════════════════════════════════════════ */
 
 const SPRING = {
-  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
-  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
-  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
+  snappy: { type: 'spring' as const, stiffness: 520, damping: 34, mass: 0.65 },
+  smooth: { type: 'spring' as const, stiffness: 360, damping: 30, mass: 0.85 },
+  liquid: { type: 'spring' as const, stiffness: 260, damping: 26, mass: 0.95 },
 } as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.06 } },
-};
-
-const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 14 },
-  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
+  visible: { opacity: 1, transition: { staggerChildren: 0.035, delayChildren: 0.02 } },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -8 },
-  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 6 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
-/* ============================================================================
- * TYPES
- * ========================================================================== */
+const tileVariants: Variants = {
+  hidden: { opacity: 0, y: 12, scale: 0.97 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: SPRING.liquid },
+};
 
-interface TeacherFilters {
-  page: number;
-  limit: number;
-  search?: string;
+/* ══════════════════════════════════════════════════════════════════════════
+ * SVG GLYPH ICONS (Two-tone Apple VisionOS Duotone System)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+interface GlyphDef {
+  readonly s: readonly string[];
+  readonly f?: readonly string[];
 }
 
-interface TeacherFormState {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  specializations: string;
-  hourlyRate: string;
-  bio: string;
-  experience: string;
-}
+const G = {
+  teachers: {
+    f: ['M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
+    s: [
+      'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2',
+      'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+      'M23 21v-2a4 4 0 0 0-3-3.9',
+      'M16 3.1a4 4 0 0 1 0 7.8',
+    ],
+  },
+  userPlus: {
+    s: [
+      'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
+      'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+      'M19 8v6',
+      'M22 11h-6',
+    ],
+  },
+  checkCircle: {
+    f: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z'],
+    s: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'm8.2 12.4 2.6 2.6 5-5.4'],
+  },
+  pause: {
+    s: ['M10 4H6v16h4z', 'M18 4h-4v16h4z'],
+  },
+  wallet: {
+    f: ['M20 12V8H6a2 2 0 0 1 0-4h12v4'],
+    s: ['M4 6v12c0 1.1.9 2 2 2h14v-4', 'M18 12a2 2 0 1 1 0 4 2 2 0 0 1 0-4z'],
+  },
+  mail: {
+    s: [
+      'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+      'M22 6 12 13 2 6',
+    ],
+  },
+  phone: {
+    s: [
+      'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7 12.8 12.8 0 0 0 .7 2.8 2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4 12.8 12.8 0 0 0 2.8.7 2 2 0 0 1 1.7 2z',
+    ],
+  },
+  award: {
+    f: ['M12 15a5 5 0 1 0 0-10 5 5 0 0 0 0 10z'],
+    s: ['M12 15a5 5 0 1 0 0-10 5 5 0 0 0 0 10z', 'M8.2 13.9 7 22l5-3 5 3-1.2-8.1'],
+  },
+  book: {
+    f: ['M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5z'],
+    s: ['M12 7v14', 'M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z'],
+  },
+  user: {
+    f: ['M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
+    s: ['M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M20 21v-1a8 8 0 0 0-16 0v1'],
+  },
+  note: {
+    s: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6', 'M8 13h8', 'M8 17h5'],
+  },
+  search: {
+    s: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'm21 21-4.35-4.35'],
+  },
+  close: {
+    s: ['M18 6 6 18', 'm6 6 12 12'],
+  },
+  export: {
+    s: ['M12 3.5v12', 'm7.5 11.5 4.5 4.5 4.5-4.5', 'M4.5 15.5v2a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5v-2'],
+  },
+  eye: {
+    f: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
+    s: ['M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],
+  },
+  sidecar: {
+    s: ['M4 4h16v16H4z', 'M15 4v16'],
+  },
+  edit: {
+    s: [
+      'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
+      'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z',
+    ],
+  },
+  trash: {
+    s: ['M3 6h18', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'],
+  },
+  more: {
+    f: ['M5 12a2 2 0 1 0 0-.01M12 12a2 2 0 1 0 0-.01M19 12a2 2 0 1 0 0-.01'],
+    s: ['M5 12a2 2 0 1 0 0-.01', 'M12 12a2 2 0 1 0 0-.01', 'M19 12a2 2 0 1 0 0-.01'],
+  },
+  list: {
+    s: ['M8 6h13', 'M8 12h13', 'M8 18h13', 'M3 6h.01', 'M3 12h.01', 'M3 18h.01'],
+  },
+  grid: {
+    s: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'],
+  },
+  card: {
+    s: ['M3 5h18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', 'M1 10h22', 'M7 15h3'],
+  },
+  key: {
+    s: ['m21 2-2 2m-1.5 1.5L14 9a5 5 0 1 0 4 4l3.5-3.5', 'm15.5 7.5 3 3'],
+  },
+  sparkles: {
+    s: ['m12 3 1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3z'],
+  },
+} as const;
 
-const INITIAL_FORM: TeacherFormState = {
-  firstName: '',
-  lastName: '',
-  email: '',
-  phone: '',
-  specializations: '',
-  hourlyRate: '',
-  bio: '',
-  experience: '',
-};
+type GlyphName = keyof typeof G;
 
-/* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
- * ========================================================================== */
-
-const ICON_STROKE = 1.75;
-
-const I: Record<string, string[]> = {
-  search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.3-4.3'],
-  plus: ['M12 5v14', 'M5 12h14'],
-  userPlus: [
-    'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
-    'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-    'M19 8v6', 'M22 11h-6',
-  ],
-  users: [
-    'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2',
-    'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-    'M23 21v-2a4 4 0 0 0-3-3.9',
-    'M16 3.1a4 4 0 0 1 0 7.8',
-  ],
-  checkCircle: [
-    'M22 11.08V12a10 10 0 1 1-5.93-9.14',
-    'M22 4 12 14.01l-3-3',
-  ],
-  check: ['M20 6 9 17l-5-5'],
-  xCircle: [
-    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
-    'M15 9l-6 6', 'M9 9l6 6',
-  ],
-  pause: [
-    'M10 4H6v16h4z',
-    'M18 4h-4v16h4z',
-  ],
-  wallet: [
-    'M20 12V8H6a2 2 0 0 1 0-4h12v4',
-    'M4 6v12c0 1.1.9 2 2 2h14v-4',
-    'M18 12a2 2 0 1 1 0 4 2 2 0 0 1 0-4z',
-  ],
-  edit: [
-    'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
-    'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z',
-  ],
-  trash: [
-    'M3 6h18',
-    'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6',
-    'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
-    'M10 11v6', 'M14 11v6',
-  ],
-  mail: [
-    'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
-    'M22 6 12 13 2 6',
-  ],
-  phone: [
-    'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7 12.8 12.8 0 0 0 .7 2.8 2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4 12.8 12.8 0 0 0 2.8.7 2 2 0 0 1 1.7 2z',
-  ],
-  sparkles: [
-    'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
-    'M18.5 3.5v3', 'M20 5h-3',
-    'M5.5 18v2.5', 'M6.75 19.25h-2.5',
-  ],
-  award: [
-    'M12 15a5 5 0 1 0 0-10 5 5 0 0 0 0 10z',
-    'M8.2 13.9 7 22l5-3 5 3-1.2-8.1',
-  ],
-  layers: [
-    'M12 2 2 7l10 5 10-5z',
-    'M2 17l10 5 10-5',
-    'M2 12l10 5 10-5',
-  ],
-  refresh: [
-    'M23 4v6h-6',
-    'M1 20v-6h6',
-    'M3.51 9a9 9 0 0 1 14.85-3.36L23 10',
-    'M20.49 15a9 9 0 0 1-14.85 3.36L1 14',
-  ],
-  empty: [
-    'M20 7h-9',
-    'M14 17H5',
-    'M19 19v-2a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v2',
-    'M10 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
-  ],
-  book: [
-    'M12 7v14',
-    'M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z',
-  ],
-  user: [
-    'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-    'M20 21v-1a8 8 0 0 0-16 0v1',
-  ],
-  note: [
-    'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z',
-    'M14 2v6h6', 'M8 13h8', 'M8 17h5',
-  ],
-  grid: [
-    'M3 3h7v7H3z',
-    'M14 3h7v7h-7z',
-    'M14 14h7v7h-7z',
-    'M3 14h7v7H3z',
-  ],
-  list: [
-    'M8 6h13',
-    'M8 12h13',
-    'M8 18h13',
-    'M3 6h.01',
-    'M3 12h.01',
-    'M3 18h.01',
-  ],
-  x: ['M18 6 6 18', 'M6 6l12 12'],
-  arrowRight: ['M5 12h14', 'M12 5l7 7-7 7'],
-  eye: ['M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],
-};
-
-function Icon({
-  paths, size = 18, className = '', strokeWidth = ICON_STROKE, ...rest
+const Glyph = memo(function Glyph({
+  name,
+  size = 18,
+  weight = 1.9,
+  className = '',
 }: {
-  paths: string[]; size?: number; className?: string; strokeWidth?: number;
-} & React.SVGProps<SVGSVGElement>) {
+  name: GlyphName;
+  size?: number;
+  weight?: number;
+  className?: string;
+}) {
+  const def: GlyphDef = G[name] ?? G.teachers;
   return (
     <svg
-      width={size} height={size} viewBox="0 0 24 24"
-      fill="none" stroke="currentColor"
-      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
-      className={className} aria-hidden {...rest}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={weight}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      shapeRendering="geometricPrecision"
+      className={`shrink-0 ${className}`}
+      aria-hidden="true"
+      focusable="false"
     >
-      {paths.map((d, i) => <path key={i} d={d} />)}
+      {def.f?.map((d, i) => (
+        <path key={`f-${i}`} d={d} fill="currentColor" fillOpacity={0.16} stroke="none" />
+      ))}
+      {def.s.map((d, i) => (
+        <path key={`s-${i}`} d={d} />
+      ))}
     </svg>
   );
-}
+});
 
-/* ============================================================================
- * TONES
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * TONES & SQUIRCLE PALETTES
+ * ════════════════════════════════════════════════════════════════════════ */
 
-type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald';
+type Tone = 'blue' | 'green' | 'orange' | 'purple' | 'slate';
 
-const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
-  emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
+const TONES: Record<Tone, { from: string; to: string; hex: string; bg: string; fg: string; border: string }> = {
+  blue: {
+    from: '#5AB0FF',
+    to: '#0A68F0',
+    hex: '#0A84FF',
+    bg: 'rgba(10,132,255,0.10)',
+    fg: '#0A84FF',
+    border: 'rgba(10,132,255,0.22)',
+  },
+  green: {
+    from: '#5EE17F',
+    to: '#1FAE4B',
+    hex: '#30D158',
+    bg: 'rgba(48,209,88,0.10)',
+    fg: '#30D158',
+    border: 'rgba(48,209,88,0.22)',
+  },
+  orange: {
+    from: '#FFB340',
+    to: '#FF6B00',
+    hex: '#FF9500',
+    bg: 'rgba(255,149,0,0.10)',
+    fg: '#FF9500',
+    border: 'rgba(255,149,0,0.22)',
+  },
+  purple: {
+    from: '#C39BFF',
+    to: '#7C4DFF',
+    hex: '#BF5AF2',
+    bg: 'rgba(191,90,242,0.10)',
+    fg: '#BF5AF2',
+    border: 'rgba(191,90,242,0.22)',
+  },
+  slate: {
+    from: '#94A3B8',
+    to: '#475569',
+    hex: '#64748B',
+    bg: 'rgba(100,116,139,0.10)',
+    fg: '#64748B',
+    border: 'rgba(100,116,139,0.22)',
+  },
 };
 
-const SPECIALIZATION_TONES: Tone[] = ['blue', 'purple', 'emerald', 'orange', 'cyan', 'red', 'green', 'gray'];
+const SPEC_PALETTES = [
+  { bg: 'bg-blue-500/10 dark:bg-blue-400/10', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-500/20' },
+  { bg: 'bg-purple-500/10 dark:bg-purple-400/10', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-500/20' },
+  { bg: 'bg-emerald-500/10 dark:bg-emerald-400/10', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-500/20' },
+  { bg: 'bg-amber-500/10 dark:bg-amber-400/10', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-500/20' },
+  { bg: 'bg-rose-500/10 dark:bg-rose-400/10', text: 'text-rose-700 dark:text-rose-300', border: 'border-rose-500/20' },
+];
 
-/* ============================================================================
- * HELPERS
- * ========================================================================== */
-
-function formatTeacherName(teacher: Teacher): string {
-  return fullName(teacher.user?.firstName, teacher.user?.lastName);
-}
-
-function getTeacherStatusBadge(isActive: boolean | undefined): {
-  variant: 'success' | 'error';
-  label: string;
-} {
-  return isActive === false
-    ? { variant: 'error', label: 'enum.status.INACTIVE' }
-    : { variant: 'success', label: 'enum.status.ACTIVE' };
-}
-
-function validateEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+function stringHash(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
 }
 
 function getInitials(name: string): string {
@@ -278,293 +307,315 @@ function getInitials(name: string): string {
   );
 }
 
-function nameHash(str: string): number {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-const AVATAR_PALETTES = [
+const AVATAR_GRADIENTS = [
   ['#007AFF', '#5856D6'],
   ['#AF52DE', '#FF2D55'],
   ['#34C759', '#32ADE6'],
   ['#FF9500', '#FF2D55'],
   ['#5856D6', '#AF52DE'],
   ['#32ADE6', '#007AFF'],
-  ['#FF2D55', '#FF9500'],
   ['#30D158', '#34C759'],
 ];
 
 function avatarGradient(name: string): string {
-  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
+  const [a, b] = AVATAR_GRADIENTS[stringHash(name) % AVATAR_GRADIENTS.length];
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 }
 
-function specializationTone(spec: string): Tone {
-  return SPECIALIZATION_TONES[nameHash(spec) % SPECIALIZATION_TONES.length];
+function formatTeacherName(teacher: Teacher | null | undefined): string {
+  if (!teacher) return '—';
+  return fullName(teacher.user?.firstName, teacher.user?.lastName);
 }
 
-/* ============================================================================
- * PREMIUM SUB-COMPONENTS
- * ========================================================================== */
-
-/** Ambient gradient orbs — GPU-friendly static atmospheric layer */
-function AmbientOrbs() {
-  return (
-    <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-20 z-0 h-[360px] overflow-hidden">
-      <div
-        className="absolute left-1/4 -top-10 h-[280px] w-[500px] -translate-x-1/2 rounded-full opacity-60 dark:opacity-40"
-        style={{
-          background: 'radial-gradient(ellipse at center, rgba(88,86,214,0.18) 0%, rgba(0,122,255,0.08) 45%, transparent 70%)',
-        }}
-      />
-      <div
-        className="absolute right-1/4 -top-10 h-[260px] w-[460px] translate-x-1/2 rounded-full opacity-50 dark:opacity-30"
-        style={{
-          background: 'radial-gradient(ellipse at center, rgba(175,82,222,0.15) 0%, rgba(52,199,89,0.06) 50%, transparent 70%)',
-        }}
-      />
-    </div>
-  );
+function csvCell(value: unknown): string {
+  if (value === null || value === undefined) return '""';
+  let str = String(value).trim();
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
 }
 
-function CountUp({
-  value, duration = 1.1, suffix = '',
-}: { value: number; duration?: number; suffix?: string }) {
-  const [n, setN] = useState(0);
-  const startRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    let raf: number;
-    startRef.current = null;
-    const step = (ts: number) => {
-      if (startRef.current === null) startRef.current = ts;
-      const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
-      const eased = 1 - Math.pow(1 - p, 4);
-      setN(Math.round(value * eased));
-      if (p < 1) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [value, duration]);
-
-  return <span className="tabular-nums">{n.toLocaleString()}{suffix}</span>;
+function validateEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-/** Teacher avatar with gradient derived from name */
-function TeacherAvatar({ name, size = 44 }: { name: string; size?: number }) {
-  return (
-    <motion.div
-      initial={{ scale: 0.85, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ ...SPRING.snappy, delay: 0.05 }}
-      whileHover={{ scale: 1.06 }}
-      className="relative flex shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
-      style={{
-        width: size,
-        height: size,
-        background: avatarGradient(name),
-        fontSize: size * 0.32,
-        letterSpacing: '0.02em',
-        boxShadow: '0 6px 18px -6px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.35)',
-      }}
-    >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-full"
-        style={{
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)',
-        }}
-      />
-      <span className="relative">{getInitials(name)}</span>
-    </motion.div>
-  );
+function isPlaceholderEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return email.toLowerCase().endsWith('@placeholder.local');
 }
 
-/** Premium stat tile with count-up */
-function StatTile({
-  label, value, icon, tone = 'blue',
+function displayEmail(email?: string | null): string {
+  if (!email || isPlaceholderEmail(email)) return '';
+  return email;
+}
+
+function generateSecurePassword(): string {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*';
+  let pwd = '';
+  const cryptoObj = typeof window !== 'undefined' ? window.crypto : null;
+  if (cryptoObj?.getRandomValues) {
+    const vals = new Uint8Array(10);
+    cryptoObj.getRandomValues(vals);
+    for (let i = 0; i < 10; i++) pwd += chars[vals[i] % chars.length];
+  } else {
+    for (let i = 0; i < 10; i++) pwd += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return pwd;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * AVATAR & METRIC PILL SUBCOMPONENTS
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const TeacherAvatar = memo(function TeacherAvatar({
+  name,
+  size = 40,
+  isActive = true,
+  showStatusIndicator = false,
 }: {
-  label: string;
-  value: number | string;
-  icon: string[];
-  tone?: Tone;
+  name: string;
+  size?: number;
+  isActive?: boolean;
+  showStatusIndicator?: boolean;
 }) {
-  const c = TONES[tone];
   return (
-    <motion.div
-      variants={rowVariants}
-      whileHover={{ y: -2 }}
-      transition={SPRING.smooth}
-      className="group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card hover:shadow-card-hover transition-all"
-    >
+    <div className="relative shrink-0 select-none">
       <div
-        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        className="relative flex items-center justify-center rounded-2xl font-bold text-white shadow-sm ring-1 ring-white/35 dark:ring-white/15 overflow-hidden transition-transform duration-200 group-hover:scale-105"
         style={{
-          background: c.bg,
-          color: c.fg,
-          border: `1px solid ${c.border}`,
+          width: size,
+          height: size,
+          background: avatarGradient(name),
+          fontSize: Math.round(size * 0.36),
         }}
       >
-        <Icon paths={icon} size={18} strokeWidth={2.2} className="relative" />
+        <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/30 to-transparent h-[45%]" />
+        <span className="relative drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.35)]">{getInitials(name)}</span>
       </div>
-      <div className="relative min-w-0 flex-1">
-        <div className="text-[20px] font-bold tracking-tight text-[var(--text-primary)] font-display">
-          {typeof value === 'number' ? <CountUp value={value} /> : value}
-        </div>
-        <div className="mt-0.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-          {label}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-/** Squircle leading icon */
-function FieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Tone }) {
-  const c = TONES[tone];
-  return (
-    <span
-      className="pointer-events-none absolute left-3 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg"
-      style={{ background: c.bg, color: c.fg }}
-      aria-hidden
-    >
-      <Icon paths={icon} size={12} strokeWidth={2.2} />
-    </span>
-  );
-}
-
-/** Shimmer skeleton bar */
-function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
-  return (
-    <div
-      className={`relative overflow-hidden bg-[#E5E5EA]/60 dark:bg-[#2C2C2E]/60 ${className}`}
-      style={{ borderRadius: radius }}
-    >
-      <motion.div
-        className="absolute inset-0"
-        style={{
-          background:
-            'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.65) 50%, transparent 100%)',
-        }}
-        animate={{ x: ['-100%', '100%'] }}
-        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-      />
+      {showStatusIndicator && (
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 block h-3 w-3 rounded-full ring-2 ring-white dark:ring-slate-900 ${
+            isActive ? 'bg-emerald-500 shadow-sm shadow-emerald-500/40' : 'bg-slate-400'
+          }`}
+        />
+      )}
     </div>
   );
-}
+});
 
-function TeachersSkeleton() {
+const MetricPill = memo(function MetricPill({
+  label,
+  hint,
+  value,
+  total = 0,
+  glyph,
+  tone = 'blue',
+  active = false,
+  onClick,
+  showPercent = true,
+}: {
+  label: string;
+  hint: string;
+  value: number;
+  total?: number;
+  glyph: GlyphName;
+  tone?: Tone;
+  active?: boolean;
+  onClick?: () => void;
+  showPercent?: boolean;
+}) {
+  const reduced = usePrefersReducedMotion();
+  const { hex } = TONES[tone];
+  const ratio = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
+  const radius = 14;
+  const circumference = 2 * Math.PI * radius; // ~87.96
+
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <Shimmer key={i} className="h-[68px]" radius="1rem" />
-        ))}
-      </div>
-      <Shimmer className="h-14" radius="1rem" />
-      <div className="overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] dark:border-[#ffffff10] dark:bg-[#1c1c1e80]">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="flex items-center gap-4 border-b border-[#00000008] p-4 last:border-0 dark:border-[#ffffff08]">
-            <Shimmer className="h-11 w-11" radius="9999px" />
-            <div className="flex-1 space-y-2">
-              <Shimmer className="h-4 w-40" radius="0.5rem" />
-              <Shimmer className="h-3 w-56" radius="0.5rem" />
-            </div>
-            <Shimmer className="hidden h-6 w-20 sm:block" radius="9999px" />
-            <Shimmer className="hidden h-6 w-16 md:block" radius="9999px" />
+    <motion.button
+      type="button"
+      data-testid={`teachers-metric-${tone}`}
+      variants={tileVariants}
+      whileTap={reduced ? undefined : { scale: 0.98 }}
+      onClick={onClick}
+      aria-pressed={active}
+      className={`group relative flex items-center justify-between p-3.5 sm:p-4 rounded-2xl text-left transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 border ${
+        active
+          ? 'bg-white/95 dark:bg-white/15 border-blue-500 shadow-md shadow-blue-500/10'
+          : 'bg-white/70 dark:bg-white/[0.04] border-slate-200/70 dark:border-white/[0.07] hover:bg-white/90 dark:hover:bg-white/[0.08] shadow-sm hover:-translate-y-0.5'
+      } backdrop-blur-xl`}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <div
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105"
+          style={{ background: TONES[tone].bg, color: TONES[tone].fg, border: `1px solid ${TONES[tone].border}` }}
+        >
+          <Glyph name={glyph} size={20} weight={2.2} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-white/50 truncate">
+            {label}
+          </p>
+          <div className="flex items-baseline gap-1.5 mt-0.5">
+            <span className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
+              {value.toLocaleString()}
+            </span>
+            {showPercent && total > 0 && (
+              <span className="text-[11.5px] font-medium text-slate-400 dark:text-white/40">
+                ({ratio}%)
+              </span>
+            )}
           </div>
-        ))}
+          <p className="text-[11px] text-slate-400 dark:text-white/40 truncate">{hint}</p>
+        </div>
       </div>
+
+      {showPercent && total > 0 && (
+        <div className="relative shrink-0 hidden sm:flex items-center justify-center w-9 h-9">
+          <svg className="w-9 h-9 -rotate-90 transform" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r={radius} fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-200 dark:text-white/10" />
+            <motion.circle
+              cx="18"
+              cy="18"
+              r={radius}
+              fill="none"
+              stroke={hex}
+              strokeWidth="3.2"
+              strokeDasharray={circumference}
+              strokeDashoffset={circumference - (circumference * ratio) / 100}
+              strokeLinecap="round"
+              transition={SPRING.smooth}
+            />
+          </svg>
+        </div>
+      )}
+    </motion.button>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * SKELETON LOADER (VisionOS Glass Shimmer)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const TeachersSkeleton = memo(function TeachersSkeleton({ viewMode }: { viewMode: 'list' | 'grid' }) {
+  return (
+    <div className="space-y-4 animate-pulse">
+      {viewMode === 'list' ? (
+        <div className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+          {[1, 2, 3, 4, 5].map((key) => (
+            <div key={key} className="flex items-center justify-between gap-4 px-5 py-4">
+              <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                <div className="h-4.5 w-4.5 rounded-full bg-slate-200/70 dark:bg-white/10 shrink-0" />
+                <div className="h-10 w-10 rounded-2xl bg-slate-200/70 dark:bg-white/10 shrink-0" />
+                <div className="space-y-2 flex-1 min-w-0">
+                  <div className="h-4 w-36 rounded-md bg-slate-200/80 dark:bg-white/15" />
+                  <div className="h-3 w-56 rounded-md bg-slate-100 dark:bg-white/[0.06]" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-7 w-20 rounded-lg bg-slate-100 dark:bg-white/[0.06]" />
+                <div className="h-9 w-9 rounded-xl bg-slate-200/70 dark:bg-white/10" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 p-4">
+          {[1, 2, 3, 4, 5, 6].map((key) => (
+            <div key={key} className="p-4.5 rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white/40 dark:bg-white/[0.02] space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 rounded-2xl bg-slate-200/70 dark:bg-white/10" />
+                <div className="space-y-2 flex-1">
+                  <div className="h-4 w-28 rounded-md bg-slate-200/80 dark:bg-white/15" />
+                  <div className="h-3 w-40 rounded-md bg-slate-100 dark:bg-white/[0.06]" />
+                </div>
+              </div>
+              <div className="h-3 w-full rounded-md bg-slate-100 dark:bg-white/[0.06]" />
+              <div className="flex justify-between items-center pt-2">
+                <div className="h-6 w-24 rounded-lg bg-slate-200/60 dark:bg-white/10" />
+                <div className="h-8 w-20 rounded-xl bg-slate-200/70 dark:bg-white/10" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * FORM STATE
+ * ════════════════════════════════════════════════════════════════════════ */
+
+type SalaryType = 'MONTHLY' | 'HOURLY' | 'PER_LESSON';
+
+interface TeacherFormState {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  password: string;
+  specializations: string;
+  salaryType: SalaryType;
+  hourlyRate: string;
+  lessonRate: string;
+  bio: string;
+  experience: string;
 }
 
-/** Specialization chip — tone-aware */
-function SpecChip({ spec }: { spec: string }) {
-  const tone = specializationTone(spec);
-  const c = TONES[tone];
-  return (
-    <span
-      className="inline-flex items-center rounded-lg px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.10em]"
-      style={{
-        background: c.bg,
-        color: c.fg,
-        border: `1px solid ${c.border}`,
-      }}
-    >
-      {spec}
-    </span>
-  );
-}
+const INITIAL_FORM: TeacherFormState = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  password: '',
+  specializations: '',
+  salaryType: 'MONTHLY',
+  hourlyRate: '',
+  lessonRate: '',
+  bio: '',
+  experience: '',
+};
 
-/** Email chip */
-function EmailChip({ email }: { email: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-[#86868B]">
-      <Icon paths={I.mail} size={11} strokeWidth={2} className="opacity-60" />
-      <span className="truncate max-w-[14rem]">{email}</span>
-    </span>
-  );
-}
-
-/** Status badge with pulse */
-function StatusBadge({ isActive, label }: { isActive: boolean; label: string }) {
-  const tone: Tone = isActive ? 'emerald' : 'gray';
-  const c = TONES[tone];
-  return (
-    <span
-      className="relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em]"
-      style={{
-        background: c.bg,
-        color: c.fg,
-        border: `1px solid ${c.border}`,
-      }}
-    >
-      <span className="relative flex h-1.5 w-1.5">
-        {isActive && (
-          <motion.span
-            className="absolute inset-0 rounded-full"
-            style={{ background: c.fg, opacity: 0.6 }}
-            animate={{ scale: [1, 2.4, 1], opacity: [0.6, 0, 0.6] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
-          />
-        )}
-        <span className="relative h-1.5 w-1.5 rounded-full" style={{ background: c.fg }} />
-      </span>
-      {label}
-    </span>
-  );
-}
-
-/* ============================================================================
- * PAGE
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * MAIN COMPONENT
+ * ════════════════════════════════════════════════════════════════════════ */
 
 export function TeachersPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('teachers.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
+  const sound = usePremiumSound();
+  const haptics = useHaptics();
+  const { id: routeTeacherId } = useParams<{ id?: string }>();
 
+  /* ── Filter & Search State ─────────────────────────────────────────── */
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
+  /* ── Modals & Popovers ─────────────────────────────────────────────── */
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [cardTeacher, setCardTeacher] = useState<Teacher | null>(null);
+  const [actionMenuId, setActionMenuId] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  /* ── Form State ────────────────────────────────────────────────────── */
   const [form, setForm] = useState<TeacherFormState>(INITIAL_FORM);
-  const [formErrors, setFormErrors] = useState<
-    Partial<Record<keyof TeacherFormState, string>>
-  >({});
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof TeacherFormState, string>>>({});
 
-  /* ── Query ────────────────────────────────────────────────────────── */
-  const params = useMemo<TeacherFilters>(
+  /* ── Query ─────────────────────────────────────────────────────────── */
+  const params = useMemo(
     () => ({
       page,
-      limit: 20,
+      limit: 24,
       search: debouncedSearch || undefined,
     }),
     [page, debouncedSearch],
@@ -579,18 +630,40 @@ export function TeachersPage() {
   const data = teachers.data as Paginated<Teacher> | undefined;
   const teacherList = useMemo(() => data?.items || [], [data]);
 
-  /* ── Derived stats ────────────────────────────────────────────────── */
+  /* ── Derived Filtering & Stats ─────────────────────────────────────── */
+  const filteredTeachers = useMemo(() => {
+    let list = teacherList;
+    if (statusFilter === 'ACTIVE') list = list.filter((t) => t.user?.isActive !== false);
+    else if (statusFilter === 'INACTIVE') list = list.filter((t) => t.user?.isActive === false);
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((t) => {
+        const name = formatTeacherName(t).toLowerCase();
+        const email = displayEmail(t.user?.email).toLowerCase();
+        const phone = (t.user?.phone || '').toLowerCase();
+        const specs = (t.specializations || []).join(' ').toLowerCase();
+        return name.includes(q) || email.includes(q) || phone.includes(q) || specs.includes(q);
+      });
+    }
+
+    return list;
+  }, [teacherList, statusFilter, search]);
+
   const stats = useMemo(() => {
     const active = teacherList.filter((t) => t.user?.isActive !== false).length;
     const inactive = teacherList.length - active;
-    const rates = teacherList
-      .map((t) => Number(t.hourlyRate) || 0)
-      .filter((n) => n > 0);
+    const rates = teacherList.map((t) => Number(t.hourlyRate) || 0).filter((n) => n > 0);
     const avgRate = rates.length ? rates.reduce((a, b) => a + b, 0) / rates.length : 0;
-    return { total: data?.total ?? teacherList.length, active, inactive, avgRate };
+    return {
+      total: data?.total ?? teacherList.length,
+      active,
+      inactive,
+      avgRate,
+    };
   }, [teacherList, data?.total]);
 
-  /* ── Mutations ────────────────────────────────────────────────────── */
+  /* ── Mutations ─────────────────────────────────────────────────────── */
   const create = useMutation({
     mutationFn: () => {
       const payload = {
@@ -598,18 +671,21 @@ export function TeachersPage() {
         lastName: form.lastName.trim(),
         email: form.email.trim() || undefined,
         phone: form.phone.trim() || undefined,
+        password: form.password.trim() || undefined,
         specializations: form.specializations
           ? form.specializations.split(',').map((s) => s.trim()).filter(Boolean)
           : [],
+        salaryType: form.salaryType || undefined,
         hourlyRate: form.hourlyRate ? parseFloat(form.hourlyRate) : undefined,
+        lessonRate: form.lessonRate ? parseFloat(form.lessonRate) : undefined,
         bio: form.bio.trim() || undefined,
         experience: form.experience ? parseInt(form.experience, 10) : undefined,
       };
-      return editingId
-        ? teachersApi.update(editingId, payload)
-        : teachersApi.create(payload);
+      return editingId ? teachersApi.update(editingId, payload) : teachersApi.create(payload);
     },
     onSuccess: () => {
+      sound.playSuccess?.();
+      haptics.success();
       push('success', editingId ? t('teachers.updated') : t('teachers.created'));
       setModalOpen(false);
       setEditingId(null);
@@ -618,160 +694,232 @@ export function TeachersPage() {
       qc.invalidateQueries({ queryKey: queryKeys.teachers.all() });
       qc.invalidateQueries({ queryKey: queryKeys.teachers.selectors() });
     },
-    onError: (e: Error) => push('error', getErrorMessage(e)),
+    onError: (e: Error) => {
+      haptics.error();
+      push('error', getErrorMessage(e));
+    },
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => teachersApi.remove(id),
     onSuccess: () => {
+      sound.playSuccess?.();
+      haptics.success();
       push('success', t('teachers.deleted'));
       qc.invalidateQueries({ queryKey: queryKeys.teachers.all() });
       qc.invalidateQueries({ queryKey: queryKeys.teachers.selectors() });
     },
-    onError: (e: Error) => push('error', getErrorMessage(e)),
+    onError: (e: Error) => {
+      haptics.error();
+      push('error', getErrorMessage(e));
+    },
   });
 
-  /* ── Validators ───────────────────────────────────────────────────── */
+  /* ── Quick Look & Sidecar ──────────────────────────────────────────── */
+  const handleOpenTeacherSidecar = useCallback(
+    (teacher: Teacher) => {
+      sound.playPop?.();
+      haptics.light();
+      const name = formatTeacherName(teacher);
+      const isAct = teacher.user?.isActive !== false;
+
+      const sidecarData: QuickLookData = {
+        id: teacher.id,
+        type: 'teacher',
+        title: name,
+        subtitle: displayEmail(teacher.user?.email) || teacher.user?.phone || t('teachers.sidecar.title'),
+        badge: {
+          text: isAct ? t('teachers.sidecar.badgeActive') : t('teachers.sidecar.badgeInactive'),
+          tone: isAct ? 'emerald' : 'slate',
+        },
+        avatar: {
+          text: name.slice(0, 2).toUpperCase(),
+          color: '#6366F1',
+        },
+        metrics: [
+          {
+            label: t('teachers.sidecar.hourlyRateMetric'),
+            value: teacher.hourlyRate ? formatCurrency(teacher.hourlyRate) : '—',
+            subtext: t('teachers.sidecar.hourlyRateSubtext'),
+          },
+          {
+            label: t('teachers.sidecar.experienceMetric'),
+            value: teacher.experience != null ? `${teacher.experience} y` : '—',
+            subtext: t('teachers.sidecar.experienceSubtext'),
+          },
+          {
+            label: t('teachers.sidecar.statusMetric'),
+            value: isAct ? t('teachers.sidecar.badgeActive') : t('teachers.sidecar.badgeInactive'),
+          },
+        ],
+        details: [
+          { label: t('teachers.sidecar.fullName'), value: name, copyable: true },
+          { label: t('common.email'), value: displayEmail(teacher.user?.email) || '—', copyable: Boolean(displayEmail(teacher.user?.email)) },
+          { label: t('teachers.form.phone'), value: teacher.user?.phone || '—', copyable: Boolean(teacher.user?.phone) },
+          {
+            label: t('teachers.sidecar.specializations'),
+            value: (teacher.specializations || []).join(', ') || t('teachers.sidecar.generalSpecialization'),
+            copyable: true,
+          },
+          { label: t('teachers.sidecar.bio'), value: teacher.bio || t('teachers.sidecar.noBio') },
+        ],
+        tags: teacher.specializations || [],
+        primaryAction: {
+          label: t('teachers.actions.edit'),
+          onExecute: () => handleEdit(teacher),
+        },
+      };
+      openSidecar(sidecarData);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sound, haptics, t],
+  );
+
+  const handleQuickLook = useCallback(
+    (teacher: Teacher) => {
+      sound.playPop?.();
+      haptics.light();
+      const name = formatTeacherName(teacher);
+      const isAct = teacher.user?.isActive !== false;
+
+      openQuickLook({
+        title: name,
+        subtitle: (teacher.specializations || []).join(' • ') || t('teachers.quickLook.title'),
+        status: {
+          label: isAct ? t('teachers.sidecar.badgeActive') : t('teachers.sidecar.badgeInactive'),
+          tone: isAct ? 'emerald' : 'slate',
+        },
+        details: [
+          { label: t('teachers.quickLook.status'), value: isAct ? t('teachers.sidecar.badgeActive') : t('teachers.sidecar.badgeInactive') },
+          { label: t('teachers.form.hourlyRate'), value: teacher.hourlyRate ? formatCurrency(teacher.hourlyRate) : '—' },
+          { label: t('teachers.form.experience'), value: teacher.experience ? `${teacher.experience} y` : '—' },
+          { label: t('teachers.form.phone'), value: teacher.user?.phone || '—' },
+          { label: t('common.email'), value: displayEmail(teacher.user?.email) || '—' },
+        ],
+      });
+    },
+    [sound, haptics, t],
+  );
+
+  /* ── Deep link resolution ──────────────────────────────────────────── */
+  useEffect(() => {
+    if (routeTeacherId && teacherList.length > 0) {
+      const match = teacherList.find((t) => t.id === routeTeacherId);
+      if (match) {
+        handleOpenTeacherSidecar(match);
+      }
+    }
+  }, [routeTeacherId, teacherList, handleOpenTeacherSidecar]);
+
+  /* ── Form Actions ──────────────────────────────────────────────────── */
+  const handleOpenCreateModal = useCallback(() => {
+    sound.playPop?.();
+    haptics.light();
+    setEditingId(null);
+    setForm(INITIAL_FORM);
+    setFormErrors({});
+    setShowPassword(false);
+    setModalOpen(true);
+  }, [sound, haptics]);
+
+  const handleEdit = useCallback(
+    (teacher: Teacher) => {
+      sound.playTick?.();
+      haptics.light();
+      setEditingId(teacher.id);
+      setForm({
+        firstName: teacher.user?.firstName || '',
+        lastName: teacher.user?.lastName || '',
+        email: displayEmail(teacher.user?.email),
+        phone: teacher.user?.phone || '',
+        password: '',
+        specializations: (teacher.specializations || []).join(', '),
+        salaryType: (teacher.salaryType as SalaryType) || 'MONTHLY',
+        hourlyRate: teacher.hourlyRate != null ? String(teacher.hourlyRate) : '',
+        lessonRate: teacher.lessonRate != null ? String(teacher.lessonRate) : '',
+        bio: teacher.bio || '',
+        experience: teacher.experience != null ? String(teacher.experience) : '',
+      });
+      setFormErrors({});
+      setShowPassword(false);
+      setModalOpen(true);
+    },
+    [sound, haptics],
+  );
+
+  const handleCloseModal = useCallback(() => {
+    sound.playTick?.();
+    haptics.light();
+    setModalOpen(false);
+    setEditingId(null);
+    setForm(INITIAL_FORM);
+    setFormErrors({});
+    setShowPassword(false);
+  }, [sound, haptics]);
+
+  const handleFieldChange = useCallback((field: keyof TeacherFormState, value: string) => {
+    setForm((prev) => (prev[field] === value ? prev : { ...prev, [field]: value }));
+    setFormErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+  }, []);
+
   const validateForm = useCallback((): boolean => {
     const errors: Partial<Record<keyof TeacherFormState, string>> = {};
     if (!form.firstName.trim()) errors.firstName = t('teachers.form.firstNameRequired');
     if (!form.lastName.trim()) errors.lastName = t('teachers.form.lastNameRequired');
-    if (form.email && !validateEmail(form.email)) errors.email = t('common.emailInvalid');
+    if (form.email && !validateEmail(form.email)) errors.email = t('teachers.form.emailInvalid');
+    if (form.password && form.password.trim().length > 0 && form.password.trim().length < 6)
+      errors.password = t('teachers.form.passwordMin');
     if (form.hourlyRate && parseFloat(form.hourlyRate) < 0)
       errors.hourlyRate = t('teachers.form.hourlyRateNumber');
+    if (form.lessonRate && parseFloat(form.lessonRate) < 0)
+      errors.lessonRate = t('teachers.form.lessonRateNumber');
     if (form.experience && parseInt(form.experience, 10) < 0)
       errors.experience = t('teachers.form.experienceNumber');
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [form, t]);
 
-  /* ── Handlers ─────────────────────────────────────────────────────── */
-  const handleFormChange = useCallback(
-    (field: keyof TeacherFormState) =>
-      (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        setForm((prev) => ({ ...prev, [field]: e.target.value }));
-        setFormErrors((prev) => ({ ...prev, [field]: undefined }));
-      },
-    [],
-  );
-
-  const handleSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setSearch(e.target.value);
-      setPage(1);
-    },
-    [],
-  );
-
   const handleSubmit = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
+    (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (!validateForm()) return;
+      if (!validateForm()) {
+        haptics.error();
+        return;
+      }
       create.mutate();
     },
-    [validateForm, create],
+    [validateForm, create, haptics],
   );
 
-  const handleCloseModal = useCallback(() => {
-    setModalOpen(false);
-    setEditingId(null);
-    setForm(INITIAL_FORM);
-    setFormErrors({});
-  }, []);
+  /* ── Delete Confirmation ───────────────────────────────────────────── */
+  const handleDeleteClick = useCallback(
+    (id: string) => {
+      sound.playTick?.();
+      haptics.medium();
+      setDeleteTarget(id);
+      setActionMenuId(null);
+    },
+    [sound, haptics],
+  );
 
-  const handleOpenModal = useCallback(() => {
-    setEditingId(null);
-    setForm(INITIAL_FORM);
-    setFormErrors({});
-    setModalOpen(true);
-  }, []);
-
-  const handleEdit = useCallback((teacher: Teacher) => {
-    setEditingId(teacher.id);
-    setForm({
-      firstName: teacher.user?.firstName || '',
-      lastName: teacher.user?.lastName || '',
-      email: teacher.user?.email || '',
-      phone: teacher.user?.phone || '',
-      specializations: (teacher.specializations || []).join(', '),
-      hourlyRate: teacher.hourlyRate != null ? String(teacher.hourlyRate) : '',
-      bio: teacher.bio || '',
-      experience: teacher.experience != null ? String(teacher.experience) : '',
-    });
-    setFormErrors({});
-    setModalOpen(true);
-  }, []);
-
-  const handleDelete = useCallback((id: string) => setDeleteTarget(id), []);
-
-  const confirmDelete = useCallback(() => {
+  const handleConfirmDelete = useCallback(() => {
     if (!deleteTarget) return;
     remove.mutate(deleteTarget);
     setDeleteTarget(null);
   }, [deleteTarget, remove]);
 
-  const sound = usePremiumSound();
+  /* ── 360° Spatial ID Card ──────────────────────────────────────────── */
+  const handleOpenSpatialCard = useCallback(
+    (teacher: Teacher) => {
+      sound.playPop?.();
+      haptics.light();
+      setCardTeacher(teacher);
+      setActionMenuId(null);
+    },
+    [sound, haptics],
+  );
 
-  const handleOpenTeacherSidecar = useCallback((teacher: Teacher) => {
-    sound.playPop();
-    const name = formatTeacherName(teacher);
-    const data: QuickLookData = {
-      id: teacher.id,
-      type: 'teacher',
-      title: name,
-      subtitle: teacher.user?.email || teacher.user?.phone || "O'qituvchi",
-      badge: {
-        text: teacher.user?.isActive !== false ? "FAOL (ACTIVE)" : "NOFAOL",
-        tone: teacher.user?.isActive !== false ? 'emerald' : 'slate',
-      },
-      avatar: {
-        text: name.slice(0, 2).toUpperCase(),
-        color: '#6366F1',
-      },
-      metrics: [
-        {
-          label: "Soatlik tarif",
-          value: teacher.hourlyRate ? formatCurrency(teacher.hourlyRate) : "—",
-          subtext: "1 akademik soat",
-        },
-        {
-          label: "Tajriba",
-          value: teacher.experience ? `${teacher.experience} yil` : "—",
-          subtext: "Pedagogik tajriba",
-        },
-        {
-          label: "Status",
-          value: teacher.user?.isActive !== false ? "Aktiv" : "Nofaol",
-        },
-      ],
-      details: [
-        { label: "F.I.SH", value: name, copyable: true },
-        { label: "Email", value: teacher.user?.email || "—", copyable: Boolean(teacher.user?.email) },
-        { label: "Telefon", value: teacher.user?.phone || "—", copyable: Boolean(teacher.user?.phone) },
-        { label: "Mutaxassislik", value: (teacher.specializations || []).join(', ') || "Umumiy", copyable: true },
-        { label: "Tarjimai hol / Bio", value: teacher.bio || "Qo'shimcha ma'lumot mavjud emas." },
-      ],
-      tags: teacher.specializations || [],
-      primaryAction: {
-        label: "Tahrirlash",
-        onExecute: () => handleEdit(teacher),
-      },
-    };
-    openSidecar(data);
-  }, [sound, handleEdit]);
-
-  /* ── Filter & View State ─────────────────────────────────────────── */
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-
-  const filteredTeachers = useMemo(() => {
-    let list = teacherList;
-    if (statusFilter === 'ACTIVE') list = list.filter((t) => t.user?.isActive !== false);
-    else if (statusFilter === 'INACTIVE') list = list.filter((t) => t.user?.isActive === false);
-    return list;
-  }, [teacherList, statusFilter]);
-
-  /* ── Keyboard Navigation ──────────────────────────────────────────── */
+  /* ── Keyboard Navigation ───────────────────────────────────────────── */
   const {
     focusedIndex,
     selectedIds,
@@ -781,21 +929,79 @@ export function TeachersPage() {
     clearSelection,
   } = useListKeyboardNavigation<Teacher>({
     items: filteredTeachers,
+    enabled: !modalOpen && !cardTeacher && !deleteTarget,
     getItemId: (t) => t.id,
     rowIdPrefix: 'teacher-row-',
     onSelect: (t) => handleOpenTeacherSidecar(t),
-    onQuickLook: (t) => handleOpenTeacherSidecar(t),
+    onQuickLook: (t) => handleQuickLook(t),
     onEdit: (t) => handleEdit(t),
   });
 
-  /* ── Bulk Actions ─────────────────────────────────────────────────── */
-  const handleBatchToggleStatus = async () => {
+  /* ── CSV Export (Formula-safe + UTF-8 BOM) ─────────────────────────── */
+  const handleExportCSV = useCallback(
+    (teachersToExport?: Teacher[]) => {
+      const rows = teachersToExport ?? (selectedCount > 0 ? teacherList.filter((t) => isSelected(t.id)) : filteredTeachers);
+      if (!rows.length) return;
+
+      sound.playSuccess?.();
+      haptics.success();
+
+      const headers = [
+        t('teachers.csv.id'),
+        t('teachers.csv.name'),
+        t('teachers.csv.email'),
+        t('teachers.csv.phone'),
+        t('teachers.csv.specializations'),
+        t('teachers.csv.hourlyRate'),
+        t('teachers.csv.experience'),
+        t('teachers.csv.status'),
+      ];
+
+      const csvRows = [
+        headers.map(csvCell).join(','),
+        ...rows.map((teacherItem) =>
+          [
+            teacherItem.id,
+            formatTeacherName(teacherItem),
+            displayEmail(teacherItem.user?.email),
+            teacherItem.user?.phone || '',
+            (teacherItem.specializations || []).join('; '),
+            teacherItem.hourlyRate ? String(teacherItem.hourlyRate) : '',
+            teacherItem.experience != null ? String(teacherItem.experience) : '',
+            teacherItem.user?.isActive !== false ? t('enum.status.ACTIVE') : t('enum.status.INACTIVE'),
+          ]
+            .map(csvCell)
+            .join(','),
+        ),
+      ];
+
+      const UTF8_BOM = '\uFEFF';
+      const blob = new Blob([UTF8_BOM + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${t('teachers.csv.fileName')}_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      if (selectedCount > 0) clearSelection();
+      push('success', t('teachers.bulk.exported', { count: rows.length }));
+    },
+    [filteredTeachers, selectedCount, teacherList, isSelected, clearSelection, sound, haptics, t, push],
+  );
+
+  /* ── Batch Toggle Status ───────────────────────────────────────────── */
+  const handleBatchToggleStatus = useCallback(async () => {
+    sound.playTick?.();
+    haptics.medium();
     let count = 0;
     for (const id of selectedIds) {
       try {
         const item = teacherList.find((t) => t.id === id);
         if (item) {
-          const nextActive = !item.user?.isActive;
+          const nextActive = item.user?.isActive === false;
           await teachersApi.update(id, { isActive: nextActive });
           count++;
         }
@@ -805,914 +1011,1047 @@ export function TeachersPage() {
     }
     qc.invalidateQueries({ queryKey: queryKeys.teachers.all() });
     clearSelection();
-    push('success', `${count} ta o'qituvchi holati yangilandi`);
-  };
+    sound.playSuccess?.();
+    haptics.success();
+    push('success', t('teachers.bulk.statusUpdated', { count }));
+  }, [selectedIds, teacherList, qc, clearSelection, sound, haptics, t, push]);
 
-  const handleExportSelectedTeachersCSV = () => {
-    const selectedRows = teacherList.filter((t) => isSelected(t.id));
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      ['ID,Name,Email,Phone,Specializations,HourlyRate,Experience']
-        .concat(
-          selectedRows.map(
-            (t) =>
-              `"${t.id}","${formatTeacherName(t)}","${t.user?.email || ''}","${t.user?.phone || ''}","${(t.specializations || []).join(';')}","${t.hourlyRate || ''}","${t.experience || ''}"`
-          )
-        )
-        .join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `teachers_export_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    clearSelection();
-    push('success', `${selectedRows.length} ta o'qituvchi CSV formatida yuklandi`);
-  };
+  /* ── Close action popover on outside click or Escape ──────────────── */
+  useEffect(() => {
+    if (!actionMenuId) return;
+    const handleOutside = () => setActionMenuId(null);
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setActionMenuId(null);
+    };
+    window.addEventListener('click', handleOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [actionMenuId]);
 
-  const { refetch: refetchTeachers } = teachers;
-  const handleRetry = useCallback(() => {
-    void refetchTeachers();
-  }, [refetchTeachers]);
+  /* ── Global ⌘K focus ───────────────────────────────────────────────── */
+  useEffect(() => {
+    const handleKey = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
 
-  const hasActiveFilter = Boolean(search);
+  const hasActiveFilters = Boolean(search || statusFilter !== 'ALL');
 
-  /* ── Loading ──────────────────────────────────────────────────────── */
-  if (teachers.isLoading && !data) {
-    return (
-      <div className="page-container space-y-5">
-        <div className="h-28 rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-2xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]" />
-        <TeachersSkeleton />
-      </div>
-    );
-  }
-
-  /* ── Error ────────────────────────────────────────────────────────── */
-  if (teachers.isError) {
-    return (
-      <div className="page-container space-y-5">
-        <div className="glass-card p-8">
-          <GlassErrorState
-            title={t('teachers.loadError')}
-            message={getErrorMessage(teachers.error as Error)}
-            onRetry={handleRetry}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  /* ── Render ───────────────────────────────────────────────────────── */
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="relative page-container space-y-5"
-    >
-      <AmbientOrbs />
+    <div className="page-container relative z-10 space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))] max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px]">
+      <AuroraMesh variant="corporate" opacity={0.65} />
+
       {toastNode}
 
-      {/* ============================================================
-          HERO HEADER
-      ============================================================ */}
-      <motion.div variants={cardVariants}>
-        <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-5 sm:p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
-          <div className="relative flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-            {/* Apple Gradient teachers tile */}
-            <div className="relative flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#5856D6] to-[#AF52DE] text-white shadow-[0_8px_20px_rgba(88,86,214,0.25)] ring-1 ring-white/20">
-              <Icon paths={I.users} size={24} strokeWidth={2.2} className="relative" />
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#5856D6]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#5856D6] border border-[#5856D6]/20">
-                  <Icon paths={I.sparkles} size={11} strokeWidth={2.2} />
-                  {t('teachers.faculty') || 'Ustozlar'}
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)] border border-black/[0.04] dark:border-white/[0.06] tabular-nums">
-                  <Icon paths={I.layers} size={11} strokeWidth={2.2} />
-                  {stats.total} {t('teachers.total') || 'jami'}
-                </span>
-                {stats.active > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#28A745] dark:text-[#34C759] border border-[#34C759]/20 tabular-nums">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] animate-pulse" />
-                    {stats.active} {t('teachers.active') || 'faol'}
-                  </span>
-                )}
-              </div>
-
-              <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-[var(--text-primary)] sm:text-3xl font-display">
-                {t('teachers.title')}
-              </h1>
-              <p className="mt-0.5 text-[13px] text-[var(--text-secondary)]">
-                {t('teachers.subtitle')}
-              </p>
-            </div>
-
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              transition={SPRING.snappy}
+      {/* ═══ 1 · UNIFIED APPLE COMMAND CENTER HEADER ═══ */}
+      <GlassPageHeader
+        title={t('teachers.title')}
+        description={t('teachers.pageSubtitle')}
+        actions={
+          <div className="flex items-center gap-2.5">
+            <GlassButton
+              type="button"
+              variant="secondary"
+              onClick={() => handleExportCSV()}
+              title={t('teachers.bulk.exportCsv')}
+              className="!rounded-full border-slate-200/80 dark:border-white/10"
             >
-              <GlassButton type="button" variant="primary" onClick={handleOpenModal}>
-                <span className="inline-flex items-center gap-2 font-medium">
-                  <Icon paths={I.userPlus} size={15} strokeWidth={2.4} />
-                  {t('teachers.add')}
-                </span>
-              </GlassButton>
-            </motion.div>
-          </div>
-        </div>
-      </motion.div>
+              <span className="inline-flex items-center gap-1.5 font-semibold">
+                <Glyph name="export" size={15} weight={2} />
+                <span className="hidden sm:inline">{t('teachers.bulk.exportCsv')}</span>
+              </span>
+            </GlassButton>
 
-      {/* ============================================================
-          STATS BAR
-      ============================================================ */}
+            <GlassButton
+              type="button"
+              variant="primary"
+              onClick={handleOpenCreateModal}
+              className="!rounded-full shadow-lg shadow-blue-500/20"
+            >
+              <span className="inline-flex items-center gap-1.5 font-semibold">
+                <Glyph name="userPlus" size={16} weight={2.2} />
+                <span>{t('teachers.add')}</span>
+              </span>
+            </GlassButton>
+          </div>
+        }
+      />
+
+      {/* ═══ METRIC PILLS CONSOLE ═══ */}
       <motion.div
         variants={containerVariants}
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        initial="hidden"
+        animate="visible"
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"
       >
-        <StatTile label={t('teachers.title')} value={stats.total} icon={I.users} tone="blue" />
-        <StatTile label={t('enum.status.ACTIVE')} value={stats.active} icon={I.checkCircle} tone="emerald" />
-        <StatTile label={t('enum.status.INACTIVE')} value={stats.inactive} icon={I.pause} tone="orange" />
-        <StatTile label={t('teachers.col.hourlyRate')} value={formatCurrency(stats.avgRate)} icon={I.wallet} tone="purple" />
+        <MetricPill
+          label={t('teachers.stats.total')}
+          hint={t('teachers.stats.totalHint')}
+          value={stats.total}
+          total={Math.max(1, stats.total)}
+          glyph="teachers"
+          tone="blue"
+          active={statusFilter === 'ALL'}
+          onClick={() => {
+            sound.playTick?.();
+            haptics.light();
+            setStatusFilter('ALL');
+          }}
+        />
+        <MetricPill
+          label={t('teachers.stats.active')}
+          hint={t('teachers.stats.activeHint')}
+          value={stats.active}
+          total={Math.max(1, stats.total)}
+          glyph="checkCircle"
+          tone="green"
+          active={statusFilter === 'ACTIVE'}
+          onClick={() => {
+            sound.playTick?.();
+            haptics.light();
+            setStatusFilter((p) => (p === 'ACTIVE' ? 'ALL' : 'ACTIVE'));
+          }}
+        />
+        <MetricPill
+          label={t('teachers.stats.inactive')}
+          hint={t('teachers.stats.inactiveHint')}
+          value={stats.inactive}
+          total={Math.max(1, stats.total)}
+          glyph="pause"
+          tone="orange"
+          active={statusFilter === 'INACTIVE'}
+          onClick={() => {
+            sound.playTick?.();
+            haptics.light();
+            setStatusFilter((p) => (p === 'INACTIVE' ? 'ALL' : 'INACTIVE'));
+          }}
+        />
+        <MetricPill
+          label={t('teachers.stats.avgRate')}
+          hint={t('teachers.stats.avgRateHint')}
+          value={Math.round(stats.avgRate)}
+          total={Math.max(1, Math.round(stats.avgRate))}
+          glyph="wallet"
+          tone="purple"
+          showPercent={false}
+          active={false}
+          onClick={() => {
+            sound.playTick?.();
+            haptics.light();
+          }}
+        />
       </motion.div>
 
-      {/* ============================================================
-          FILTER TOOLBAR
-      ============================================================ */}
-      <motion.div
-        variants={cardVariants}
-        className="relative flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm"
-      >
-        <div className="relative flex-1 min-w-[240px]">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-tertiary)]">
-            <Icon paths={I.search} size={15} strokeWidth={2.2} />
-          </div>
-          <input
-            type="search"
-            value={search}
-            onChange={handleSearchChange}
-            placeholder={t('teachers.searchPlaceholder')}
-            className="w-full h-10 pl-9 pr-9 text-[13px] font-medium rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 focus:border-[#007AFF] transition-all"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              aria-label="Tozalash"
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
-            >
-              <Icon paths={I.x} size={14} strokeWidth={2.5} />
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Status segmented control */}
-          <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
-            <button
-              type="button"
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
-                statusFilter === 'ALL'
-                  ? 'bg-white text-[var(--text-primary)] shadow-sm dark:bg-surface-800 font-semibold'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              Hammasi <span className="ml-1 text-[10.5px] opacity-70">({stats.total})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('ACTIVE')}
-              className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
-                statusFilter === 'ACTIVE'
-                  ? 'bg-white text-[#28A745] dark:text-[#34C759] shadow-sm dark:bg-surface-800 font-semibold'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              Faol <span className="ml-1 text-[10.5px] opacity-70">({stats.active})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('INACTIVE')}
-              className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
-                statusFilter === 'INACTIVE'
-                  ? 'bg-white text-[var(--text-primary)] shadow-sm dark:bg-surface-800 font-semibold'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              Nofaol <span className="ml-1 text-[10.5px] opacity-70">({stats.inactive})</span>
-            </button>
-          </div>
-
-          {/* View switcher: list vs grid */}
-          <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
-            <button
-              type="button"
-              onClick={() => setViewMode('list')}
-              aria-label="Ro'yxat ko'rinishi"
-              className={`p-1.5 rounded-lg transition-all ${
-                viewMode === 'list'
-                  ? 'bg-white text-[#007AFF] shadow-sm dark:bg-surface-800'
-                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Icon paths={I.list} size={15} strokeWidth={2.2} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('grid')}
-              aria-label="Kataklar (Grid) ko'rinishi"
-              className={`p-1.5 rounded-lg transition-all ${
-                viewMode === 'grid'
-                  ? 'bg-white text-[#007AFF] shadow-sm dark:bg-surface-800'
-                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Icon paths={I.grid} size={15} strokeWidth={2.2} />
-            </button>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ============================================================
-          TEACHERS CONTENT (EMPTY / LIST / GRID)
-      ============================================================ */}
-      <AnimatePresence mode="wait">
-        {teacherList.length === 0 ? (
-          <motion.div
-            key="empty"
-            variants={cardVariants}
-            className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-10 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card text-center"
-          >
-            <div className="flex flex-col items-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#5856D6]/10 text-[#5856D6]">
-                <Icon paths={I.empty} size={24} strokeWidth={1.8} />
-              </div>
-              <p className="mt-4 text-[15px] font-bold tracking-tight text-[var(--text-primary)] font-display">
-                {hasActiveFilter ? t('teachers.emptyFiltered') : t('teachers.empty')}
-              </p>
-              <p className="mt-1 max-w-sm text-[13px] text-[var(--text-secondary)]">
-                {hasActiveFilter
-                  ? t('teachers.emptyFilteredHint')
-                  : t('teachers.emptyHint')}
-              </p>
-              {!hasActiveFilter && (
-                <div className="mt-5">
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <GlassButton
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      onClick={handleOpenModal}
-                    >
-                      <span className="inline-flex items-center gap-2 font-medium">
-                        <Icon paths={I.userPlus} size={14} strokeWidth={2.4} />
-                        {t('teachers.add')}
-                      </span>
-                    </GlassButton>
-                  </motion.div>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        ) : filteredTeachers.length === 0 ? (
-          <motion.div
-            key="empty-filtered"
-            variants={cardVariants}
-            className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-10 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card text-center"
-          >
-            <div className="flex flex-col items-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/[0.04] dark:bg-white/[0.06] text-[var(--text-tertiary)]">
-                <Icon paths={I.search} size={20} strokeWidth={2} />
-              </div>
-              <p className="mt-3 text-[14px] font-bold text-[var(--text-primary)]">
-                Mos keluvchi o'qituvchi topilmadi
-              </p>
-              <p className="mt-1 text-[12.5px] text-[var(--text-secondary)]">
-                Qidiruv so'zini yoki status filtrini o'zgartirib ko'ring
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch('');
-                  setStatusFilter('ALL');
-                }}
-                className="mt-4 px-4 py-2 text-[12.5px] font-semibold rounded-xl bg-black/[0.04] hover:bg-black/[0.08] dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-[var(--text-primary)] transition-colors"
+      {/* ═══ 2 · SEARCH & FILTER TOOLBAR ═══ */}
+      <div className="p-3.5 sm:p-4 rounded-3xl bg-white/80 dark:bg-white/[0.04] backdrop-blur-2xl border border-slate-200/70 dark:border-white/[0.08] shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative flex-1 min-w-[240px]">
+            <GlassInput
+              ref={searchInputRef}
+              data-testid="teachers-search-input"
+              placeholder={t('teachers.searchPlaceholder')}
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              aria-label={t('teachers.searchPlaceholder')}
+              type="search"
+              inputPrefix={<Glyph name="search" size={16} className="text-slate-400 dark:text-white/40" weight={2} />}
+            />
+            {!search && (
+              <kbd
+                aria-hidden="true"
+                className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md bg-slate-200/80 dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-white/60 sm:inline-flex border border-slate-300/50 dark:border-white/10"
               >
-                Filtrlarni tozalash
-              </button>
+                ⌘K
+              </kbd>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2.5 lg:justify-end">
+            <div
+              role="tablist"
+              aria-label={t('teachers.filterStatusLabel')}
+              className="inline-flex p-1 rounded-xl bg-slate-200/60 dark:bg-white/[0.08] backdrop-blur-md border border-slate-300/40 dark:border-white/[0.08]"
+            >
+              {[
+                { id: 'ALL' as const, label: t('teachers.filter.all') },
+                { id: 'ACTIVE' as const, label: t('teachers.filter.active') },
+                { id: 'INACTIVE' as const, label: t('teachers.filter.inactive') },
+              ].map((opt) => {
+                const sel = statusFilter === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={sel}
+                    data-testid={`teachers-status-${opt.id}`}
+                    onClick={() => {
+                      if (!sel) {
+                        sound.playTick?.();
+                        haptics.light();
+                        setStatusFilter(opt.id);
+                      }
+                    }}
+                    className={`relative px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      sel ? 'text-slate-900 dark:text-white font-semibold' : 'text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {sel && (
+                      <motion.span
+                        layoutId="teachers-status-thumb"
+                        transition={SPRING.snappy}
+                        className="absolute inset-0 rounded-lg bg-white dark:bg-white/20 shadow-sm border border-black/[0.04] dark:border-white/10"
+                      />
+                    )}
+                    <span className="relative z-10">{opt.label}</span>
+                  </button>
+                );
+              })}
             </div>
-          </motion.div>
-        ) : viewMode === 'list' ? (
-          <motion.div
-            key="list"
-            variants={cardVariants}
-            className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card divide-y divide-black/[0.05] dark:divide-white/[0.05]"
-          >
-            {filteredTeachers.map((teacher, idx) => {
-              const statusBadge = getTeacherStatusBadge(teacher.user?.isActive);
-              const specializations = teacher.specializations || [];
-              const name = formatTeacherName(teacher);
-              const isActive = teacher.user?.isActive !== false;
-              const isRowSelected = isSelected(teacher.id);
-              const isRowFocused = focusedIndex === idx;
 
-              return (
-                <motion.div
-                  key={teacher.id}
-                  id={`teacher-row-${teacher.id}`}
-                  variants={rowVariants}
-                  onClick={() => handleOpenTeacherSidecar(teacher)}
-                  className={`group cursor-pointer flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-3.5 transition-all ${
-                    isRowFocused
-                      ? 'ring-2 ring-[#007AFF] bg-brand-500/[0.06]'
-                      : isRowSelected
-                      ? 'bg-brand-500/[0.04]'
-                      : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
-                  }`}
+            <div className="flex items-center gap-2">
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playTick?.();
+                    haptics.light();
+                    setSearch('');
+                    setStatusFilter('ALL');
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/12 px-3 py-1.5 text-[12px] font-semibold text-blue-600 dark:text-blue-400 outline-none transition-colors hover:bg-blue-500/20 focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
-                  {/* Left: Selection + Avatar + Teacher Info */}
-                  <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
-                    {/* Selection Checkbox */}
+                  <Glyph name="close" size={12} weight={2.6} />
+                  {t('teachers.clearFilters')}
+                </button>
+              )}
+
+              {/* View Switcher: List vs Grid */}
+              <div
+                role="tablist"
+                aria-label={t('teachers.view.aria')}
+                className="inline-flex p-1 rounded-xl bg-slate-200/60 dark:bg-white/[0.08] backdrop-blur-md border border-slate-300/40 dark:border-white/[0.08]"
+              >
+                {[
+                  { id: 'list' as const, label: t('teachers.view.list'), glyph: 'list' as GlyphName },
+                  { id: 'grid' as const, label: t('teachers.view.grid'), glyph: 'grid' as GlyphName },
+                ].map((v) => {
+                  const sel = viewMode === v.id;
+                  return (
                     <button
+                      key={v.id}
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelection(teacher.id);
+                      role="tab"
+                      aria-selected={sel}
+                      data-testid={`teachers-view-${v.id}`}
+                      title={v.label}
+                      aria-label={v.label}
+                      onClick={() => {
+                        if (!sel) {
+                          sound.playTick?.();
+                          haptics.light();
+                          setViewMode(v.id);
+                        }
                       }}
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all mt-1 sm:mt-0 ${
-                        isRowSelected
-                          ? 'border-[#007AFF] bg-[#007AFF] text-white'
-                          : 'border-black/20 dark:border-white/20 bg-white/50 dark:bg-surface-800/50 hover:border-black/40 dark:hover:border-white/40'
+                      className={`relative p-1.5 rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                        sel ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-white/60 hover:text-slate-900 dark:hover:text-white'
                       }`}
-                      aria-label={`Tanlash ${name}`}
                     >
-                      {isRowSelected && (
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
-                          <path d="M20 6 9 17l-5-5" />
-                        </svg>
+                      {sel && (
+                        <motion.span
+                          layoutId="teachers-view-thumb"
+                          transition={SPRING.snappy}
+                          className="absolute inset-0 rounded-lg bg-white dark:bg-white/20 shadow-sm border border-black/[0.04] dark:border-white/10"
+                        />
                       )}
+                      <span className="relative z-10">
+                        <Glyph name={v.glyph} size={15} weight={2.2} />
+                      </span>
                     </button>
+                  );
+                })}
+              </div>
 
-                    {/* Avatar */}
-                    <div className="shrink-0">
-                      <TeacherAvatar name={name} size={42} />
-                    </div>
+              <div aria-live="polite" className="text-slate-500 dark:text-white/60 text-[12.5px] font-semibold tabular-nums pl-1">
+                {filteredTeachers.length}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-[13.5px] font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[#007AFF] transition-colors">
-                          {name}
-                        </p>
-                        {teacher.experience != null && teacher.experience > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF9500]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FF9500] shrink-0 border border-[#FF9500]/20">
-                            <Icon paths={I.award} size={9} strokeWidth={2.4} />
-                            {teacher.experience}y
+      {/* ═══ 3 · TEACHERS DATA CONTAINER ═══ */}
+      <div className={`rounded-3xl bg-white/80 dark:bg-white/[0.04] backdrop-blur-2xl border border-slate-200/70 dark:border-white/[0.08] shadow-sm overflow-hidden ${teachers.isPlaceholderData ? 'opacity-70 transition-opacity' : 'transition-opacity'}`}>
+        <AnimatePresence mode="wait">
+          {teachers.isError ? (
+            <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-8">
+              <GlassErrorState
+                title={t('teachers.loadError')}
+                message={getErrorMessage(teachers.error as Error)}
+                onRetry={() => teachers.refetch()}
+              />
+            </motion.div>
+          ) : teachers.isLoading ? (
+            <motion.div key="skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-4 sm:p-6">
+              <TeachersSkeleton viewMode={viewMode} />
+            </motion.div>
+          ) : teacherList.length === 0 ? (
+            <motion.div key="empty" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="p-8 sm:p-12">
+              <GlassEmptyState
+                title={t('teachers.emptyTitle')}
+                message={t('teachers.emptyMessage')}
+                action={
+                  <GlassButton type="button" variant="primary" onClick={handleOpenCreateModal} className="!rounded-full">
+                    <span className="inline-flex items-center gap-1.5 font-semibold">
+                      <Glyph name="userPlus" size={15} />
+                      {t('teachers.add')}
+                    </span>
+                  </GlassButton>
+                }
+              />
+            </motion.div>
+          ) : filteredTeachers.length === 0 ? (
+            <motion.div key="empty-filtered" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="p-8 sm:p-12">
+              <GlassEmptyState
+                title={t('teachers.emptySearch')}
+                message={t('teachers.emptySearchHint')}
+                action={
+                  <GlassButton
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      sound.playTick?.();
+                      haptics.light();
+                      setSearch('');
+                      setStatusFilter('ALL');
+                    }}
+                    className="!rounded-full"
+                  >
+                    {t('teachers.clearFilters')}
+                  </GlassButton>
+                }
+              />
+            </motion.div>
+          ) : viewMode === 'list' ? (
+            /* LIST VIEW */
+            <motion.div
+              key="list"
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="divide-y divide-slate-100 dark:divide-white/[0.04]"
+            >
+              {filteredTeachers.map((teacher, idx) => {
+                const name = formatTeacherName(teacher);
+                const isActive = teacher.user?.isActive !== false;
+                const isRowSelected = isSelected(teacher.id);
+                const isRowFocused = focusedIndex === idx;
+                const isMenuOpen = actionMenuId === teacher.id;
+                const specs = teacher.specializations || [];
+
+                return (
+                  <motion.div
+                    key={teacher.id}
+                    id={`teacher-row-${teacher.id}`}
+                    variants={rowVariants}
+                    onClick={() => handleOpenTeacherSidecar(teacher)}
+                    tabIndex={0}
+                    role="link"
+                    aria-label={t('teachers.viewAria', { name })}
+                    onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                      if (e.key === ' ') {
+                        e.preventDefault();
+                        handleQuickLook(teacher);
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleOpenTeacherSidecar(teacher);
+                      }
+                    }}
+                    className={`group relative flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-4 sm:px-5 py-3.5 cursor-pointer outline-none transition-all ${
+                      isRowFocused
+                        ? 'bg-blue-50/90 dark:bg-blue-900/25 ring-2 ring-inset ring-blue-500'
+                        : isRowSelected
+                        ? 'bg-blue-50/60 dark:bg-blue-900/15'
+                        : 'hover:bg-slate-50/80 dark:hover:bg-white/[0.03]'
+                    }`}
+                  >
+                    <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
+                      <input
+                        type="checkbox"
+                        checked={isRowSelected}
+                        onChange={() => {
+                          sound.playTick?.();
+                          haptics.light();
+                          toggleSelection(teacher.id);
+                        }}
+                        onClick={(e: MouseEvent<HTMLInputElement>) => e.stopPropagation()}
+                        aria-label={t('teachers.selectTeacher', { name })}
+                        className="h-4.5 w-4.5 rounded-full border border-slate-300 dark:border-white/30 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer mt-1 sm:mt-0"
+                      />
+
+                      <TeacherAvatar name={name} size={42} isActive={isActive} showStatusIndicator />
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-[14px] font-semibold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            {name}
+                          </p>
+                          {teacher.experience != null && teacher.experience > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                              <Glyph name="award" size={11} weight={2} />
+                              {t('teachers.experienceYears', { count: teacher.experience })}
+                            </span>
+                          )}
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold ${
+                              isActive
+                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
+                                : 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20'
+                            }`}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                            {isActive ? t('teachers.sidecar.badgeActive') : t('teachers.sidecar.badgeInactive')}
                           </span>
-                        )}
-                        <StatusBadge isActive={isActive} label={t(statusBadge.label)} />
-                      </div>
+                        </div>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                        {teacher.user?.email && (
-                          <EmailChip email={teacher.user.email} />
-                        )}
-                        {teacher.user?.phone && (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-[11.5px] font-medium tabular-nums text-[var(--text-tertiary)]">
-                            <Icon paths={I.phone} size={11} strokeWidth={2} className="opacity-60" />
-                            {teacher.user.phone}
-                          </span>
-                        )}
-                      </div>
-
-                      {specializations.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {specializations.slice(0, 4).map((s) => (
-                            <SpecChip key={s} spec={s} />
-                          ))}
-                          {specializations.length > 4 && (
-                            <span className="inline-flex items-center rounded-lg bg-black/[0.04] dark:bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold text-[var(--text-tertiary)]">
-                              +{specializations.length - 4}
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          {displayEmail(teacher.user?.email) && (
+                            <span className="inline-flex items-center gap-1.5 text-[11.5px] text-slate-500 dark:text-white/50">
+                              <Glyph name="mail" size={12} className="opacity-60" />
+                              <span className="truncate max-w-[14rem]">{displayEmail(teacher.user?.email)}</span>
+                            </span>
+                          )}
+                          {teacher.user?.phone && (
+                            <span className="inline-flex items-center gap-1.5 text-[11.5px] text-slate-500 dark:text-white/50 tabular-nums">
+                              <Glyph name="phone" size={12} className="opacity-60" />
+                              {teacher.user.phone}
                             </span>
                           )}
                         </div>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Right: Rate + Actions */}
-                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0 shrink-0">
-                    {/* Rate */}
-                    {teacher.hourlyRate ? (
-                      <div className="flex flex-col items-start sm:items-end shrink-0">
-                        <span className="text-[9.5px] sm:text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                          {t('teachers.col.hourlyRate')}
-                        </span>
-                        <span className="mt-0.5 text-[13.5px] sm:text-[14px] font-bold tabular-nums tracking-tight text-[#34C759] dark:text-[#30D158]">
-                          {formatCurrency(teacher.hourlyRate)}
-                        </span>
+                        {specs.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {specs.slice(0, 4).map((s, sIdx) => {
+                              const p = SPEC_PALETTES[sIdx % SPEC_PALETTES.length];
+                              return (
+                                <span
+                                  key={s}
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-medium border ${p.bg} ${p.text} ${p.border}`}
+                                >
+                                  {s}
+                                </span>
+                              );
+                            })}
+                            {specs.length > 4 && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-white/60">
+                                +{specs.length - 4}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <span className="text-[12px] font-medium text-[var(--text-tertiary)] shrink-0">—</span>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      {/* Sidecar Inspector Toggle */}
-                      <motion.button
-                        type="button"
-                        onClick={() => handleOpenTeacherSidecar(teacher)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        transition={SPRING.snappy}
-                        aria-label="Sidecar Dossier"
-                        title="Sidecar tafsilotlari (Split-View · Space)"
-                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-brand-500/40 transition-colors text-xs font-bold"
-                      >
-                        <span>◨</span>
-                      </motion.button>
-
-                      <motion.button
-                        type="button"
-                        onClick={() => handleEdit(teacher)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        transition={SPRING.snappy}
-                        aria-label={t('common.edit')}
-                        title={t('common.edit')}
-                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-[#007AFF]/30 transition-colors"
-                      >
-                        <Icon paths={I.edit} size={13} strokeWidth={2} />
-                      </motion.button>
-                      <motion.button
-                        type="button"
-                        onClick={() => handleDelete(teacher.id)}
-                        disabled={remove.isPending && remove.variables === teacher.id}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        transition={SPRING.snappy}
-                        aria-label={t('common.delete')}
-                        title={t('common.delete')}
-                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/15 disabled:opacity-50 transition-colors"
-                      >
-                        <Icon paths={I.trash} size={13} strokeWidth={2} />
-                      </motion.button>
                     </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        ) : (
-          /* GRID VIEW */
-          <motion.div
-            key="grid"
-            variants={containerVariants}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-          >
-            {filteredTeachers.map((teacher, idx) => {
-              const statusBadge = getTeacherStatusBadge(teacher.user?.isActive);
-              const specializations = teacher.specializations || [];
-              const name = formatTeacherName(teacher);
-              const isActive = teacher.user?.isActive !== false;
-              const isRowSelected = isSelected(teacher.id);
-              const isRowFocused = focusedIndex === idx;
 
-              return (
-                <motion.div
-                  key={teacher.id}
-                  id={`teacher-card-${teacher.id}`}
-                  variants={rowVariants}
-                  whileHover={{ y: -2 }}
-                  transition={SPRING.smooth}
-                  onClick={() => handleOpenTeacherSidecar(teacher)}
-                  className={`group relative flex flex-col justify-between rounded-2xl border border-black/[0.06] bg-white/80 p-5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card hover:shadow-card-hover transition-all cursor-pointer ${
-                    isRowFocused
-                      ? 'ring-2 ring-[#007AFF] bg-brand-500/[0.05]'
-                      : isRowSelected
-                      ? 'ring-2 ring-[#007AFF]/60 bg-brand-500/[0.03]'
-                      : ''
-                  }`}
-                >
-                  <div>
-                    {/* Top: Checkbox, Avatar, Name, Status */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
+                    {/* Right: Hourly rate & Apple HIG Action Console */}
+                    <div
+                      className="flex items-center justify-between md:justify-end gap-3 pt-2 md:pt-0 border-t border-slate-100 dark:border-white/[0.04] md:border-0 shrink-0"
+                      onClick={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}
+                    >
+                      {teacher.hourlyRate ? (
+                        <div className="flex flex-col items-start md:items-end shrink-0 pr-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-white/40">
+                            {t('teachers.form.hourlyRate')}
+                          </span>
+                          <span className="text-[13.5px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                            {formatCurrency(teacher.hourlyRate)}
+                            <span className="text-[11px] font-normal text-slate-400 dark:text-white/40 ml-0.5">
+                              {t('teachers.perHour')}
+                            </span>
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-[12px] text-slate-400 dark:text-white/40 pr-2">—</span>
+                      )}
+
+                      {/* Action Console Buttons */}
+                      <div className="flex items-center gap-1 relative">
+                        {/* Quick Look */}
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleSelection(teacher.id);
-                          }}
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
-                            isRowSelected
-                              ? 'border-[#007AFF] bg-[#007AFF] text-white'
-                              : 'border-black/20 dark:border-white/20 bg-white/60 dark:bg-surface-800/60 hover:border-black/40 dark:hover:border-white/40'
-                          }`}
-                          aria-label={`Tanlash ${name}`}
+                          onClick={() => handleQuickLook(teacher)}
+                          title={`${t('teachers.actions.quickLook')} (Space)`}
+                          aria-label={t('teachers.actions.quickLook')}
+                          className="h-10 w-10 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-white/60 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                         >
-                          {isRowSelected && (
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
-                              <path d="M20 6 9 17l-5-5" />
-                            </svg>
-                          )}
+                          <Glyph name="eye" size={15} weight={2.2} />
                         </button>
-                        <TeacherAvatar name={name} size={46} />
-                        <div className="min-w-0">
-                          <h3 className="truncate text-[14px] font-bold text-[var(--text-primary)] group-hover:text-[#007AFF] transition-colors">
-                            {name}
-                          </h3>
-                          {teacher.user?.email && (
-                            <span className="truncate text-[11.5px] text-[var(--text-tertiary)] block">
-                              {teacher.user.email}
+
+                        {/* Sidecar */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenTeacherSidecar(teacher)}
+                          title={t('teachers.actions.sidecar')}
+                          aria-label={t('teachers.actions.sidecar')}
+                          className="h-10 w-10 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-white/60 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                          <Glyph name="sidecar" size={15} weight={2.2} />
+                        </button>
+
+                        {/* Edit */}
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(teacher)}
+                          title={t('teachers.actions.edit')}
+                          aria-label={t('teachers.actions.edit')}
+                          className="h-10 w-10 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-blue-600 dark:text-white/60 dark:hover:text-blue-400 hover:bg-blue-500/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                          <Glyph name="edit" size={15} weight={2.2} />
+                        </button>
+
+                        {/* More Popover */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                              e.stopPropagation();
+                              setActionMenuId(isMenuOpen ? null : teacher.id);
+                            }}
+                            title={t('teachers.actions.more')}
+                            aria-label={t('teachers.actions.more')}
+                            aria-expanded={isMenuOpen}
+                            className={`h-10 w-10 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                              isMenuOpen
+                                ? 'bg-slate-200 dark:bg-white/15 text-slate-900 dark:text-white'
+                                : 'text-slate-500 hover:text-slate-900 dark:text-white/60 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10'
+                            }`}
+                          >
+                            <Glyph name="more" size={15} weight={2.4} />
+                          </button>
+
+                          <AnimatePresence>
+                            {isMenuOpen && (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                                transition={SPRING.snappy}
+                                className="absolute right-0 top-full mt-1.5 w-52 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200 dark:border-white/10 shadow-xl py-1.5 z-30"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenSpatialCard(teacher)}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[12.5px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                                >
+                                  <Glyph name="card" size={15} weight={2} />
+                                  <span>{t('teachers.actions.spatialCard')}</span>
+                                </button>
+                                <div className="my-1 border-t border-slate-100 dark:border-white/10" />
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteClick(teacher.id)}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[12.5px] font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                                >
+                                  <Glyph name="trash" size={15} weight={2} />
+                                  <span>{t('teachers.actions.delete')}</span>
+                                </button>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          ) : (
+            /* GRID VIEW */
+            <motion.div
+              key="grid"
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 p-4"
+            >
+              {filteredTeachers.map((teacher) => {
+                const name = formatTeacherName(teacher);
+                const isActive = teacher.user?.isActive !== false;
+                const isRowSelected = isSelected(teacher.id);
+                const specs = teacher.specializations || [];
+
+                return (
+                  <motion.div
+                    key={teacher.id}
+                    id={`teacher-card-${teacher.id}`}
+                    variants={tileVariants}
+                    onClick={() => handleOpenTeacherSidecar(teacher)}
+                    tabIndex={0}
+                    role="link"
+                    aria-label={t('teachers.viewAria', { name })}
+                    className={`group relative flex flex-col justify-between p-4.5 rounded-2xl cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-200 border ${
+                      isRowSelected
+                        ? 'bg-blue-50/80 dark:bg-blue-900/15 border-blue-500 shadow-md shadow-blue-500/10'
+                        : 'bg-white/60 dark:bg-white/[0.03] border-slate-200/60 dark:border-white/[0.06] hover:bg-white/90 dark:hover:bg-white/[0.07] hover:-translate-y-0.5 shadow-sm'
+                    } backdrop-blur-xl`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isRowSelected}
+                            onChange={() => {
+                              sound.playTick?.();
+                              haptics.light();
+                              toggleSelection(teacher.id);
+                            }}
+                            onClick={(e: MouseEvent<HTMLInputElement>) => e.stopPropagation()}
+                            aria-label={t('teachers.selectTeacher', { name })}
+                            className="h-4.5 w-4.5 rounded-full border border-slate-300 dark:border-white/30 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                          />
+                          <TeacherAvatar name={name} size={44} isActive={isActive} showStatusIndicator />
+                          <div className="min-w-0">
+                            <h3 className="truncate text-[14.5px] font-semibold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                              {name}
+                            </h3>
+                            {teacher.user?.email && (
+                              <span className="truncate text-[11.5px] text-slate-400 dark:text-white/40 block">
+                                {displayEmail(teacher.user.email)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10.5px] font-semibold ${
+                            isActive
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
+                              : 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20'
+                          }`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                          {isActive ? t('teachers.sidecar.badgeActive') : t('teachers.sidecar.badgeInactive')}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between border-t border-slate-100 dark:border-white/[0.04] pt-3">
+                        <div className="flex items-center gap-1.5">
+                          {teacher.experience != null && teacher.experience > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                              <Glyph name="award" size={11} weight={2} />
+                              {t('teachers.experienceYears', { count: teacher.experience })}
                             </span>
                           )}
                         </div>
-                      </div>
-                      <StatusBadge isActive={isActive} label={t(statusBadge.label)} />
-                    </div>
-
-                    {/* Middle: Experience & Hourly Rate */}
-                    <div className="mt-4 flex items-center justify-between border-t border-black/[0.04] dark:border-white/[0.04] pt-3">
-                      <div className="flex items-center gap-1.5">
-                        {teacher.experience != null && teacher.experience > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF9500]/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-[#FF9500] border border-[#FF9500]/20">
-                            <Icon paths={I.award} size={10} strokeWidth={2.4} />
-                            {teacher.experience} yillik tajriba
+                        {teacher.hourlyRate ? (
+                          <span className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                            {formatCurrency(teacher.hourlyRate)}
+                            <span className="text-[10.5px] font-normal text-slate-400 dark:text-white/40 ml-0.5">
+                              {t('teachers.perHour')}
+                            </span>
                           </span>
-                        )}
+                        ) : null}
                       </div>
-                      {teacher.hourlyRate && (
-                        <span className="text-[13px] font-bold tabular-nums text-[#34C759] dark:text-[#30D158]">
-                          {formatCurrency(teacher.hourlyRate)}/soat
-                        </span>
+
+                      {specs.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1">
+                          {specs.slice(0, 3).map((s, sIdx) => {
+                            const p = SPEC_PALETTES[sIdx % SPEC_PALETTES.length];
+                            return (
+                              <span
+                                key={s}
+                                className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-medium border ${p.bg} ${p.text} ${p.border}`}
+                              >
+                                {s}
+                              </span>
+                            );
+                          })}
+                          {specs.length > 3 && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-white/60">
+                              +{specs.length - 3}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
 
-                    {/* Specialization chips */}
-                    {specializations.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        {specializations.slice(0, 3).map((s) => (
-                          <SpecChip key={s} spec={s} />
-                        ))}
-                        {specializations.length > 3 && (
-                          <span className="inline-flex items-center rounded-lg bg-black/[0.04] dark:bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold text-[var(--text-tertiary)]">
-                            +{specializations.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card Footer: Actions */}
-                  <div
-                    className="mt-4 flex items-center justify-between border-t border-black/[0.04] dark:border-white/[0.04] pt-3"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <motion.button
-                        type="button"
-                        onClick={() => handleOpenTeacherSidecar(teacher)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        title="Sidecar tafsilotlari (Split-View · Space)"
-                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                      >
-                        <span className="text-[13px] leading-none">◨</span>
-                      </motion.button>
-                      <motion.button
-                        type="button"
-                        onClick={() => handleEdit(teacher)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        title={t('common.edit')}
-                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF]"
-                      >
-                        <Icon paths={I.edit} size={13} strokeWidth={2} />
-                      </motion.button>
-                    </div>
-
-                    <motion.button
-                      type="button"
-                      onClick={() => handleDelete(teacher.id)}
-                      disabled={remove.isPending && remove.variables === teacher.id}
-                      whileHover={{ scale: 1.08 }}
-                      whileTap={{ scale: 0.92 }}
-                      title={t('common.delete')}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] disabled:opacity-50"
+                    <div
+                      className="mt-4 flex items-center justify-between border-t border-slate-100 dark:border-white/[0.04] pt-3"
+                      onClick={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}
                     >
-                      <Icon paths={I.trash} size={13} strokeWidth={2} />
-                    </motion.button>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenSpatialCard(teacher)}
+                          title={t('teachers.actions.spatialCard')}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-xs font-semibold transition-all min-h-[36px]"
+                        >
+                          <Glyph name="card" size={13} weight={2} />
+                          <span className="text-[11px]">{t('teachers.spatialCard.badge')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenTeacherSidecar(teacher)}
+                          title={t('teachers.actions.sidecar')}
+                          aria-label={t('teachers.actions.sidecar')}
+                          className="h-9 w-9 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-white/60 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors"
+                        >
+                          <Glyph name="sidecar" size={14} weight={2.2} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(teacher)}
+                          title={t('teachers.actions.edit')}
+                          aria-label={t('teachers.actions.edit')}
+                          className="h-9 w-9 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-blue-600 dark:text-white/60 dark:hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                        >
+                          <Glyph name="edit" size={14} weight={2.2} />
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteClick(teacher.id)}
+                        title={t('teachers.actions.delete')}
+                        aria-label={t('teachers.actions.delete')}
+                        className="h-9 w-9 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-rose-500 hover:bg-rose-500/10 transition-colors"
+                      >
+                        <Glyph name="trash" size={14} weight={2.2} />
+                      </button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Pagination */}
         {teacherList.length > 0 && (data?.totalPages ?? 1) > 1 && (
-          <div className="relative border-t border-black/[0.04] p-4 dark:border-white/[0.04]">
-            <div className="flex justify-center">
-              <GlassPagination
-                page={page}
-                totalPages={data?.totalPages ?? 1}
-                onPageChange={setPage}
-              />
-            </div>
+          <div className="border-t border-slate-100 dark:border-white/[0.04] p-4 flex justify-center">
+            <GlassPagination page={page} totalPages={data?.totalPages ?? 1} onPageChange={setPage} />
           </div>
         )}
+      </div>
 
-      {/* ============================================================
-          MODAL
-      ============================================================ */}
+      {/* ═══ CREATE / EDIT TEACHER MODAL ═══ */}
       <GlassModal
         open={modalOpen}
         onClose={handleCloseModal}
-        title={editingId ? t('teachers.editTitle') : t('teachers.add')}
+        title={editingId ? t('teachers.modal.editTitle') : t('teachers.modal.addTitle')}
         wide
       >
-        <form className="space-y-5" onSubmit={handleSubmit} noValidate>
-          {/* Hint banner */}
-          <div className="flex items-center gap-3 rounded-2xl border border-[#5856D633] bg-[#5856D6]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#5856D6]/15 text-[#5856D6]">
-              <Icon paths={I.sparkles} size={18} strokeWidth={2} />
+        <div>
+          <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+            <div className="flex items-center gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 px-4 py-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                <Glyph name="teachers" size={18} weight={2.2} />
+              </div>
+              <p className="text-[12.5px] font-medium leading-snug text-slate-700 dark:text-white/80">
+                {editingId ? t('teachers.modal.editHint') : t('teachers.modal.addHint')}
+              </p>
             </div>
-            <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
-              {editingId
-                ? (t('teachers.form.editHint') || 'Update the teacher profile. Changes are reflected immediately.')
-                : (t('teachers.form.addHint') || 'Fill in the details below. First and last name are required.')}
-            </p>
-          </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <GlassField
-              label={t('teachers.form.firstName')}
-              required
-              error={formErrors.firstName}
-            >
-              <div className="relative">
-                <FieldIcon icon={I.user} tone="blue" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <GlassField label={t('teachers.form.firstName')} required error={formErrors.firstName} htmlFor="teacher-firstName">
                 <GlassInput
+                  id="teacher-firstName"
+                  name="firstName"
+                  autoComplete="given-name"
                   value={form.firstName}
-                  onChange={handleFormChange('firstName')}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleFieldChange('firstName', e.target.value)}
                   required
-                  aria-invalid={Boolean(formErrors.firstName)}
-                  aria-describedby={formErrors.firstName ? 'firstname-error' : undefined}
-                  placeholder="John"
+                  placeholder="Ali"
                   disabled={create.isPending}
-                  className="pl-11"
+                  inputPrefix={<Glyph name="user" size={15} className="text-slate-400" />}
                 />
-              </div>
-              {formErrors.firstName && (
-                <span
-                  id="firstname-error"
-                  className="mt-1 text-sm"
-                  style={{ color: 'var(--state-error)' }}
-                >
-                  {formErrors.firstName}
-                </span>
-              )}
-            </GlassField>
+              </GlassField>
 
-            <GlassField
-              label={t('teachers.form.lastName')}
-              required
-              error={formErrors.lastName}
-            >
-              <div className="relative">
-                <FieldIcon icon={I.user} tone="blue" />
+              <GlassField label={t('teachers.form.lastName')} required error={formErrors.lastName} htmlFor="teacher-lastName">
                 <GlassInput
+                  id="teacher-lastName"
+                  name="lastName"
+                  autoComplete="family-name"
                   value={form.lastName}
-                  onChange={handleFormChange('lastName')}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleFieldChange('lastName', e.target.value)}
                   required
-                  aria-invalid={Boolean(formErrors.lastName)}
-                  aria-describedby={formErrors.lastName ? 'lastname-error' : undefined}
-                  placeholder="Doe"
+                  placeholder="Valiyev"
                   disabled={create.isPending}
-                  className="pl-11"
+                  inputPrefix={<Glyph name="user" size={15} className="text-slate-400" />}
                 />
-              </div>
-              {formErrors.lastName && (
-                <span
-                  id="lastname-error"
-                  className="mt-1 text-sm"
-                  style={{ color: 'var(--state-error)' }}
-                >
-                  {formErrors.lastName}
-                </span>
-              )}
-            </GlassField>
+              </GlassField>
 
-            <GlassField label={t('common.email')} error={formErrors.email}>
-              <div className="relative">
-                <FieldIcon icon={I.mail} tone="purple" />
+              <GlassField label={t('teachers.form.email')} error={formErrors.email} htmlFor="teacher-email">
                 <GlassInput
+                  id="teacher-email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
                   value={form.email}
-                  onChange={handleFormChange('email')}
-                  aria-invalid={Boolean(formErrors.email)}
-                  aria-describedby={formErrors.email ? 'email-error' : undefined}
-                  placeholder="john@example.com"
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleFieldChange('email', e.target.value)}
+                  placeholder="ali.valiyev@example.com"
                   disabled={create.isPending}
-                  className="pl-11"
+                  inputPrefix={<Glyph name="mail" size={15} className="text-slate-400" />}
                 />
-              </div>
-              {formErrors.email && (
-                <span
-                  id="email-error"
-                  className="mt-1 text-sm"
-                  style={{ color: 'var(--state-error)' }}
-                >
-                  {formErrors.email}
-                </span>
-              )}
-            </GlassField>
+              </GlassField>
 
-            <GlassField label={t('teachers.form.phone')}>
-              <div className="relative">
-                <FieldIcon icon={I.phone} tone="emerald" />
+              <GlassField label={t('teachers.form.phone')} htmlFor="teacher-phone">
                 <GlassInput
+                  id="teacher-phone"
+                  name="phone"
                   type="tel"
+                  autoComplete="tel"
                   value={form.phone}
-                  onChange={handleFormChange('phone')}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleFieldChange('phone', e.target.value)}
                   placeholder="+998 90 123 4567"
                   disabled={create.isPending}
-                  className="pl-11"
+                  inputPrefix={<Glyph name="phone" size={15} className="text-slate-400" />}
                 />
+              </GlassField>
+            </div>
+
+            {/* Login Password Field */}
+            <GlassField
+              label={t('teachers.form.password')}
+              hint={editingId ? t('teachers.form.passwordEditHint') : t('teachers.form.passwordCreateHint')}
+              error={formErrors.password}
+              htmlFor="teacher-password"
+            >
+              <div className="relative flex items-center">
+                <GlassInput
+                  id="teacher-password"
+                  name="password"
+                  autoComplete="new-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleFieldChange('password', e.target.value)}
+                  placeholder={editingId ? '••••••••' : 'Medu@2026!'}
+                  disabled={create.isPending}
+                  inputPrefix={<Glyph name="key" size={15} className="text-slate-400" />}
+                  className="pr-28"
+                />
+                <div className="absolute right-2 flex items-center gap-1.5 z-10">
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((p) => !p)}
+                    title={showPassword ? t('teachers.form.hidePassword') : t('teachers.form.showPassword')}
+                    aria-label={showPassword ? t('teachers.form.hidePassword') : t('teachers.form.showPassword')}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
+                  >
+                    <Glyph name="eye" size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const generated = generateSecurePassword();
+                      setForm((p) => ({ ...p, password: generated }));
+                      setShowPassword(true);
+                      sound.playPop?.();
+                      haptics.light();
+                    }}
+                    title={t('teachers.form.generatePasswordTitle')}
+                    className="px-2 py-1 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px] font-semibold hover:bg-blue-500/20 transition-colors"
+                  >
+                    {t('teachers.form.generatePassword')}
+                  </button>
+                </div>
               </div>
             </GlassField>
 
-            <GlassField
-              label={t('teachers.form.specializations')}
-              hint={t('teachers.form.specializationsHint')}
-            >
-              <div className="relative">
-                <FieldIcon icon={I.book} tone="orange" />
-                <GlassInput
-                  value={form.specializations}
-                  onChange={handleFormChange('specializations')}
-                  placeholder={t('teachers.specializationsPlaceholder')}
-                  disabled={create.isPending}
-                  className="pl-11"
-                />
-              </div>
-            </GlassField>
+            {/* Salary Type & Rate Configuration */}
+            <div className="p-3.5 rounded-2xl bg-slate-500/5 border border-slate-200/60 dark:border-white/10 space-y-3">
+              <label className="text-[12px] font-semibold uppercase tracking-wider text-slate-500 dark:text-white/50 block">
+                {t('teachers.form.salaryType')}
+              </label>
 
-            <GlassField
-              label={t('teachers.form.hourlyRate')}
-              error={formErrors.hourlyRate}
-            >
-              <div className="relative">
-                <FieldIcon icon={I.wallet} tone="green" />
-                <GlassInput
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.hourlyRate}
-                  onChange={handleFormChange('hourlyRate')}
-                  aria-invalid={Boolean(formErrors.hourlyRate)}
-                  aria-describedby={formErrors.hourlyRate ? 'rate-error' : undefined}
-                  placeholder="25.00"
-                  disabled={create.isPending}
-                  className="pl-11"
-                />
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'MONTHLY' as const, label: t('teachers.salaryType.monthly') },
+                  { id: 'HOURLY' as const, label: t('teachers.salaryType.hourly') },
+                  { id: 'PER_LESSON' as const, label: t('teachers.salaryType.perLesson') },
+                ].map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => {
+                      sound.playTick?.();
+                      haptics.light();
+                      setForm((p) => ({ ...p, salaryType: st.id }));
+                    }}
+                    className={`px-3 py-2 rounded-xl text-[12px] font-semibold border transition-all text-center ${
+                      form.salaryType === st.id
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/20'
+                        : 'bg-white/80 dark:bg-white/[0.04] text-slate-700 dark:text-white/70 border-slate-200/70 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/[0.08]'
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
               </div>
-              {formErrors.hourlyRate && (
-                <span
-                  id="rate-error"
-                  className="mt-1 text-sm"
-                  style={{ color: 'var(--state-error)' }}
-                >
-                  {formErrors.hourlyRate}
-                </span>
+
+              {form.salaryType === 'HOURLY' && (
+                <GlassField label={t('teachers.form.hourlyRate')} error={formErrors.hourlyRate} htmlFor="teacher-hourlyRate">
+                  <GlassInput
+                    id="teacher-hourlyRate"
+                    name="hourlyRate"
+                    type="number"
+                    step="5000"
+                    min="0"
+                    value={form.hourlyRate}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleFieldChange('hourlyRate', e.target.value)}
+                    placeholder="150000"
+                    disabled={create.isPending}
+                    inputPrefix={<Glyph name="wallet" size={15} className="text-slate-400" />}
+                  />
+                </GlassField>
               )}
-            </GlassField>
 
-            <GlassField
-              label={t('teachers.form.experience')}
-              error={formErrors.experience}
-            >
-              <div className="relative">
-                <FieldIcon icon={I.award} tone="orange" />
+              {form.salaryType === 'PER_LESSON' && (
+                <GlassField label={t('teachers.form.lessonRate')} error={formErrors.lessonRate} htmlFor="teacher-lessonRate">
+                  <GlassInput
+                    id="teacher-lessonRate"
+                    name="lessonRate"
+                    type="number"
+                    step="5000"
+                    min="0"
+                    value={form.lessonRate}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleFieldChange('lessonRate', e.target.value)}
+                    placeholder="60000"
+                    disabled={create.isPending}
+                    inputPrefix={<Glyph name="wallet" size={15} className="text-slate-400" />}
+                  />
+                </GlassField>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <GlassField
+                label={t('teachers.form.specializations')}
+                hint={t('teachers.form.specializationsHint')}
+                htmlFor="teacher-specializations"
+              >
                 <GlassInput
+                  id="teacher-specializations"
+                  name="specializations"
+                  value={form.specializations}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleFieldChange('specializations', e.target.value)}
+                  placeholder="Matematika, Fizika, React"
+                  disabled={create.isPending}
+                  inputPrefix={<Glyph name="book" size={15} className="text-slate-400" />}
+                />
+              </GlassField>
+
+              <GlassField label={t('teachers.form.experience')} error={formErrors.experience} htmlFor="teacher-experience">
+                <GlassInput
+                  id="teacher-experience"
+                  name="experience"
                   type="number"
                   min="0"
                   value={form.experience}
-                  onChange={handleFormChange('experience')}
-                  aria-invalid={Boolean(formErrors.experience)}
-                  aria-describedby={formErrors.experience ? 'experience-error' : undefined}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleFieldChange('experience', e.target.value)}
                   placeholder="5"
                   disabled={create.isPending}
-                  className="pl-11"
+                  inputPrefix={<Glyph name="award" size={15} className="text-slate-400" />}
                 />
-              </div>
-              {formErrors.experience && (
-                <span
-                  id="experience-error"
-                  className="mt-1 text-sm"
-                  style={{ color: 'var(--state-error)' }}
-                >
-                  {formErrors.experience}
-                </span>
-              )}
-            </GlassField>
-          </div>
+              </GlassField>
+            </div>
 
-          <GlassField label={t('teachers.form.bio')}>
-            <div className="relative">
-              <span
-                className="pointer-events-none absolute left-3 top-3 z-10 flex h-6 w-6 items-center justify-center rounded-lg"
-                style={{ background: TONES.gray.bg, color: TONES.gray.fg }}
-                aria-hidden
-              >
-                <Icon paths={I.note} size={12} strokeWidth={2.2} />
-              </span>
+            <GlassField label={t('teachers.form.bio')} htmlFor="teacher-bio">
               <GlassTextArea
+                id="teacher-bio"
+                name="bio"
                 rows={3}
                 value={form.bio}
-                onChange={handleFormChange('bio')}
-                placeholder={t('teachers.bioPlaceholder')}
+                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => handleFieldChange('bio', e.target.value)}
+                placeholder={t('teachers.form.bioPlaceholder')}
                 disabled={create.isPending}
-                className="pl-11"
               />
-            </div>
-          </GlassField>
+            </GlassField>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton
-                type="button"
-                variant="secondary"
-                onClick={handleCloseModal}
-                disabled={create.isPending}
-              >
+            <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-200/60 dark:border-white/10">
+              <GlassButton type="button" variant="secondary" onClick={handleCloseModal} disabled={create.isPending}>
                 {t('common.cancel')}
               </GlassButton>
-            </motion.div>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton type="submit" variant="primary" disabled={create.isPending}>
-                <span className="inline-flex items-center gap-2">
-                  {create.isPending ? (
-                    <>
-                      <motion.span
-                        className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                      />
-                      {t('common.saving')}
-                    </>
-                  ) : editingId ? (
-                    <>
-                      <Icon paths={I.check} size={14} strokeWidth={2.5} />
-                      {t('teachers.update')}
-                    </>
-                  ) : (
-                    <>
-                      <Icon paths={I.plus} size={14} strokeWidth={2.5} />
-                      {t('teachers.create')}
-                    </>
-                  )}
-                </span>
+                {create.isPending ? t('common.saving') : editingId ? t('common.save') : t('common.create')}
               </GlassButton>
-            </motion.div>
-          </div>
-        </form>
+            </div>
+          </form>
+        </div>
       </GlassModal>
 
+      {/* ═══ 360° SPATIAL IDENTITY CARD MODAL ═══ */}
+      {cardTeacher && (
+        <GlassModal
+          open={Boolean(cardTeacher)}
+          onClose={() => setCardTeacher(null)}
+          title={t('teachers.spatialCard.modalTitle', { name: formatTeacherName(cardTeacher) })}
+          size="md"
+        >
+          <div className="py-2 flex flex-col items-center">
+            <SpatialIdentityCard360
+              data={{
+                id: cardTeacher.id,
+                fullName: formatTeacherName(cardTeacher),
+                role: 'TEACHER',
+                email: cardTeacher.user?.email || undefined,
+                phone: cardTeacher.user?.phone || undefined,
+                specialty: cardTeacher.specializations?.[0] || undefined,
+                activeGroupsCount: cardTeacher.groups?.length ?? 0,
+                status: cardTeacher.user?.isActive !== false ? t('teachers.sidecar.badgeActive') : t('teachers.sidecar.badgeInactive'),
+                biometricVerified: Boolean((cardTeacher as unknown as Record<string, unknown>).faceEnrolled || (cardTeacher.user as unknown as Record<string, unknown>)?.faceEnrolled),
+                nfcEnabled: false,
+              }}
+            />
+          </div>
+        </GlassModal>
+      )}
+
+      {/* ═══ DELETE CONFIRM DIALOG ═══ */}
       <ConfirmDialog
         open={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={confirmDelete}
+        onConfirm={handleConfirmDelete}
         description={t('teachers.deleteConfirm')}
         loading={remove.isPending}
       />
 
-      {/* Floating Action Island for Bulk Teacher Operations */}
+      {/* ═══ FLOATING ACTION ISLAND (BULK ACTIONS) ═══ */}
       <FloatingActionIsland
         selectedCount={selectedCount}
-        onClear={clearSelection}
+        onClearSelection={() => {
+          sound.playTick?.();
+          haptics.light();
+          clearSelection();
+        }}
+        entityName={t('teachers.bulk.itemLabel')}
         actions={[
           {
-            label: "Holatni o'zgartirish",
-            icon: "🔄",
-            onClick: handleBatchToggleStatus,
+            label: t('teachers.bulk.toggleStatus'),
+            icon: <Glyph name="teachers" size={15} weight={2.2} />,
             variant: 'primary',
-            shortcutBadge: 't',
+            onClick: handleBatchToggleStatus,
           },
           {
-            label: "Eksport (CSV)",
-            icon: "📊",
-            onClick: handleExportSelectedTeachersCSV,
-            shortcutBadge: 'e',
+            label: t('teachers.bulk.exportCsv'),
+            icon: <Glyph name="export" size={15} weight={2.2} />,
+            onClick: () => handleExportCSV(),
           },
         ]}
       />
-    </motion.div>
+    </div>
   );
 }
+
+export default TeachersPage;

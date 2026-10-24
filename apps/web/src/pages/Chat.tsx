@@ -30,8 +30,9 @@ import { getSocketBaseUrl } from '@/lib/socketUrl';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { ChatConversation, ChatMessage } from '@/lib/types';
 import { useAuth } from '@/auth/AuthContext';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { TranslateFn } from '@/i18n/I18nProvider';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -247,10 +248,6 @@ function getParticipantInitials(conv: ChatConversation, currentUserId?: string):
 /* ============================================================================
  * PREMIUM SUB-COMPONENTS
  * ========================================================================== */
-
-function AmbientOrbs() {
-  return null;
-}
 
 function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
   return (
@@ -639,7 +636,7 @@ function Composer({
  * ========================================================================== */
 
 export function ChatPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('chat.title'));
   const { user } = useAuth();
   const { push, toastNode } = useToast();
@@ -847,9 +844,9 @@ export function ChatPage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="relative page-container space-y-5"
+      className="relative page-container space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
-      <AmbientOrbs />
+      <AuroraMesh variant="corporate" opacity={0.65} />
       {toastNode}
 
       {/* ============================================================

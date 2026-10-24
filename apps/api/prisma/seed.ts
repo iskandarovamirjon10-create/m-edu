@@ -31,11 +31,14 @@ async function main() {
 
   await prisma.accessControlConfig.upsert({
     where: { id: 'global' },
-    update: {},
+    update: {
+      inviteOnly: true,
+      requireApproval: true,
+    },
     create: {
       id: 'global',
-      inviteOnly: false,
-      requireApproval: false,
+      inviteOnly: true,
+      requireApproval: true,
     },
   });
 
@@ -186,7 +189,11 @@ async function main() {
   console.log(`  Organization: ${orgName}`);
   console.log(`  Admin Email:  ${email}`);
   if (isProd) {
-    console.log('  Password:     set via SEED_ADMIN_PASSWORD env var');
+    if (process.env.SEED_ADMIN_PASSWORD) {
+      console.log('  Password:     [Configured via SEED_ADMIN_PASSWORD]');
+    } else {
+      console.log(`  Password:     ${password} (Generated production secret)`);
+    }
   } else {
     console.log(`  Password:     ${password}`);
   }

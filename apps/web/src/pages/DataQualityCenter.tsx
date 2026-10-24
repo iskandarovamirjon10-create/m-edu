@@ -14,12 +14,13 @@ import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
 import { GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassButton } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { useToast } from '@/components/ui/GlassToast';
 import { dataQualityApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { formatDate } from '@/lib/format';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 
@@ -91,7 +92,7 @@ interface DataQualitySummary {
 }
 
 export function DataQualityCenterPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('dataQualityCenter.title'));
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'critical' | 'unresolved'>('unresolved');
@@ -121,10 +122,9 @@ export function DataQualityCenterPage() {
     const sidecarData: QuickLookData = {
       title: issue.message,
       subtitle: `${issue.entityType} • Field: ${issue.field || 'General Record'}`,
-      badge: issue.severity,
-      status: {
-        label: issue.resolvedAt ? 'Issue Resolved' : `Open ${issue.severity} Priority`,
-        tone: issue.resolvedAt ? 'success' : issue.severity === 'CRITICAL' ? 'error' : issue.severity === 'HIGH' ? 'warning' : 'primary',
+      badge: {
+        text: issue.severity,
+        tone: issue.severity === 'CRITICAL' ? 'rose' : issue.severity === 'HIGH' ? 'amber' : 'blue',
       },
       metrics: [
         { label: 'Severity Level', value: issue.severity },
@@ -141,7 +141,7 @@ export function DataQualityCenterPage() {
       ],
     };
     openSidecar(sidecarData);
-  }, [playTick]);
+  }, [playPop]);
 
   const runMutation = useMutation({
     mutationFn: () => dataQualityApi.run() as Promise<{ created?: number }>,
@@ -212,13 +212,10 @@ export function DataQualityCenterPage() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={SPRING.smooth}
-      className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto"
+      className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
       {/* Ambient background lighting */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-        <div className="absolute -top-[12%] right-[15%] h-[400px] w-[500px] rounded-full bg-cyan-500/10 blur-[140px] dark:bg-cyan-600/[0.08]" />
-        <div className="absolute top-[40%] left-[8%] h-[350px] w-[450px] rounded-full bg-brand-500/10 blur-[130px] dark:bg-blue-600/[0.07]" />
-      </div>
+      <AuroraMesh variant="corporate" />
 
       {/* ── Apple V2 Hero Header ── */}
       <div className="liquid-glass-card liquid-glass-surface relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between rounded-[2.25rem] border border-white/40 dark:border-white/10 p-6 sm:p-7 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.07)] backdrop-blur-2xl">
@@ -283,7 +280,7 @@ export function DataQualityCenterPage() {
                 playTick();
                 setFilter(f);
               }}
-              className={`relative px-3.5 sm:px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
+              className={`relative px-3.5 sm:px-4 py-2.5 min-h-[44px] text-xs font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${
                 isActive
                   ? 'text-zinc-900 dark:text-white shadow-sm'
                   : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
@@ -369,7 +366,7 @@ export function DataQualityCenterPage() {
                   <button
                     type="button"
                     onClick={() => handleOpenIssueSidecar(issue)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-white/40 hover:bg-white/60 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 border border-white/40 dark:border-white/10 shadow-sm transition-all"
+                    className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-white/40 hover:bg-white/60 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300 border border-white/40 dark:border-white/10 shadow-sm transition-all"
                     title="Quick Look Detail"
                   >
                     <span>◨</span>
@@ -377,6 +374,7 @@ export function DataQualityCenterPage() {
                   </button>
                   <GlassButton
                     size="sm"
+                    className="min-h-[44px]"
                     variant={issue.resolvedAt ? 'ghost' : 'secondary'}
                     onClick={() => resolveMutation.mutate(issue.id)}
                     disabled={!!issue.resolvedAt}

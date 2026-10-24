@@ -113,11 +113,14 @@ export class InvoicesController {
   @Get(':id/payment-links')
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER, Role.STUDENT)
   @ApiOperation({ summary: 'Generate Payme and Click payment deep links and QR codes' })
-  paymentLinks(
-    @CurrentUser('organizationId') orgId: string,
+  async paymentLinks(
+    @CurrentUser() user: { organizationId: string; id: string; role: Role },
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.invoicesService.getPaymentLinks(orgId, id);
+    if (user.role === Role.STUDENT) {
+      await this.invoicesService.getInvoiceForStudent(user.organizationId, user.id, id);
+    }
+    return this.invoicesService.getPaymentLinks(user.organizationId, id);
   }
 
   @AllowAnyRole()

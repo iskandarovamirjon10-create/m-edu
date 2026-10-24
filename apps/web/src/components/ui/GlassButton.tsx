@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { GlassSpinner } from './GlassSpinner';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 
 
@@ -54,6 +55,7 @@ interface GlassButtonProps extends Omit<NativeButtonProps, 'children'> {
 
   
   pressed?: boolean;
+  haptic?: boolean;
 }
 
 
@@ -368,15 +370,25 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
       disabled,
       asChild,
       type = 'button',
+      haptic = true,
+      onClick,
       ...rest
     },
     ref,
   ) => {
+    const sound = usePremiumSound();
     
     const showLoading = loading;
     const showSuccess = success && !loading;
     const isDisabled = Boolean(disabled) || showLoading;
     const isIconSize = ICON_SIZES.has(size);
+
+    const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (haptic && !isDisabled) {
+        sound.playTick();
+      }
+      onClick?.(e);
+    };
 
     
     devWarn(
@@ -433,6 +445,7 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
       'data-variant': variant,
       'data-size': size,
       ...rest,
+      onClick: handleClick,
     };
 
     

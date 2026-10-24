@@ -59,6 +59,26 @@ export interface CameraWorkerConfig {
   readonly minAmbiguityMargin?: number;
 }
 
+export type WorkerHealthSnapshot = ReturnType<CameraWorkerSession['getHealth']>;
+
+export interface WorkerStatusResult {
+  readonly cameraId: string;
+  readonly state: WorkerState | null;
+  readonly health: WorkerHealthSnapshot | null;
+  readonly running: boolean;
+  readonly startedAt?: Date;
+  readonly ownedByThisReplica: boolean;
+  readonly remoteOwnerReplicaId: string | null;
+}
+
+export interface WorkerSummaryResult {
+  readonly cameraId: string;
+  readonly organizationId: string;
+  readonly state: WorkerState;
+  readonly health: WorkerHealthSnapshot;
+  readonly startedAt: Date;
+}
+
 interface WorkerRecord {
   readonly cameraId: string;
   readonly organizationId: string;
@@ -69,7 +89,6 @@ interface WorkerRecord {
   readonly session: CameraWorkerSession;
   readonly startedAt: Date;
   lastFrameOrRecoveryAt: Date;
-  consecutiveLockFailures: number;
   readonly cleanupListeners: () => void;
 }
 
@@ -127,6 +146,7 @@ const DEFAULT_PROCESSING_FPS = 3;
 const DEFAULT_START_TIMEOUT_MS = 30_000;
 const DEFAULT_STOP_TIMEOUT_MS = 10_000;
 const DISTRIBUTED_STOP_WAIT_TIMEOUT_MS = 6_000;
+const DISTRIBUTED_STOP_POLL_INTERVAL_MS = 150;
 
 const CAMERA_LOCK_TTL_SECONDS = 15;
 const CAMERA_LOCK_RENEW_INTERVAL_MS = 4_000;
@@ -219,7 +239,9 @@ class CameraLifecycleCoordinator {
   public abortInFlightStart(cameraId: string): void {
     const controller = this.startAbortControllers.get(cameraId);
     if (controller && !controller.signal.aborted) {
-      controller.abort(new Error(`Start aborted due to incoming STOP for camera ${cameraId}`));
+      controller.abort(
+        new Error(`Start aborted due to incoming STOP for camera ${cameraId}`),
+      );
     }
   }
 
@@ -246,10 +268,12 @@ class CameraLifecycleCoordinator {
     this.chains.set(cameraId, nextChain);
 
     try {
-      await prev;
+      await prev.catch(() => {});
       return await fn(abortController.signal);
     } finally {
-      this.startAbortControllers.delete(cameraId);
+      if (this.startAbortControllers.get(cameraId) === abortController) {
+        this.startAbortControllers.delete(cameraId);
+      }
       if (this.activeOp.get(cameraId) === 'START') {
         this.activeOp.delete(cameraId);
       }
@@ -301,8 +325,11 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
   /** Active workers owned by this replica: cameraId -> WorkerRecord */
   private readonly workers = new Map<string, WorkerRecord>();
 
-  /** Locks held in Redis during pre-session startup phase so heartbeat renews them too */
+  /** Locks held in Redis (both pre-session startup and running workers) */
   private readonly activeLocks = new Set<string>();
+
+  /** Tracks consecutive Redis lock renewal failures for both pre-session and active workers */
+  private readonly consecutiveLockFailures = new Map<string, number>();
 
   /** Per-camera lifecycle coordinator (preemptible start / serialized stop) */
   private readonly coordinator = new CameraLifecycleCoordinator();
@@ -462,6 +489,9 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
       this.dbStatusChains.clear();
     }
 
+    this.lastHealthErrorPersist.clear();
+    this.consecutiveLockFailures.clear();
+
     // 6. Gracefully close Redis connections (quit flushes pending DEL lock commands)
     const uniqueClients = new Set(
       [this.subRedis, this.pubRedis, this.redis].filter(
@@ -604,9 +634,10 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
 
       if (!ownsCamera) return;
 
-      this.logger.info(`Received distributed STOP for camera ${payload.cameraId}`, {
-        fromReplica: payload.sender,
-      });
+      this.logger.info(
+        `Received distributed STOP for camera ${payload.cameraId}`,
+        { fromReplica: payload.sender },
+      );
 
       try {
         await this.stopWorkerInternal(payload.cameraId);
@@ -616,7 +647,6 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
           { error: getErrorMessage(err) },
         );
       } finally {
-        // Notify the requesting replica that teardown & lock release completed
         if (payload.commandId && this.pubRedis && this.isRedisReady()) {
           const ack: DistributedCameraCommand = {
             commandId: randomUUID(),
@@ -635,8 +665,8 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
   }
 
   /**
-   * Single-flight batched lock renewal with Self-Fencing protection against Split-Brain.
-   * Also renews locks for cameras currently in the middle of a slow RTSP startup.
+   * Single-flight batched lock renewal with Non-Blocking Self-Fencing protection.
+   * Never blocks the heartbeat loop on slow camera teardown.
    */
   private async renewLocks(): Promise<void> {
     if (this.renewLocksInFlight || this.isShuttingDown || !this.redis) return;
@@ -650,8 +680,7 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
 
     try {
       if (!this.isRedisReady()) {
-        // Redis connection degraded — increment failure counters and self-fence if exceeded
-        await this.handleLockRenewalDegradation(trackedCameraIds);
+        this.handleLockRenewalDegradation(trackedCameraIds);
         return;
       }
 
@@ -664,47 +693,56 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
         CAMERA_LOCK_TTL_SECONDS,
       )) as number[];
 
-      await Promise.allSettled(
-        trackedCameraIds.map(async (cameraId, idx) => {
-          const renewed = rawResults[idx] === 1;
-          const worker = this.workers.get(cameraId);
+      for (let idx = 0; idx < trackedCameraIds.length; idx++) {
+        const cameraId = trackedCameraIds[idx]!;
+        const renewed = rawResults[idx] === 1;
 
-          if (renewed) {
-            if (worker) worker.consecutiveLockFailures = 0;
-            return;
-          }
+        if (renewed) {
+          this.consecutiveLockFailures.set(cameraId, 0);
+          continue;
+        }
 
-          this.logger.warn(
-            `Lost distributed lock ownership for camera ${cameraId}; fencing local worker`,
-          );
-          await this.stopWorkerInternal(cameraId).catch(() => {});
-        }),
-      );
+        this.logger.warn(
+          `Lost distributed lock ownership for camera ${cameraId}; fencing local worker`,
+        );
+        this.fenceWorkerNonBlocking(cameraId);
+      }
     } catch (err: unknown) {
       this.logger.warn('Batch lock renewal failed', {
         error: getErrorMessage(err),
       });
-      await this.handleLockRenewalDegradation(trackedCameraIds);
+      this.handleLockRenewalDegradation(trackedCameraIds);
     } finally {
       this.renewLocksInFlight = false;
     }
   }
 
-  private async handleLockRenewalDegradation(cameraIds: string[]): Promise<void> {
-    await Promise.allSettled(
-      cameraIds.map(async (cameraId) => {
-        const worker = this.workers.get(cameraId);
-        if (!worker) return;
+  private handleLockRenewalDegradation(cameraIds: string[]): void {
+    for (const cameraId of cameraIds) {
+      const failures = (this.consecutiveLockFailures.get(cameraId) ?? 0) + 1;
+      this.consecutiveLockFailures.set(cameraId, failures);
 
-        worker.consecutiveLockFailures += 1;
-        if (worker.consecutiveLockFailures >= MAX_CONSECUTIVE_LOCK_FAILURES) {
-          this.logger.error(
-            `Self-fencing camera ${cameraId} after ${worker.consecutiveLockFailures} failed Redis lock renewals to prevent split-brain`,
-          );
-          await this.stopWorkerInternal(cameraId).catch(() => {});
-        }
-      }),
-    );
+      if (failures >= MAX_CONSECUTIVE_LOCK_FAILURES) {
+        this.logger.error(
+          `Self-fencing camera ${cameraId} after ${failures} failed Redis lock renewals to prevent split-brain`,
+        );
+        this.fenceWorkerNonBlocking(cameraId);
+      }
+    }
+  }
+
+  /**
+   * Immediately aborts any in-flight start and triggers asynchronous worker teardown
+   * so the Redis lock renewal loop is NEVER blocked by RTSP/FFmpeg stop timeouts.
+   */
+  private fenceWorkerNonBlocking(cameraId: string): void {
+    this.consecutiveLockFailures.delete(cameraId);
+    this.coordinator.abortInFlightStart(cameraId);
+    void this.stopWorkerInternal(cameraId).catch((err: unknown) => {
+      this.logger.warn(`Fenced teardown failed for camera ${cameraId}`, {
+        error: getErrorMessage(err),
+      });
+    });
   }
 
   // =====================================================================
@@ -728,6 +766,7 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
         );
       }
       this.activeLocks.add(cameraId);
+      this.consecutiveLockFailures.set(cameraId, 0);
       return true;
     }
 
@@ -743,6 +782,7 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
 
       if (result === 1) {
         this.activeLocks.add(cameraId);
+        this.consecutiveLockFailures.set(cameraId, 0);
         return true;
       }
 
@@ -758,12 +798,14 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
         { cameraId, error: getErrorMessage(err) },
       );
       this.activeLocks.add(cameraId);
+      this.consecutiveLockFailures.set(cameraId, 0);
       return true;
     }
   }
 
   private async releaseCameraLock(cameraId: string): Promise<void> {
     this.activeLocks.delete(cameraId);
+    this.consecutiveLockFailures.delete(cameraId);
 
     const redis = this.redis;
     if (!redis || redis.status !== 'ready') return;
@@ -818,9 +860,10 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
             },
           );
         } catch (err: unknown) {
-          this.logger.warn('Ignoring malformed face-templates-changed payload', {
-            error: getErrorMessage(err),
-          });
+          this.logger.warn(
+            'Ignoring malformed face-templates-changed payload',
+            { error: getErrorMessage(err) },
+          );
         }
       },
     );
@@ -842,7 +885,7 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
 
   /**
    * Serializes database status writes per camera so a slow `ONLINE` query
-   * can NEVER resolve after a subsequent `CONFIGURED` (stop) query.
+   * can NEVER resolve after a subsequent `CONFIGURED` (stop) or `ERROR` query.
    */
   private enqueueCameraDbUpdate(
     cameraId: string,
@@ -870,14 +913,18 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
   }
 
   /**
-   * Only persists `ONLINE` and `lastSeenAt` for genuinely `RUNNING` workers.
-   * `DEGRADED` cameras are NEVER overwritten back to `ONLINE`!
+   * Persists `ONLINE` and `lastSeenAt` for genuinely `RUNNING` workers.
+   * Skips cameras that have pending status transitions in `dbStatusChains`
+   * or active coordinator operations to guarantee strict state ordering.
    */
   private async persistRunningCameraHealth(): Promise<void> {
     if (this.persistHealthInFlight || this.isShuttingDown) return;
 
     const runningWorkers = Array.from(this.workers.values()).filter(
-      (worker) => worker.state === 'RUNNING',
+      (worker) =>
+        worker.state === 'RUNNING' &&
+        !this.coordinator.isBusy(worker.cameraId) &&
+        !this.dbStatusChains.has(worker.cameraId),
     );
     if (runningWorkers.length === 0) return;
 
@@ -886,10 +933,6 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     try {
       const byOrg = new Map<string, string[]>();
       for (const worker of runningWorkers) {
-        // Double-check the worker hasn't entered a stop/error transition
-        if (this.coordinator.getActiveOperation(worker.cameraId) === 'STOP') {
-          continue;
-        }
         const ids = byOrg.get(worker.organizationId) ?? [];
         ids.push(worker.cameraId);
         byOrg.set(worker.organizationId, ids);
@@ -899,8 +942,12 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
       await Promise.all(
         Array.from(byOrg.entries()).map(([organizationId, cameraIds]) =>
           this.prisma.camera.updateMany({
-            where: { id: { in: cameraIds }, organizationId },
-            data: { status: 'ONLINE', lastSeenAt: now },
+            where: {
+              id: { in: cameraIds },
+              organizationId,
+              status: 'ONLINE',
+            },
+            data: { lastSeenAt: now },
           }),
         ),
       );
@@ -928,10 +975,13 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     cameraId: string,
     error: string,
     errorCode: string = 'STREAM_ERROR',
+    forceImmediate = false,
   ): void {
     const nowMs = Date.now();
-    const last = this.lastHealthErrorPersist.get(cameraId) ?? 0;
-    if (nowMs - last < HEALTH_ERROR_PERSIST_MIN_INTERVAL_MS) return;
+    if (!forceImmediate) {
+      const last = this.lastHealthErrorPersist.get(cameraId) ?? 0;
+      if (nowMs - last < HEALTH_ERROR_PERSIST_MIN_INTERVAL_MS) return;
+    }
 
     this.lastHealthErrorPersist.set(cameraId, nowMs);
     const now = new Date(nowMs);
@@ -1023,7 +1073,7 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
    * Cluster-Aware Bootstrap:
    * Iterates over all enabled cameras for each tenant instead of slicing the
    * first `maxWorkersPerOrg` rows blindly — if cameras 1..3 are already locked by
-   * Replica A, Replica B seamlessly skips them and picks up cameras 4..6!
+   * Replica A, Replica B seamlessly skips them and picks up cameras 4..6.
    */
   private async startEnabledCameras(signal: AbortSignal): Promise<void> {
     if (!this.faceEngine) {
@@ -1115,7 +1165,11 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     if (this.workers.has(cameraId)) return;
 
     await this.coordinator.runStart(cameraId, async (abortSignal) => {
-      if (this.workers.has(cameraId) || abortSignal.aborted || this.isShuttingDown) {
+      if (
+        this.workers.has(cameraId) ||
+        abortSignal.aborted ||
+        this.isShuttingDown
+      ) {
         return;
       }
 
@@ -1124,7 +1178,7 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
       let capacityReserved = false;
 
       try {
-        // 1. Reserve capacity synchronously before first await
+        // 1. Reserve capacity synchronously before first await inside coordinator
         this.reserveWorkerCapacity(organizationId);
         capacityReserved = true;
 
@@ -1133,7 +1187,7 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
         this.validateCameraCanStart(camera);
         this.throwIfAborted(abortSignal);
 
-        // 3. Acquire distributed lock (also registers in `activeLocks` so heartbeat renews it during slow RTSP connect)
+        // 3. Acquire distributed lock (registers in `activeLocks` so heartbeat renews it during slow RTSP connect)
         lockHeld = await this.acquireCameraLock(cameraId);
         if (!lockHeld) {
           if (options.ignorePeerOwnedConflict) return;
@@ -1161,7 +1215,6 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
         const generationId = randomUUID();
 
         // 4. Attach listeners BEFORE session.start() with generation-token guards
-        // so early events are captured and post-stop zombie events are ignored.
         const onOffline = (evt: {
           cameraId: string;
           organizationId: string;
@@ -1234,7 +1287,6 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
           session,
           startedAt: now,
           lastFrameOrRecoveryAt: now,
-          consecutiveLockFailures: 0,
           cleanupListeners,
         };
 
@@ -1268,11 +1320,22 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
           });
         } catch (err: unknown) {
           worker.state = 'ERROR';
+          const errMsg = getErrorMessage(err);
           this.logger.error('Camera worker failed during startup', {
             cameraId: camera.id,
             organizationId: camera.organizationId,
-            error: getErrorMessage(err),
+            error: errMsg,
           });
+
+          if (!abortSignal.aborted) {
+            this.persistCameraError(
+              camera.organizationId,
+              camera.id,
+              errMsg,
+              'STARTUP_ERROR',
+              true,
+            );
+          }
 
           await this.cleanupFailedWorker(camera.id, worker);
           throw err;
@@ -1312,8 +1375,6 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     if (!localOnly && this.pubRedis && this.isRedisReady()) {
       const commandId = randomUUID();
 
-      // If the worker is running on a peer replica, prepare an ACK waiter
-      // so stopWorker/restartWorker waits until the peer actually releases the lock!
       if (!isOwnedLocally) {
         ackPromise = this.waitForPeerStopAndLockRelease(cameraId, commandId);
       }
@@ -1333,6 +1394,8 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
           JSON.stringify(cmd),
         );
       } catch (err: unknown) {
+        const resolver = this.stopAckWaiters.get(commandId);
+        if (resolver) resolver();
         this.stopAckWaiters.delete(commandId);
         ackPromise = null;
         this.logger.warn('Failed to broadcast distributed STOP', {
@@ -1349,39 +1412,58 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  private async waitForPeerStopAndLockRelease(
+  /**
+   * Registers the STOP_ACK listener synchronously BEFORE any async Redis round-trip
+   * and uses non-overlapping polling to prevent concurrent Redis GET storms.
+   */
+  private waitForPeerStopAndLockRelease(
     cameraId: string,
     commandId: string,
   ): Promise<void> {
-    if (!this.redis || !this.isRedisReady()) return;
-
-    const lockKey = this.cameraLockKey(cameraId);
-    const currentOwner = await this.redis.get(lockKey).catch(() => null);
-    if (!currentOwner || currentOwner === this.replicaId) {
-      this.stopAckWaiters.delete(commandId);
-      return;
+    if (!this.redis || !this.isRedisReady()) {
+      return Promise.resolve();
     }
 
-    await new Promise<void>((resolve) => {
-      const deadline = Date.now() + DISTRIBUTED_STOP_WAIT_TIMEOUT_MS;
+    const lockKey = this.cameraLockKey(cameraId);
+
+    return new Promise<void>((resolve) => {
+      let settled = false;
+      let pollInFlight = false;
 
       const finish = () => {
+        if (settled) return;
+        settled = true;
         this.stopAckWaiters.delete(commandId);
         clearInterval(pollTimer);
         clearTimeout(timeoutTimer);
         resolve();
       };
 
+      // Register synchronously BEFORE publishing so an ultra-fast STOP_ACK is never missed
       this.stopAckWaiters.set(commandId, finish);
 
-      const pollTimer = setInterval(async () => {
-        if (!this.redis || Date.now() >= deadline) {
-          finish();
+      const checkLockOwner = async () => {
+        if (settled || pollInFlight || !this.redis || !this.isRedisReady()) {
           return;
         }
-        const owner = await this.redis.get(lockKey).catch(() => null);
-        if (!owner) finish();
-      }, 150);
+        pollInFlight = true;
+        try {
+          const owner = await this.redis.get(lockKey);
+          if (!owner || owner === this.replicaId) {
+            finish();
+          }
+        } catch {
+          // Ignore transient poll errors; timeout or next tick will resolve
+        } finally {
+          pollInFlight = false;
+        }
+      };
+
+      void checkLockOwner();
+
+      const pollTimer = setInterval(() => {
+        void checkLockOwner();
+      }, DISTRIBUTED_STOP_POLL_INTERVAL_MS);
       pollTimer.unref?.();
 
       const timeoutTimer = setTimeout(finish, DISTRIBUTED_STOP_WAIT_TIMEOUT_MS);
@@ -1434,13 +1516,15 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
   // RESTART (Cluster-Safe)
   // =====================================================================
 
-  public async restartWorker(organizationId: string, cameraId: string) {
+  public async restartWorker(
+    organizationId: string,
+    cameraId: string,
+  ): Promise<WorkerStatusResult> {
     this.assertNonEmptyIdentifier(organizationId, 'organizationId');
     this.assertNonEmptyIdentifier(cameraId, 'cameraId');
 
     await this.assertCameraOwnership(organizationId, cameraId);
 
-    // `stopWorker` now waits for both local teardown AND peer STOP_ACK / lock release!
     await this.stopWorker(organizationId, cameraId, false);
     await this.startWorker(organizationId, cameraId);
 
@@ -1451,7 +1535,10 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
   // STATUS & INTROSPECTION
   // =====================================================================
 
-  public async getWorkerStatus(organizationId: string, cameraId: string) {
+  public async getWorkerStatus(
+    organizationId: string,
+    cameraId: string,
+  ): Promise<WorkerStatusResult> {
     this.assertNonEmptyIdentifier(organizationId, 'organizationId');
     this.assertNonEmptyIdentifier(cameraId, 'cameraId');
 
@@ -1496,11 +1583,11 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     return this.workers.get(cameraId)?.state ?? null;
   }
 
-  public getWorkerHealth(cameraId: string) {
+  public getWorkerHealth(cameraId: string): WorkerHealthSnapshot | null {
     return this.workers.get(cameraId)?.session.getHealth() ?? null;
   }
 
-  public getAllWorkersStatus() {
+  public getAllWorkersStatus(): WorkerSummaryResult[] {
     return Array.from(this.workers.values()).map((worker) => ({
       cameraId: worker.cameraId,
       organizationId: worker.organizationId,
@@ -1510,7 +1597,9 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     }));
   }
 
-  public async getOrganizationWorkersStatus(organizationId: string) {
+  public async getOrganizationWorkersStatus(
+    organizationId: string,
+  ): Promise<WorkerSummaryResult[]> {
     this.assertNonEmptyIdentifier(organizationId, 'organizationId');
 
     const cameraIds =
@@ -1632,7 +1721,11 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
   private validateCameraCanStart(
     camera: Pick<
       Camera,
-      'enabled' | 'recognitionEnabled' | 'attendanceEnabled' | 'host' | 'protocol'
+      | 'enabled'
+      | 'recognitionEnabled'
+      | 'attendanceEnabled'
+      | 'host'
+      | 'protocol'
     >,
   ): void {
     if (!camera.enabled) {
@@ -1735,9 +1828,9 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
       throw new BadRequestException('Camera host is missing');
     }
 
-    const host = await this.resolveStreamHost(rawHost, camera.metadata);
-    const hostInUri =
-      host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+    const resolvedHost = await this.resolveStreamHost(rawHost, camera.metadata);
+    const bareHost = resolvedHost.replace(/^\[|\]$/g, '');
+    const hostInUri = bareHost.includes(':') ? `[${bareHost}]` : bareHost;
 
     const port = camera.port ?? (camera.protocol === 'ONVIF' ? 80 : 554);
     if (!Number.isInteger(port) || port < 1 || port > 65_535) {
@@ -1784,11 +1877,18 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     rawHost: string,
     metadata: unknown,
   ): Promise<string> {
+    const cleanHost = rawHost.replace(/^\[|\]$/g, '');
     const pin = this.readAddressPin(metadata);
 
-    if (pin && (pin.validatedHost === '' || pin.validatedHost === rawHost)) {
+    if (
+      pin &&
+      (pin.validatedHost === '' ||
+        pin.validatedHost.replace(/^\[|\]$/g, '') === cleanHost)
+    ) {
       try {
-        return this.networkSecurity.validateIp(pin.validatedIp);
+        return await this.networkSecurity.validateIp(
+          pin.validatedIp.replace(/^\[|\]$/g, ''),
+        );
       } catch (err: unknown) {
         this.logger.warn(
           'Pinned camera destination failed re-validation; falling back to resolving the host',
@@ -1797,7 +1897,7 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
       }
     }
 
-    return this.networkSecurity.validateHost(rawHost);
+    return await this.networkSecurity.validateHost(cleanHost);
   }
 
   private normalizeStreamPath(streamPath: string | null): string {
@@ -1928,6 +2028,9 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     ms: number,
     message: string,
   ): Promise<T> {
+    // Prevent unhandled rejection if the underlying promise rejects after timeout
+    void promise.catch(() => {});
+
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(message)), ms);
       timer.unref?.();
@@ -1951,6 +2054,9 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     signal: AbortSignal,
     timeoutMessage: string,
   ): Promise<T> {
+    // Prevent unhandled rejection if `session.start()` rejects after abort/timeout
+    void promise.catch(() => {});
+
     if (signal.aborted) {
       return Promise.reject(
         new HttpException(

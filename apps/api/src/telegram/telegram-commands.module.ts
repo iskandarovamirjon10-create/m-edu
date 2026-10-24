@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { StudentsModule } from '../students/students.module';
 import { TeachersModule } from '../teachers/teachers.module';
 import { GroupsModule } from '../groups/groups.module';
@@ -42,6 +43,14 @@ import {
   TodayCommand,
 } from './commands/staff.commands';
 import { CopilotCommand } from './commands/copilot.command';
+import { BriefingCommand } from './commands/briefing.command';
+import { CalendarCommand } from './commands/calendar.command';
+import { TeacherCockpitCommand } from './commands/teacher-cockpit.command';
+import { TelegramWebAppAuthService } from './telegram-webapp-auth.service';
+import { TelegramWebAppAuthController } from './telegram-webapp-auth.controller';
+import { TelegramCalendarService } from './telegram-calendar.service';
+import { TelegramCalendarController } from './telegram-calendar.controller';
+import { TelegramExecutiveBriefingService } from './telegram-executive-briefing.service';
 
 /** Every command handler, in one list. */
 const COMMAND_HANDLERS = [
@@ -63,6 +72,9 @@ const COMMAND_HANDLERS = [
   GroupsCommand,
   TodayCommand,
   CopilotCommand,
+  BriefingCommand,
+  CalendarCommand,
+  TeacherCockpitCommand,
 ];
 
 /**
@@ -76,6 +88,7 @@ const COMMAND_HANDLERS = [
 @Module({
   imports: [
     TelegramCoreModule,
+    forwardRef(() => AuthModule),
     StudentsModule,
     TeachersModule,
     GroupsModule,
@@ -87,7 +100,11 @@ const COMMAND_HANDLERS = [
     NotificationsModule,
     AiModule,
   ],
-  controllers: [TelegramWebhookController],
+  controllers: [
+    TelegramWebhookController,
+    TelegramWebAppAuthController,
+    TelegramCalendarController,
+  ],
   providers: [
     ...COMMAND_HANDLERS,
     {
@@ -98,6 +115,14 @@ const COMMAND_HANDLERS = [
     TelegramCommandRouter,
     TelegramCallbackRouter,
     TelegramBootstrapService,
+    TelegramWebAppAuthService,
+    TelegramCalendarService,
+    TelegramExecutiveBriefingService,
+  ],
+  exports: [
+    TelegramWebAppAuthService,
+    TelegramCalendarService,
+    TelegramExecutiveBriefingService,
   ],
 })
 export class TelegramCommandsModule {}

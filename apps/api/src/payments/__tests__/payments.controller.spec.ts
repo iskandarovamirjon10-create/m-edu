@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PaymentsController } from '../payments.controller';
 import { PaymentsService } from '../payments.service';
+import { RedisPubSubService } from '../../common/redis/redis-pubsub.service';
 
 describe('PaymentsController', () => {
   let controller: PaymentsController;
@@ -18,19 +19,11 @@ let service: {
     service = {
       findAll: vi.fn(),
       findOne: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [PaymentsController],
-      providers: [
-        {
-          provide: PaymentsService,
-          useValue: service,
-        },
-      ],
-    }).compile();
-
-    controller = module.get<PaymentsController>(PaymentsController);
+    controller = new PaymentsController(service as unknown as PaymentsService);
   });
 
   it('should be defined', () => {

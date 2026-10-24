@@ -34,7 +34,9 @@ export interface Teacher {
   organizationId: string;
   userId: string;
   specializations: string[];
-  hourlyRate?: string | null;
+  salaryType?: 'MONTHLY' | 'HOURLY' | 'PER_LESSON';
+  hourlyRate?: string | number | null;
+  lessonRate?: string | number | null;
   bio?: string | null;
   experience?: number | null;
   user?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'phone' | 'isActive'>;

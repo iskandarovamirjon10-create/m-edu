@@ -33,9 +33,10 @@ import { formatDateTime } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, SystemAuditEvent, AuditAction } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * MOTION TOKENS
@@ -122,7 +123,7 @@ function truncateId(id: string | null | undefined, maxLength = 8): string {
 }
 
 export function AuditPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('nav.audit'));
   const { playTick, playPop } = usePremiumSound();
 
@@ -260,13 +261,9 @@ export function AuditPage() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={SPRING.smooth}
-      className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto"
+      className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
-      {/* Ambient background lighting */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-        <div className="absolute -top-[12%] right-[15%] h-[400px] w-[500px] rounded-full bg-slate-500/10 blur-[140px] dark:bg-slate-600/[0.08]" />
-        <div className="absolute top-[40%] left-[8%] h-[350px] w-[450px] rounded-full bg-indigo-500/10 blur-[130px] dark:bg-indigo-600/[0.07]" />
-      </div>
+      <AuroraMesh variant="security" opacity={0.65} />
 
       {/* ── Apple V2 Hero Header ── */}
       <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">

@@ -90,7 +90,14 @@ export class NotificationEventProcessor extends WorkerHost {
       const state = await redis.get(idempKey);
       if (state === 'DELIVERED') {
         const cached = await redis.get(`${idempKey}:result`);
-        return cached ? JSON.parse(cached) : { deliveries: [] };
+        if (cached) {
+          try {
+            return JSON.parse(cached);
+          } catch {
+            return { deliveries: [] };
+          }
+        }
+        return { deliveries: [] };
       }
       if (state === 'DELIVERING_EXTERNAL') {
         // Previous attempt crashed during external delivery. To prevent duplicate
@@ -131,10 +138,11 @@ export class NotificationEventProcessor extends WorkerHost {
         try {
           const ok = await this.sms.sendSms(phone, `${title}: ${body}`, event.organizationId);
           deliveries.push({ channel: 'SMS', ok, error: ok ? undefined : 'provider rejected' });
-        } catch (e) {
-          deliveries.push({ channel: 'SMS', ok: false, error: e.message });
+        } catch (e: any) {
+          const errText = e?.message || String(e || 'unknown error');
+          deliveries.push({ channel: 'SMS', ok: false, error: errText });
           this.logger.error(
-            `Parent SMS failed for event ${event.type}/${event.entityId} to ${phone}: ${e.message}`,
+            `Parent SMS failed for event ${event.type}/${event.entityId} to ${phone}: ${errText}`,
           );
         }
       }

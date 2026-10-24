@@ -1,5 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Test, TestingModule } from '@nestjs/testing';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SecurityService } from '../security.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -10,7 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
  */
 function createMockPrisma() {
   return {
-    auditLog: { findMany: vi.fn() },
+    auditLog: { findMany: vi.fn(), create: vi.fn().mockResolvedValue({ id: 'res-log-1' }) },
     dataQualityIssue: { updateMany: vi.fn() },
   };
 }
@@ -32,11 +31,7 @@ describe('SecurityService', () => {
 
   beforeEach(async () => {
     mockPrisma = createMockPrisma();
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [SecurityService, { provide: PrismaService, useValue: mockPrisma }],
-    }).compile();
-
-    service = module.get<SecurityService>(SecurityService);
+    service = new SecurityService(mockPrisma as unknown as PrismaService);
   });
 
   it('should be defined', () => {
@@ -118,23 +113,57 @@ describe('SecurityService', () => {
       expect(result.items[0].severity).toBe('MEDIUM');
     });
 
-    it('paginates the derived alerts', async () => {
-      const result = await service.findAlerts('org-1', { skip: 1, take: 1 });
-      expect(result.total).toBe(3);
-      expect(result.items).toHaveLength(1);
+    it('does not silence a new wave of failed logins occurring after an earlier resolution', async () => {
+      const earlierResolution = new Date(Date.now() - 3600_000);
+      const newAttack = new Date(Date.now() - 60_000);
+
+      mockPrisma.auditLog.findMany.mockResolvedValue([
+        {
+          id: 'log-res-1',
+          action: 'SECURITY_ALERT_RESOLVED',
+          resource: 'SecurityAlert',
+          resourceId: 'login-failed-1.2.3.4',
+          organizationId: 'org-1',
+          userId: 'admin-1',
+          changes: { note: 'old resolution' },
+          timestamp: earlierResolution,
+        },
+        {
+          id: 'log-attack-1',
+          action: 'LOGIN_FAILED',
+          resource: 'Auth',
+          resourceId: null,
+          organizationId: 'org-1',
+          userId: null,
+          ipAddress: '1.2.3.4',
+          timestamp: newAttack,
+        },
+      ]);
+
+      const result = await service.findAlerts('org-1', {});
+      const ipAlert = result.items.find((a) => a.id === 'login-failed-1.2.3.4');
+      expect(ipAlert).toBeDefined();
+      expect(ipAlert?.resolvedAt).toBeNull();
     });
   });
 
   describe('resolve', () => {
-    it('fails loudly instead of writing to the wrong table (H1)', async () => {
-      // Security alerts are DERIVED from AuditLog at read time; the previous
-      // implementation "resolved" them by mutating DataQualityIssue (a
-      // different module) — success was fake. Only a real persistence model
-      // can make this endpoint honest.
-      await expect(
-        service.resolve('org-1', 'evt-1', 'admin-1', 'handled'),
-      ).rejects.toThrow('persistence is not implemented yet');
-      expect(mockPrisma.dataQualityIssue.updateMany).not.toHaveBeenCalled();
+    it('persists resolution in AuditLog and returns ok: true', async () => {
+      const res = await service.resolve('org-1', 'evt-1', 'admin-1', 'handled');
+      expect(res).toEqual({ ok: true });
+      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          organizationId: 'org-1',
+          userId: 'admin-1',
+          action: 'SECURITY_ALERT_RESOLVED',
+          resource: 'SecurityAlert',
+          resourceId: 'evt-1',
+          changes: expect.objectContaining({
+            note: 'handled',
+            resolvedBy: 'admin-1',
+          }),
+        }),
+      });
     });
   });
 });

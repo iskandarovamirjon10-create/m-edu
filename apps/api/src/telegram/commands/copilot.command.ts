@@ -78,6 +78,15 @@ export class CopilotCommand implements TelegramCommandHandler {
         ctx.userId ?? ctx.principalId,
         question.slice(0, TELEGRAM_COPILOT_MAX_QUESTION_LENGTH),
         [],
+        undefined,
+        false,
+        undefined,
+        {
+          userRole: ctx.role,
+          principalType: ctx.kind,
+          studentId: ctx.studentId,
+          parentId: ctx.parentId,
+        },
       );
       const content = typeof answer?.content === 'string' ? answer.content.trim() : '';
       if (!content) return { text: tr('copilot.error'), keyboard };

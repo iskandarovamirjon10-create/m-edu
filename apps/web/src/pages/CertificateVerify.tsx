@@ -1,30 +1,34 @@
 /**
- * M-EDU Certificate Verification Portal — Apple Design Award Edition
+ * M-EDU Certificate Verification Portal — Apple visionOS & macOS Sequoia 10/10 Edition
  *
  * Publicly verifiable credential page:
  *  - URL route: /verify/:code and /verify
- *  - 3D interactive holographic certificate card
+ *  - 3D interactive holographic certificate card (TiltCertificate)
  *  - Official verification badge & accredited status
- *  - Anonymous access — zero login required
+ *  - Anonymous public access — zero login required
  *  - Print & copy verification link actions
- *  - Full i18n support
+ *  - Apple visionOS Liquid Glass aesthetic with Aurora mesh backdrop
+ *  - WCAG 2.2 AA SC 2.5.8 touch targets (>= 44x44px for all controls)
+ *  - Accessible live status announcements (aria-live="polite")
+ *  - Trilingual resilience (UZ, RU, EN) with safe fallbacks
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { certificatesApi } from '@/lib/api';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { GlassButton, GlassInput, useToasts } from '@/components/ui';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { TiltCertificate } from '@/components/certificates/TiltCertificate';
 
 /* ============================================================================
  * MOTION TOKENS
  * ========================================================================== */
 
-const SPRING = {
+export const SPRING = {
   snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
   smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
   soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
@@ -34,24 +38,40 @@ const SPRING = {
  * ICONS
  * ========================================================================== */
 
-function Icon({
-  paths, size = 18, className = '', strokeWidth = 2,
+export function Icon({
+  paths,
+  size = 18,
+  className = '',
+  strokeWidth = 2,
+  ...rest
 }: {
-  paths: string[]; size?: number; className?: string; strokeWidth?: number;
-}) {
+  paths: string[];
+  size?: number;
+  className?: string;
+  strokeWidth?: number;
+} & React.SVGProps<SVGSVGElement>) {
   return (
     <svg
-      width={size} height={size} viewBox="0 0 24 24"
-      fill="none" stroke="currentColor"
-      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
-      className={className} aria-hidden
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+      {...rest}
     >
-      {paths.map((d, i) => <path key={i} d={d} />)}
+      {paths.map((d, i) => (
+        <path key={i} d={d} />
+      ))}
     </svg>
   );
 }
 
-const I = {
+export const I = {
   shieldCheck: [
     'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
     'M9 12l2 2 4-4',
@@ -63,6 +83,7 @@ const I = {
   sparkles: [
     'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
     'M18.5 3.5v3', 'M20 5h-3',
+    'M5.5 18v2.5', 'M6.75 19.25h-2.5',
   ],
   search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.3-4.3'],
   copy: [
@@ -90,35 +111,85 @@ const I = {
   ],
 };
 
+/* ============================================================================
+ * PURE DOMAIN HELPERS
+ * ========================================================================== */
+
+export function cleanVerificationCode(code?: string | null): string {
+  if (!code) return '';
+  return code.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+}
+
+export function formatVerificationDate(dateStr?: string | null, locale = 'uz-UZ'): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString(locale);
+  } catch {
+    return dateStr;
+  }
+}
+
+/* ============================================================================
+ * ATMOSPHERIC AURORA MESH
+ * ========================================================================== */
+
+export function AuroraBackdrop() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      <div
+        className="absolute -top-40 left-1/4 h-96 w-96 rounded-full blur-3xl opacity-30 dark:opacity-20 animate-pulse"
+        style={{
+          background: 'radial-gradient(circle, rgba(197,160,89,0.35) 0%, rgba(37,99,235,0.2) 60%, transparent 80%)',
+          animationDuration: '10s',
+        }}
+      />
+      <div
+        className="absolute bottom-20 right-10 h-80 w-80 rounded-full blur-3xl opacity-25 dark:opacity-15 animate-pulse"
+        style={{
+          background: 'radial-gradient(circle, rgba(52,199,89,0.3) 0%, rgba(197,160,89,0.15) 70%, transparent 85%)',
+          animationDuration: '12s',
+        }}
+      />
+    </div>
+  );
+}
 
 /* ============================================================================
  * MAIN VERIFICATION PAGE
  * ========================================================================== */
 
-interface VerifyCertificateResponse {
+export interface VerifyCertificateResponse {
   isValid: boolean;
   certificateNumber: string;
   verificationCode?: string;
-  student?: { firstName?: string; lastName?: string };
-  course?: { name?: string };
+  organizationName?: string;
+  student?: { firstName?: string; lastName?: string; name?: string };
+  course?: { name?: string; description?: string };
   issueDate?: string;
+  directorName?: string;
+  instructorName?: string;
+  grade?: string;
 }
 
 export function CertificateVerifyPage() {
   const { code: urlCode } = useParams<{ code?: string }>();
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const { push, toastNode } = useToasts();
-  usePageTitle(t('certificates.verifyTitle') || 'Certificate Verification — M-EDU');
+  const { playPop, playTick } = usePremiumSound();
 
-  const [inputCode, setInputCode] = useState(urlCode || '');
-  const [activeCode, setActiveCode] = useState(urlCode || '');
+  usePageTitle(t('certificates.verifyTitle', 'Certificate Verification — M-EDU'));
+
+  const [inputCode, setInputCode] = useState(urlCode ? cleanVerificationCode(urlCode) : '');
+  const [activeCode, setActiveCode] = useState(urlCode ? cleanVerificationCode(urlCode) : '');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (urlCode) {
-      setInputCode(urlCode);
-      setActiveCode(urlCode);
+      const clean = cleanVerificationCode(urlCode);
+      setInputCode(clean);
+      setActiveCode(clean);
     }
   }, [urlCode]);
 
@@ -129,46 +200,40 @@ export function CertificateVerifyPage() {
     retry: false,
   });
 
-  const handleSearch = useCallback((e?: React.FormEvent) => {
-    e?.preventDefault();
-    const trimmed = inputCode.trim().toUpperCase();
-    if (trimmed) {
-      setActiveCode(trimmed);
-      navigate(`/verify/${trimmed}`, { replace: true });
-    }
-  }, [inputCode, navigate]);
+  const handleSearch = useCallback(
+    (e?: React.FormEvent) => {
+      e?.preventDefault();
+      const cleaned = cleanVerificationCode(inputCode);
+      if (cleaned) {
+        playTick();
+        setActiveCode(cleaned);
+        navigate(`/verify/${cleaned}`, { replace: true });
+      }
+    },
+    [inputCode, navigate, playTick],
+  );
 
   const copyLink = useCallback(() => {
     if (typeof window === 'undefined') return;
+    playPop();
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
-    push({ type: 'success', message: t('certificates.linkCopied') || 'Verification link copied to clipboard!' });
+    push({
+      type: 'success',
+      message: t('certificates.linkCopied', 'Verification link copied to clipboard!'),
+    });
     setTimeout(() => setCopied(false), 2400);
-  }, [push, t]);
+  }, [push, t, playPop]);
 
   const printCertificate = useCallback(() => {
+    playTick();
     if (typeof window !== 'undefined') window.print();
-  }, []);
+  }, [playTick]);
 
   return (
-    <div className="min-h-screen relative flex flex-col justify-between overflow-hidden bg-gradient-to-b from-[#F5F5F7] via-[#FFFFFF] to-[#F5F5F7] dark:from-[#0B0C10] dark:via-[#12141A] dark:to-[#0B0C10] px-4 py-8 sm:px-6 lg:px-8">
+    <div className="min-h-screen relative flex flex-col justify-between overflow-hidden bg-gradient-to-b from-[#F5F5F7] via-[#FFFFFF] to-[#F5F5F7] dark:from-[#0B0C10] dark:via-[#12141A] dark:to-[#0B0C10] px-4 py-8 sm:px-6 lg:px-8 pb-[max(4rem,env(safe-area-inset-bottom))]">
+      <AuroraBackdrop />
       {toastNode}
-
-      {/* Ambient background glows */}
-      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-        <motion.div
-          className="absolute -left-[10%] top-[10%] h-[45%] w-[45%] rounded-full"
-          style={{ background: 'radial-gradient(closest-side, rgba(197,160,89,0.14), transparent 70%)' }}
-          animate={{ x: [0, 30, 0], y: [0, 20, 0] }}
-          transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          className="absolute -right-[10%] bottom-[10%] h-[50%] w-[50%] rounded-full"
-          style={{ background: 'radial-gradient(closest-side, rgba(37,99,235,0.12), transparent 70%)' }}
-          animate={{ x: [0, -30, 0], y: [0, -25, 0] }}
-          transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      </div>
 
       <div className="relative mx-auto max-w-4xl w-full">
         {/* Top Header */}
@@ -177,17 +242,20 @@ export function CertificateVerifyPage() {
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={SPRING.smooth}
-            className="inline-flex items-center gap-2 rounded-full border border-[#C5A059]/30 bg-[#C5A059]/10 px-4 py-1.5 text-xs font-bold text-[#C5A059]"
+            className="inline-flex items-center gap-2 rounded-full border border-[#C5A059]/30 bg-[#C5A059]/10 px-4 py-1.5 text-xs font-bold text-[#C5A059] shadow-xs"
           >
             <Icon paths={I.sparkles} size={13} strokeWidth={2.4} />
-            M-EDU Official Credential Verification
+            {t('certificates.officialBadge', 'M-EDU Official Credential Verification')}
           </motion.div>
 
-          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
-            {t('certificates.verifyHeading') || 'Verify Certificate Authenticity'}
+          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+            {t('certificates.verifyHeading', 'Verify Certificate Authenticity')}
           </h1>
-          <p className="mt-2 text-sm text-[#64748B] max-w-lg mx-auto">
-            {t('certificates.verifySub') || 'Enter the unique 12-digit verification code found on the certificate or scan its QR code.'}
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-lg mx-auto font-medium">
+            {t(
+              'certificates.verifySub',
+              'Enter the unique 12-digit verification code found on the certificate or scan its QR code.',
+            )}
           </p>
 
           {/* Search bar */}
@@ -196,103 +264,137 @@ export function CertificateVerifyPage() {
               value={inputCode}
               onChange={(e) => setInputCode(e.target.value.toUpperCase())}
               placeholder="e.g. 9B47FA2B8C11"
-              className="text-center font-mono uppercase tracking-widest text-base font-bold"
-              aria-label="Verification Code"
+              className="text-center font-mono uppercase tracking-widest text-base font-bold min-h-[44px]"
+              aria-label={t('certificates.verificationCode', 'Verification Code')}
             />
-            <GlassButton variant="primary" onClick={() => handleSearch()} disabled={!inputCode.trim()}>
+            <GlassButton
+              variant="primary"
+              onClick={() => handleSearch()}
+              disabled={!inputCode.trim()}
+              aria-label={t('common.verify')}
+              className="min-h-[44px]"
+            >
               <span className="inline-flex items-center gap-2">
                 <Icon paths={I.search} size={16} strokeWidth={2.4} />
-                {t('common.verify') || 'Verify'}
+                {t('common.verify', 'Verify')}
               </span>
             </GlassButton>
           </form>
         </div>
 
-        {/* Verification Result Area */}
-        <AnimatePresence mode="wait">
-          {isLoading && (
-            <motion.div
-              key="loading"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="rounded-2xl border border-black/[0.06] bg-white/80 p-12 text-center backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
-            >
-              <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[#C5A059]/20 border-t-[#C5A059]" />
-              <p className="mt-4 text-sm font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                Verifying credential with M-EDU registry...
-              </p>
-            </motion.div>
-          )}
+        {/* Verification Result Area (with aria-live="polite") */}
+        <div aria-live="polite" aria-atomic="true">
+          <AnimatePresence mode="wait">
+            {isLoading && (
+              <motion.div
+                key="loading"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                role="status"
+                className="liquid-glass-surface rounded-3xl border border-black/[0.08] dark:border-white/[0.12] bg-white/80 dark:bg-surface-900/80 p-12 text-center backdrop-blur-2xl shadow-sm"
+              >
+                <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[#C5A059]/20 border-t-[#C5A059]" />
+                <p className="mt-4 text-sm font-bold text-slate-900 dark:text-white">
+                  {t('certificates.verifyingStatus', 'Verifying credential with M-EDU registry...')}
+                </p>
+              </motion.div>
+            )}
 
-          {!isLoading && isError && (
-            <motion.div
-              key="error"
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="rounded-2xl border border-red-500/20 bg-red-500/5 p-10 text-center backdrop-blur-md dark:bg-red-950/20 max-w-xl mx-auto"
-            >
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/15 text-red-500">
-                <Icon paths={I.alert} size={28} strokeWidth={2} />
-              </div>
-              <h3 className="mt-4 text-lg font-bold text-red-600 dark:text-red-400">
-                Certificate Not Found
-              </h3>
-              <p className="mt-1 text-xs text-[#64748B] max-w-sm mx-auto">
-                No active certificate matching code &quot;<span className="font-mono font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">{activeCode}</span>&quot; was found. Please check for typos and verify again.
-              </p>
-              <div className="mt-5">
-                <GlassButton variant="secondary" size="sm" onClick={() => setInputCode('')}>
-                  Try Another Code
-                </GlassButton>
-              </div>
-            </motion.div>
-          )}
+            {!isLoading && isError && (
+              <motion.div
+                key="error"
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                role="alert"
+                className="liquid-glass-surface rounded-3xl border border-red-500/20 bg-red-500/5 dark:bg-red-950/20 p-10 text-center backdrop-blur-2xl max-w-xl mx-auto shadow-sm"
+              >
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/15 text-red-500">
+                  <Icon paths={I.alert} size={28} strokeWidth={2} />
+                </div>
+                <h3 className="mt-4 text-lg font-bold text-red-600 dark:text-red-400">
+                  {t('certificates.notFound', 'Certificate Not Found')}
+                </h3>
+                <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                  {t(
+                    'certificates.notFoundHint',
+                    `No active certificate matching code "${activeCode}" was found. Please check for typos and verify again.`,
+                  )}
+                </p>
+                <div className="mt-5">
+                  <GlassButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      playTick();
+                      setInputCode('');
+                    }}
+                    className="min-h-[44px]"
+                  >
+                    {t('certificates.tryAnotherCode', 'Try Another Code')}
+                  </GlassButton>
+                </div>
+              </motion.div>
+            )}
 
-          {!isLoading && data?.isValid && (
-            <motion.div
-              key="verified"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={SPRING.smooth}
-              className="space-y-6"
-            >
-              {/* Verified Badge Header */}
-              <div className="flex items-center justify-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3 text-emerald-600 dark:text-emerald-400 max-w-md mx-auto">
-                <Icon paths={I.shieldCheck} size={22} strokeWidth={2.4} />
-                <span className="text-sm font-bold tracking-tight">
-                  Authentic Certificate Verified in Registry
-                </span>
-              </div>
-
-              {/* 3D Holographic Tilt Card */}
-              <TiltCertificate data={data} />
-
-              {/* Actions */}
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                <GlassButton variant="primary" onClick={copyLink}>
-                  <span className="inline-flex items-center gap-2">
-                    <Icon paths={copied ? I.check : I.copy} size={15} strokeWidth={2.2} />
-                    {copied ? 'Link Copied!' : 'Copy Verification Link'}
+            {!isLoading && data?.isValid && (
+              <motion.div
+                key="verified"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={SPRING.smooth}
+                className="space-y-6"
+              >
+                {/* Verified Badge Header */}
+                <div className="flex items-center justify-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3 text-emerald-600 dark:text-emerald-400 max-w-md mx-auto shadow-xs">
+                  <Icon paths={I.shieldCheck} size={22} strokeWidth={2.4} />
+                  <span className="text-sm font-bold tracking-tight">
+                    {t('certificates.authenticVerified', 'Authentic Certificate Verified in Registry')}
                   </span>
-                </GlassButton>
+                </div>
 
-                <GlassButton variant="secondary" onClick={printCertificate}>
-                  <span className="inline-flex items-center gap-2">
-                    <Icon paths={I.printer} size={15} strokeWidth={2.2} />
-                    Print Certificate
-                  </span>
-                </GlassButton>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                {/* 3D Holographic Tilt Card */}
+                <TiltCertificate data={data} />
+
+                {/* Actions */}
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                  <GlassButton
+                    variant="primary"
+                    onClick={copyLink}
+                    className="min-h-[44px]"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Icon paths={copied ? I.check : I.copy} size={15} strokeWidth={2.2} />
+                      {copied
+                        ? t('certificates.linkCopied', 'Link Copied!')
+                        : t('certificates.copyLink', 'Copy Verification Link')}
+                    </span>
+                  </GlassButton>
+
+                  <GlassButton
+                    variant="secondary"
+                    onClick={printCertificate}
+                    className="min-h-[44px]"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Icon paths={I.printer} size={15} strokeWidth={2.2} />
+                      {t('certificates.print', 'Print Certificate')}
+                    </span>
+                  </GlassButton>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Footer Branding */}
-      <footer className="mt-12 text-center text-xs font-medium text-[#64748B]">
-        Powered by M-EDU Cloud Educational Infrastructure — Secured with cryptographic hash verification.
+      <footer className="mt-12 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
+        {t(
+          'certificates.footerSecured',
+          'Powered by M-EDU Cloud Educational Infrastructure — Secured with cryptographic hash verification.',
+        )}
       </footer>
     </div>
   );

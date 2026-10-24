@@ -20,7 +20,12 @@ import { fullName, formatDate } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, User, UserRole } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+import { SpatialIdentityCard360 } from '@/components/cards/SpatialIdentityCard360';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { cn } from '@/lib/design';
 
 const SPRING = {
   snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
@@ -146,11 +151,12 @@ const ROLE_STYLES: Record<string, { ring: string; bg: string; text: string; dot:
 };
 
 export function UsersPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('users.title'));
   const { push, toastNode } = useToasts();
   const { user: currentUser } = useAuth();
   const qc = useQueryClient();
+  const { playPop, playTick } = usePremiumSound();
 
   const availableRoles = useMemo(
     () =>
@@ -163,6 +169,9 @@ export function UsersPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [cardUser, setCardUser] = useState<User | null>(null);
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'ACTIVE' | 'ADMIN' | 'TEACHER'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [form, setForm] = useState<UserFormState>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof UserFormState, string>>>({});
@@ -174,7 +183,22 @@ export function UsersPage() {
   });
 
   const data = users.data as Paginated<User> | undefined;
-  const userList = useMemo(() => data?.items || [], [data]);
+  const rawUserList = useMemo(() => data?.items || [], [data]);
+
+  const userList = useMemo(() => {
+    return rawUserList.filter((u) => {
+      if (roleFilter === 'ACTIVE' && !u.isActive) return false;
+      if (roleFilter === 'ADMIN' && u.role !== 'SUPER_ADMIN' && u.role !== 'ORG_ADMIN') return false;
+      if (roleFilter === 'TEACHER' && u.role !== 'TEACHER') return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const name = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase();
+        const email = (u.email || '').toLowerCase();
+        if (!name.includes(q) && !email.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [rawUserList, roleFilter, searchQuery]);
 
   const create = useMutation({
     mutationFn: () => {
@@ -290,6 +314,50 @@ export function UsersPage() {
     setDeleteTarget(null);
   }, [deleteTarget, removeUser]);
 
+  const handleOpenUserSidecar = useCallback((user: User) => {
+    playPop();
+    const roleColors: Record<string, 'blue' | 'emerald' | 'amber' | 'purple' | 'slate'> = {
+      SUPER_ADMIN: 'purple',
+      ORG_ADMIN: 'blue',
+      MANAGER: 'blue',
+      TEACHER: 'emerald',
+      ASSISTANT: 'amber',
+      STUDENT: 'blue',
+    };
+    const sidecarData: QuickLookData = {
+      title: formatUserName(user),
+      subtitle: user.email,
+      badge: {
+        text: t(roleKey(user.role)) || user.role,
+        tone: roleColors[user.role] ?? 'slate',
+      },
+      avatar: {
+        text: `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() || 'U',
+      },
+      metrics: [
+        { label: t('common.status') || 'Holat', value: user.isActive ? (t('users.status.ACTIVE') || 'Faol') : (t('users.status.INACTIVE') || 'Nofaol') },
+        { label: t('users.col.role') || 'Rol', value: t(roleKey(user.role)) || user.role },
+        { label: t('users.col.lastLogin') || 'Oxirgi kirish', value: user.lastLoginAt ? formatDate(user.lastLoginAt) : '—' },
+      ],
+      details: [
+        { label: 'Foydalanuvchi ID', value: user.id, copyable: true },
+        { label: t('common.name') || 'Ism familiya', value: formatUserName(user) },
+        { label: t('common.email') || 'Email', value: user.email, copyable: true },
+        { label: t('users.col.role') || 'Tizimdagi roli', value: user.role },
+        { label: t('common.status') || 'Holati', value: user.isActive ? 'Faol akkaunt' : 'Nofaol akkaunt' },
+        { label: 'Tashkilot ID', value: (user as any).organizationId || '—', copyable: Boolean((user as any).organizationId) },
+        { label: 'Yaratilgan sana', value: (user as any).createdAt ? formatDate((user as any).createdAt) : '—' },
+      ],
+      primaryAction: {
+        label: t('common.edit') || 'Tahrirlash',
+        onExecute: () => {
+          handleEdit(user);
+        },
+      },
+    };
+    openSidecar(sidecarData);
+  }, [playPop, t, handleEdit]);
+
   const { refetch: refetchUsers } = users;
   const handleRetry = useCallback(() => {
     void refetchUsers();
@@ -332,25 +400,13 @@ export function UsersPage() {
   /* ── Main ── */
   return (
     <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
-      {/* ── Ambient background orbs ── */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-        <div className="absolute -top-[10%] -left-[10%] h-[55%] w-[55%] animate-[float_18s_ease-in-out_infinite] rounded-full bg-cyan-400/10 blur-[140px] dark:bg-cyan-500/[0.07]" />
-        <div className="absolute top-[30%] -right-[10%] h-[50%] w-[45%] animate-[float_22s_ease-in-out_infinite_reverse] rounded-full bg-indigo-400/10 blur-[130px] dark:bg-indigo-500/[0.06]" />
-        <div className="absolute -bottom-[15%] left-[30%] h-[45%] w-[50%] animate-[float_26s_ease-in-out_infinite] rounded-full bg-brand-400/[0.07] blur-[150px] dark:bg-brand-500/[0.05]" />
-        <div
-          className="absolute inset-0 opacity-[0.015] dark:opacity-[0.025]"
-          style={{
-            backgroundImage:
-              "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-          }}
-        />
-      </div>
+      <AuroraMesh variant="corporate" opacity={0.65} />
 
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={SPRING.smooth}
-        className="page-container relative z-10 space-y-5"
+        className="page-container relative z-10 space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
       >
         <GlassPageHeader
           title={t('users.title')}
@@ -368,32 +424,103 @@ export function UsersPage() {
           }
         />
 
-        {/* ── Apple V2 KPI Bar ── */}
+        {/* ── Apple V2 KPI Bar (Interactive Filter) ── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+          <button
+            type="button"
+            onClick={() => { playTick(); setRoleFilter('ALL'); }}
+            className={cn(
+              'text-left rounded-2xl border p-4 shadow-card backdrop-blur-xl transition-all duration-200 active:scale-[0.98]',
+              roleFilter === 'ALL'
+                ? 'border-brand-500/50 bg-white/95 ring-2 ring-brand-500/30 dark:border-brand-400/40 dark:bg-surface-900/95'
+                : 'border-black/[0.06] bg-white/80 hover:bg-white/90 dark:border-white/[0.08] dark:bg-surface-900/80 dark:hover:bg-surface-900/90'
+            )}
+          >
             <p className="text-xs font-medium text-[var(--text-secondary)]">{t('common.total') || 'Jami foydalanuvchilar'}</p>
             <p className="mt-1 text-2xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
-              {data?.total ?? userList.length}
+              {data?.total ?? rawUserList.length}
             </p>
-          </div>
-          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+          </button>
+          <button
+            type="button"
+            onClick={() => { playTick(); setRoleFilter('ACTIVE'); }}
+            className={cn(
+              'text-left rounded-2xl border p-4 shadow-card backdrop-blur-xl transition-all duration-200 active:scale-[0.98]',
+              roleFilter === 'ACTIVE'
+                ? 'border-emerald-500/50 bg-white/95 ring-2 ring-emerald-500/30 dark:border-emerald-400/40 dark:bg-surface-900/95'
+                : 'border-black/[0.06] bg-white/80 hover:bg-white/90 dark:border-white/[0.08] dark:bg-surface-900/80 dark:hover:bg-surface-900/90'
+            )}
+          >
             <p className="text-xs font-medium text-[var(--text-secondary)]">{t('users.status.ACTIVE') || 'Faol'}</p>
             <p className="mt-1 text-2xl font-bold tracking-tight text-[#34C759] dark:text-[#30D158] tabular-nums">
-              {userList.filter(u => u.isActive).length}
+              {rawUserList.filter(u => u.isActive).length}
             </p>
-          </div>
-          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+          </button>
+          <button
+            type="button"
+            onClick={() => { playTick(); setRoleFilter('ADMIN'); }}
+            className={cn(
+              'text-left rounded-2xl border p-4 shadow-card backdrop-blur-xl transition-all duration-200 active:scale-[0.98]',
+              roleFilter === 'ADMIN'
+                ? 'border-purple-500/50 bg-white/95 ring-2 ring-purple-500/30 dark:border-purple-400/40 dark:bg-surface-900/95'
+                : 'border-black/[0.06] bg-white/80 hover:bg-white/90 dark:border-white/[0.08] dark:bg-surface-900/80 dark:hover:bg-surface-900/90'
+            )}
+          >
             <p className="text-xs font-medium text-[var(--text-secondary)]">{t('users.role.ORG_ADMIN') || 'Adminlar'}</p>
             <p className="mt-1 text-2xl font-bold tracking-tight text-[#AF52DE] tabular-nums">
-              {userList.filter(u => u.role === 'SUPER_ADMIN' || u.role === 'ORG_ADMIN').length}
+              {rawUserList.filter(u => u.role === 'SUPER_ADMIN' || u.role === 'ORG_ADMIN').length}
             </p>
-          </div>
-          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
+          </button>
+          <button
+            type="button"
+            onClick={() => { playTick(); setRoleFilter('TEACHER'); }}
+            className={cn(
+              'text-left rounded-2xl border p-4 shadow-card backdrop-blur-xl transition-all duration-200 active:scale-[0.98]',
+              roleFilter === 'TEACHER'
+                ? 'border-blue-500/50 bg-white/95 ring-2 ring-blue-500/30 dark:border-blue-400/40 dark:bg-surface-900/95'
+                : 'border-black/[0.06] bg-white/80 hover:bg-white/90 dark:border-white/[0.08] dark:bg-surface-900/80 dark:hover:bg-surface-900/90'
+            )}
+          >
             <p className="text-xs font-medium text-[var(--text-secondary)]">{t('users.role.TEACHER') || 'O\'qituvchilar'}</p>
             <p className="mt-1 text-2xl font-bold tracking-tight text-[#007AFF] tabular-nums">
-              {userList.filter(u => u.role === 'TEACHER').length}
+              {rawUserList.filter(u => u.role === 'TEACHER').length}
             </p>
+          </button>
+        </div>
+
+        {/* ── Search & Filter Pill Bar ── */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="relative flex-1 max-w-md">
+            <svg
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-muted)] pointer-events-none"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('common.search') || 'Foydalanuvchilarni qidirish...'}
+              className="w-full h-11 pl-10 pr-4 rounded-xl border border-black/[0.08] dark:border-white/[0.12] bg-white/70 dark:bg-surface-900/70 text-sm backdrop-blur-md outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+            />
           </div>
+          {roleFilter !== 'ALL' && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--text-muted)]">Filtr: {roleFilter}</span>
+              <button
+                type="button"
+                onClick={() => { playTick(); setRoleFilter('ALL'); }}
+                className="h-9 px-3 rounded-lg text-xs font-semibold bg-brand-500/10 text-brand-600 hover:bg-brand-500/20 transition-colors"
+              >
+                ✕ Tozalash
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── Users table ── */}
@@ -495,13 +622,39 @@ export function UsersPage() {
                         {/* Actions */}
                         <td className="px-6 py-3.5">
                           <div className="flex items-center justify-end gap-1.5 opacity-100 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity duration-300">
+                            {/* Sidecar QuickLook */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenUserSidecar(user)}
+                              title={t('common.details') || 'Sidecarda ko‘rish'}
+                              aria-label={`${formatUserName(user)} ma'lumotlari`}
+                              className="flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-all duration-300 hover:bg-white/60 hover:text-brand-600 hover:shadow-[0_4px_12px_-4px_rgba(59,130,246,0.4)] active:scale-95 dark:hover:bg-white/[0.06] dark:hover:text-brand-400"
+                            >
+                              <svg className="h-4 w-4 sm:h-3.5 sm:w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect width="18" height="18" x="3" y="3" rx="2" />
+                                <path d="M15 3v18" />
+                                <path d="m8 9 3 3-3 3" />
+                              </svg>
+                            </button>
+
+                            {/* 360° Glass ID Card */}
+                            <button
+                              type="button"
+                              onClick={() => setCardUser(user)}
+                              title="360° Shaffof ID Karta"
+                              className="flex min-h-[40px] px-2.5 sm:min-h-0 sm:h-8 sm:px-2 items-center justify-center gap-1 rounded-xl text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 transition-all duration-300 active:scale-95"
+                            >
+                              <span className="text-xs">🪪</span>
+                              <span className="text-[10px] font-bold">360°</span>
+                            </button>
+
                             {/* Edit */}
                             <button
                               type="button"
                               onClick={() => handleEdit(user)}
                               disabled={isCurrentUser}
                               title={isCurrentUser ? t('users.cannotEditSelf') : t('common.edit')}
-                              className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-all duration-300 hover:bg-white/60 hover:text-brand-600 hover:shadow-[0_4px_12px_-4px_rgba(59,130,246,0.4)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/[0.06] dark:hover:text-brand-400"
+                              className="flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-all duration-300 hover:bg-white/60 hover:text-brand-600 hover:shadow-[0_4px_12px_-4px_rgba(59,130,246,0.4)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/[0.06] dark:hover:text-brand-400"
                             >
                               <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M12 20h9" />
@@ -515,7 +668,7 @@ export function UsersPage() {
                               onClick={() => handleToggleActive(user)}
                               disabled={isToggling || isCurrentUser}
                               title={isCurrentUser ? t('users.cannotDeactivateSelf') : user.isActive ? t('users.deactivate') : t('users.activate')}
-                              className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-300 hover:bg-white/60 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/[0.06] ${
+                              className={`flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl transition-all duration-300 hover:bg-white/60 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/[0.06] ${
                                 user.isActive
                                   ? 'text-emerald-600 hover:shadow-[0_4px_12px_-4px_rgba(16,185,129,0.5)] dark:text-emerald-400'
                                   : 'text-slate-500 hover:shadow-[0_4px_12px_-4px_rgba(100,116,139,0.5)]'
@@ -544,7 +697,7 @@ export function UsersPage() {
                               onClick={() => handleDelete(user)}
                               disabled={isDeleting || isCurrentUser}
                               title={isCurrentUser ? t('users.cannotDeleteSelf') : t('common.delete')}
-                              className="flex h-8 w-8 items-center justify-center rounded-xl text-red-500 transition-all duration-300 hover:bg-red-500/10 hover:shadow-[0_4px_12px_-4px_rgba(239,68,68,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+                              className="flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-red-500 transition-all duration-300 hover:bg-red-500/10 hover:shadow-[0_4px_12px_-4px_rgba(239,68,68,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
                             >
                               {isDeleting ? (
                                 <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -716,6 +869,30 @@ export function UsersPage() {
           description={deleteTarget ? t('users.deleteConfirm', { name: deleteTarget.name }) : ''}
           loading={removeUser.isPending}
         />
+
+        {cardUser && (
+          <GlassModal
+            open={Boolean(cardUser)}
+            onClose={() => setCardUser(null)}
+            title={`${formatUserName(cardUser)} · 360° Shaffof Karta`}
+            size="md"
+          >
+            <div className="py-2 flex flex-col items-center">
+              <SpatialIdentityCard360
+                data={{
+                  id: cardUser.id,
+                  fullName: formatUserName(cardUser),
+                  role: cardUser.role,
+                  email: cardUser.email || undefined,
+                  phone: cardUser.phone || undefined,
+                  status: cardUser.isActive ? 'Faol' : 'Nofaol',
+                  biometricVerified: Boolean((cardUser as any).faceEnrolled),
+                  nfcEnabled: false,
+                }}
+              />
+            </div>
+          </GlassModal>
+        )}
 
         {toastNode}
       </motion.div>

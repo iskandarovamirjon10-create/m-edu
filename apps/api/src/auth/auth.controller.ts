@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Headers, HttpException, Param, Post, Req, Res, UseGuards, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpException, Param, Post, Req, Res, UseGuards, BadRequestException, Optional, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Response, Request } from 'express';
@@ -34,6 +35,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly parentPortalService: ParentPortalService,
+    @Optional() private readonly jwtService?: JwtService,
   ) {}
 
   private extractClientMeta(req?: Request) {
@@ -246,21 +248,64 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Refresh access token' })
-  async refresh(@Req() req: Request & { user: RequestUser }, @Res({ passthrough: true }) res: Response) {
+  async refresh(
+    @Req() req: Request & { user?: RequestUser },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    let currentUser = req.user;
+
+    // LOGIC-04: Allow silent refresh for expired JWTs if the database session is still active
+    if (!currentUser) {
+      const rawToken =
+        (req.cookies as Record<string, string> | undefined)?.access_token ||
+        (req.headers?.authorization?.startsWith('Bearer ')
+          ? req.headers.authorization.slice(7).trim()
+          : undefined);
+
+      if (!rawToken) {
+        throw new UnauthorizedException('No token provided');
+      }
+
+      try {
+        const payload = this.jwtService?.verify(rawToken, { ignoreExpiration: true }) as
+          | { sub: string; sid?: string; role: string; accountType?: string }
+          | undefined;
+
+        if (!payload || !payload.sub) {
+          throw new UnauthorizedException('Invalid token payload');
+        }
+
+        currentUser = {
+          sub: payload.sub,
+          id: payload.sub,
+          role: payload.role as any,
+          email: (payload as any).email || '',
+          organizationId: (payload as any).organizationId || '',
+          sid: payload.sid || null,
+        };
+      } catch (err) {
+        if (err instanceof UnauthorizedException) throw err;
+        throw new UnauthorizedException('Invalid or tampered token');
+      }
+    }
+
+    if (!currentUser) {
+      throw new UnauthorizedException('No user session');
+    }
     // `role` selects the session table: 'PARENT' -> ParentSession,
     // anything else -> Session. Never resolve a sid against both.
     const meta = this.extractClientMeta(req);
     const result = meta
       ? await this.authService.refreshToken(
-          req.user.sub,
-          req.user.sid ?? undefined,
-          req.user.role,
+          currentUser.sub,
+          currentUser.sid ?? undefined,
+          currentUser.role,
           meta,
         )
       : await this.authService.refreshToken(
-          req.user.sub,
-          req.user.sid ?? undefined,
-          req.user.role,
+          currentUser.sub,
+          currentUser.sid ?? undefined,
+          currentUser.role,
         );
     res.cookie('access_token', result.accessToken, {
       httpOnly: true,

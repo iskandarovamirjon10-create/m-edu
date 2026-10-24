@@ -35,7 +35,7 @@ function SkeletonCard({ children, className, delay = 0, elevated }: SkeletonCard
       style={{ animationDelay: `${delay}ms` }}
       className={cn(
         'relative overflow-hidden border bg-card/85 backdrop-blur-xl',
-        elevated ? 'rounded-3xl' : 'rounded-2xl',
+        elevated ? 'rounded-[2.25rem]' : 'rounded-[2rem]',
         'border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_-8px_rgba(0,0,0,0.08)]',
         'dark:border-white/[0.08] dark:shadow-none',
         // Apple-style specular hairline (matches real component surfaces)

@@ -5,22 +5,12 @@ import { TeachersService } from '../../teachers/teachers.service';
 import { GroupsService } from '../../groups/groups.service';
 import { ScheduleService } from '../../schedule/schedule.service';
 import { TelegramCommandHandler, TelegramRequestContext } from './command.interface';
-import { listReply, scheduleLine } from './command-helpers';
+import { listReply, scheduleLine, getWeekdayInTimezone } from './command-helpers';
 import { adminMenuKeyboard, mainMenuKeyboard } from '../ui/keyboards';
 import { escapeHtml } from '../ui/format';
 import { TelegramReply } from '../ui/telegram-ui.types';
 
 const PAGE_SIZE = '6';
-
-const WEEKDAYS = [
-  'SUNDAY',
-  'MONDAY',
-  'TUESDAY',
-  'WEDNESDAY',
-  'THURSDAY',
-  'FRIDAY',
-  'SATURDAY',
-] as const;
 
 interface ListResult<T> {
   items: T[];
@@ -197,7 +187,8 @@ export class TodayCommand implements TelegramCommandHandler {
 
   async handle(request: TelegramRequestContext): Promise<TelegramReply> {
     const { ctx } = request;
-    const dayOfWeek = WEEKDAYS[new Date().getUTCDay()];
+    const tz = ctx.timezone || 'Asia/Tashkent';
+    const dayOfWeek = getWeekdayInTimezone(new Date(), tz);
 
     const query: Record<string, string> = { dayOfWeek, limit: '10' };
     if (ctx.isTeaching && ctx.teacherId) {

@@ -4,7 +4,7 @@
  * v3 ARCHITECTURAL UPGRADES:
  *  1. Zero Dual-Render: `resolvedTheme` and `isDark` are derived synchronously (no secondary state).
  *  2. True SSR & Hydration Safety: Powered by React 18 `useSyncExternalStore`.
- *  3. Native UI Sync: Updates CSS `color-scheme` (scrollbars, inputs) & `<meta name="theme-color">`.
+ *  3. Native UI Sync: Updates CSS `color-scheme` (scrollbars, inputs) & auto-provisions `<meta name="theme-color">`.
  *  4. View Transitions API & Flash Suppression: Smooth macOS-like theme switching without CSS transition lag.
  *  5. True Singleton MediaQueryList: Single cached `matchMedia` instance across the entire app lifecycle.
  *  6. Cross-Tab Synchronization: Instant updates across multiple browser tabs via `storage` event.
@@ -232,11 +232,14 @@ function applyThemeToDOM(resolved: ResolvedTheme, animate = false): void {
     // 3. Native Browser Controls (Scrollbars, Date Pickers, Select Dropdowns)
     root.style.colorScheme = darkActive ? 'dark' : 'light';
 
-    // 4. Mobile Safari / PWA Status Bar Color
-    const metaTheme = document.querySelector('meta[name="theme-color"]');
-    if (metaTheme) {
-      metaTheme.setAttribute('content', META_THEME_COLORS[resolved]);
+    // 4. Mobile Safari / PWA Status Bar Color (Ensure tag exists in document.head)
+    let metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (!metaTheme) {
+      metaTheme = document.createElement('meta');
+      metaTheme.setAttribute('name', 'theme-color');
+      document.head.appendChild(metaTheme);
     }
+    metaTheme.setAttribute('content', META_THEME_COLORS[resolved]);
   };
 
   // Use native View Transitions API if supported and requested, otherwise suppress transition jank

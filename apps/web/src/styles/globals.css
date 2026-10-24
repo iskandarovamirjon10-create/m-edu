@@ -1,27 +1,28 @@
-﻿/* ═══════════════════════════════════════════════════════════════════════════
- * M-EDU GLOBAL STYLES V2 — Apple Liquid Glass & Sequoia Optics
+/* ═══════════════════════════════════════════════════════════════════════════
+ * M-EDU GLOBAL STYLES V2 — Apple Liquid Glass & iOS 27 Optics Architecture
  * reset · tokens · base · typography · glass · components · motion · focus · utilities · print
  *
- * V2 Architecture Upgrades:
- *   1. Zero non-breaking spaces (U+00A0 purged), strict @layer cascade order
- *   2. Complete fallback bridges for all easing, spring & optical tokens
- *   3. True visionOS / macOS Sequoia Liquid Glass with 3D inner specular rims
- *   4. Fixed `.glass-card > *` positioning bug (preserves absolute children)
- *   5. Unified `.dark` & `[data-theme="dark"]` selectors across all rules
- *   6. GPU-friendly percentage skeleton shimmer & non-destructive transitions
- *   7. 100% coverage in `@supports`, `prefers-reduced-transparency`, `forced-colors` & `print`
+ * Architecture Highlights:
+ *   1. Zero non-breaking spaces, strict CSS Cascade Layer hierarchy matching design-tokens.css
+ *   2. Unified 3-Tier Liquid Glass System: .glass-subtle, .glass-card, .glass-floating
+ *   3. 100% backward-compatible aliases for all existing classes (.liquid-glass-card, .apple-glass, .medu-glass, .glass)
+ *   4. Physical Apple optics: 3D specular crown lines, refractive inner rims, multi-stop ambient shadows
+ *   5. Triple-theme calibration: Light, Dark, and true pitch-black OLED (#000000) with zero neon glow
+ *   6. Mobile performance: adaptive blur degradation (12px on touch) and GPU load reduction
+ *   7. Full accessibility: prefers-reduced-transparency, prefers-reduced-motion, forced-colors & print
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 @layer reset, tokens, base, typography, glass, components, motion, focus, utilities, print;
 
 @import './design-tokens.css';
+@import './copilot.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 
-/* ═══ §0 · Registered animatable custom properties (Houdini CSSOM) ════════ */
+/* ═══ §0 · Registered Animatable Custom Properties (Houdini CSSOM) ════════ */
 
 @property --aurora-conic-angle { syntax: '<angle>';      inherits: false; initial-value: 0deg; }
 @property --aurora-glow-x      { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
@@ -32,64 +33,73 @@
 @property --aurora-scale       { syntax: '<number>';     inherits: false; initial-value: 1; }
 @property --btn-press-y        { syntax: '<length>';     inherits: false; initial-value: 0px; }
 @property --btn-press-scale    { syntax: '<number>';     inherits: false; initial-value: 1; }
-@property --liquid-specular    { syntax: '<number>';     inherits: false; initial-value: 0.55; }
+@property --liquid-specular    { syntax: '<number>';     inherits: false; initial-value: 0.65; }
 
 
-/* ═══ §1 · Token bridges & resilient fallbacks ════════════════════════════ */
+/* ═══ §1 · Token Bridges & Resilient Fallbacks ════════════════════════════ */
 
 @layer tokens {
   :root {
-    /* Durations */
-    --dur-instant: var(--duration-instant, 75ms);
+    /* Timing Durations */
+    --dur-instant: var(--duration-instant, 80ms);
     --dur-fast:    var(--duration-fast, 150ms);
     --dur-normal:  var(--duration-normal, 220ms);
     --dur-slow:    var(--duration-slow, 300ms);
-    --dur-slower:  var(--duration-slower, 420ms);
+    --dur-slower:  var(--duration-slower, 400ms);
     --dur-ambient: var(--duration-ambient, 16s);
 
-    /* Apple Core Easings (with safe fallbacks so transitions never break) */
-    --ease-standard:     var(--ease-apple-standard, cubic-bezier(0.25, 0.1, 0.25, 1));
-    --ease-emphasized:   var(--ease-apple-emphasized, cubic-bezier(0.22, 1, 0.36, 1));
-    --ease-glide:        var(--ease-apple-glide, cubic-bezier(0.16, 1, 0.3, 1));
-    --ease-apple-out:    cubic-bezier(0.19, 1, 0.22, 1);
+    /* Apple Core Curves */
+    --ease-standard:     var(--ease-apple-standard, cubic-bezier(0.32, 0.72, 0, 1));
+    --ease-emphasized:   var(--ease-apple-snappy, cubic-bezier(0.2, 0.9, 0.2, 1));
+    --ease-glide:        var(--ease-soft, cubic-bezier(0.16, 1, 0.3, 1));
+    --ease-apple-out:    cubic-bezier(0.22, 1, 0.36, 1);
     --ease-apple-spring: cubic-bezier(0.32, 0.72, 0, 1);
     --ease-overshoot:    var(--ease-apple-bounce, cubic-bezier(0.34, 1.56, 0.64, 1));
     --ease-soft:         var(--ease-apple-spring, cubic-bezier(0.32, 0.72, 0, 1));
 
-    /* Spring Timing Fallbacks */
-    --spring-snappy:   cubic-bezier(0.22, 1, 0.36, 1);
-    --spring-smooth:   cubic-bezier(0.32, 0.72, 0, 1);
-    --spring-soft:     cubic-bezier(0.25, 0.9, 0.35, 1);
+    /* Spring Physics */
+    --spring-snappy:   cubic-bezier(0.2, 0.9, 0.2, 1);
+    --spring-smooth:   cubic-bezier(0.16, 1, 0.3, 1);
+    --spring-soft:     cubic-bezier(0.22, 1, 0.36, 1);
     --spring-bouncy:   cubic-bezier(0.34, 1.56, 0.64, 1);
     --spring-magnetic: cubic-bezier(0.16, 1, 0.3, 1);
 
-    /* Liquid Glass Optical Tokens */
+    /* Liquid Glass Optical Tokens (Connected to LiquidGlassStudio) */
     --glass-blur-md: 16px;
     --glass-blur-lg: 24px;
     --glass-blur-xl: 36px;
-    --liquid-glass-blur: 28px;
-    --liquid-glass-saturate: 190%;
-    --liquid-glass-opacity: 0.78;
+    --liquid-glass-blur: 20px;
+    --liquid-glass-saturate: 180%;
+    --liquid-glass-opacity: 0.80;
     --liquid-glass-specular: 0.65;
+    --liquid-glass-refraction: 1.2px;
 
     --_apple-blue: #007AFF;
-    --glass-surface-edge: rgba(0, 0, 0, 0.06);
+    --glass-surface-edge: rgba(0, 0, 0, 0.065);
     --glass-surface-edge-dark: rgba(255, 255, 255, 0.11);
-    --glass-inner-rim: rgba(255, 255, 255, 0.72);
-    --glass-inner-rim-dark: rgba(255, 255, 255, 0.14);
+    --glass-inner-rim: rgba(255, 255, 255, 0.85);
+    --glass-inner-rim-dark: rgba(255, 255, 255, 0.16);
   }
 
   .dark,
   [data-theme="dark"] {
     --_apple-blue: #0A84FF;
-    --liquid-glass-opacity: 0.68;
+    --liquid-glass-opacity: 0.74;
     --liquid-glass-specular: 0.28;
-    --liquid-glass-saturate: 200%;
+    --liquid-glass-saturate: 190%;
+  }
+
+  [data-theme="oled"] {
+    --_apple-blue: #0A84FF;
+    --liquid-glass-opacity: 0.86;
+    --liquid-glass-specular: 0.22;
+    --liquid-glass-saturate: 160%;
+    --glass-inner-rim-dark: rgba(255, 255, 255, 0.20);
   }
 }
 
 
-/* ═══ §2 · Base reset & viewport shell ════════════════════════════════════ */
+/* ═══ §2 · Base Reset & Viewport Shell ════════════════════════════════════ */
 
 @layer reset {
   *, *::before, *::after {
@@ -123,6 +133,20 @@
     html { scroll-behavior: auto; }
   }
 
+  /* Native Fluid 60/120fps Scrolling Container — Zero Compositor Traps */
+  [data-scroll-container] {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    scroll-behavior: smooth;
+    touch-action: pan-y;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-scroll-container] {
+      scroll-behavior: auto;
+    }
+  }
+
   body {
     font-family: var(--font-body, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif);
     font-size: var(--text-body, 15px);
@@ -130,7 +154,7 @@
     color: var(--text-primary);
     background-color: var(--bg-page);
     min-height: 100dvh;
-    line-height: var(--lh-normal, 1.5);
+    line-height: var(--lh-normal, 1.47);
     letter-spacing: -0.008em;
     transition:
       background-color var(--dur-normal) var(--ease-glide),
@@ -214,7 +238,7 @@
 }
 
 
-/* ═══ §3 · Base substrate, ambient optics, scrollbars & links ═════════════ */
+/* ═══ §3 · Base Substrate, Ambient Optics, Scrollbars & Links ═════════════ */
 
 @layer base {
   .bg-page     { background-color: var(--bg-page); }
@@ -227,7 +251,7 @@
     pointer-events: none;
     border-radius: 50%;
     filter: blur(96px);
-    opacity: 0.52;
+    opacity: 0.48;
     z-index: 0;
     will-change: transform;
     transform: translate3d(0, 0, 0);
@@ -254,17 +278,21 @@
   .orb-magenta-1 {
     width: 410px; height: 410px; top: 40%; right: -15%;
     background: radial-gradient(circle, rgba(142, 142, 147, 0.06), transparent 70%);
-    opacity: 0.48;
+    opacity: 0.40;
   }
 
   .dark .orb,
   [data-theme="dark"] .orb {
-    opacity: 0.38;
+    opacity: 0.32;
+  }
+
+  [data-theme="oled"] .orb {
+    display: none !important; /* Pitch black battery savings in OLED */
   }
 
   @keyframes orb-float {
     0%   { transform: translate3d(0, 0, 0) scale(1); }
-    100% { transform: translate3d(28px, -22px, 0) scale(1.05); }
+    100% { transform: translate3d(24px, -18px, 0) scale(1.04); }
   }
 
   /* Subtle architectural grid */
@@ -287,6 +315,11 @@
     background-image:
       linear-gradient(to right, rgba(255, 255, 255, 0.032) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(255, 255, 255, 0.032) 1px, transparent 1px);
+  }
+  [data-theme="oled"] .bg-grid::before {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
   }
   .bg-grid > :not([style*="position: absolute"]):not([style*="position: fixed"]) {
     position: relative;
@@ -341,181 +374,68 @@
     margin: var(--space-4, 1rem) 0;
   }
 
-  @media (max-width: 767px) {
-    .orb { filter: blur(56px); }
+  /* Mobile optimization for ambient lights */
+  @media (max-width: 768px) {
+    .orb {
+      filter: blur(52px);
+      opacity: 0.22;
+      animation: none !important; /* Disable continuous translation on mobile to save GPU battery */
+    }
   }
 }
 
 
-/* ═══ §4 · Apple Liquid Glass & Surface Architecture ══════════════════════ */
+/* ═══ §4 · iOS 27 Liquid Glass Engine & Surface Architecture ══════════════ */
 
 @layer glass {
-  /* 1. Chrome Glass (navigation bars, toolbars, floating rails) */
+  /* 
+   * TIER 1: Subtle Liquid Glass (.glass-subtle, .glass)
+   * Toolbars, sticky headers, table headers, sub-navigation rails
+   */
+  .glass-subtle,
   .glass {
-    background: var(--bg-glass, rgba(255, 255, 255, 0.76));
-    backdrop-filter: blur(var(--glass-blur-lg)) saturate(180%);
-    -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(180%);
-    border: 1px solid var(--border-glass, rgba(0, 0, 0, 0.07));
+    position: relative;
+    background: var(--glass-tier-subtle-bg, rgba(255, 255, 255, 0.70));
+    backdrop-filter: blur(var(--glass-tier-subtle-blur, 14px)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--glass-tier-subtle-blur, 14px)) saturate(160%);
+    border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.055));
     box-shadow:
       inset 0 1px 0 0 var(--glass-inner-rim),
-      0 4px 20px -4px rgba(0, 0, 0, 0.05);
+      0 2px 8px -2px rgba(0, 0, 0, 0.04);
+    transition:
+      background-color var(--dur-normal) var(--ease-glide),
+      border-color var(--dur-normal) var(--ease-glide),
+      box-shadow var(--dur-normal) var(--ease-glide);
   }
+  .dark .glass-subtle,
   .dark .glass,
+  [data-theme="dark"] .glass-subtle,
   [data-theme="dark"] .glass {
-    background: var(--bg-glass-dark, rgba(28, 28, 30, 0.72));
-    border-color: var(--glass-surface-edge-dark);
+    background: var(--glass-tier-subtle-bg, rgba(22, 27, 38, 0.65));
+    border-color: var(--border-subtle, rgba(255, 255, 255, 0.08));
     box-shadow:
       inset 0 1px 0 0 var(--glass-inner-rim-dark),
-      0 8px 28px -6px rgba(0, 0, 0, 0.48);
+      0 4px 16px -4px rgba(0, 0, 0, 0.45);
+  }
+  [data-theme="oled"] .glass-subtle,
+  [data-theme="oled"] .glass {
+    background: var(--glass-tier-subtle-bg, rgba(10, 10, 12, 0.75));
+    border-color: var(--border-subtle, rgba(255, 255, 255, 0.08));
+    box-shadow:
+      inset 0 1px 0 0 var(--glass-inner-rim-dark),
+      0 6px 20px -4px rgba(0, 0, 0, 0.85);
   }
 
-  /* 2. Standard Card: refined surface + inner specular top rim (NO child z-index breakage) */
-  .glass-card {
-    position: relative;
-    overflow: hidden;
-    isolation: isolate;
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.06));
-    border-radius: var(--radius-xl, 16px);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.65),
-      0 1px 3px rgba(0, 0, 0, 0.03),
-      0 4px 12px -2px rgba(0, 0, 0, 0.03);
-    transition:
-      background-color var(--dur-normal) var(--ease-standard),
-      border-color var(--dur-normal) var(--ease-standard),
-      box-shadow var(--dur-normal) var(--ease-standard),
-      transform var(--dur-fast) var(--ease-apple-spring);
-  }
-  .dark .glass-card,
-  [data-theme="dark"] .glass-card {
-    border-color: rgba(255, 255, 255, 0.08);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
-      0 2px 6px rgba(0, 0, 0, 0.35),
-      0 8px 20px -4px rgba(0, 0, 0, 0.40);
-  }
-
-  /* Subtle top ambient sheen (pointer-events-none, safe stacking) */
-  .glass-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.42) 0%, transparent 38%);
-    pointer-events: none;
-  }
-  .dark .glass-card::before,
-  [data-theme="dark"] .glass-card::before {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, transparent 38%);
-  }
-
-  .glass-card:hover {
-    background: var(--bg-card-hover, var(--bg-card));
-    border-color: var(--border-medium, rgba(0, 0, 0, 0.10));
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
-      0 8px 24px -4px rgba(0, 0, 0, 0.07),
-      0 2px 6px rgba(0, 0, 0, 0.04);
-  }
-  .dark .glass-card:hover,
-  [data-theme="dark"] .glass-card:hover {
-    background: var(--bg-card-hover, var(--bg-card));
-    border-color: rgba(255, 255, 255, 0.14);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
-      0 10px 28px -4px rgba(0, 0, 0, 0.55),
-      0 2px 6px rgba(0, 0, 0, 0.40);
-  }
-
-  .glass-card--interactive { cursor: pointer; }
-  .glass-card--interactive:hover { transform: translateY(-2px); }
-  .glass-card--interactive:active {
-    transform: translateY(0) scale(0.985);
-    transition-duration: var(--dur-instant);
-  }
-  .glass-card--interactive:focus-visible {
-    outline: 2px solid var(--border-focus);
-    outline-offset: 2px;
-  }
-
-  .glass-card--elevated {
-    background: var(--bg-card-elevated, var(--bg-card));
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.75),
-      0 12px 32px -6px rgba(0, 0, 0, 0.08),
-      0 2px 6px rgba(0, 0, 0, 0.04);
-  }
-  .dark .glass-card--elevated,
-  [data-theme="dark"] .glass-card--elevated {
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
-      0 14px 36px -6px rgba(0, 0, 0, 0.55),
-      0 2px 6px rgba(0, 0, 0, 0.35);
-  }
-
-  /* 3. GlassSurface.tsx companion classes */
-  .medu-glass {
-    background-color: var(--glass-surface-bg, var(--bg-glass));
-  }
-  .dark .medu-glass,
-  [data-theme="dark"] .medu-glass {
-    background-color: var(--glass-surface-bg-dark, var(--bg-glass));
-  }
-  .medu-glass-base {
-    background-color: var(--glass-surface-bg, var(--bg-glass));
-    transition: background-color var(--dur-normal) var(--ease-glide);
-  }
-  .dark .medu-glass-base,
-  [data-theme="dark"] .medu-glass-base {
-    background-color: var(--glass-surface-bg-dark, var(--bg-glass));
-  }
-  .medu-glass-specular {
-    box-shadow:
-      inset 0 0 0 1px var(--glass-surface-edge),
-      inset 0 1px 0 var(--glass-inner-rim);
-    transition: box-shadow var(--dur-normal) var(--ease-glide);
-  }
-  .dark .medu-glass-specular,
-  [data-theme="dark"] .medu-glass-specular {
-    box-shadow:
-      inset 0 0 0 1px var(--glass-surface-edge-dark),
-      inset 0 1px 0 var(--glass-inner-rim-dark);
-  }
-
-  /* 4. Apple Liquid Glass V2 (visionOS / macOS Sequoia True Optical Refraction) */
+  /*
+   * TIER 2: Primary Card Liquid Glass (.glass-card, .liquid-glass-card, .apple-glass, .medu-glass)
+   * Main cards, student profiles, dashboard metrics, widgets, timelines
+   */
+  .glass-card,
+  .liquid-glass-card,
+  .apple-glass,
+  .medu-glass,
+  .medu-glass-base,
   .liquid-glass-surface {
-    position: relative;
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, calc(var(--liquid-glass-opacity, 0.78) + 0.06)) 0%,
-      rgba(255, 255, 255, var(--liquid-glass-opacity, 0.78)) 100%
-    );
-    backdrop-filter: blur(var(--liquid-glass-blur, 28px)) saturate(var(--liquid-glass-saturate, 190%));
-    -webkit-backdrop-filter: blur(var(--liquid-glass-blur, 28px)) saturate(var(--liquid-glass-saturate, 190%));
-    border: 1px solid rgba(0, 0, 0, 0.065);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.75),
-      inset 0 -1px 0 0 rgba(255, 255, 255, 0.25),
-      0 8px 28px -6px rgba(0, 0, 0, 0.06),
-      0 1px 3px rgba(0, 0, 0, 0.03);
-  }
-  .dark .liquid-glass-surface,
-  [data-theme="dark"] .liquid-glass-surface {
-    background: linear-gradient(
-      180deg,
-      rgba(38, 38, 42, calc(var(--liquid-glass-opacity, 0.68) + 0.06)) 0%,
-      rgba(24, 24, 27, var(--liquid-glass-opacity, 0.68)) 100%
-    );
-    border-color: rgba(255, 255, 255, 0.11);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
-      inset 0 -1px 0 0 rgba(255, 255, 255, 0.05),
-      0 12px 36px -6px rgba(0, 0, 0, 0.55),
-      0 2px 6px rgba(0, 0, 0, 0.40);
-  }
-
-  .liquid-glass-card {
     position: relative;
     overflow: hidden;
     isolation: isolate;
@@ -525,13 +445,13 @@
       rgba(255, 255, 255, calc(var(--liquid-glass-opacity, 0.78) + 0.08)) 0%,
       rgba(255, 255, 255, var(--liquid-glass-opacity, 0.78)) 100%
     );
-    backdrop-filter: blur(var(--liquid-glass-blur, 28px)) saturate(var(--liquid-glass-saturate, 190%));
-    -webkit-backdrop-filter: blur(var(--liquid-glass-blur, 28px)) saturate(var(--liquid-glass-saturate, 190%));
-    border: 1px solid rgba(0, 0, 0, 0.065);
+    backdrop-filter: blur(var(--liquid-glass-blur, 20px)) saturate(var(--liquid-glass-saturate, 180%));
+    -webkit-backdrop-filter: blur(var(--liquid-glass-blur, 20px)) saturate(var(--liquid-glass-saturate, 180%));
+    border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.065));
     box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.82),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.85),
       inset 1px 0 0 0 rgba(255, 255, 255, 0.35),
-      0 8px 28px -4px rgba(0, 0, 0, 0.05),
+      0 8px 24px -4px rgba(0, 0, 0, 0.05),
       0 2px 4px rgba(0, 0, 0, 0.025);
     transition:
       background var(--dur-normal) var(--ease-standard),
@@ -539,24 +459,54 @@
       box-shadow var(--dur-normal) var(--ease-standard),
       transform var(--dur-fast) var(--ease-apple-spring);
   }
+
+  .dark .glass-card,
   .dark .liquid-glass-card,
-  [data-theme="dark"] .liquid-glass-card {
+  .dark .apple-glass,
+  .dark .medu-glass,
+  .dark .medu-glass-base,
+  .dark .liquid-glass-surface,
+  [data-theme="dark"] .glass-card,
+  [data-theme="dark"] .liquid-glass-card,
+  [data-theme="dark"] .apple-glass,
+  [data-theme="dark"] .medu-glass,
+  [data-theme="dark"] .medu-glass-base,
+  [data-theme="dark"] .liquid-glass-surface {
     background: linear-gradient(
       165deg,
-      rgba(40, 40, 44, calc(var(--liquid-glass-opacity, 0.68) + 0.06)) 0%,
-      rgba(26, 26, 29, var(--liquid-glass-opacity, 0.68)) 100%
+      rgba(38, 44, 58, calc(var(--liquid-glass-opacity, 0.68) + 0.06)) 0%,
+      rgba(22, 27, 38, var(--liquid-glass-opacity, 0.68)) 100%
     );
-    border-color: rgba(255, 255, 255, 0.11);
+    border-color: rgba(255, 255, 255, 0.08);
     box-shadow:
       inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
       inset 1px 0 0 0 rgba(255, 255, 255, 0.06),
-      0 10px 34px -4px rgba(0, 0, 0, 0.55),
+      0 10px 32px -4px rgba(0, 0, 0, 0.55),
       0 2px 6px rgba(0, 0, 0, 0.38);
   }
 
-  /* Specular Horizon Crown Line */
+  [data-theme="oled"] .glass-card,
+  [data-theme="oled"] .liquid-glass-card,
+  [data-theme="oled"] .apple-glass,
+  [data-theme="oled"] .medu-glass,
+  [data-theme="oled"] .medu-glass-base,
+  [data-theme="oled"] .liquid-glass-surface {
+    background: linear-gradient(
+      165deg,
+      rgba(18, 18, 22, 0.90) 0%,
+      rgba(10, 10, 12, 0.85) 100%
+    );
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+      0 14px 40px -4px rgba(0, 0, 0, 0.92);
+  }
+
+  /* Specular Crown Horizon Line (Real-world Optical Highlight) */
+  .glass-card::before,
   .liquid-glass-card::before,
-  .liquid-glass-surface::before {
+  .liquid-glass-surface::before,
+  .apple-glass::before {
     content: '';
     position: absolute;
     inset-x: 0;
@@ -571,10 +521,14 @@
     pointer-events: none;
     z-index: 2;
   }
+  .dark .glass-card::before,
   .dark .liquid-glass-card::before,
   .dark .liquid-glass-surface::before,
+  .dark .apple-glass::before,
+  [data-theme="dark"] .glass-card::before,
   [data-theme="dark"] .liquid-glass-card::before,
-  [data-theme="dark"] .liquid-glass-surface::before {
+  [data-theme="dark"] .liquid-glass-surface::before,
+  [data-theme="dark"] .apple-glass::before {
     background: linear-gradient(
       90deg,
       transparent 5%,
@@ -582,7 +536,23 @@
       transparent 95%
     );
   }
+  [data-theme="oled"] .glass-card::before,
+  [data-theme="oled"] .liquid-glass-card::before,
+  [data-theme="oled"] .liquid-glass-surface::before,
+  [data-theme="oled"] .apple-glass::before {
+    background: linear-gradient(
+      90deg,
+      transparent 5%,
+      rgba(255, 255, 255, 0.22) 50%,
+      transparent 95%
+    );
+  }
 
+  /* Interactive Card States */
+  .glass-card--interactive {
+    cursor: pointer;
+  }
+  .glass-card--interactive:hover,
   .liquid-glass-card:hover {
     background: linear-gradient(
       165deg,
@@ -591,54 +561,188 @@
     );
     border-color: rgba(0, 0, 0, 0.10);
     box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.92),
-      0 14px 38px -6px rgba(0, 0, 0, 0.08),
-      0 3px 8px rgba(0, 0, 0, 0.04);
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+      0 12px 32px -4px rgba(0, 0, 0, 0.07),
+      0 2px 6px rgba(0, 0, 0, 0.035);
   }
+  .dark .glass-card--interactive:hover,
   .dark .liquid-glass-card:hover,
+  [data-theme="dark"] .glass-card--interactive:hover,
   [data-theme="dark"] .liquid-glass-card:hover {
     background: linear-gradient(
       165deg,
-      rgba(48, 48, 54, min(0.92, calc(var(--liquid-glass-opacity, 0.68) + 0.10))) 0%,
-      rgba(32, 32, 36, min(0.88, calc(var(--liquid-glass-opacity, 0.68) + 0.06))) 100%
+      rgba(48, 54, 70, min(0.92, calc(var(--liquid-glass-opacity, 0.68) + 0.10))) 0%,
+      rgba(28, 34, 46, min(0.88, calc(var(--liquid-glass-opacity, 0.68) + 0.06))) 100%
     );
-    border-color: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.16);
     box-shadow:
       inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
-      0 16px 44px -6px rgba(0, 0, 0, 0.68),
-      0 4px 10px rgba(0, 0, 0, 0.45);
+      0 14px 40px -4px rgba(0, 0, 0, 0.65),
+      0 3px 8px rgba(0, 0, 0, 0.45);
+  }
+  [data-theme="oled"] .glass-card--interactive:hover,
+  [data-theme="oled"] .liquid-glass-card:hover {
+    background: linear-gradient(
+      165deg,
+      rgba(24, 24, 28, 0.95) 0%,
+      rgba(14, 14, 18, 0.90) 100%
+    );
+    border-color: rgba(255, 255, 255, 0.20);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.28),
+      0 18px 48px -4px rgba(0, 0, 0, 0.98);
   }
 
-  /* Complete Fallbacks for No Backdrop-Filter & Reduced Transparency */
+  .glass-card--interactive:hover {
+    transform: translateY(-2px);
+  }
+  .glass-card--interactive:active {
+    transform: translateY(0) scale(0.985);
+    transition-duration: var(--dur-instant);
+  }
+  .glass-card--interactive:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+  }
+
+  /* Elevated Slabs */
+  .glass-card--elevated {
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.90),
+      0 16px 36px -6px rgba(0, 0, 0, 0.08),
+      0 2px 6px rgba(0, 0, 0, 0.04);
+  }
+  .dark .glass-card--elevated,
+  [data-theme="dark"] .glass-card--elevated {
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
+      0 18px 44px -6px rgba(0, 0, 0, 0.62),
+      0 2px 8px rgba(0, 0, 0, 0.40);
+  }
+  [data-theme="oled"] .glass-card--elevated {
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.24),
+      0 22px 52px -6px rgba(0, 0, 0, 0.96);
+  }
+
+  /* Companion class for GlassSurface.tsx */
+  .medu-glass-specular {
+    box-shadow:
+      inset 0 0 0 1px var(--glass-surface-edge),
+      inset 0 1px 0 var(--glass-inner-rim);
+    transition: box-shadow var(--dur-normal) var(--ease-glide);
+  }
+  .dark .medu-glass-specular,
+  [data-theme="dark"] .medu-glass-specular {
+    box-shadow:
+      inset 0 0 0 1px var(--glass-surface-edge-dark),
+      inset 0 1px 0 var(--glass-inner-rim-dark);
+  }
+
+  /*
+   * TIER 3: Floating / Modal Liquid Glass (.glass-floating, .glass-modal, .auth-glass-panel)
+   * AI Copilot, floating modals, contextual dropdowns, mobile sheets
+   */
+  .glass-floating,
+  .glass-modal,
+  .auth-glass-panel {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    border-radius: var(--radius-3xl, 24px);
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.07));
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.90),
+      0 24px 64px -8px rgba(0, 0, 0, 0.10),
+      0 4px 16px rgba(0, 0, 0, 0.05);
+    transition:
+      box-shadow var(--dur-normal) var(--ease-apple-spring),
+      transform var(--dur-normal) var(--ease-apple-spring);
+  }
+  .dark .glass-floating,
+  .dark .glass-modal,
+  .dark .auth-glass-panel,
+  [data-theme="dark"] .glass-floating,
+  [data-theme="dark"] .glass-modal,
+  [data-theme="dark"] .auth-glass-panel {
+    background: rgba(26, 31, 44, 0.84);
+    border-color: rgba(255, 255, 255, 0.11);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
+      0 24px 64px -8px rgba(0, 0, 0, 0.65),
+      0 4px 16px rgba(0, 0, 0, 0.45);
+  }
+  [data-theme="oled"] .glass-floating,
+  [data-theme="oled"] .glass-modal,
+  [data-theme="oled"] .auth-glass-panel {
+    background: rgba(14, 14, 17, 0.92);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+      0 28px 72px -8px rgba(0, 0, 0, 0.98);
+  }
+
+  /* Responsive Mobile Blur Optimization (Guarantees 60fps on Touch Devices) */
+  @media (max-width: 768px) {
+    .glass-subtle,
+    .glass,
+    .glass-card,
+    .liquid-glass-card,
+    .apple-glass,
+    .medu-glass,
+    .medu-glass-base,
+    .liquid-glass-surface,
+    .glass-floating,
+    .glass-modal,
+    .auth-glass-panel {
+      backdrop-filter: blur(14px) saturate(150%) !important;
+      -webkit-backdrop-filter: blur(14px) saturate(150%) !important;
+    }
+  }
+
+  /* Solid Fallback for Browsers Without Backdrop-Filter */
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .glass,
+    .glass-subtle,
     .glass-card,
     .glass-card--elevated,
     .medu-glass,
     .medu-glass-base,
     .liquid-glass-surface,
     .liquid-glass-card,
-    .apple-glass {
+    .apple-glass,
+    .glass-floating,
+    .glass-modal,
+    .auth-glass-panel {
       background: var(--bg-surface) !important;
     }
   }
 
+  /* Reduced Transparency Preference (Accessibility) */
   @media (prefers-reduced-transparency: reduce) {
     .glass,
+    .glass-subtle,
     .glass-card,
     .glass-card--elevated,
     .medu-glass,
     .medu-glass-base,
     .liquid-glass-surface,
     .liquid-glass-card,
-    .apple-glass {
+    .apple-glass,
+    .glass-floating,
+    .glass-modal,
+    .auth-glass-panel {
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
       background: var(--bg-surface) !important;
     }
     .glass-card::before,
     .liquid-glass-card::before,
-    .liquid-glass-surface::before {
+    .liquid-glass-surface::before,
+    .apple-glass::before {
       display: none !important;
     }
   }
@@ -767,7 +871,7 @@
 }
 
 
-/* ═══ §6 · Forms, Tones & Auth Panels ═════════════════════════════════════ */
+/* ═══ §6 · Forms, Tones & Component Controls ══════════════════════════════ */
 
 @layer components {
   /* Recessed Liquid Glass Input Base */
@@ -795,6 +899,10 @@
     box-shadow:
       inset 0 1px 2px rgba(0, 0, 0, 0.25),
       0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  [data-theme="oled"] .input-base {
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
   }
   .input-base::placeholder {
     color: var(--text-placeholder);
@@ -845,8 +953,8 @@
   [data-theme="dark"] textarea:-webkit-autofill,
   [data-theme="dark"] select:-webkit-autofill {
     -webkit-text-fill-color: var(--text-primary) !important;
-    -webkit-box-shadow: 0 0 0 1000px rgba(28, 28, 30, 0.94) inset !important;
-    box-shadow: 0 0 0 1000px rgba(28, 28, 30, 0.94) inset !important;
+    -webkit-box-shadow: 0 0 0 1000px rgba(22, 27, 38, 0.94) inset !important;
+    box-shadow: 0 0 0 1000px rgba(22, 27, 38, 0.94) inset !important;
     caret-color: #0A84FF !important;
   }
 
@@ -884,33 +992,6 @@
   .tone-tile:active {
     transform: translateY(0) scale(0.96);
     transition-duration: var(--dur-instant);
-  }
-
-  /* Auth Liquid Glass Panel */
-  .auth-glass-panel {
-    position: relative;
-    overflow: hidden;
-    border-radius: 24px;
-    background: rgba(255, 255, 255, 0.86);
-    backdrop-filter: blur(28px) saturate(190%);
-    -webkit-backdrop-filter: blur(28px) saturate(190%);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
-      0 24px 64px -8px rgba(0, 0, 0, 0.10),
-      0 4px 16px rgba(0, 0, 0, 0.05);
-    border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.07));
-    transition:
-      box-shadow var(--dur-normal) var(--ease-apple-spring),
-      transform var(--dur-normal) var(--ease-apple-spring);
-  }
-  .dark .auth-glass-panel,
-  [data-theme="dark"] .auth-glass-panel {
-    background: rgba(28, 28, 30, 0.80);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
-      0 24px 64px -8px rgba(0, 0, 0, 0.65),
-      0 4px 16px rgba(0, 0, 0, 0.45);
-    border-color: rgba(255, 255, 255, 0.11);
   }
 
   .apple-focus-ring:focus-within {
@@ -1069,7 +1150,7 @@
     }
   }
 
-  /* Safe reduced motion — includes all V2 Liquid Glass classes */
+  /* Safe Reduced Motion Handling (Full iOS 27 Liquid Glass Support) */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
@@ -1083,11 +1164,11 @@
     }
 
     button, a, input, textarea, select,
-    .glass-card, .glass-card--interactive,
-    .liquid-glass-card, .liquid-glass-surface, .auth-glass-panel,
+    .glass, .glass-subtle, .glass-card, .glass-card--interactive,
+    .liquid-glass-card, .liquid-glass-surface, .apple-glass, .auth-glass-panel,
     .input-base, .tone-tile, .apple-press, .apple-spring {
       transition-property: background-color, color, border-color, box-shadow, opacity !important;
-      transition-duration: 120ms !important;
+      transition-duration: 100ms !important;
     }
   }
 }
@@ -1165,7 +1246,7 @@
     scrollbar-width: thin;
   }
 
-  /* WCAG 2.5.8 / Apple HIG 44px targets */
+  /* WCAG 2.5.8 & Apple HIG 44px minimum touch targets */
   .tap-target {
     min-height: 44px;
     min-width: 44px;
@@ -1204,32 +1285,12 @@
     transition-duration: 75ms;
   }
 
-  /* Safe GPU properties instead of `transition: all` */
   .apple-spring {
     transition-property: transform, opacity, background-color, border-color, box-shadow, color;
     transition-duration: 280ms;
     transition-timing-function: var(--ease-apple-spring);
   }
   .apple-squircle { border-radius: var(--radius-2xl, 20px); }
-
-  /* Fixed `.apple-glass` — uses translucent surface so backdrop-filter actually refracts */
-  .apple-glass {
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    background: var(--glass-surface-bg, rgba(255, 255, 255, 0.78));
-    border: 1px solid var(--border-glass, rgba(0, 0, 0, 0.07));
-    box-shadow:
-      inset 0 1px 0 0 var(--glass-inner-rim),
-      0 8px 24px -4px rgba(0, 0, 0, 0.06);
-  }
-  .dark .apple-glass,
-  [data-theme="dark"] .apple-glass {
-    background: var(--glass-surface-bg-dark, rgba(28, 28, 30, 0.74));
-    border-color: var(--glass-surface-edge-dark);
-    box-shadow:
-      inset 0 1px 0 0 var(--glass-inner-rim-dark),
-      0 10px 28px -4px rgba(0, 0, 0, 0.50);
-  }
 
   .space-fib-1  { gap: var(--space-fib-1, 0.25rem); }
   .space-fib-2  { gap: var(--space-fib-2, 0.5rem); }
@@ -1286,20 +1347,34 @@
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) transparent;
   }
-  .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: var(--scrollbar-thumb);
-    border-radius: 9999px;
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
   }
-  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb, rgba(142, 142, 147, 0.28));
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 150ms ease;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover, rgba(142, 142, 147, 0.45));
+  }
 
-  /* High-Contrast & Forced-Colors Overrides (covers ALL glass variants) */
+  /* High-Contrast & Forced-Colors Overrides (All Liquid Glass Tiers) */
   @media (prefers-contrast: more) {
     .glass,
+    .glass-subtle,
     .glass-card,
     .liquid-glass-surface,
     .liquid-glass-card,
     .apple-glass,
+    .glass-floating,
+    .glass-modal,
     .auth-glass-panel {
       border-width: 2px !important;
       border-color: var(--border-strong) !important;
@@ -1310,6 +1385,7 @@
     .glass-card::before,
     .liquid-glass-card::before,
     .liquid-glass-surface::before,
+    .apple-glass::before,
     .orb,
     .bg-grid::before {
       display: none !important;
@@ -1318,10 +1394,13 @@
 
   @media (forced-colors: active) {
     .glass,
+    .glass-subtle,
     .glass-card,
     .liquid-glass-surface,
     .liquid-glass-card,
     .apple-glass,
+    .glass-floating,
+    .glass-modal,
     .auth-glass-panel,
     .tone-tile {
       border: 1px solid CanvasText !important;
@@ -1332,6 +1411,7 @@
     .glass-card::before,
     .liquid-glass-card::before,
     .liquid-glass-surface::before,
+    .apple-glass::before,
     .orb,
     .bg-grid::before {
       display: none !important;
@@ -1367,12 +1447,15 @@
     }
 
     .glass,
+    .glass-subtle,
     .glass-card,
     .medu-glass,
     .medu-glass-base,
     .liquid-glass-surface,
     .liquid-glass-card,
     .apple-glass,
+    .glass-floating,
+    .glass-modal,
     .auth-glass-panel {
       background: #fff !important;
       backdrop-filter: none !important;
@@ -1384,7 +1467,8 @@
 
     .glass-card::before,
     .liquid-glass-card::before,
-    .liquid-glass-surface::before {
+    .liquid-glass-surface::before,
+    .apple-glass::before {
       display: none !important;
     }
 

@@ -6,11 +6,11 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { GlassButton } from '@/components/ui';
 
 export function UnauthorizedPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('error.forbiddenTitle'));
   const navigate = useNavigate();
 

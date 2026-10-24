@@ -1,27 +1,21 @@
-import { useEffect, useState, type FormEvent } from 'react';
+/**
+ * M-EDU ResetPasswordPage — Apple Premium Liquid Glass Edition
+ */
+
+import { useEffect, useState, type FormEvent, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { authApi, friendlyHttpMessage, type ApiError } from '@/lib/api';
 import { GlassButton, GlassInput } from '@/components/ui';
 import { MeduLogo } from '@/components/brand/MeduLogo';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
-
-const KEYFRAMES = `
-@keyframes auth-rise   { from { opacity:0; transform:translateY(14px) scale(.985) } to { opacity:1; transform:none } }
-@keyframes auth-fade   { from { opacity:0 } to { opacity:1 } }
-@keyframes auth-check  { from { stroke-dashoffset: 24 } to { stroke-dashoffset: 0 } }
-@media (prefers-reduced-motion: reduce) {
-  .auth-motion * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-}
-`;
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 function Backdrop() {
   return (
     <div
       aria-hidden
-      className="orb-container"
-      style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}
+      className="orb-container pointer-events-none fixed inset-0 z-0 overflow-hidden"
     >
       <div className="orb orb-cyan-1" />
       <div className="orb orb-cyan-2" />
@@ -43,7 +37,7 @@ function Spinner() {
 function Check() {
   return (
     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="24" className="[animation:auth-check_.45s_cubic-bezier(.2,.8,.2,1)_forwards]" />
+      <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -58,38 +52,38 @@ function Eye({ off }: { off: boolean }) {
   );
 }
 
-function BrandMark() {
-  return <MeduLogo size="lg" className="mx-auto mb-6" />;
-}
-
 export function ResetPasswordPage() {
-  const { t } = useI18n();
-  usePageTitle(t('auth.resetPasswordTitle'));
+  const { t } = useSafeI18n();
+  usePageTitle(t('resetPassword.heading') || 'Reset Password');
   const [searchParams] = useSearchParams();
-  const token = searchParams.get('token') || '';
+  const token = searchParams.get('token') || searchParams.get('t') || '';
 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+
+  const hasToken = Boolean(token && token.length > 10);
 
   useEffect(() => {
-    const tag = document.createElement('style');
-    tag.textContent = KEYFRAMES;
-    document.head.appendChild(tag);
-    return () => tag.remove();
-  }, []);
+    if (!hasToken) {
+      setError(t('resetPassword.invalidToken') || 'Parolni tiklash havolasi yaroqsiz yoki muddati o\'tgan.');
+    }
+  }, [hasToken, t]);
 
-  const hasToken = token.length > 0;
-
-  async function handleSubmit(e: FormEvent) {
+  const handleSubmit = useCallback(async (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
+    if (password.length < 8) {
+      setError(t('auth.passwordMinLength', { min: 8 }) || 'Parol kamida 8 ta belgidan iborat bo\'lishi kerak.');
+      return;
+    }
+
     if (password !== confirm) {
-      setError(t('auth.passwordsDoNotMatch'));
+      setError(t('auth.passwordsDoNotMatch') || 'Parollar mos kelmadi.');
       return;
     }
 
@@ -103,80 +97,77 @@ export function ResetPasswordPage() {
     } finally {
       setBusy(false);
     }
-  }
+  }, [password, confirm, token, t]);
 
   return (
-    <div
-      className="auth-motion flex min-h-screen items-center justify-center px-5"
-      style={{ background: 'var(--bg-base)' }}
-    >
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-12">
       <Backdrop />
       <motion.main
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 350, damping: 30, mass: 0.8 }}
         className="relative z-10 w-full max-w-[420px]"
       >
-        <section className="relative overflow-hidden rounded-[2.25rem] bg-white/65 p-8 backdrop-blur-md ring-1 ring-inset ring-white/70 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12)] dark:bg-white/[0.04] dark:ring-white/[0.08] dark:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.5)] sm:p-9">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20" />
-          <BrandMark />
+        <section className="relative overflow-hidden rounded-[2.25rem] bg-white/65 p-8 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12),inset_0_1px_0_0_rgba(255,255,255,0.85)] ring-1 ring-inset ring-white/70 backdrop-blur-md backdrop-saturate-[1.8] dark:bg-white/[0.04] dark:shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.08)] dark:ring-white/[0.08] sm:p-9">
+          {/* Specular top sheen */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/25"
+          />
 
-          <p
-            className="mb-1 text-center text-[13px] font-medium uppercase tracking-[.06em]"
-            style={{ color: 'var(--text-muted)' }}
-          >
+          <MeduLogo size="lg" className="mx-auto mb-6" />
+
+          <p className="mb-1 text-center text-[12.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-muted)]">
             M-EDU
           </p>
-          <h1
-            className="mb-2 text-center text-[22px] font-semibold tracking-[-0.02em]"
-            style={{ color: 'var(--text-primary)' }}
-          >
+          <h1 className="mb-2 text-center text-[22px] font-black tracking-tight text-[var(--text-primary)]">
             {t('resetPassword.heading')}
           </h1>
-          <p
-            className="mb-6 text-center text-[14px] leading-relaxed"
-            style={{ color: 'var(--text-secondary)' }}
-          >
+          <p className="mb-6 text-center text-[13.5px] leading-relaxed text-[var(--text-secondary)]">
             {t('resetPassword.linkValid')}
           </p>
 
           {!hasToken ? (
-            <div className="space-y-4 [animation:auth-fade_.4s_ease-out]">
-              <div
-                className="rounded-[14px] p-3.5 text-[14px] font-medium border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-              >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="space-y-4"
+            >
+              <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-[14px] font-medium text-amber-600 dark:text-amber-400">
                 {t('resetPassword.invalidToken')}
               </div>
               <GlassButton
                 asChild
                 variant="primary"
-                className="h-[48px] w-full text-[15px] font-medium"
+                className="h-[48px] w-full text-[15px] font-semibold"
               >
                 <Link to="/forgot-password">
                   {t('resetPassword.requestNewLink')}
                 </Link>
               </GlassButton>
-            </div>
+            </motion.div>
           ) : done ? (
-            <div className="space-y-4 [animation:auth-fade_.4s_ease-out]">
-              <div
-                className="flex items-center gap-2.5 rounded-[14px] p-3.5 text-[14px] font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="space-y-4"
+            >
+              <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-[14px] font-medium text-emerald-600 dark:text-emerald-400">
                 <Check />
                 {t('resetPassword.success')}
               </div>
               <GlassButton
                 asChild
                 variant="primary"
-                className="h-[48px] w-full text-[15px] font-medium"
+                className="h-[48px] w-full text-[15px] font-semibold"
               >
                 <Link to="/login">
                   {t('auth.login')}
                 </Link>
               </GlassButton>
-            </div>
+            </motion.div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="relative">
                 <GlassInput
                   type={showPw ? 'text' : 'password'}
@@ -189,18 +180,20 @@ export function ResetPasswordPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={busy}
-                  className="h-[48px] pr-11 pl-4 text-[15px]"
+                  className="h-[48px] text-[15px]"
+                  inputSuffix={
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setShowPw((v) => !v)}
+                      disabled={busy}
+                      aria-label={showPw ? t('auth.hidePassword') : t('auth.showPassword')}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-surface-500 transition-colors hover:bg-black/5 hover:text-surface-700 dark:hover:bg-white/10 dark:hover:text-surface-300"
+                    >
+                      <Eye off={showPw} />
+                    </button>
+                  }
                 />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowPw((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors z-10"
-                  style={{ color: 'var(--text-muted)' }}
-                  aria-label={showPw ? t('auth.hidePassword') : t('auth.showPassword')}
-                >
-                  <Eye off={showPw} />
-                </button>
               </div>
 
               <GlassInput
@@ -217,15 +210,17 @@ export function ResetPasswordPage() {
               />
 
               {error && (
-                <p
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
                   role="alert"
-                  className="flex items-start gap-1.5 text-[13px] font-medium text-rose-600 dark:text-rose-400 [animation:auth-fade_.25s_ease-out]"
+                  className="flex items-start gap-1.5 text-[13px] font-medium text-rose-600 dark:text-rose-400"
                 >
                   <svg className="mt-[3px] h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                     <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 5a1.25 1.25 0 0 1 1.25 1.25v5a1.25 1.25 0 0 1-2.5 0v-5A1.25 1.25 0 0 1 12 7Zm0 11a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />
                   </svg>
                   {error}
-                </p>
+                </motion.p>
               )}
 
               <GlassButton
@@ -233,7 +228,7 @@ export function ResetPasswordPage() {
                 disabled={busy || !password || !confirm}
                 aria-busy={busy}
                 variant="primary"
-                className="group h-[48px] w-full text-[15px] font-medium"
+                className="h-[48px] w-full text-[15px] font-semibold"
               >
                 {busy ? (<><Spinner /> {t('resetPassword.resetting')}</>) : t('resetPassword.submit')}
               </GlassButton>
@@ -241,16 +236,12 @@ export function ResetPasswordPage() {
           )}
         </section>
 
-        <p
-          className="mt-7 text-center text-[13px] tracking-[-0.01em] [animation:auth-fade_.9s_.25s_ease-out_both]"
-          style={{ color: 'var(--text-secondary)' }}
-        >
+        <p className="mt-6 text-center text-[13.5px] font-medium text-[var(--text-secondary)]">
           <Link
             to="/login"
-            className="font-medium underline-offset-[3px] hover:underline"
-            style={{ color: 'var(--m-vivid)' }}
+            className="font-semibold text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
-            {t('auth.backToSignIn')}
+            ← {t('auth.backToSignIn')}
           </Link>
         </p>
       </motion.main>

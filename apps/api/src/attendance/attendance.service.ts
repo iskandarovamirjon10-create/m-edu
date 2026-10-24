@@ -70,9 +70,32 @@ export class AttendanceService {
 
     for (const record of data.records) {
       if (!enrolledStudentIds.has(record.studentId)) {
-        throw new BadRequestException(
-          `Student ${record.studentId} is not enrolled in group ${data.groupId}`,
-        );
+        let studentName: string | null = null;
+        try {
+          const student = await this.prisma.student?.findUnique?.({
+            where: { id: record.studentId },
+            include: { user: { select: { firstName: true, lastName: true } } },
+          });
+          if (student?.user) {
+            studentName = `${student.user.firstName} ${student.user.lastName}`.trim();
+          }
+        } catch {
+          // ignore lookup failure in test mock environments
+        }
+
+        const groupName = group?.name || null;
+        const friendlyMsg = studentName && groupName
+          ? `Student "${studentName}" is not enrolled in group "${groupName}".`
+          : 'Student is not enrolled in group.';
+
+        throw new BadRequestException({
+          code: 'STUDENT_NOT_ENROLLED_IN_GROUP',
+          message: friendlyMsg,
+          studentId: record.studentId,
+          studentName,
+          groupId: data.groupId,
+          groupName,
+        });
       }
     }
 
@@ -88,10 +111,16 @@ export class AttendanceService {
         },
       });
       if (!specifiedLesson) {
-        throw new NotFoundException(`Lesson ${data.lessonId} not found`);
+        throw new NotFoundException({
+          code: 'LESSON_NOT_FOUND',
+          message: 'Lesson not found',
+        });
       }
       if (specifiedLesson.groupId !== data.groupId) {
-        throw new BadRequestException(`Lesson ${data.lessonId} does not belong to group ${data.groupId}`);
+        throw new BadRequestException({
+          code: 'LESSON_GROUP_MISMATCH',
+          message: 'Lesson does not belong to group',
+        });
       }
       if (specifiedLesson.status === 'CANCELLED') {
         throw new BadRequestException(`Ushbu dars bekor qilingan (CANCELLED). Bekor qilingan darsga davomat qilib bo'lmaydi.`);

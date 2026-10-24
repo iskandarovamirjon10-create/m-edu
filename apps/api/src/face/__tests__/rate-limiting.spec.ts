@@ -69,45 +69,19 @@ describe(
   () => {
     it(
       'registers ThrottlerGuard as the global APP_GUARD',
-      async () => {
-        const moduleRef =
-          await Test.createTestingModule({
-            imports: [AppModule],
-          }).compile();
-
-        try {
-          const appGuard =
-            getAppGuardProvider();
-
-          expect(appGuard).toBeDefined();
-          expect(appGuard.useClass).toBe(
-            ThrottlerGuard,
-          );
-        } finally {
-          await moduleRef.close();
-        }
+      () => {
+        const appGuard = getAppGuardProvider();
+        expect(appGuard).toBeDefined();
+        expect(appGuard?.useClass).toBe(ThrottlerGuard);
       },
     );
 
     it(
       'does not silently omit the global guard',
-      async () => {
-        const moduleRef =
-          await Test.createTestingModule({
-            imports: [AppModule],
-          }).compile();
-
-        try {
-          const appGuard =
-            getAppGuardProvider();
-
-          expect(appGuard).toBeDefined();
-          expect(
-            appGuard?.provide,
-          ).toBe(APP_GUARD);
-        } finally {
-          await moduleRef.close();
-        }
+      () => {
+        const appGuard = getAppGuardProvider();
+        expect(appGuard).toBeDefined();
+        expect(appGuard?.provide).toBe(APP_GUARD);
       },
     );
 

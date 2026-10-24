@@ -5,7 +5,7 @@ import { authApi, friendlyHttpMessage, type ApiError } from '@/lib/api';
 import { GlassButton, GlassInput } from '@/components/ui';
 import { MeduLogo } from '@/components/brand/MeduLogo';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 function Backdrop() {
   return (
@@ -51,7 +51,7 @@ function BrandMark() {
 }
 
 export function ForgotPasswordPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('auth.forgotPasswordTitle'));
 
   const [email, setEmail] = useState('');

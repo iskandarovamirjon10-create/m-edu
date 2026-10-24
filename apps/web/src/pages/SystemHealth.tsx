@@ -13,10 +13,11 @@ import { useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
 import { GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassStatCard } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import request from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 
@@ -117,7 +118,7 @@ function ComponentStatusCard({
   responseTime?: number;
   onOpenSidecar: () => void;
 }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const info = COMPONENT_LABELS[name] ?? { labelKey: '', descriptionKey: '' };
   const isHealthy = status === 'ok';
 
@@ -138,7 +139,7 @@ function ComponentStatusCard({
           <button
             type="button"
             onClick={onOpenSidecar}
-            className="inline-flex items-center gap-1 rounded-lg border border-black/[0.08] bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/70 shadow-sm transition-all hover:border-emerald-400 hover:bg-emerald-50/50 hover:text-emerald-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/80 dark:hover:text-emerald-400"
+            className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] gap-1 rounded-xl border border-black/[0.08] bg-black/[0.03] px-2.5 py-1 text-xs font-semibold text-black/70 shadow-sm transition-all hover:border-emerald-400 hover:bg-emerald-50/50 hover:text-emerald-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/80 dark:hover:text-emerald-400"
             title="macOS Split-View Sidecar (◨)"
           >
             <span>◨</span>
@@ -160,7 +161,7 @@ function ComponentStatusCard({
 }
 
 export function SystemHealthPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('systemHealth.title'));
   const { playTick, playPop } = usePremiumSound();
 
@@ -204,9 +205,9 @@ export function SystemHealthPage() {
       id: component.name,
       title: label,
       subtitle: `Tizim komponenti · ${component.status}`,
-      status: {
-        label: component.status.toUpperCase(),
-        tone: component.status === 'ok' ? 'green' : component.status === 'warning' ? 'amber' : 'red',
+      badge: {
+        text: component.status.toUpperCase(),
+        tone: component.status === 'ok' ? 'emerald' : component.status === 'warning' ? 'amber' : 'rose',
       },
       metrics: [
         { label: 'Holati', value: component.status },
@@ -231,9 +232,9 @@ export function SystemHealthPage() {
       id: err.id,
       title: `${err.statusCode} · ${err.endpoint}`,
       subtitle: `Tizim xatoligi · ${new Date(err.timestamp).toLocaleTimeString()}`,
-      status: {
-        label: String(err.statusCode),
-        tone: err.statusCode >= 500 ? 'red' : 'amber',
+      badge: {
+        text: String(err.statusCode),
+        tone: err.statusCode >= 500 ? 'rose' : 'amber',
       },
       metrics: [
         { label: 'Status Code', value: String(err.statusCode) },
@@ -282,13 +283,10 @@ export function SystemHealthPage() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={SPRING.smooth}
-      className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto"
+      className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
       {/* Ambient background lighting */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-        <div className="absolute -top-[12%] right-[15%] h-[400px] w-[500px] rounded-full bg-emerald-500/10 blur-[140px] dark:bg-emerald-600/[0.08]" />
-        <div className="absolute top-[40%] left-[8%] h-[350px] w-[450px] rounded-full bg-brand-500/10 blur-[130px] dark:bg-blue-600/[0.07]" />
-      </div>
+      <AuroraMesh variant="corporate" />
 
       {/* ── Apple V2 Hero Header ── */}
       <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
@@ -431,7 +429,7 @@ export function SystemHealthPage() {
                 <button
                   type="button"
                   onClick={() => handleOpenErrorSidecar(err)}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-black/[0.08] bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-black/70 shadow-sm transition-all hover:border-emerald-400 hover:bg-emerald-50/50 hover:text-emerald-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/80 dark:hover:text-emerald-400"
+                  className="inline-flex shrink-0 items-center justify-center min-h-[44px] min-w-[44px] gap-1 rounded-xl border border-black/[0.08] bg-black/[0.03] px-2.5 py-1 text-xs font-semibold text-black/70 shadow-sm transition-all hover:border-emerald-400 hover:bg-emerald-50/50 hover:text-emerald-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/80 dark:hover:text-emerald-400"
                   title="macOS Split-View Sidecar (◨)"
                 >
                   <span>◨</span>

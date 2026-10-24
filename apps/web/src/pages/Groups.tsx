@@ -375,15 +375,18 @@ function KpiTile({
   value,
   icon,
   tone = 'blue',
+  'data-testid': testId,
 }: {
   label: string;
   value: number;
   icon: string[];
   tone?: Tone;
+  'data-testid'?: string;
 }) {
   const c = TONES[tone];
   return (
     <motion.div
+      data-testid={testId}
       variants={rowVariants}
       whileHover={{ y: -2 }}
       transition={SPRING.smooth}
@@ -996,8 +999,8 @@ export function GroupsPage() {
           variants={containerVariants}
           className="grid grid-cols-2 gap-3 sm:grid-cols-4"
         >
-          <KpiTile label={t('groups.title')} value={stats.total} icon={I.groups} tone="blue" />
-          <KpiTile label={t('enum.status.ACTIVE')} value={stats.active} icon={I.checkCircle} tone="emerald" />
+          <KpiTile data-testid="groups-metric-blue" label={t('groups.title')} value={stats.total} icon={I.groups} tone="blue" />
+          <KpiTile data-testid="groups-metric-green" label={t('enum.status.ACTIVE')} value={stats.active} icon={I.checkCircle} tone="emerald" />
           <KpiTile label={t('groups.col.capacity')} value={stats.totalCapacity} icon={I.users} tone="purple" />
           <KpiTile label={t('groups.col.room')} value={stats.rooms} icon={I.door} tone="orange" />
         </motion.div>
@@ -1017,6 +1020,7 @@ export function GroupsPage() {
           </div>
           <input
             type="text"
+            data-testid="groups-search-input"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Guruh nomi, kurs, xona yoki o'qituvchi bo'yicha qidirish..."
@@ -1068,6 +1072,7 @@ export function GroupsPage() {
             </button>
             <button
               type="button"
+              data-testid="groups-status-ACTIVE"
               onClick={() => setStatusFilter('ACTIVE')}
               className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
                 statusFilter === 'ACTIVE'
@@ -1107,6 +1112,7 @@ export function GroupsPage() {
             </button>
             <button
               type="button"
+              data-testid="groups-view-grid"
               onClick={() => setViewMode('grid')}
               aria-label="Kataklar (Grid) ko'rinishi"
               title="Kataklar ko'rinishi"
@@ -1197,6 +1203,27 @@ export function GroupsPage() {
           variants={cardVariants}
           className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card divide-y divide-black/[0.05] dark:divide-white/[0.05]"
         >
+          {/* Header row with Select All */}
+          <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 bg-black/[0.02] dark:bg-white/[0.02] border-b border-black/[0.05] dark:border-white/[0.05] text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                aria-label="Barcha guruhlarni tanlash"
+                checked={filteredGroups.length > 0 && selectedCount === filteredGroups.length}
+                onChange={() => {
+                  if (selectedCount === filteredGroups.length) {
+                    clearSelection();
+                  } else {
+                    filteredGroups.forEach((g) => {
+                      if (!isSelected(g.id)) toggleSelection(g.id);
+                    });
+                  }
+                }}
+                className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[#007AFF] focus:ring-[#007AFF] dark:border-white/20 dark:bg-white/5"
+              />
+              <span>{t('groups.title')}</span>
+            </div>
+          </div>
           {filteredGroups.map((group, idx) => {
             const tone = groupTone(group.name);
             const c = TONES[tone];
@@ -1238,25 +1265,17 @@ export function GroupsPage() {
               >
                 {/* Left: Selection + Icon Squircle + Details */}
                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <button
-                    type="button"
-                    onClick={(e) => {
+                  <input
+                    type="checkbox"
+                    checked={isRowSelected}
+                    onChange={(e) => {
                       e.stopPropagation();
                       toggleSelection(group.id);
                     }}
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
-                      isRowSelected
-                        ? 'border-[#007AFF] bg-[#007AFF] text-white'
-                        : 'border-black/20 dark:border-white/20 bg-white/50 dark:bg-surface-800/50 hover:border-black/40 dark:hover:border-white/40'
-                    }`}
+                    onClick={(e) => e.stopPropagation()}
                     aria-label={isRowSelected ? "Tanlovni bekor qilish" : "Tanlash"}
-                  >
-                    {isRowSelected && (
-                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    )}
-                  </button>
+                    className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[#007AFF] focus:ring-[#007AFF] dark:border-white/20 dark:bg-white/5"
+                  />
 
                   <div
                     className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"

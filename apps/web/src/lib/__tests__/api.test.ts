@@ -13,6 +13,26 @@ describe('userStore', () => {
     expect(userStore.get()).toBeNull();
   });
 
+  it('strips sensitive credential fields before saving to localStorage', () => {
+    const sensitiveUser = {
+      id: '1',
+      email: 'a@b.c',
+      role: 'ORG_ADMIN' as const,
+      password: 'plain_password',
+      passwordHash: '$2b$10$...',
+      token: 'jwt_secret_token',
+      accessToken: 'access_123',
+      refreshToken: 'refresh_123',
+      twoFactorSecret: 'TOTP_SECRET',
+    };
+    userStore.set(sensitiveUser);
+    const stored = userStore.get<typeof sensitiveUser>();
+    expect(stored).toEqual({ id: '1', email: 'a@b.c', role: 'ORG_ADMIN' });
+    expect(stored).not.toHaveProperty('password');
+    expect(stored).not.toHaveProperty('accessToken');
+    expect(stored).not.toHaveProperty('twoFactorSecret');
+  });
+
   it('returns null for corrupted user JSON', () => {
     localStorage.setItem('medu_user', '{broken');
     expect(userStore.get()).toBeNull();

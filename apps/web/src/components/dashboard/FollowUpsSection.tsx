@@ -1,8 +1,10 @@
 import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { GlassEmptyState } from '@/components/ui';
 import { formatDate, formatTime } from '@/lib/format';
 import type { DashboardStats } from '@/lib/types';
 import { useI18n } from '@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 interface FollowUpsSectionProps {
   followUps: DashboardStats['upcomingFollowUps'];
@@ -46,9 +48,10 @@ function getLeadName(
 export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const sound = usePremiumSound();
 
   return (
-    <div className="relative overflow-hidden flex flex-col justify-between rounded-2xl border border-subtle/80 bg-card/85 backdrop-blur-xl p-5 shadow-card before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent dark:before:via-white/10 sm:p-6">
+    <div className="relative overflow-hidden flex flex-col justify-between rounded-[2rem] border border-white/60 bg-white/75 backdrop-blur-3xl backdrop-saturate-[200%] p-5 sm:p-6 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.08),inset_0_1.5px_1.5px_rgba(255,255,255,0.9)] dark:border-white/[0.12] dark:bg-[#161618]/75 dark:shadow-[0_20px_50px_-16px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.18)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-[1.5px] before:bg-gradient-to-r before:from-transparent before:via-white/70 before:to-transparent dark:before:via-white/20">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-primary">
@@ -79,24 +82,31 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
             />
           </div>
         ) : (
-          <div className="divide-y divide-subtle/60 overflow-hidden rounded-xl border border-subtle/70 bg-card/50 backdrop-blur-sm">
+          <div className="divide-y divide-black/[0.04] dark:divide-white/[0.06] overflow-hidden rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02]">
             {followUps.slice(0, 6).map((item) => {
               const name = getLeadName(item.lead, t('dashboard.lead') || 'Lead');
               const urgency = getUrgency(item.scheduledAt, t);
               const leadPhone = (item.lead as { phone?: string })?.phone;
 
               return (
-                <div
+                <motion.div
                   key={item.id}
-                  onClick={() => navigate('/leads')}
+                  whileHover={{ scale: 1.008, x: 2 }}
+                  whileTap={{ scale: 0.985 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+                  onClick={() => {
+                    sound.playPop?.();
+                    navigate('/leads');
+                  }}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
+                      sound.playPop?.();
                       navigate('/leads');
                     }
                   }}
-                  className="group flex cursor-pointer items-center justify-between gap-3 p-3 transition-colors hover:bg-surface/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="group flex cursor-pointer items-center justify-between gap-3 p-3 transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {/* Left: Contact Info */}
                   <div className="flex min-w-0 items-center gap-3">
@@ -161,7 +171,7 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
                       <path d="m9 18 6-6-6-6" />
                     </svg>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>

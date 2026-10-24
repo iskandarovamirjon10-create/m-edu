@@ -18,10 +18,11 @@ import {
   GlassSwitch,
 } from '@/components/ui';
 import { useToast } from '@/components/ui/GlassToast';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { dataGovernanceApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { DataGovernancePolicy, ExportLog, DataAccessLog, Paginated, RetentionCheckResult } from '@/types/governance';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
@@ -65,7 +66,7 @@ function StatCard({ label, value, color }: { label: string; value: string | numb
 }
 
 function RetentionPoliciesTab() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('dg.title'));
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -83,7 +84,10 @@ function RetentionPoliciesTab() {
     const sidecarData: QuickLookData = {
       title: dt.label,
       subtitle: `Data Classification Scope: ${dt.value}`,
-      badge: policy?.isActive ? 'Active Retention Policy' : 'Draft / Inactive',
+      badge: {
+        text: policy?.isActive ? 'Active Retention Policy' : 'Draft / Inactive',
+        tone: policy?.isActive ? 'emerald' : 'amber',
+      },
       status: {
         label: policy ? (policy.isActive ? 'Active Enforcement' : 'Inactive') : 'No Policy Defined',
         tone: policy?.isActive ? 'success' : 'warning',
@@ -239,7 +243,7 @@ function RetentionPoliciesTab() {
 }
 
 function ExportLogTab() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const { playTick } = usePremiumSound();
   const [page, setPage] = useState(1);
   const [exportTypeFilter, setExportTypeFilter] = useState('');
@@ -255,7 +259,10 @@ function ExportLogTab() {
     const sidecarData: QuickLookData = {
       title: `Export: ${item.exportType}`,
       subtitle: `${item.format} • ${item.status}`,
-      badge: item.status,
+      badge: {
+        text: item.status,
+        tone: item.status === 'COMPLETED' ? 'emerald' : item.status === 'FAILED' ? 'rose' : 'amber',
+      },
       status: {
         label: item.status === 'COMPLETED' ? 'Export Successful' : item.status === 'FAILED' ? 'Export Failed' : 'Processing Log',
         tone: item.status === 'COMPLETED' ? 'success' : item.status === 'FAILED' ? 'error' : 'warning',
@@ -370,7 +377,7 @@ function ExportLogTab() {
 }
 
 function AccessAuditTab() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const { playTick } = usePremiumSound();
   const [page, setPage] = useState(1);
   const [entityFilter, setEntityFilter] = useState('');
@@ -386,7 +393,10 @@ function AccessAuditTab() {
     const sidecarData: QuickLookData = {
       title: `${item.action} on ${item.resource}`,
       subtitle: `Target Resource ID: ${item.resourceId ?? 'N/A'}`,
-      badge: item.action,
+      badge: {
+        text: item.action,
+        tone: item.action === 'DELETE' ? 'rose' : item.action === 'CREATE' ? 'emerald' : 'blue',
+      },
       status: {
         label: `Access Audit • ${item.action}`,
         tone: item.action === 'DELETE' ? 'error' : item.action === 'CREATE' ? 'success' : 'primary',
@@ -508,7 +518,7 @@ function AccessAuditTab() {
 }
 
 function SummaryTab() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const toast = useToast();
   const { playSuccess, playError } = usePremiumSound();
 
@@ -595,7 +605,7 @@ function SummaryTab() {
 }
 
 export function DataGovernancePage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const { playTick } = usePremiumSound();
   const [activeTab, setActiveTab] = useState<TabKey>('summary');
 
@@ -637,7 +647,8 @@ export function DataGovernancePage() {
   }, [playTick]);
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))]">
+      <AuroraMesh variant="corporate" />
       <GlassPageHeader title={t('dg.title')} subtitle={t('dg.subtitle')} />
 
       {/* Apple segmented control */}
@@ -652,7 +663,7 @@ export function DataGovernancePage() {
                 playTick();
                 setActiveTab(tab.id);
               }}
-              className={`relative flex items-center gap-1.5 px-4 py-2 rounded-xl text-[0.85rem] font-semibold transition-colors duration-200 whitespace-nowrap shrink-0 z-10 ${
+              className={`relative inline-flex items-center justify-center min-h-[44px] gap-1.5 px-4 py-2.5 rounded-xl text-[0.85rem] font-semibold transition-colors duration-200 whitespace-nowrap shrink-0 z-10 ${
                 isActive
                   ? 'text-[var(--text-primary)] shadow-sm'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'

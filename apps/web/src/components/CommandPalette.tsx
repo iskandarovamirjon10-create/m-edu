@@ -1,3 +1,16 @@
+/**
+ * M-EDU CommandPalette — Apple macOS Sequoia & VisionOS Liquid Glass Spotlight.
+ *
+ * Features:
+ * - Ultra-refractive liquid glass modal (`backdrop-blur-3xl backdrop-saturate-[200%]`).
+ * - Specular top rim highlight and optical hairline borders.
+ * - Auto-scroll into view (`block: 'nearest'`) on arrow key navigation.
+ * - Zero-bleed scroll lock via `acquireScrollLock()` eliminating layout shift.
+ * - Global synchronization with `ui.store` (`setCommandPaletteOpen`).
+ * - Strict WCAG 2.2 AA / Apple HIG >= 44px touch targets.
+ * - Debounced asynchronous multi-entity search (Students, Teachers, Groups, Courses).
+ */
+
 import {
   useCallback,
   useEffect,
@@ -5,6 +18,8 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +27,8 @@ import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useOptionalAuthState } from '@/auth/AuthContext';
 import { searchApi } from '@/lib/api';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { setCommandPaletteOpen, toggleAiCopilot } from '@/stores/ui.store';
+import { acquireScrollLock } from '@/layouts/core/singletons';
 import {
   CreditCard,
   ClipboardCheck,
@@ -25,7 +42,7 @@ import {
   Search,
   Sparkles,
   CornerDownLeft,
-  LayoutDashboard,
+  Home,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -37,7 +54,7 @@ interface CommandItem {
   category?: string;
   keywords?: string[];
   href?: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   action?: () => void;
 }
 
@@ -57,19 +74,19 @@ function ActionBadge({
   return (
     <span
       className={cn(
-        'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-subtle bg-card/80 text-secondary transition-transform duration-150 ease-apple-spring group-hover:scale-[1.02]',
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/[0.08] bg-white/70 text-secondary shadow-[0_2px_6px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-md transition-transform duration-150 group-hover:scale-105 dark:border-white/[0.1] dark:bg-white/[0.08] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]',
         color,
         className,
       )}
     >
-      <IconComponent className="h-4 w-4" strokeWidth={1.75} />
+      <IconComponent className="h-4.5 w-4.5" strokeWidth={1.8} />
     </span>
   );
 }
 
-function SimpleIcon({ children }: { children: React.ReactNode }) {
+function SimpleIcon({ children }: { children: ReactNode }) {
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-subtle bg-card/80 text-secondary transition-transform duration-150 ease-apple-spring group-hover:scale-[1.02]">
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/[0.08] bg-white/70 text-secondary shadow-[0_2px_6px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-md transition-transform duration-150 group-hover:scale-105 dark:border-white/[0.1] dark:bg-white/[0.08] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]">
       {children}
     </span>
   );
@@ -80,7 +97,11 @@ interface CommandItemWithRoles extends CommandItem {
   roles?: string[];
 }
 
-const ICON_NAV = <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 12h18M3 6h18M3 18h18"/></svg>;
+const ICON_NAV = (
+  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+    <path d="M3 12h18M3 6h18M3 18h18" />
+  </svg>
+);
 
 const QUICK_ACTIONS: CommandItemWithRoles[] = [
   {
@@ -150,13 +171,13 @@ const QUICK_ACTIONS: CommandItemWithRoles[] = [
 const NAV_ITEMS: CommandItemWithRoles[] = [
   {
     id: 'dashboard',
-    label: 'Dashboard',
+    label: 'Asosiy',
     description: 'Overview of your education center',
     category: 'Main',
-    keywords: ['home', 'stats', 'overview'],
+    keywords: ['home', 'stats', 'overview', 'asosiy', 'dashboard', 'boshqaruv paneli'],
     href: '/',
     icon: (
-      <ActionBadge icon={LayoutDashboard} className="bg-blue-500/15 border-blue-500/25 text-blue-500 dark:text-blue-400" />
+      <ActionBadge icon={Home} className="bg-blue-500/15 border-blue-500/25 text-blue-500 dark:text-blue-400" />
     ),
   },
   {
@@ -297,6 +318,16 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     icon: <ActionBadge icon={Sparkles} className="bg-purple-500/15 border-purple-500/25 text-purple-500 dark:text-purple-400" />,
   },
   {
+    id: 'quick-ai-copilot',
+    label: 'Quick AI Copilot (Slide-over)',
+    description: 'Instant AI assistant side-sheet [⌘J]',
+    category: 'AI',
+    keywords: ['quick', 'slide', 'drawer', 'copilot', 'assistant', 'chat', 'gemini'],
+    action: () => toggleAiCopilot(),
+    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'],
+    icon: <ActionBadge icon={Sparkles} className="bg-blue-500/15 border-blue-500/25 text-blue-500 dark:text-blue-400" />,
+  },
+  {
     id: 'profile',
     label: 'My Profile',
     description: 'View and edit your profile',
@@ -335,6 +366,17 @@ export function CommandPalette() {
   const [liveResults, setLiveResults] = useState<CommandItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  // Synchronize with global UI store & acquire scroll lock
+  useEffect(() => {
+    setCommandPaletteOpen(open);
+    if (!open) return;
+    const release = acquireScrollLock();
+    return () => {
+      release();
+    };
+  }, [open]);
+
+  // Live entity search with debounce
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) {
@@ -347,7 +389,8 @@ export function CommandPalette() {
     setIsSearching(true);
 
     const timer = setTimeout(() => {
-      searchApi.search(q, ['STUDENT', 'TEACHER', 'GROUP', 'COURSE'], 8)
+      searchApi
+        .search(q, ['STUDENT', 'TEACHER', 'GROUP', 'COURSE'], 8)
         .then((res: any) => {
           if (cancelled) return;
           const mapped: CommandItem[] = (res.results || []).map((item: any) => {
@@ -460,6 +503,7 @@ export function CommandPalette() {
     });
   }, []);
 
+  // Shortcut listeners (Cmd+K / Ctrl+K and custom event)
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if (
@@ -500,6 +544,13 @@ export function CommandPalette() {
     setSelected(0);
   }, [query]);
 
+  // Auto-scroll selected item into view
+  useEffect(() => {
+    if (!open || !filtered[selected]) return;
+    const el = document.getElementById(`command-item-${filtered[selected].id}`);
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [selected, open, filtered]);
+
   const execute = useCallback(
     (item: CommandItem) => {
       playPop();
@@ -513,30 +564,23 @@ export function CommandPalette() {
     [navigate, closePalette, playPop],
   );
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-
       if (!filtered.length) return;
       playTick();
-      setSelected((value) =>
-        value >= filtered.length - 1 ? 0 : value + 1,
-      );
+      setSelected((value) => (value >= filtered.length - 1 ? 0 : value + 1));
     }
 
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-
       if (!filtered.length) return;
       playTick();
-      setSelected((value) =>
-        value <= 0 ? filtered.length - 1 : value - 1,
-      );
+      setSelected((value) => (value <= 0 ? filtered.length - 1 : value - 1));
     }
 
     if (event.key === 'Enter') {
       event.preventDefault();
-
       if (filtered[selected]) {
         execute(filtered[selected]);
       }
@@ -564,7 +608,7 @@ export function CommandPalette() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/40 px-4 pt-[10vh] sm:pt-[14vh] backdrop-blur-sm animate-overlay-in"
+      className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/45 dark:bg-black/65 px-4 pt-[calc(2.5rem+env(safe-area-inset-top,0px))] sm:pt-[12vh] backdrop-blur-2xl backdrop-saturate-[180%] animate-overlay-in"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -572,15 +616,23 @@ export function CommandPalette() {
         }
       }}
     >
+      {/* VisionOS Specular Liquid Glass Spotlight Container */}
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={t('a11y.commandPalette', 'Spotlight Command Palette')}
-        className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-subtle bg-card shadow-modal animate-modal-in"
+        className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-white/60 bg-white/85 shadow-[0_24px_64px_-16px_rgba(0,0,0,0.22),inset_0_1px_1px_rgba(255,255,255,0.95)] backdrop-blur-3xl backdrop-saturate-[200%] dark:border-white/[0.14] dark:bg-[#18181B]/85 dark:shadow-[0_28px_72px_-16px_rgba(0,0,0,0.75),inset_0_1px_1px_rgba(255,255,255,0.15)] animate-modal-in"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center gap-3.5 border-b border-black/[0.06] dark:border-white/[0.08] px-5 py-3.5">
+        {/* Specular inner top highlight rim */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-8 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/30"
+        />
+
+        {/* Search Input Bar */}
+        <div className="flex items-center gap-3.5 border-b border-black/[0.06] px-5 py-4 dark:border-white/[0.08]">
           <Search className="h-5 w-5 shrink-0 text-[#2563EB] dark:text-[#0A84FF]" />
 
           <input
@@ -589,31 +641,33 @@ export function CommandPalette() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={t('a11y.searchPlaceholder', "Buyruq, o'quvchi, guruh yoki sahifani qidiring...")}
+            placeholder={t(
+              'a11y.searchPlaceholder',
+              "Buyruq, o'quvchi, guruh yoki sahifani qidiring...",
+            )}
             aria-label={t('a11y.search', 'Qidiruv')}
             aria-autocomplete="list"
             aria-controls={listId}
             aria-activedescendant={
-              filtered[selected]
-                ? `command-item-${filtered[selected].id}`
-                : undefined
+              filtered[selected] ? `command-item-${filtered[selected].id}` : undefined
             }
-            className="min-w-0 flex-1 bg-transparent text-[16px] font-medium tracking-tight outline-none placeholder:text-[#8E8E93] text-[#1D1D1F] dark:text-[#F5F5F7]"
+            className="min-w-0 flex-1 bg-transparent text-[16px] font-medium tracking-tight text-[#1D1D1F] outline-none placeholder:text-[#8E8E93] dark:text-[#F5F5F7] [&::-webkit-search-cancel-button]:hidden"
           />
 
           {isSearching && (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#2563EB] border-t-transparent shrink-0" />
+            <div className="h-4.5 w-4.5 shrink-0 animate-spin rounded-full border-2 border-[#2563EB] border-t-transparent" />
           )}
 
-          <kbd className="hidden rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2 py-0.5 text-[10px] font-bold text-[#8E8E93] sm:inline-flex">
+          <kbd className="hidden rounded-lg border border-black/10 bg-black/5 px-2 py-0.5 text-[10px] font-bold text-[#8E8E93] dark:border-white/10 dark:bg-white/5 sm:inline-flex">
             ESC
           </kbd>
         </div>
 
+        {/* Results Listbox */}
         <ul
           id={listId}
           role="listbox"
-          className="max-h-[min(26rem,60vh)] overflow-y-auto py-2 scrollbar-thin"
+          className="max-h-[min(28rem,60vh)] overflow-y-auto py-2.5 [scrollbar-width:thin]"
         >
           {!filtered.length && (
             <li className="px-5 py-12 text-center text-sm font-medium text-[#8E8E93]">
@@ -623,13 +677,12 @@ export function CommandPalette() {
 
           {Object.entries(grouped).map(([category, items]) => (
             <li key={category}>
-              <div className="px-5 pb-2 pt-3 text-[10px] font-bold uppercase tracking-[.16em] text-[#8E8E93]">
+              <div className="px-5 pb-2 pt-3 text-[10.5px] font-bold uppercase tracking-[.14em] text-[#8E8E93]">
                 {category}
               </div>
 
               {items.map((item) => {
                 index += 1;
-
                 const itemIndex = index;
                 const active = itemIndex === selected;
 
@@ -647,19 +700,24 @@ export function CommandPalette() {
                       }
                     }}
                     onClick={() => execute(item)}
-                    className={[
-                      'group mx-2.5 my-0.5 flex w-[calc(100%-1.25rem)] items-center gap-3.5 rounded-2xl px-3 py-2.5 text-left transition-all duration-150',
+                    className={cn(
+                      'group mx-2.5 my-1 flex min-h-[44px] w-[calc(100%-1.25rem)] items-center gap-3.5 rounded-2xl px-3.5 py-2.5 text-left transition-all duration-150',
                       active
-                        ? 'bg-[#2563EB]/10 dark:bg-[#0A84FF]/15 ring-1 ring-[#2563EB]/25 dark:ring-[#0A84FF]/30'
+                        ? 'bg-[#2563EB]/10 ring-1 ring-[#2563EB]/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] dark:bg-[#0A84FF]/18 dark:ring-[#0A84FF]/35'
                         : 'hover:bg-black/[0.035] dark:hover:bg-white/[0.04]',
-                    ].join(' ')}
+                    )}
                   >
-                    <span className="shrink-0">
-                      {item.icon}
-                    </span>
+                    <span className="shrink-0">{item.icon}</span>
 
                     <span className="min-w-0 flex-1">
-                      <span className={`block truncate text-[14px] font-semibold tracking-tight ${active ? 'text-[#2563EB] dark:text-[#0A84FF]' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'}`}>
+                      <span
+                        className={cn(
+                          'block truncate text-[14px] font-semibold tracking-tight',
+                          active
+                            ? 'text-[#2563EB] dark:text-[#0A84FF]'
+                            : 'text-[#1D1D1F] dark:text-[#F5F5F7]',
+                        )}
+                      >
                         {item.label}
                       </span>
 
@@ -671,7 +729,7 @@ export function CommandPalette() {
                     </span>
 
                     {active && (
-                      <span className="flex items-center gap-1 rounded-lg bg-[#2563EB]/15 dark:bg-[#0A84FF]/20 px-2 py-1 text-[11px] font-semibold text-[#2563EB] dark:text-[#0A84FF]">
+                      <span className="flex items-center gap-1 rounded-lg bg-[#2563EB]/15 px-2 py-1 text-[11px] font-semibold text-[#2563EB] dark:bg-[#0A84FF]/20 dark:text-[#0A84FF]">
                         <span>Ochish</span>
                         <CornerDownLeft className="h-3 w-3" />
                       </span>
@@ -683,22 +741,29 @@ export function CommandPalette() {
           ))}
         </ul>
 
-        <div className="flex items-center justify-between border-t border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02] px-5 py-2.5 text-[11px] font-medium text-[#8E8E93]">
+        {/* Footer Navigation Hints */}
+        <div className="flex items-center justify-between border-t border-black/[0.06] bg-black/[0.02] px-5 py-3 text-[11px] font-medium text-[#8E8E93] dark:border-white/[0.08] dark:bg-white/[0.02]">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
-              <kbd className="rounded border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-1 py-0.5 text-[10px]">↑↓</kbd>
+              <kbd className="rounded border border-black/10 bg-black/5 px-1 py-0.5 text-[10px] dark:border-white/10 dark:bg-white/5">
+                ↑↓
+              </kbd>
               Navigatsiya
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-1 py-0.5 text-[10px]">↵</kbd>
+              <kbd className="rounded border border-black/10 bg-black/5 px-1 py-0.5 text-[10px] dark:border-white/10 dark:bg-white/5">
+                ↵
+              </kbd>
               Tanlash
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-1 py-0.5 text-[10px]">ESC</kbd>
+              <kbd className="rounded border border-black/10 bg-black/5 px-1 py-0.5 text-[10px] dark:border-white/10 dark:bg-white/5">
+                ESC
+              </kbd>
               Yopish
             </span>
           </div>
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="hidden items-center gap-2 sm:flex">
             <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               Alt+P: To'lov

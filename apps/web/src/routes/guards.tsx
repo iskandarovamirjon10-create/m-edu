@@ -32,6 +32,15 @@ import type { Role } from '@/lib/types';
 /** Maximum length of a `returnTo` value we will honor. */
 const MAX_RETURN_TO_LENGTH = 512;
 
+/** Paths that should never be returned to after login (prevents redirect loops). */
+const AUTH_LOOP_PATHS = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/auth',
+];
+
 /* ============================================================================
  * RETURN-TO SANITIZATION
  * ========================================================================== */
@@ -46,6 +55,7 @@ const MAX_RETURN_TO_LENGTH = 512;
  *   - absolute URLs                  (`https://evil.com`)
  *   - strings starting without `/`   (`javascript:`, `data:`, etc.)
  *   - excessively long strings       (CPU / memory)
+ *   - recursive auth loops           (`/login?returnTo=/login`)
  *
  * @returns A safe path starting with `/`, or the fallback.
  */
@@ -54,19 +64,31 @@ export function sanitizeReturnTo(
   fallback: string = '/',
 ): string {
   if (!raw) return fallback;
-  if (raw.length > MAX_RETURN_TO_LENGTH) return fallback;
-  if (!raw.startsWith('/')) return fallback;
-  if (raw.startsWith('//')) return fallback;
-  if (raw.startsWith('/\\')) return fallback;
-  if (/[\r\n]/.test(raw)) return fallback;
-  return raw;
+  const trimmed = raw.trim();
+  if (trimmed.length > MAX_RETURN_TO_LENGTH) return fallback;
+  if (!trimmed.startsWith('/')) return fallback;
+  if (trimmed.startsWith('//')) return fallback;
+  if (trimmed.includes('\\')) return fallback; // DEP-03 (CVE-2025-68470 bypass prevention)
+  if (/[\r\n]/.test(trimmed)) return fallback;
+
+  // Prevent redirect loops to login/auth pages
+  const cleanPath = trimmed.split('?')[0].split('#')[0].toLowerCase();
+  if (
+    AUTH_LOOP_PATHS.some(
+      (authPath) => cleanPath === authPath || cleanPath.startsWith(`${authPath}/`),
+    )
+  ) {
+    return fallback;
+  }
+
+  return trimmed;
 }
 
 /* ============================================================================
  * SHARED LOADING STATE
  * ----------------------------------------------------------------------------
  * Self-contained — no PageFallback dependency (which had signature mismatch).
- * Uses design tokens; respects reduced motion.
+ * Uses design tokens; respects reduced motion; safe viewport fallback.
  * ========================================================================== */
 
 function AuthLoading({
@@ -78,9 +100,10 @@ function AuthLoading({
 }) {
   const { t } = useSafeI18n();
 
-  // Respect reduced motion at the component level (no global hook needed here)
+  // Respect reduced motion at the component level
   const reduced =
     typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const label = t(labelKey) || fallbackLabel;
@@ -90,7 +113,7 @@ function AuthLoading({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-      className="flex min-h-dvh w-full items-center justify-center bg-[var(--bg-app)] text-[var(--text-primary)]"
+      className="flex min-h-screen min-h-[calc(var(--app-vh,1vh)*100)] min-h-dvh w-full items-center justify-center bg-[var(--bg-app)] text-[var(--text-primary)]"
       role="status"
       aria-live="polite"
       aria-label={label}
@@ -123,16 +146,19 @@ function AuthLoading({
  *   - Logged in but lacking roles: redirects to `/unauthorized`.
  *   - Otherwise: renders children.
  *
- * @param roles - If provided and non-empty, user must have at least one.
+ * @param roles - If provided and non-empty, user must have at least one (or all if requireAll=true).
+ * @param requireAll - If true, user must have ALL listed roles.
  */
 export function Protected({
   children,
   roles,
+  requireAll = false,
 }: {
   children: ReactNode;
   roles?: readonly Role[];
+  requireAll?: boolean;
 }) {
-  const { user, loading, hasAnyRole } = useAuth();
+  const { user, loading, hasAnyRole, hasAllRoles } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -145,18 +171,22 @@ export function Protected({
   }
 
   if (!user) {
-    const returnTo = encodeURIComponent(location.pathname + location.search);
-    return <Navigate to={`/login?returnTo=${returnTo}`} replace />;
+    const fullTarget = location.pathname + location.search + location.hash;
+    const returnTo = fullTarget !== '/' ? `?returnTo=${encodeURIComponent(fullTarget)}` : '';
+    return <Navigate to={`/login${returnTo}`} replace />;
   }
 
   if (roles?.length) {
     let allowed = false;
     try {
-      allowed = hasAnyRole(...roles);
+      allowed =
+        requireAll && typeof hasAllRoles === 'function'
+          ? hasAllRoles(...roles)
+          : hasAnyRole(...roles);
     } catch (err) {
       if (typeof console !== 'undefined') {
         // eslint-disable-next-line no-console
-        console.error('[Protected] hasAnyRole threw:', err);
+        console.error('[Protected] role verification threw:', err);
       }
       allowed = false;
     }

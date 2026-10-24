@@ -65,6 +65,9 @@ const ALLOWED_PUBLIC_ROUTES: readonly string[] = [
   'POST /api/webhooks/terminal/event',
   // public certificate verification (anonymously verifiable via QR / verification code)
   'GET /api/certificates/verify/:code',
+  // telegram webapp auth & external calendar subscription feeds
+  'POST /api/telegram/webapp/auth',
+  'GET /api/telegram/calendar/feed/:token.ics',
 ];
 
 /** Routes that must NEVER become anonymous, asserted explicitly below. */

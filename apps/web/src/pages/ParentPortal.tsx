@@ -35,7 +35,7 @@ import type {
   Invoice,
 } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * MOTION TOKENS
@@ -475,7 +475,7 @@ function PremiumTabSwitcher({
  * ════════════════════════════════════════════════════════════════════════ */
 
 function AttendanceRing({ summary }: { summary: ParentAttendanceSummary }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const reduced = usePrefersReducedMotion();
   const { byStatus, total } = summary;
   if (total === 0) return null;
@@ -634,7 +634,7 @@ function CommandBar({
 }: {
   studentName: string; balance: number; status?: string;
 }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const reduced = usePrefersReducedMotion();
 
   return (
@@ -709,7 +709,7 @@ function CommandBar({
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function ParentPortalPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('parentPortal.title'));
   const reduced = usePrefersReducedMotion();
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -743,6 +743,12 @@ export function ParentPortalPage() {
     queryKey: ['parent-portal-invoices', selectedChild?.studentId],
     queryFn: () => parentPortalApi.invoices(selectedChild!.studentId),
     enabled: !!selectedChild?.permissions?.payments,
+  });
+
+  const scheduleQuery = useQuery({
+    queryKey: ['parent-portal-schedule', selectedChild?.studentId],
+    queryFn: () => parentPortalApi.schedule(selectedChild!.studentId),
+    enabled: !!selectedChild?.permissions?.attendance,
   });
 
   /* ── Loading ──────────────────────────────────────────────────────── */
@@ -811,10 +817,11 @@ export function ParentPortalPage() {
   const attendanceSummary = attendanceSummaryQuery.data as ParentAttendanceSummary | undefined;
   const gradesData = gradesQuery.data as ParentGradesResponse | undefined;
   const invoicesData = invoicesQuery.data as ParentInvoicesResponse | undefined;
+  const scheduleData = (scheduleQuery.data as Array<{ id: string; dayOfWeek: string; startTime: string; endTime: string; room?: string | null; group: { id: string; name: string } }> | undefined) ?? [];
 
   /* ── Main Render ──────────────────────────────────────────────────── */
   return (
-    <div className="relative min-h-screen pb-12 selection:bg-emerald-500/30">
+    <div className="relative min-h-screen pb-[max(6rem,env(safe-area-inset-bottom))] selection:bg-emerald-500/30">
       <AuroraBackdrop />
 
       <div className="relative z-10 mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8">
@@ -1125,6 +1132,78 @@ export function ParentPortalPage() {
                         <div className="flex justify-center p-10">
                           <p className="text-[0.85rem] font-medium text-[var(--text-muted)]">
                             {t('parentPortal.noGrades')}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </LiquidGlassCard>
+                </motion.div>
+              )}
+
+              {/* ── Weekly Schedule ── */}
+              {perms?.attendance && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ ...SPRING.smooth, delay: 0.18 }}
+                >
+                  <LiquidGlassCard elevated>
+                    <div className="flex items-center justify-between border-b border-slate-200/60 px-5 py-3.5 dark:border-white/[0.06]">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-500/12 text-purple-600 dark:text-purple-400">
+                          <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                          </svg>
+                        </div>
+                        <h2 className="text-[0.95rem] font-black tracking-tight text-[var(--text-primary)]">
+                          {t('nav.schedule')}
+                        </h2>
+                      </div>
+                      <span className="text-[0.72rem] font-bold text-[var(--text-muted)]">
+                        {scheduleData.length} {t('common.total')?.toLowerCase() ?? 'classes'}
+                      </span>
+                    </div>
+
+                    <div className="p-3">
+                      {scheduleQuery.isLoading ? (
+                        <div className="flex h-28 items-center justify-center">
+                          <GlassPageLoader />
+                        </div>
+                      ) : scheduleData.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {scheduleData.map((s, idx) => {
+                            const dayKey = `schedule.day.${s.dayOfWeek}`;
+                            const dayName = t(dayKey) !== dayKey ? t(dayKey) : s.dayOfWeek;
+                            return (
+                              <motion.div
+                                key={s.id ?? idx}
+                                initial={reduced ? false : { opacity: 0, x: -8, filter: 'blur(3px)' }}
+                                animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
+                                className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white/60 p-3 transition-all hover:border-purple-500/30 dark:border-white/[0.06] dark:bg-white/[0.03]"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-[0.9rem] font-bold text-[var(--text-primary)]">
+                                    {s.group?.name ?? '—'}
+                                  </p>
+                                  <p className="mt-0.5 text-[0.75rem] font-medium text-[var(--text-muted)]">
+                                    {dayName} {s.room ? `· ${s.room}` : ''}
+                                  </p>
+                                </div>
+                                <div className="shrink-0 rounded-lg bg-purple-500/10 px-3 py-1 ring-1 ring-inset ring-purple-500/20">
+                                  <span className="text-[0.82rem] font-bold text-purple-700 dark:text-purple-300 tabular-nums">
+                                    {s.startTime} – {s.endTime}
+                                  </span>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex justify-center p-8">
+                          <p className="text-[0.85rem] font-medium text-[var(--text-muted)]">
+                            {t('schedule.noSchedule') !== 'schedule.noSchedule' ? t('schedule.noSchedule') : 'No schedule entries found'}
                           </p>
                         </div>
                       )}

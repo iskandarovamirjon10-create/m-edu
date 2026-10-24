@@ -12,7 +12,7 @@
  *  - Tone-aware colors throughout
  */
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, type SVGProps } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
@@ -28,7 +28,17 @@ import { useToast } from '@/components/ui/GlassToast';
 import { notificationsApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
 import { getErrorMessage } from '@/lib/errorMessages';
-import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
+import { useSafeI18n, type TranslateFn } from '@/i18n/I18nProvider';
+
+function AuroraMesh() {
+  return (
+    <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+      <div className="absolute -top-[10%] -left-[10%] h-[560px] w-[560px] rounded-full bg-gradient-to-br from-blue-500/12 via-indigo-500/8 to-transparent blur-[130px] dark:from-blue-600/14 dark:via-indigo-600/10" />
+      <div className="absolute top-[25%] -right-[10%] h-[520px] w-[520px] rounded-full bg-gradient-to-bl from-purple-500/12 via-pink-500/8 to-transparent blur-[130px] dark:from-purple-600/14 dark:via-pink-600/10" />
+      <div className="absolute -bottom-[15%] left-[25%] h-[480px] w-[480px] rounded-full bg-gradient-to-tr from-amber-500/10 via-orange-500/6 to-transparent blur-[120px] dark:from-amber-600/12" />
+    </div>
+  );
+}
 
 /* ============================================================================
  * MOTION TOKENS
@@ -207,7 +217,7 @@ function Icon({
   paths, size = 18, className = '', strokeWidth = ICON_STROKE, ...rest
 }: {
   paths: string[]; size?: number; className?: string; strokeWidth?: number;
-} & React.SVGProps<SVGSVGElement>) {
+} & SVGProps<SVGSVGElement>) {
   return (
     <svg
       width={size} height={size} viewBox="0 0 24 24"
@@ -752,7 +762,7 @@ function NotificationRow({
  * ========================================================================== */
 
 export function NotificationsCenterPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('notifications.title'));
   const queryClient = useQueryClient();
   const { push } = useToast();
@@ -843,9 +853,8 @@ export function NotificationsCenterPage() {
      MAIN
   --------------------------------------------------------------- */
   return (
-    <div style={{ display: 'contents' }}>
-      <div className="orb orb-cyan-1" />
-      <div className="orb orb-indigo-1" />
+    <div className="relative min-h-screen pb-[max(6rem,env(safe-area-inset-bottom))]">
+      <AuroraMesh />
 
       <motion.div
         variants={containerVariants}

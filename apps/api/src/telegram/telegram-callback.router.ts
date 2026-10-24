@@ -161,6 +161,9 @@ export class TelegramCallbackRouter {
         return this.commands.executeCommand(arg, chatId, { ctx });
       }
 
+      case 'brf':
+        return this.commands.executeCommand('briefing', chatId, { ctx });
+
       case CallbackCodes.CHILD_SELECT:
         return this.renderChildSelect(ctx, chatId, arg);
 

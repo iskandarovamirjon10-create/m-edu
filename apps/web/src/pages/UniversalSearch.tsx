@@ -21,10 +21,12 @@ import {
   GlassPageLoader,
   GlassErrorState,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useUniversalSearch } from '@/hooks/useUniversalSearch';
 import { getErrorMessage } from '@/lib/errorMessages';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 const SPRING = {
   snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
@@ -76,8 +78,9 @@ const TYPE_FILTERS = [
 ];
 
 export function UniversalSearchPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('search.title'));
+  const { playTick } = usePremiumSound();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialQ = searchParams.get('q') ?? '';
@@ -124,16 +127,13 @@ export function UniversalSearchPage() {
   return (
     <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
       {/* Ambient background lighting */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        <div className="absolute top-[5%] left-[-5%] w-[45%] h-[40%] rounded-full bg-blue-400/5 blur-[120px]" />
-        <div className="absolute bottom-[10%] right-[-5%] w-[40%] h-[45%] rounded-full bg-indigo-400/5 blur-[120px]" />
-      </div>
+      <AuroraMesh variant="corporate" />
 
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="relative z-10 w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6"
+        className="relative z-10 w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))]"
       >
         <motion.div variants={itemVariants}>
           <GlassPageHeader
@@ -185,8 +185,12 @@ export function UniversalSearchPage() {
               <GlassButton
                 key={f.value}
                 size="sm"
+                className="min-h-[44px]"
                 variant={typeFilter === f.value ? 'primary' : 'ghost'}
-                onClick={() => setTypeFilter(f.value)}
+                onClick={() => {
+                  playTick();
+                  setTypeFilter(f.value);
+                }}
               >
                 {t(f.labelKey)}
               </GlassButton>

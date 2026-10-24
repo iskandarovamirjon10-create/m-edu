@@ -27,7 +27,7 @@ vi.mock('@/lib/api', () => ({
 function renderCallback(initialEntries: string[]) {
   return render(
     <I18nProvider>
-      <MemoryRouter initialEntries={initialEntries}>
+      <MemoryRouter initialEntries={initialEntries} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <Routes>
             <Route path="/auth/callback" element={<AuthCallbackPage />} />

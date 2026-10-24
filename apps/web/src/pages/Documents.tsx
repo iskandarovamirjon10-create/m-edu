@@ -28,11 +28,14 @@ import {
   GlassField,
   ConfirmDialog,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { useToast } from '@/components/ui/GlassToast';
 import { documentsApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -302,7 +305,7 @@ function docGradient(title: string): string {
  * ========================================================================== */
 
 function AmbientOrbs() {
-  return null;
+  return <AuroraMesh variant="subtle" />;
 }
 
 function CountUp({ value, duration = 1.1 }: { value: number; duration?: number }) {
@@ -482,10 +485,11 @@ function TextAreaFieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Ton
  * ========================================================================== */
 
 export function DocumentsPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('documents.title'));
   const queryClient = useQueryClient();
   const toast = useToast();
+  const { playPop } = usePremiumSound();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -493,6 +497,42 @@ export function DocumentsPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [form, setForm] = useState<CreateForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const handleOpenDocSidecar = (doc: Document) => {
+    playPop();
+    const sidecarData: QuickLookData = {
+      type: 'general',
+      id: doc.id,
+      title: doc.title,
+      subtitle: `${doc.category} · v${doc.version}`,
+      badge: {
+        text: doc.category,
+        tone: 'blue',
+      },
+      metrics: [
+        { label: 'Hajmi', value: formatSize(doc.fileSize) },
+        { label: 'Versiya', value: `v${doc.version}` },
+        { label: 'Format', value: doc.mimeType.split('/')[1]?.toUpperCase() || 'FILE' },
+      ],
+      details: [
+        { label: 'Hujjat ID', value: doc.id, copyable: true },
+        { label: 'Nomi', value: doc.title },
+        { label: 'Kategoriya', value: doc.category },
+        { label: 'Tavsif', value: doc.description || '—' },
+        { label: 'MIME Type', value: doc.mimeType },
+        { label: 'Yuklangan', value: formatDate(doc.uploadedAt) },
+        { label: 'Yuklagan', value: doc.uploadedBy || 'Tizim' },
+        { label: 'Teglar', value: doc.tags?.join(', ') || '—' },
+      ],
+      primaryAction: {
+        label: t('common.open') || 'Ochish',
+        onExecute: () => {
+          window.open(doc.fileUrl, '_blank', 'noopener,noreferrer');
+        },
+      },
+    };
+    openSidecar(sidecarData);
+  };
 
   /* ── Queries ──────────────────────────────────────────────────────── */
   const docsQuery = useQuery({
@@ -638,7 +678,7 @@ export function DocumentsPage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="relative page-container space-y-5"
+      className="relative page-container space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
       <AmbientOrbs />
       {toast.toastNode}
@@ -939,7 +979,15 @@ export function DocumentsPage() {
                     </div>
                   </div>
 
-                  <div className="flex gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDocSidecar(doc)}
+                      className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-xl border border-black/[0.08] bg-black/[0.03] text-xs font-semibold text-slate-700 hover:border-sky-400 hover:bg-sky-50/50 hover:text-sky-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200 dark:hover:text-sky-400 transition-all shadow-sm"
+                      title="macOS Split-View Sidecar (◨)"
+                    >
+                      <span className="text-sm">◨</span>
+                    </button>
                     <motion.button
                       type="button"
                       onClick={() => window.open(doc.fileUrl, '_blank', 'noopener,noreferrer')}
@@ -948,7 +996,7 @@ export function DocumentsPage() {
                       transition={SPRING.snappy}
                       aria-label={t('common.open')}
                       title={t('common.open')}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
+                      className="flex h-11 w-11 items-center justify-center rounded-xl outline-none"
                       style={{
                         background: 'rgba(2,132,199,0.10)',
                         color: '#0284C7',
@@ -962,7 +1010,7 @@ export function DocumentsPage() {
                           e.currentTarget.click();
                         }
                       }}>
-                      <Icon paths={I.externalLink} size={13} strokeWidth={2} />
+                      <Icon paths={I.externalLink} size={15} strokeWidth={2} />
                     </motion.button>
                     <motion.button
                       type="button"
@@ -973,7 +1021,7 @@ export function DocumentsPage() {
                       transition={SPRING.snappy}
                       aria-label={t('common.edit')}
                       title={t('common.edit')}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg outline-none disabled:opacity-50"
+                      className="flex h-11 w-11 items-center justify-center rounded-xl outline-none disabled:opacity-50"
                       style={{
                         background: 'rgba(37,99,235,0.10)',
                         color: '#2563EB',
@@ -987,7 +1035,7 @@ export function DocumentsPage() {
                           e.currentTarget.click();
                         }
                       }}>
-                      <Icon paths={I.edit} size={13} strokeWidth={2} />
+                      <Icon paths={I.edit} size={15} strokeWidth={2} />
                     </motion.button>
                     <motion.button
                       type="button"
@@ -998,7 +1046,7 @@ export function DocumentsPage() {
                       transition={SPRING.snappy}
                       aria-label={t('common.delete')}
                       title={t('common.delete')}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg outline-none disabled:opacity-50"
+                      className="flex h-11 w-11 items-center justify-center rounded-xl outline-none disabled:opacity-50"
                       style={{
                         background: 'rgba(239,68,68,0.10)',
                         color: '#EF4444',

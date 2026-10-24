@@ -7,7 +7,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { GlassButton } from '@/components/ui';
 import type { User } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 type CallbackStatus = 'processing' | 'success' | 'error';
 
@@ -23,7 +23,7 @@ const INITIAL_STATE: CallbackState = {
 };
 
 export function AuthCallbackPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('authCallback.pageTitle'));
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

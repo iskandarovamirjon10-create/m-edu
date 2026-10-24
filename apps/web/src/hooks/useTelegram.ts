@@ -100,8 +100,8 @@ function updateSnapshot(partial: Partial<TelegramStateSnapshot>): void {
  * (Oddiy brauzerda ham window.Telegram.WebApp obyekti bo'ladi, lekin initData bo'sh bo'ladi)
  */
 function detectIsRealTelegram(sdk: ExtendedTelegramWebApp): boolean {
-  if (Boolean(sdk.initData && sdk.initData.length > 0)) return true;
-  if (Boolean(sdk.initDataUnsafe?.user?.id)) return true;
+  if (sdk.initData && sdk.initData.length > 0) return true;
+  if (sdk.initDataUnsafe?.user?.id) return true;
   if (sdk.platform && sdk.platform !== 'unknown') return true;
   if (typeof window !== 'undefined' && window.location.hash.includes('tgWebAppData')) {
     return true;

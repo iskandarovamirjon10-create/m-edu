@@ -13,8 +13,9 @@ import {
   GlassEmptyState,
   GlassErrorState,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { performanceApi } from '@/lib/api';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
@@ -56,7 +57,7 @@ function SeverityBadge({ severity }: { severity: string }) {
 }
 
 export function PerformanceMonitorPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('performance.title') || 'Performance & Telemetry');
   const [activeTab, setActiveTab] = useState<Tab>('audit');
 
@@ -77,9 +78,9 @@ export function PerformanceMonitorPage() {
       id: `${issue.file}:${issue.line}`,
       title: `${issue.method} (N+1 Hazard)`,
       subtitle: `${issue.file}:${issue.line}`,
-      status: {
-        label: issue.severity,
-        tone: issue.severity === 'HIGH' ? 'red' : 'amber',
+      badge: {
+        text: issue.severity,
+        tone: issue.severity === 'HIGH' ? 'rose' : 'amber',
       },
       metrics: [
         { label: 'Daraja', value: issue.severity },
@@ -104,9 +105,9 @@ export function PerformanceMonitorPage() {
       id: `${ep.method}-${ep.endpoint}`,
       title: `${ep.method} ${ep.endpoint}`,
       subtitle: `Kechikish: ${ep.avgDuration}ms · ${ep.callCount} ta so'rov`,
-      status: {
-        label: `${ep.avgDuration}ms`,
-        tone: ep.avgDuration > 1000 ? 'red' : ep.avgDuration > 500 ? 'amber' : 'green',
+      badge: {
+        text: `${ep.avgDuration}ms`,
+        tone: ep.avgDuration > 1000 ? 'rose' : ep.avgDuration > 500 ? 'amber' : 'emerald',
       },
       metrics: [
         { label: 'Method', value: ep.method },
@@ -176,16 +177,9 @@ export function PerformanceMonitorPage() {
   ];
 
   return (
-    <div className="relative min-h-screen px-4 pb-16 pt-4 sm:px-6 lg:px-8">
+    <div className="relative min-h-screen px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 lg:px-8">
       {/* Ambient background glows */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed -top-40 right-10 h-96 w-96 rounded-full bg-emerald-500/10 blur-[100px] dark:bg-emerald-500/15"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed top-1/3 left-10 h-96 w-96 rounded-full bg-cyan-500/10 blur-[100px] dark:bg-cyan-500/15"
-      />
+      <AuroraMesh variant="corporate" />
 
       <div className="relative z-10 mx-auto max-w-7xl space-y-6">
         <GlassPageHeader
@@ -265,7 +259,7 @@ export function PerformanceMonitorPage() {
                     playTick();
                     setActiveTab(tab.key);
                   }}
-                  className={`relative rounded-xl px-4 py-2 text-[12.5px] font-bold transition-colors ${
+                  className={`relative inline-flex items-center justify-center min-h-[44px] rounded-xl px-4 py-2.5 text-[12.5px] font-bold transition-colors ${
                     isActive
                       ? 'text-white'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -323,7 +317,7 @@ export function PerformanceMonitorPage() {
                           playTick();
                           handleOpenNPlusOneSidecar(issue);
                         }}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/20 bg-white/40 px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)] shadow-sm backdrop-blur-md transition-all hover:bg-white/60 hover:text-[var(--text-primary)] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
+                        className="inline-flex shrink-0 items-center justify-center min-h-[44px] min-w-[44px] gap-1.5 rounded-xl border border-white/20 bg-white/40 px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] shadow-sm backdrop-blur-md transition-all hover:bg-white/60 hover:text-[var(--text-primary)] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
                         title="Split View Sidecar"
                       >
                         <span>◨</span>
@@ -477,7 +471,7 @@ export function PerformanceMonitorPage() {
                               playTick();
                               handleOpenSlowEndpointSidecar(ep);
                             }}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/40 px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)] shadow-sm backdrop-blur-md transition-all hover:bg-white/60 hover:text-[var(--text-primary)] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
+                            className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] gap-1.5 rounded-xl border border-white/20 bg-white/40 px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] shadow-sm backdrop-blur-md transition-all hover:bg-white/60 hover:text-[var(--text-primary)] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
                             title="Split View Sidecar"
                           >
                             <span>◨</span>

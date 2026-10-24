@@ -193,22 +193,24 @@ export class RecognitionDecisionPolicy {
       };
     }
 
-    // Step 4: Similarity threshold
+    // Step 4: Uncertain zone around the threshold [threshold - margin, threshold + margin)
+    // Evaluated BEFORE threshold rejection so scores in [threshold - margin, threshold)
+    // are correctly classified as UNCERTAIN rather than prematurely rejected.
+    const distanceFromThreshold = Math.abs(input.similarityScore - this.config.matching.similarityThreshold);
+    if (this.config.matching.uncertainMargin > 0 && distanceFromThreshold < this.config.matching.uncertainMargin) {
+      return {
+        outcome: 'UNCERTAIN',
+        reason: 'SIMILARITY_UNCERTAIN',
+        message: `Similarity score ${input.similarityScore.toFixed(3)} is near the threshold`,
+      };
+    }
+
+    // Step 5: Similarity threshold
     if (input.similarityScore < this.config.matching.similarityThreshold) {
       return {
         outcome: 'REJECTED',
         reason: 'SIMILARITY_TOO_LOW',
         message: `Similarity score ${input.similarityScore.toFixed(3)} is below threshold ${this.config.matching.similarityThreshold}`,
-      };
-    }
-
-    // Step 5: Uncertain zone
-    const distanceFromThreshold = Math.abs(input.similarityScore - this.config.matching.similarityThreshold);
-    if (distanceFromThreshold < this.config.matching.uncertainMargin) {
-      return {
-        outcome: 'UNCERTAIN',
-        reason: 'SIMILARITY_UNCERTAIN',
-        message: `Similarity score ${input.similarityScore.toFixed(3)} is near the threshold`,
       };
     }
 

@@ -46,11 +46,14 @@ export function createStudentsTools(students: StudentsService): AiToolDefinition
     },
     {
       name: 'students.create',
-      description: 'Create a new student in the current organization.',
+      description:
+        'Create a new student in the current organization. Only call this once the ' +
+        'user has confirmed the first and last name. Email is optional: omit it ' +
+        'instead of inventing an address.',
       inputSchema: z.object({
         firstName: z.string().min(1).max(100),
         lastName: z.string().min(1).max(100),
-        email: z.string().email(),
+        email: z.string().email().optional(),
         phone: z.string().max(20).optional(),
       }),
       riskLevel: AiToolRiskLevel.MEDIUM,
@@ -61,11 +64,16 @@ export function createStudentsTools(students: StudentsService): AiToolDefinition
         const result = await students.create(context.organizationId, {
           firstName: input.firstName,
           lastName: input.lastName,
-          email: input.email,
-          phone: input.phone,
+          ...(input.email ? { email: input.email } : {}),
+          ...(input.phone ? { phone: input.phone } : {}),
           role: 'STUDENT',
         } as any);
-        return { success: true, studentId: result.id };
+        return {
+          success: true,
+          studentId: result.id,
+          name: `${input.firstName} ${input.lastName}`.trim(),
+          email: input.email ?? null,
+        };
       },
     }
   ];

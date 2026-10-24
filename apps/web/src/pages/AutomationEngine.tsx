@@ -83,9 +83,10 @@ import {
   useToasts,
   GlassTabs,
 } from '@/components/ui';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { openSidecar } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import type {
   AutomationRule,
   AutomationExecution,
@@ -517,7 +518,7 @@ type ActiveTab = 'rules' | 'executions' | 'stats';
 type ModalMode = { kind: 'closed' } | { kind: 'create' } | { kind: 'edit'; rule: AutomationRule };
 
 export function AutomationEnginePage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const { push: toast, toastNode } = useToasts();
   const queryClient = useQueryClient();
   const { playTick, playPop, playSuccess, playError } = usePremiumSound();
@@ -916,22 +917,9 @@ export function AutomationEnginePage() {
 
   return (
     <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
-      {/* Ambient background — 3 orbs, tab-visibility gated animation */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-        <div className="absolute -left-[10%] -top-[10%] h-[55%] w-[55%] rounded-full bg-brand-400/10 blur-[140px] dark:bg-brand-500/[0.07] motion-safe:animate-[float_18s_ease-in-out_infinite]" />
-        <div className="absolute -right-[10%] top-[30%] h-[50%] w-[45%] rounded-full bg-emerald-400/10 blur-[130px] dark:bg-emerald-500/[0.06] motion-safe:animate-[float_22s_ease-in-out_infinite_reverse]" />
-        <div className="absolute -bottom-[15%] left-[30%] h-[45%] w-[50%] rounded-full bg-purple-400/[0.07] blur-[150px] dark:bg-purple-500/[0.05] motion-safe:animate-[float_26s_ease-in-out_infinite]" />
-        {/* Film grain — anti-banding dither */}
-        <div
-          className="absolute inset-0 opacity-[0.015] dark:opacity-[0.025]"
-          style={{
-            backgroundImage:
-              "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-          }}
-        />
-      </div>
+      <AuroraMesh variant="corporate" opacity={0.65} />
 
-      <div className="relative z-10 mx-auto w-full max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700">
+      <div className="relative z-10 mx-auto w-full max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8 pb-[max(6rem,env(safe-area-inset-bottom))] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700">
         {/* Toast region — aria-live for screen readers */}
         <div aria-live="polite" aria-atomic="false">
           {toastNode}

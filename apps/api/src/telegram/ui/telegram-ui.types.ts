@@ -9,6 +9,8 @@ export interface InlineKeyboardButton {
   text: string;
   /** Callback payload — always an opaque, server-verified envelope. */
   callback_data?: string;
+  url?: string;
+  web_app?: { url: string };
 }
 
 export type InlineKeyboardMarkup = {

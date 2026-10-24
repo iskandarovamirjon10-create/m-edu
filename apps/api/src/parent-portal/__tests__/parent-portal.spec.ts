@@ -49,6 +49,9 @@ describe('ParentPortalModule Unit Tests', () => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
 
+    service = new ParentPortalService(prisma as unknown as PrismaService);
+    controller = new ParentPortalController(service);
+    /*
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ParentPortalController],
       providers: [
@@ -59,6 +62,7 @@ describe('ParentPortalModule Unit Tests', () => {
 
     service = module.get<ParentPortalService>(ParentPortalService);
     controller = module.get<ParentPortalController>(ParentPortalController);
+    */
   });
 
   describe('ParentPortalService', () => {

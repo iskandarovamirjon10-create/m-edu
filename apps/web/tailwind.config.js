@@ -1,11 +1,12 @@
-﻿/**
- * M-EDU - Apple Premium Design System
+/**
+ * M-EDU - Apple Premium Design System (iOS 27 & macOS Sequoia Liquid Glass)
  *
  * One restrained system:
  *  - Apple system colors (blue #007AFF, green #34C759, orange #FF9500, red #FF3B30)
- *  - Hairline borders, very soft shadows, no candy glows
- *  - SF Pro typography with tight tracking on large text
+ *  - Hairline borders, multi-stop ambient shadows, no candy/neon glows
+ *  - SF Pro typography with tight optical tracking
  *  - Apple spring easing (cubic-bezier(0.32, 0.72, 0, 1))
+ *  - Unified 3-Tier Liquid Glass optics (subtle, card, floating)
  */
 
 /** @type {import('tailwindcss').Config} */
@@ -65,9 +66,12 @@ export default {
           950: '#000000',
         },
         glass: {
-          light: 'rgba(255,255,255,0.72)',
+          light: 'rgba(255,255,255,0.78)',
           lighter: 'rgba(255,255,255,0.88)',
-          dark: 'rgba(28,28,30,0.72)',
+          dark: 'rgba(22,27,38,0.74)',
+          subtle: 'rgba(255,255,255,0.70)',
+          card: 'rgba(255,255,255,0.80)',
+          floating: 'rgba(255,255,255,0.88)',
         },
       },
       fontFamily: {
@@ -94,15 +98,21 @@ export default {
         'royal': '0 4px 14px rgba(0,122,255,0.24)',
         'glass': '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
         'glass-lg': '0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)',
+        'glass-subtle': 'inset 0 1px 0 0 rgba(255,255,255,0.8), 0 2px 8px -2px rgba(0,0,0,0.04)',
+        'glass-card': 'inset 0 1px 0 0 rgba(255,255,255,0.85), inset 1px 0 0 0 rgba(255,255,255,0.35), 0 8px 24px -4px rgba(0,0,0,0.05)',
+        'glass-floating': 'inset 0 1px 0 0 rgba(255,255,255,0.9), 0 24px 64px -8px rgba(0,0,0,0.10)',
         'apple-card': '0 1px 3px rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.06)',
         'apple-float': '0 12px 32px -8px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.06)',
         'glow-cyan': '0 0 20px rgba(90,200,250,0.16)',
         'glow-vivid': '0 2px 12px rgba(0,122,255,0.18)',
       },
       backdropBlur: {
+        'glass-xs': '8px',
+        'glass-sm': '12px',
         'glass': '20px',
-        'glass-lg': '32px',
-        'glass-xl': '48px',
+        'glass-lg': '28px',
+        'glass-xl': '36px',
+        'glass-2xl': '48px',
       },
       transitionTimingFunction: {
         'apple-spring': 'cubic-bezier(0.32, 0.72, 0, 1)',

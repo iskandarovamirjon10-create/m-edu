@@ -77,7 +77,7 @@ describe('FaceRecognitionPage — start-session response contract', () => {
     // Wait for the page to settle
     await screen.findByText(/face recognition/i);
 
-    await userEvent.click(screen.getByRole('button', { name: /start recognition session/i }));
+    await userEvent.click(screen.getAllByRole('button', { name: /start recognition session/i })[0]);
 
     // The session-active state must engage and the capture surface appear.
     await waitFor(() => {

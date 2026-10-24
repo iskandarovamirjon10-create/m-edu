@@ -44,7 +44,7 @@ import { GlassInput } from '@/components/ui';
 import { ApiError } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
+import { useSafeI18n, type TranslateFn } from '@/i18n/I18nProvider';
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §1  PHYSICS CONSTANTS (100% preserved from v2)
@@ -754,7 +754,7 @@ function ChapterCard({
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 function PendingScreen({ message }: { message: string }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const reduced = usePrefersReducedMotion();
 
   return (
@@ -826,7 +826,7 @@ function PendingScreen({ message }: { message: string }) {
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 export function RegisterPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('auth.registerTitle'));
 
   const { register } = useAuth();

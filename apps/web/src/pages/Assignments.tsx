@@ -18,10 +18,11 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { assignmentsApi, groupsApi } from '@/lib/api';
-import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
+import { useSafeI18n, type TranslateFn } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -362,7 +363,7 @@ function AssignmentCard({
   isSelected?: boolean;
   onToggleSelect?: () => void;
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale } = useSafeI18n();
   const { playTick, playPop } = usePremiumSound();
   const tone = assignmentTone(assignment.title);
   const c = TONE[tone];
@@ -562,7 +563,7 @@ function AssignmentCard({
  * ========================================================================== */
 
 export default function AssignmentsPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const queryClient = useQueryClient();
   const { playPop, playTick, playSuccess } = usePremiumSound();
 
@@ -777,12 +778,14 @@ export default function AssignmentsPage() {
 
   /* ---------------- Main View ---------------- */
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="page-container space-y-5"
-    >
+    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+      <AuroraMesh variant="corporate" opacity={0.65} />
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="page-container relative z-10 space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
+      >
       {/* HERO (Apple Liquid Glass Header) */}
       <motion.div variants={cardVariants}>
         <div className="liquid-glass-surface rounded-3xl p-6 sm:p-8">
@@ -1099,5 +1102,6 @@ export default function AssignmentsPage() {
         )}
       </AnimatePresence>
     </motion.div>
+  </div>
   );
 }

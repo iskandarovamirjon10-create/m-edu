@@ -76,14 +76,14 @@ function StatMini({
   tone: string;
 }) {
   return (
-    <div className="rounded-lg border border-subtle bg-black/[0.02] p-3 dark:bg-white/[0.03]">
+    <div className="rounded-2xl border border-black/[0.06] bg-black/[0.02] p-3.5 dark:border-white/[0.08] dark:bg-white/[0.03] shadow-xs">
       <div className="flex items-center gap-2">
-        <span className={cn('flex h-6 w-6 items-center justify-center rounded-md', tone)}>
-          <IconComponent className="h-3.5 w-3.5" strokeWidth={1.75} />
+        <span className={cn('flex h-7 w-7 items-center justify-center rounded-xl', tone)}>
+          <IconComponent className="h-4 w-4" strokeWidth={1.8} />
         </span>
-        <span className="text-[11px] font-medium uppercase tracking-wide text-tertiary">{label}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-tertiary">{label}</span>
       </div>
-      <p className="mt-2 text-base font-semibold tabular-nums text-primary">{value}</p>
+      <p className="mt-2.5 text-base font-bold tabular-nums text-primary">{value}</p>
       <span className="mt-0.5 block text-[11px] text-tertiary">{footnote}</span>
     </div>
   );
@@ -182,14 +182,14 @@ export function ExecutiveBriefingModal({
               handleClose();
               navigate('/reports');
             }}
-            className="inline-flex h-9 items-center justify-center rounded-lg border border-subtle bg-black/[0.02] px-3.5 text-xs font-medium text-secondary transition-colors duration-150 hover:text-primary dark:bg-white/[0.04]"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-black/[0.08] bg-black/[0.03] px-4 text-xs font-semibold text-secondary transition-colors duration-150 hover:bg-black/[0.06] hover:text-primary dark:border-white/[0.1] dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
           >
             {t('dashboard.fullDiagnostics') || 'Batafsil hisobotlar'}
           </button>
           <button
             type="button"
             onClick={handleClose}
-            className="inline-flex h-9 items-center justify-center rounded-lg bg-brand-500 px-5 text-xs font-medium text-white shadow-xs transition-colors duration-150 hover:bg-brand-600 active:bg-brand-700"
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-gradient-to-r from-apple-blue to-[#5E5CE6] px-5 text-xs font-semibold text-white shadow-xs transition-all duration-150 hover:opacity-95 active:scale-98"
           >
             {t('dashboard.startWorking') || 'Tushunarli'}
           </button>
@@ -199,10 +199,10 @@ export function ExecutiveBriefingModal({
       <div className="space-y-5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-apple-blue/10 text-apple-blue">
-              <Sparkles className="h-4.5 w-4.5" strokeWidth={1.75} aria-hidden />
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-apple-blue/10 text-apple-blue ring-1 ring-apple-blue/20">
+              <Sparkles className="h-4.5 w-4.5" strokeWidth={1.8} aria-hidden />
             </span>
-            <span className="text-xs font-medium text-secondary">AI tahliliy xulosa</span>
+            <span className="text-xs font-semibold text-secondary">AI tahliliy xulosa</span>
           </div>
 
           <button
@@ -214,23 +214,23 @@ export function ExecutiveBriefingModal({
                 : t('dashboard.playVoice') || 'Ovozli tinglash'
             }
             className={cn(
-              'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors duration-150',
+              'inline-flex h-8.5 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-all duration-150',
               isSpeaking
-                ? 'bg-apple-blue/10 text-apple-blue'
-                : 'border border-subtle bg-black/[0.02] text-secondary hover:text-primary dark:bg-white/[0.04]',
+                ? 'bg-apple-blue/15 text-apple-blue ring-1 ring-apple-blue/30'
+                : 'border border-black/[0.08] bg-black/[0.02] text-secondary hover:text-primary hover:bg-black/[0.05] dark:border-white/[0.1] dark:bg-white/[0.04] dark:hover:bg-white/[0.08]',
             )}
           >
             {isSpeaking ? (
               <>
-                <Volume2 className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                <Volume2 className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
                 <span>{t('dashboard.speaking') || 'Ovozli ijro...'}</span>
               </>
             ) : (
               <>
                 {hasStarted ? (
-                  <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                  <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
                 ) : (
-                  <VolumeX className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                  <VolumeX className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
                 )}
                 <span>
                   {hasStarted
@@ -243,7 +243,7 @@ export function ExecutiveBriefingModal({
         </div>
 
         {isSpeaking && (
-          <div className="flex items-center justify-between rounded-lg border border-apple-blue/15 bg-apple-blue/5 px-4 py-2">
+          <div className="flex items-center justify-between rounded-2xl border border-apple-blue/20 bg-apple-blue/[0.08] px-4 py-2.5 backdrop-blur-md">
             <span className="text-xs font-medium text-apple-blue">AI hisobotni o'qib bermoqda...</span>
             <AudioWaveform active={isSpeaking} />
           </div>
@@ -251,7 +251,7 @@ export function ExecutiveBriefingModal({
 
         <p
           aria-live="polite"
-          className="rounded-lg border border-subtle bg-black/[0.02] p-4 text-sm leading-relaxed text-secondary dark:bg-white/[0.03]"
+          className="rounded-2xl border border-black/[0.06] bg-black/[0.02] p-4 text-sm leading-relaxed text-secondary dark:border-white/[0.08] dark:bg-white/[0.03]"
         >
           “{briefingText}”
         </p>

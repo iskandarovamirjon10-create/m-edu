@@ -16,25 +16,48 @@ import type { TenantContext } from '../ports/tenant-context.port';
 import { FaceEmbedding } from '../domain/value-objects';
 import { RecognitionDecisionPolicy } from './recognition-decision.policy';
 import { AttendancePolicy } from './attendance.policy';
-import { RecognitionAttemptStatus, RecognitionSessionStatus, AuditEventType } from '@medu/contracts';
+import {
+  RecognitionAttemptStatus,
+  RecognitionSessionStatus,
+  AuditEventType,
+  Permissions,
+} from '@medu/contracts';
 import {
   SessionNotFoundError,
   SessionAlreadyFinishedError,
   FaceNotDetectedError,
-  MultipleFacesDetectedError,
   FaceQualityTooLowError,
   LivenessFailedError,
   MaxConcurrentSessionsError,
 } from '../domain/errors';
-import { Permissions } from '@medu/contracts';
+
+// ===========================================================================
+// 1. PUBLIC CONTRACTS & TYPES
+// ===========================================================================
+
+export interface BoundingBox {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface RecognitionStudentSummary {
+  readonly id: string;
+  readonly firstName: string;
+  readonly lastName: string;
+}
+
+export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+export type LivenessDecisionType = 'PASS' | 'FAIL' | 'UNCERTAIN' | 'UNAVAILABLE';
 
 export interface RecognitionMatchItem {
   faceIndex: number;
   attemptId: string;
   identified: boolean;
   status: RecognitionAttemptStatus;
-  student: { id: string; firstName: string; lastName: string } | null;
-  confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+  student: RecognitionStudentSummary | null;
+  confidence: ConfidenceLevel;
   similarityScore: number | null;
   qualityScore: number;
   liveness: string;
@@ -42,15 +65,15 @@ export interface RecognitionMatchItem {
   attendanceDecision: string | null;
   attendanceRecordId: string | null;
   message: string;
-  boundingBox?: { x: number; y: number; width: number; height: number };
+  boundingBox?: BoundingBox;
 }
 
 export interface RecognitionAttemptResult {
   attemptId: string;
   identified: boolean;
   status: RecognitionAttemptStatus;
-  student: { id: string; firstName: string; lastName: string } | null;
-  confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+  student: RecognitionStudentSummary | null;
+  confidence: ConfidenceLevel;
   liveness: string;
   qualityScore: number;
   attendanceRecorded: boolean;
@@ -60,8 +83,61 @@ export interface RecognitionAttemptResult {
   faceCount?: number;
   matches?: RecognitionMatchItem[];
 }
+
+type ActiveTemplateRecord = Awaited<
+  ReturnType<EnrollmentRepository['findAllActiveTemplates']>
+>[number];
+
+type SessionRecord = NonNullable<
+  Awaited<ReturnType<RecognitionRepository['findSession']>>
+>;
+
+interface CachedTemplateEntry {
+  readonly hash: string;
+  readonly embedding: FaceEmbedding;
+}
+
+interface CandidateMatchRank {
+  bestSimilarity: number;
+  bestMatch: ActiveTemplateRecord | null;
+  secondBestSimilarity: number;
+}
+
+interface MultiFaceEvaluationContext {
+  readonly faceIndex: number;
+  readonly face: DetectedFace;
+  qualityScore: number;
+  qualityPasses: boolean;
+  livenessResult: LivenessDecisionType;
+  livenessConfidence: number;
+  livenessStatus: RecognitionAttemptStatus;
+  probeEmbedding: FaceEmbedding | null;
+  preprocessingError: string | null;
+  /** Ranked per-student best matches so multi-face frames can prevent duplicate student assignment */
+  readonly studentScores: Map<
+    string,
+    { similarity: number; template: ActiveTemplateRecord }
+  >;
+}
+
+// ===========================================================================
+// 2. CONSTANTS
+// ===========================================================================
+
+const GALLERY_STREAM_BATCH_SIZE = 500;
+const MAX_FACES_PER_FRAME = 5;
+const MAX_TEMPLATE_CACHE_ENTRIES = 100_000;
+
+// ===========================================================================
+// 3. SERVICE IMPLEMENTATION
+// ===========================================================================
+
 export class RecognitionService {
-  private static templateCache = new Map<string, { hash: string, embedding: FaceEmbedding }>();
+  /**
+   * Bounded LRU in-memory cache of decrypted embeddings keyed by `${organizationId}:${templateId}`.
+   * Avoids O(N) AES-GCM decryptions per camera frame while keeping memory strictly bounded.
+   */
+  private static readonly templateCache = new Map<string, CachedTemplateEntry>();
 
   constructor(
     private readonly faceEngine: FaceEngine,
@@ -71,8 +147,66 @@ export class RecognitionService {
     private readonly authorization: AuthorizationPort,
     private readonly audit: AuditRepository,
     private readonly decisionPolicy: RecognitionDecisionPolicy,
-    private readonly attendancePolicy: AttendancePolicy
+    private readonly attendancePolicy: AttendancePolicy,
   ) {}
+
+  // =========================================================================
+  // CACHE MANAGEMENT API
+  // =========================================================================
+
+  /**
+   * Invalidates cached decrypted templates globally, per organization, or for a single template.
+   */
+  public static invalidateTemplateCache(
+    organizationId?: string,
+    templateId?: string,
+  ): void {
+    if (!organizationId) {
+      RecognitionService.templateCache.clear();
+      return;
+    }
+
+    if (templateId) {
+      RecognitionService.templateCache.delete(`${organizationId}:${templateId}`);
+      return;
+    }
+
+    const prefix = `${organizationId}:`;
+    for (const key of RecognitionService.templateCache.keys()) {
+      if (key.startsWith(prefix)) {
+        RecognitionService.templateCache.delete(key);
+      }
+    }
+  }
+
+  private getCachedTemplate(key: string): CachedTemplateEntry | undefined {
+    const entry = RecognitionService.templateCache.get(key);
+    if (!entry) return undefined;
+
+    // Refresh LRU order
+    RecognitionService.templateCache.delete(key);
+    RecognitionService.templateCache.set(key, entry);
+    return entry;
+  }
+
+  private setCachedTemplate(key: string, entry: CachedTemplateEntry): void {
+    if (RecognitionService.templateCache.has(key)) {
+      RecognitionService.templateCache.delete(key);
+    } else if (
+      RecognitionService.templateCache.size >= MAX_TEMPLATE_CACHE_ENTRIES
+    ) {
+      // Evict oldest (least recently used) entry instead of wiping the entire 100k cache
+      const oldestKey = RecognitionService.templateCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        RecognitionService.templateCache.delete(oldestKey);
+      }
+    }
+    RecognitionService.templateCache.set(key, entry);
+  }
+
+  // =========================================================================
+  // SESSION LIFECYCLE
+  // =========================================================================
 
   /**
    * Start a new recognition session.
@@ -83,12 +217,16 @@ export class RecognitionService {
       deviceId?: string;
       groupId?: string;
       lessonId?: string;
-    }
+    },
   ): Promise<{ sessionId: string; status: string }> {
-    await this.authorization.requirePermission(Permissions.FACE_RECOGNIZE, tenant.role);
+    await this.authorization.requirePermission(
+      Permissions.FACE_RECOGNIZE,
+      tenant.role,
+    );
 
-    // Check concurrent session limit
-    const activeSessions = await this.recognitionRepo.countActiveSessions(tenant.organizationId);
+    const activeSessions = await this.recognitionRepo.countActiveSessions(
+      tenant.organizationId,
+    );
     const config = this.decisionPolicy.getConfig();
     if (activeSessions >= config.sessions.maxConcurrent) {
       throw new MaxConcurrentSessionsError(config.sessions.maxConcurrent);
@@ -115,27 +253,83 @@ export class RecognitionService {
   }
 
   /**
+   * Finish a recognition session with full RBAC enforcement, state validation, and audit trail.
+   */
+  async finishSession(
+    tenant: TenantContext,
+    sessionId: string,
+    reason: 'COMPLETED' | 'TIMEOUT' | 'CANCELLED' | 'ERROR' = 'COMPLETED',
+  ): Promise<void> {
+    await this.authorization.requirePermission(
+      Permissions.FACE_RECOGNIZE,
+      tenant.role,
+    );
+
+    const session = await this.recognitionRepo.findSession(
+      tenant.organizationId,
+      sessionId,
+    );
+    if (!session) throw new SessionNotFoundError(sessionId);
+
+    if (session.status === 'FINISHED' || session.status === 'CANCELLED') {
+      throw new SessionAlreadyFinishedError(sessionId);
+    }
+
+    const status: RecognitionSessionStatus =
+      reason === 'ERROR'
+        ? 'ERROR'
+        : reason === 'CANCELLED'
+          ? 'CANCELLED'
+          : 'FINISHED';
+
+    await this.recognitionRepo.updateSessionStatus(
+      tenant.organizationId,
+      sessionId,
+      status,
+      new Date(),
+    );
+
+    void this.audit
+      .log({
+        organizationId: tenant.organizationId,
+        userId: tenant.userId,
+        type: 'FACE_RECOGNITION_ATTEMPTED',
+        resourceType: 'RecognitionSession',
+        resourceId: sessionId,
+        description: `Recognition session finished with reason: ${reason}`,
+        metadata: { status, reason },
+      })
+      .catch(() => {});
+  }
+
+  // =========================================================================
+  // SINGLE & MULTI-FACE RECOGNITION PIPELINE
+  // =========================================================================
+
+  /**
    * Process a single recognition attempt within a session.
    * Runs the full pipeline and returns the result.
    */
   async processAttempt(
     tenant: TenantContext,
     sessionId: string,
-    imageBuffer: Buffer
+    imageBuffer: Buffer,
   ): Promise<RecognitionAttemptResult> {
-    await this.authorization.requirePermission(Permissions.FACE_RECOGNIZE, tenant.role);
+    await this.authorization.requirePermission(
+      Permissions.FACE_RECOGNIZE,
+      tenant.role,
+    );
 
-    const session = await this.recognitionRepo.findSession(tenant.organizationId, sessionId);
+    const session = await this.recognitionRepo.findSession(
+      tenant.organizationId,
+      sessionId,
+    );
     if (!session) throw new SessionNotFoundError(sessionId);
     if (session.status === 'FINISHED' || session.status === 'CANCELLED') {
       throw new SessionAlreadyFinishedError(sessionId);
     }
 
-    // Enforce session TTL on every attempt: any session that has been
-    // alive longer than the configured timeout is rejected. Without this,
-    // an attacker with FACE_RECOGNIZE permission could keep a session in
-    // STARTED/IN_PROGRESS indefinitely and exhaust the concurrent-session
-    // budget for the organization (slow DoS).
+    // Enforce session TTL on every attempt to prevent slow-DoS session exhaustion
     const config = this.decisionPolicy.getConfig();
     const ageMs = Date.now() - new Date(session.startedAt).getTime();
     const ttlMs = config.sessions.timeoutMinutes * 60_000;
@@ -149,19 +343,23 @@ export class RecognitionService {
       throw new SessionAlreadyFinishedError(sessionId);
     }
 
-    // Update session to IN_PROGRESS
     if (session.status === 'STARTED') {
-      await this.recognitionRepo.updateSessionStatus(tenant.organizationId, sessionId, 'IN_PROGRESS');
+      await this.recognitionRepo.updateSessionStatus(
+        tenant.organizationId,
+        sessionId,
+        'IN_PROGRESS',
+      );
     }
 
     const startTime = Date.now();
-    // config was already obtained above for TTL check — reuse it here.
-    let attemptStatus: RecognitionAttemptStatus = RecognitionAttemptStatus.DETECTED;
+    let attemptStatus: RecognitionAttemptStatus =
+      RecognitionAttemptStatus.DETECTED;
     let qualityScore = 0;
-    let livenessResult = 'UNAVAILABLE';
+    let livenessResult: LivenessDecisionType = 'UNAVAILABLE';
     let similarityScore: number | null = null;
     let identifiedStudentId: string | null = null;
-    let student: { id: string; firstName: string; lastName: string } | null = null;
+    let student: RecognitionStudentSummary | null = null;
+    let confidenceDecision: ConfidenceLevel = 'NONE';
     let message = '';
     let persistedAttempt:
       | Awaited<ReturnType<RecognitionRepository['createAttempt']>>
@@ -169,7 +367,10 @@ export class RecognitionService {
 
     try {
       // Stage 1: Face Detection
-      const detectedFaces = await this.faceEngine.detectFaces({ imageBuffer, format: 'jpeg' });
+      const detectedFaces = await this.faceEngine.detectFaces({
+        imageBuffer,
+        format: 'jpeg',
+      });
       if (detectedFaces.length === 0) throw new FaceNotDetectedError();
       if (detectedFaces.length > 1) {
         return await this.processMultipleFacesAttempt(
@@ -180,10 +381,13 @@ export class RecognitionService {
           startTime,
         );
       }
-      const primaryFace = detectedFaces[0];
+      const primaryFace = detectedFaces[0]!;
 
       // Stage 2: Quality Assessment
-      const quality = await this.faceEngine.assessQuality({ imageBuffer, face: primaryFace });
+      const quality = await this.faceEngine.assessQuality({
+        imageBuffer,
+        face: primaryFace,
+      });
       qualityScore = quality.overallScore;
       if (!quality.passesThreshold || qualityScore < config.qualityThreshold) {
         attemptStatus = RecognitionAttemptStatus.QUALITY_FAILED;
@@ -192,8 +396,11 @@ export class RecognitionService {
       attemptStatus = RecognitionAttemptStatus.QUALITY_PASSED;
 
       // Stage 3: Liveness
-      const liveness = await this.faceEngine.checkLiveness({ imageBuffer, face: primaryFace });
-      livenessResult = liveness.decision;
+      const liveness = await this.faceEngine.checkLiveness({
+        imageBuffer,
+        face: primaryFace,
+      });
+      livenessResult = liveness.decision as LivenessDecisionType;
       if (liveness.decision === 'FAIL') {
         attemptStatus = RecognitionAttemptStatus.LIVENESS_FAILED;
         throw new LivenessFailedError(liveness.decision);
@@ -207,169 +414,52 @@ export class RecognitionService {
       }
 
       // Stage 4: Generate Embedding
-      const probeEmbedding = await this.faceEngine.generateEmbedding({ imageBuffer, face: primaryFace });
+      const probeEmbedding = await this.faceEngine.generateEmbedding({
+        imageBuffer,
+        face: primaryFace,
+      });
       attemptStatus = RecognitionAttemptStatus.EMBEDDING_GENERATED;
 
       // Stage 5: Candidate Retrieval & Matching
-      // Memory-safe: stream the active template gallery in bounded batches
-      // via cursor pagination. Each batch is held in memory only for the
-      // duration of the comparison loop; total memory is O(BATCH_SIZE) rather
-      // than O(total templates). Cosine similarity on 128-dim embeddings is
-      // trivial (µs each), so iterating all templates remains the correct
-      // correctness behaviour — we just stop materialising the whole gallery
-      // at once.
-      const BATCH_SIZE = 500;
-
-      let bestSimilarity = -1;
-      let bestMatch:
-        | Awaited<ReturnType<EnrollmentRepository['findAllActiveTemplates']>>[number]
-        | null = null;
-      let secondBestSimilarity = -1;
-
-      const stream = this.enrollmentRepo.streamActiveTemplates(
-        tenant.organizationId,
-        BATCH_SIZE,
+      const rank = await this.matchSingleProbeAgainstGallery(
+        tenant,
         session.groupId ?? undefined,
+        probeEmbedding,
       );
 
-      for await (const batch of stream) {
-        // Yield to event loop between batches to prevent starvation during massive streaming
-        await new Promise((resolve) => setImmediate(resolve));
-
-        for (const template of batch) {
-          // Model-version compatibility guard: a template extracted with a
-          // DIFFERENT embedding model yields meaningless similarity scores
-          // (both false accepts and false rejects). Skip it — fail closed.
-          //
-          // A MISSING modelVersion cannot be verified against the running
-          // engine, so it is also treated as incompatible. The previous
-          // `template.modelVersion && ...` form compared unversioned
-          // (legacy / mock-enrolled) templates against real embeddings, which
-          // could fabricate a match or a rejection from a meaningless score.
-          if (
-            !template.modelVersion ||
-            template.modelVersion !== this.faceEngine.getModelVersion()
-          ) {
-            continue;
-          }
-
-          try {
-            // Memory Cache: Avoid O(N) AES decryptions per frame.
-            // Templates are encrypted at rest, but we can cache them in-memory (in use).
-            const cacheKey = `${tenant.organizationId}:${template.id}`;
-            let storedEmbedding = RecognitionService.templateCache.get(cacheKey);
-            
-            // Cache invalidation: if hash changed (re-enrollment), re-decrypt.
-            if (!storedEmbedding || storedEmbedding.hash !== template.templateHash) {
-              const decryptedData = await this.encryption.decrypt(template.templateData);
-              
-              // Verify integrity
-              const hashValid = await this.encryption.verifyHash(decryptedData, template.templateHash);
-              if (!hashValid) {
-                await this.audit.log({
-                  organizationId: tenant.organizationId,
-                  type: 'TEMPLATE_CORRUPTED',
-                  resourceType: 'FaceTemplate',
-                  resourceId: template.id,
-                  description: `Template integrity check failed: ${template.id}`,
-                });
-                continue;
-              }
-              
-              storedEmbedding = {
-                hash: template.templateHash,
-                embedding: FaceEmbedding.deserialize(decryptedData),
-              };
-              
-              // Enforce bounds to prevent memory leaks (max 100,000 templates = ~50MB)
-              if (RecognitionService.templateCache.size > 100000) {
-                RecognitionService.templateCache.clear();
-              }
-              RecognitionService.templateCache.set(cacheKey, storedEmbedding);
-            }
-
-            const similarity = await this.faceEngine.compareEmbeddings({
-              embeddingA: probeEmbedding,
-              embeddingB: storedEmbedding.embedding,
-            });
-
-            // Fail closed on a non-finite score (NaN/Infinity): every
-            // threshold comparison below (score < threshold) would be false
-            // for NaN, so an invalid score must never enter the ranking.
-            if (!Number.isFinite(similarity)) {
-              continue;
-            }
-
-            if (!bestMatch) {
-              bestSimilarity = similarity;
-              bestMatch = template;
-            } else if (template.studentId === bestMatch.studentId) {
-              if (similarity > bestSimilarity) {
-                bestSimilarity = similarity;
-                bestMatch = template;
-              }
-            } else {
-              // Different student from current bestMatch
-              if (similarity > bestSimilarity) {
-                if (bestSimilarity > secondBestSimilarity) {
-                  secondBestSimilarity = bestSimilarity;
-                }
-                bestSimilarity = similarity;
-                bestMatch = template;
-              } else if (similarity > secondBestSimilarity) {
-                secondBestSimilarity = similarity;
-              }
-            }
-          } catch (err: unknown) {
-            void this.audit.log({
-              organizationId: tenant.organizationId,
-              userId: tenant.userId,
-              type: AuditEventType.TEMPLATE_CORRUPTED,
-              resourceType: 'FaceTemplate',
-              resourceId: template.id,
-              description: `Face template decryption or comparison failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
-              metadata: {
-                studentId: template.studentId,
-                templateHash: template.templateHash,
-              },
-            }).catch(() => {
-              // Audit logging failure must not crash the recognition pipeline
-            });
-            // Fail closed for this template, continue searching remaining valid templates
-            continue;
-          }
-        }
-      }
-
       const ambiguityMargin =
-        bestMatch && secondBestSimilarity >= 0
-          ? bestSimilarity - secondBestSimilarity
+        rank.bestMatch && rank.secondBestSimilarity >= 0
+          ? rank.bestSimilarity - rank.secondBestSimilarity
           : null;
 
-      if (bestMatch && bestSimilarity >= 0) {
-        similarityScore = bestSimilarity;
-        identifiedStudentId = bestMatch.studentId;
-        student = bestMatch.student;
-        attemptStatus = bestSimilarity >= config.matching.similarityThreshold
-          ? RecognitionAttemptStatus.MATCH_FOUND
-          : RecognitionAttemptStatus.MATCH_NOT_FOUND;
+      if (rank.bestMatch && rank.bestSimilarity >= 0) {
+        similarityScore = rank.bestSimilarity;
+        identifiedStudentId = rank.bestMatch.studentId;
+        student = rank.bestMatch.student;
+        attemptStatus =
+          rank.bestSimilarity >= config.matching.similarityThreshold
+            ? RecognitionAttemptStatus.MATCH_FOUND
+            : RecognitionAttemptStatus.MATCH_NOT_FOUND;
       } else {
         attemptStatus = RecognitionAttemptStatus.MATCH_NOT_FOUND;
       }
 
       // Stage 6: Decision Policy
-      const decision = this.decisionPolicy.decide({
-        qualityScore,
-        livenessDecision: liveness.decision as 'PASS' | 'FAIL' | 'UNCERTAIN' | 'UNAVAILABLE',
-        livenessConfidence: liveness.confidence,
-        similarityScore,
-        bestMatchFound: bestMatch !== null,
-        ambiguityMargin,
-      }, identifiedStudentId ?? undefined);
+      const decision = this.decisionPolicy.decide(
+        {
+          qualityScore,
+          livenessDecision: livenessResult,
+          livenessConfidence: liveness.confidence,
+          similarityScore,
+          bestMatchFound: rank.bestMatch !== null,
+          ambiguityMargin,
+        },
+        identifiedStudentId ?? undefined,
+      );
 
-      // Final attempt status
       if (decision.outcome === 'IDENTIFIED') {
         attemptStatus = RecognitionAttemptStatus.IDENTIFIED;
+        confidenceDecision = decision.confidence;
         message = decision.message;
       } else if (decision.outcome === 'UNCERTAIN') {
         attemptStatus = RecognitionAttemptStatus.MATCH_UNCERTAIN;
@@ -399,64 +489,44 @@ export class RecognitionService {
       persistedAttempt = attempt;
 
       // Stage 7: Attendance (if identified)
-      let attendanceRecorded = false;
-      let attendanceDecision: string | null = null;
-      let attendanceRecordId: string | null = null;
+      const {
+        attendanceRecorded,
+        attendanceDecision,
+        attendanceRecordId,
+      } = await this.evaluateAndRecordAttendance(
+        tenant,
+        session,
+        attempt.id,
+        decision.outcome === 'IDENTIFIED' ? decision.studentId : null,
+      );
 
-      if (decision.outcome === 'IDENTIFIED' && session.groupId) {
-        const attendanceCheck = await this.attendancePolicy.validate(
-          tenant,
-          decision.studentId,
-          session.groupId,
-          session.lessonId,
-          sessionId
-        );
-
-        if (attendanceCheck.decision === 'RECORDED') {
-          const record = await this.recognitionRepo.createAttendance({
-            organizationId: tenant.organizationId,
-            studentId: decision.studentId,
-            groupId: session.groupId!,
-            lessonId: session.lessonId ?? undefined,
-            sessionId,
-            recognitionAttemptId: attempt.id,
-            decision: 'RECORDED',
-          });
-          // createAttendance can resolve to an existing row on a P2002 race
-          // (decision 'DUPLICATE_PREVENTED') — reflect the true outcome.
-          attendanceRecorded = record.decision === 'RECORDED';
-          attendanceDecision = record.decision;
-          // Only expose the id when this attempt is what created the row, so a
-          // caller can never delete a pre-existing attendance record.
-          attendanceRecordId = attendanceRecorded ? record.id : null;
-        } else {
-          attendanceDecision = attendanceCheck.decision;
-        }
-      } else if (decision.outcome === 'IDENTIFIED') {
-        // Identified, but the session carries no group -> attendance cannot be
-        // attributed. Return an EXPLICIT decision instead of silently
-        // skipping (a silent skip is indistinguishable from 'recorded' in
-        // logs/metrics and hides misconfigured kiosk sessions).
-        attendanceDecision = 'NO_GROUP_CONTEXT';
-      }
-
-      // Audit
+      // Stage 8: Audit
       await this.audit.log({
         organizationId: tenant.organizationId,
         userId: tenant.userId,
-        type: decision.outcome === 'IDENTIFIED' ? 'FACE_RECOGNITION_CONFIRMED' : 'FACE_RECOGNITION_REJECTED',
+        type:
+          decision.outcome === 'IDENTIFIED'
+            ? 'FACE_RECOGNITION_CONFIRMED'
+            : 'FACE_RECOGNITION_REJECTED',
         resourceType: 'RecognitionAttempt',
         resourceId: attempt.id,
         description: message,
-        metadata: { sessionId, attemptId: attempt.id, identifiedStudentId, attendanceRecorded },
+        metadata: {
+          sessionId,
+          attemptId: attempt.id,
+          identifiedStudentId,
+          attendanceRecorded,
+        },
       });
+
+      const isIdentified = decision.outcome === 'IDENTIFIED';
 
       return {
         attemptId: attempt.id,
-        identified: decision.outcome === 'IDENTIFIED',
+        identified: isIdentified,
         status: attemptStatus,
         student,
-        confidence: decision.outcome === 'IDENTIFIED' ? decision.confidence : 'NONE',
+        confidence: confidenceDecision,
         liveness: livenessResult,
         qualityScore,
         attendanceRecorded,
@@ -468,10 +538,10 @@ export class RecognitionService {
           {
             faceIndex: 0,
             attemptId: attempt.id,
-            identified: decision.outcome === 'IDENTIFIED',
+            identified: isIdentified,
             status: attemptStatus,
             student,
-            confidence: decision.outcome === 'IDENTIFIED' ? decision.confidence : 'NONE',
+            confidence: confidenceDecision,
             similarityScore,
             qualityScore,
             liveness: livenessResult,
@@ -484,18 +554,20 @@ export class RecognitionService {
         ],
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Recognition failed';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Recognition failed';
 
-      // A failure AFTER the attempt row was persisted must not create a
-      // second attempt row — previously the catch-all created a duplicate
-      // ERROR attempt alongside the real one (regression: CO-3).
+      // If the attempt was already persisted, preserve its true status & identity
+      // rather than creating a duplicate row or lying about the persisted status.
       if (persistedAttempt) {
+        const wasIdentified =
+          persistedAttempt.status === RecognitionAttemptStatus.IDENTIFIED;
         return {
           attemptId: persistedAttempt.id,
-          identified: false,
+          identified: wasIdentified,
           status: persistedAttempt.status,
-          student: null,
-          confidence: 'NONE',
+          student: wasIdentified ? student : null,
+          confidence: wasIdentified ? confidenceDecision : 'NONE',
           liveness: livenessResult,
           qualityScore,
           attendanceRecorded: false,
@@ -505,9 +577,6 @@ export class RecognitionService {
         };
       }
 
-      // Pre-persistence failure: keep the REAL failure reason (QUALITY_FAILED,
-      // LIVENESS_FAILED, LIVENESS_UNCERTAIN, LIVENESS_UNAVAILABLE, ...)
-      // instead of collapsing every failure into ERROR (regression: CO-3).
       const failedStatus =
         attemptStatus !== RecognitionAttemptStatus.DETECTED
           ? attemptStatus
@@ -516,6 +585,7 @@ export class RecognitionService {
       const attempt = await this.recognitionRepo.createAttempt({
         organizationId: tenant.organizationId,
         sessionId,
+        actorId: tenant.userId,
         status: failedStatus,
         qualityScore,
         livenessResult,
@@ -539,92 +609,88 @@ export class RecognitionService {
     }
   }
 
-  /**
-   * Finish a recognition session.
-   */
-  async finishSession(
-    tenant: TenantContext,
-    sessionId: string,
-    reason: 'COMPLETED' | 'TIMEOUT' | 'CANCELLED' | 'ERROR' = 'COMPLETED'
-  ): Promise<void> {
-    const session = await this.recognitionRepo.findSession(tenant.organizationId, sessionId);
-    if (!session) throw new SessionNotFoundError(sessionId);
+  // =========================================================================
+  // MULTI-FACE PIPELINE
+  // =========================================================================
 
-    const status: RecognitionSessionStatus =
-      reason === 'ERROR' ? 'ERROR' : reason === 'CANCELLED' ? 'CANCELLED' : 'FINISHED';
-    await this.recognitionRepo.updateSessionStatus(
-      tenant.organizationId,
-      sessionId,
-      status,
-      new Date()
-    );
-  }
   /**
-   * Process multiple faces in a single capture frame.
-   * Evaluates each detected face, matches against the gallery in a single streaming pass,
-   * and records attendance for all identified students.
+   * Process multiple faces in a single capture frame:
+   * - Evaluates quality, liveness (preserving true livenessConfidence), and embeddings.
+   * - Streams the gallery once and computes per-student rankings for all valid faces.
+   * - Deduplicates student assignments across faces in the same frame so two faces
+   *   in a single image can never both claim the same student.
    */
   private async processMultipleFacesAttempt(
     tenant: TenantContext,
-    session: NonNullable<Awaited<ReturnType<RecognitionRepository['findSession']>>>,
+    session: SessionRecord,
     imageBuffer: Buffer,
     detectedFaces: DetectedFace[],
     startTime: number,
   ): Promise<RecognitionAttemptResult> {
     const config = this.decisionPolicy.getConfig();
 
-    // Sort faces by area descending (largest / most prominent face first)
+    // Sort faces by bounding-box area descending (largest / closest face first)
     const sortedFaces = [...detectedFaces].sort((a, b) => {
       const areaA = (a.boundingBox?.width ?? 0) * (a.boundingBox?.height ?? 0);
       const areaB = (b.boundingBox?.width ?? 0) * (b.boundingBox?.height ?? 0);
       return areaB - areaA;
     });
 
-    const MAX_FACES_PER_FRAME = 5;
     const facesToProcess = sortedFaces.slice(0, MAX_FACES_PER_FRAME);
-
-    const faceDataList: Array<{
-      faceIndex: number;
-      face: DetectedFace;
-      qualityScore: number;
-      qualityPasses: boolean;
-      livenessResult: string;
-      livenessStatus: RecognitionAttemptStatus;
-      probeEmbedding: FaceEmbedding | null;
-      bestSimilarity: number;
-      bestMatch: Awaited<ReturnType<EnrollmentRepository['findAllActiveTemplates']>>[number] | null;
-      secondBestSimilarity: number;
-    }> = [];
+    const faceDataList: MultiFaceEvaluationContext[] = [];
 
     for (let i = 0; i < facesToProcess.length; i++) {
-      const face = facesToProcess[i];
+      const face = facesToProcess[i]!;
       let qualityScore = 0;
       let qualityPasses = false;
-      let livenessResult = 'UNAVAILABLE';
-      let livenessStatus: RecognitionAttemptStatus = RecognitionAttemptStatus.LIVENESS_PASSED;
+      let livenessResult: LivenessDecisionType = 'UNAVAILABLE';
+      let livenessConfidence = 0;
+      let livenessStatus: RecognitionAttemptStatus =
+        RecognitionAttemptStatus.DETECTED;
       let probeEmbedding: FaceEmbedding | null = null;
+      let preprocessingError: string | null = null;
 
       try {
-        const quality = await this.faceEngine.assessQuality({ imageBuffer, face });
+        const quality = await this.faceEngine.assessQuality({
+          imageBuffer,
+          face,
+        });
         qualityScore = quality.overallScore;
-        qualityPasses = quality.passesThreshold && qualityScore >= config.qualityThreshold;
+        qualityPasses =
+          quality.passesThreshold && qualityScore >= config.qualityThreshold;
 
-        if (qualityPasses) {
-          const liveness = await this.faceEngine.checkLiveness({ imageBuffer, face });
-          livenessResult = liveness.decision;
+        if (!qualityPasses) {
+          livenessStatus = RecognitionAttemptStatus.QUALITY_FAILED;
+        } else {
+          const liveness = await this.faceEngine.checkLiveness({
+            imageBuffer,
+            face,
+          });
+          livenessResult = liveness.decision as LivenessDecisionType;
+          livenessConfidence = liveness.confidence;
+
           if (liveness.decision === 'FAIL') {
             livenessStatus = RecognitionAttemptStatus.LIVENESS_FAILED;
-          } else if (liveness.decision === 'UNCERTAIN') {
-            livenessStatus = RecognitionAttemptStatus.LIVENESS_UNCERTAIN;
-          } else if (liveness.decision === 'UNAVAILABLE') {
-            livenessStatus = RecognitionAttemptStatus.LIVENESS_UNAVAILABLE;
           } else {
-            livenessStatus = RecognitionAttemptStatus.LIVENESS_PASSED;
-            probeEmbedding = await this.faceEngine.generateEmbedding({ imageBuffer, face });
+            if (liveness.decision === 'UNCERTAIN') {
+              livenessStatus = RecognitionAttemptStatus.LIVENESS_UNCERTAIN;
+            } else if (liveness.decision === 'UNAVAILABLE') {
+              livenessStatus = RecognitionAttemptStatus.LIVENESS_UNAVAILABLE;
+            } else {
+              livenessStatus = RecognitionAttemptStatus.LIVENESS_PASSED;
+            }
+
+            // Generate embedding for PASS, UNCERTAIN, and UNAVAILABLE
+            // (consistent with single-face pipeline so decisionPolicy makes the final call)
+            probeEmbedding = await this.faceEngine.generateEmbedding({
+              imageBuffer,
+              face,
+            });
           }
         }
-      } catch {
-        // Continue processing other faces if one face fails preprocessing
+      } catch (err: unknown) {
+        preprocessingError =
+          err instanceof Error ? err.message : 'Face preprocessing failed';
       }
 
       faceDataList.push({
@@ -633,81 +699,51 @@ export class RecognitionService {
         qualityScore,
         qualityPasses,
         livenessResult,
+        livenessConfidence,
         livenessStatus,
         probeEmbedding,
-        bestSimilarity: -1,
-        bestMatch: null,
-        secondBestSimilarity: -1,
+        preprocessingError,
+        studentScores: new Map(),
       });
     }
 
-    const facesWithEmbeddings = faceDataList.filter((f) => f.probeEmbedding !== null);
+    const facesWithEmbeddings = faceDataList.filter(
+      (f) => f.probeEmbedding !== null && f.preprocessingError === null,
+    );
+
     if (facesWithEmbeddings.length > 0) {
-      const BATCH_SIZE = 500;
-      const stream = this.enrollmentRepo.streamActiveTemplates(
-        tenant.organizationId,
-        BATCH_SIZE,
+      await this.matchMultiProbesAgainstGallery(
+        tenant,
         session.groupId ?? undefined,
+        facesWithEmbeddings,
       );
+    }
 
-      for await (const batch of stream) {
-        await new Promise((resolve) => setImmediate(resolve));
-        for (const template of batch) {
-          if (!template.modelVersion || template.modelVersion !== this.faceEngine.getModelVersion()) {
-            continue;
-          }
+    // Prevent two faces in the same frame from being assigned to the same studentId.
+    // Assign students greedily by highest similarity score first.
+    const claimedStudentIds = new Set<string>();
+    const assignedRanks = new Map<number, CandidateMatchRank>();
 
-          try {
-            const cacheKey = `${tenant.organizationId}:${template.id}`;
-            let storedEmbedding = RecognitionService.templateCache.get(cacheKey);
+    const facesByBestScore = [...facesWithEmbeddings].sort((a, b) => {
+      const maxA = this.extractRankExcluding(a.studentScores, claimedStudentIds)
+        .bestSimilarity;
+      const maxB = this.extractRankExcluding(b.studentScores, claimedStudentIds)
+        .bestSimilarity;
+      return maxB - maxA;
+    });
 
-            if (!storedEmbedding || storedEmbedding.hash !== template.templateHash) {
-              const decryptedData = await this.encryption.decrypt(template.templateData);
-              const hashValid = await this.encryption.verifyHash(decryptedData, template.templateHash);
-              if (!hashValid) continue;
+    for (const fd of facesByBestScore) {
+      const rank = this.extractRankExcluding(
+        fd.studentScores,
+        claimedStudentIds,
+      );
+      assignedRanks.set(fd.faceIndex, rank);
 
-              storedEmbedding = {
-                hash: template.templateHash,
-                embedding: FaceEmbedding.deserialize(decryptedData),
-              };
-              if (RecognitionService.templateCache.size > 100000) {
-                RecognitionService.templateCache.clear();
-              }
-              RecognitionService.templateCache.set(cacheKey, storedEmbedding);
-            }
-
-            for (const faceData of facesWithEmbeddings) {
-              const similarity = await this.faceEngine.compareEmbeddings({
-                embeddingA: faceData.probeEmbedding!,
-                embeddingB: storedEmbedding.embedding,
-              });
-
-              if (!Number.isFinite(similarity)) continue;
-
-              if (!faceData.bestMatch) {
-                faceData.bestSimilarity = similarity;
-                faceData.bestMatch = template;
-              } else if (template.studentId === faceData.bestMatch.studentId) {
-                if (similarity > faceData.bestSimilarity) {
-                  faceData.bestSimilarity = similarity;
-                  faceData.bestMatch = template;
-                }
-              } else {
-                if (similarity > faceData.bestSimilarity) {
-                  if (faceData.bestSimilarity > faceData.secondBestSimilarity) {
-                    faceData.secondBestSimilarity = faceData.bestSimilarity;
-                  }
-                  faceData.bestSimilarity = similarity;
-                  faceData.bestMatch = template;
-                } else if (similarity > faceData.secondBestSimilarity) {
-                  faceData.secondBestSimilarity = similarity;
-                }
-              }
-            }
-          } catch {
-            continue;
-          }
-        }
+      if (
+        rank.bestMatch &&
+        rank.bestSimilarity >= config.matching.similarityThreshold
+      ) {
+        claimedStudentIds.add(rank.bestMatch.studentId);
       }
     }
 
@@ -716,27 +752,43 @@ export class RecognitionService {
     for (const fd of faceDataList) {
       let attemptStatus: RecognitionAttemptStatus;
       let identifiedStudentId: string | null = null;
-      let student: { id: string; firstName: string; lastName: string } | null = null;
+      let student: RecognitionStudentSummary | null = null;
       let message = '';
       let similarityScore: number | null = null;
-      let confidenceDecision: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE' = 'NONE';
+      let confidenceDecision: ConfidenceLevel = 'NONE';
 
-      if (!fd.qualityPasses) {
+      if (fd.preprocessingError !== null) {
+        attemptStatus =
+          fd.livenessStatus !== RecognitionAttemptStatus.DETECTED
+            ? fd.livenessStatus
+            : RecognitionAttemptStatus.ERROR;
+        message = fd.preprocessingError;
+      } else if (!fd.qualityPasses) {
         attemptStatus = RecognitionAttemptStatus.QUALITY_FAILED;
         message = `Face quality too low: ${fd.qualityScore.toFixed(2)}`;
-      } else if (fd.livenessStatus === RecognitionAttemptStatus.LIVENESS_FAILED) {
+      } else if (
+        fd.livenessStatus === RecognitionAttemptStatus.LIVENESS_FAILED
+      ) {
         attemptStatus = RecognitionAttemptStatus.LIVENESS_FAILED;
         message = 'Liveness check failed';
       } else {
-        const ambiguityMargin =
-          fd.bestMatch && fd.secondBestSimilarity >= 0 ? fd.bestSimilarity - fd.secondBestSimilarity : null;
+        const rank = assignedRanks.get(fd.faceIndex) ?? {
+          bestSimilarity: -1,
+          bestMatch: null,
+          secondBestSimilarity: -1,
+        };
 
-        if (fd.bestMatch && fd.bestSimilarity >= 0) {
-          similarityScore = fd.bestSimilarity;
-          identifiedStudentId = fd.bestMatch.studentId;
-          student = fd.bestMatch.student;
+        const ambiguityMargin =
+          rank.bestMatch && rank.secondBestSimilarity >= 0
+            ? rank.bestSimilarity - rank.secondBestSimilarity
+            : null;
+
+        if (rank.bestMatch && rank.bestSimilarity >= 0) {
+          similarityScore = rank.bestSimilarity;
+          identifiedStudentId = rank.bestMatch.studentId;
+          student = rank.bestMatch.student;
           attemptStatus =
-            fd.bestSimilarity >= config.matching.similarityThreshold
+            rank.bestSimilarity >= config.matching.similarityThreshold
               ? RecognitionAttemptStatus.MATCH_FOUND
               : RecognitionAttemptStatus.MATCH_NOT_FOUND;
         } else {
@@ -746,10 +798,10 @@ export class RecognitionService {
         const decision = this.decisionPolicy.decide(
           {
             qualityScore: fd.qualityScore,
-            livenessDecision: fd.livenessResult as any,
-            livenessConfidence: 0.9,
+            livenessDecision: fd.livenessResult,
+            livenessConfidence: fd.livenessConfidence,
             similarityScore,
-            bestMatchFound: fd.bestMatch !== null,
+            bestMatchFound: rank.bestMatch !== null,
             ambiguityMargin,
           },
           identifiedStudentId ?? undefined,
@@ -785,53 +837,44 @@ export class RecognitionService {
         processingTimeMs: Date.now() - startTime,
       });
 
-      let attendanceRecorded = false;
-      let attendanceDecision: string | null = null;
-      let attendanceRecordId: string | null = null;
+      const isIdentified =
+        attemptStatus === RecognitionAttemptStatus.IDENTIFIED &&
+        identifiedStudentId !== null;
 
-      if (attemptStatus === RecognitionAttemptStatus.IDENTIFIED && identifiedStudentId && session.groupId) {
-        const attendanceCheck = await this.attendancePolicy.validate(
-          tenant,
-          identifiedStudentId,
-          session.groupId,
-          session.lessonId,
-          session.id,
-        );
+      const {
+        attendanceRecorded,
+        attendanceDecision,
+        attendanceRecordId,
+      } = await this.evaluateAndRecordAttendance(
+        tenant,
+        session,
+        attempt.id,
+        isIdentified ? identifiedStudentId : null,
+      );
 
-        if (attendanceCheck.decision === 'RECORDED') {
-          const record = await this.recognitionRepo.createAttendance({
-            organizationId: tenant.organizationId,
-            studentId: identifiedStudentId,
-            groupId: session.groupId,
-            lessonId: session.lessonId ?? undefined,
+      void this.audit
+        .log({
+          organizationId: tenant.organizationId,
+          userId: tenant.userId,
+          type: isIdentified
+            ? 'FACE_RECOGNITION_CONFIRMED'
+            : 'FACE_RECOGNITION_REJECTED',
+          resourceType: 'RecognitionAttempt',
+          resourceId: attempt.id,
+          description: message,
+          metadata: {
             sessionId: session.id,
-            recognitionAttemptId: attempt.id,
-            decision: 'RECORDED',
-          });
-          attendanceRecorded = record.decision === 'RECORDED';
-          attendanceDecision = record.decision;
-          attendanceRecordId = attendanceRecorded ? record.id : null;
-        } else {
-          attendanceDecision = attendanceCheck.decision;
-        }
-      } else if (attemptStatus === RecognitionAttemptStatus.IDENTIFIED && identifiedStudentId) {
-        attendanceDecision = 'NO_GROUP_CONTEXT';
-      }
-
-      void this.audit.log({
-        organizationId: tenant.organizationId,
-        userId: tenant.userId,
-        type: attemptStatus === RecognitionAttemptStatus.IDENTIFIED ? 'FACE_RECOGNITION_CONFIRMED' : 'FACE_RECOGNITION_REJECTED',
-        resourceType: 'RecognitionAttempt',
-        resourceId: attempt.id,
-        description: message,
-        metadata: { sessionId: session.id, attemptId: attempt.id, identifiedStudentId, attendanceRecorded },
-      }).catch(() => {});
+            attemptId: attempt.id,
+            identifiedStudentId,
+            attendanceRecorded,
+          },
+        })
+        .catch(() => {});
 
       matches.push({
         faceIndex: fd.faceIndex,
         attemptId: attempt.id,
-        identified: attemptStatus === RecognitionAttemptStatus.IDENTIFIED,
+        identified: isIdentified,
         status: attemptStatus,
         student,
         confidence: confidenceDecision,
@@ -846,7 +889,7 @@ export class RecognitionService {
       });
     }
 
-    const primaryMatch = matches.find((m) => m.identified) || matches[0];
+    const primaryMatch = matches.find((m) => m.identified) ?? matches[0]!;
     return {
       attemptId: primaryMatch.attemptId,
       identified: primaryMatch.identified,
@@ -861,6 +904,296 @@ export class RecognitionService {
       message: primaryMatch.message,
       faceCount: detectedFaces.length,
       matches,
+    };
+  }
+
+  // =========================================================================
+  // PRIVATE — SHARED GALLERY STREAMING & TEMPLATE RESOLUTION
+  // =========================================================================
+
+  /**
+   * Decrypts, verifies integrity, and caches a single gallery template.
+   * Returns `null` if incompatible or corrupted (logging corruption asynchronously).
+   */
+  private async resolveGalleryTemplateEmbedding(
+    tenant: TenantContext,
+    template: ActiveTemplateRecord,
+    expectedModelVersion: string,
+  ): Promise<FaceEmbedding | null> {
+    if (
+      !template.modelVersion ||
+      template.modelVersion !== expectedModelVersion
+    ) {
+      return null;
+    }
+
+    const cacheKey = `${tenant.organizationId}:${template.id}`;
+    const cached = this.getCachedTemplate(cacheKey);
+    if (cached && cached.hash === template.templateHash) {
+      return cached.embedding;
+    }
+
+    try {
+      const decryptedData = await this.encryption.decrypt(template.templateData);
+      const hashValid = await this.encryption.verifyHash(
+        decryptedData,
+        template.templateHash,
+      );
+
+      if (!hashValid) {
+        void this.audit
+          .log({
+            organizationId: tenant.organizationId,
+            userId: tenant.userId,
+            type: AuditEventType.TEMPLATE_CORRUPTED,
+            resourceType: 'FaceTemplate',
+            resourceId: template.id,
+            description: `Template integrity check failed: ${template.id}`,
+            metadata: {
+              studentId: template.studentId,
+              templateHash: template.templateHash,
+            },
+          })
+          .catch(() => {});
+        return null;
+      }
+
+      const embedding = FaceEmbedding.deserialize(decryptedData);
+      this.setCachedTemplate(cacheKey, {
+        hash: template.templateHash,
+        embedding,
+      });
+      return embedding;
+    } catch (err: unknown) {
+      void this.audit
+        .log({
+          organizationId: tenant.organizationId,
+          userId: tenant.userId,
+          type: AuditEventType.TEMPLATE_CORRUPTED,
+          resourceType: 'FaceTemplate',
+          resourceId: template.id,
+          description: `Face template decryption or deserialization failed: ${
+            err instanceof Error ? err.message : 'Unknown error'
+          }`,
+          metadata: {
+            studentId: template.studentId,
+            templateHash: template.templateHash,
+          },
+        })
+        .catch(() => {});
+      return null;
+    }
+  }
+
+  private async matchSingleProbeAgainstGallery(
+    tenant: TenantContext,
+    groupId: string | undefined,
+    probeEmbedding: FaceEmbedding,
+  ): Promise<CandidateMatchRank> {
+    const expectedModelVersion = this.faceEngine.getModelVersion();
+    const studentScores = new Map<
+      string,
+      { similarity: number; template: ActiveTemplateRecord }
+    >();
+
+    const stream = this.enrollmentRepo.streamActiveTemplates(
+      tenant.organizationId,
+      GALLERY_STREAM_BATCH_SIZE,
+      groupId,
+    );
+
+    for await (const batch of stream) {
+      await new Promise((resolve) => setImmediate(resolve));
+
+      for (const template of batch) {
+        const storedEmbedding = await this.resolveGalleryTemplateEmbedding(
+          tenant,
+          template,
+          expectedModelVersion,
+        );
+        if (!storedEmbedding) continue;
+
+        try {
+          const similarity = await this.faceEngine.compareEmbeddings({
+            embeddingA: probeEmbedding,
+            embeddingB: storedEmbedding,
+          });
+
+          if (!Number.isFinite(similarity)) continue;
+
+          const currentBestForStudent = studentScores.get(template.studentId);
+          if (
+            !currentBestForStudent ||
+            similarity > currentBestForStudent.similarity
+          ) {
+            studentScores.set(template.studentId, { similarity, template });
+          }
+        } catch (err: unknown) {
+          void this.audit
+            .log({
+              organizationId: tenant.organizationId,
+              userId: tenant.userId,
+              type: AuditEventType.TEMPLATE_CORRUPTED,
+              resourceType: 'FaceTemplate',
+              resourceId: template.id,
+              description: `Face template comparison failed: ${
+                err instanceof Error ? err.message : 'Unknown error'
+              }`,
+              metadata: {
+                studentId: template.studentId,
+                templateHash: template.templateHash,
+              },
+            })
+            .catch(() => {});
+        }
+      }
+    }
+
+    return this.extractRankExcluding(studentScores);
+  }
+
+  private async matchMultiProbesAgainstGallery(
+    tenant: TenantContext,
+    groupId: string | undefined,
+    facesWithEmbeddings: MultiFaceEvaluationContext[],
+  ): Promise<void> {
+    const expectedModelVersion = this.faceEngine.getModelVersion();
+    const stream = this.enrollmentRepo.streamActiveTemplates(
+      tenant.organizationId,
+      GALLERY_STREAM_BATCH_SIZE,
+      groupId,
+    );
+
+    for await (const batch of stream) {
+      await new Promise((resolve) => setImmediate(resolve));
+
+      for (const template of batch) {
+        const storedEmbedding = await this.resolveGalleryTemplateEmbedding(
+          tenant,
+          template,
+          expectedModelVersion,
+        );
+        if (!storedEmbedding) continue;
+
+        for (const faceData of facesWithEmbeddings) {
+          try {
+            const similarity = await this.faceEngine.compareEmbeddings({
+              embeddingA: faceData.probeEmbedding!,
+              embeddingB: storedEmbedding,
+            });
+
+            if (!Number.isFinite(similarity)) continue;
+
+            const currentBest = faceData.studentScores.get(template.studentId);
+            if (!currentBest || similarity > currentBest.similarity) {
+              faceData.studentScores.set(template.studentId, {
+                similarity,
+                template,
+              });
+            }
+          } catch {
+            continue;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Computes `bestMatch`, `bestSimilarity`, and `secondBestSimilarity` across distinct students,
+   * optionally excluding students already claimed by a higher-confidence face in the same frame.
+   */
+  private extractRankExcluding(
+    studentScores: Map<
+      string,
+      { similarity: number; template: ActiveTemplateRecord }
+    >,
+    excludedStudentIds?: ReadonlySet<string>,
+  ): CandidateMatchRank {
+    let bestSimilarity = -1;
+    let bestMatch: ActiveTemplateRecord | null = null;
+    let secondBestSimilarity = -1;
+
+    for (const [studentId, entry] of studentScores.entries()) {
+      if (excludedStudentIds?.has(studentId)) continue;
+
+      if (entry.similarity > bestSimilarity) {
+        secondBestSimilarity = bestSimilarity;
+        bestSimilarity = entry.similarity;
+        bestMatch = entry.template;
+      } else if (entry.similarity > secondBestSimilarity) {
+        secondBestSimilarity = entry.similarity;
+      }
+    }
+
+    return {
+      bestSimilarity,
+      bestMatch,
+      secondBestSimilarity,
+    };
+  }
+
+  // =========================================================================
+  // PRIVATE — SHARED ATTENDANCE EVALUATION
+  // =========================================================================
+
+  private async evaluateAndRecordAttendance(
+    tenant: TenantContext,
+    session: SessionRecord,
+    attemptId: string,
+    identifiedStudentId: string | null,
+  ): Promise<{
+    attendanceRecorded: boolean;
+    attendanceDecision: string | null;
+    attendanceRecordId: string | null;
+  }> {
+    if (!identifiedStudentId) {
+      return {
+        attendanceRecorded: false,
+        attendanceDecision: null,
+        attendanceRecordId: null,
+      };
+    }
+
+    if (!session.groupId) {
+      return {
+        attendanceRecorded: false,
+        attendanceDecision: 'NO_GROUP_CONTEXT',
+        attendanceRecordId: null,
+      };
+    }
+
+    const attendanceCheck = await this.attendancePolicy.validate(
+      tenant,
+      identifiedStudentId,
+      session.groupId,
+      session.lessonId,
+      session.id,
+    );
+
+    if (attendanceCheck.decision !== 'RECORDED') {
+      return {
+        attendanceRecorded: false,
+        attendanceDecision: attendanceCheck.decision,
+        attendanceRecordId: null,
+      };
+    }
+
+    const record = await this.recognitionRepo.createAttendance({
+      organizationId: tenant.organizationId,
+      studentId: identifiedStudentId,
+      groupId: session.groupId,
+      lessonId: session.lessonId ?? undefined,
+      sessionId: session.id,
+      recognitionAttemptId: attemptId,
+      decision: 'RECORDED',
+    });
+
+    const attendanceRecorded = record.decision === 'RECORDED';
+    return {
+      attendanceRecorded,
+      attendanceDecision: record.decision,
+      attendanceRecordId: attendanceRecorded ? record.id : null,
     };
   }
 }

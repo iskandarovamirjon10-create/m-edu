@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import 'dotenv/config';
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import { applyCsrf } from './helpers/csrf';
 import * as crypto from 'crypto';
@@ -61,7 +61,7 @@ async function api(path: string, options: { method?: string; token?: string; bod
 describe('Access Control & Forensic Fixes', () => {
   let superAdminToken: string;
   let orgAAdminToken: string;
-  let orgBAdminToken: string;
+  let _orgBAdminToken: string;
   let regularUserToken: string;
   
   let orgAId: string;
@@ -97,7 +97,7 @@ describe('Access Control & Forensic Fixes', () => {
     const bAdmin = await prisma.user.create({
       data: { email: `b-admin-${rnd}@test.com`, firstName: 'Admin', lastName: 'B', passwordHash: 'hash', role: 'ORG_ADMIN', organizationId: orgBId }
     });
-    orgBAdminToken = await provisionToken(bAdmin);
+    _orgBAdminToken = await provisionToken(bAdmin);
 
     // Create regular User Org A
     const rUser = await prisma.user.create({

@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { RelationshipsService } from '../relationships.service';
 import { RelationshipsController } from '../relationships.controller';
@@ -29,16 +29,8 @@ describe('RelationshipsModule Unit Tests', () => {
     vi.clearAllMocks();
     prisma = createMockPrisma();
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [RelationshipsController],
-      providers: [
-        RelationshipsService,
-        { provide: PrismaService, useValue: prisma },
-      ],
-    }).compile();
-
-    service = module.get<RelationshipsService>(RelationshipsService);
-    controller = module.get<RelationshipsController>(RelationshipsController);
+    service = new RelationshipsService(prisma as unknown as PrismaService);
+    controller = new RelationshipsController(service);
   });
 
   describe('RelationshipsService', () => {

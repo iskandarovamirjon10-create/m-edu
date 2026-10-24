@@ -40,6 +40,7 @@ import {
 } from '@/layouts/components/Icons';
 import { AppRoutes } from './routes';
 import { DocumentTitleManager } from './routes/DocumentTitle';
+import { ScrollToTop } from './routes/ScrollToTop';
 import { Protected, PublicOnly } from './routes/guards';
 
 /* Re-export route guards so existing `from '../App'` imports keep working. */
@@ -210,7 +211,7 @@ function toneForError(error: unknown): Tone {
 const APP_ICONS = {
   sparkles: LayoutIcons.ai,
   alertTriangle: LayoutIcons.earlyWarning,
-  home: LayoutIcons.parentPortal,
+  home: LayoutIcons.home,
   shield: LayoutIcons.governance,
   refreshCw: [
     'M23 4v6h-6',
@@ -264,7 +265,7 @@ const Shimmer = memo(function Shimmer({
 
       {/* Optional inner anatomical bones */}
       {children && (
-        <div className="relative z-10 flex h-full w-full flex-col justify-between p-5">
+        <div className="relative z-10 flex h-full w-full flex-col justify-between p-3.5 sm:p-5">
           {children}
         </div>
       )}
@@ -414,7 +415,7 @@ export const BrandedSplash = memo(function BrandedSplash({
 
   return (
     <div
-      className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[var(--bg-page)] px-4 select-none"
+      className="relative flex min-h-screen min-h-[calc(var(--app-vh,1vh)*100)] min-h-dvh items-center justify-center overflow-y-auto bg-[var(--bg-page)] px-4 select-none"
       role="status"
       aria-live="polite"
       aria-label={label}
@@ -668,8 +669,10 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
       role="alert"
       aria-live="assertive"
       className={[
-        'relative flex w-full items-center justify-center overflow-hidden px-4 py-8',
-        fullScreen ? 'min-h-dvh bg-[var(--bg-page)]' : 'min-h-[68vh]',
+        'relative flex w-full items-center justify-center overflow-y-auto scrollbar-thin px-4 py-8',
+        fullScreen
+          ? 'min-h-screen min-h-[calc(var(--app-vh,1vh)*100)] min-h-dvh bg-[var(--bg-page)]'
+          : 'min-h-[68vh]',
       ].join(' ')}
     >
       {/* Subsurface Tone Glow */}
@@ -690,7 +693,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
         <motion.div
           variants={cardVariants}
           className={[
-            'relative overflow-hidden rounded-[2rem] p-7 backdrop-blur-2xl',
+            'relative overflow-hidden rounded-2xl sm:rounded-[2rem] p-4.5 sm:p-7 backdrop-blur-2xl',
             'border border-white/85 dark:border-white/[0.12]',
             'bg-white/82 dark:bg-[#0F172A]/85',
             'shadow-[0_1px_0_rgba(255,255,255,0.95)_inset,0_28px_70px_-16px_rgba(15,23,42,0.18)]',
@@ -756,7 +759,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                   whileHover={reduced ? undefined : { scale: 1.025 }}
                   whileTap={reduced ? undefined : { scale: 0.965 }}
                   transition={SPRING.snappy}
-                  className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
+                  className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
                   style={{
                     background: 'var(--gradient-hero)',
                     boxShadow:
@@ -784,7 +787,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                   whileTap={reduced ? undefined : { scale: 0.965 }}
                   transition={SPRING.snappy}
                   className={[
-                    'inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold',
+                    'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold',
                     'border border-white/85 bg-white/70 text-[var(--text-primary)] backdrop-blur-md',
                     'shadow-[0_1px_0_#FFF_inset,0_2px_8px_rgba(15,23,42,0.06)]',
                     'hover:bg-white dark:border-white/[0.12] dark:bg-white/[0.07] dark:hover:bg-white/[0.12]',
@@ -808,7 +811,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                   type="button"
                   onClick={() => setShowDetails((prev) => !prev)}
                   aria-expanded={showDetails}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
+                  className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
                 >
                   <StaticIcon
                     paths={APP_ICONS.terminal}
@@ -839,7 +842,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                           <button
                             type="button"
                             onClick={handleCopyReport}
-                            className="inline-flex items-center gap-1 rounded-md bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-[var(--text-primary)] shadow-sm transition hover:bg-white dark:bg-white/10 dark:hover:bg-white/20"
+                            className="inline-flex min-h-[28px] items-center gap-1 rounded-md bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-[var(--text-primary)] shadow-sm transition hover:bg-white dark:bg-white/10 dark:hover:bg-white/20"
                           >
                             <StaticIcon
                               paths={copied ? APP_ICONS.check : APP_ICONS.copy}
@@ -853,9 +856,14 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                             </span>
                           </button>
                         </div>
-                        <p className="max-h-24 overflow-y-auto break-words font-mono text-[11px] leading-relaxed text-[var(--text-secondary)]">
+                        <div
+                          tabIndex={0}
+                          role="region"
+                          aria-label="Diagnostic logs"
+                          className="max-h-28 overflow-y-auto break-words font-mono text-[11px] leading-relaxed text-[var(--text-secondary)] focus:outline-none"
+                        >
                           {errorText}
-                        </p>
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -891,22 +899,22 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
 
 /**
  * Automatically resets the active ErrorBoundary whenever the user navigates
- * to a different route (e.g. clicking a Sidebar link while an error is shown).
+ * to a different route or changes tabs/query parameters.
  */
 function RouteChangeErrorReset({
-  pathname,
+  locationKey,
   onReset,
 }: {
-  pathname: string;
+  locationKey: string;
   onReset: () => void;
 }) {
-  const initialPathRef = useRef(pathname);
+  const initialKeyRef = useRef(locationKey);
 
   useEffect(() => {
-    if (pathname !== initialPathRef.current) {
+    if (locationKey !== initialKeyRef.current) {
       onReset();
     }
-  }, [pathname, onReset]);
+  }, [locationKey, onReset]);
 
   return null;
 }
@@ -946,7 +954,7 @@ export function ErrorBoundaryWrapper({
       fallback={({ error, reset }) => (
         <>
           <RouteChangeErrorReset
-            pathname={location.pathname}
+            locationKey={location.key || `${location.pathname}${location.search}${location.hash}`}
             onReset={reset}
           />
           <PremiumErrorFallback
@@ -973,6 +981,44 @@ export function ErrorBoundaryWrapper({
         {children}
       </Suspense>
     </ErrorBoundary>
+  );
+}
+
+/**
+ * PWA Update Notification Banner — listens for new releases announced by main.tsx
+ */
+function PwaUpdateNotification() {
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const tr = useSafeTranslate();
+
+  useEffect(() => {
+    const handleUpdate = () => setUpdateAvailable(true);
+    window.addEventListener('medu:pwa-update-available', handleUpdate);
+    return () => window.removeEventListener('medu:pwa-update-available', handleUpdate);
+  }, []);
+
+  if (!updateAvailable) return null;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed bottom-4 left-4 right-4 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl border border-sky-400/30 bg-slate-900/95 p-3.5 text-white shadow-2xl backdrop-blur-xl sm:bottom-6"
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400 animate-pulse" />
+        <p className="text-xs font-medium">
+          {tr('pwa.updateAvailable', 'Yangi versiya mavjud.')}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="shrink-0 min-h-[36px] rounded-xl bg-sky-500 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-sky-400 active:scale-95"
+      >
+        {tr('common.updateNow', 'Yangilash')}
+      </button>
+    </div>
   );
 }
 
@@ -1027,9 +1073,11 @@ export default function App() {
               <IconDefsHost />
 
               <RoutedAuthProvider>
+                <ScrollToTop />
                 <DocumentTitleManager />
                 <UserSettingsSync />
                 <AppRoutes />
+                <PwaUpdateNotification />
                 <OfflineIndicator />
                 <QuickPaymentModal />
                 <QuickAttendanceModal />

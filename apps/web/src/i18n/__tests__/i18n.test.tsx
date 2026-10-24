@@ -1,7 +1,10 @@
+/**
+ * @vitest-environment jsdom
+ */
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { I18nProvider, useI18n, LOCALES, isLocale } from '../I18nProvider';
+import { I18nProvider, useI18n, useSafeI18n, LOCALES, isLocale, type I18nContextValue } from '../I18nProvider';
 import { translate } from '../index';
 
 afterEach(cleanup);
@@ -125,5 +128,89 @@ describe('I18nProvider', () => {
     expect(select.options[0].text).toBe('O\'zbekcha');
     expect(select.options[1].text).toBe('Русский');
     expect(select.options[2].text).toBe('English');
+  });
+
+  it('synchronizes HTML dir, data-locale, and data-locale-loaded attributes', () => {
+    render(
+      <I18nProvider initialLocale="uz">
+        <div data-testid="child">M-EDU</div>
+      </I18nProvider>,
+    );
+
+    expect(document.documentElement.lang).toBe('uz');
+    expect(document.documentElement.dir).toBe('ltr');
+    expect(document.documentElement.getAttribute('data-locale')).toBe('uz');
+    expect(document.documentElement.getAttribute('data-locale-loaded')).toBe('true');
+  });
+
+  it('provides Apple HIG Intl formatters bound to the active locale', () => {
+    let captured: I18nContextValue | undefined;
+    function FormatterProbe() {
+      const i18n = useI18n();
+      useEffect(() => {
+        captured = i18n;
+      }, [i18n]);
+      return null;
+    }
+
+    render(
+      <I18nProvider initialLocale="en">
+        <FormatterProbe />
+      </I18nProvider>,
+    );
+
+    expect(captured).toBeDefined();
+    const ctx = captured!;
+    expect(ctx.isRTL).toBe(false);
+    expect(ctx.meta.code).toBe('en');
+
+    // formatNumber
+    const formattedNum = ctx.formatNumber(1250000);
+    expect(formattedNum).toContain('1');
+
+    // formatCurrency
+    const formattedCur = ctx.formatCurrency(50000, 'USD');
+    expect(formattedCur).toContain('50,000');
+
+    // formatDate
+    const testDate = new Date(2026, 9, 22);
+    const formattedDate = ctx.formatDate(testDate);
+    expect(formattedDate).toBeTruthy();
+
+    // formatRelativeTime
+    const justNow = new Date(Date.now() - 5000);
+    const relTime = ctx.formatRelativeTime(justNow);
+    expect(relTime).toBeTruthy();
+  });
+
+  it('useSafeI18n works reliably outside I18nProvider without throwing', () => {
+    let safeCtx: I18nContextValue | undefined;
+    function SafeProbe() {
+      const i18n = useSafeI18n();
+      useEffect(() => {
+        safeCtx = i18n;
+      }, [i18n]);
+      return <div>Safe Fallback</div>;
+    }
+
+    render(<SafeProbe />);
+
+    expect(safeCtx).toBeDefined();
+    expect(safeCtx!.locale).toBe('en');
+    expect(safeCtx!.t('certificates.title')).toBe('Certificates');
+    expect(safeCtx!.formatNumber(100)).toBe('100');
+  });
+
+  it('LanguageSwitcher renders active badge and pill mode correctly', async () => {
+    const { LanguageSwitcher } = await import('../LanguageSwitcher');
+    const { container } = render(
+      <I18nProvider initialLocale="uz">
+        <LanguageSwitcher variant="pill" />
+      </I18nProvider>,
+    );
+
+    const matches = screen.getAllByText("O'zbekcha");
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelector('select')).toBeDefined();
   });
 });

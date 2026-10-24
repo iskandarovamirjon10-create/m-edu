@@ -142,4 +142,29 @@ describe('AppLayout navigation by role', () => {
     expect(logoutMock).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('login page')).toBeInTheDocument();
   });
+
+  it('renders main content as a fully accessible and configured scroll container', () => {
+    renderLayout();
+    const main = screen.getByRole('main');
+    expect(main).toBeInTheDocument();
+    expect(main).toHaveAttribute('id', 'main-content');
+    expect(main).toHaveAttribute('data-scroll-container');
+    expect(main).toHaveAttribute('data-scroll-focus');
+    expect(main.className).toContain('overflow-y-auto');
+    expect(main.className).toContain('overscroll-y-contain');
+    expect(main.className).toContain('touch-pan-y');
+  });
+
+  it('delegates window wheel events to main scroll container', () => {
+    renderLayout();
+    const main = screen.getByRole('main');
+    const scrollBySpy = vi.fn();
+    main.scrollBy = scrollBySpy;
+
+    // Simulate wheel on TopBar / document body outside main
+    const wheelEvent = new WheelEvent('wheel', { deltaY: 120, bubbles: true });
+    window.dispatchEvent(wheelEvent);
+
+    expect(scrollBySpy).toHaveBeenCalledWith({ top: 120, behavior: 'auto' });
+  });
 });

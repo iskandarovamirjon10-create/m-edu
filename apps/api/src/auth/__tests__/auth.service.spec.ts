@@ -577,6 +577,26 @@ describe('AuthService', () => {
       await expect((svc as unknown as { cleanupExpiredEntries: () => Promise<void> }).cleanupExpiredEntries()).resolves.toBeUndefined();
     });
 
+    it('skips cleanup when another replica holds the distributed lock (DB-04)', async () => {
+      prisma.session.deleteMany.mockResolvedValue({ count: 5 });
+      const mockRedis = {
+        setIfNotExists: vi.fn().mockResolvedValue(false),
+      };
+      const svc = new AuthService(
+        prisma as unknown as PrismaService,
+        mockJwt,
+        undefined,
+        mockRedis as never,
+      );
+      await (svc as unknown as { cleanupExpiredEntries: () => Promise<void> }).cleanupExpiredEntries();
+      expect(mockRedis.setIfNotExists).toHaveBeenCalledWith(
+        'auth:session:cleanup:lock',
+        'locked',
+        expect.any(Number),
+      );
+      expect(prisma.session.deleteMany).not.toHaveBeenCalled();
+    });
+
     it('honors SESSION_RETENTION_HOURS as a purge grace period', async () => {
       const prev = process.env.SESSION_RETENTION_HOURS;
       process.env.SESSION_RETENTION_HOURS = '24';

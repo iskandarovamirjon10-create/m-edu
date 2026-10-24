@@ -35,16 +35,63 @@ const INLINE_SOURCE = [
   '(~~[^~]+~~)',
 ].join('|');
 
+export const ALLOWED_INTERNAL_PREFIXES = [
+  '/attendance',
+  '/payments',
+  '/invoices',
+  '/schedule',
+  '/students',
+  '/teachers',
+  '/groups',
+  '/courses',
+  '/settings',
+  '/dashboard',
+  '/analytics',
+  '/reports',
+  '/leads',
+  '/branches',
+  '/rooms',
+  '/finance',
+  '/inventory',
+  '/tasks',
+  '/homework',
+] as const;
+
+export function isSafeInternalRoute(path: string): boolean {
+  const trimmed = path.trim();
+  if (!trimmed.startsWith('/')) return false;
+  // Disallow protocol relative // or backslashes
+  if (trimmed.startsWith('//') || trimmed.includes('\\')) return false;
+  // Disallow directory traversal
+  if (trimmed.includes('..')) return false;
+  // Disallow javascript/data pseudos inside path
+  if (trimmed.toLowerCase().includes('javascript:') || trimmed.toLowerCase().includes('data:')) return false;
+
+  return ALLOWED_INTERNAL_PREFIXES.some(
+    (prefix) =>
+      trimmed === prefix ||
+      trimmed.startsWith(`${prefix}/`) ||
+      trimmed.startsWith(`${prefix}?`) ||
+      trimmed.startsWith(`${prefix}#`)
+  );
+}
+
 function isSafeHref(url: string): boolean {
   const value = url.trim().toLowerCase();
-  return (
-    value.startsWith('http://') ||
+  if (
     value.startsWith('https://') ||
-    value.startsWith('//') ||
-    value.startsWith('/') ||
-    value.startsWith('#') ||
+    value.startsWith('http://') ||
     value.startsWith('mailto:')
-  );
+  ) {
+    return true;
+  }
+  if (value.startsWith('/')) {
+    return isSafeInternalRoute(url);
+  }
+  if (value.startsWith('#')) {
+    return true;
+  }
+  return false;
 }
 
 function renderInline(text: string, keyBase: string): ReactNode[] {
@@ -106,12 +153,13 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
       const label = link.slice(1, split);
       const href = link.slice(split + 2, -1);
       if (isSafeHref(href)) {
+        const isInternal = href.startsWith('/');
         nodes.push(
           <a
             key={key}
             href={href}
-            target="_blank"
-            rel="noopener noreferrer nofollow"
+            target={isInternal ? undefined : '_blank'}
+            rel={isInternal ? undefined : 'noopener noreferrer nofollow'}
             className="font-medium underline underline-offset-[3px] decoration-[1px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]/40 rounded-sm"
             style={{
               color: 'var(--ai-primary, #007AFF)',

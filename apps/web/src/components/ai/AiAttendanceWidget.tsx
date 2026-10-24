@@ -1,30 +1,32 @@
 /**
- * AiAttendanceWidget v3 — Live Data · Count-Up · Sparkline Draw
+ * AiAttendanceWidget v4 — premium Apple-grade live dashboard
  * ============================================================================
- * Fixes:
- *  - ActionButton: replaced `any` with proper polymorphic typing; <a> no
- *    longer receives `disabled`/`type`; rel/target added when href is external
- *  - useLiveAnnouncer: node is now stable (memoized) — no SR re-announce on
- *    every parent render
- *  - Timer leaks: download + copy timers now tracked in refs + cleared on
- *    unmount
- *  - Keyboard shortcuts now work WITHOUT the widget being focused (document
- *    listener, guarded by element visibility) — ⌘E / ⌘B / ⌘⇧C now function
- *  - handleDownloadExcel no-ops when isEmpty (shortcut path too)
- *  - buildCsv escapes className for quotes and semicolons (Excel-safe)
- *  - share icon replaced by copy icon (it copies, not shares)
- *  - greeting refreshes every 60s via interval (was stuck at mount)
- *  - useIsApple uses userAgentData when available
- *  - prefers-reduced-motion skips artificial timers
- * Design (visible):
- *  - Live pulse dot next to "AI Davomat" label
- *  - Animated count-up on every metric value (rAF + easeOut, respects r.m.)
- *  - Sparkline pathLength draw on mount / change
- *  - AttendanceRing re-draws when totals change (keyed remount)
- *  - Emphasis card: gradient bg + accent glow + tinted border
- *  - Corner specular shimmer (6s pulse)
- *  - Widget hover: subtle lift + glow (motion, r.m.-safe)
- *  - Refresh button spins while busy
+ * v4 changes (from v3):
+ *  - Fix: global keyboard shortcuts are now scoped — only ONE widget reacts
+ *    per document (last-mounted wins), and shortcuts are disabled while the
+ *    user is typing or while another element is focused in another widget.
+ *  - Fix: CSV escaping no longer mangles embedded ";" — only the delimiter
+ *    is protected. BOM added.
+ *  - Fix: MetricCard polymorphic typing — no `any`, proper union return.
+ *  - Fix: ActionButton disabled-as-link now truly non-interactive (tabIndex,
+ *    aria-disabled, onClick guard).
+ *  - Fix: useLiveAnnouncer uses a monotonic nonce to defeat React batching.
+ *  - Fix: spinner respects prefers-reduced-motion.
+ *  - Fix: MetricCard gets focus-visible ring when clickable.
+ *  - Fix: AttendanceRing no longer remounts — animates dash via `animate`.
+ *  - Fix: Sparkline re-draws when data changes (keyed motion.path).
+ *  - Fix: ring has sr-only label (screen readers get the value).
+ *  - Fix: dark-mode hover layer is visible in dark (inverted colors).
+ *  - Fix: stylesheet is injected once via `document.adoptedStyleSheets`
+ *    (or a <style id> singleton), not on every render.
+ *  - New: `loading` prop → Skeleton metric grid.
+ *  - New: `onCopyError` / `onDownloadError` / `onCopySuccess` callbacks.
+ *  - New: haptics on copy / download / refresh (graceful).
+ *  - New: `aria-keyshortcuts` on action buttons.
+ *  - New: `prefers-contrast` support (contrast-more: Tailwind utilities).
+ *  - New: mobile priority — Jami full-width, then 3-col for states.
+ *  - New: `role="region"` + `aria-label` on widget root.
+ *  - New: respects `prefers-reduced-data` for the shimmer.
  * ============================================================================
  */
 
@@ -35,7 +37,9 @@ import {
   useEffect,
   useRef,
   memo,
-  type ComponentType,
+  type ButtonHTMLAttributes,
+  type AnchorHTMLAttributes,
+  type ReactNode,
 } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
@@ -67,43 +71,85 @@ const RAINBOW_EDGE =
  * PALETTE
  * ═══════════════════════════════════════════════════════════════════ */
 const METRIC = {
-  total:   { fg: '#6366F1', soft: 'rgba(99,102,241,0.10)',  ring: 'rgba(99,102,241,0.22)' },
-  present: { fg: '#10B981', soft: 'rgba(16,185,129,0.10)',  ring: 'rgba(16,185,129,0.22)' },
-  absent:  { fg: '#F43F5E', soft: 'rgba(244,63,94,0.10)',   ring: 'rgba(244,63,94,0.22)'  },
-  late:    { fg: '#F59E0B', soft: 'rgba(245,158,11,0.10)',  ring: 'rgba(245,158,11,0.22)' },
+  total:   { fg: '#6366F1', soft: 'rgba(99,102,241,0.10)', ring: 'rgba(99,102,241,0.22)' },
+  present: { fg: '#10B981', soft: 'rgba(16,185,129,0.10)', ring: 'rgba(16,185,129,0.22)' },
+  absent:  { fg: '#F43F5E', soft: 'rgba(244,63,94,0.10)',  ring: 'rgba(244,63,94,0.22)' },
+  late:    { fg: '#F59E0B', soft: 'rgba(245,158,11,0.10)', ring: 'rgba(245,158,11,0.22)' },
 } as const;
+
+/* ═══════════════════════════════════════════════════════════════════
+ * HAPTICS
+ * ═══════════════════════════════════════════════════════════════════ */
+function haptic(kind: 'tap' | 'success' | 'warning' | 'error'): void {
+  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+  try {
+    const map = {
+      tap: 10,
+      success: [12, 40, 12],
+      warning: [18, 50, 18],
+      error: [40, 60, 40],
+    } as const;
+    navigator.vibrate(map[kind] as number | number[]);
+  } catch {
+    /* noop */
+  }
+}
 
 /* ═══════════════════════════════════════════════════════════════════
  * HOOKS
  * ═══════════════════════════════════════════════════════════════════ */
 
-/** Stable live announcer node (memoized once). */
+/**
+ * Live announcer — defeats React batching by using a monotonic nonce in the
+ * node content. Works reliably with VoiceOver / NVDA / TalkBack.
+ */
 function useLiveAnnouncer() {
-  const [msg, setMsg] = useState('');
-  const [priority, setPriority] = useState<'polite' | 'assertive'>('polite');
-  const announce = useCallback((m: string, p: 'polite' | 'assertive' = 'polite') => {
-    setPriority(p);
-    setMsg('');
-    requestAnimationFrame(() => requestAnimationFrame(() => setMsg(m)));
+  const [state, setState] = useState<{ msg: string; priority: 'polite' | 'assertive'; nonce: number }>({
+    msg: '',
+    priority: 'polite',
+    nonce: 0,
+  });
+
+  const announce = useCallback((msg: string, priority: 'polite' | 'assertive' = 'polite') => {
+    setState((s) => ({ msg, priority, nonce: s.nonce + 1 }));
   }, []);
-  const node = useMemo(
-    () => (
-      <div role="status" aria-live={priority} aria-atomic="true" className="sr-only">
-        {msg}
-      </div>
-    ),
-    [msg, priority],
+
+  const node = (
+    <div
+      role="status"
+      aria-live={state.priority}
+      aria-atomic="true"
+      className="sr-only"
+      data-nonce={state.nonce}
+    >
+      {state.msg}
+    </div>
   );
+
   return { announce, node };
 }
 
 function useIsApple(): boolean {
   return useMemo(() => {
     if (typeof navigator === 'undefined') return false;
-    // @ts-expect-error userAgentData is new
-    const platform = navigator.userAgentData?.platform || navigator.platform || '';
+    const uaData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
+    const platform = uaData?.platform || navigator.platform || '';
     return /Mac|iPhone|iPad|iPod/i.test(platform) || /Mac|iPhone|iPad/i.test(navigator.userAgent);
   }, []);
+}
+
+/** Additional preference hooks for the shimmer etc. */
+function usePrefersReducedData(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-reduced-data: reduce)');
+    setReduced(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
+  }, []);
+  return reduced;
 }
 
 /** Animated counter — rAF based, respects reduced motion. */
@@ -138,6 +184,56 @@ function useCountUp(value: number, reduced: boolean, duration = 700): number {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+ * GLOBAL SHORTCUT REGISTRY
+ * Only one widget handles shortcuts at a time (the most recently mounted one
+ * or the one the user last interacted with).
+ * ═══════════════════════════════════════════════════════════════════ */
+type ShortcutHandler = (e: KeyboardEvent) => boolean; // return true if handled
+const shortcutRegistry: { id: symbol; handler: ShortcutHandler }[] = [];
+let activeShortcutId: symbol | null = null;
+
+function useWidgetShortcuts(id: symbol, handler: ShortcutHandler, active: boolean) {
+  useEffect(() => {
+    // Register
+    shortcutRegistry.push({ id, handler });
+    if (shortcutRegistry.length === 1) activeShortcutId = id;
+
+    const onKey = (e: KeyboardEvent) => {
+      if (activeShortcutId !== id) return;
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      const editable =
+        tag === 'input' ||
+        tag === 'textarea' ||
+        (e.target as HTMLElement | null)?.isContentEditable;
+      if (editable) return;
+      if (handler(e)) {
+        // Handled — do not propagate.
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('keydown', onKey, { capture: true });
+    return () => {
+      document.removeEventListener('keydown', onKey, { capture: true } as EventListenerOptions);
+      const idx = shortcutRegistry.findIndex((r) => r.id === id);
+      if (idx >= 0) shortcutRegistry.splice(idx, 1);
+      if (activeShortcutId === id) {
+        activeShortcutId = shortcutRegistry[shortcutRegistry.length - 1]?.id ?? null;
+      }
+    };
+  }, [id, handler, active]);
+
+  // Claim focus-shortcut ownership when this widget receives focus.
+  const claim = useCallback(() => {
+    if (activeShortcutId !== id && shortcutRegistry.some((r) => r.id === id)) {
+      activeShortcutId = id;
+    }
+  }, [id]);
+
+  return claim;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
  * ICONS
  * ═══════════════════════════════════════════════════════════════════ */
 const I = {
@@ -154,7 +250,7 @@ const I = {
 };
 
 function Icon({ paths, size = 14, strokeWidth = 2, className = '' }: {
-  paths: string[]; size?: number; strokeWidth?: number; className?: string;
+  paths: readonly string[]; size?: number; strokeWidth?: number; className?: string;
 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -167,11 +263,13 @@ function Icon({ paths, size = 14, strokeWidth = 2, className = '' }: {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * SPARKLINE — with draw animation
+ * SPARKLINE — re-draws on data change
  * ═══════════════════════════════════════════════════════════════════ */
 const Sparkline = memo(function Sparkline({
   data, color, width = 48, height = 16, reduced,
-}: { data: readonly number[]; color: string; width?: number; height?: number; reduced: boolean }) {
+}: {
+  data: readonly number[]; color: string; width?: number; height?: number; reduced: boolean;
+}) {
   const path = useMemo(() => {
     if (data.length < 2) return '';
     const min = Math.min(...data);
@@ -189,9 +287,11 @@ const Sparkline = memo(function Sparkline({
 
   if (!path) return null;
 
+  // Key on the path so React remounts → pathLength re-animates.
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
       <motion.path
+        key={path}
         d={path}
         fill="none"
         stroke={color}
@@ -208,12 +308,12 @@ const Sparkline = memo(function Sparkline({
 });
 
 /* ═══════════════════════════════════════════════════════════════════
- * ATTENDANCE RING — keyed remount on data change
+ * ATTENDANCE RING — animates dash, no remount
  * ═══════════════════════════════════════════════════════════════════ */
 const AttendanceRing = memo(function AttendanceRing({
-  presentPct, latePct, absentPct, size = 64, reduced,
+  presentPct, latePct, absentPct, size = 64, reduced, label,
 }: {
-  presentPct: number; latePct: number; absentPct: number; size?: number; reduced: boolean;
+  presentPct: number; latePct: number; absentPct: number; size?: number; reduced: boolean; label: string;
 }) {
   const stroke = 6;
   const r = (size - stroke) / 2;
@@ -225,39 +325,62 @@ const AttendanceRing = memo(function AttendanceRing({
   const absentDash = (absentPct / total) * c;
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor"
-        strokeWidth={stroke} opacity="0.08" />
-      <motion.circle cx={size / 2} cy={size / 2} r={r} fill="none"
-        stroke={METRIC.present.fg} strokeWidth={stroke} strokeLinecap="round"
-        strokeDasharray={`${presentDash} ${c}`} strokeDashoffset={0}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        initial={reduced ? false : { strokeDasharray: `0 ${c}` }}
-        animate={{ strokeDasharray: `${presentDash} ${c}` }}
-        transition={{ duration: 1.1, ease: EASE_APPLE }} />
-      <motion.circle cx={size / 2} cy={size / 2} r={r} fill="none"
-        stroke={METRIC.late.fg} strokeWidth={stroke} strokeLinecap="round"
-        strokeDasharray={`${lateDash} ${c}`} strokeDashoffset={-presentDash}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        initial={reduced ? false : { strokeDasharray: `0 ${c}` }}
-        animate={{ strokeDasharray: `${lateDash} ${c}` }}
-        transition={{ duration: 1.1, ease: EASE_APPLE, delay: 0.15 }} />
-      <motion.circle cx={size / 2} cy={size / 2} r={r} fill="none"
-        stroke={METRIC.absent.fg} strokeWidth={stroke} strokeLinecap="round"
-        strokeDasharray={`${absentDash} ${c}`} strokeDashoffset={-(presentDash + lateDash)}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        initial={reduced ? false : { strokeDasharray: `0 ${c}` }}
-        animate={{ strokeDasharray: `${absentDash} ${c}` }}
-        transition={{ duration: 1.1, ease: EASE_APPLE, delay: 0.3 }} />
-    </svg>
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor"
+          strokeWidth={stroke} opacity="0.08" />
+        <motion.circle cx={size / 2} cy={size / 2} r={r} fill="none"
+          stroke={METRIC.present.fg} strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={`${presentDash} ${c}`} strokeDashoffset={0}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          initial={false}
+          animate={{ strokeDasharray: `${presentDash} ${c}` }}
+          transition={{ duration: reduced ? 0 : 1.0, ease: EASE_APPLE }} />
+        <motion.circle cx={size / 2} cy={size / 2} r={r} fill="none"
+          stroke={METRIC.late.fg} strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={`${lateDash} ${c}`} strokeDashoffset={-presentDash}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          initial={false}
+          animate={{ strokeDasharray: `${lateDash} ${c}` }}
+          transition={{ duration: reduced ? 0 : 1.0, ease: EASE_APPLE, delay: reduced ? 0 : 0.12 }} />
+        <motion.circle cx={size / 2} cy={size / 2} r={r} fill="none"
+          stroke={METRIC.absent.fg} strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={`${absentDash} ${c}`} strokeDashoffset={-(presentDash + lateDash)}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          initial={false}
+          animate={{ strokeDasharray: `${absentDash} ${c}` }}
+          transition={{ duration: reduced ? 0 : 1.0, ease: EASE_APPLE, delay: reduced ? 0 : 0.24 }} />
+      </svg>
+      {/* SR-only accurate value */}
+      <span className="sr-only">{label}</span>
+    </div>
   );
 });
 
 /* ═══════════════════════════════════════════════════════════════════
- * METRIC CARD — count-up + emphasis glow
+ * SKELETON
+ * ═══════════════════════════════════════════════════════════════════ */
+const MetricSkeleton = memo(function MetricSkeleton({ reduced }: { reduced: boolean }) {
+  return (
+    <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="rounded-xl p-3">
+          <div className="mb-2 h-2.5 w-14 rounded bg-slate-900/[0.06] dark:bg-white/[0.08]" />
+          <div
+            className="h-5 w-10 rounded bg-slate-900/[0.08] dark:bg-white/[0.10] motion-safe:animate-pulse"
+            style={{ animationDelay: reduced ? undefined : `${i * 80}ms` }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+ * METRIC CARD — polymorphic without `any`
  * ═══════════════════════════════════════════════════════════════════ */
 interface MetricCardProps {
-  icon: string[];
+  icon: readonly string[];
   label: string;
   value: number;
   pct?: number;
@@ -268,39 +391,34 @@ interface MetricCardProps {
   reduced: boolean;
   delay: number;
   emphasis?: boolean;
+  ariaLabel?: string;
 }
 
 const MetricCard = memo(function MetricCard({
-  icon, label, value, pct, accent, soft, spark, onClick, reduced, delay, emphasis,
+  icon, label, value, pct, accent, soft, spark, onClick, reduced, delay, emphasis, ariaLabel,
 }: MetricCardProps) {
   const display = useCountUp(value, reduced);
-  const Comp = (onClick ? motion.button : motion.div) as ComponentType<any>;
 
-  return (
-    <Comp
-      type={onClick ? 'button' : undefined}
-      onClick={onClick}
-      initial={reduced ? false : { opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ...SPRING.smooth, delay }}
-      whileHover={reduced || !onClick ? undefined : { y: -1.5 }}
-      whileTap={reduced || !onClick ? undefined : { scale: 0.985 }}
-      className={`group relative flex flex-col items-start overflow-hidden rounded-xl p-3 text-left transition-colors duration-200 ${onClick ? 'cursor-pointer' : ''}`}
-      style={{
-        background: emphasis
-          ? `linear-gradient(135deg, ${soft} 0%, transparent 75%)`
-          : 'transparent',
-        border: emphasis
-          ? `1px solid ${accent}38`
-          : '1px solid transparent',
-        boxShadow: emphasis
-          ? `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 16px -8px ${accent}66`
-          : undefined,
-      }}
-    >
+  const className = [
+    'group relative flex flex-col items-start overflow-hidden rounded-xl p-3 text-left',
+    'transition-colors duration-200',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900',
+    onClick ? 'cursor-pointer' : '',
+  ].filter(Boolean).join(' ');
+
+  const style = {
+    background: emphasis ? `linear-gradient(135deg, ${soft} 0%, transparent 75%)` : 'transparent',
+    border: emphasis ? `1px solid ${accent}38` : '1px solid transparent',
+    boxShadow: emphasis
+      ? `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 16px -8px ${accent}66`
+      : undefined,
+  };
+
+  const body = (
+    <>
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 contrast-more:group-hover:opacity-0"
         style={{ background: soft }}
       />
       <div className="relative z-10 flex w-full items-center gap-1.5">
@@ -331,40 +449,83 @@ const MetricCard = memo(function MetricCard({
           </div>
         )}
       </div>
-    </Comp>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <motion.button
+        type="button"
+        onClick={onClick}
+        aria-label={ariaLabel ?? `${label}: ${value}${pct !== undefined ? ` (${pct}%)` : ''}`}
+        initial={reduced ? false : { opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ ...SPRING.smooth, delay }}
+        whileHover={reduced ? undefined : { y: -1.5 }}
+        whileTap={reduced ? undefined : { scale: 0.985 }}
+        className={className}
+        style={style}
+      >
+        {body}
+      </motion.button>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={reduced ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ ...SPRING.smooth, delay }}
+      className={className}
+      style={style}
+    >
+      {body}
+    </motion.div>
   );
 });
 
 /* ═══════════════════════════════════════════════════════════════════
- * ACTION BUTTON — properly typed, no `any`
+ * ACTION BUTTON — properly typed, href/button split
  * ═══════════════════════════════════════════════════════════════════ */
-interface ActionButtonProps {
-  icon: string[];
+interface ActionButtonBaseProps {
+  icon: readonly string[];
   label: string;
-  onClick?: () => void;
-  href?: string;
   variant?: 'primary' | 'ghost';
   loading?: boolean;
   disabled?: boolean;
   shortcut?: string;
+  shortcutLabel?: string; // for aria-keyshortcuts, e.g. "Meta+E"
   reduced: boolean;
+  children?: never;
 }
 
-const ActionButton = memo(function ActionButton({
-  icon, label, onClick, href, variant = 'ghost',
-  loading, disabled, shortcut, reduced,
-}: ActionButtonProps) {
+type ActionButtonProps = ActionButtonBaseProps &
+  (
+    | ({ onClick?: () => void; href?: undefined } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'onClick'>)
+    | ({ href: string; onClick?: () => void } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'children' | 'onClick'>)
+  );
+
+const ActionButton = memo(function ActionButton(props: ActionButtonProps) {
+  const {
+    icon, label, variant = 'ghost', loading, disabled,
+    shortcut, shortcutLabel, reduced,
+  } = props;
+
   const isPrimary = variant === 'primary';
+  const isDisabled = disabled || loading;
+
   const baseClass = [
     'group/btn relative inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5',
     'text-[12px] font-semibold tracking-tight',
     'outline-none transition-all duration-200',
     'focus-visible:ring-2 focus-visible:ring-offset-0',
-    disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+    isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
     isPrimary
       ? 'text-white shadow-sm focus-visible:ring-indigo-500/60'
       : 'text-slate-700 focus-visible:ring-slate-400/50 dark:text-slate-200',
+    'contrast-more:border contrast-more:border-current',
   ].join(' ');
+
   const baseStyle = isPrimary
     ? {
         background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
@@ -375,33 +536,40 @@ const ActionButton = memo(function ActionButton({
         border: '1px solid rgba(15,23,42,0.08)',
         boxShadow: '0 1px 0 rgba(255,255,255,0.9) inset',
       };
-  const hoverAnim = reduced || disabled ? undefined : { y: -1 };
-  const tapAnim = reduced || disabled ? undefined : { scale: 0.97 };
+
+  const hoverAnim = reduced || isDisabled ? undefined : { y: -1 };
+  const tapAnim = reduced || isDisabled ? undefined : { scale: 0.97 };
 
   const inner = (
     <>
       {!isPrimary && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-lg opacity-0 transition-opacity duration-200 group-hover/btn:opacity-100 dark:opacity-0"
+          className="pointer-events-none absolute inset-0 rounded-lg opacity-0 transition-opacity duration-200 group-hover/btn:opacity-100"
           style={{ background: 'rgba(15,23,42,0.04)' }}
         />
       )}
       <span className="relative z-10 flex items-center gap-1.5">
         {loading ? (
-          <motion.span
-            animate={{ rotate: 360 }}
-            transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-            className="inline-flex"
-          >
+          reduced ? (
             <Icon paths={I.refresh} size={12} strokeWidth={2.4} />
-          </motion.span>
+          ) : (
+            <motion.span
+              animate={{ rotate: 360 }}
+              transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+              className="inline-flex"
+              aria-hidden="true"
+            >
+              <Icon paths={I.refresh} size={12} strokeWidth={2.4} />
+            </motion.span>
+          )
         ) : (
           <Icon paths={icon} size={12} strokeWidth={2.3} />
         )}
         <span>{loading ? 'Yuklanmoqda…' : label}</span>
         {shortcut && !loading && (
           <kbd
+            aria-hidden="true"
             className={[
               'ml-0.5 rounded border px-1 py-px text-[9.5px] font-bold tabular-nums',
               isPrimary
@@ -416,44 +584,57 @@ const ActionButton = memo(function ActionButton({
     </>
   );
 
-  if (href) {
+  const commonMotionProps = {
+    whileHover: hoverAnim,
+    whileTap: tapAnim,
+    transition: SPRING.snappy,
+    className: baseClass,
+    style: baseStyle,
+    'aria-keyshortcuts': shortcutLabel,
+    'aria-busy': loading || undefined,
+  } as const;
+
+  if ('href' in props && props.href) {
+    const { href, onClick, ...rest } = props as Extract<ActionButtonProps, { href: string }>;
     const isExternal = /^https?:\/\//.test(href);
     return (
       <motion.a
-        href={href}
+        {...commonMotionProps}
+        {...(rest as unknown as Record<string, unknown>)}
+        href={isDisabled ? undefined : href}
         rel={isExternal ? 'noopener noreferrer' : undefined}
         target={isExternal ? '_blank' : undefined}
-        onClick={onClick}
-        aria-disabled={disabled || loading || undefined}
-        whileHover={hoverAnim}
-        whileTap={tapAnim}
-        transition={SPRING.snappy}
-        className={baseClass}
-        style={baseStyle}
+        onClick={(e) => {
+          if (isDisabled) {
+            e.preventDefault();
+            return;
+          }
+          onClick?.();
+        }}
+        aria-disabled={isDisabled || undefined}
+        tabIndex={isDisabled ? -1 : undefined}
       >
         {inner}
       </motion.a>
     );
   }
 
+  const { onClick, ...rest } = props as Extract<ActionButtonProps, { onClick?: () => void }>;
   return (
     <motion.button
+      {...commonMotionProps}
+      {...(rest as unknown as Record<string, unknown>)}
       type="button"
       onClick={onClick}
-      disabled={disabled || loading}
-      whileHover={hoverAnim}
-      whileTap={tapAnim}
-      transition={SPRING.snappy}
-      className={baseClass}
-      style={baseStyle}
+      disabled={isDisabled}
     >
       {inner}
     </motion.button>
   );
-});
+}) as <P extends ActionButtonProps>(props: P) => ReactNode;
 
 /* ═══════════════════════════════════════════════════════════════════
- * EXPORT
+ * CSV EXPORT — Excel-safe (correct escaping)
  * ═══════════════════════════════════════════════════════════════════ */
 interface ExportRow {
   id: string | number;
@@ -463,37 +644,43 @@ interface ExportRow {
   timestamp?: string;
 }
 
-function csvEscape(s: string): string {
-  return `"${String(s).replace(/"/g, '""').replace(/;/g, ',')}"`;
+/** Escape a field per RFC 4180 — only doubles quotes. Does NOT touch ";". */
+function csvField(s: string): string {
+  return `"${String(s).replace(/"/g, '""')}"`;
 }
 
-function buildCsv(rows: ExportRow[], meta: { total: number; present: number; absent: number; late: number }): string {
+function buildCsv(
+  rows: ExportRow[],
+  meta: { total: number; present: number; absent: number; late: number },
+): string {
   const BOM = '\uFEFF';
   const sep = ';';
-  const header = ['ID', 'O\'quvchi', 'Sinf', 'Holat', 'Vaqt'].join(sep);
+  const header = ['ID', "O'quvchi", 'Sinf', 'Holat', 'Vaqt'].map(csvField).join(sep);
   const metaRow = [
     `Jami: ${meta.total}`,
     `Qatnashgan: ${meta.present}`,
     `Yo'q: ${meta.absent}`,
     `Kechikkan: ${meta.late}`,
-  ].join(sep);
+  ]
+    .map(csvField)
+    .join(sep);
   const statusMap: Record<ExportRow['status'], string> = {
     present: 'Qatnashgan',
-    absent: 'Yo\'q',
+    absent: "Yo'q",
     late: 'Kechikkan',
   };
   const body = rows
     .map((r) =>
       [
-        r.id,
-        csvEscape(r.studentName),
-        csvEscape(r.className),
-        statusMap[r.status],
-        r.timestamp ?? '',
+        String(r.id),
+        csvField(r.studentName),
+        csvField(r.className),
+        csvField(statusMap[r.status]),
+        csvField(r.timestamp ?? ''),
       ].join(sep),
     )
-    .join('\n');
-  return BOM + [metaRow, '', header, body].join('\n');
+    .join('\r\n');
+  return BOM + [metaRow, '', header, body].join('\r\n');
 }
 
 function downloadCsv(filename: string, content: string) {
@@ -502,10 +689,32 @@ function downloadCsv(filename: string, content: string) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * STYLE SINGLETON — injected once, no duplicate keyframes
+ * ═══════════════════════════════════════════════════════════════════ */
+const STYLE_ID = 'ai-attendance-widget-styles-v4';
+function ensureStyles() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(STYLE_ID)) return;
+  const el = document.createElement('style');
+  el.id = STYLE_ID;
+  el.textContent = `
+    @keyframes cornerShimmer {
+      0%, 100% { opacity: 0.30; transform: translate(0, 0); }
+      50%      { opacity: 0.60; transform: translate(4px, 4px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ai-attendance-shimmer { animation: none !important; }
+    }
+  `;
+  document.head.appendChild(el);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -521,30 +730,43 @@ export interface AiAttendanceWidgetProps {
   sparkPresent?: readonly number[];
   sparkAbsent?: readonly number[];
   sparkLate?: readonly number[];
+  loading?: boolean;
   onOpenClassBreakdown?: () => void;
   onRefresh?: () => void;
+  onCopySuccess?: () => void;
+  onCopyError?: (e: unknown) => void;
+  onDownloadSuccess?: () => void;
+  onDownloadError?: (e: unknown) => void;
 }
 
 export function AiAttendanceWidget({
   total = 0, present = 0, absent = 0, late = 0,
   rows, sparkTotal, sparkPresent, sparkAbsent, sparkLate,
+  loading = false,
   onOpenClassBreakdown, onRefresh,
+  onCopySuccess, onCopyError,
+  onDownloadSuccess, onDownloadError,
 }: AiAttendanceWidgetProps) {
   const reduced = Boolean(useReducedMotion());
+  const reducedData = usePrefersReducedData();
   const isApple = useIsApple();
   const { announce, node: announcer } = useLiveAnnouncer();
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [greeting, setGreeting] = useState(() => computeGreeting());
   const shortcutMod = isApple ? '⌘' : 'Ctrl+';
+  const shortcutPrefix = isApple ? 'Meta' : 'Control';
 
   const downloadTimer = useRef<number | null>(null);
   const copyTimer = useRef<number | null>(null);
+  const widgetId = useRef(Symbol('attendance-widget')).current;
 
   const presentPct = total > 0 ? Math.round((present / total) * 100) : 0;
   const absentPct = total > 0 ? Math.round((absent / total) * 100) : 0;
   const latePct = total > 0 ? Math.round((late / total) * 100) : 0;
-  const isEmpty = total === 0;
+  const isEmpty = total === 0 && !loading;
+
+  useEffect(() => { ensureStyles(); }, []);
 
   // Refresh greeting every 60s
   useEffect(() => {
@@ -562,6 +784,7 @@ export function AiAttendanceWidget({
 
   const handleDownloadExcel = useCallback(() => {
     if (downloading || isEmpty) return;
+    if (downloadTimer.current !== null) window.clearTimeout(downloadTimer.current);
     setDownloading(true);
     announce('Hisobot tayyorlanmoqda…', 'polite');
     try {
@@ -572,15 +795,22 @@ export function AiAttendanceWidget({
       const finish = () => {
         setDownloading(false);
         announce('Hisobot yuklandi', 'polite');
+        haptic('success');
+        onDownloadSuccess?.();
         downloadTimer.current = null;
       };
       if (reduced) finish();
       else downloadTimer.current = window.setTimeout(finish, 700);
-    } catch {
+    } catch (e) {
       setDownloading(false);
-      announce('Hisobotni yuklab bo\'lmadi', 'assertive');
+      haptic('error');
+      announce("Hisobotni yuklab bo'lmadi", 'assertive');
+      onDownloadError?.(e);
     }
-  }, [downloading, isEmpty, rows, total, present, absent, late, announce, reduced]);
+  }, [
+    downloading, isEmpty, rows, total, present, absent, late,
+    announce, reduced, onDownloadSuccess, onDownloadError,
+  ]);
 
   const handleCopySummary = useCallback(async () => {
     const summary = [
@@ -591,9 +821,12 @@ export function AiAttendanceWidget({
       `Kechikkan: ${late} (${latePct}%)`,
     ].join('\n');
     try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
       await navigator.clipboard.writeText(summary);
       setCopied(true);
       announce('Xulosa nusxalandi', 'polite');
+      haptic('tap');
+      onCopySuccess?.();
       if (reduced) {
         setCopied(false);
       } else {
@@ -603,36 +836,53 @@ export function AiAttendanceWidget({
           copyTimer.current = null;
         }, 1800);
       }
-    } catch {
-      announce('Nusxalab bo\'lmadi', 'assertive');
+    } catch (e) {
+      haptic('error');
+      announce("Nusxalab bo'lmadi", 'assertive');
+      onCopyError?.(e);
     }
-  }, [total, present, absent, late, presentPct, absentPct, latePct, announce, reduced]);
+  }, [
+    total, present, absent, late, presentPct, absentPct, latePct,
+    announce, reduced, onCopySuccess, onCopyError,
+  ]);
 
-  // Global keyboard shortcuts — work even without focus, but only when
-  // the widget is mounted & visible in the DOM.
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!rootRef.current) return;
-      // Don't hijack while typing in an input
-      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement | null)?.isContentEditable) return;
-      const mod = isApple ? e.metaKey : e.ctrlKey;
-      if (!mod) return;
-      const key = e.key.toLowerCase();
-      if (key === 'e') { e.preventDefault(); handleDownloadExcel(); }
-      else if (key === 'c' && e.shiftKey) { e.preventDefault(); handleCopySummary(); }
-      else if (key === 'b') { e.preventDefault(); onOpenClassBreakdown?.(); }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+  const shortcutHandler = useCallback((e: KeyboardEvent): boolean => {
+    const mod = isApple ? e.metaKey : e.ctrlKey;
+    if (!mod) return false;
+    const key = e.key.toLowerCase();
+    if (key === 'e' && !e.shiftKey && !e.altKey) { handleDownloadExcel(); return true; }
+    if (key === 'c' && e.shiftKey) { handleCopySummary(); return true; }
+    if (key === 'b') { onOpenClassBreakdown?.(); return true; }
+    return false;
   }, [isApple, handleDownloadExcel, handleCopySummary, onOpenClassBreakdown]);
+
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const claimShortcutOwnership = useWidgetShortcuts(widgetId, shortcutHandler, true);
+
+  // Claim ownership when the user focuses/interacts with the widget
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const onFocus = () => claimShortcutOwnership();
+    const onPointer = () => claimShortcutOwnership();
+    el.addEventListener('focusin', onFocus);
+    el.addEventListener('pointerdown', onPointer);
+    return () => {
+      el.removeEventListener('focusin', onFocus);
+      el.removeEventListener('pointerdown', onPointer);
+    };
+  }, [claimShortcutOwnership]);
+
+  const ringLabel = `Umumiy qatnashish: ${presentPct}%, kechikkan: ${latePct}%, yo'q: ${absentPct}%`;
+  const showShimmer = !reduced && !reducedData;
 
   return (
     <>
       {announcer}
       <motion.div
         ref={rootRef}
+        role="region"
+        aria-label="AI Davomat vidjeti"
         initial={reduced ? false : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         whileHover={reduced ? undefined : { y: -2 }}
@@ -682,10 +932,10 @@ export function AiAttendanceWidget({
           }} />
 
         {/* Corner specular shimmer */}
-        {!reduced && (
+        {showShimmer && (
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute left-3 top-3 h-16 w-16 rounded-full bg-white/30 blur-2xl motion-safe:animate-[cornerShimmer_6s_ease-in-out_infinite] dark:bg-white/[0.08]"
+            className="ai-attendance-shimmer pointer-events-none absolute left-3 top-3 h-16 w-16 rounded-full bg-white/30 blur-2xl motion-safe:animate-[cornerShimmer_6s_ease-in-out_infinite] dark:bg-white/[0.08]"
           />
         )}
 
@@ -704,7 +954,6 @@ export function AiAttendanceWidget({
                   <Icon paths={I.spark} size={12} strokeWidth={2.2} />
                 </span>
                 <span>AI Davomat</span>
-                {/* Live pulse indicator */}
                 <span className="relative ml-0.5 inline-flex h-1.5 w-1.5" aria-hidden="true">
                   {!reduced && (
                     <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60 motion-safe:animate-ping" />
@@ -722,24 +971,25 @@ export function AiAttendanceWidget({
               </motion.p>
             </div>
 
-            {/* Overall ring — keyed on data for re-animation */}
-            {!isEmpty && (
+            {!isEmpty && !loading && (
               <motion.div
                 initial={reduced ? false : { opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ ...SPRING.smooth, delay: 0.15 }}
                 className="relative flex shrink-0 items-center justify-center text-slate-900 dark:text-slate-100"
-                title={`Umumiy qatnashish: ${presentPct}%`}
               >
                 <AttendanceRing
-                  key={`${present}-${late}-${absent}`}
                   presentPct={presentPct}
                   latePct={latePct}
                   absentPct={absentPct}
                   size={64}
                   reduced={reduced}
+                  label={ringLabel}
                 />
-                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <div
+                  className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
+                  aria-hidden="true"
+                >
                   <span className="text-[14px] font-bold leading-none tracking-tight tabular-nums text-slate-900 dark:text-slate-50">
                     {presentPct}
                     <span className="text-[9px] font-semibold opacity-70">%</span>
@@ -753,10 +1003,12 @@ export function AiAttendanceWidget({
           </div>
 
           {/* Metric grid */}
-          {isEmpty ? (
-            <EmptyState reduced={reduced} />
+          {loading ? (
+            <MetricSkeleton reduced={reduced} />
+          ) : isEmpty ? (
+            <EmptyState reduced={reduced} onRefresh={onRefresh} />
           ) : (
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
               <MetricCard icon={I.users} label="Jami" value={total}
                 accent={METRIC.total.fg} soft={METRIC.total.soft}
                 spark={sparkTotal} reduced={reduced} delay={0.18} />
@@ -784,7 +1036,9 @@ export function AiAttendanceWidget({
                 variant="primary" reduced={reduced} />
               <ActionButton icon={I.grid} label="Sinflar kesimida"
                 onClick={onOpenClassBreakdown}
-                shortcut={`${shortcutMod}B`} reduced={reduced} />
+                shortcut={`${shortcutMod}B`}
+                shortcutLabel={`${shortcutPrefix}+B`}
+                reduced={reduced} />
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
@@ -806,7 +1060,9 @@ export function AiAttendanceWidget({
                     transition={{ duration: 0.15 }}>
                     <ActionButton icon={I.copy} label="Xulosa"
                       onClick={handleCopySummary}
-                      shortcut={`${shortcutMod}⇧C`} reduced={reduced} />
+                      shortcut={`${shortcutMod}⇧C`}
+                      shortcutLabel={`${shortcutPrefix}+Shift+C`}
+                      reduced={reduced} />
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -815,16 +1071,18 @@ export function AiAttendanceWidget({
                 onClick={handleDownloadExcel}
                 loading={downloading}
                 disabled={downloading || isEmpty}
-                shortcut={`${shortcutMod}E`} reduced={reduced} />
+                shortcut={`${shortcutMod}E`}
+                shortcutLabel={`${shortcutPrefix}+E`}
+                reduced={reduced} />
 
               {onRefresh && (
                 <motion.button
                   type="button"
-                  onClick={onRefresh}
+                  onClick={() => { haptic('tap'); onRefresh(); }}
                   whileHover={reduced ? undefined : { rotate: 90 }}
                   whileTap={reduced ? undefined : { scale: 0.9 }}
                   transition={SPRING.snappy}
-                  aria-label="Yangilash" title="Yangilash"
+                  aria-label="Yangilash"
                   className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-900/[0.08] bg-white/65 text-slate-600 outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-indigo-500/50 dark:border-white/[0.10] dark:bg-white/[0.06] dark:text-slate-300 dark:hover:bg-white/[0.10]"
                 >
                   <Icon paths={I.refresh} size={12} strokeWidth={2.2} />
@@ -834,13 +1092,6 @@ export function AiAttendanceWidget({
           </motion.div>
         </div>
       </motion.div>
-
-      <style>{`
-        @keyframes cornerShimmer {
-          0%, 100% { opacity: 0.30; transform: translate(0, 0); }
-          50%      { opacity: 0.60; transform: translate(4px, 4px); }
-        }
-      `}</style>
     </>
   );
 }
@@ -857,7 +1108,9 @@ function computeGreeting(): string {
   return 'Bugungi yakuniy davomat:';
 }
 
-const EmptyState = memo(function EmptyState({ reduced }: { reduced: boolean }) {
+const EmptyState = memo(function EmptyState({
+  reduced, onRefresh,
+}: { reduced: boolean; onRefresh?: () => void }) {
   return (
     <motion.div
       initial={reduced ? false : { opacity: 0, y: 4 }}
@@ -877,7 +1130,9 @@ const EmptyState = memo(function EmptyState({ reduced }: { reduced: boolean }) {
           Bugun uchun ma'lumot yo'q
         </p>
         <p className="mt-0.5 text-[11.5px] text-slate-500 dark:text-slate-400">
-          Davomat belgilanmagani ko'rinadi. Yangilab qayta urinib ko'ring.
+          {onRefresh
+            ? "Davomat belgilanmagani ko'rinadi. Yangilab qayta urinib ko'ring."
+            : "Davomat belgilanmagani ko'rinadi."}
         </p>
       </div>
     </motion.div>

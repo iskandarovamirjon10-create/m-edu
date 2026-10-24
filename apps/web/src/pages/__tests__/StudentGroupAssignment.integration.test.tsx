@@ -161,7 +161,7 @@ function renderStudentDetail(studentId: string, client?: QueryClient) {
   return render(
     <I18nProvider initialLocale="en">
       <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={[`/students/${studentId}`]}>
+        <MemoryRouter initialEntries={[`/students/${studentId}`]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/students/:id" element={<StudentDetailPage />} />
           </Routes>

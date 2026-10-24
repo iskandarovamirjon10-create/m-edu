@@ -14,6 +14,7 @@ describe('ParentPortalController', () => {
     getChildAttendance: ReturnType<typeof vi.fn>;
     getChildAttendanceSummary: ReturnType<typeof vi.fn>;
     getChildGrades: ReturnType<typeof vi.fn>;
+    getChildSchedule: ReturnType<typeof vi.fn>;
     getChildInvoices: ReturnType<typeof vi.fn>;
   };
 
@@ -35,20 +36,11 @@ describe('ParentPortalController', () => {
       getChildAttendance: vi.fn(),
       getChildAttendanceSummary: vi.fn(),
       getChildGrades: vi.fn(),
+      getChildSchedule: vi.fn(),
       getChildInvoices: vi.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [ParentPortalController],
-      providers: [
-        {
-          provide: ParentPortalService,
-          useValue: service,
-        },
-      ],
-    }).compile();
-
-    controller = module.get<ParentPortalController>(ParentPortalController);
+    controller = new ParentPortalController(service as unknown as ParentPortalService);
   });
 
   it('should be defined', () => {
@@ -171,6 +163,38 @@ describe('ParentPortalController', () => {
     });
   });
 
+  describe('childSchedule', () => {
+    it('delegates to parentPortal.getChildSchedule with resolved context and studentId', async () => {
+      const mockSchedule = [
+        {
+          id: 'sch-1',
+          dayOfWeek: 'MONDAY',
+          startTime: '09:00',
+          endTime: '10:30',
+          room: 'Room 101',
+          group: { id: 'grp-1', name: 'Math Advanced' },
+        },
+      ];
+      service.getChildSchedule.mockResolvedValue(mockSchedule);
+
+      const result = await controller.childSchedule(mockUser, studentId);
+
+      expect(service.getChildSchedule).toHaveBeenCalledWith(expectedCtx, studentId);
+      expect(result).toEqual(mockSchedule);
+    });
+
+    it('propagates service errors', async () => {
+      service.getChildSchedule.mockRejectedValue(
+        new NotFoundException('Schedule domain not permitted'),
+      );
+
+      await expect(controller.childSchedule(mockUser, studentId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(service.getChildSchedule).toHaveBeenCalledWith(expectedCtx, studentId);
+    });
+  });
+
   describe('childInvoices', () => {
     it('delegates to parentPortal.getChildInvoices with resolved context and studentId', async () => {
       const mockInvoices = {
@@ -214,6 +238,7 @@ describe('ParentPortalController', () => {
         ParentPortalController.prototype.childAttendance,
         ParentPortalController.prototype.childAttendanceSummary,
         ParentPortalController.prototype.childGrades,
+        ParentPortalController.prototype.childSchedule,
         ParentPortalController.prototype.childInvoices,
       ];
 

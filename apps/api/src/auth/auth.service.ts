@@ -13,6 +13,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecurityEventService, SecurityEventType } from '../common/security/security-event.service';
+import { RedisPubSubService } from '../common/redis/redis-pubsub.service';
 import { errorMessage, GoogleProfile, TokenUser, GetMeResponse } from './types';
 import { SecureLogger } from '@medu/face-security';
 import * as bcrypt from 'bcryptjs';
@@ -92,6 +93,7 @@ const pass = process.env.SMTP_PASSWORD;
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     @Optional() private readonly security?: SecurityEventService,
+    @Optional() private readonly redis?: RedisPubSubService,
   ) {}
 
   /**
@@ -247,6 +249,16 @@ const pass = process.env.SMTP_PASSWORD;
   }
 
   async cleanupExpiredEntries() {
+    if (this.redis) {
+      // In multi-replica deployments, acquire an exclusive lease for this tick (DB-04)
+      const lockKey = 'auth:session:cleanup:lock';
+      const lockTtlMs = Math.min(Math.max(this.CLEANUP_INTERVAL_MS - 5000, 10000), 50000);
+      const acquired = await this.redis.setIfNotExists(lockKey, 'locked', lockTtlMs);
+      if (!acquired) {
+        return;
+      }
+    }
+
     const now = Date.now();
 
     try {
@@ -396,7 +408,10 @@ const pass = process.env.SMTP_PASSWORD;
         });
 
         // Fail-closed default: if configuration row is absent, default to inviteOnly: true, requireApproval: true
-        const effectiveConfig = config ?? { inviteOnly: true, requireApproval: true };
+        const effectiveConfig = config ?? {
+          inviteOnly: process.env.AUTH_OPEN_REGISTRATION === 'true' ? false : true,
+          requireApproval: process.env.AUTH_REQUIRE_APPROVAL === 'false' ? false : true,
+        };
 
         if (effectiveConfig.inviteOnly) {
           throw new ForbiddenException('Registration is currently invite-only or requires whitelist approval.');
@@ -757,7 +772,7 @@ const pass = process.env.SMTP_PASSWORD;
     return await this.issueToken(result, clientMeta);
   }
 
-  private async issueToken(
+  async issueToken(
     user: TokenUser,
     clientMeta?: { userAgent?: string; ipAddress?: string },
   ): Promise<{ accessToken: string; user: TokenUser }> {
@@ -836,7 +851,33 @@ const pass = process.env.SMTP_PASSWORD;
         parentId: parent.parentId,
         organizationId: parent.organizationId,
         expiresAt: new Date(Date.now() + authTtlMs()),
+        userAgent: clientMeta?.userAgent,
+        ipAddress: clientMeta?.ipAddress,
+        lastActiveAt: new Date(),
       },
+    });
+
+    // Cleanup excess active parent sessions in background
+    Promise.resolve().then(async () => {
+      try {
+        const activeSessions = await this.prisma.parentSession.count({
+          where: { parentId: parent.parentId, revokedAt: null },
+        });
+        if (activeSessions > 10) {
+          const excessSessions = await this.prisma.parentSession.findMany({
+            where: { parentId: parent.parentId, revokedAt: null },
+            orderBy: { createdAt: 'asc' },
+            take: activeSessions - 10,
+            select: { id: true },
+          });
+          await this.prisma.parentSession.updateMany({
+            where: { id: { in: excessSessions.map((s) => s.id) } },
+            data: { revokedAt: new Date(), revokedReason: 'excess_sessions' },
+          });
+        }
+      } catch (err) {
+        this.logger.error('Failed to cleanup excess parent sessions', { error: errorMessage(err) });
+      }
     });
 
     const payload = {
@@ -1574,6 +1615,10 @@ const pass = process.env.SMTP_PASSWORD;
         id: s.id,
         createdAt: s.createdAt,
         expiresAt: s.expiresAt,
+        userAgent: s.userAgent,
+        ipAddress: s.ipAddress,
+        deviceInfo: s.deviceInfo,
+        lastActiveAt: s.lastActiveAt,
         isCurrent: s.id === currentSessionId,
       }));
     }
@@ -1642,10 +1687,14 @@ const pass = process.env.SMTP_PASSWORD;
     const passwordHash = await bcrypt.hash(dto.password, this.BCRYPT_ROUNDS);
 
     const result = await this.prisma.$transaction(async (tx) => {
-      await tx.invitation.update({
-        where: { id: invitation.id },
+      const claim = await tx.invitation.updateMany({
+        where: { id: invitation.id, status: 'PENDING', acceptedAt: null },
         data: { status: 'ACCEPTED', acceptedAt: new Date() },
       });
+
+      if (claim.count !== 1) {
+        throw new BadRequestException('Invitation has already been accepted or is no longer valid');
+      }
 
       const user = await tx.user.create({
         data: {
@@ -1653,8 +1702,8 @@ const pass = process.env.SMTP_PASSWORD;
           organizationId: invitation.organizationId,
           role: invitation.role,
           passwordHash,
-          firstName: 'Invited',
-          lastName: 'Member',
+          firstName: dto.firstName?.trim() || 'Invited',
+          lastName: dto.lastName?.trim() || 'Member',
           status: 'ACTIVE',
           isActive: true,
           lastLoginAt: new Date(),

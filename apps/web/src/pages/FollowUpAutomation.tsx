@@ -28,8 +28,9 @@ import {
   ConfirmDialog,
   GlassTabs,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { openSidecar } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 
@@ -155,7 +156,7 @@ function AutomationStatCard({
 }
 
 export function FollowUpAutomationPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('followUp.title'));
   const { push: toast, toastNode } = useToasts();
   const queryClient = useQueryClient();
@@ -232,7 +233,10 @@ export function FollowUpAutomationPage() {
     openSidecar({
       title: leadName,
       subtitle: `Rejalashtirilgan: ${new Date(fu.scheduledAt).toLocaleDateString()}`,
-      badge: fu.isCompleted ? 'Bajarilgan' : 'Kutilmoqda',
+      badge: {
+        text: fu.isCompleted ? 'Bajarilgan' : 'Kutilmoqda',
+        tone: fu.isCompleted ? 'emerald' : 'amber',
+      },
       status: {
         label: fu.isCompleted ? 'Yopilgan' : 'Faol Navbatda',
         tone: fu.isCompleted ? 'emerald' : 'amber',
@@ -464,17 +468,14 @@ export function FollowUpAutomationPage() {
 
   return (
     <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
-      {/* Soft Apple-style Ambient Orbs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        <div className="absolute top-[0%] left-[-10%] w-[40%] h-[40%] rounded-full bg-brand-400/5 blur-[120px]" />
-        <div className="absolute bottom-[20%] right-[-5%] w-[30%] h-[50%] rounded-full bg-amber-400/5 blur-[100px]" />
-      </div>
+      {/* AuroraMesh substrate */}
+      <AuroraMesh variant="corporate" />
 
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="relative z-10 w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6"
+        className="relative z-10 w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))]"
       >
         {toastNode}
 
@@ -841,7 +842,7 @@ function FollowUpSection({
   isOverdue?: boolean;
   isToday?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   if (items.length === 0) return null;
   return (
     <div>

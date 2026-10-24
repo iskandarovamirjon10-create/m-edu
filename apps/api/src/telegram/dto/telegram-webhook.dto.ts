@@ -56,6 +56,12 @@ export class TelegramMessageDto {
 
   @IsOptional() @Allow()
   text?: string;
+
+  @IsOptional() @Allow()
+  caption?: string;
+
+  @IsOptional() @Allow()
+  photo?: Array<{ file_id: string; file_unique_id: string; width: number; height: number; file_size?: number }>;
 }
 
 /** Inline-keyboard press. `data` is fully attacker-controlled. */

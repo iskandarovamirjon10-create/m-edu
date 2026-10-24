@@ -1,4 +1,4 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EarlyWarningQueryDto } from './dto/early-warning.dto';
 
@@ -43,7 +43,7 @@ export class EarlyWarningService {
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-    const [overduePayments, staleLeads, lowAttendance] = await Promise.all([
+    const [overduePayments, staleLeads, lowAttendance, resolvedLogs] = await Promise.all([
       this.prisma.payment.findMany({
         where: {
           organizationId: orgId,
@@ -60,45 +60,65 @@ export class EarlyWarningService {
         },
       }),
       this.getLowAttendanceStudents(orgId, fourteenDaysAgo),
+      this.prisma.auditLog.findMany({
+        where: {
+          organizationId: orgId,
+          action: 'EARLY_WARNING_RESOLVED',
+          resource: 'EarlyWarning',
+        },
+        select: { resourceId: true, timestamp: true },
+      }),
     ]);
 
-    const paymentWarnings = overduePayments.map(p => ({
-      id: `payment-${p.id}`,
-      ruleId: 'payment-overdue',
-      ruleName: 'Payment Overdue',
-      severity: 'CRITICAL' as const,
-      entityType: 'PAYMENT',
-      entityId: p.id,
-      entityName: p.student?.user
-        ? `${p.student.user.firstName} ${p.student.user.lastName}`
-        : p.id,
-      message: `Payment of ${p.amount} is overdue`,
-      detectedAt: p.updatedAt,
-    }));
+    const resolvedIds = new Set(
+      resolvedLogs
+        .map(l => l.resourceId)
+        .filter((id): id is string => Boolean(id)),
+    );
 
-    const leadWarnings = staleLeads.map(l => ({
-      id: `lead-${l.id}`,
-      ruleId: 'lead-stale',
-      ruleName: 'Stale Lead',
-      severity: 'MEDIUM' as const,
-      entityType: 'LEAD',
-      entityId: l.id,
-      entityName: `${l.firstName} ${l.lastName ?? ''}`.trim(),
-      message: `Lead has had no activity for over 14 days`,
-      detectedAt: l.updatedAt,
-    }));
+    const paymentWarnings = overduePayments
+      .map(p => ({
+        id: `payment-${p.id}`,
+        ruleId: 'payment-overdue',
+        ruleName: 'Payment Overdue',
+        severity: 'CRITICAL' as const,
+        entityType: 'PAYMENT',
+        entityId: p.id,
+        entityName: p.student?.user
+          ? `${p.student.user.firstName} ${p.student.user.lastName}`
+          : p.id,
+        message: `Payment of ${p.amount} is overdue`,
+        detectedAt: p.updatedAt,
+      }))
+      .filter(w => !resolvedIds.has(w.id));
 
-    const attendanceWarnings = lowAttendance.map(s => ({
-      id: `attendance-${s.id}`,
-      ruleId: 'attendance-low',
-      ruleName: 'Low Attendance',
-      severity: 'HIGH' as const,
-      entityType: 'STUDENT',
-      entityId: s.id,
-      entityName: s.name,
-      message: `Attendance rate is ${s.rate}% (below 70%)`,
-      detectedAt: new Date(),
-    }));
+    const leadWarnings = staleLeads
+      .map(l => ({
+        id: `lead-${l.id}`,
+        ruleId: 'lead-stale',
+        ruleName: 'Stale Lead',
+        severity: 'MEDIUM' as const,
+        entityType: 'LEAD',
+        entityId: l.id,
+        entityName: `${l.firstName} ${l.lastName ?? ''}`.trim(),
+        message: 'Lead has had no activity for over 14 days',
+        detectedAt: l.updatedAt,
+      }))
+      .filter(w => !resolvedIds.has(w.id));
+
+    const attendanceWarnings = lowAttendance
+      .map(s => ({
+        id: `attendance-${s.id}`,
+        ruleId: 'attendance-low',
+        ruleName: 'Low Attendance',
+        severity: 'HIGH' as const,
+        entityType: 'STUDENT',
+        entityId: s.id,
+        entityName: s.name,
+        message: `Attendance rate is ${s.rate}% (below 70%)`,
+        detectedAt: new Date(),
+      }))
+      .filter(w => !resolvedIds.has(w.id));
 
     const allWarnings = [...paymentWarnings, ...leadWarnings, ...attendanceWarnings];
 
@@ -116,7 +136,7 @@ export class EarlyWarningService {
       open,
       critical,
       high,
-      resolvedThisWeek: 0,
+      resolvedThisWeek: resolvedLogs.filter((l: any) => !l.timestamp || new Date(l.timestamp) >= sevenDaysAgo).length,
       byRule,
       total: open,
     };
@@ -132,7 +152,7 @@ export class EarlyWarningService {
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-    const [overduePayments, staleLeads, lowAttendance] = await Promise.all([
+    const [overduePayments, staleLeads, lowAttendance, resolvedLogs] = await Promise.all([
       this.prisma.payment.findMany({
         where: {
           organizationId: orgId,
@@ -149,45 +169,65 @@ export class EarlyWarningService {
         },
       }),
       this.getLowAttendanceStudents(orgId, fourteenDaysAgo),
+      this.prisma.auditLog.findMany({
+        where: {
+          organizationId: orgId,
+          action: 'EARLY_WARNING_RESOLVED',
+          resource: 'EarlyWarning',
+        },
+        select: { resourceId: true },
+      }),
     ]);
 
-    const paymentWarnings = overduePayments.map(p => ({
-      id: `payment-${p.id}`,
-      ruleId: 'payment-overdue',
-      ruleName: 'Payment Overdue',
-      severity: 'CRITICAL' as const,
-      entityType: 'PAYMENT',
-      entityId: p.id,
-      entityName: p.student?.user
-        ? `${p.student.user.firstName} ${p.student.user.lastName}`
-        : p.id,
-      message: `Payment of ${p.amount} is overdue`,
-      detectedAt: p.updatedAt,
-    }));
+    const resolvedIds = new Set(
+      resolvedLogs
+        .map(l => l.resourceId)
+        .filter((id): id is string => Boolean(id)),
+    );
 
-    const leadWarnings = staleLeads.map(l => ({
-      id: `lead-${l.id}`,
-      ruleId: 'lead-stale',
-      ruleName: 'Stale Lead',
-      severity: 'MEDIUM' as const,
-      entityType: 'LEAD',
-      entityId: l.id,
-      entityName: `${l.firstName} ${l.lastName ?? ''}`.trim(),
-      message: `Lead has had no activity for over 14 days`,
-      detectedAt: l.updatedAt,
-    }));
+    const paymentWarnings = overduePayments
+      .map(p => ({
+        id: `payment-${p.id}`,
+        ruleId: 'payment-overdue',
+        ruleName: 'Payment Overdue',
+        severity: 'CRITICAL' as const,
+        entityType: 'PAYMENT',
+        entityId: p.id,
+        entityName: p.student?.user
+          ? `${p.student.user.firstName} ${p.student.user.lastName}`
+          : p.id,
+        message: `Payment of ${p.amount} is overdue`,
+        detectedAt: p.updatedAt,
+      }))
+      .filter(w => !resolvedIds.has(w.id));
 
-    const attendanceWarnings = lowAttendance.map(s => ({
-      id: `attendance-${s.id}`,
-      ruleId: 'attendance-low',
-      ruleName: 'Low Attendance',
-      severity: 'HIGH' as const,
-      entityType: 'STUDENT',
-      entityId: s.id,
-      entityName: s.name,
-      message: `Attendance rate is ${s.rate}% (below 70%)`,
-      detectedAt: new Date(),
-    }));
+    const leadWarnings = staleLeads
+      .map(l => ({
+        id: `lead-${l.id}`,
+        ruleId: 'lead-stale',
+        ruleName: 'Stale Lead',
+        severity: 'MEDIUM' as const,
+        entityType: 'LEAD',
+        entityId: l.id,
+        entityName: `${l.firstName} ${l.lastName ?? ''}`.trim(),
+        message: 'Lead has had no activity for over 14 days',
+        detectedAt: l.updatedAt,
+      }))
+      .filter(w => !resolvedIds.has(w.id));
+
+    const attendanceWarnings = lowAttendance
+      .map(s => ({
+        id: `attendance-${s.id}`,
+        ruleId: 'attendance-low',
+        ruleName: 'Low Attendance',
+        severity: 'HIGH' as const,
+        entityType: 'STUDENT',
+        entityId: s.id,
+        entityName: s.name,
+        message: `Attendance rate is ${s.rate}% (below 70%)`,
+        detectedAt: new Date(),
+      }))
+      .filter(w => !resolvedIds.has(w.id));
 
     let items = [...paymentWarnings, ...leadWarnings, ...attendanceWarnings];
 
@@ -216,7 +256,7 @@ export class EarlyWarningService {
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-    const [overduePayments, staleLeads, lowAttendance] = await Promise.all([
+    const [overduePayments, staleLeads, lowAttendance, resolvedLogs] = await Promise.all([
       this.prisma.payment.findMany({
         where: {
           organizationId: orgId,
@@ -232,44 +272,69 @@ export class EarlyWarningService {
         },
       }),
       this.getLowAttendanceStudents(orgId, fourteenDaysAgo),
+      this.prisma.auditLog.findMany({
+        where: {
+          organizationId: orgId,
+          action: 'EARLY_WARNING_RESOLVED',
+          resource: 'EarlyWarning',
+          timestamp: { gte: sevenDaysAgo },
+        },
+        select: { resourceId: true },
+      }),
     ]);
 
-    // M2: these were presented as "created/fixed" counters while NOTHING was
-    // persisted (no EarlyWarning model exists). Report honest semantics:
-    // `detected` = real candidates found in the scan, persistence count 0.
-    const detected =
-      overduePayments.length + staleLeads.length + lowAttendance.length;
+    const resolvedIds = new Set(
+      resolvedLogs
+        .map(l => l.resourceId)
+        .filter((id): id is string => Boolean(id)),
+    );
+
+    const scanned = overduePayments.length + staleLeads.length + lowAttendance.length;
+    const unresolvedPayments = overduePayments.filter(p => !resolvedIds.has(`payment-${p.id}`)).length;
+    const unresolvedLeads = staleLeads.filter(l => !resolvedIds.has(`lead-${l.id}`)).length;
+    const unresolvedAttendance = lowAttendance.filter(s => !resolvedIds.has(`attendance-${s.id}`)).length;
+    const detected = unresolvedPayments + unresolvedLeads + unresolvedAttendance;
+
     return {
-      scanned: detected,
+      scanned,
       detected,
       created: 0,
-      fixed: 0,
-      message: 'Scan completed. Persistence requires the EarlyWarning model (not yet implemented).',
+      fixed: resolvedLogs.length,
+      message: `Scan complete: ${detected} active warning(s) detected (${resolvedLogs.length} resolved this week).`,
     };
   }
 
   async resolve(
-    _orgId: string,
-    _id: string,
-    _userId: string,
-    _note?: string,
+    orgId: string,
+    id: string,
+    userId: string,
+    note?: string,
   ): Promise<{ ok: boolean }> {
-    void _orgId;
-    void _id;
-    void _userId;
-    void _note;
-    // M2: resolving derived findings without a persistence model is a fake
-    // success. Fail honestly until the EarlyWarning model lands.
-    throw new NotImplementedException(
-      'Early-warning persistence requires the EarlyWarning model (not yet implemented).',
-    );
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: orgId,
+        userId,
+        action: 'EARLY_WARNING_RESOLVED',
+        resource: 'EarlyWarning',
+        resourceId: id,
+        changes: {
+          warningId: id,
+          note: note ?? null,
+          resolvedBy: userId,
+          resolvedAt: new Date().toISOString(),
+        },
+      },
+    });
+    return { ok: true };
   }
 
   private async getLowAttendanceStudents(
     orgId: string,
     since: Date,
   ): Promise<Array<{ id: string; name: string; rate: number }>> {
+    // DB-02: Bounded query to prevent unbounded heap memory consumption
     const records = await this.prisma.attendance.findMany({
+      take: 5000,
       where: {
         organizationId: orgId,
         date: { gte: since },
@@ -302,7 +367,10 @@ export class EarlyWarningService {
       }
       const g = grouped.get(rec.studentId)!;
       g.total++;
-      if (rec.status === 'PRESENT') g.present++;
+      // LOGIC-01: LATE and EXCUSED records count towards attendance (not truant)
+      if (rec.status === 'PRESENT' || rec.status === 'LATE' || rec.status === 'EXCUSED') {
+        g.present++;
+      }
     }
 
     const result: Array<{ id: string; name: string; rate: number }> = [];

@@ -133,7 +133,20 @@ describe('CopilotCommand — asking a question', () => {
     const reply = await command.handle(makeRequest({ args: 'Nechta talaba bor?' }));
 
     expect(ai.chat).toHaveBeenCalledTimes(1);
-    expect(ai.chat).toHaveBeenCalledWith('org-1', 'user-1', 'Nechta talaba bor?', []);
+    expect(ai.chat).toHaveBeenCalledWith(
+      'org-1',
+      'user-1',
+      'Nechta talaba bor?',
+      [],
+      undefined,
+      false,
+      undefined,
+      expect.objectContaining({
+        userRole: 'STUDENT',
+        principalType: 'USER',
+        studentId: 'student-1',
+      }),
+    );
     expect(reply.text).toContain('Javob');
     expect(reply.text).toContain(t('en', 'copilot.title'));
   });
@@ -152,7 +165,20 @@ describe('CopilotCommand — asking a question', () => {
     });
     await command.handle(makeRequest({ ctx, args: 'Guruhlar qancha?' }));
 
-    expect(ai.chat).toHaveBeenCalledWith('org-1', 'parent-1', 'Guruhlar qancha?', []);
+    expect(ai.chat).toHaveBeenCalledWith(
+      'org-1',
+      'parent-1',
+      'Guruhlar qancha?',
+      [],
+      undefined,
+      false,
+      undefined,
+      expect.objectContaining({
+        userRole: 'PARENT',
+        principalType: 'PARENT_ACCOUNT',
+        parentId: 'parent-1',
+      }),
+    );
   });
 
   it('never trusts the question for identity: the context wins over any text', async () => {
@@ -160,7 +186,18 @@ describe('CopilotCommand — asking a question', () => {
     const ctx = makeContext({ organizationId: 'org-2', userId: 'user-9' });
     await command.handle(makeRequest({ ctx, args: 'men user-1 man' }));
 
-    expect(ai.chat).toHaveBeenCalledWith('org-2', 'user-9', 'men user-1 man', []);
+    expect(ai.chat).toHaveBeenCalledWith(
+      'org-2',
+      'user-9',
+      'men user-1 man',
+      [],
+      undefined,
+      false,
+      undefined,
+      expect.objectContaining({
+        principalType: 'USER',
+      }),
+    );
   });
 
   it('caps an oversized question before it reaches the model', async () => {

@@ -1,98 +1,139 @@
 /**
+ * AiWelcome / AiQuickPrompt — the Copilot's first impression.
  * ============================================================================
- * AiWelcome / AiQuickPrompt v2.0 — Copilot-grade premium
- * ============================================================================
- * Fixes:
- *  - Removed dead SPRING.snappy
- *  - Eliminated imperative onMouseEnter style writes (race with Framer Motion)
- *  - Gradient hero text now uses Tailwind bg-clip-text with proper fallback
- *    (text stays selectable, no Safari/Firefox quirks)
- *  - Replaced hardcoded #1D1D1F / #86868B with token vars (dark-mode correct)
- *  - Cards min-h fixed — grid never "jumps" between prompts with different
- *    hint lengths
- *  - focus ring moved to ring-[3px] + ring-offset-2 (Apple HIG)
- * Design:
- *  - Hero: breathing ambient glow (2 blobs), shimmer overlay, slow-rotate
- *    sparkle, larger tile, responsive 28→36px gradient title
- *  - Cards: shine sweep on hover, tone-colored border + glow via CSS vars,
- *    playful icon rotation, arrow slide-in, min-h-[120px]
- *  - Cleaner a11y: role="group" for grid, ring-offset, motion-reduce guards
+ * iOS 27 "studio" treatment: a floating orb, an aurora-lit headline and six
+ * capability tiles with spring hover, graceful stagger and a specular sweep.
+ *
+ * Contract kept for hosts + tests:
+ *  - heading text remains "Bugun sizga qanday yordam beray?"
+ *  - each tile is a button whose accessible name is "<Title> — <hint>"
+ *  - the grid carries `grid gap-3 sm:grid-cols-2 lg:grid-cols-3`
+ *  - selecting "Davomat" sends "Bugungi davomatni ko'rsat"
  * ============================================================================
  */
-
-import { type CSSProperties, type ReactNode } from 'react';
+import { useId, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
-  ArrowUpRight,
-  CalendarDays,
-  ClipboardCheck,
-  FileText,
-  Megaphone,
-  Sparkles,
-  Users,
-  Wallet,
-} from 'lucide-react';
+  IconArrowDown,
+  IconAttendance,
+  IconChevronRight,
+  IconCopilotMark,
+  IconFinance,
+  IconMegaphone,
+  IconReport,
+  IconSchedule,
+  IconStudents,
+} from './copilotIcons';
+import { CopilotKbd } from './CopilotControls';
 import { cn } from '@/lib/design';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
-/* ============================================================================
- * MOTION
- * ========================================================================== */
+/* ─────────────────────────────────────────────────────────────────────────
+ * Utilities
+ * ─────────────────────────────────────────────────────────────────────── */
 
-const SPRING = {
-  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
-} as const;
+function haptic(kind: 'tap' | 'success' = 'tap') {
+  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+  try {
+    navigator.vibrate(kind === 'success' ? [10, 26, 10] : 8);
+  } catch {
+    /* noop */
+  }
+}
 
-/* ============================================================================
- * TONES
- * ========================================================================== */
+function resolve(
+  t: ((key: string, fallback?: string) => string) | undefined,
+  key: string,
+  fallback: string,
+): string {
+  if (!t) return fallback;
+  try {
+    const value = t(key, fallback);
+    return !value || value === key ? fallback : value;
+  } catch {
+    return fallback;
+  }
+}
 
-type Tone = 'blue' | 'purple' | 'emerald' | 'orange' | 'cyan' | 'pink';
+/* ─────────────────────────────────────────────────────────────────────────
+ * Catalog
+ * ─────────────────────────────────────────────────────────────────────── */
 
-const TONES: Record<
-  Tone,
-  { fg: string; border: string; glow: string; gradient: string }
-> = {
-  blue: {
-    fg: '#007AFF',
-    border: 'rgba(0,122,255,0.28)',
-    glow: 'rgba(0,122,255,0.32)',
-    gradient: 'linear-gradient(135deg, #007AFF 0%, #32ADE6 100%)',
-  },
-  purple: {
-    fg: '#AF52DE',
-    border: 'rgba(175,82,222,0.28)',
-    glow: 'rgba(175,82,222,0.32)',
-    gradient: 'linear-gradient(135deg, #AF52DE 0%, #FF2D55 100%)',
-  },
-  emerald: {
-    fg: '#10B981',
-    border: 'rgba(16,185,129,0.28)',
-    glow: 'rgba(16,185,129,0.32)',
-    gradient: 'linear-gradient(135deg, #10B981 0%, #34C759 100%)',
-  },
-  orange: {
-    fg: '#FF9500',
-    border: 'rgba(255,149,0,0.28)',
-    glow: 'rgba(255,149,0,0.32)',
-    gradient: 'linear-gradient(135deg, #FF9500 0%, #FF2D55 100%)',
-  },
-  cyan: {
-    fg: '#32ADE6',
-    border: 'rgba(50,173,230,0.28)',
-    glow: 'rgba(50,173,230,0.32)',
-    gradient: 'linear-gradient(135deg, #32ADE6 0%, #007AFF 100%)',
-  },
-  pink: {
-    fg: '#FF2D55',
-    border: 'rgba(255,45,85,0.28)',
-    glow: 'rgba(255,45,85,0.32)',
-    gradient: 'linear-gradient(135deg, #FF2D55 0%, #AF52DE 100%)',
-  },
+type Tone = 'blue' | 'violet' | 'emerald' | 'amber' | 'cyan' | 'pink';
+
+export type AiQuickPromptId =
+  | 'attendance'
+  | 'schedule'
+  | 'students'
+  | 'finance'
+  | 'report'
+  | 'announcement';
+
+interface PromptMeta {
+  id: AiQuickPromptId;
+  tone: Tone;
+  icon: ReactNode;
+  digit: string;
+  gradient: string;
+  glow: string;
+}
+
+const TONE_GRADIENT: Record<Tone, { gradient: string; glow: string; text: string }> = {
+  blue: { gradient: 'linear-gradient(140deg,#0A84FF,#32ADE6)', glow: 'rgba(10,132,255,0.55)', text: '#0A84FF' },
+  violet: { gradient: 'linear-gradient(140deg,#5E5CE6,#BF5AF2)', glow: 'rgba(94,92,230,0.5)', text: '#5E5CE6' },
+  emerald: { gradient: 'linear-gradient(140deg,#30D158,#10B981)', glow: 'rgba(48,209,88,0.45)', text: '#1EB954' },
+  amber: { gradient: 'linear-gradient(140deg,#FF9F0A,#FF375F)', glow: 'rgba(255,159,10,0.5)', text: '#FF9500' },
+  cyan: { gradient: 'linear-gradient(140deg,#32ADE6,#0A84FF)', glow: 'rgba(50,173,230,0.5)', text: '#32ADE6' },
+  pink: { gradient: 'linear-gradient(140deg,#FF375F,#BF5AF2)', glow: 'rgba(255,55,95,0.5)', text: '#FF375F' },
 };
 
-/* ============================================================================
- * DATA
- * ========================================================================== */
+const PROMPT_META: PromptMeta[] = [
+  { id: 'attendance', tone: 'blue', digit: '1', icon: <IconAttendance size={20} />, gradient: TONE_GRADIENT.blue.gradient, glow: TONE_GRADIENT.blue.glow },
+  { id: 'schedule', tone: 'violet', digit: '2', icon: <IconSchedule size={20} />, gradient: TONE_GRADIENT.violet.gradient, glow: TONE_GRADIENT.violet.glow },
+  { id: 'students', tone: 'emerald', digit: '3', icon: <IconStudents size={20} />, gradient: TONE_GRADIENT.emerald.gradient, glow: TONE_GRADIENT.emerald.glow },
+  { id: 'finance', tone: 'amber', digit: '4', icon: <IconFinance size={20} />, gradient: TONE_GRADIENT.amber.gradient, glow: TONE_GRADIENT.amber.glow },
+  { id: 'report', tone: 'cyan', digit: '5', icon: <IconReport size={20} />, gradient: TONE_GRADIENT.cyan.gradient, glow: TONE_GRADIENT.cyan.glow },
+  { id: 'announcement', tone: 'pink', digit: '6', icon: <IconMegaphone size={20} />, gradient: TONE_GRADIENT.pink.gradient, glow: TONE_GRADIENT.pink.glow },
+];
+
+interface PromptCopy {
+  title: string;
+  hint: string;
+  text: string;
+}
+
+const FALLBACK_COPY: Record<AiQuickPromptId, PromptCopy> = {
+  attendance: {
+    title: 'Davomat',
+    hint: "Bugungi davomatni ko'rsating",
+    text: "Bugungi davomatni ko'rsat",
+  },
+  schedule: {
+    title: 'Darslar',
+    hint: 'Bugungi dars jadvali va xonalar',
+    text: "Bugungi darslar jadvalini ko'rsat",
+  },
+  students: {
+    title: "O'quvchilar",
+    hint: 'Guruhlar va o‘quvchilar ro‘yxati',
+    text: "Guruhlar va o'quvchilar ro'yxatini ko'rsat",
+  },
+  finance: {
+    title: "To'lovlar",
+    hint: "Qarzdorlar va to'lovlar holati",
+    text: "To'lovlar va qarzdorlar holatini ko'rsat",
+  },
+  report: {
+    title: 'Hisobot',
+    hint: 'Kunlik boshqaruv hisoboti',
+    text: "Bugungi boshqaruv hisobotini tayyorla",
+  },
+  announcement: {
+    title: 'Xabarlar',
+    hint: "Ota-onalarga e'lon yuborish",
+    text: "Ota-onalarga e'lon tayyorlab ber",
+  },
+};
 
 export interface AiQuickPromptData {
   id: string;
@@ -101,268 +142,293 @@ export interface AiQuickPromptData {
   text: string;
   icon: ReactNode;
   tone: Tone;
+  digit?: string;
 }
 
-export const AI_QUICK_PROMPTS: AiQuickPromptData[] = [
-  {
-    id: 'attendance',
-    title: 'Davomat',
-    hint: 'Bugungi davomatni ko\'rsatish',
-    text: 'Bugungi davomatni ko\'rsat',
-    tone: 'blue',
-    icon: <ClipboardCheck className="h-5 w-5" strokeWidth={1.9} />,
-  },
-  {
-    id: 'schedule',
-    title: 'Darslar',
-    hint: 'Bugungi darslar jadvali',
-    text: 'Bugungi darslar jadvalini ko\'rsat',
-    tone: 'purple',
-    icon: <CalendarDays className="h-5 w-5" strokeWidth={1.9} />,
-  },
-  {
-    id: 'students',
-    title: 'O\'quvchilar',
-    hint: 'O\'quvchilarni qidirish',
-    text: 'O\'quvchilarni ismi bo\'yicha qidirib ber',
-    tone: 'emerald',
-    icon: <Users className="h-5 w-5" strokeWidth={1.9} />,
-  },
-  {
-    id: 'finance',
-    title: 'To\'lovlar',
-    hint: 'Qarzdorlar ro\'yxati',
-    text: 'Qarzdorlar ro\'yxatini ko\'rsat',
-    tone: 'orange',
-    icon: <Wallet className="h-5 w-5" strokeWidth={1.9} />,
-  },
-  {
-    id: 'report',
-    title: 'Hisobot',
-    hint: 'Qisqa kunlik hisobot',
-    text: 'Bugungi darslar bo\'yicha qisqa hisobot tayyorla',
-    tone: 'cyan',
-    icon: <FileText className="h-5 w-5" strokeWidth={1.9} />,
-  },
-  {
-    id: 'announcement',
-    title: 'Xabarlar',
-    hint: 'Telegram xabarini tayyorlash',
-    text: 'Ota-onalarga Telegram xabarini tayyorlashni so\'rang',
-    tone: 'pink',
-    icon: <Megaphone className="h-5 w-5" strokeWidth={1.9} />,
-  },
-];
+/** i18n-aware catalog used by hosts that want to override copy. */
+export function useAiQuickPrompts(
+  t?: (key: string, fallback?: string) => string,
+): AiQuickPromptData[] {
+  return useMemo(
+    () =>
+      PROMPT_META.map((meta) => {
+        const copy = FALLBACK_COPY[meta.id];
+        return {
+          id: meta.id,
+          tone: meta.tone,
+          icon: meta.icon,
+          digit: meta.digit,
+          title: resolve(t, `ai.quickPrompts.${meta.id}.title`, copy.title),
+          hint: resolve(t, `ai.quickPrompts.${meta.id}.hint`, copy.hint),
+          text: resolve(t, `ai.quickPrompts.${meta.id}.text`, copy.text),
+        };
+      }),
+    [t],
+  );
+}
 
-/* ============================================================================
- * AiQuickPrompt — single card
- * ========================================================================== */
+/** Backward-compatible static list. */
+export const AI_QUICK_PROMPTS: AiQuickPromptData[] = PROMPT_META.map((meta) => {
+  const copy = FALLBACK_COPY[meta.id];
+  return { id: meta.id, tone: meta.tone, icon: meta.icon, digit: meta.digit, ...copy };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Tile
+ * ─────────────────────────────────────────────────────────────────────── */
 
 export interface AiQuickPromptProps {
   prompt: AiQuickPromptData;
   disabled?: boolean;
+  selected?: boolean;
   onSelect: (text: string) => void;
   index?: number;
+  isApple?: boolean;
 }
 
 export function AiQuickPrompt({
   prompt,
   disabled = false,
+  selected = false,
   onSelect,
   index = 0,
+  isApple,
 }: AiQuickPromptProps) {
-  const tone = TONES[prompt.tone];
-  const reduced = useReducedMotion();
+  const reduced = Boolean(useReducedMotion());
+  const [pressed, setPressed] = useState(false);
+  const tone = TONE_GRADIENT[prompt.tone];
+  const shortcut = prompt.digit
+    ? isApple === false
+      ? `Ctrl+${prompt.digit}`
+      : `⌘${prompt.digit}`
+    : undefined;
 
   const styleVars = {
-    '--tone-border': tone.border,
-    '--tone-glow': tone.glow,
+    '--cp-prompt-glow': tone.glow,
+    '--cp-prompt-tone': tone.text,
   } as CSSProperties;
 
   return (
     <motion.button
       type="button"
       disabled={disabled}
-      onClick={() => onSelect(prompt.text)}
-      initial={reduced ? false : { opacity: 0, y: 16, scale: 0.96 }}
+      onClick={() => {
+        if (disabled) return;
+        setPressed(true);
+        haptic('tap');
+        onSelect(prompt.text);
+        window.setTimeout(() => setPressed(false), 220);
+      }}
+      initial={reduced ? false : { opacity: 0, y: 18, scale: 0.965 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ delay: 0.15 + index * 0.05, ...SPRING.smooth }}
-      whileHover={disabled || reduced ? undefined : { y: -4, scale: 1.01 }}
-      whileTap={disabled ? undefined : { scale: 0.97 }}
+      transition={{
+        delay: reduced ? 0 : Math.min(index * 0.045, 0.24),
+        type: 'spring',
+        stiffness: 380,
+        damping: 30,
+        mass: 0.85,
+      }}
+      whileTap={reduced || disabled ? undefined : { scale: 0.975 }}
       aria-label={`${prompt.title} — ${prompt.hint}`}
+      aria-pressed={selected}
+      aria-busy={disabled || undefined}
       style={styleVars}
       className={cn(
-        'group/prompt relative flex min-h-[120px] w-full flex-col items-start gap-3 overflow-hidden rounded-2xl border p-4 text-left outline-none',
-        'border-black/[0.06] bg-white/70 backdrop-blur-xl',
-        'dark:border-white/[0.08] dark:bg-white/[0.04]',
-        'shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_4px_16px_-10px_rgba(0,0,0,0.10)]',
-        'dark:shadow-none',
-        'transition-[border-color,box-shadow] duration-300 ease-out',
-        'hover:border-[color:var(--tone-border)]',
-        'hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_12px_32px_-14px_var(--tone-glow)]',
-        'focus-visible:ring-[3px] focus-visible:ring-[rgba(0,122,255,0.4)] focus-visible:ring-offset-2',
-        'focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#1C1C1E]',
-        'disabled:cursor-not-allowed disabled:opacity-45'
+        'cp-prompt group/prompt flex min-h-[132px] w-full flex-col justify-between gap-3 p-4',
+        'outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--cp-accent)]',
+        selected && 'border-[color:var(--cp-prompt-tone)]',
+        disabled && 'pointer-events-none opacity-45',
       )}
     >
-      {/* Shine sweep on hover */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 ease-out group-hover/prompt:translate-x-full dark:via-white/10 motion-reduce:hidden"
-      />
-
-      {/* Icon tile — playful rotate on hover */}
-      <div
-        className={cn(
-          'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white',
-          'transition-transform duration-300 ease-out',
-          'group-hover/prompt:-rotate-[4deg] group-hover/prompt:scale-105',
-          'motion-reduce:group-hover/prompt:rotate-0 motion-reduce:group-hover/prompt:scale-100'
-        )}
-        style={{
-          background: tone.gradient,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 20px -8px ${tone.glow}`,
-        }}
-      >
+      <span className="flex items-start justify-between gap-2">
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-xl"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
-          }}
-        />
-        <span className="relative">{prompt.icon}</span>
-      </div>
+          className="cp-prompt__icon relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] text-white transition-transform duration-300 ease-out group-hover/prompt:-rotate-3 group-hover/prompt:scale-105 motion-reduce:transform-none"
+          style={{ background: tone.gradient }}
+        >
+          <span className="pointer-events-none absolute inset-0 rounded-[14px] bg-[linear-gradient(180deg,rgba(255,255,255,0.42),transparent_58%)]" />
+          <span className="relative">{prompt.icon}</span>
+        </span>
 
-      {/* Text + arrow */}
-      <div className="relative w-full min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-[14px] font-semibold tracking-tight text-[var(--text-primary,#1D1D1F)] dark:text-[var(--text-primary,#F5F5F7)]">
-            {prompt.title}
-          </p>
-          <ArrowUpRight
+        <span className="flex items-center gap-1.5">
+          {shortcut && (
+            <CopilotKbd>{shortcut}</CopilotKbd>
+          )}
+          <span
             aria-hidden="true"
-            className="mt-0.5 h-3.5 w-3.5 shrink-0 -translate-x-1 text-[var(--text-tertiary,#C7C7CC)] opacity-0 transition-all duration-200 ease-out group-hover/prompt:translate-x-0 group-hover/prompt:opacity-100 motion-reduce:transition-none"
-          />
-        </div>
-        <p className="mt-1 line-clamp-2 text-[12px] font-medium leading-relaxed text-[var(--text-secondary,#86868B)] dark:text-[var(--text-secondary,#A1A1A6)]">
+            className="flex h-6 w-6 items-center justify-center rounded-full border border-[color:var(--cp-hairline)] bg-[color:var(--cp-surface-sunken)] text-[color:var(--cp-text-quaternary)] transition-all duration-200 group-hover/prompt:border-[color:var(--cp-accent-line)] group-hover/prompt:text-[color:var(--cp-accent)]"
+          >
+            <IconChevronRight size={12} />
+          </span>
+        </span>
+      </span>
+
+      <span className="min-w-0">
+        <span className="block text-[14px] font-semibold tracking-[-0.015em] text-[color:var(--cp-text)]">
+          {prompt.title}
+        </span>
+        <span className="mt-0.5 block text-[12px] leading-relaxed text-[color:var(--cp-text-tertiary)]">
           {prompt.hint}
-        </p>
-      </div>
+        </span>
+      </span>
+
+      {pressed && !reduced && (
+        <motion.span
+          aria-hidden="true"
+          initial={{ scale: 0, opacity: 0.3 }}
+          animate={{ scale: 2.6, opacity: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="pointer-events-none absolute left-5 top-5 h-14 w-14 rounded-full"
+          style={{ background: tone.glow }}
+        />
+      )}
     </motion.button>
   );
 }
 
-/* ============================================================================
- * AiWelcome — full empty state
- * ========================================================================== */
+/* ─────────────────────────────────────────────────────────────────────────
+ * Welcome
+ * ─────────────────────────────────────────────────────────────────────── */
 
 export interface AiWelcomeProps {
   disabled?: boolean;
+  selectedId?: string;
   onSelect?: (text: string) => void;
+  /** Deprecated alias — `onSelect` wins. */
   onSelectPrompt?: (text: string) => void;
+  prompts?: AiQuickPromptData[];
+  t?: (key: string, fallback?: string) => string;
+  /** Compact variant for the floating panel. */
+  compact?: boolean;
+  userName?: string;
 }
 
 export function AiWelcome({
   disabled = false,
+  selectedId,
   onSelect,
   onSelectPrompt,
+  prompts,
+  t,
+  compact = false,
+  userName,
 }: AiWelcomeProps) {
-  const reduced = useReducedMotion();
+  const reduced = Boolean(useReducedMotion());
+  const i18n = useSafeI18n();
+  const idPrefix = useId();
+  const tx = t ?? ((key: string, fallback?: string) => resolve(i18n.t, key, fallback ?? key));
+  const generatedCatalog = useAiQuickPrompts(tx);
+  const catalog = prompts ?? generatedCatalog;
 
-  const handleSelect = (text: string) => {
-    onSelect?.(text);
-    onSelectPrompt?.(text);
-  };
+  const handleSelect = (text: string) => (onSelect ?? onSelectPrompt)?.(text);
+
+  const isApple =
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform || '');
+  const greeting = userName ? `${userName},` : null;
 
   return (
-    <div className="relative flex min-h-full items-center justify-center overflow-hidden px-4 py-8 sm:px-6 sm:py-12">
-      {/* Ambient background — very subtle, mirrors Copilot hero */}
+    <div
+      className={cn(
+        'relative flex flex-col items-center justify-center min-h-full w-full overflow-hidden px-4',
+        compact ? 'py-4 sm:py-6' : 'py-8 sm:py-12',
+      )}
+    >
+      {/* Ambient light — CSS only, respects reduced data/motion. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute left-1/2 top-0 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(0,122,255,0.06),transparent_60%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(0,122,255,0.12),transparent_60%)]" />
-        <div className="absolute bottom-0 left-1/2 h-[400px] w-[400px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(175,82,222,0.05),transparent_60%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(175,82,222,0.10),transparent_60%)]" />
+        <div className="absolute left-1/2 top-[-14%] h-[26rem] w-[26rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(10,132,255,0.16),transparent_62%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(10,132,255,0.22),transparent_62%)]" />
+        <div className="absolute bottom-[-22%] left-1/2 h-[22rem] w-[22rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(191,90,242,0.12),transparent_64%)] blur-3xl" />
       </div>
 
-      <div className="mx-auto w-full max-w-2xl text-center">
-        {/* Hero icon — breathing glow + shimmer + slow sparkle */}
-        <motion.div
-          initial={reduced ? false : { scale: 0.85, opacity: 0, rotate: -8 }}
-          animate={{ scale: 1, opacity: 1, rotate: 0 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-          className="relative mx-auto mb-7 flex h-14 w-14 items-center justify-center sm:mb-8 sm:h-16 sm:w-16"
-        >
-          {/* Ambient glow blobs (breathing) */}
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 -m-6 sm:-m-8">
-            <div className="absolute inset-0 rounded-full bg-[#007AFF]/30 blur-3xl motion-safe:animate-[heroGlowPulse_6s_ease-in-out_infinite]" />
-            <div className="absolute inset-0 rounded-full bg-[#AF52DE]/25 blur-3xl motion-safe:animate-[heroGlowPulse_6s_ease-in-out_infinite_1.5s]" />
-          </div>
-
-          {/* Gradient tile */}
-          <div
-            className="relative flex h-14 w-14 items-center justify-center rounded-2xl text-white sm:h-16 sm:w-16 sm:rounded-3xl"
-            style={{
-              background: 'linear-gradient(135deg, #007AFF 0%, #AF52DE 100%)',
-              boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.10), ' +
-                '0 16px 40px -12px rgba(0,122,255,0.55), 0 8px 24px -8px rgba(175,82,222,0.4)',
-            }}
-          >
-            <span
+      <div className={cn('cp-enter-rise relative mx-auto w-full', compact ? 'max-w-xl' : 'max-w-2xl')}>
+        {/* Orb */}
+        <div className="relative mx-auto mb-6 flex h-16 w-16 items-center justify-center sm:h-[72px] sm:w-[72px]">
+          {!reduced && (
+            <motion.span
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 rounded-2xl sm:rounded-3xl"
+              className="absolute -inset-1 rounded-[26px] opacity-70"
               style={{
                 background:
-                  'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
+                  'conic-gradient(from 0deg,#0A84FF,#5E5CE6,#BF5AF2,#FF375F,#FF9F0A,#0A84FF)',
+                WebkitMask:
+                  'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+                WebkitMaskComposite: 'xor',
+                maskComposite: 'exclude',
+                padding: 1.5,
               }}
+              animate={{ rotate: 360 }}
+              transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
             />
-            <motion.div
-              animate={reduced ? undefined : { rotate: 360 }}
-              transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
-              className="relative h-6 w-6 sm:h-7 sm:w-7"
-            >
-              <Sparkles className="h-full w-full" strokeWidth={1.75} />
-            </motion.div>
+          )}
+          <div
+            aria-hidden="true"
+            className="relative flex h-full w-full items-center justify-center rounded-[24px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_20px_46px_-16px_rgba(10,132,255,0.7)]"
+            style={{ background: 'var(--cp-brand-gradient)' }}
+          >
+            <span className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(180deg,rgba(255,255,255,0.42),transparent_58%)]" />
+            <IconCopilotMark size={30} />
           </div>
-        </motion.div>
+        </div>
 
-        {/* Hero title — gradient text with proper fallback */}
-        <h2 className="text-balance text-[28px] font-bold leading-[1.15] tracking-[-0.025em] sm:text-[36px]">
-          <span className="bg-gradient-to-br from-[#007AFF] via-[#AF52DE] to-[#FF2D55] bg-clip-text text-transparent dark:from-[#409CFF] dark:via-[#C77DFF] dark:to-[#FF6B8A]">
+        {/* Eyebrow */}
+        <div className="mb-3 flex justify-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--cp-hairline)] bg-[color:var(--cp-surface)] px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[color:var(--cp-text-tertiary)] backdrop-blur-xl">
+            <span className="cp-live-dot" aria-hidden="true" />
+            M-EDU Copilot · Studio
+          </span>
+        </div>
+
+        <h2 className="text-balance text-center text-[26px] font-bold leading-[1.12] tracking-[-0.03em] sm:text-[34px]">
+          {greeting && (
+            <span className="block pb-1 text-[15px] font-semibold tracking-normal text-[color:var(--cp-text-tertiary)]">
+              {greeting}
+            </span>
+          )}
+          <span className="bg-[linear-gradient(100deg,var(--cp-text)_18%,var(--cp-accent)_52%,var(--cp-violet)_82%)] bg-clip-text text-transparent">
             Bugun sizga qanday yordam beray?
           </span>
         </h2>
 
-        <p className="mx-auto mt-3 max-w-lg text-balance text-[14px] font-medium leading-relaxed text-[var(--text-secondary,#86868B)] dark:text-[var(--text-secondary,#A1A1A6)]">
-          M-EDU tizimidagi ma'lumotlarni tahlil qiling, hisobotlar tayyorlang yoki
-          kundalik vazifalarni AI yordamida tezlashtiring.
+        <p className="mx-auto mt-3 max-w-lg text-balance text-center text-[13.5px] font-medium leading-relaxed text-[color:var(--cp-text-tertiary)]">
+          M-EDU ma'lumotlarini tahlil qiling, hisobot tayyorlang yoki kundalik
+          vazifalarni bir suhbatda hal qiling.
         </p>
 
-        {/* Prompt grid */}
-        <div
-          role="group"
+        {/* Capabilities */}
+        <ul
+          role="list"
           aria-label="Tezkor AI so'rovlar"
-          className="mt-8 grid gap-3 sm:grid-cols-2 sm:gap-3.5 lg:grid-cols-3"
+          className={cn('mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3', compact && 'mt-4 sm:grid-cols-2 lg:grid-cols-2 gap-2.5')}
         >
-          {AI_QUICK_PROMPTS.map((prompt, i) => (
-            <AiQuickPrompt
-              key={prompt.id}
-              prompt={prompt}
-              disabled={disabled}
-              onSelect={handleSelect}
-              index={i}
-            />
+          {catalog.map((prompt, index) => (
+            <li key={prompt.id} role="listitem">
+              <AiQuickPrompt
+                prompt={prompt}
+                disabled={disabled}
+                selected={selectedId === prompt.id}
+                onSelect={handleSelect}
+                index={index}
+                isApple={isApple}
+              />
+            </li>
           ))}
-        </div>
-      </div>
+        </ul>
 
-      {/* Scoped keyframes */}
-      <style>{`
-        @keyframes heroGlowPulse {
-          0%, 100% { opacity: 0.7; transform: scale(1); }
-          50%      { opacity: 1;   transform: scale(1.15); }
-        }
-      `}</style>
+        {/* Comfort footer */}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[10.5px] font-medium text-[color:var(--cp-text-quaternary)]">
+          <span className="hidden items-center gap-1.5 sm:inline-flex">
+            <CopilotKbd>⌘K</CopilotKbd> buyruqlar
+          </span>
+          <span className="hidden items-center gap-1.5 sm:inline-flex">
+            <CopilotKbd>/</CopilotKbd> tezkor buyruq
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <IconArrowDown size={12} />
+            suhbatni pastga suring
+          </span>
+        </div>
+
+        <span id={`${idPrefix}-anchor`} hidden aria-hidden="true" />
+      </div>
     </div>
   );
 }

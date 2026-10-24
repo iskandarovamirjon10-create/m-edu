@@ -1,10 +1,11 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { InvoicesController } from '../invoices.controller';
 import { InvoicesService } from '../invoices.service';
 import { Role } from '@prisma/client';
 import { CreateInvoiceDto, RecordPaymentDto, CreateRefundDto } from '../dto/invoice.dto';
 import { UnauthorizedException } from '@nestjs/common';
+import { RedisPubSubService } from '../../common/redis/redis-pubsub.service';
 
 describe('InvoicesController', () => {
   let controller: InvoicesController;
@@ -14,6 +15,7 @@ describe('InvoicesController', () => {
     getBalanceForUser: ReturnType<typeof vi.fn>;
     getStudentBalance: ReturnType<typeof vi.fn>;
     getInvoiceForStudent: ReturnType<typeof vi.fn>;
+    getPaymentLinks: ReturnType<typeof vi.fn>;
     createInvoice: ReturnType<typeof vi.fn>;
     addItem: ReturnType<typeof vi.fn>;
     issueInvoice: ReturnType<typeof vi.fn>;
@@ -34,6 +36,7 @@ describe('InvoicesController', () => {
       getBalanceForUser: vi.fn(),
       getStudentBalance: vi.fn(),
       getInvoiceForStudent: vi.fn(),
+      getPaymentLinks: vi.fn(),
       createInvoice: vi.fn(),
       addItem: vi.fn(),
       issueInvoice: vi.fn(),
@@ -44,17 +47,7 @@ describe('InvoicesController', () => {
       rejectRefund: vi.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [InvoicesController],
-      providers: [
-        {
-          provide: InvoicesService,
-          useValue: service,
-        },
-      ],
-    }).compile();
-
-    controller = module.get<InvoicesController>(InvoicesController);
+    controller = new InvoicesController(service as unknown as InvoicesService);
   });
 
   it('should be defined', () => {
@@ -104,6 +97,43 @@ describe('InvoicesController', () => {
       );
       expect(result).toEqual({ id: 'inv-1' });
       expect(service.findOne).toHaveBeenCalledWith(orgId, 'inv-1');
+    });
+  });
+
+  describe('paymentLinks (SEC-FIN-01 regression)', () => {
+    it('verifies student ownership via getInvoiceForStudent if caller is STUDENT', async () => {
+      service.getInvoiceForStudent.mockResolvedValue({ id: 'inv-1' });
+      service.getPaymentLinks.mockResolvedValue({ paymeUrl: 'https://payme/1', clickUrl: 'https://click/1' });
+      const result = await controller.paymentLinks(
+        { organizationId: orgId, id: userId, role: Role.STUDENT },
+        'inv-1',
+      );
+      expect(service.getInvoiceForStudent).toHaveBeenCalledWith(orgId, userId, 'inv-1');
+      expect(service.getPaymentLinks).toHaveBeenCalledWith(orgId, 'inv-1');
+      expect(result).toEqual({ paymeUrl: 'https://payme/1', clickUrl: 'https://click/1' });
+    });
+
+    it('rejects cross-student payment links request if invoice does not belong to student', async () => {
+      service.getInvoiceForStudent.mockRejectedValue(new Error('Invoice not found'));
+      await expect(
+        controller.paymentLinks(
+          { organizationId: orgId, id: userId, role: Role.STUDENT },
+          'inv-other-student',
+        ),
+      ).rejects.toThrow('Invoice not found');
+      expect(service.getInvoiceForStudent).toHaveBeenCalledWith(orgId, userId, 'inv-other-student');
+      expect(service.getPaymentLinks).not.toHaveBeenCalled();
+    });
+
+    it('bypasses student ownership check if caller is ORG_ADMIN', async () => {
+      service.getPaymentLinks.mockResolvedValue({ paymeUrl: 'https://payme/1', clickUrl: 'https://click/1' });
+      const result = await controller.paymentLinks(
+        { organizationId: orgId, id: userId, role: Role.ORG_ADMIN },
+        'inv-1',
+      );
+      expect(service.getInvoiceForStudent).not.toHaveBeenCalled();
+      expect(service.getPaymentLinks).toHaveBeenCalledWith(orgId, 'inv-1');
+      expect(result).toEqual({ paymeUrl: 'https://payme/1', clickUrl: 'https://click/1' });
     });
   });
 

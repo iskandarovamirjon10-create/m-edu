@@ -41,13 +41,13 @@ interface GeminiRequestBody {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+const DEFAULT_MODEL = 'gemini-3-flash-preview';
 
 /**
  * White-label fallback model list. If the primary model is unavailable the
  * adapter degrades model-by-model before giving up with a typed provider error.
  */
-const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+const FALLBACK_MODELS = ['gemini-3-flash-preview', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'];
 
 @Injectable()
 export class GeminiProvider implements AiProvider {

@@ -50,19 +50,14 @@ const mockSms = { isConfigured: vi.fn().mockReturnValue(false), sendSms: vi.fn()
 describe('AutomationService', () => {
   let service: AutomationService;
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AutomationService,
-        { provide: PrismaService, useValue: mockPrisma },
-        { provide: NotificationEventService, useValue: mockNotificationEvents },
-        { provide: TelegramService, useValue: mockTelegram },
-        { provide: SmsService, useValue: mockSms },
-        { provide: AuditService, useValue: mockAudit },
-      ],
-    }).compile();
-
-    service = module.get<AutomationService>(AutomationService);
+  beforeEach(() => {
+    service = new AutomationService(
+      mockPrisma as any,
+      mockNotificationEvents as any,
+      mockTelegram as any,
+      mockSms as any,
+      mockAudit as any,
+    );
     vi.clearAllMocks();
   });
 

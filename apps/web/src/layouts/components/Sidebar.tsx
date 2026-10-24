@@ -4,11 +4,11 @@
  * Visual: Multi-layered liquid glass surface (high-saturation backdrop blur,
  * specular inner top/left rims, ambient light refraction), fluid shared-layout
  * active & hover capsules via Framer Motion (`layoutId`), and spring-animated
- * floating glass tooltips.
+ * floating glass tooltips with viewport boundary clamping.
  *
  * Behavior kept 100% intact: nav registry (exact export shapes), sections, `/`
- * quick-filter with inline highlight, recent routes, collapsed rail tooltips,
- * keyboard roving focus and RBAC (student) filtering.
+ * quick-filter with modal shielding, recent routes, collapsed rail tooltips,
+ * keyboard roving focus, and strict RBAC (student) filtering.
  */
 
 import {
@@ -22,7 +22,7 @@ import {
 } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { cn, usePrefersReducedMotion, SPRING } from '@/lib/design';
 import type { AccentKey } from '../core/tokens';
 import {
@@ -32,6 +32,7 @@ import {
 } from '../core/singletons';
 import { Brand } from './Brand';
 import { StaticIcon, PremiumIcon, I, type IconPaths } from './Icons';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 /* ══════════════════════════════════════════════════════════════════════
  * LIQUID GLASS & SPRING TOKENS
@@ -227,7 +228,7 @@ export const RecentRoutes = memo(function RecentRoutes({
   role?: string;
   onNavigate?: () => void;
 }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const recent = useRecentRoutes(3);
   const isStudent = role.toUpperCase() === 'STUDENT';
 
@@ -239,6 +240,8 @@ export const RecentRoutes = memo(function RecentRoutes({
         .filter((x): x is NavItem => Boolean(x)),
     [recent, isStudent],
   );
+
+  const sound = usePremiumSound();
 
   if (items.length === 0) return null;
 
@@ -252,10 +255,13 @@ export const RecentRoutes = memo(function RecentRoutes({
           <NavLink
             key={item.to}
             to={item.to}
-            onClick={onNavigate}
+            onClick={() => {
+              sound.playTick();
+              onNavigate?.();
+            }}
             className={({ isActive }) =>
               cn(
-                'group relative inline-flex max-w-[144px] items-center gap-1.5 rounded-full px-2.5 py-1',
+                'group relative inline-flex max-w-[144px] items-center gap-1.5 rounded-full px-2.5 py-1 min-h-[32px]',
                 'text-[11px] font-medium transition-all duration-200 active:scale-[0.96]',
                 'backdrop-blur-md',
                 FOCUS,
@@ -306,7 +312,7 @@ export const NavItems = memo(function NavItems({
   filter = '',
   isMobile = false,
 }: NavItemsProps) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const location = useLocation();
   const reduced = usePrefersReducedMotion();
   const navRef = useRef<HTMLElement | null>(null);
@@ -316,14 +322,16 @@ export const NavItems = memo(function NavItems({
   const isStudent = (role?.toUpperCase() ?? '') === 'STUDENT';
   const trimmedFilter = filter.trim();
   const lowered = trimmedFilter.toLowerCase();
+  const sound = usePremiumSound();
 
   const [moreExpanded, setMoreExpanded] = useState(false);
-  const [hoveredTo, setHoveredTo] = useState<string | null>(null);
   const [railTip, setRailTip] = useState<RailTooltipState | null>(null);
 
   useEffect(() => {
     setRailTip(null);
-    setHoveredTo(null);
+    return () => {
+      if (tipTimeoutRef.current) clearTimeout(tipTimeoutRef.current);
+    };
   }, [collapsed, location.pathname]);
 
   const isMoreRouteActive = useMemo(
@@ -375,54 +383,63 @@ export const NavItems = memo(function NavItems({
 
   const showMore = moreExpanded || Boolean(lowered) || isMoreRouteActive || collapsed;
 
-  /** Collapsed rail: pin a viewport-fixed label next to the focused/hovered row. */
+  const tipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hideTip = useCallback(() => {
+    if (tipTimeoutRef.current) clearTimeout(tipTimeoutRef.current);
+    setRailTip(null);
+  }, []);
+
+  /** Collapsed rail: pin a viewport-clamped label next to the focused/hovered row. */
   const showTip = useCallback(
     (e: { currentTarget: HTMLElement }, label: string) => {
       if (!collapsed) return;
+      if (tipTimeoutRef.current) clearTimeout(tipTimeoutRef.current);
       const rect = e.currentTarget.getBoundingClientRect();
+      const rawTop = rect.top + rect.height / 2;
+      // Viewport clamping so tooltip never clips above or below the window
+      const safeViewportTop = typeof window !== 'undefined'
+        ? Math.max(16, Math.min(window.innerHeight - 38, rawTop))
+        : rawTop;
+
       setRailTip({
         label,
-        top: rect.top + rect.height / 2,
+        top: safeViewportTop,
         left: rect.right + 14,
       });
+
+      // Auto-dismiss after 2.5s to prevent stuck tooltips on touch devices/tablets
+      tipTimeoutRef.current = setTimeout(() => {
+        setRailTip(null);
+      }, 2500);
     },
     [collapsed],
   );
 
-  const hideTip = useCallback(() => setRailTip(null), []);
-
   const renderItem = useCallback(
     (item: NavItem) => {
       const label = t(item.labelKey, item.label);
-      const isHovered = hoveredTo === item.to;
 
       return (
         <NavLink
           key={item.to}
           to={item.to}
           end={item.end}
-          onClick={onNavigate}
-          onMouseEnter={(e) => {
-            setHoveredTo(item.to);
-            showTip(e, label);
+          onClick={() => {
+            sound.playTick();
+            onNavigate?.();
           }}
-          onMouseLeave={() => {
-            setHoveredTo((prev) => (prev === item.to ? null : prev));
-            hideTip();
-          }}
-          onFocus={(e) => {
-            setHoveredTo(item.to);
-            showTip(e, label);
-          }}
-          onBlur={() => {
-            setHoveredTo((prev) => (prev === item.to ? null : prev));
-            hideTip();
-          }}
+          onMouseEnter={(e) => showTip(e, label)}
+          onMouseLeave={hideTip}
+          onFocus={(e) => showTip(e, label)}
+          onBlur={hideTip}
           aria-label={collapsed ? label : undefined}
           className={({ isActive }) =>
             cn(
               'group relative flex items-center rounded-xl transition-transform duration-150 ease-out active:scale-[0.97]',
-              collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2',
+              collapsed
+                ? 'min-h-[44px] min-w-[44px] justify-center px-2 py-2.5'
+                : 'min-h-[40px] gap-3 px-3 py-2',
               FOCUS,
               isActive
                 ? 'font-semibold text-brand-600 dark:text-brand-300'
@@ -432,28 +449,23 @@ export const NavItems = memo(function NavItems({
         >
           {({ isActive }) => (
             <>
-              {/* ── Liquid Floating Hover Capsule ── */}
-              {isHovered && !isActive && (
-                <motion.span
-                  layoutId={isMobile ? undefined : "sidebar-liquid-hover"}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={reduced ? { duration: 0 } : HOVER_SPRING}
-                  aria-hidden="true"
-                  className={cn(
-                    'pointer-events-none absolute inset-0 z-0 rounded-xl',
-                    'bg-gradient-to-b from-white/60 to-white/25 dark:from-white/[0.08] dark:to-white/[0.03]',
-                    'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.65),0_1px_3px_rgba(0,0,0,0.03)]',
-                    'dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.2)]',
-                  )}
-                />
-              )}
+              {/* ── Liquid Tactile Hover Capsule (Zero-latency hardware accelerated) ── */}
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'pointer-events-none absolute inset-0 z-0 rounded-xl transition-opacity duration-150',
+                  'bg-gradient-to-b from-white/60 to-white/25 dark:from-white/[0.08] dark:to-white/[0.03]',
+                  'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.65),0_1px_3px_rgba(0,0,0,0.03)]',
+                  'dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.2)]',
+                  isActive ? 'opacity-0' : 'opacity-0 group-hover:opacity-100',
+                )}
+              />
 
               {/* ── Liquid Floating Active Glass Pill ── */}
               {isActive && (
                 <motion.span
-                  layoutId={isMobile ? undefined : "sidebar-liquid-active"}
+                  layoutId={isMobile ? undefined : 'sidebar-liquid-active'}
+                  layoutDependency={location.pathname}
                   transition={reduced ? { duration: 0 } : LIQUID_SPRING}
                   aria-hidden="true"
                   className={cn(
@@ -470,7 +482,8 @@ export const NavItems = memo(function NavItems({
               {/* ── Luminous Left Accent Indicator ── */}
               {isActive && (
                 <motion.span
-                  layoutId={isMobile ? undefined : "sidebar-liquid-bar"}
+                  layoutId={isMobile ? undefined : 'sidebar-liquid-bar'}
+                  layoutDependency={location.pathname}
                   transition={reduced ? { duration: 0 } : LIQUID_SPRING}
                   aria-hidden="true"
                   className="pointer-events-none absolute left-0 top-1/2 z-10 h-5 w-[3px] -translate-y-1/2 rounded-full bg-gradient-to-b from-brand-400 to-brand-600 shadow-[0_0_10px_rgba(0,122,255,0.85)]"
@@ -498,20 +511,24 @@ export const NavItems = memo(function NavItems({
         </NavLink>
       );
     },
-    [collapsed, hoveredTo, onNavigate, reduced, t, trimmedFilter, showTip, hideTip],
+    [collapsed, location.pathname, onNavigate, reduced, t, trimmedFilter, showTip, hideTip],
   );
 
   return (
     <>
       <nav
         ref={navRef}
-        onMouseLeave={() => setHoveredTo(null)}
+        onScroll={hideTip}
         aria-label={t('a11y.mainNav', 'Main navigation')}
         className={cn(
-          'min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth',
+          'min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin',
+          isMobile
+            ? 'overscroll-y-contain touch-pan-y [-webkit-overflow-scrolling:touch]'
+            : 'scroll-smooth',
           '[scrollbar-width:thin] [scrollbar-color:rgba(150,150,150,0.2)_transparent]',
-          collapsed ? 'px-2 pt-3 pb-8' : 'px-3 pt-3 pb-8',
+          collapsed ? 'px-2 pt-3 pb-8' : isMobile ? 'px-3 pt-3 pb-12' : 'px-3 pt-3 pb-8',
         )}
+        style={isMobile ? { WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : undefined}
       >
         {isEmpty ? (
           <motion.div
@@ -586,10 +603,13 @@ export const NavItems = memo(function NavItems({
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setMoreExpanded((v) => !v)}
+                    onClick={() => {
+                      sound.playPop();
+                      setMoreExpanded((v) => !v);
+                    }}
                     aria-expanded={showMore}
                     className={cn(
-                      'group flex w-full items-center justify-between rounded-xl px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.08em]',
+                      'group flex w-full min-h-[40px] items-center justify-between rounded-xl px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.08em]',
                       'text-[var(--text-tertiary)] transition-all duration-200',
                       GLASS_BTN_HOVER,
                       'hover:text-[var(--text-primary)]',
@@ -644,8 +664,8 @@ export const NavItems = memo(function NavItems({
             className={cn(
               'pointer-events-none fixed z-[100] -translate-y-1/2 rounded-xl px-3 py-1.5',
               'text-xs font-semibold tracking-tight text-[var(--text-primary)]',
-              'border border-white/40 bg-white/75 backdrop-blur-2xl backdrop-saturate-[190%]',
-              'dark:border-white/[0.14] dark:bg-neutral-900/75',
+              'border border-white/40 bg-white/80 backdrop-blur-2xl backdrop-saturate-[200%]',
+              'dark:border-white/[0.16] dark:bg-[#18181B]/85',
               'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7),0_10px_28px_-6px_rgba(0,0,0,0.18)]',
               'dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.16),0_10px_30px_-6px_rgba(0,0,0,0.55)]',
             )}
@@ -682,14 +702,14 @@ export const Sidebar = memo(function Sidebar({
   userRole,
   onLogout,
 }: SidebarProps) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const reduced = usePrefersReducedMotion();
   const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
   const [navFilter, setNavFilter] = useState('');
   const filterInputRef = useRef<HTMLInputElement | null>(null);
   const roleLabel = useRoleLabel(userRole);
 
-  // Press `/` anywhere outside a text field → focus the sidebar quick-filter.
+  // Press `/` anywhere outside a text field or open modal → focus the sidebar quick-filter.
   useEffect(() => {
     if (collapsed) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -698,7 +718,9 @@ export const Sidebar = memo(function Sidebar({
       if (
         el?.tagName === 'INPUT' ||
         el?.tagName === 'TEXTAREA' ||
-        el?.isContentEditable
+        el?.tagName === 'SELECT' ||
+        el?.isContentEditable ||
+        Boolean(document.querySelector('[role="dialog"][data-state="open"], [role="dialog"]:not([aria-hidden="true"])'))
       ) {
         return;
       }
@@ -770,7 +792,7 @@ export const Sidebar = memo(function Sidebar({
               aria-label={t('nav.collapse', 'Collapse sidebar')}
               title={t('nav.collapse', 'Collapse sidebar')}
               className={cn(
-                'flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-secondary)]',
+                'flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-[var(--text-secondary)]',
                 'transition-all duration-200 active:scale-[0.92]',
                 GLASS_BTN_HOVER,
                 'hover:text-[var(--text-primary)]',
@@ -791,7 +813,7 @@ export const Sidebar = memo(function Sidebar({
               aria-label={t('nav.expand', 'Expand sidebar')}
               title={t('nav.expand', 'Expand sidebar')}
               className={cn(
-                'flex w-full items-center justify-center rounded-xl border border-black/[0.06] bg-white/40 py-2 text-[var(--text-secondary)]',
+                'flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black/[0.06] bg-white/40 py-2 text-[var(--text-secondary)]',
                 'shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md',
                 'dark:border-white/[0.08] dark:bg-white/[0.04] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]',
                 'transition-all duration-200 active:scale-[0.95]',
@@ -853,7 +875,7 @@ export const Sidebar = memo(function Sidebar({
                     onClick={clearFilter}
                     aria-label={t('common.clear', 'Clear')}
                     className={cn(
-                      'absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full',
+                      'absolute right-1.5 top-1/2 flex h-7 w-7 min-h-[36px] min-w-[36px] -translate-y-1/2 items-center justify-center rounded-full',
                       'text-[var(--text-tertiary)] transition-all duration-150 active:scale-90',
                       GLASS_BTN_HOVER,
                       'hover:text-[var(--text-primary)]',
@@ -890,8 +912,8 @@ export const Sidebar = memo(function Sidebar({
             aria-label={collapsed ? logoutLabel : undefined}
             title={collapsed ? logoutLabel : undefined}
             className={cn(
-              'group flex w-full items-center rounded-xl font-medium transition-all duration-200 active:scale-[0.97]',
-              collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2 text-[13.5px]',
+              'group flex w-full min-h-[44px] items-center rounded-xl font-medium transition-all duration-200 active:scale-[0.97]',
+              collapsed ? 'min-w-[44px] justify-center px-2 py-2.5' : 'gap-3 px-3 py-2 text-[13.5px]',
               'text-[var(--text-secondary)]',
               'hover:bg-gradient-to-b hover:from-apple-red/15 hover:to-apple-red/5 hover:text-apple-red',
               'hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_2px_8px_-2px_rgba(255,59,48,0.2)]',

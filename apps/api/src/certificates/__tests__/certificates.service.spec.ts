@@ -19,9 +19,11 @@ describe('CertificatesService', () => {
     },
     student: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
     },
     course: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
     },
     studentGroup: {
       findFirst: vi.fn(),
@@ -53,6 +55,8 @@ describe('CertificatesService', () => {
     vi.clearAllMocks();
     mockPrisma.certificate.findFirst.mockReset();
     mockPrisma.certificate.create.mockReset();
+    mockPrisma.student.findFirst.mockImplementation(mockPrisma.student.findUnique);
+    mockPrisma.course.findFirst.mockImplementation(mockPrisma.course.findUnique);
     service = new CertificatesService(mockPrisma as unknown as PrismaService);
   });
 

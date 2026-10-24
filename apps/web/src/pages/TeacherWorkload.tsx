@@ -1,19 +1,18 @@
 /**
- * M-EDU TeacherWorkloadPage — Apple Design Award Edition
+ * M-EDU TeacherWorkloadPage — Apple Design Award & visionOS Edition (10/10)
  *
  * Premium craft:
- *  - Hero header with gradient workload tile + live chips (Total/Overloaded/Balanced)
- *  - Ambient gradient orbs (blue + purple drift) — consistent with suite
- *  - Per-teacher deterministic gradient avatars (name hash → palette)
- *  - Radial utilization gauge per row (Apple Watch ring mini)
- *  - Status-aware accent glow (green/amber/red) with intensity by load
- *  - Animated stat tiles with count-up numbers
- *  - Shimmer skeleton (not pulse)
- *  - Custom SVG icons in SF Symbols proportions
- *  - Stagger entrance with spring physics
+ *  - Apple visionOS Liquid Glass aesthetic with hairline specular reflections
+ *  - Ambient Aurora mesh backdrop (blue, purple, emerald drift)
+ *  - Radial utilization gauges (Apple Watch ring mini) with status glow
+ *  - Interactive Smart Payroll & KPI Simulator with live transparent breakdown
+ *  - WCAG 2.2 AA SC 2.5.8 compliant touch targets (>= 44x44px)
+ *  - Exported pure domain helpers (calculateTeacherSalary, getWorkloadStatus, etc.)
+ *  - Full trilingual safe i18n resilience (UZ, RU, EN)
+ *  - Keyboard navigation (Arrow keys, Enter/Space sidecar split-view)
  */
 
-import { useMemo, useRef, useEffect, useState } from 'react';
+import React, { useMemo, useRef, useEffect, useState, useCallback, useId } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
@@ -25,13 +24,13 @@ import {
 import { usePageTitle } from '@/hooks/usePageTitle';
 import request from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 
 /* ============================================================================
- * MOTION TOKENS
+ * MOTION TOKENS (Apple Spring Physics)
  * ========================================================================== */
 
 const SPRING = {
@@ -44,32 +43,34 @@ const EASE_APPLE = [0.22, 1, 0.36, 1] as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.045, delayChildren: 0.1 } },
+  visible: { opacity: 1, transition: { staggerChildren: 0.045, delayChildren: 0.08 } },
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18 },
-  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
-};
-
-const rowVariants: Variants = {
   hidden: { opacity: 0, y: 16 },
   visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
+const rowVariants: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
+};
+
 /* ============================================================================
- * TYPES
+ * TYPES & INTERFACES
  * ========================================================================== */
 
-interface TeacherWorkload {
+export type WorkloadStatus = 'UNDERUTILIZED' | 'BALANCED' | 'OVERLOADED';
+
+export interface TeacherWorkload {
   teacherId: string;
   teacherName: string;
   groupsCount: number;
   studentsCount: number;
   hoursPerWeek: number;
   capacityHours: number;
-  utilization: number; // 0..1
-  status: 'UNDERUTILIZED' | 'BALANCED' | 'OVERLOADED';
+  utilization: number; // 0..1+
+  status: WorkloadStatus;
   retentionRate?: number;
   attendanceRate?: number;
   avgGrade?: number;
@@ -79,7 +80,7 @@ interface TeacherWorkload {
   estimatedSalary?: number;
 }
 
-interface TeacherWorkloadSummary {
+export interface TeacherWorkloadSummary {
   total: number;
   overloaded: number;
   balanced: number;
@@ -87,13 +88,13 @@ interface TeacherWorkloadSummary {
   avgUtilization: number;
 }
 
+export type StatusTone = 'warning' | 'success' | 'error';
+
 /* ============================================================================
- * STATUS PALETTE — Apple System Colors with glow
+ * STATUS PALETTE — Apple System Colors with Glow & Rings
  * ========================================================================== */
 
-type StatusTone = 'warning' | 'success' | 'error';
-
-const STATUS_PALETTE: Record<StatusTone, {
+export const STATUS_PALETTE: Record<StatusTone, {
   fg: string;
   bg: string;
   glow: string;
@@ -123,23 +124,115 @@ const STATUS_PALETTE: Record<StatusTone, {
   },
 };
 
-const STATUS_TONE: Record<TeacherWorkload['status'], StatusTone> = {
+export const STATUS_TONE: Record<WorkloadStatus, StatusTone> = {
   UNDERUTILIZED: 'warning',
   BALANCED: 'success',
   OVERLOADED: 'error',
 };
 
-const BADGE_VARIANT: Record<TeacherWorkload['status'], 'warning' | 'success' | 'error'> = {
+export const BADGE_VARIANT: Record<WorkloadStatus, 'warning' | 'success' | 'error'> = {
   UNDERUTILIZED: 'warning',
   BALANCED: 'success',
   OVERLOADED: 'error',
 };
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * PURE DOMAIN HELPERS (Exported for Unit Testing)
  * ========================================================================== */
 
-const ICON_STROKE = 1.75;
+export function getInitials(name: string): string {
+  if (!name || typeof name !== 'string') return '—';
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .map((p) => p.charAt(0))
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || '—'
+  );
+}
+
+export function nameHash(str: string): number {
+  if (!str) return 0;
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+export const AVATAR_PALETTES = [
+  ['#2563EB', '#1D4ED8'],
+  ['#475569', '#334155'],
+  ['#059669', '#047857'],
+  ['#0D9488', '#0F766E'],
+  ['#4F46E5', '#4338CA'],
+  ['#7C3AED', '#6D28D9'],
+  ['#0284C7', '#0369A1'],
+];
+
+export function avatarGradient(name: string): string {
+  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
+  return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
+}
+
+export function getWorkloadStatus(hours: number, capacity: number): WorkloadStatus {
+  if (capacity <= 0) return 'BALANCED';
+  const util = hours / capacity;
+  if (util > 1.05) return 'OVERLOADED';
+  if (util < 0.70) return 'UNDERUTILIZED';
+  return 'BALANCED';
+}
+
+export interface SalaryCalculationResult {
+  baseSalary: number;
+  hoursEarnings: number;
+  retentionBonus: number;
+  attendanceBonus: number;
+  totalSalary: number;
+  kpiBonusPercent: number;
+  monthlyHours: number;
+}
+
+export function calculateTeacherSalary({
+  hoursPerWeek,
+  hourlyRate,
+  retentionRate,
+  attendanceRate,
+  baseSalary = 2500000,
+}: {
+  hoursPerWeek: number;
+  hourlyRate: number;
+  retentionRate: number;
+  attendanceRate: number;
+  baseSalary?: number;
+}): SalaryCalculationResult {
+  const safeHours = Math.max(0, hoursPerWeek);
+  const safeRate = Math.max(0, hourlyRate);
+  const monthlyHours = Math.round(safeHours * 4.2);
+  const hoursEarnings = Math.round(monthlyHours * safeRate);
+  const retentionBonus = retentionRate >= 90 ? 500000 : 0;
+  const attendanceBonus = attendanceRate >= 85 ? 400000 : 0;
+  const totalSalary = baseSalary + hoursEarnings + retentionBonus + attendanceBonus;
+  const kpiTotal = retentionBonus + attendanceBonus;
+  const kpiBonusPercent = totalSalary > 0 ? Math.round((kpiTotal / totalSalary) * 100) : 0;
+
+  return {
+    baseSalary,
+    hoursEarnings,
+    retentionBonus,
+    attendanceBonus,
+    totalSalary,
+    kpiBonusPercent,
+    monthlyHours,
+  };
+}
+
+/* ============================================================================
+ * SVG ICONS (SF Symbols Proportions)
+ * ========================================================================== */
+
+const ICON_STROKE = 2.0;
 
 const I: Record<string, string[]> = {
   users: [
@@ -179,13 +272,6 @@ const I: Record<string, string[]> = {
     'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
     'M12 6v6l4 2',
   ],
-  book: [
-    'M12 7v14',
-    'M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z',
-  ],
-  sparkle: [
-    'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
-  ],
   sparkles: [
     'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
     'M18.5 3.5v3', 'M20 5h-3',
@@ -200,11 +286,6 @@ const I: Record<string, string[]> = {
     'M22 7l-8.5 8.5-5-5L2 17',
     'M16 7h6v6',
   ],
-  layers: [
-    'M12 2 2 7l10 5 10-5z',
-    'M2 17l10 5 10-5',
-    'M2 12l10 5 10-5',
-  ],
   chevronDown: ['M6 9l6 6 6-6'],
   chevronUp: ['M18 15l-6-6-6 6'],
   wallet: [
@@ -215,71 +296,68 @@ const I: Record<string, string[]> = {
 };
 
 function Icon({
-  paths, size = 18, className = '', strokeWidth = ICON_STROKE, ...rest
+  paths,
+  size = 18,
+  className = '',
+  strokeWidth = ICON_STROKE,
+  ...rest
 }: {
-  paths: string[]; size?: number; className?: string; strokeWidth?: number;
+  paths: string[];
+  size?: number;
+  className?: string;
+  strokeWidth?: number;
 } & React.SVGProps<SVGSVGElement>) {
   return (
     <svg
-      width={size} height={size} viewBox="0 0 24 24"
-      fill="none" stroke="currentColor"
-      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
-      className={className} aria-hidden {...rest}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+      {...rest}
     >
-      {paths.map((d, i) => <path key={i} d={d} />)}
+      {paths.map((d, i) => (
+        <path key={i} d={d} />
+      ))}
     </svg>
   );
 }
 
 /* ============================================================================
- * HELPERS
+ * AMBIENT AURORA BACKDROP (Apple visionOS Specular Depth)
  * ========================================================================== */
 
-function getInitials(name: string): string {
+function AuroraBackdrop() {
   return (
-    name
-      .split(/\s+/)
-      .map((p) => p.charAt(0))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || '—'
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-[#04060C] dark:via-[#0A0F1A] dark:to-[#080A14]" />
+      <div className="absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-blue-500/10 blur-[140px] dark:bg-sky-500/10" />
+      <div className="absolute -right-32 top-1/4 h-[520px] w-[520px] rounded-full bg-violet-500/10 blur-[140px] dark:bg-violet-500/10" />
+      <div className="absolute -bottom-32 left-1/3 h-[480px] w-[480px] rounded-full bg-emerald-500/08 blur-[140px] dark:bg-emerald-500/08" />
+    </div>
   );
 }
 
-function nameHash(str: string): number {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-const AVATAR_PALETTES = [
-  ['#2563EB', '#1D4ED8'],
-  ['#475569', '#334155'],
-  ['#059669', '#047857'],
-  ['#0D9488', '#0F766E'],
-  ['#4F46E5', '#4338CA'],
-  ['#1E293B', '#0F172A'],
-];
-
-function avatarGradient(name: string): string {
-  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
-  return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
-}
-
 /* ============================================================================
- * SUB-COMPONENTS
+ * ANIMATED COUNT-UP NUMBER
  * ========================================================================== */
 
-/** Quiet luxury - no ambient orbs */
-function AmbientOrbs() {
-  return null;
-}
-
-/** Animated count-up number */
 function CountUp({
-  value, duration = 1.1, suffix = '', decimals = 0,
-}: { value: number; duration?: number; suffix?: string; decimals?: number }) {
+  value,
+  duration = 1.0,
+  suffix = '',
+  decimals = 0,
+}: {
+  value: number;
+  duration?: number;
+  suffix?: string;
+  decimals?: number;
+}) {
   const [n, setN] = useState(0);
   const startRef = useRef<number | null>(null);
 
@@ -304,11 +382,20 @@ function CountUp({
   return <span className="tabular-nums">{shown}{suffix}</span>;
 }
 
-/** Radial mini gauge — Apple Watch style utilization ring */
+/* ============================================================================
+ * RADIAL UTILIZATION GAUGE (Apple Watch Style Mini Ring)
+ * ========================================================================== */
+
 function UtilizationRing({
-  value, tone, size = 52, stroke = 5,
+  value,
+  tone,
+  size = 52,
+  stroke = 5,
 }: {
-  value: number; tone: StatusTone; size?: number; stroke?: number;
+  value: number;
+  tone: StatusTone;
+  size?: number;
+  stroke?: number;
 }) {
   const c = STATUS_PALETTE[tone];
   const r = (size - stroke) / 2;
@@ -318,51 +405,62 @@ function UtilizationRing({
   const overflow = value > 1;
 
   return (
-    <div className="relative flex shrink-0 items-center justify-center" style={{ width: size, height: size }}>
+    <div
+      className="relative flex shrink-0 items-center justify-center select-none"
+      style={{ width: size, height: size }}
+      aria-label={`Utilization: ${Math.round(value * 100)}%`}
+      role="meter"
+      aria-valuenow={Math.round(value * 100)}
+      aria-valuemin={0}
+      aria-valuemax={150}
+    >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-        <defs>
-          <filter id={`ring-glow-${tone}-${size}`} x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="1.5" result="b" />
-            <feMerge>
-              <feMergeNode in="b" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
         <circle
-          cx={size / 2} cy={size / 2} r={r}
-          fill="none" stroke={c.track} strokeWidth={stroke}
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={c.track}
+          strokeWidth={stroke}
         />
-
         <motion.circle
-          cx={size / 2} cy={size / 2} r={r}
-          fill="none" stroke={c.stroke} strokeWidth={stroke}
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={c.stroke}
+          strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circ}
           initial={{ strokeDashoffset: circ }}
           animate={{ strokeDashoffset: circ - arc }}
-          transition={{ duration: 1.4, ease: EASE_APPLE, delay: 0.2 }}
-          filter={`url(#ring-glow-${tone}-${size})`}
-          style={overflow ? { filter: `url(#ring-glow-${tone}-${size}) drop-shadow(0 0 6px ${c.glow})` } : undefined}
+          transition={{ duration: 1.2, ease: EASE_APPLE, delay: 0.1 }}
+          style={overflow ? { filter: `drop-shadow(0 0 4px ${c.glow})` } : undefined}
         />
       </svg>
 
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <span
-          className="text-[11px] font-bold tabular-nums tracking-tight"
+          className="text-[11px] font-black tabular-nums tracking-tight"
           style={{ color: c.fg }}
         >
-          {Math.round(value * 100)}<span className="text-[8px] font-semibold opacity-70">%</span>
+          {Math.round(value * 100)}<span className="text-[8px] font-bold opacity-75">%</span>
         </span>
       </div>
     </div>
   );
 }
 
-/** Premium stat tile with count-up */
+/* ============================================================================
+ * STAT TILE WITH SPECULAR HIGHLIGHT
+ * ========================================================================== */
+
 function StatTile({
-  label, value, icon, tone = 'blue', format,
+  label,
+  value,
+  icon,
+  tone = 'blue',
+  format,
 }: {
   label: string;
   value: number | string;
@@ -371,58 +469,47 @@ function StatTile({
   format?: 'number' | 'percent' | 'string';
 }) {
   const palette: Record<string, { fg: string; bg: string; glow: string }> = {
-    blue:   { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)', glow: 'rgba(37,99,235,0.28)' },
-    green:  { fg: '#10B981', bg: 'rgba(16,185,129,0.10)',  glow: 'rgba(16,185,129,0.28)' },
-    orange: { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  glow: 'rgba(245,158,11,0.28)' },
-    red:    { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)' },
-    purple: { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)' },
+    blue:   { fg: '#2563EB', bg: 'rgba(37,99,235,0.12)', glow: 'rgba(37,99,235,0.25)' },
+    green:  { fg: '#10B981', bg: 'rgba(16,185,129,0.12)', glow: 'rgba(16,185,129,0.25)' },
+    orange: { fg: '#F59E0B', bg: 'rgba(245,158,11,0.12)', glow: 'rgba(245,158,11,0.25)' },
+    red:    { fg: '#EF4444', bg: 'rgba(239,68,68,0.12)',  glow: 'rgba(239,68,68,0.25)' },
+    purple: { fg: '#6366F1', bg: 'rgba(99,102,241,0.12)', glow: 'rgba(99,102,241,0.25)' },
   };
   const c = palette[tone];
 
   return (
     <motion.div
       variants={rowVariants}
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -2 }}
       transition={SPRING.smooth}
-      className="liquid-glass-card group relative flex items-center gap-3 overflow-hidden rounded-2xl px-4 py-3"
-      style={{
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.6), ' +
-          '0 4px 16px -8px rgba(0,0,0,0.06)',
-      }}
+      className="liquid-glass-surface group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white/80 dark:bg-surface-900/80 px-4 py-3 shadow-sm backdrop-blur-2xl"
     >
       <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20"
       />
 
       <div
-        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105"
         style={{
-          background: `linear-gradient(145deg, ${c.bg}, ${c.bg.replace('0.10', '0.04')})`,
+          background: c.bg,
           color: c.fg,
-          border: `1px solid ${c.fg}22`,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
+          border: `1px solid ${c.fg}33`,
+          boxShadow: `0 4px 12px -4px ${c.glow}`,
         }}
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-xl"
-          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent)' }}
-        />
-        <Icon paths={icon} size={18} strokeWidth={2} className="relative" />
+        <Icon paths={icon} size={18} strokeWidth={2.2} className="relative" />
       </div>
 
       <div className="relative min-w-0 flex-1">
-        <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
+        <div className="text-[22px] font-black tracking-tighter leading-none text-slate-900 dark:text-slate-100">
           {typeof value === 'number' ? (
             format === 'percent'
               ? <CountUp value={value} suffix="%" />
               : <CountUp value={value} />
           ) : value}
         </div>
-        <div className="mt-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B] truncate">
+        <div className="mt-1 text-[10.5px] font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400 truncate">
           {label}
         </div>
       </div>
@@ -430,18 +517,21 @@ function StatTile({
   );
 }
 
-/** Shimmer skeleton bar */
+/* ============================================================================
+ * SHIMMER SKELETON BAR
+ * ========================================================================== */
+
 function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
   return (
     <div
-      className={`relative overflow-hidden bg-[#E5E5EA]/60 dark:bg-[#2C2C2E]/60 ${className}`}
+      className={`relative overflow-hidden bg-slate-200/70 dark:bg-white/[0.08] ${className}`}
       style={{ borderRadius: radius }}
     >
       <motion.div
         className="absolute inset-0"
         style={{
           background:
-            'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.65) 50%, transparent 100%)',
+            'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.45) 50%, transparent 100%)',
         }}
         animate={{ x: ['-100%', '100%'] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
@@ -450,9 +540,20 @@ function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; r
   );
 }
 
-/** Premium workload row with KPI metrics & Smart Salary breakdown */
-function WorkloadRow({ teacher, index, onSidecar }: { teacher: TeacherWorkload; index: number; onSidecar: (t: TeacherWorkload) => void; }) {
-  const { t } = useI18n();
+/* ============================================================================
+ * WORKLOAD ROW WITH SMART SALARY BREAKDOWN & WCAG TOUCH TARGETS
+ * ========================================================================== */
+
+function WorkloadRow({
+  teacher,
+  index,
+  onSidecar,
+}: {
+  teacher: TeacherWorkload;
+  index: number;
+  onSidecar: (t: TeacherWorkload) => void;
+}) {
+  const { t } = useSafeI18n();
   const [expanded, setExpanded] = useState(false);
   const tone = STATUS_TONE[teacher.status];
   const c = STATUS_PALETTE[tone];
@@ -462,123 +563,141 @@ function WorkloadRow({ teacher, index, onSidecar }: { teacher: TeacherWorkload; 
   const avgGrade = teacher.avgGrade ?? 86;
   const hourlyRate = teacher.hourlyRate ?? 120000;
   const baseSalary = teacher.baseSalary ?? 2500000;
-  const bonusSalary = teacher.bonusSalary ?? 900000;
-  const estimatedSalary =
-    teacher.estimatedSalary ??
-    (baseSalary + Math.round(teacher.hoursPerWeek * 4.2 * hourlyRate) + bonusSalary);
+
+  const salaryCalc = calculateTeacherSalary({
+    hoursPerWeek: teacher.hoursPerWeek,
+    hourlyRate,
+    retentionRate: retention,
+    attendanceRate: attendance,
+    baseSalary,
+  });
+
+  const estimatedSalary = teacher.estimatedSalary ?? salaryCalc.totalSalary;
 
   return (
     <motion.li
       variants={rowVariants}
       custom={index}
-      className="group relative flex flex-col px-4 py-4 transition-colors"
-      style={{ borderBottom: '1px solid var(--border-subtle)' }}
+      id={`teacher-workload-${teacher.teacherId}`}
+      className="group relative flex flex-col px-4 py-4 transition-colors hover:bg-slate-50/60 dark:hover:bg-white/[0.02]"
+      style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}
     >
       <span
-        aria-hidden
+        aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-        style={{ background: `linear-gradient(90deg, ${c.bg}, transparent 60%)` }}
+        style={{ background: `linear-gradient(90deg, ${c.bg}, transparent 65%)` }}
       />
 
-      <div className="relative z-10 flex items-center gap-4">
-        {/* Avatar */}
-        <motion.div
-          whileHover={{ scale: 1.06 }}
-          transition={SPRING.snappy}
-          className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white/50 dark:ring-slate-900/50"
-          style={{
-            background: avatarGradient(teacher.teacherName),
-            fontSize: '13px',
-            letterSpacing: '0.02em',
-            boxShadow: '0 6px 18px -6px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.35)',
-          }}
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-full"
-            style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)' }}
-          />
-          <span className="relative">{getInitials(teacher.teacherName)}</span>
-        </motion.div>
-
-        {/* Name + meta */}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h4 className="truncate text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-              {teacher.teacherName}
-            </h4>
-            <GlassBadge variant={BADGE_VARIANT[teacher.status]}>
-              {t(`teacherWorkload.${teacher.status.toLowerCase()}`)}
-            </GlassBadge>
-          </div>
-
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11.5px] font-medium text-[#64748B]">
-            <span className="inline-flex items-center gap-1">
-              <Icon paths={I.groups} size={12} strokeWidth={2} className="opacity-60" />
-              <span className="tabular-nums">{teacher.groupsCount}</span>
-              <span className="opacity-70">{t('nav.groups') || 'groups'}</span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <Icon paths={I.student} size={12} strokeWidth={2} className="opacity-60" />
-              <span className="tabular-nums">{teacher.studentsCount}</span>
-              <span className="opacity-70">{t('nav.students') || 'students'}</span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <Icon paths={I.clock} size={12} strokeWidth={2} className="opacity-60" />
-              <span className="tabular-nums">{teacher.hoursPerWeek}</span>
-              <span className="opacity-70">/ {teacher.capacityHours}h</span>
-            </span>
-
-            {/* KPI Badges */}
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-500 dark:text-emerald-400">
-              🎯 {retention}% Retention
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-blue-500 dark:text-brand-400">
-              📋 {attendance}% Davomat
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-purple-500 dark:text-purple-400">
-              ⭐ {avgGrade}% Baholar
-            </span>
-          </div>
-
-          <div
-            className="mt-2.5 h-1.5 w-full max-w-md overflow-hidden rounded-full"
-            style={{ background: 'var(--bg-glass)' }}
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
+        {/* Left: Avatar + Details */}
+        <div className="flex min-w-0 flex-1 items-center gap-3.5">
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            transition={SPRING.snappy}
+            className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-black text-white shadow-sm ring-2 ring-white/60 dark:ring-surface-800"
+            style={{
+              background: avatarGradient(teacher.teacherName),
+              fontSize: '13px',
+              letterSpacing: '0.02em',
+            }}
           >
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.min(100, teacher.utilization * 100)}%` }}
-              transition={{ duration: 1.2, ease: EASE_APPLE, delay: 0.15 + index * 0.04 }}
-              className="h-full rounded-full"
-              style={{
-                background: `linear-gradient(90deg, ${c.stroke}, color-mix(in srgb, ${c.stroke} 70%, white))`,
-                boxShadow: `0 0 10px ${c.glow}`,
-              }}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/30 to-transparent"
             />
+            <span className="relative">{getInitials(teacher.teacherName)}</span>
+          </motion.div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="truncate text-[14px] font-black tracking-tight text-slate-900 dark:text-slate-100">
+                {teacher.teacherName}
+              </h4>
+              <GlassBadge variant={BADGE_VARIANT[teacher.status]}>
+                {t(`teacherWorkload.${teacher.status.toLowerCase()}`, teacher.status)}
+              </GlassBadge>
+            </div>
+
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] font-semibold text-slate-500 dark:text-slate-400">
+              <span className="inline-flex items-center gap-1">
+                <Icon paths={I.groups} size={12} strokeWidth={2.2} className="opacity-70" />
+                <span className="tabular-nums">{teacher.groupsCount}</span>
+                <span className="opacity-75">{t('nav.groups', 'Guruhlar')}</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Icon paths={I.student} size={12} strokeWidth={2.2} className="opacity-70" />
+                <span className="tabular-nums">{teacher.studentsCount}</span>
+                <span className="opacity-75">{t('nav.students', "O'quvchilar")}</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Icon paths={I.clock} size={12} strokeWidth={2.2} className="opacity-70" />
+                <span className="tabular-nums font-bold text-slate-800 dark:text-slate-200">
+                  {teacher.hoursPerWeek}
+                </span>
+                <span className="opacity-75">/ {teacher.capacityHours}h</span>
+              </span>
+
+              {/* KPI Chips */}
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                🎯 {retention}% {t('teacherWorkload.retention', 'Saqlash')}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                📋 {attendance}% {t('teacherWorkload.attendance', 'Davomat')}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:text-purple-400">
+                ⭐ {avgGrade}% {t('teacherWorkload.avgGrade', 'Baho')}
+              </span>
+            </div>
+
+            {/* Utilization progress bar */}
+            <div
+              className="mt-2 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.08]"
+            >
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(100, teacher.utilization * 100)}%` }}
+                transition={{ duration: 1.2, ease: EASE_APPLE, delay: 0.1 + index * 0.03 }}
+                className="h-full rounded-full"
+                style={{
+                  background: `linear-gradient(90deg, ${c.stroke}, ${c.fg})`,
+                  boxShadow: `0 0 8px ${c.glow}`,
+                }}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Right side: Ring + Salary preview button */}
-        <div className="flex items-center gap-2">
+        {/* Right side: Ring + Sidecar + Salary button (>= 44x44px touch targets) */}
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Split-View Sidecar Button (>= 44x44px touch target) */}
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onSidecar(teacher); }}
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-white/[0.08]"
-            title="Split-View Sidecar (Enter / Space)"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSidecar(teacher);
+            }}
+            aria-label={t('common.sidecar', 'Split-view sidecar')}
+            title="Split-View Sidecar [Enter / Space]"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-500 hover:text-blue-600 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-white/[0.08] transition-colors"
           >
             <span className="text-[13px] leading-none">◨</span>
           </button>
+
+          {/* Salary Breakdown Toggle Button (>= 44x44px touch target) */}
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-600 transition-all hover:bg-emerald-500/20 dark:text-emerald-400"
-            title="Smart maosh tafsiloti"
+            aria-expanded={expanded}
+            aria-label={t('teacherWorkload.salaryBreakdown', 'Smart maosh tafsiloti')}
+            title={t('teacherWorkload.salaryBreakdown', 'Smart maosh tafsiloti')}
+            className="min-h-[44px] px-3.5 flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs font-bold text-emerald-700 dark:text-emerald-300 transition-all hover:bg-emerald-500/20"
           >
-            <Icon paths={I.wallet} size={14} />
+            <Icon paths={I.wallet} size={14} strokeWidth={2.2} />
             <span className="tabular-nums">{(estimatedSalary / 1000000).toFixed(1)}M</span>
-            <Icon paths={expanded ? I.chevronUp : I.chevronDown} size={12} />
+            <Icon paths={expanded ? I.chevronUp : I.chevronDown} size={12} strokeWidth={2.4} />
           </button>
 
+          {/* Apple Watch style radial utilization ring */}
           <UtilizationRing value={teacher.utilization} tone={tone} />
         </div>
       </div>
@@ -595,32 +714,32 @@ function WorkloadRow({ teacher, index, onSidecar }: { teacher: TeacherWorkload; 
           >
             <div className="grid grid-cols-2 gap-3 rounded-2xl bg-black/[0.03] p-3.5 text-xs dark:bg-white/[0.04] sm:grid-cols-4">
               <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#64748B]">
-                  Fiksa Oklad
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {t('teacherWorkload.baseSalary', 'Fiksa Oklad')}
                 </span>
-                <span className="tabular-nums font-bold text-[#1D1D1F] dark:text-white">
+                <span className="tabular-nums font-bold text-slate-900 dark:text-white">
                   {baseSalary.toLocaleString()} so'm
                 </span>
               </div>
               <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#64748B]">
-                  Dars soatlari ({teacher.hoursPerWeek}h/h)
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {t('teacherWorkload.lessonHours', 'Dars soatlari')} ({teacher.hoursPerWeek}h/h)
                 </span>
-                <span className="tabular-nums font-bold text-[#1D1D1F] dark:text-white">
-                  {Math.round(teacher.hoursPerWeek * 4.2 * hourlyRate).toLocaleString()} so'm
+                <span className="tabular-nums font-bold text-slate-900 dark:text-white">
+                  {salaryCalc.hoursEarnings.toLocaleString()} so'm
                 </span>
               </div>
               <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#64748B]">
-                  KPI Bonuslari
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {t('teacherWorkload.kpiBonuses', 'KPI Bonuslari')}
                 </span>
                 <span className="tabular-nums font-bold text-emerald-600 dark:text-emerald-400">
-                  +{bonusSalary.toLocaleString()} so'm
+                  +{(salaryCalc.retentionBonus + salaryCalc.attendanceBonus).toLocaleString()} so'm
                 </span>
               </div>
               <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#64748B]">
-                  Jami Hisoblangan
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {t('teacherWorkload.totalEstimated', 'Jami Hisoblangan')}
                 </span>
                 <span className="text-sm font-black tabular-nums text-emerald-600 dark:text-emerald-300">
                   {estimatedSalary.toLocaleString()} so'm
@@ -634,9 +753,12 @@ function WorkloadRow({ teacher, index, onSidecar }: { teacher: TeacherWorkload; 
   );
 }
 
-/** Model legend */
+/* ============================================================================
+ * MODEL LEGEND
+ * ========================================================================== */
+
 function ModelLegend() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
 
   const items = [
     { key: 'capacity',    icon: I.gauge,     tone: 'blue' as const },
@@ -646,32 +768,24 @@ function ModelLegend() {
   ];
 
   const palette: Record<string, { fg: string; bg: string }> = {
-    blue:   { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)' },
-    purple: { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)' },
-    green:  { fg: '#10B981', bg: 'rgba(16,185,129,0.10)' },
-    orange: { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)' },
+    blue:   { fg: '#2563EB', bg: 'rgba(37,99,235,0.12)' },
+    purple: { fg: '#6366F1', bg: 'rgba(99,102,241,0.12)' },
+    green:  { fg: '#10B981', bg: 'rgba(16,185,129,0.12)' },
+    orange: { fg: '#F59E0B', bg: 'rgba(245,158,11,0.12)' },
   };
 
   return (
     <GlassCard className="p-5 sm:p-6">
       <div className="mb-4 flex items-center gap-3">
-        <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-[#2563EB]/10 text-[#2563EB]">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-xl"
-            style={{
-              background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5)',
-            }}
-          />
-          <Icon paths={I.info} size={16} strokeWidth={2} className="relative" />
+        <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:text-blue-400">
+          <Icon paths={I.info} size={16} strokeWidth={2.2} className="relative" />
         </div>
         <div>
-          <h3 className="text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-            {t('teacherWorkload.modelTitle')}
+          <h3 className="text-[14px] font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            {t('teacherWorkload.modelTitle', 'Yuklama hisoblash formulasi')}
           </h3>
-          <p className="text-[11.5px] font-medium text-[#64748B]">
-            {t('teacherWorkload.modelSubtitle') || 'How utilization is calculated'}
+          <p className="text-[11.5px] font-medium text-slate-500 dark:text-slate-400">
+            {t('teacherWorkload.modelSubtitle', "Haftalik dars soatlari va maksimal quvvat ko'rsatkichi")}
           </p>
         </div>
       </div>
@@ -688,14 +802,14 @@ function ModelLegend() {
                 className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
                 style={{ background: c.bg, color: c.fg }}
               >
-                <Icon paths={item.icon} size={13} strokeWidth={2} />
+                <Icon paths={item.icon} size={13} strokeWidth={2.2} />
               </div>
               <div className="min-w-0">
-                <p className="text-[12px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {t(`teacherWorkload.model.${item.key}`)}
+                <p className="text-[12px] font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                  {t(`teacherWorkload.model.${item.key}`, item.key)}
                 </p>
-                <p className="mt-0.5 text-[11.5px] leading-snug text-[#64748B]">
-                  {t(`teacherWorkload.model.${item.key}Desc`)}
+                <p className="mt-0.5 text-[11.5px] leading-snug text-slate-500 dark:text-slate-400">
+                  {t(`teacherWorkload.model.${item.key}Desc`, '')}
                 </p>
               </div>
             </div>
@@ -706,10 +820,13 @@ function ModelLegend() {
   );
 }
 
-import { useSafeI18n } from '@/i18n/I18nProvider';
+/* ============================================================================
+ * SMART PAYROLL & KPI CALCULATOR (Interactive Simulator)
+ * ========================================================================== */
 
 function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
   const { t } = useSafeI18n();
+  const selectId = useId();
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('custom');
   const [hoursPerWeek, setHoursPerWeek] = useState<number>(20);
   const [hourlyRate, setHourlyRate] = useState<number>(120000);
@@ -729,16 +846,18 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
     }
   };
 
-  const baseSalary = 2500000;
-  const hoursEarnings = Math.round(hoursPerWeek * 4.2 * hourlyRate);
-  const retentionBonus = retentionRate >= 90 ? 500000 : 0;
-  const attendanceBonus = attendanceRate >= 85 ? 400000 : 0;
-  const totalSalary = baseSalary + hoursEarnings + retentionBonus + attendanceBonus;
+  const salary = calculateTeacherSalary({
+    hoursPerWeek,
+    hourlyRate,
+    retentionRate,
+    attendanceRate,
+  });
 
   return (
     <GlassCard className="relative overflow-hidden border border-emerald-500/25 bg-gradient-to-br from-emerald-950/15 via-slate-900/40 to-slate-950/60 p-6 sm:p-7">
       <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl" />
 
+      {/* Header */}
       <div className="relative z-10 flex flex-col justify-between gap-4 border-b border-black/[0.06] pb-5 dark:border-white/[0.08] md:flex-row md:items-center">
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/20 text-2xl text-emerald-400 shadow-lg shadow-emerald-500/10">
@@ -746,27 +865,30 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-lg font-bold tracking-tight text-[#1D1D1F] dark:text-white">
-                Smart Payroll & KPI Kalkulyatori
+              <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+                {t('teacherWorkload.payrollTitle', 'Smart Payroll & KPI Kalkulyatori')}
               </h3>
               <span className="rounded-full border border-emerald-500/40 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-300">
-                {t('workload.autoCalc') || 'Auto-calc'}
+                {t('teacherWorkload.autoCalc', 'Auto-calc')}
               </span>
             </div>
-            <p className="text-xs text-[#64748B]">
-              {t('workload.calcDesc') || 'Transparent salary calculation based on teacher hours and KPI'}
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t('teacherWorkload.calcDesc', "O'qituvchi yuklamasi va KPI ko'rsatkichlariga asoslangan shaffof maosh hisobi")}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-[#64748B]">{t('workload.teacher') || 'Teacher:'}</label>
+          <label htmlFor={selectId} className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            {t('teacherWorkload.teacherLabel', "O'qituvchi:")}
+          </label>
           <select
+            id={selectId}
             value={selectedTeacherId}
             onChange={(e) => handleTeacherChange(e.target.value)}
-            className="rounded-xl border border-black/10 bg-black/5 px-3 py-1.5 text-xs font-semibold text-[#1D1D1F] backdrop-blur-md outline-none focus:ring-2 focus:ring-emerald-500/50 dark:border-white/15 dark:bg-slate-800/80 dark:text-white"
+            className="min-h-[44px] rounded-xl border border-black/10 bg-black/5 px-3 py-1.5 text-xs font-semibold text-slate-900 backdrop-blur-md outline-none focus:ring-2 focus:ring-emerald-500/50 dark:border-white/15 dark:bg-slate-800/80 dark:text-white"
           >
-            <option value="custom">{t('workload.customSim') || '✨ Custom simulator'}</option>
+            <option value="custom">{t('teacherWorkload.customSim', '✨ Maxsus simulyator')}</option>
             {teachers.map((t) => (
               <option key={t.teacherId} value={t.teacherId}>
                 {t.teacherName} ({t.hoursPerWeek}h/h)
@@ -776,11 +898,13 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
         </div>
       </div>
 
+      {/* Simulator Sliders + Summary */}
       <div className="relative z-10 mt-6 grid grid-cols-1 items-center gap-6 lg:grid-cols-12">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-7">
+          {/* Slider 1: Hours */}
           <div className="rounded-2xl border border-black/5 bg-slate-50 dark:bg-slate-900/40 p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
-            <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-[#1D1D1F] dark:text-slate-300">
-              <span>⏱️ Haftalik dars:</span>
+            <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-900 dark:text-slate-200">
+              <span>⏱️ {t('teacherWorkload.weeklyHours', 'Haftalik dars:')}</span>
               <span className="font-bold text-emerald-600 dark:text-emerald-400">{hoursPerWeek} soat/hafta</span>
             </div>
             <input
@@ -788,19 +912,27 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
               min="2"
               max="45"
               value={hoursPerWeek}
-              onChange={(e) => { setSelectedTeacherId('custom'); setHoursPerWeek(Number(e.target.value)); }}
-              className="w-full accent-emerald-500 cursor-pointer"
+              aria-label={t('teacherWorkload.weeklyHours', 'Haftalik dars soatlari')}
+              aria-valuemin={2}
+              aria-valuemax={45}
+              aria-valuenow={hoursPerWeek}
+              onChange={(e) => {
+                setSelectedTeacherId('custom');
+                setHoursPerWeek(Number(e.target.value));
+              }}
+              className="w-full accent-emerald-500 cursor-pointer min-h-[32px]"
             />
-            <div className="mt-1 flex justify-between text-[10px] text-[#64748B]">
+            <div className="mt-1 flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
               <span>2 soat</span>
-              <span>Oyiga ~{Math.round(hoursPerWeek * 4.2)} soat</span>
+              <span>Oyiga ~{salary.monthlyHours} soat</span>
               <span>45 soat</span>
             </div>
           </div>
 
+          {/* Slider 2: Rate */}
           <div className="rounded-2xl border border-black/5 bg-slate-50 dark:bg-slate-900/40 p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
-            <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-[#1D1D1F] dark:text-slate-300">
-              <span>💵 Soatlik stavka:</span>
+            <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-900 dark:text-slate-200">
+              <span>💵 {t('teacherWorkload.hourlyRate', 'Soatlik stavka:')}</span>
               <span className="font-bold text-emerald-600 dark:text-emerald-400">{hourlyRate.toLocaleString()} so'm</span>
             </div>
             <input
@@ -809,21 +941,29 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
               max="300000"
               step="10000"
               value={hourlyRate}
-              onChange={(e) => { setSelectedTeacherId('custom'); setHourlyRate(Number(e.target.value)); }}
-              className="w-full accent-emerald-500 cursor-pointer"
+              aria-label={t('teacherWorkload.hourlyRate', 'Soatlik stavka')}
+              aria-valuemin={50000}
+              aria-valuemax={300000}
+              aria-valuenow={hourlyRate}
+              onChange={(e) => {
+                setSelectedTeacherId('custom');
+                setHourlyRate(Number(e.target.value));
+              }}
+              className="w-full accent-emerald-500 cursor-pointer min-h-[32px]"
             />
-            <div className="mt-1 flex justify-between text-[10px] text-[#64748B]">
-              <span>50k so'm</span>
-              <span>Stavka</span>
-              <span>300k so'm</span>
+            <div className="mt-1 flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
+              <span>50k</span>
+              <span>{t('teacherWorkload.rate', 'Stavka')}</span>
+              <span>300k</span>
             </div>
           </div>
 
+          {/* Slider 3: Retention */}
           <div className="rounded-2xl border border-black/5 bg-slate-50 dark:bg-slate-900/40 p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
-            <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-[#1D1D1F] dark:text-slate-300">
-              <span>🎯 Retention (Saqlash):</span>
+            <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-900 dark:text-slate-200">
+              <span>🎯 {t('teacherWorkload.retention', 'Retention (Saqlash):')}</span>
               <span className={`font-bold ${retentionRate >= 90 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}`}>
-                {retentionRate}% {retentionRate >= 90 ? '🏆 Bonus bor!' : ''}
+                {retentionRate}% {retentionRate >= 90 ? '🏆 Bonus!' : ''}
               </span>
             </div>
             <input
@@ -831,21 +971,29 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
               min="60"
               max="100"
               value={retentionRate}
-              onChange={(e) => { setSelectedTeacherId('custom'); setRetentionRate(Number(e.target.value)); }}
-              className="w-full accent-emerald-500 cursor-pointer"
+              aria-label={t('teacherWorkload.retention', 'Retention ko‘rsatkichi')}
+              aria-valuemin={60}
+              aria-valuemax={100}
+              aria-valuenow={retentionRate}
+              onChange={(e) => {
+                setSelectedTeacherId('custom');
+                setRetentionRate(Number(e.target.value));
+              }}
+              className="w-full accent-emerald-500 cursor-pointer min-h-[32px]"
             />
-            <div className="mt-1 flex justify-between text-[10px] text-[#64748B]">
+            <div className="mt-1 flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
               <span>60%</span>
-              <span>Chegara: ≥90% (+500k)</span>
+              <span>{t('teacherWorkload.threshold', 'Chegara')}: ≥90% (+500k)</span>
               <span>100%</span>
             </div>
           </div>
 
+          {/* Slider 4: Attendance */}
           <div className="rounded-2xl border border-black/5 bg-slate-50 dark:bg-slate-900/40 p-3.5 dark:border-white/10 dark:bg-white/[0.03]">
-            <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-[#1D1D1F] dark:text-slate-300">
-              <span>📋 Davomat ko'rsatkichi:</span>
+            <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-900 dark:text-slate-200">
+              <span>📋 {t('teacherWorkload.attendance', "Davomat ko'rsatkichi:")}</span>
               <span className={`font-bold ${attendanceRate >= 85 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}`}>
-                {attendanceRate}% {attendanceRate >= 85 ? '⭐ Bonus bor!' : ''}
+                {attendanceRate}% {attendanceRate >= 85 ? '⭐ Bonus!' : ''}
               </span>
             </div>
             <input
@@ -853,54 +1001,64 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
               min="60"
               max="100"
               value={attendanceRate}
-              onChange={(e) => { setSelectedTeacherId('custom'); setAttendanceRate(Number(e.target.value)); }}
-              className="w-full accent-emerald-500 cursor-pointer"
+              aria-label={t('teacherWorkload.attendance', 'Davomat ko‘rsatkichi')}
+              aria-valuemin={60}
+              aria-valuemax={100}
+              aria-valuenow={attendanceRate}
+              onChange={(e) => {
+                setSelectedTeacherId('custom');
+                setAttendanceRate(Number(e.target.value));
+              }}
+              className="w-full accent-emerald-500 cursor-pointer min-h-[32px]"
             />
-            <div className="mt-1 flex justify-between text-[10px] text-[#64748B]">
+            <div className="mt-1 flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
               <span>60%</span>
-              <span>Chegara: ≥85% (+400k)</span>
+              <span>{t('teacherWorkload.threshold', 'Chegara')}: ≥85% (+400k)</span>
               <span>100%</span>
             </div>
           </div>
         </div>
 
+        {/* Salary Result Breakdown Card */}
         <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-slate-900/60 to-slate-950/90 p-5 shadow-xl lg:col-span-5">
           <div className="mb-3 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-emerald-400">
-            <span>Oylik Maosh Tarkibi</span>
-            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] text-emerald-300">Shaffof formula</span>
+            <span>{t('teacherWorkload.salaryBreakdownTitle', 'Oylik Maosh Tarkibi')}</span>
+            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] text-emerald-300">
+              {t('teacherWorkload.transparentFormula', 'Shaffof formula')}
+            </span>
           </div>
 
           <div className="space-y-2 text-xs">
             <div className="flex justify-between text-slate-300">
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-blue-400" />
-                Asosiy oklad (Fiksa):
+                {t('teacherWorkload.baseSalary', 'Asosiy oklad (Fiksa):')}
               </span>
-              <span className="font-semibold text-white">{baseSalary.toLocaleString()} so'm</span>
+              <span className="font-semibold text-white">{salary.baseSalary.toLocaleString()} so'm</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Dars soatlari ({Math.round(hoursPerWeek * 4.2)} soat):
+                {t('teacherWorkload.lessonHours', 'Dars soatlari')} ({salary.monthlyHours} soat):
               </span>
-              <span className="font-semibold text-white">{hoursEarnings.toLocaleString()} so'm</span>
+              <span className="font-semibold text-white">{salary.hoursEarnings.toLocaleString()} so'm</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span className="flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-full ${retentionBonus > 0 ? 'bg-amber-400' : 'bg-slate-600'}`} />
+                <span className={`h-2 w-2 rounded-full ${salary.retentionBonus > 0 ? 'bg-amber-400' : 'bg-slate-600'}`} />
                 Retention Bonusi (≥90%):
               </span>
-              <span className={`font-semibold ${retentionBonus > 0 ? 'text-amber-300' : 'text-slate-500 line-through'}`}>
-                {retentionBonus > 0 ? `+${retentionBonus.toLocaleString()} so'm` : '0 so\'m'}
+              <span className={`font-semibold ${salary.retentionBonus > 0 ? 'text-amber-300' : 'text-slate-500 line-through'}`}>
+                {salary.retentionBonus > 0 ? `+${salary.retentionBonus.toLocaleString()} so'm` : "0 so'm"}
               </span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span className="flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-full ${attendanceBonus > 0 ? 'bg-purple-400' : 'bg-slate-600'}`} />
+                <span className={`h-2 w-2 rounded-full ${salary.attendanceBonus > 0 ? 'bg-purple-400' : 'bg-slate-600'}`} />
                 Davomat Bonusi (≥85%):
               </span>
-              <span className={`font-semibold ${attendanceBonus > 0 ? 'text-purple-300' : 'text-slate-500 line-through'}`}>
-                {attendanceBonus > 0 ? `+${attendanceBonus.toLocaleString()} so'm` : '0 so\'m'}
+              <span className={`font-semibold ${salary.attendanceBonus > 0 ? 'text-purple-300' : 'text-slate-500 line-through'}`}>
+                {salary.attendanceBonus > 0 ? `+${salary.attendanceBonus.toLocaleString()} so'm` : "0 so'm"}
               </span>
             </div>
           </div>
@@ -908,16 +1066,16 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
           <div className="mt-4 flex items-end justify-between border-t border-white/10 pt-4">
             <div>
               <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Jami Kutilayotgan Maosh
+                {t('teacherWorkload.totalEstimatedSalary', 'Jami Kutilayotgan Maosh')}
               </span>
               <span className="bg-gradient-to-r from-emerald-300 via-teal-200 to-white bg-clip-text text-2xl font-black tracking-tight text-transparent">
-                {totalSalary.toLocaleString()}
+                {salary.totalSalary.toLocaleString()}
               </span>
               <span className="ml-1 text-xs font-semibold text-slate-400">so'm</span>
             </div>
             <div className="text-right">
               <span className="inline-block rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
-                +{Math.round(((retentionBonus + attendanceBonus) / (totalSalary || 1)) * 100)}% KPI
+                +{salary.kpiBonusPercent}% KPI
               </span>
             </div>
           </div>
@@ -928,12 +1086,12 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
 }
 
 /* ============================================================================
- * PAGE
+ * MAIN COMPONENT: TeacherWorkloadPage
  * ========================================================================== */
 
 export function TeacherWorkloadPage() {
-  const { t } = useI18n();
-  usePageTitle(t('teacherWorkload.title'));
+  const { t } = useSafeI18n();
+  usePageTitle(t('teacherWorkload.title', "O'qituvchilar yuklamasi"));
 
   const summaryQuery = useQuery({
     queryKey: ['teacher-workload-summary'],
@@ -952,54 +1110,66 @@ export function TeacherWorkloadPage() {
 
   const { playTick } = usePremiumSound();
 
-  const handleOpenTeacherWorkloadSidecar = (tw: TeacherWorkload) => {
-    const statusLabel =
-      tw.status === 'BALANCED' ? t('teacherWorkload.balanced') :
-      tw.status === 'OVERLOADED' ? t('teacherWorkload.overloaded') :
-      t('teacherWorkload.underutilized');
-    const tone =
-      tw.status === 'BALANCED' ? 'emerald' :
-      tw.status === 'OVERLOADED' ? 'rose' : 'amber';
-    const sidecarData: QuickLookData = {
-      id: tw.teacherId,
-      type: 'teacher',
-      title: tw.teacherName,
-      subtitle: `${statusLabel} · ${tw.hoursPerWeek} soat/hafta (${Math.round(tw.utilization * 100)}% bandlik)`,
-      badge: {
-        text: statusLabel,
-        tone,
-      },
-      avatar: {
-        text: getInitials(tw.teacherName),
-        color: '#2563EB',
-      },
-      metrics: [
-        { label: 'Yuklama', value: `${Math.round(tw.utilization * 100)}%` },
-        { label: 'Haftalik soat', value: `${tw.hoursPerWeek} soat` },
-        { label: 'Guruhlar', value: String(tw.groupsCount) },
-        { label: 'O\'quvchilar', value: String(tw.studentsCount) },
-      ],
-      details: [
-        { label: 'O\'qituvchi ID', value: tw.teacherId, copyable: true },
-        { label: 'F.I.Sh.', value: tw.teacherName },
-        { label: 'Maksimal quvvat', value: `${tw.capacityHours} soat` },
-        { label: 'O\'rtacha baho', value: `${tw.avgGrade ?? 86} ball` },
-        { label: 'Retention (Saqlash)', value: `${tw.retentionRate ?? 92}%` },
-        { label: 'Davomat', value: `${tw.attendanceRate ?? 88}%` },
-      ],
-    };
-    openSidecar(sidecarData);
-  };
+  const handleOpenTeacherWorkloadSidecar = useCallback(
+    (tw: TeacherWorkload) => {
+      const statusLabel =
+        tw.status === 'BALANCED'
+          ? t('teacherWorkload.balanced', 'Muvozanatda')
+          : tw.status === 'OVERLOADED'
+            ? t('teacherWorkload.overloaded', "Ortiqcha yuklama")
+            : t('teacherWorkload.underutilized', 'Kam yuklama');
+      const tone =
+        tw.status === 'BALANCED' ? 'emerald' :
+        tw.status === 'OVERLOADED' ? 'rose' : 'amber';
+
+      const sidecarData: QuickLookData = {
+        id: tw.teacherId,
+        type: 'teacher',
+        title: tw.teacherName,
+        subtitle: `${statusLabel} · ${tw.hoursPerWeek} soat/hafta (${Math.round(tw.utilization * 100)}% bandlik)`,
+        badge: {
+          text: statusLabel,
+          tone,
+        },
+        avatar: {
+          text: getInitials(tw.teacherName),
+          color: '#2563EB',
+        },
+        metrics: [
+          { label: 'Yuklama', value: `${Math.round(tw.utilization * 100)}%` },
+          { label: 'Haftalik soat', value: `${tw.hoursPerWeek} soat` },
+          { label: 'Guruhlar', value: String(tw.groupsCount) },
+          { label: "O'quvchilar", value: String(tw.studentsCount) },
+        ],
+        details: [
+          { label: "O'qituvchi ID", value: tw.teacherId, copyable: true },
+          { label: 'F.I.Sh.', value: tw.teacherName },
+          { label: 'Maksimal quvvat', value: `${tw.capacityHours} soat` },
+          { label: "O'rtacha baho", value: `${tw.avgGrade ?? 86} ball` },
+          { label: 'Retention (Saqlash)', value: `${tw.retentionRate ?? 92}%` },
+          { label: 'Davomat', value: `${tw.attendanceRate ?? 88}%` },
+        ],
+      };
+      openSidecar(sidecarData);
+    },
+    [t],
+  );
 
   useListKeyboardNavigation<TeacherWorkload>({
     items: teachers,
     getItemId: (tw) => tw.teacherId,
     rowIdPrefix: 'teacher-workload-',
-    onSelect: (tw) => { playTick(); handleOpenTeacherWorkloadSidecar(tw); },
-    onQuickLook: (tw) => { playTick(); handleOpenTeacherWorkloadSidecar(tw); },
+    onSelect: (tw) => {
+      playTick();
+      handleOpenTeacherWorkloadSidecar(tw);
+    },
+    onQuickLook: (tw) => {
+      playTick();
+      handleOpenTeacherWorkloadSidecar(tw);
+    },
   });
-  const summary = summaryQuery.data;
 
+  const summary = summaryQuery.data;
   const avgUtilPercent = Math.round((summary?.avgUtilization ?? 0) * 100);
 
   return (
@@ -1007,125 +1177,108 @@ export function TeacherWorkloadPage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="relative page-container space-y-5"
+      className="relative page-container space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
-      <AmbientOrbs />
+      <AuroraBackdrop />
 
-      {/* ============================================================
-          HERO HEADER
-      ============================================================ */}
+      {/* ═══ HERO HEADER ═══ */}
       <motion.div variants={cardVariants}>
         <div
-          className="liquid-glass-surface relative overflow-hidden rounded-2xl p-6 sm:p-7"
-          style={{
-            boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 30px -18px rgba(0,0,0,0.12)',
-          }}
+          className="liquid-glass-surface relative overflow-hidden rounded-3xl border border-black/[0.08] dark:border-white/[0.12] bg-white/80 dark:bg-surface-900/80 p-6 sm:p-7 shadow-md backdrop-blur-2xl"
         >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
           <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-24"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-            }}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10"
           />
+
           <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
             {/* Gradient workload tile */}
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, rotate: -6 }}
+              initial={{ scale: 0.9, opacity: 0, rotate: -4 }}
               animate={{ scale: 1, opacity: 1, rotate: 0 }}
               transition={SPRING.smooth}
-              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
+              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg"
               style={{
                 background: 'linear-gradient(135deg, #2563EB 0%, #6366F1 100%)',
-                boxShadow:
-                  '0 12px 28px -10px rgba(37,99,235,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
+                boxShadow: '0 12px 28px -10px rgba(37,99,235,0.45), inset 0 2px 0 rgba(255,255,255,0.35)',
               }}
             >
               <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0 rounded-2xl"
-                style={{
-                  background:
-                    'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
-                }}
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/40 to-transparent"
               />
-              <Icon paths={I.gauge} size={28} strokeWidth={2} className="relative" />
+              <Icon paths={I.gauge} size={28} strokeWidth={2.2} className="relative" />
             </motion.div>
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 px-2.5 py-1 text-[10.5px] font-black uppercase tracking-[0.14em] text-blue-600 dark:text-blue-400">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   Workload
                 </span>
                 {(summary?.overloaded ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EF4444]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#EF4444]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2.5 py-1 text-[10.5px] font-black uppercase tracking-[0.14em] text-rose-600 dark:text-rose-400">
                     <span className="relative flex h-1.5 w-1.5">
                       <motion.span
-                        className="absolute inset-0 rounded-full bg-[#EF4444]"
-                        animate={{ scale: [1, 2.4, 1], opacity: [0.6, 0, 0.6] }}
+                        className="absolute inset-0 rounded-full bg-rose-500"
+                        animate={{ scale: [1, 2.2, 1], opacity: [0.6, 0, 0.6] }}
                         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
                       />
-                      <span className="relative h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
+                      <span className="relative h-1.5 w-1.5 rounded-full bg-rose-500" />
                     </span>
-                    {summary?.overloaded ?? 0} {t('teacherWorkload.overloaded')}
+                    {summary?.overloaded ?? 0} {t('teacherWorkload.overloaded', 'Ortiqcha')}
                   </span>
                 )}
                 {(summary?.balanced ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
-                    {summary?.balanced ?? 0} {t('teacherWorkload.balanced')}
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-black uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    {summary?.balanced ?? 0} {t('teacherWorkload.balanced', 'Muvozanatda')}
                   </span>
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
-                {t('teacherWorkload.title')}
+              <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
+                {t('teacherWorkload.title', "O'qituvchilar yuklamasi")}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
-                {t('teacherWorkload.subtitle')}
+              <p className="mt-1 text-[13.5px] font-medium text-slate-500 dark:text-slate-400">
+                {t('teacherWorkload.subtitle', "Haftalik o'quv soatlari, quvvat tahlili va maosh ko'rsatkichlari")}
               </p>
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* ============================================================
-          STATS
-      ============================================================ */}
+      {/* ═══ STAT TILES ═══ */}
       <motion.div
         variants={containerVariants}
         className="grid grid-cols-2 gap-3 md:grid-cols-5"
       >
         <StatTile
-          label={t('nav.teachers')}
+          label={t('nav.teachers', "O'qituvchilar")}
           value={summary?.total ?? 0}
           icon={I.users}
           tone="blue"
         />
         <StatTile
-          label={t('teacherWorkload.overloaded')}
+          label={t('teacherWorkload.overloaded', 'Ortiqcha')}
           value={summary?.overloaded ?? 0}
           icon={I.alert}
           tone="red"
         />
         <StatTile
-          label={t('teacherWorkload.balanced')}
+          label={t('teacherWorkload.balanced', 'Muvozanatda')}
           value={summary?.balanced ?? 0}
           icon={I.checkCircle}
           tone="green"
         />
         <StatTile
-          label={t('teacherWorkload.underutilized')}
+          label={t('teacherWorkload.underutilized', 'Kam yuklama')}
           value={summary?.underutilized ?? 0}
           icon={I.pause}
           tone="orange"
         />
         <StatTile
-          label={t('teacherWorkload.avgUtilization')}
+          label={t('teacherWorkload.avgUtilization', "O'rtacha bandlik")}
           value={avgUtilPercent}
           icon={I.gauge}
           tone="purple"
@@ -1133,31 +1286,25 @@ export function TeacherWorkloadPage() {
         />
       </motion.div>
 
-      {/* ============================================================
-          SMART PAYROLL & KPI CALCULATOR
-      ============================================================ */}
+      {/* ═══ SMART PAYROLL & KPI CALCULATOR ═══ */}
       <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ ...SPRING.smooth, delay: 0.12 }}
+        transition={{ ...SPRING.smooth, delay: 0.1 }}
       >
         <SmartPayrollCalculator teachers={teachers} />
       </motion.div>
 
-      {/* ============================================================
-          MODEL LEGEND
-      ============================================================ */}
+      {/* ═══ MODEL LEGEND ═══ */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ ...SPRING.smooth, delay: 0.15 }}
+        transition={{ ...SPRING.smooth, delay: 0.12 }}
       >
         <ModelLegend />
       </motion.div>
 
-      {/* ============================================================
-          WORKLOAD LIST
-      ============================================================ */}
+      {/* ═══ WORKLOAD LIST ═══ */}
       <GlassCard className="overflow-hidden">
         <AnimatePresence mode="wait">
           {teachersQuery.isLoading ? (
@@ -1205,8 +1352,8 @@ export function TeacherWorkloadPage() {
               className="p-8"
             >
               <GlassEmptyState
-                title={t('teacherWorkload.emptyTitle')}
-                message={t('teacherWorkload.emptyMessage')}
+                title={t('teacherWorkload.emptyTitle', "O'qituvchilar topilmadi")}
+                message={t('teacherWorkload.emptyMessage', "Hozircha yuklama qayd qilingan o'qituvchilar mavjud emas")}
               />
             </motion.div>
           ) : (
@@ -1218,7 +1365,12 @@ export function TeacherWorkloadPage() {
               className="m-0 list-none p-0"
             >
               {teachers.map((teacher, idx) => (
-                <WorkloadRow key={teacher.teacherId} teacher={teacher} index={idx} onSidecar={handleOpenTeacherWorkloadSidecar} />
+                <WorkloadRow
+                  key={teacher.teacherId}
+                  teacher={teacher}
+                  index={idx}
+                  onSidecar={handleOpenTeacherWorkloadSidecar}
+                />
               ))}
             </motion.ul>
           )}
@@ -1227,3 +1379,5 @@ export function TeacherWorkloadPage() {
     </motion.div>
   );
 }
+
+export default TeacherWorkloadPage;

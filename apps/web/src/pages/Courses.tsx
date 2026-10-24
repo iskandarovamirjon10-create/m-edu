@@ -1,15 +1,16 @@
 /**
- * M-EDU CoursesPage — Apple Design Award Edition
+ * M-EDU CoursesPage — Apple visionOS & macOS Sequoia Specular Edition
  *
  * Premium craft:
- *  - Hero section with animated icon + stats inline
- *  - Stats bar (Total, Active, Avg Price, Levels) with CountUp
- *  - Segmented filter (All / Active / by Level) + search
- *  - Premium course cards with gradient icon tiles
- *  - Custom SVG icons in SF Symbols proportions
- *  - Shimmer skeletons (not pulse)
- *  - Tone-aware colors + spring physics
- *  - Premium modal with section headers + validation inline
+ *  - Unified Hero atelier with specular meniscus highlights & inline KPI stats
+ *  - Stat ribbon (Total, Active, Avg Tuition, Levels) with CountUp ease-out
+ *  - Dual View Atelier: Apple Gallery Mode (Cards) <-> High-Density Specular Table Mode
+ *  - Segmented level & status filters with smooth horizontal mobile scrolling
+ *  - WCAG 2.2 AA compliant touch targets (all buttons, actions, checkboxes >= 44x44px)
+ *  - Trilingual resilience with useSafeI18n (UZ, RU, EN)
+ *  - macOS Split-View QuickLook Sidecar integration
+ *  - Bulk Action Island for batch toggling & CSV export
+ *  - Zero-leak React Query caching & optimistic-ready mutations
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef, forwardRef } from 'react';
@@ -17,7 +18,6 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
-  GlassPageHeader,
   GlassCard,
   GlassErrorState,
   GlassEmptyState,
@@ -38,11 +38,11 @@ import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Course, CourseLevel } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { queryKeys } from '@/lib/query-keys.factory';
 
 /* ============================================================================
- * MOTION TOKENS
+ * MOTION TOKENS (Apple Spatial Spring Physics)
  * ========================================================================== */
 
 const SPRING = {
@@ -53,26 +53,27 @@ const SPRING = {
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.06 } },
+  visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.04 } },
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 14 },
+  hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -8 },
+  hidden: { opacity: 0, x: -6 },
   visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
- * TYPES
+ * TYPES & CONSTANTS
  * ========================================================================== */
 
 const COURSE_LEVELS: CourseLevel[] = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'];
 
 type LevelFilter = 'ALL' | 'ACTIVE' | CourseLevel;
+type ViewMode = 'gallery' | 'table';
 
 interface CourseFormState {
   name: string;
@@ -91,10 +92,10 @@ const INITIAL_FORM: CourseFormState = {
 };
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * ICONS (SF Symbols proportions)
  * ========================================================================== */
 
-const ICON_STROKE = 1.75;
+const ICON_STROKE = 1.85;
 
 const I = {
   book: [
@@ -125,7 +126,6 @@ const I = {
     'M21 21l-4.35-4.35',
     'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z',
   ],
-  filter: ['M22 3H2l8 9.46V19l4 2v-8.54L22 3z'],
   clock: [
     'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
     'M12 6v6l4 2',
@@ -150,10 +150,6 @@ const I = {
   ],
   check: ['M20 6 9 17l-5-5'],
   x: ['M18 6 6 18', 'M6 6l12 12'],
-  alertCircle: [
-    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
-    'M12 8v4', 'M12 16h.01',
-  ],
   zap: ['M13 2 3 14h9l-1 8 10-12h-9l1-8z'],
   trendingUp: [
     'M22 7 13.5 15.5 8.5 10.5 2 17',
@@ -162,6 +158,20 @@ const I = {
   graduationCap: [
     'M22 10 12 5 2 10l10 5 10-5z',
     'M6 12v5c3 3 9 3 12 0v-5',
+  ],
+  grid: [
+    'M3 3h7v7H3z',
+    'M14 3h7v7h-7z',
+    'M14 14h7v7h-7z',
+    'M3 14h7v7H3z',
+  ],
+  list: [
+    'M8 6h13',
+    'M8 12h13',
+    'M8 18h13',
+    'M3 6h.01',
+    'M3 12h.01',
+    'M3 18h.01',
   ],
 };
 
@@ -172,10 +182,17 @@ function Icon({
 } & React.SVGProps<SVGSVGElement>) {
   return (
     <svg
-      width={size} height={size} viewBox="0 0 24 24"
-      fill="none" stroke="currentColor"
-      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
-      className={className} aria-hidden {...rest}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+      {...rest}
     >
       {paths.map((d, i) => <path key={i} d={d} />)}
     </svg>
@@ -205,7 +222,7 @@ const LEVEL_TONE: Record<CourseLevel, Tone> = {
 };
 
 /* ============================================================================
- * HELPERS
+ * EXPORTED PURE HELPERS (Tested by pageFormatters.test.ts)
  * ========================================================================== */
 
 export function formatCourseLevel(level: string | null | undefined): string {
@@ -260,7 +277,7 @@ function courseGradient(name: string): string {
 }
 
 /* ============================================================================
- * SUB-COMPONENTS
+ * COUNT-UP & SHIMMER SKELETON
  * ========================================================================== */
 
 function CountUp({
@@ -289,16 +306,16 @@ function CountUp({
   return <span className="tabular-nums">{prefix}{shown}{suffix}</span>;
 }
 
-function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
+function Shimmer({ className = '', radius = '1rem' }: { className?: string; radius?: string }) {
   return (
     <div
-      className={`relative overflow-hidden bg-[#E5E5EA]/60 dark:bg-[#2C2C2E]/60 ${className}`}
+      className={`relative overflow-hidden bg-black/[0.04] dark:bg-white/[0.04] ${className}`}
       style={{ borderRadius: radius }}
     >
       <motion.div
         className="absolute inset-0"
         style={{
-          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.65) 50%, transparent 100%)',
+          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.45) 50%, transparent 100%)',
         }}
         animate={{ x: ['-100%', '100%'] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
@@ -309,18 +326,22 @@ function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; r
 
 function CoursesSkeleton() {
   return (
-    <div className="space-y-5">
-      <Shimmer className="h-40 w-full" radius="2rem" />
+    <div className="space-y-5 animate-pulse">
+      <Shimmer className="h-44 w-full" radius="1.75rem" />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[68px]" radius="1rem" />)}
+        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-20" radius="1.25rem" />)}
       </div>
-      <Shimmer className="h-16" radius="1rem" />
-      <div className="space-y-2">
-        {[1, 2, 3, 4, 5].map((i) => <Shimmer key={i} className="h-16" radius="1rem" />)}
+      <Shimmer className="h-14 w-full" radius="1.25rem" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => <Shimmer key={i} className="h-48" radius="1.5rem" />)}
       </div>
     </div>
   );
 }
+
+/* ============================================================================
+ * STAT TILE
+ * ========================================================================== */
 
 function StatTile({
   label, value, icon, tone = 'blue',
@@ -337,29 +358,33 @@ function StatTile({
       variants={rowVariants}
       whileHover={{ y: -2 }}
       transition={SPRING.smooth}
-      className="group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card hover:shadow-card-hover transition-all"
+      className="group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm hover:shadow-md transition-all"
     >
       <div
-        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
         style={{
           background: c.bg,
           color: c.fg,
-          border: `1px solid ${c.fg}22`,
+          border: `1px solid ${c.fg}28`,
         }}
       >
-        <Icon paths={icon} size={18} strokeWidth={2.2} className="relative" />
+        <Icon paths={icon} size={20} strokeWidth={2.2} className="relative" />
       </div>
       <div className="relative min-w-0 flex-1">
         <div className="text-[20px] font-bold tracking-tight text-[var(--text-primary)] font-display">
           {typeof value === 'number' ? <CountUp value={value} /> : value}
         </div>
-        <div className="mt-0.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)] truncate">
+        <div className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)] truncate">
           {label}
         </div>
       </div>
     </motion.div>
   );
 }
+
+/* ============================================================================
+ * SEGMENTED FILTER
+ * ========================================================================== */
 
 function SegmentedFilter({
   value, onChange, options, counts,
@@ -370,59 +395,64 @@ function SegmentedFilter({
   counts: Record<LevelFilter, number>;
 }) {
   return (
-    <div
-      className="inline-flex flex-wrap gap-1 rounded-2xl border border-black/[0.06] bg-black/[0.04] p-1 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.06]"
-    >
-      {options.map((opt) => {
-        const active = value === opt.key;
-        const c = TONE[opt.tone];
-        const count = counts[opt.key] ?? 0;
+    <div className="flex items-center overflow-x-auto no-scrollbar py-0.5 max-w-full">
+      <div className="inline-flex shrink-0 items-center gap-1 rounded-2xl border border-black/[0.06] bg-black/[0.04] p-1.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.06]">
+        {options.map((opt) => {
+          const active = value === opt.key;
+          const c = TONE[opt.tone];
+          const count = counts[opt.key] ?? 0;
 
-        return (
-          <motion.button
-            key={opt.key}
-            type="button"
-            onClick={() => onChange(opt.key)}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            transition={SPRING.snappy}
-            className={`relative flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold outline-none transition-all ${
-              active
-                ? 'bg-white text-[var(--text-primary)] shadow-sm dark:bg-surface-800'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-            style={{
-              color: active ? c.fg : undefined,
-            }}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e: any) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                e.currentTarget.click();
-              }
-            }}>
-            <Icon paths={opt.icon} size={12} strokeWidth={2.2} />
-            <span className="tracking-tight">{opt.label}</span>
-            {count > 0 && (
-              <span
-                className="ml-0.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold tabular-nums"
-                style={{
-                  background: active ? `${c.fg}22` : 'rgba(142,142,147,0.15)',
-                  color: active ? c.fg : 'inherit',
-                }}
-              >
-                {count}
-              </span>
-            )}
-          </motion.button>
-        );
-      })}
+          return (
+            <motion.button
+              key={opt.key}
+              type="button"
+              onClick={() => onChange(opt.key)}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              transition={SPRING.snappy}
+              className={`relative flex min-h-[44px] items-center gap-2 rounded-xl px-3.5 py-2 text-[12.5px] font-semibold outline-none transition-all ${
+                active
+                  ? 'bg-white text-[var(--text-primary)] shadow-sm dark:bg-surface-800'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+              style={{
+                color: active ? c.fg : undefined,
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.currentTarget.click();
+                }
+              }}
+            >
+              <Icon paths={opt.icon} size={14} strokeWidth={2.2} />
+              <span className="tracking-tight whitespace-nowrap">{opt.label}</span>
+              {count > 0 && (
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
+                  style={{
+                    background: active ? `${c.fg}22` : 'rgba(142,142,147,0.18)',
+                    color: active ? c.fg : 'inherit',
+                  }}
+                >
+                  {count}
+                </span>
+              )}
+            </motion.button>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-const CourseRow = forwardRef<HTMLDivElement, {
+/* ============================================================================
+ * COURSE CARD (Gallery Mode)
+ * ========================================================================== */
+
+const CourseCard = forwardRef<HTMLDivElement, {
   course: Course;
   onEdit: (c: Course) => void;
   onDelete: (id: string) => void;
@@ -430,10 +460,199 @@ const CourseRow = forwardRef<HTMLDivElement, {
   isFocused?: boolean;
   onToggleSelect?: () => void;
   onOpenSidecar?: () => void;
-}>(function CourseRow({
+}>(function CourseCard({
   course, onEdit, onDelete, isSelected, isFocused, onToggleSelect, onOpenSidecar,
 }, ref) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
+  const level = course.level as CourseLevel | null | undefined;
+  const normalizedLevel = (level || '').toUpperCase() as CourseLevel;
+  const tone: Tone = LEVEL_TONE[normalizedLevel] || 'slate';
+  const c = TONE[tone] || TONE.slate;
+
+  return (
+    <motion.div
+      ref={ref}
+      id={`course-row-${course.id}`}
+      layout
+      variants={cardVariants}
+      whileHover={{ y: -3 }}
+      transition={SPRING.snappy}
+      onClick={onOpenSidecar}
+      className={`group relative flex flex-col justify-between overflow-hidden rounded-2xl border p-4.5 transition-all cursor-pointer backdrop-blur-xl ${
+        isSelected
+          ? 'border-[#007AFF] bg-brand-500/[0.08] ring-1 ring-[#007AFF]/40 shadow-md'
+          : isFocused
+          ? 'border-[#007AFF]/70 bg-brand-500/[0.05] ring-1 ring-[#007AFF]/30'
+          : 'border-black/[0.06] bg-white/80 dark:border-white/[0.08] dark:bg-surface-900/80 hover:border-black/[0.14] dark:hover:border-white/[0.16] shadow-sm hover:shadow-card'
+      }`}
+    >
+      {/* Top row: Checkbox, Squircle Icon, and Level & Status */}
+      <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {/* Selection Checkbox with 44x44px touch area */}
+            {onToggleSelect && (
+              <div
+                className="flex h-11 w-11 -ml-2 -mt-2 shrink-0 items-center justify-center cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect();
+                }}
+              >
+                <div
+                  className={`flex h-5 w-5 items-center justify-center rounded-md border transition-all ${
+                    isSelected
+                      ? 'border-[#007AFF] bg-[#007AFF] text-white shadow-sm'
+                      : 'border-black/25 dark:border-white/25 bg-white/70 dark:bg-surface-800/70 hover:border-black/50 dark:hover:border-white/50'
+                  }`}
+                  aria-label={t('courses.selectRowAria', { name: course.name })}
+                >
+                  {isSelected && (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Squircle Avatar */}
+            <div
+              className="relative flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl font-bold text-white shadow-[0_6px_16px_rgba(0,0,0,0.12)] ring-1 ring-white/20"
+              style={{ background: courseGradient(course.name) }}
+            >
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 rounded-2xl"
+                style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)' }}
+              />
+              <span className="relative text-[14px] font-bold tracking-tight font-display">
+                {getInitials(course.name)}
+              </span>
+            </div>
+          </div>
+
+          {/* Status Badge */}
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-semibold tabular-nums border ${
+              course.isActive
+                ? 'bg-[#34C759]/12 text-[#28A745] dark:text-[#34C759] border-[#34C759]/25'
+                : 'bg-black/[0.04] dark:bg-white/[0.06] text-[var(--text-tertiary)] border-black/[0.05] dark:border-white/[0.06]'
+            }`}
+          >
+            {course.isActive && <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] animate-pulse" />}
+            {course.isActive ? t('common.active') : t('common.inactive')}
+          </span>
+        </div>
+
+        {/* Course Title and Description */}
+        <div className="mt-3.5">
+          <h3 className="text-[15px] font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[#007AFF] transition-colors line-clamp-1">
+            {course.name}
+          </h3>
+          <p className="mt-1 line-clamp-2 text-[12.5px] font-normal leading-relaxed text-[var(--text-secondary)] min-h-[36px]">
+            {course.description || t('courses.sidecar.noDescription')}
+          </p>
+        </div>
+
+        {/* Metadata Chips: Level, Duration, Monthly Price */}
+        <div className="mt-3.5 flex flex-wrap items-center gap-2 text-[11.5px] font-medium text-[var(--text-tertiary)]">
+          {course.level && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+              style={{
+                background: c.bg,
+                color: c.fg,
+                border: `1px solid ${c.fg}33`,
+              }}
+            >
+              <Icon paths={I.award} size={10} strokeWidth={2.5} />
+              {t(`courses.level.${course.level}`, formatCourseLevel(course.level as CourseLevel))}
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.03] dark:bg-white/[0.05] px-2.5 py-0.5 text-[11px] font-medium text-[var(--text-secondary)]">
+            <Icon paths={I.clock} size={11} strokeWidth={2} className="opacity-70" />
+            {course.duration} {course.duration === 1 ? t('courses.unit.month') : t('courses.unit.months')}
+          </span>
+        </div>
+      </div>
+
+      {/* Bottom Footer: Price & Accessible Action Buttons */}
+      <div
+        className="mt-4 flex items-center justify-between border-t border-black/[0.05] dark:border-white/[0.05] pt-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex flex-col">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-[var(--text-tertiary)]">
+            {t('courses.form.priceLabel')}
+          </span>
+          <span className="text-[14.5px] font-bold tabular-nums text-[#34C759] dark:text-[#30D158]">
+            {formatCurrency(course.price)}
+          </span>
+        </div>
+
+        {/* Actions with WCAG >= 44x44px Hitboxes */}
+        <div className="flex items-center gap-1">
+          <motion.button
+            type="button"
+            onClick={() => onOpenSidecar?.()}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={SPRING.snappy}
+            aria-label={t('courses.sidecar.dossier')}
+            title={t('courses.sidecar.toggleAria')}
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-brand-500/40 transition-colors text-xs font-bold"
+          >
+            <span>◨</span>
+          </motion.button>
+
+          <motion.button
+            type="button"
+            onClick={() => onEdit(course)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={SPRING.snappy}
+            aria-label={t('common.edit')}
+            title={t('courses.editCourse')}
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-[#007AFF]/30 transition-colors"
+          >
+            <Icon paths={I.edit} size={15} strokeWidth={2} />
+          </motion.button>
+
+          <motion.button
+            type="button"
+            onClick={() => onDelete(course.id)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={SPRING.snappy}
+            aria-label={t('common.delete')}
+            title={t('courses.deleteCourse')}
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/20 transition-colors"
+          >
+            <Icon paths={I.trash} size={15} strokeWidth={2} />
+          </motion.button>
+        </div>
+      </div>
+    </motion.div>
+  );
+});
+
+/* ============================================================================
+ * COURSE TABLE ROW (Table Mode)
+ * ========================================================================== */
+
+const CourseTableRow = forwardRef<HTMLDivElement, {
+  course: Course;
+  onEdit: (c: Course) => void;
+  onDelete: (id: string) => void;
+  isSelected?: boolean;
+  isFocused?: boolean;
+  onToggleSelect?: () => void;
+  onOpenSidecar?: () => void;
+}>(function CourseTableRow({
+  course, onEdit, onDelete, isSelected, isFocused, onToggleSelect, onOpenSidecar,
+}, ref) {
+  const { t } = useSafeI18n();
   const level = course.level as CourseLevel | null | undefined;
   const normalizedLevel = (level || '').toUpperCase() as CourseLevel;
   const tone: Tone = LEVEL_TONE[normalizedLevel] || 'slate';
@@ -445,120 +664,117 @@ const CourseRow = forwardRef<HTMLDivElement, {
       id={`course-row-${course.id}`}
       layout
       variants={rowVariants}
-      whileHover={{ y: -2 }}
+      whileHover={{ y: -1 }}
       transition={SPRING.snappy}
       onClick={onOpenSidecar}
-      className={`group relative flex flex-col gap-3 rounded-2xl border p-3.5 transition-all cursor-pointer ${
+      className={`group relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border p-3.5 transition-all cursor-pointer backdrop-blur-xl ${
         isSelected
           ? 'border-[#007AFF] bg-brand-500/[0.08] ring-1 ring-[#007AFF]/30'
           : isFocused
           ? 'border-[#007AFF]/60 bg-brand-500/[0.05] ring-1 ring-[#007AFF]/30'
-          : 'border-black/[0.06] bg-white/80 dark:border-white/[0.08] dark:bg-surface-900/80 hover:border-black/[0.12] dark:hover:border-white/[0.15] hover:shadow-card shadow-sm backdrop-blur-xl'
-      } sm:flex-row sm:items-center`}
+          : 'border-black/[0.06] bg-white/80 dark:border-white/[0.08] dark:bg-surface-900/80 hover:border-black/[0.12] dark:hover:border-white/[0.15] hover:shadow-sm'
+      }`}
     >
-      {/* Selection Checkbox */}
-      {onToggleSelect && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSelect();
-          }}
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
-            isSelected
-              ? 'border-[#007AFF] bg-[#007AFF] text-white'
-              : 'border-black/20 dark:border-white/20 bg-white/50 dark:bg-surface-800/50 hover:border-black/40 dark:hover:border-white/40'
-          }`}
-          aria-label={`Tanlash ${course.name}`}
-        >
-          {isSelected && (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-          )}
-        </button>
-      )}
-
-      {/* Course avatar squircle */}
-      <div
-        className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-bold text-white shadow-[0_4px_14px_rgba(0,0,0,0.12)] ring-1 ring-white/20"
-        style={{
-          background: courseGradient(course.name),
-        }}
-      >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-2xl"
-          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent 55%)' }}
-        />
-        <span className="relative text-[13px] font-bold tracking-tight">{getInitials(course.name)}</span>
-      </div>
-
-      {/* Content */}
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="truncate text-[14px] font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[#007AFF] transition-colors">
-            {course.name}
-          </h3>
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums border ${
-              course.isActive
-                ? 'bg-[#34C759]/10 text-[#28A745] dark:text-[#34C759] border-[#34C759]/20'
-                : 'bg-black/[0.04] dark:bg-white/[0.06] text-[var(--text-tertiary)] border-black/[0.04] dark:border-white/[0.06]'
-            }`}
+      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+        {/* Checkbox with 44x44px tap zone */}
+        {onToggleSelect && (
+          <div
+            className="flex h-11 w-11 shrink-0 items-center justify-center cursor-pointer -ml-2"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect();
+            }}
           >
-            {course.isActive && <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] animate-pulse" />}
-            {course.isActive ? t('common.active') : t('common.inactive')}
-          </span>
-        </div>
-
-        {course.description && (
-          <p className="mt-0.5 line-clamp-1 text-[12px] font-normal text-[var(--text-secondary)]">
-            {course.description}
-          </p>
+            <div
+              className={`flex h-5 w-5 items-center justify-center rounded-md border transition-all ${
+                isSelected
+                  ? 'border-[#007AFF] bg-[#007AFF] text-white'
+                  : 'border-black/25 dark:border-white/25 bg-white/50 dark:bg-surface-800/50'
+              }`}
+              aria-label={t('courses.selectRowAria', { name: course.name })}
+            >
+              {isSelected && (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              )}
+            </div>
+          </div>
         )}
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11.5px] font-medium text-[var(--text-tertiary)]">
-          {/* Level chip */}
-          {course.level && (
+        {/* Avatar Squircle */}
+        <div
+          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-bold text-white shadow-sm ring-1 ring-white/20"
+          style={{ background: courseGradient(course.name) }}
+        >
+          <span className="relative text-[12px] font-bold tracking-tight font-display">
+            {getInitials(course.name)}
+          </span>
+        </div>
+
+        {/* Info */}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-[14px] font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[#007AFF] transition-colors">
+              {course.name}
+            </h3>
             <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-              style={{
-                background: c.bg,
-                color: c.fg,
-                border: `1px solid ${c.fg}33`,
-              }}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums border ${
+                course.isActive
+                  ? 'bg-[#34C759]/10 text-[#28A745] dark:text-[#34C759] border-[#34C759]/20'
+                  : 'bg-black/[0.04] dark:bg-white/[0.06] text-[var(--text-tertiary)] border-black/[0.04] dark:border-white/[0.06]'
+              }`}
             >
-              <Icon paths={I.award} size={9} strokeWidth={2.5} />
-              {formatCourseLevel(course.level as CourseLevel)}
+              {course.isActive && <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] animate-pulse" />}
+              {course.isActive ? t('common.active') : t('common.inactive')}
             </span>
+          </div>
+          {course.description && (
+            <p className="mt-0.5 line-clamp-1 text-[12px] font-normal text-[var(--text-secondary)]">
+              {course.description}
+            </p>
           )}
-          <span className="inline-flex items-center gap-1">
-            <Icon paths={I.clock} size={11} strokeWidth={2} className="opacity-70" />
-            {course.duration} {course.duration === 1 ? 'month' : 'months'}
-          </span>
-          <span className="inline-flex items-center gap-1 font-bold tabular-nums text-[#34C759] dark:text-[#30D158]">
-            <Icon paths={I.creditCard} size={11} strokeWidth={2.2} />
-            {formatCurrency(course.price)}
-          </span>
         </div>
       </div>
 
-      {/* Actions */}
+      {/* Middle Specs */}
+      <div className="flex flex-wrap items-center gap-3 sm:gap-5 text-[12px] font-medium text-[var(--text-tertiary)] pl-14 sm:pl-0">
+        {course.level && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+            style={{
+              background: c.bg,
+              color: c.fg,
+              border: `1px solid ${c.fg}33`,
+            }}
+          >
+            <Icon paths={I.award} size={10} strokeWidth={2.5} />
+            {t(`courses.level.${course.level}`, formatCourseLevel(course.level as CourseLevel))}
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1 text-[11.5px] text-[var(--text-secondary)]">
+          <Icon paths={I.clock} size={12} strokeWidth={2} className="opacity-70" />
+          {course.duration} {course.duration === 1 ? t('courses.unit.month') : t('courses.unit.months')}
+        </span>
+        <span className="font-bold tabular-nums text-[#34C759] dark:text-[#30D158]">
+          {formatCurrency(course.price)}
+        </span>
+      </div>
+
+      {/* Actions (44x44px touch targets) */}
       <div
-        className="flex shrink-0 items-center justify-end sm:justify-start w-full sm:w-auto gap-1.5 pt-1.5 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0"
+        className="flex shrink-0 items-center justify-end gap-1 pt-1.5 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Sidecar Inspector Toggle */}
         <motion.button
           type="button"
           onClick={() => onOpenSidecar?.()}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           transition={SPRING.snappy}
-          aria-label="Course Dossier"
-          title="Sidecar tafsilotlari (Split-View · Space)"
-          className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-brand-500/40 transition-colors text-xs font-bold"
+          aria-label={t('courses.sidecar.dossier')}
+          title={t('courses.sidecar.toggleAria')}
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-brand-500/40 transition-colors text-xs font-bold"
         >
           <span>◨</span>
         </motion.button>
@@ -566,40 +782,27 @@ const CourseRow = forwardRef<HTMLDivElement, {
         <motion.button
           type="button"
           onClick={() => onEdit(course)}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           transition={SPRING.snappy}
           aria-label={t('common.edit')}
           title={t('courses.editCourse')}
-          className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-[#007AFF]/30 transition-colors"
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e: any) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              e.currentTarget.click();
-            }
-          }}>
-          <Icon paths={I.edit} size={13} strokeWidth={2} />
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-[#007AFF]/30 transition-colors"
+        >
+          <Icon paths={I.edit} size={14} strokeWidth={2} />
         </motion.button>
+
         <motion.button
           type="button"
           onClick={() => onDelete(course.id)}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           transition={SPRING.snappy}
           aria-label={t('common.delete')}
           title={t('courses.deleteCourse')}
-          className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/15 transition-colors"
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e: any) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              e.currentTarget.click();
-            }
-          }}>
-          <Icon paths={I.trash} size={13} strokeWidth={2} />
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/20 transition-colors"
+        >
+          <Icon paths={I.trash} size={14} strokeWidth={2} />
         </motion.button>
       </div>
     </motion.div>
@@ -607,11 +810,11 @@ const CourseRow = forwardRef<HTMLDivElement, {
 });
 
 /* ============================================================================
- * MAIN PAGE
+ * MAIN COURSES PAGE COMPONENT
  * ========================================================================== */
 
 export function CoursesPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('courses.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
@@ -621,6 +824,25 @@ export function CoursesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
+  // View mode
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    try {
+      const saved = localStorage.getItem('medu_courses_view_mode');
+      return saved === 'table' ? 'table' : 'gallery';
+    } catch {
+      return 'gallery';
+    }
+  });
+
+  const handleSetViewMode = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('medu_courses_view_mode', mode);
+    } catch {
+      // noop
+    }
+  }, []);
+
   // Filter + search
   const [searchParams] = useSearchParams();
   const [filter, setFilter] = useState<LevelFilter>('ALL');
@@ -628,9 +850,7 @@ export function CoursesPage() {
 
   // Form state
   const [form, setForm] = useState<CourseFormState>(INITIAL_FORM);
-  const [formErrors, setFormErrors] = useState<
-    Partial<Record<keyof CourseFormState, string>>
-  >({});
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof CourseFormState, string>>>({});
 
   const courses = useQuery({
     queryKey: queryKeys.courses.all(),
@@ -641,9 +861,7 @@ export function CoursesPage() {
   const data = courses.data as Paginated<Course> | undefined;
   const courseList = useMemo(() => data?.items || [], [data]);
 
-  /* ---------------------------------------------------------------
-     STATS
-  --------------------------------------------------------------- */
+  /* ── Stats Ribbon ─────────────────────────────────────────────────── */
   const stats = useMemo(() => {
     const total = courseList.length;
     const active = courseList.filter((c) => c.isActive).length;
@@ -653,9 +871,7 @@ export function CoursesPage() {
     return { total, active, avgPrice, levels };
   }, [courseList]);
 
-  /* ---------------------------------------------------------------
-     FILTER COUNTS + FILTERED
-  --------------------------------------------------------------- */
+  /* ── Filter Counts & Filtering ─────────────────────────────────────── */
   const counts = useMemo<Record<LevelFilter, number>>(() => {
     const base: Record<LevelFilter, number> = {
       ALL: courseList.length,
@@ -686,19 +902,17 @@ export function CoursesPage() {
 
   const filterOptions = useMemo(
     () => [
-      { key: 'ALL' as LevelFilter,         label: t('common.all'),          icon: I.layers,        tone: 'blue'   as Tone },
-      { key: 'ACTIVE' as LevelFilter,      label: t('common.active'),       icon: I.checkCircle,   tone: 'green'  as Tone },
-      { key: 'BEGINNER' as LevelFilter,    label: 'Beginner',               icon: I.graduationCap, tone: 'green'  as Tone },
-      { key: 'INTERMEDIATE' as LevelFilter, label: 'Intermediate',          icon: I.book,          tone: 'blue'   as Tone },
-      { key: 'ADVANCED' as LevelFilter,    label: 'Advanced',               icon: I.zap,           tone: 'orange' as Tone },
-      { key: 'EXPERT' as LevelFilter,      label: 'Expert',                 icon: I.award,         tone: 'purple' as Tone },
+      { key: 'ALL' as LevelFilter,          label: t('courses.filter.all'),    icon: I.layers,        tone: 'blue'   as Tone },
+      { key: 'ACTIVE' as LevelFilter,       label: t('courses.filter.active'), icon: I.checkCircle,   tone: 'green'  as Tone },
+      { key: 'BEGINNER' as LevelFilter,     label: t('courses.level.BEGINNER'), icon: I.graduationCap, tone: 'green'  as Tone },
+      { key: 'INTERMEDIATE' as LevelFilter, label: t('courses.level.INTERMEDIATE'), icon: I.book,     tone: 'blue'   as Tone },
+      { key: 'ADVANCED' as LevelFilter,     label: t('courses.level.ADVANCED'), icon: I.zap,          tone: 'orange' as Tone },
+      { key: 'EXPERT' as LevelFilter,       label: t('courses.level.EXPERT'),   icon: I.award,        tone: 'purple' as Tone },
     ],
     [t],
   );
 
-  /* ---------------------------------------------------------------
-     MUTATIONS
-  --------------------------------------------------------------- */
+  /* ── Mutations ────────────────────────────────────────────────────── */
   const save = useMutation({
     mutationFn: () => {
       const payload = {
@@ -732,9 +946,7 @@ export function CoursesPage() {
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
-  /* ---------------------------------------------------------------
-     FORM HANDLERS
-  --------------------------------------------------------------- */
+  /* ── Form Handlers ────────────────────────────────────────────────── */
   const validateForm = useCallback((): boolean => {
     const errors: Partial<Record<keyof CourseFormState, string>> = {};
     if (!form.name.trim()) errors.name = t('courses.validation.nameRequired');
@@ -802,53 +1014,54 @@ export function CoursesPage() {
 
   const sound = usePremiumSound();
 
+  /* ── Sidecar QuickLook Dossier ────────────────────────────────────── */
   const handleOpenCourseSidecar = useCallback((course: Course) => {
     sound.playPop();
     const data: QuickLookData = {
       id: course.id,
       type: 'general',
       title: course.name,
-      subtitle: `${course.duration} oylik professional kurs`,
+      subtitle: t('courses.sidecar.subtitle', { duration: course.duration }),
       badge: {
-        text: course.isActive ? "FAOL (ACTIVE)" : "NOFAOL",
+        text: course.isActive ? t('common.active') : t('common.inactive'),
         tone: course.isActive ? 'emerald' : 'slate',
       },
       avatar: {
-        text: course.name.slice(0, 2).toUpperCase(),
-        color: '#2563EB',
+        text: getInitials(course.name),
+        color: '#007AFF',
       },
       metrics: [
         {
-          label: "Oylik narx",
+          label: t('courses.sidecar.monthlyPrice'),
           value: formatCurrency(course.price),
-          subtext: "Standart to'lov",
+          subtext: t('courses.sidecar.standardTuition'),
         },
         {
-          label: "Davomiyligi",
-          value: `${course.duration} oy`,
-          subtext: "O'quv dasturi",
+          label: t('courses.col.duration'),
+          value: `${course.duration} ${course.duration === 1 ? t('courses.unit.month') : t('courses.unit.months')}`,
+          subtext: t('courses.sidecar.curriculumDuration'),
         },
         {
-          label: "Daraja",
-          value: course.level || "Umumiy",
+          label: t('courses.col.level'),
+          value: course.level ? t(`courses.level.${course.level}`, formatCourseLevel(course.level as CourseLevel)) : t('courses.sidecar.generalLevel'),
         },
       ],
       details: [
-        { label: "Kurs nomi", value: course.name, copyable: true },
-        { label: "Narxi", value: formatCurrency(course.price) },
-        { label: "Davomiyligi", value: `${course.duration} oy` },
-        { label: "Darajasi", value: course.level || "Umumiy" },
-        { label: "Tavsifi", value: course.description || "Qo'shimcha tavsif berilmagan." },
+        { label: t('courses.form.name'), value: course.name, copyable: true },
+        { label: t('courses.form.priceLabel'), value: formatCurrency(course.price) },
+        { label: t('courses.col.duration'), value: `${course.duration} ${course.duration === 1 ? t('courses.unit.month') : t('courses.unit.months')}` },
+        { label: t('courses.col.level'), value: course.level ? t(`courses.level.${course.level}`, formatCourseLevel(course.level as CourseLevel)) : t('courses.sidecar.generalLevel') },
+        { label: t('courses.form.description'), value: course.description || t('courses.sidecar.noDescription') },
       ],
       primaryAction: {
-        label: "Tahrirlash",
+        label: t('courses.sidecar.editAction'),
         onExecute: () => handleEdit(course),
       },
     };
     openSidecar(data);
-  }, [sound, handleEdit]);
+  }, [sound, handleEdit, t]);
 
-  /* ── Keyboard Navigation ──────────────────────────────────────────── */
+  /* ── Keyboard Navigation ──────────────────────────────────── */
   const {
     focusedIndex,
     selectedIds,
@@ -867,25 +1080,22 @@ export function CoursesPage() {
 
   /* ── Bulk Actions ─────────────────────────────────────────────────── */
   const handleBatchToggleCourseStatus = async () => {
-    let count = 0;
-    for (const id of selectedIds) {
-      try {
-        const item = filtered.find((c) => c.id === id);
-        if (item) {
-          await coursesApi.update(id, { isActive: !item.isActive });
-          count++;
-        }
-      } catch {
-        // continue
-      }
-    }
+    let successCount = 0;
+    const updates = Array.from(selectedIds).map((id) => {
+      const course = filtered.find((c) => c.id === id);
+      if (!course) return Promise.resolve(null);
+      return coursesApi.update(course.id, { isActive: !course.isActive })
+        .then(() => { successCount++; })
+        .catch(() => null);
+    });
+    await Promise.allSettled(updates);
     qc.invalidateQueries({ queryKey: queryKeys.courses.all() });
     clearSelection();
-    push('success', `${count} ta kurs holati yangilandi`);
+    push('success', t('courses.batch.statusUpdated', { count: successCount }));
   };
 
   const handleExportSelectedCoursesCSV = () => {
-    const selectedRows = filtered.filter((c) => isSelected(c.id));
+    const selectedRows = filtered.filter((c) => selectedIds.has(c.id));
     const csvContent =
       'data:text/csv;charset=utf-8,' +
       ['ID,Name,Price,Duration,Level,IsActive']
@@ -904,31 +1114,29 @@ export function CoursesPage() {
     link.click();
     document.body.removeChild(link);
     clearSelection();
-    push('success', `${selectedRows.length} ta kurs CSV formatida yuklandi`);
+    push('success', t('courses.batch.exportedCsv', { count: selectedRows.length }));
   };
 
-  /* ---------------------------------------------------------------
-     LOADING
-  --------------------------------------------------------------- */
+  /* ───────────────────────────────────────────────────────────────
+     LOADING STATE
+  ─────────────────────────────────────────────────────────────── */
   if (courses.isLoading && !data) {
     return (
       <div style={{ display: 'contents' }}>
-        <div className="page-container space-y-5">
-          <GlassPageHeader title={t('courses.title')} subtitle={t('courses.pageSubtitle')} />
+        <div className="page-container space-y-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           <CoursesSkeleton />
         </div>
       </div>
     );
   }
 
-  /* ---------------------------------------------------------------
-     ERROR
-  --------------------------------------------------------------- */
+  /* ───────────────────────────────────────────────────────────────
+     ERROR STATE
+  ─────────────────────────────────────────────────────────────── */
   if (courses.isError) {
     return (
       <div style={{ display: 'contents' }}>
-        <div className="page-container space-y-5">
-          <GlassPageHeader title={t('courses.title')} subtitle={t('courses.pageSubtitle')} />
+        <div className="page-container space-y-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           <GlassCard className="p-8">
             <GlassErrorState
               title={t('courses.loadFailed')}
@@ -941,73 +1149,72 @@ export function CoursesPage() {
     );
   }
 
-  /* ---------------------------------------------------------------
-     MAIN
-  --------------------------------------------------------------- */
+  /* ───────────────────────────────────────────────────────────────
+     MAIN VIEW
+  ─────────────────────────────────────────────────────────────── */
   return (
     <div style={{ display: 'contents' }}>
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="page-container space-y-5"
+        className="page-container space-y-5 pb-[max(2rem,env(safe-area-inset-bottom))]"
       >
-        <GlassPageHeader
-          title={t('courses.title')}
-          subtitle={t('courses.pageSubtitle')}
-        />
-
-        {/* HERO */}
+        {/* APPLE VISIONOS HERO ATELIER (Unified Header + Stats + Action) */}
         <motion.div variants={cardVariants}>
-          <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-5 sm:p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
-            <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
-              {/* Apple Icon squircle */}
-              <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#007AFF] to-[#5856D6] text-white shadow-[0_8px_20px_rgba(0,122,255,0.25)] ring-1 ring-white/20 sm:h-16 sm:w-16">
-                <Icon paths={I.graduationCap} size={28} strokeWidth={2.2} className="relative z-10" />
+          <div className="relative overflow-hidden rounded-3xl border border-black/[0.08] bg-white/80 p-5 sm:p-6 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+            {/* Subtle specular sheen */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -left-20 -top-20 h-56 w-56 rounded-full bg-gradient-to-br from-[#007AFF]/15 to-transparent blur-3xl"
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -right-20 -bottom-20 h-56 w-56 rounded-full bg-gradient-to-tl from-[#5856D6]/15 to-transparent blur-3xl"
+            />
+
+            <div className="relative z-10 flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+              {/* Apple Squircle Icon */}
+              <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#007AFF] via-[#5856D6] to-[#AF52DE] text-white shadow-[0_10px_25px_rgba(0,122,255,0.30)] ring-1 ring-white/25 sm:h-18 sm:w-18">
+                <Icon paths={I.graduationCap} size={30} strokeWidth={2.2} className="relative z-10" />
               </div>
 
-              {/* Text */}
+              {/* Title & Metadata */}
               <div className="min-w-0 flex-1 text-center sm:text-left">
                 <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#28A745] dark:text-[#34C759] border border-[#34C759]/20 tabular-nums">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/12 px-2.5 py-0.5 text-[11px] font-semibold text-[#28A745] dark:text-[#34C759] border border-[#34C759]/25 tabular-nums">
                     <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] animate-pulse" />
-                    {stats.active} Active
+                    {stats.active} {t('courses.kpi.active')}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)] border border-black/[0.04] dark:border-white/[0.06] tabular-nums">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)] border border-black/[0.05] dark:border-white/[0.06] tabular-nums">
                     <Icon paths={I.layers} size={11} strokeWidth={2.2} />
-                    {stats.total} Total
+                    {stats.total} {t('courses.kpi.total')}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#AF52DE] border border-[#AF52DE]/20 tabular-nums">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#AF52DE]/12 px-2.5 py-0.5 text-[11px] font-semibold text-[#AF52DE] border border-[#AF52DE]/25 tabular-nums">
                     <Icon paths={I.award} size={11} strokeWidth={2.2} />
-                    {stats.levels} Levels
+                    {stats.levels} {t('courses.kpi.levels')}
                   </span>
                 </div>
 
-                <h2 className="mt-1.5 text-2xl font-bold tracking-tight text-[var(--text-primary)] sm:text-3xl font-display">
+                <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--text-primary)] sm:text-3xl font-display">
                   {t('courses.title')}
-                </h2>
-                <p className="mt-0.5 text-[13px] text-[var(--text-secondary)]">
+                </h1>
+                <p className="mt-0.5 text-[13.5px] font-normal text-[var(--text-secondary)]">
                   {t('courses.pageSubtitle')}
                 </p>
               </div>
 
-              {/* Actions */}
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              {/* Add Course Action Button with >= 44x44px target */}
+              <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
                 <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} transition={SPRING.snappy}>
                   <GlassButton
                     type="button"
                     variant="primary"
                     onClick={handleOpenModal}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e: any) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        e.currentTarget.click();
-                      }
-                    }}>
-                    <span className="inline-flex items-center gap-2 font-medium">
-                      <Icon paths={I.plus} size={15} strokeWidth={2.5} />
+                    className="min-h-[44px] px-5 text-[13.5px] font-semibold shadow-sm"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Icon paths={I.plus} size={16} strokeWidth={2.5} />
                       {t('courses.add')}
                     </span>
                   </GlassButton>
@@ -1017,10 +1224,10 @@ export function CoursesPage() {
           </div>
         </motion.div>
 
-        {/* STATS */}
+        {/* STATS RIBBON */}
         <motion.div variants={containerVariants} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label={t('courses.title')} value={stats.total} icon={I.bookOpen} tone="blue" />
-          <StatTile label={t('common.active')} value={stats.active} icon={I.checkCircle} tone="green" />
+          <StatTile label={t('courses.kpi.total')} value={stats.total} icon={I.bookOpen} tone="blue" />
+          <StatTile label={t('courses.kpi.active')} value={stats.active} icon={I.checkCircle} tone="green" />
           <StatTile
             label={t('courses.stats.avgPrice')}
             value={formatCurrency(stats.avgPrice)}
@@ -1030,8 +1237,8 @@ export function CoursesPage() {
           <StatTile label={t('courses.stats.levels')} value={stats.levels} icon={I.award} tone="purple" />
         </motion.div>
 
-        {/* TOOLBAR: filter + search */}
-        <motion.div variants={cardVariants} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* TOOLBAR: Filter by Level + Search + View Switcher */}
+        <motion.div variants={cardVariants} className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <SegmentedFilter
             value={filter}
             onChange={setFilter}
@@ -1039,142 +1246,167 @@ export function CoursesPage() {
             counts={counts}
           />
 
-          {/* Search */}
-          <div className="relative w-full sm:w-72">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]">
-              <Icon paths={I.search} size={14} strokeWidth={2.2} />
-            </span>
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t('courses.searchPlaceholder') || 'Search courses…'}
-              className="input-base h-10 w-full pl-9 pr-9 text-[13px]"
-            />
-            {search && (
-              <motion.button
+          <div className="flex items-center gap-2.5">
+            {/* Search Input */}
+            <div className="relative min-w-0 flex-1 sm:w-72 sm:flex-initial">
+              <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#64748B]">
+                <Icon paths={I.search} size={15} strokeWidth={2.2} />
+              </span>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('courses.searchPlaceholder')}
+                className="input-base min-h-[44px] w-full pl-10 pr-10 text-[13px] rounded-2xl"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center text-[#64748B] hover:text-[var(--text-primary)]"
+                  aria-label={t('courses.clearSearch')}
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-black/[0.05] dark:bg-white/[0.08]">
+                    <Icon paths={I.x} size={12} strokeWidth={2.5} />
+                  </span>
+                </button>
+              )}
+            </div>
+
+            {/* View Mode Switcher (Gallery vs Table) */}
+            <div className="inline-flex shrink-0 items-center rounded-2xl border border-black/[0.06] bg-black/[0.04] p-1 dark:border-white/[0.08] dark:bg-white/[0.06]">
+              <button
                 type="button"
-                onClick={() => setSearch('')}
-                initial={{ opacity: 0, scale: 0.6 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.6 }}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[#64748B] outline-none hover:bg-slate-100 dark:hover:bg-slate-800/60 dark:hover:bg-[#ffffff08]"
-                aria-label={t('courses.clearSearch')}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e: any) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.currentTarget.click();
-                  }
-                }}>
-                <Icon paths={I.x} size={12} strokeWidth={2.5} />
-              </motion.button>
-            )}
+                onClick={() => handleSetViewMode('gallery')}
+                className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all ${
+                  viewMode === 'gallery'
+                    ? 'bg-white text-[#007AFF] shadow-sm dark:bg-surface-800'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+                title={t('courses.view.gallery')}
+                aria-label={t('courses.view.gallery')}
+              >
+                <Icon paths={I.grid} size={16} strokeWidth={2.2} />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetViewMode('table')}
+                className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all ${
+                  viewMode === 'table'
+                    ? 'bg-white text-[#007AFF] shadow-sm dark:bg-surface-800'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+                title={t('courses.view.table')}
+                aria-label={t('courses.view.table')}
+              >
+                <Icon paths={I.list} size={16} strokeWidth={2.2} />
+              </button>
+            </div>
           </div>
         </motion.div>
 
-        {/* LIST */}
+        {/* CONTENT CATALOG (Gallery or Table) */}
         <motion.div variants={cardVariants}>
-          <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
-            <div className="flex items-center gap-3 border-b border-black/[0.05] dark:border-white/[0.05] px-5 py-3.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400">
-                <Icon paths={I.bookOpen} size={15} strokeWidth={2.2} />
+          {courseList.length === 0 ? (
+            <GlassCard className="p-8">
+              <GlassEmptyState
+                title={t('courses.empty')}
+                message={t('courses.emptyMessage')}
+              />
+            </GlassCard>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center dark:border-slate-700 bg-white/40 dark:bg-surface-900/40 backdrop-blur-xl">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#007AFF]/10 text-[#007AFF]">
+                <Icon paths={I.search} size={24} strokeWidth={2} />
               </div>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-[14px] font-bold tracking-tight text-[var(--text-primary)]">
-                  {t('courses.title')}
-                </h2>
-                <p className="text-[11.5px] font-medium text-[var(--text-tertiary)]">
-                  {filtered.length} {filtered.length === 1 ? 'course' : 'courses'}
-                </p>
+              <p className="mt-3.5 text-[15px] font-bold text-[var(--text-primary)]">
+                {t('courses.noMatch')}
+              </p>
+              <p className="mx-auto mt-1 max-w-sm text-[12.5px] font-medium text-[var(--text-secondary)]">
+                {t('courses.clearSearchHint')}
+              </p>
+              <div className="mt-5 flex justify-center gap-2">
+                {search && (
+                  <GlassButton
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setSearch('')}
+                    className="min-h-[44px]"
+                  >
+                    {t('courses.clearSearch')}
+                  </GlassButton>
+                )}
+                <GlassButton
+                  type="button"
+                  variant="primary"
+                  onClick={() => { setFilter('ALL'); setSearch(''); }}
+                  className="min-h-[44px]"
+                >
+                  {t('courses.showAll')}
+                </GlassButton>
               </div>
-              {search && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)]">
-                  <Icon paths={I.search} size={10} strokeWidth={2.5} />
-                  {filtered.length} found
-                </span>
-              )}
             </div>
-
-            <div className="p-3">
-              {courseList.length === 0 ? (
-                <div className="p-4">
-                  <GlassEmptyState
-                    title={t('courses.empty')}
-                    message={t('courses.emptyMessage')}
+          ) : viewMode === 'gallery' ? (
+            /* GALLERY VIEW (Apple Specular Cards) */
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <AnimatePresence initial={false} mode="popLayout">
+                {filtered.map((course, idx) => (
+                  <CourseCard
+                    key={course.id}
+                    course={course}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    isSelected={isSelected(course.id)}
+                    isFocused={focusedIndex === idx}
+                    onToggleSelect={() => toggleSelection(course.id)}
+                    onOpenSidecar={() => handleOpenCourseSidecar(course)}
                   />
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="p-4">
-                  <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center dark:border-[#ffffff15]">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2563EB]/10 text-[#2563EB]">
-                      <Icon paths={I.search} size={20} strokeWidth={2} />
-                    </div>
-                    <p className="mt-3 text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                      {t('courses.noMatch')}
+                ))}
+              </AnimatePresence>
+            </div>
+          ) : (
+            /* TABLE VIEW (Dense Specular Grid) */
+            <div className="overflow-hidden rounded-3xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+              <div className="flex items-center justify-between border-b border-black/[0.05] dark:border-white/[0.05] px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400">
+                    <Icon paths={I.bookOpen} size={16} strokeWidth={2.2} />
+                  </div>
+                  <div>
+                    <h2 className="text-[14px] font-bold tracking-tight text-[var(--text-primary)]">
+                      {t('courses.title')}
+                    </h2>
+                    <p className="text-[11.5px] font-medium text-[var(--text-tertiary)]">
+                      {filtered.length} {filtered.length === 1 ? t('courses.countOne') : t('courses.countMany')}
                     </p>
-                    <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#64748B]">
-                      {t('courses.clearSearchHint')}
-                    </p>
-                    <div className="mt-4 flex justify-center gap-2">
-                      {search && (
-                        <GlassButton
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setSearch('')}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e: any) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              e.currentTarget.click();
-                            }
-                          }}>
-                          {t('courses.clearSearch')}
-                        </GlassButton>
-                      )}
-                      <GlassButton
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        onClick={() => { setFilter('ALL'); setSearch(''); }}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e: any) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            e.currentTarget.click();
-                          }
-                        }}>
-                        {t('courses.showAll')}
-                      </GlassButton>
-                    </div>
                   </div>
                 </div>
-              ) : (
-                <motion.div layout className="space-y-2">
-                  <AnimatePresence initial={false} mode="popLayout">
-                    {filtered.map((course, idx) => (
-                      <CourseRow
-                        key={course.id}
-                        course={course}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                        isSelected={isSelected(course.id)}
-                        isFocused={focusedIndex === idx}
-                        onToggleSelect={() => toggleSelection(course.id)}
-                        onOpenSidecar={() => handleOpenCourseSidecar(course)}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </motion.div>
-              )}
+                {search && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-3 py-1 text-[11px] font-semibold text-[var(--text-secondary)]">
+                    <Icon paths={I.search} size={11} strokeWidth={2.5} />
+                    {filtered.length}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2 p-3">
+                <AnimatePresence initial={false} mode="popLayout">
+                  {filtered.map((course, idx) => (
+                    <CourseTableRow
+                      key={course.id}
+                      course={course}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      isSelected={isSelected(course.id)}
+                      isFocused={focusedIndex === idx}
+                      onToggleSelect={() => toggleSelection(course.id)}
+                      onOpenSidecar={() => handleOpenCourseSidecar(course)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
             </div>
-          </div>
+          )}
         </motion.div>
 
         {/* ADD / EDIT MODAL */}
@@ -1185,22 +1417,22 @@ export function CoursesPage() {
           wide
         >
           <form className="space-y-5" onSubmit={handleSubmit} noValidate>
-            {/* Header hint */}
+            {/* Header hint callout */}
             <div className="flex items-center gap-3 rounded-2xl border border-[#007AFF]/20 bg-[#007AFF]/[0.06] px-4 py-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#007AFF]/15 text-[#007AFF]">
                 <Icon paths={I.sparkles} size={18} strokeWidth={2} />
               </div>
-              <p className="text-[12px] font-medium leading-snug text-[var(--text-primary)]">
+              <p className="text-[12.5px] font-medium leading-snug text-[var(--text-primary)]">
                 {editingId
-                  ? 'Update course details. Changes apply immediately to new enrollments.'
-                  : 'Create a new course with pricing, duration, and level. Students can enroll right away.'}
+                  ? t('courses.modalHintEdit')
+                  : t('courses.modalHintCreate')}
               </p>
             </div>
 
             {/* Section: Basic info */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Icon paths={I.bookOpen} size={13} strokeWidth={2} className="text-[var(--text-tertiary)]" />
+                <Icon paths={I.bookOpen} size={14} strokeWidth={2} className="text-[var(--text-tertiary)]" />
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                   {t('courses.basicInfo')}
                 </p>
@@ -1213,6 +1445,7 @@ export function CoursesPage() {
                   required
                   aria-invalid={Boolean(formErrors.name)}
                   placeholder={t('courses.namePlaceholder')}
+                  className="min-h-[44px]"
                 />
               </GlassField>
 
@@ -1229,9 +1462,9 @@ export function CoursesPage() {
             {/* Section: Pricing & duration */}
             <div className="space-y-3 border-t border-black/[0.06] dark:border-white/[0.08] pt-4">
               <div className="flex items-center gap-2">
-                <Icon paths={I.creditCard} size={13} strokeWidth={2} className="text-[var(--text-tertiary)]" />
+                <Icon paths={I.creditCard} size={14} strokeWidth={2} className="text-[var(--text-tertiary)]" />
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                  Pricing & Duration
+                  {t('courses.pricingAndDuration')}
                 </p>
               </div>
 
@@ -1246,6 +1479,7 @@ export function CoursesPage() {
                     required
                     aria-invalid={Boolean(formErrors.price)}
                     placeholder="299.99"
+                    className="min-h-[44px]"
                   />
                 </GlassField>
                 <GlassField label={t('courses.form.durationLabel')} required error={formErrors.duration}>
@@ -1257,6 +1491,7 @@ export function CoursesPage() {
                     required
                     aria-invalid={Boolean(formErrors.duration)}
                     placeholder="6"
+                    className="min-h-[44px]"
                   />
                 </GlassField>
               </div>
@@ -1265,7 +1500,7 @@ export function CoursesPage() {
             {/* Section: Level */}
             <div className="space-y-3 border-t border-black/[0.06] dark:border-white/[0.08] pt-4">
               <div className="flex items-center gap-2">
-                <Icon paths={I.award} size={13} strokeWidth={2} className="text-[var(--text-tertiary)]" />
+                <Icon paths={I.award} size={14} strokeWidth={2} className="text-[var(--text-tertiary)]" />
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                   {t('courses.level')}
                 </p>
@@ -1280,13 +1515,13 @@ export function CoursesPage() {
                       key={level}
                       type="button"
                       onClick={() => setForm((prev) => ({ ...prev, level }))}
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       transition={SPRING.snappy}
-                      className="flex flex-col items-center gap-1.5 rounded-2xl border px-3 py-3 text-[11px] font-bold uppercase tracking-wider outline-none"
+                      className="flex min-h-[48px] flex-col items-center justify-center gap-1 rounded-2xl border px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider outline-none"
                       style={{
                         background: active ? c.bg : 'transparent',
-                        borderColor: active ? `${c.fg}44` : 'rgba(0,0,0,0.06)',
+                        borderColor: active ? `${c.fg}55` : 'rgba(0,0,0,0.08)',
                         color: active ? c.fg : 'var(--text-secondary)',
                         boxShadow: active
                           ? `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`
@@ -1294,14 +1529,9 @@ export function CoursesPage() {
                       }}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={(e: any) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          e.currentTarget.click();
-                        }
-                      }}>
-                      <Icon paths={I.award} size={14} strokeWidth={2.2} />
-                      {formatCourseLevel(level)}
+                    >
+                      <Icon paths={I.award} size={15} strokeWidth={2.2} />
+                      {t(`courses.level.${level}`, formatCourseLevel(level))}
                     </motion.button>
                   );
                 })}
@@ -1316,23 +1546,22 @@ export function CoursesPage() {
                   variant="secondary"
                   onClick={handleCloseModal}
                   disabled={save.isPending}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e: any) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      e.currentTarget.click();
-                    }
-                  }}>
+                  className="min-h-[44px] px-4"
+                >
                   {t('common.cancel')}
                 </GlassButton>
               </motion.div>
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <GlassButton type="submit" variant="primary" disabled={save.isPending}>
+                <GlassButton
+                  type="submit"
+                  variant="primary"
+                  disabled={save.isPending}
+                  className="min-h-[44px] px-5"
+                >
                   {save.isPending ? (
                     <span className="inline-flex items-center gap-2">
                       <motion.span
-                        className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
+                        className="inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white"
                         animate={{ rotate: 360 }}
                         transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
                       />
@@ -1354,7 +1583,7 @@ export function CoursesPage() {
           </form>
         </GlassModal>
 
-        {/* DELETE CONFIRM */}
+        {/* DELETE CONFIRM DIALOG */}
         <ConfirmDialog
           open={deleteTarget !== null}
           onClose={() => setDeleteTarget(null)}
@@ -1363,21 +1592,21 @@ export function CoursesPage() {
           loading={remove.isPending}
         />
 
-        {/* Floating Action Island for Bulk Course Operations */}
+        {/* FLOATING ACTION ISLAND (Bulk Course Operations) */}
         <FloatingActionIsland
           selectedCount={selectedCount}
           onClear={clearSelection}
           actions={[
             {
-              label: "Holatni o'zgartirish",
-              icon: "🔄",
+              label: t('courses.batch.toggleStatus'),
+              icon: '🔄',
               onClick: handleBatchToggleCourseStatus,
               variant: 'primary',
               shortcutBadge: 't',
             },
             {
-              label: "Eksport (CSV)",
-              icon: "📊",
+              label: t('courses.batch.exportCsv'),
+              icon: '📊',
               onClick: handleExportSelectedCoursesCSV,
               shortcutBadge: 'e',
             },

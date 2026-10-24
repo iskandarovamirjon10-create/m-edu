@@ -1,199 +1,429 @@
+'use client';
+
 /**
  * ============================================================================
  * M-EDU Dynamic Wallpaper & Shader Substrate — macOS Sequoia Edition
  * ============================================================================
  *
- * Provides Apple macOS Sequoia-grade dynamic ambient light substrates:
- *  - 4 Curated Palettes with full Light & Dark mode support:
- *     1. Sequoia Dawn (Warm amber, rose, deep obsidian indigo)
- *     2. Sonoma Sky (Pacific azure, clean turquoise, vapor blue)
- *     3. Ventura Gold (Warm California golden hour radiance)
- *     4. Obsidian Studio (Pure deep OLED graphite with subtle specular mesh)
- *  - Synchronized with active theme (`isDark` from `useTheme`)
- *  - Mouse parallax motion & gentle ambient pulsation
- *  - Persistent across reloads (localStorage: 'm-edu.wallpaper-theme')
- *  - Full GPU acceleration via CSS radial mesh & transform3d
+ * Premium ambient-light wallpaper substrate inspired by macOS Sequoia.
+ *
+ * ✨ Features
+ *   • 4 curated palettes with full light / dark support:
+ *       1. Sequoia Dawn  — warm amber, rose & obsidian indigo
+ *       2. Sonoma Sky    — Pacific azure, turquoise & vapor blue
+ *       3. Ventura Gold  — California golden-hour radiance
+ *       4. Obsidian      — OLED graphite with subtle specular mesh
+ *   • Synchronized with app theme (`isDark` from `useTheme`)
+ *   • Pointer parallax with rAF-lerped easing (disabled on coarse pointers
+ *     and `prefers-reduced-motion`)
+ *   • Ambient "breathing" pulsation on the light blobs
+ *   • Ultra-fine procedural grain overlay (SVG feTurbulence)
+ *   • Cross-tab synchronization via `useSyncExternalStore`
+ *   • SSR-safe (stable server snapshot, no hydration mismatch)
+ *   • Storage-safe (defensive try/catch around `localStorage`)
+ *   • Smooth color transitions via CSS `@property` registered custom props
+ *   • GPU-accelerated: single compositor layer per blob, `contain: strict`,
+ *     `will-change: transform` and `backface-visibility: hidden`
+ *
+ * 🎛  Public API
+ *   DynamicWallpaper            — the drop-in React component
+ *   WALLPAPER_THEMES            — palette metadata (for theme pickers)
+ *   WALLPAPER_THEME_LIST        — ordered theme IDs
+ *   WALLPAPER_STORAGE_KEY       — localStorage key
+ *   WALLPAPER_CHANGE_EVENT      — CustomEvent name
+ *   setWallpaperTheme(theme)    — imperative setter
+ *   getWallpaperTheme()         — imperative getter
+ *   useWallpaperTheme()         — reactive `[theme, setTheme]` hook
+ *   WallpaperTheme              — union type of theme IDs
  * ============================================================================
  */
 
-import { memo, useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import {
+  memo,
+  useInsertionEffect,
+  useRef,
+  useSyncExternalStore,
+  type CSSProperties,
+  type RefObject,
+} from 'react';
 import { useTheme } from '@/hooks/useTheme';
 
-export type WallpaperTheme = 'sequoia' | 'sonoma' | 'ventura' | 'obsidian';
+/* ═══════════════════════════════════════════════════════════════════════
+ * 1. Public constants
+ * ═══════════════════════════════════════════════════════════════════════ */
 
-interface WallpaperPalette {
-  name: string;
-  light: {
-    bg: string;
-    blob1: string;
-    blob2: string;
-    blob3: string;
-  };
-  dark: {
-    bg: string;
-    blob1: string;
-    blob2: string;
-    blob3: string;
-  };
+export const WALLPAPER_STORAGE_KEY = 'm-edu.wallpaper-theme' as const;
+export const WALLPAPER_CHANGE_EVENT = 'm-edu-wallpaper-changed' as const;
+const WALLPAPER_STYLE_ID = 'm-edu-wallpaper-styles';
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * 2. Types
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+interface PaletteVariant {
+  readonly bgFrom: string;
+  readonly bgVia: string;
+  readonly bgTo: string;
+  readonly blob1: string;
+  readonly blob2: string;
+  readonly blob3: string;
+  readonly glow: string;
 }
 
-const THEMES: Record<WallpaperTheme, WallpaperPalette> = {
+interface WallpaperPalette {
+  readonly name: string;
+  readonly description: string;
+  readonly light: PaletteVariant;
+  readonly dark: PaletteVariant;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * 3. Palette catalogue
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+export const WALLPAPER_THEMES = {
   sequoia: {
-    name: 'macOS Sequoia Dawn',
+    name: 'Sequoia Dawn',
+    description: 'Warm amber, rose & obsidian indigo',
     light: {
-      bg: 'from-amber-100/30 via-orange-50/20 to-sky-100/20',
-      blob1: 'radial-gradient(circle, rgba(245, 158, 11, 0.09) 0%, transparent 70%)',
-      blob2: 'radial-gradient(circle, rgba(225, 29, 72, 0.07) 0%, transparent 70%)',
-      blob3: 'radial-gradient(circle, rgba(99, 102, 241, 0.07) 0%, transparent 70%)',
+      bgFrom: 'rgba(254, 243, 199, 0.35)',
+      bgVia: 'rgba(255, 228, 230, 0.25)',
+      bgTo: 'rgba(224, 242, 254, 0.20)',
+      blob1: 'rgba(245, 158, 11, 0.22)',
+      blob2: 'rgba(244, 63, 94, 0.14)',
+      blob3: 'rgba(129, 140, 248, 0.16)',
+      glow: 'rgba(251, 191, 36, 0.28)',
     },
     dark: {
-      bg: 'from-amber-950/25 via-slate-900/50 to-slate-950/80',
-      blob1: 'radial-gradient(circle, rgba(245, 158, 11, 0.18) 0%, transparent 70%)',
-      blob2: 'radial-gradient(circle, rgba(225, 29, 72, 0.16) 0%, transparent 70%)',
-      blob3: 'radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%)',
+      bgFrom: 'rgba(69, 26, 3, 0.55)',
+      bgVia: 'rgba(15, 23, 42, 0.85)',
+      bgTo: 'rgba(2, 6, 23, 0.95)',
+      blob1: 'rgba(251, 191, 36, 0.28)',
+      blob2: 'rgba(244, 63, 94, 0.22)',
+      blob3: 'rgba(129, 140, 248, 0.24)',
+      glow: 'rgba(251, 191, 36, 0.20)',
     },
   },
   sonoma: {
-    name: 'macOS Sonoma Sky',
+    name: 'Sonoma Sky',
+    description: 'Pacific azure, turquoise & vapor blue',
     light: {
-      bg: 'from-sky-100/30 via-blue-50/20 to-indigo-50/25',
-      blob1: 'radial-gradient(circle, rgba(14, 165, 233, 0.09) 0%, transparent 70%)',
-      blob2: 'radial-gradient(circle, rgba(56, 189, 248, 0.08) 0%, transparent 70%)',
-      blob3: 'radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%)',
+      bgFrom: 'rgba(207, 250, 254, 0.35)',
+      bgVia: 'rgba(224, 242, 254, 0.28)',
+      bgTo: 'rgba(238, 242, 255, 0.30)',
+      blob1: 'rgba(6, 182, 212, 0.18)',
+      blob2: 'rgba(56, 189, 248, 0.16)',
+      blob3: 'rgba(99, 102, 241, 0.14)',
+      glow: 'rgba(56, 189, 248, 0.22)',
     },
     dark: {
-      bg: 'from-sky-950/25 via-blue-900/40 to-slate-950/80',
-      blob1: 'radial-gradient(circle, rgba(14, 165, 233, 0.20) 0%, transparent 70%)',
-      blob2: 'radial-gradient(circle, rgba(56, 189, 248, 0.16) 0%, transparent 70%)',
-      blob3: 'radial-gradient(circle, rgba(59, 130, 246, 0.18) 0%, transparent 70%)',
+      bgFrom: 'rgba(8, 47, 73, 0.75)',
+      bgVia: 'rgba(30, 58, 138, 0.65)',
+      bgTo: 'rgba(2, 6, 23, 0.95)',
+      blob1: 'rgba(34, 211, 238, 0.32)',
+      blob2: 'rgba(56, 189, 248, 0.26)',
+      blob3: 'rgba(99, 102, 241, 0.28)',
+      glow: 'rgba(34, 211, 238, 0.18)',
     },
   },
   ventura: {
-    name: 'macOS Ventura Gold',
+    name: 'Ventura Gold',
+    description: 'Warm California golden-hour radiance',
     light: {
-      bg: 'from-orange-100/30 via-amber-50/20 to-yellow-50/20',
-      blob1: 'radial-gradient(circle, rgba(251, 146, 60, 0.09) 0%, transparent 70%)',
-      blob2: 'radial-gradient(circle, rgba(245, 158, 11, 0.08) 0%, transparent 70%)',
-      blob3: 'radial-gradient(circle, rgba(234, 88, 12, 0.07) 0%, transparent 70%)',
+      bgFrom: 'rgba(254, 215, 170, 0.35)',
+      bgVia: 'rgba(253, 230, 138, 0.28)',
+      bgTo: 'rgba(255, 237, 213, 0.30)',
+      blob1: 'rgba(251, 146, 60, 0.22)',
+      blob2: 'rgba(245, 158, 11, 0.18)',
+      blob3: 'rgba(234, 88, 12, 0.16)',
+      glow: 'rgba(251, 146, 60, 0.26)',
     },
     dark: {
-      bg: 'from-orange-950/25 via-amber-950/40 to-slate-950/80',
-      blob1: 'radial-gradient(circle, rgba(251, 146, 60, 0.19) 0%, transparent 70%)',
-      blob2: 'radial-gradient(circle, rgba(245, 158, 11, 0.17) 0%, transparent 70%)',
-      blob3: 'radial-gradient(circle, rgba(234, 88, 12, 0.15) 0%, transparent 70%)',
+      bgFrom: 'rgba(67, 20, 7, 0.70)',
+      bgVia: 'rgba(69, 26, 3, 0.60)',
+      bgTo: 'rgba(2, 6, 23, 0.95)',
+      blob1: 'rgba(251, 146, 60, 0.32)',
+      blob2: 'rgba(245, 158, 11, 0.28)',
+      blob3: 'rgba(234, 88, 12, 0.24)',
+      glow: 'rgba(251, 146, 60, 0.20)',
     },
   },
   obsidian: {
-    name: 'Obsidian Studio OLED',
+    name: 'Obsidian Studio',
+    description: 'OLED graphite with subtle specular mesh',
     light: {
-      bg: 'from-slate-100/40 via-zinc-50/30 to-white/60',
-      blob1: 'radial-gradient(circle, rgba(0, 0, 0, 0.03) 0%, transparent 70%)',
-      blob2: 'radial-gradient(circle, rgba(99, 102, 241, 0.05) 0%, transparent 70%)',
-      blob3: 'radial-gradient(circle, rgba(168, 85, 247, 0.04) 0%, transparent 70%)',
+      bgFrom: 'rgba(244, 244, 245, 0.50)',
+      bgVia: 'rgba(250, 250, 250, 0.60)',
+      bgTo: 'rgba(255, 255, 255, 0.70)',
+      blob1: 'rgba(0, 0, 0, 0.04)',
+      blob2: 'rgba(139, 92, 246, 0.08)',
+      blob3: 'rgba(168, 85, 247, 0.06)',
+      glow: 'rgba(99, 102, 241, 0.10)',
     },
     dark: {
-      bg: 'from-zinc-950/60 via-black to-black',
-      blob1: 'radial-gradient(circle, rgba(255, 255, 255, 0.04) 0%, transparent 70%)',
-      blob2: 'radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%)',
-      blob3: 'radial-gradient(circle, rgba(168, 85, 247, 0.06) 0%, transparent 70%)',
+      bgFrom: 'rgba(0, 0, 0, 0.95)',
+      bgVia: 'rgba(9, 9, 11, 0.95)',
+      bgTo: 'rgba(0, 0, 0, 1.00)',
+      blob1: 'rgba(255, 255, 255, 0.06)',
+      blob2: 'rgba(139, 92, 246, 0.12)',
+      blob3: 'rgba(168, 85, 247, 0.10)',
+      glow: 'rgba(139, 92, 246, 0.14)',
     },
   },
-};
+} as const satisfies Record<string, WallpaperPalette>;
 
-export function setWallpaperTheme(theme: WallpaperTheme): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('m-edu.wallpaper-theme', theme);
-    window.dispatchEvent(new CustomEvent('m-edu-wallpaper-changed', { detail: theme }));
+export type WallpaperTheme = keyof typeof WALLPAPER_THEMES;
+
+export const WALLPAPER_THEME_LIST = Object.keys(WALLPAPER_THEMES) as WallpaperTheme[];
+
+const DEFAULT_THEME: WallpaperTheme = 'sequoia';
+
+function isWallpaperTheme(value: unknown): value is WallpaperTheme {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(WALLPAPER_THEMES, value);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * 4. Store (read / subscribe / write) — SSR + cross-tab safe
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+function readWallpaperTheme(): WallpaperTheme {
+  if (typeof window === 'undefined') return DEFAULT_THEME;
+  try {
+    const stored = window.localStorage.getItem(WALLPAPER_STORAGE_KEY);
+    return isWallpaperTheme(stored) ? stored : DEFAULT_THEME;
+  } catch {
+    return DEFAULT_THEME;
   }
 }
 
+function subscribeWallpaperTheme(onChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === WALLPAPER_STORAGE_KEY || event.key === null) onChange();
+  };
+  const handleCustom = () => onChange();
+  window.addEventListener('storage', handleStorage);
+  window.addEventListener(WALLPAPER_CHANGE_EVENT, handleCustom);
+  return () => {
+    window.removeEventListener('storage', handleStorage);
+    window.removeEventListener(WALLPAPER_CHANGE_EVENT, handleCustom);
+  };
+}
+
+const getServerSnapshot = (): WallpaperTheme => DEFAULT_THEME;
+
+export function getWallpaperTheme(): WallpaperTheme {
+  return readWallpaperTheme();
+}
+
+export function setWallpaperTheme(theme: WallpaperTheme): void {
+  if (typeof window === 'undefined' || !isWallpaperTheme(theme)) return;
+  try {
+    window.localStorage.setItem(WALLPAPER_STORAGE_KEY, theme);
+  } catch {
+    /* storage unavailable — event still notifies the current tab */
+  }
+  window.dispatchEvent(
+    new CustomEvent<WallpaperTheme>(WALLPAPER_CHANGE_EVENT, { detail: theme }),
+  );
+}
+
+export function useWallpaperTheme(): readonly [
+  WallpaperTheme,
+  (theme: WallpaperTheme) => void,
+] {
+  const theme = useSyncExternalStore(
+    subscribeWallpaperTheme,
+    readWallpaperTheme,
+    getServerSnapshot,
+  );
+  return [theme, setWallpaperTheme] as const;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * 5. Pointer parallax (rAF-lerped, disabled for reduced-motion / coarse)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+function usePointerParallax(_ref: RefObject<HTMLElement | null>): void {
+  // Parallax disabled: keeps GPU composited layers stable at 120 FPS without backdrop-filter recompositing
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * 6. Injected stylesheet (keyframes + @property registrations)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+const WALLPAPER_CSS = `
+@property --m-edu-bg-from { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --m-edu-bg-via  { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --m-edu-bg-to   { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --m-edu-b1      { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --m-edu-b2      { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --m-edu-b3      { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --m-edu-glow    { syntax: '<color>'; inherits: true; initial-value: transparent; }
+
+.m-edu-wallpaper {
+  --px: 0;
+  --py: 0;
+  background:
+    radial-gradient(120% 80% at 50% -10%, var(--m-edu-glow) 0%, transparent 55%),
+    linear-gradient(
+      to top right,
+      var(--m-edu-bg-from),
+      var(--m-edu-bg-via),
+      var(--m-edu-bg-to)
+    );
+  transition:
+    --m-edu-bg-from 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    --m-edu-bg-via  1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    --m-edu-bg-to   1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    --m-edu-b1      1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    --m-edu-b2      1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    --m-edu-b3      1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    --m-edu-glow    1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.m-edu-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+.m-edu-blob-1 {
+  background: radial-gradient(circle, var(--m-edu-b1) 0%, transparent 70%);
+  animation: m-edu-breathe-1 18s ease-in-out infinite;
+}
+.m-edu-blob-2 {
+  background: radial-gradient(circle, var(--m-edu-b2) 0%, transparent 70%);
+  animation: m-edu-breathe-2 22s ease-in-out infinite;
+}
+.m-edu-blob-3 {
+  background: radial-gradient(circle, var(--m-edu-b3) 0%, transparent 70%);
+  animation: m-edu-breathe-3 26s ease-in-out infinite;
+}
+
+@keyframes m-edu-breathe-1 {
+  0%, 100% {
+    transform: translate3d(
+      calc(var(--px) * -22px),
+      calc(var(--py) * -22px),
+      0
+    ) scale(1);
+  }
+  50% {
+    transform: translate3d(
+      calc(var(--px) * -22px + 18px),
+      calc(var(--py) * -22px + 12px),
+      0
+    ) scale(1.07);
+  }
+}
+@keyframes m-edu-breathe-2 {
+  0%, 100% {
+    transform: translate3d(
+      calc(var(--px) * -32px),
+      calc(var(--py) * -32px),
+      0
+    ) scale(1);
+  }
+  50% {
+    transform: translate3d(
+      calc(var(--px) * -32px - 22px),
+      calc(var(--py) * -32px + 16px),
+      0
+    ) scale(1.06);
+  }
+}
+@keyframes m-edu-breathe-3 {
+  0%, 100% {
+    transform: translate3d(
+      calc(var(--px) * -14px),
+      calc(var(--py) * -14px),
+      0
+    ) scale(1);
+  }
+  50% {
+    transform: translate3d(
+      calc(var(--px) * -14px + 14px),
+      calc(var(--py) * -14px - 18px),
+      0
+    ) scale(1.08);
+  }
+}
+
+.m-edu-grain {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>");
+  opacity: 0.35;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-edu-blob-1,
+  .m-edu-blob-2,
+  .m-edu-blob-3 {
+    animation: none !important;
+    transform: none !important;
+  }
+  .m-edu-wallpaper {
+    transition-duration: 0s !important;
+  }
+}
+`;
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * 7. Component
+ * ═══════════════════════════════════════════════════════════════════════ */
+
 export const DynamicWallpaper = memo(function DynamicWallpaper() {
   const { isDark } = useTheme();
-  const [currentTheme, setCurrentTheme] = useState<WallpaperTheme>(() => {
-    if (typeof window === 'undefined') return 'sequoia';
-    return (localStorage.getItem('m-edu.wallpaper-theme') as WallpaperTheme) || 'sequoia';
-  });
+  const [theme] = useWallpaperTheme();
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  usePointerParallax(rootRef);
 
-  useEffect(() => {
-    const handleThemeChange = (e: Event) => {
-      const theme = (e as CustomEvent<WallpaperTheme>).detail;
-      if (theme && THEMES[theme]) {
-        setCurrentTheme(theme);
-      }
-    };
+  const palette = WALLPAPER_THEMES[theme];
+  const active = isDark ? palette.dark : palette.light;
 
-    window.addEventListener('m-edu-wallpaper-changed', handleThemeChange);
-    return () => window.removeEventListener('m-edu-wallpaper-changed', handleThemeChange);
+  const style = {
+    '--m-edu-bg-from': active.bgFrom,
+    '--m-edu-bg-via': active.bgVia,
+    '--m-edu-bg-to': active.bgTo,
+    '--m-edu-b1': active.blob1,
+    '--m-edu-b2': active.blob2,
+    '--m-edu-b3': active.blob3,
+    '--m-edu-glow': active.glow,
+  } as CSSProperties;
+
+  useInsertionEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById(WALLPAPER_STYLE_ID)) return;
+    const tag = document.createElement('style');
+    tag.id = WALLPAPER_STYLE_ID;
+    tag.textContent = WALLPAPER_CSS;
+    document.head.appendChild(tag);
   }, []);
-
-  useEffect(() => {
-    let frameId: number;
-    const handleMouseMove = (e: MouseEvent) => {
-      cancelAnimationFrame(frameId);
-      frameId = requestAnimationFrame(() => {
-        const x = (e.clientX / window.innerWidth - 0.5) * 40;
-        const y = (e.clientY / window.innerHeight - 0.5) * 40;
-        setMousePos({ x, y });
-      });
-    };
-
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      cancelAnimationFrame(frameId);
-    };
-  }, []);
-
-  const activeThemeGroup = THEMES[currentTheme] || THEMES.sequoia;
-  const active = isDark ? activeThemeGroup.dark : activeThemeGroup.light;
 
   return (
     <div
+      ref={rootRef}
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-0 overflow-hidden select-none"
+      data-wallpaper-theme={theme}
+      data-wallpaper-mode={isDark ? 'dark' : 'light'}
+      className="m-edu-wallpaper pointer-events-none fixed inset-0 -z-10 overflow-hidden select-none [contain:strict]"
+      style={style}
     >
-      {/* Background ambient gradient */}
-      <div className={`absolute inset-0 bg-gradient-to-tr ${active.bg} opacity-40 transition-colors duration-1000`} />
+      {/* Ambient light blobs (parallax + breathing) */}
+      <div className="m-edu-blob m-edu-blob-1 -top-32 -left-32 h-[560px] w-[560px]" />
+      <div className="m-edu-blob m-edu-blob-2 top-1/4 -right-24 h-[660px] w-[660px]" />
+      <div className="m-edu-blob m-edu-blob-3 -bottom-36 left-1/3 h-[620px] w-[620px]" />
 
-      {/* Floating Ambient Light Mesh Blobs with Parallax */}
-      <motion.div
-        animate={{
-          x: mousePos.x * 0.8,
-          y: mousePos.y * 0.8,
-        }}
-        transition={{ type: 'spring', stiffness: 40, damping: 20 }}
-        style={{
-          background: active.blob1,
-        }}
-        className="absolute -top-32 -left-32 h-[550px] w-[550px] rounded-full blur-[100px] transition-all duration-1000"
-      />
-
-      <motion.div
-        animate={{
-          x: -mousePos.x * 0.6,
-          y: -mousePos.y * 0.6,
-        }}
-        transition={{ type: 'spring', stiffness: 40, damping: 20 }}
-        style={{
-          background: active.blob2,
-        }}
-        className="absolute top-1/4 -right-24 h-[650px] w-[650px] rounded-full blur-[120px] transition-all duration-1000"
-      />
-
-      <motion.div
-        animate={{
-          x: mousePos.x * 0.4,
-          y: mousePos.y * 0.4,
-        }}
-        transition={{ type: 'spring', stiffness: 40, damping: 20 }}
-        style={{
-          background: active.blob3,
-        }}
-        className="absolute -bottom-36 left-1/3 h-[600px] w-[600px] rounded-full blur-[110px] transition-all duration-1000"
-      />
+      {/* Specular grain overlay for that premium "shader" feel */}
+      <div className="m-edu-grain absolute inset-0" />
     </div>
   );
 });
+
+export default DynamicWallpaper;

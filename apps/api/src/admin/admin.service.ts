@@ -45,7 +45,7 @@ export class AdminService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiration
 
-    const [updatedRequest, invitation] = await this.prisma.$transaction([
+    const [, invitation] = await this.prisma.$transaction([
       this.prisma.accessRequest.update({
         where: { id },
         data: { status: 'APPROVED', reviewedBy: reviewerId },
@@ -96,7 +96,7 @@ export class AdminService {
       throw new BadRequestException(`Request is already ${request.status}`);
     }
 
-    const updated = await this.prisma.accessRequest.update({
+    await this.prisma.accessRequest.update({
       where: { id },
       data: { status: 'REJECTED', reviewedBy: reviewerId },
     });

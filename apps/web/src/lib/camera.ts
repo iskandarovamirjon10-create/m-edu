@@ -358,6 +358,8 @@ export function waitForVideoReady(
       video.removeEventListener('loadeddata', onReady);
       video.removeEventListener('canplay', onReady);
       video.removeEventListener('loadedmetadata', onMeta);
+      video.removeEventListener('playing', onReady);
+      video.removeEventListener('timeupdate', onReady);
       video.removeEventListener('error', onError);
       signal?.removeEventListener('abort', onAbort);
       window.clearTimeout(timer);
@@ -379,6 +381,9 @@ export function waitForVideoReady(
     // Metadata alone is not proof of frames; nudge once via rAF for Safari,
     // which sometimes only reports dimensions on the next frame.
     const onMeta = () => {
+      if (video.paused) {
+        void safePlay(video);
+      }
       requestAnimationFrame(() => {
         if (settled) return;
         if (video.readyState >= 2 && video.videoWidth > 0) succeed();
@@ -405,7 +410,13 @@ export function waitForVideoReady(
     video.addEventListener('loadeddata', onReady);
     video.addEventListener('canplay', onReady);
     video.addEventListener('loadedmetadata', onMeta);
+    video.addEventListener('playing', onReady);
+    video.addEventListener('timeupdate', onReady);
     video.addEventListener('error', onError);
+
+    if (video.paused) {
+      void safePlay(video);
+    }
 
     if (signal?.aborted) onAbort();
   });
@@ -418,6 +429,11 @@ export function waitForVideoReady(
  */
 export async function safePlay(video: HTMLVideoElement): Promise<void> {
   try {
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.setAttribute('playsinline', 'true');
+    video.setAttribute('webkit-playsinline', 'true');
     await video.play();
   } catch {
     /* autoplay policy — frames may still arrive once the user interacts */
@@ -453,6 +469,12 @@ export function pickCameraId(
   if (devices.length === 0) return null;
 
   if (prefer === 'different-from') {
+    if (!currentDeviceId && devices.length > 1) {
+      // Current camera unknown (e.g. started via facingMode: 'user').
+      // Prioritize an environment/back camera if available, otherwise the second device.
+      const back = devices.find((device) => device.label && /back|rear|environment|world|arqa|orqa|задн|тыльн/i.test(device.label));
+      return back ? back.deviceId : devices[1].deviceId;
+    }
     const other = devices.find((device) => device.deviceId !== currentDeviceId);
     return other?.deviceId ?? devices[0].deviceId;
   }

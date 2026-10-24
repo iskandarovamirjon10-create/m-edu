@@ -1121,22 +1121,15 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     studentId: string,
   ): Promise<void> {
     try {
-      if (this.redisPubSub) {
-        // Raw payload — the pub/sub service owns serialization.
-        await this.redisPubSub.publish(ATTENDANCE_CREATED_EVENT, {
-          organizationId,
-          attendanceId,
-          studentId,
-          recognizedAt: new Date().toISOString(),
-        });
-      }
-
-      if (!this.notificationEvents) return;
-
       const student = await this.prisma.student.findFirst({
         where: { id: studentId, organizationId },
         select: {
           user: { select: { firstName: true, lastName: true } },
+          groups: {
+            where: { isActive: true },
+            include: { group: { select: { name: true } } },
+            take: 1,
+          },
         },
       });
 
@@ -1145,6 +1138,21 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
           .filter((part): part is string => Boolean(part))
           .join(' ')
           .trim() || STUDENT_NAME_FALLBACK;
+      const groupName = student?.groups?.[0]?.group?.name || '';
+
+      if (this.redisPubSub) {
+        // Raw payload — the pub/sub service owns serialization.
+        await this.redisPubSub.publish(ATTENDANCE_CREATED_EVENT, {
+          organizationId,
+          attendanceId,
+          studentId,
+          studentName,
+          groupName,
+          recognizedAt: new Date().toISOString(),
+        });
+      }
+
+      if (!this.notificationEvents) return;
 
       await this.notificationEvents.emit({
         organizationId,

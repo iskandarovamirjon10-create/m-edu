@@ -29,7 +29,7 @@ describe('RelationshipsController', () => {
       ],
     }).compile();
 
-    controller = module.get<RelationshipsController>(RelationshipsController);
+    controller = new RelationshipsController(service as unknown as RelationshipsService);
   });
 
   it('should be defined', () => {

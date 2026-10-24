@@ -21,6 +21,11 @@ export class CertificatesService {
     const certificates = await this.prisma.certificate.findMany({
       where: { organizationId, isActive: true },
       include: {
+        organization: {
+          select: {
+            name: true,
+          },
+        },
         student: {
           include: {
             user: {
@@ -51,6 +56,11 @@ export class CertificatesService {
     const certificate = await this.prisma.certificate.findFirst({
       where: { id, organizationId },
       include: {
+        organization: {
+          select: {
+            name: true,
+          },
+        },
         student: {
           include: {
             user: {
@@ -85,9 +95,7 @@ export class CertificatesService {
   }
 
   async getStudentCertificates(organizationId: string, studentId: string, userId: string, userRole: string) {
-    const student = await this.prisma.student.findUnique({
-      where: { id: studentId, organizationId },
-    });
+    const student = await this.prisma.student.findFirst({ where: { id: studentId, organizationId } });
 
     if (!student) {
       throw new NotFoundException('Student not found');
@@ -123,28 +131,23 @@ export class CertificatesService {
     const { studentId, courseId, templateId } = dto;
 
     // Verify student exists
-    const student = await this.prisma.student.findUnique({
-      where: { id: studentId, organizationId },
-    });
+    const student = await this.prisma.student.findFirst({ where: { id: studentId, organizationId } });
 
     if (!student) {
       throw new NotFoundException('Student not found');
     }
 
     // Verify course exists
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId, organizationId },
-    });
+    const course = await this.prisma.course.findFirst({ where: { id: courseId, organizationId } });
 
     if (!course) {
       throw new NotFoundException('Course not found');
     }
 
-    // Verify student is enrolled in a group of the course
+    // Verify student is enrolled in a group of the course (either active or completed)
     const enrollment = await this.prisma.studentGroup.findFirst({
       where: {
         studentId,
-        isActive: true,
         group: {
           organizationId,
           courseId,
@@ -659,33 +662,216 @@ export class CertificatesService {
       id: 'default',
       html: `
         <!DOCTYPE html>
-        <html>
+        <html lang="uz">
         <head>
+          <meta charset="UTF-8">
           <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
-            .header { border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 40px; }
-            .title { font-size: 36px; color: #1e40af; margin: 20px 0; }
-            .subtitle { font-size: 18px; color: #6b7280; margin: 10px 0; }
-            .student-name { font-size: 32px; color: #111; margin: 30px 0; font-weight: bold; }
-            .course-name { font-size: 20px; color: #374151; margin: 20px 0; }
-            .footer { margin-top: 60px; border-top: 1px solid #e5e7eb; padding-top: 20px; }
-            .signature { margin-top: 40px; display: inline-block; }
-            .certificate-number { color: #9ca3af; font-size: 14px; margin-top: 20px; }
-            .verification-code { color: #1e40af; font-size: 14px; font-family: monospace; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body {
+              background: #0B0E14;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              padding: 30px;
+              color: #1A1F2C;
+            }
+            .cert-frame {
+              width: 100%;
+              max-width: 960px;
+              background: linear-gradient(135deg, #FAF8F5 0%, #FFFFFF 50%, #F5F1EB 100%);
+              border-radius: 24px;
+              padding: 14px;
+              position: relative;
+              box-shadow: 0 32px 80px -20px rgba(0,0,0,0.5), 0 0 0 1px rgba(197, 160, 89, 0.4);
+            }
+            .cert-border-outer {
+              border: 3px double #C5A059;
+              border-radius: 18px;
+              padding: 40px 48px;
+              position: relative;
+              background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.95) 0%, rgba(250,248,245,0.98) 100%);
+            }
+            .cert-guilloche-corner {
+              position: absolute;
+              width: 44px;
+              height: 44px;
+            }
+            .top-left { top: 12px; left: 12px; border-top: 3px solid #C5A059; border-left: 3px solid #C5A059; }
+            .top-right { top: 12px; right: 12px; border-top: 3px solid #C5A059; border-right: 3px solid #C5A059; }
+            .bottom-left { bottom: 12px; left: 12px; border-bottom: 3px solid #C5A059; border-left: 3px solid #C5A059; }
+            .bottom-right { bottom: 12px; right: 12px; border-bottom: 3px solid #C5A059; border-right: 3px solid #C5A059; }
+            .cert-header { text-align: center; }
+            .academy-name {
+              font-size: 13px;
+              letter-spacing: 0.35em;
+              color: #9A7B38;
+              font-weight: 700;
+              text-transform: uppercase;
+              margin-bottom: 8px;
+            }
+            .cert-title {
+              font-size: 32px;
+              font-weight: 800;
+              letter-spacing: 0.06em;
+              color: #0A192F;
+              margin-bottom: 8px;
+              text-transform: uppercase;
+            }
+            .cert-subtitle {
+              font-size: 12px;
+              font-weight: 600;
+              color: #64748B;
+              letter-spacing: 0.15em;
+              text-transform: uppercase;
+            }
+            .student-block {
+              text-align: center;
+              margin: 32px 0 20px;
+            }
+            .student-prefix {
+              font-size: 13px;
+              color: #64748B;
+              font-weight: 500;
+              margin-bottom: 10px;
+            }
+            .student-name {
+              font-size: 38px;
+              font-weight: 800;
+              color: #0A192F;
+              letter-spacing: -0.01em;
+              margin-bottom: 12px;
+            }
+            .gold-divider {
+              height: 2px;
+              width: 240px;
+              background: linear-gradient(90deg, transparent, #C5A059, transparent);
+              margin: 0 auto;
+            }
+            .course-block {
+              text-align: center;
+              margin-bottom: 32px;
+            }
+            .course-prefix {
+              font-size: 13px;
+              color: #64748B;
+              margin-bottom: 6px;
+            }
+            .course-name {
+              font-size: 22px;
+              font-weight: 700;
+              color: #007AFF;
+              letter-spacing: -0.01em;
+            }
+            .cert-footer {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+              border-top: 1px solid rgba(197, 160, 89, 0.35);
+              padding-top: 24px;
+              margin-top: 24px;
+            }
+            .signature-box { text-align: left; }
+            .signature-title {
+              font-style: italic;
+              font-size: 18px;
+              color: #0A192F;
+              font-weight: 600;
+            }
+            .signature-line {
+              width: 140px;
+              height: 1px;
+              background: #C5A059;
+              margin: 6px 0;
+            }
+            .signature-sub {
+              font-size: 10px;
+              font-weight: 700;
+              letter-spacing: 0.1em;
+              color: #94A3B8;
+              text-transform: uppercase;
+            }
+            .seal-box {
+              text-align: center;
+            }
+            .gold-seal {
+              width: 58px;
+              height: 58px;
+              border-radius: 50%;
+              background: radial-gradient(circle, #FCF6BA 0%, #BF953F 60%, #AA771C 100%);
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              box-shadow: 0 4px 16px rgba(191,149,63,0.4);
+              color: #0A192F;
+              font-weight: 800;
+              font-size: 18px;
+              border: 2px solid #FFF;
+            }
+            .seal-label {
+              font-size: 9px;
+              font-weight: 700;
+              color: #9A7B38;
+              letter-spacing: 0.12em;
+              margin-top: 6px;
+              text-transform: uppercase;
+            }
+            .meta-box {
+              text-align: right;
+              font-size: 11px;
+              color: #64748B;
+            }
+            .cert-id-tag {
+              font-family: monospace;
+              font-weight: 700;
+              color: #007AFF;
+              background: rgba(0,122,255,0.08);
+              padding: 3px 8px;
+              border-radius: 6px;
+              display: inline-block;
+              margin-bottom: 4px;
+            }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>CERTIFICATE OF COMPLETION</h1>
-          </div>
-          <p class="subtitle">This is to certify that</p>
-          <div class="student-name">{{studentName}}</div>
-          <p class="course-name">has successfully completed</p>
-          <div class="course-name">{{courseName}}</div>
-          <p class="subtitle">issued on {{issueDate}}</p>
-          <div class="footer">
-            <div class="certificate-number">Certificate #{{certificateNumber}}</div>
-            <div class="verification-code">Verify at: /verify/{{verificationCode}}</div>
+          <div class="cert-frame">
+            <div class="cert-border-outer">
+              <div class="cert-guilloche-corner top-left"></div>
+              <div class="cert-guilloche-corner top-right"></div>
+              <div class="cert-guilloche-corner bottom-left"></div>
+              <div class="cert-guilloche-corner bottom-right"></div>
+              <div class="cert-header">
+                <div class="academy-name">M-EDU RASMIY AKADEMIYASI</div>
+                <div class="cert-title">MALAKA VA NATIJALAR SERTIFIKATI</div>
+                <div class="cert-subtitle">Rasmiy tasdiqlangan ta'lim hujjati</div>
+              </div>
+              <div class="student-block">
+                <div class="student-prefix">Mazkur maxsus sertifikat faxr bilan taqdim etiladi:</div>
+                <div class="student-name">{{studentName}}</div>
+                <div class="gold-divider"></div>
+              </div>
+              <div class="course-block">
+                <div class="course-prefix">Quyidagi kasbiy ta'lim dasturini a'lo baholar bilan muvaffaqiyatli tamomlaganligi uchun:</div>
+                <div class="course-name">{{courseName}}</div>
+              </div>
+              <div class="cert-footer">
+                <div class="signature-box">
+                  <div class="signature-title">Bosh Direktor</div>
+                  <div class="signature-line"></div>
+                  <div class="signature-sub">Akademiya Rahbariyati</div>
+                </div>
+                <div class="seal-box">
+                  <div class="gold-seal">★</div>
+                  <div class="seal-label">Rasmiy Tasdiqlangan</div>
+                </div>
+                <div class="meta-box">
+                  <div><span class="cert-id-tag">ID: {{certificateNumber}}</span></div>
+                  <div>Berilgan sana: <strong>{{issueDate}}</strong></div>
+                  <div style="font-family: monospace; font-size: 10px; margin-top: 3px;">Kodi: {{verificationCode}}</div>
+                </div>
+              </div>
+            </div>
           </div>
         </body>
         </html>
@@ -696,18 +882,32 @@ export class CertificatesService {
 
   // ===================== Verification =====================
 
-  async verifyCertificate(verificationCode: string) {
+  async verifyCertificate(codeOrNumber: string) {
+    const cleanCode = (codeOrNumber || '').trim();
+    if (!cleanCode) {
+      throw new NotFoundException('Verification code is required');
+    }
+
     const certificate = await this.prisma.certificate.findFirst({
-      where: { verificationCode, isActive: true },
+      where: {
+        OR: [
+          { verificationCode: cleanCode.toUpperCase() },
+          { certificateNumber: { equals: cleanCode, mode: 'insensitive' } },
+        ],
+        isActive: true,
+      },
       include: {
+        organization: {
+          select: {
+            name: true,
+          },
+        },
         student: {
           include: {
             user: {
               select: {
                 firstName: true,
                 lastName: true,
-                // Intentionally omit email/phone from public verification
-                // endpoint to prevent PII exposure.
               },
             },
           },
@@ -715,6 +915,7 @@ export class CertificatesService {
         course: {
           select: {
             name: true,
+            description: true,
           },
         },
       },
@@ -727,12 +928,21 @@ export class CertificatesService {
     return {
       isValid: true,
       certificateNumber: certificate.certificateNumber,
+      verificationCode: certificate.verificationCode,
+      organizationName: certificate.organization?.name || 'M-EDU Global Academy',
       student: {
         firstName: certificate.student?.user?.firstName,
         lastName: certificate.student?.user?.lastName,
       },
-      course: certificate.course,
+      course: {
+        name: certificate.course?.name || 'Kasbiy Kurs',
+        description: certificate.course?.description,
+      },
       issueDate: certificate.issueDate,
+      directorName: (certificate.metadata as any)?.directorName || 'Markaz Rahbari',
+      instructorName: (certificate.metadata as any)?.instructorName || "Katta O'qituvchi",
+      grade: (certificate.metadata as any)?.grade || "A+ (A'lo)",
+      metadata: certificate.metadata,
     };
   }
 

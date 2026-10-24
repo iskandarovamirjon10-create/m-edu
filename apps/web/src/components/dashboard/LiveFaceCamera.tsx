@@ -17,11 +17,21 @@ import {
   ExternalLink,
   ShieldCheck,
   UserCheck,
+  CheckCircle2,
+  Sparkles,
 } from 'lucide-react';
 import { cn, usePrefersReducedMotion } from '@/lib/design';
 import { useI18n } from '@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 type CameraStatus = 'STANDBY' | 'CONNECTING' | 'STREAMING' | 'ERROR';
+
+interface RecentAttendanceRecord {
+  id: string;
+  name: string;
+  group: string;
+  time: string;
+}
 
 const STATUS_META: Record<
   CameraStatus,
@@ -39,10 +49,39 @@ const STATUS_META: Record<
 
 export function LiveFaceCamera() {
   const { t } = useI18n();
+  const sound = usePremiumSound();
   const reduced = usePrefersReducedMotion();
   const [status, setStatus] = useState<CameraStatus>('STANDBY');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [recentAttendee, setRecentAttendee] = useState<RecentAttendanceRecord | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Listen to global attendance event bus (fired by FaceRecognition kiosk or WebSocket)
+  useEffect(() => {
+    const handleDetection = (event: Event) => {
+      const custom = event as CustomEvent<RecentAttendanceRecord>;
+      if (custom.detail) {
+        setRecentAttendee(custom.detail);
+        try {
+          sound.playFaceIdMatch();
+        } catch {
+          /* sound optional */
+        }
+
+        if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+        dismissTimerRef.current = setTimeout(() => {
+          setRecentAttendee(null);
+        }, 6000);
+      }
+    };
+
+    window.addEventListener('medu:attendance-logged', handleDetection);
+    return () => {
+      window.removeEventListener('medu:attendance-logged', handleDetection);
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    };
+  }, [sound]);
 
   const startWebcam = useCallback(async () => {
     setStatus('CONNECTING');
@@ -63,6 +102,7 @@ export function LiveFaceCamera() {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         setStatus('STREAMING');
+        sound.playFaceIdMatch();
       }
     } catch (err: unknown) {
       setStatus('ERROR');
@@ -78,7 +118,7 @@ export function LiveFaceCamera() {
         setErrorMessage(t('face.cameraError') || 'Kamerani yoqishda xatolik yuz berdi.');
       }
     }
-  }, [t]);
+  }, [t, sound]);
 
   const stopWebcam = useCallback(() => {
     if (videoRef.current?.srcObject) {
@@ -185,6 +225,47 @@ export function LiveFaceCamera() {
             </div>
           </div>
         )}
+
+        {/* Real-time attendee detection toast */}
+        <AnimatePresence>
+          {recentAttendee && (
+            <motion.div
+              initial={reduced ? false : { opacity: 0, y: 15, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+              className="pointer-events-auto absolute inset-x-3 bottom-3 z-20 flex items-center justify-between gap-3 rounded-xl border border-white/25 bg-neutral-900/90 p-2.5 shadow-2xl backdrop-blur-xl"
+            >
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/25 text-emerald-400 shadow-[0_0_12px_rgba(52,199,89,0.4)]">
+                  <CheckCircle2 className="h-4.5 w-4.5" strokeWidth={2.2} />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-xs font-semibold text-white">
+                      {recentAttendee.name}
+                    </span>
+                    <span className="inline-flex items-center gap-0.5 rounded bg-emerald-500/25 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                      <Sparkles className="h-2.5 w-2.5" />
+                      Qayd etildi
+                    </span>
+                  </div>
+                  <div className="truncate text-[11px] text-white/70">
+                    {recentAttendee.group} · {recentAttendee.time}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setRecentAttendee(null)}
+                className="shrink-0 rounded-md bg-white/10 px-2 py-1 text-[11px] font-medium text-white/80 transition-colors hover:bg-white/20 hover:text-white"
+              >
+                Yopish
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {status === 'STANDBY' && (

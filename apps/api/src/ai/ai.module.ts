@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
+import { PrismaService } from '../prisma/prisma.service';
 import { StudentsModule } from '../students/students.module';
 import { TeachersModule } from '../teachers/teachers.module';
 import { AttendanceModule } from '../attendance/attendance.module';
@@ -9,6 +10,7 @@ import { ScheduleModule } from '../schedule/schedule.module';
 import { AuditModule } from '../audit/audit.module';
 import { GroupsModule } from '../groups/groups.module';
 import { CoursesModule } from '../courses/courses.module';
+import { AcademicRiskModule } from '../academic-risk/academic-risk.module';
 
 import { StudentsService } from '../students/students.service';
 import { TeachersService } from '../teachers/teachers.service';
@@ -51,6 +53,7 @@ import { GeminiProvider } from './infrastructure/providers/gemini.provider';
     AuditModule,
     GroupsModule,
     CoursesModule,
+    AcademicRiskModule,
   ],
   controllers: [AiController, AiWorkspaceController],
   providers: [
@@ -77,6 +80,7 @@ import { GeminiProvider } from './infrastructure/providers/gemini.provider';
         InvoicesService,
         GroupsService,
         CoursesService,
+        PrismaService,
       ],
     },
   ],

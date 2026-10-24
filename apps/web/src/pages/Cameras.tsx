@@ -39,10 +39,11 @@ import { formatDateTime } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Camera, CameraProtocol } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { TranslateFn } from '@/i18n/I18nProvider';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * MOTION TOKENS & VARIANTS
@@ -730,7 +731,7 @@ const CameraEventsTable = memo(function CameraEventsTable({
 }: {
   data: unknown;
 }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const events =
     (
       data as {
@@ -873,7 +874,7 @@ const CameraDetailTabs = memo(function CameraDetailTabs({
   health: ReturnType<typeof useQuery>;
   workerStatus: ReturnType<typeof useQuery>;
 }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const [tab, setTab] = useState<TabKey>('events');
   const tabs: { key: TabKey; labelKey: string; icon: readonly string[]; tone: Tone }[] = [
     { key: 'events', labelKey: 'cameras.tabEvents', icon: I.activity, tone: 'blue' },
@@ -986,7 +987,7 @@ const CameraDetailTabs = memo(function CameraDetailTabs({
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function CamerasPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('cameras.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
@@ -1376,12 +1377,14 @@ export function CamerasPage() {
 
   /* ── 3. Main Render ───────────────────────────────────────────────── */
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="page-container relative z-10 space-y-5 pb-10"
-    >
+    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+      <AuroraMesh variant="security" opacity={0.65} />
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="page-container relative z-10 space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
+      >
       {toastNode}
 
       {/* ═══ 1 · HERO HEADER CARD ═══ */}
@@ -2414,5 +2417,6 @@ export function CamerasPage() {
         loading={deleteCamera.isPending}
       />
     </motion.div>
+  </div>
   );
 }

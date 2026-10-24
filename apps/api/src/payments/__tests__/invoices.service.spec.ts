@@ -339,3 +339,55 @@ describe('InvoicesService — student scoping', () => {
     );
   });
 });
+
+
+describe('InvoicesService — tuition proration accuracy', () => {
+  it('proratePreview does not lose rounding sums when remainingLessons equals totalLessons', async () => {
+    const prisma = createMockPrisma();
+    prisma.student.findFirst.mockResolvedValue({
+      id: 'stu-1',
+      user: { firstName: 'Ali', lastName: 'Valiyev' },
+    });
+    const svc = new InvoicesService(
+      prisma as never,
+      createMockAudit() as never,
+      { emit: vi.fn().mockResolvedValue(undefined) } as never,
+      { ensureNotClosedTx: vi.fn(), ensureNotClosed: vi.fn().mockResolvedValue(undefined) } as never,
+    );
+
+    const res = await svc.proratePreview(orgId, {
+      studentId: 'stu-1',
+      startDate: '2026-10-01',
+      fullMonthlyAmount: 1_000_000,
+      totalLessonsInMonth: 12,
+      remainingLessons: 12,
+    });
+
+    expect(res.proratedTotal).toBe(1_000_000);
+    expect(res.remainingLessons).toBe(12);
+  });
+
+  it('proratePreview calculates partial month with high precision without premature division truncation', async () => {
+    const prisma = createMockPrisma();
+    prisma.student.findFirst.mockResolvedValue({
+      id: 'stu-1',
+      user: { firstName: 'Ali', lastName: 'Valiyev' },
+    });
+    const svc = new InvoicesService(
+      prisma as never,
+      createMockAudit() as never,
+      { emit: vi.fn().mockResolvedValue(undefined) } as never,
+      { ensureNotClosedTx: vi.fn(), ensureNotClosed: vi.fn().mockResolvedValue(undefined) } as never,
+    );
+
+    const res = await svc.proratePreview(orgId, {
+      studentId: 'stu-1',
+      startDate: '2026-10-15',
+      fullMonthlyAmount: 1_000_000,
+      totalLessonsInMonth: 12,
+      remainingLessons: 5,
+    });
+
+    expect(res.proratedTotal).toBe(416667);
+  });
+});

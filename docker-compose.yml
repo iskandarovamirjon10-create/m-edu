@@ -58,7 +58,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-medu}:${POSTGRES_PASSWORD:?put a strong POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-medu}?schema=public
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET}
-      - CORS_ORIGIN=${CORS_ORIGIN}
+      - CORS_ORIGIN=${CORS_ORIGIN:-${NEXT_PUBLIC_APP_URL:-http://localhost:8080}}
       - BIOMETRIC_ENCRYPTION_KEY=${BIOMETRIC_ENCRYPTION_KEY}
       - FACE_ENGINE_PROVIDER=${FACE_ENGINE_PROVIDER:-real-local}
       # The ONNX models ship in the repository under packages/face-engine/models
@@ -73,6 +73,8 @@ services:
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL:-admin@medu.test}
+      - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD}
       - TRUST_PROXY=1
     depends_on:
       db:

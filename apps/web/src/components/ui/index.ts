@@ -48,3 +48,5 @@ export {
 // `ui.tsx` provides a richer set of legacy aliases (TextInput, Modal,
 // Pagination, useToasts, statusColor, etc.) and is the file pages import
 // from via `@/components/ui`. We only add the ones that are missing.
+
+export { AuroraMesh, type AuroraMeshProps, type AuroraVariant } from './AuroraMesh';

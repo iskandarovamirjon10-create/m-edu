@@ -91,8 +91,8 @@ export class TelegramContextService {
         isActive: true,
         student: { select: { id: true, balance: true } },
         teacher: { select: { id: true } },
-        settings: { select: { language: true } },
-        organization: { select: { language: true } },
+        settings: { select: { language: true, timezone: true } },
+        organization: { select: { language: true, timezone: true } },
       },
     });
     if (!user || !user.isActive) throw new TelegramContextError('INACTIVE');
@@ -120,6 +120,7 @@ export class TelegramContextService {
         user.organization?.language,
         account.languageCode,
       ),
+      timezone: user.settings?.timezone || user.organization?.timezone || 'Asia/Tashkent',
       studentId: user.student?.id ?? null,
       teacherId: user.teacher?.id ?? null,
       userId: user.id,
@@ -140,7 +141,7 @@ export class TelegramContextService {
         email: true,
         organizationId: true,
         isActive: true,
-        organization: { select: { language: true } },
+        organization: { select: { language: true, timezone: true } },
       },
     });
     if (!parent || !parent.isActive) throw new TelegramContextError('INACTIVE');
@@ -168,6 +169,7 @@ export class TelegramContextService {
         parent.organization?.language,
         account.languageCode,
       ),
+      timezone: parent.organization?.timezone || 'Asia/Tashkent',
       studentId: null,
       teacherId: null,
       userId: null,
@@ -226,6 +228,7 @@ export interface TelegramContext {
   isParent: boolean;
   displayName: string;
   language: TelegramLanguage;
+  timezone?: string;
   /** The principal's own Student row id (STUDENT role only). */
   studentId: string | null;
   /** The principal's own Teacher row id (teaching roles only). */

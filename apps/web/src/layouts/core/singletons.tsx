@@ -1,16 +1,16 @@
 /**
- * M-EDU Layout Singletons & Utilities
+ * M-EDU Layout Singletons & Utilities — Apple Premium Engine Edition.
  *
- *  · SSR-safe singleton stores built on `useSyncExternalStore` (no leaks)
+ *  · SSR-safe singleton stores built on `useSyncExternalStore` (zero memory leaks)
  *  · Deduplicated MediaQuery registry — one listener per query app-wide
- *  · Reference-counted scroll lock (safe for nested modals & drawers)
+ *  · Reference-counted scroll lock with `--scrollbar-compensation` preventing header shift
  *  · Cross-tab and same-tab synchronized persisted state
- *  · Reactive network / battery / hardware device profiling
- *  · Cursor spotlight, haptics, focus trap, roving keyboard nav, hotkeys
+ *  · Reactive network / battery / hardware device profiling with glass quality tiers
+ *  · Cursor spotlight, haptics, focus trap (WCAG 2.2 AA), roving keyboard nav, hotkeys
+ *  · Real-time virtual keyboard detection syncing `--keyboard-height` to CSS root
  *
  * Every exported name, hook and signature is preserved — other modules and
- * tests import them unchanged. Helpers may delegate to shared utilities, but
- * the public surface never moves.
+ * tests import them unchanged.
  */
 import {
   useState,
@@ -227,13 +227,15 @@ function updateViewportSnapshot() {
   const vv = window.visualViewport;
   const width = Math.round(vv ? vv.width : window.innerWidth);
   const height = Math.round(vv ? vv.height : window.innerHeight);
-  const keyboardHeight = Math.max(0, Math.round(window.innerHeight - height));
-  const keyboardOpen = keyboardHeight > 140;
+  const rawKeyboardH = Math.max(0, Math.round(window.innerHeight - height));
+  const keyboardOpen = rawKeyboardH > 140;
+  const keyboardHeight = keyboardOpen ? rawKeyboardH : 0;
+
   const next: ViewportMetrics = {
     width,
     height,
     keyboardOpen,
-    keyboardHeight: keyboardOpen ? keyboardHeight : 0,
+    keyboardHeight,
   };
   if (
     cachedViewport.width === next.width &&
@@ -244,6 +246,15 @@ function updateViewportSnapshot() {
     return;
   }
   cachedViewport = next;
+
+  // Publish to document root for responsive CSS ergonomics
+  document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
+  if (keyboardOpen) {
+    document.documentElement.setAttribute('data-keyboard-open', 'true');
+  } else {
+    document.documentElement.removeAttribute('data-keyboard-open');
+  }
+
   for (const cb of viewportListeners) cb();
 }
 
@@ -561,7 +572,7 @@ export function useHaptics() {
  * 4 · ACCESSIBILITY, SCROLL LOCK & KEYBOARD MANAGEMENT
  * ══════════════════════════════════════════════════════════════ */
 
-/* ── 4.1 Reference-counted scroll lock (safe for nested modals) ── */
+/* ── 4.1 Reference-counted scroll lock (zero fixed-header layout shift) ── */
 let scrollLockCount = 0;
 let savedBodyOverflow = '';
 let savedBodyPaddingRight = '';
@@ -578,6 +589,9 @@ export function acquireScrollLock(): () => void {
       const currentPad =
         parseInt(window.getComputedStyle(document.body).paddingRight, 10) || 0;
       document.body.style.paddingRight = `${currentPad + scrollbarW}px`;
+      document.documentElement.style.setProperty('--scrollbar-compensation', `${scrollbarW}px`);
+    } else {
+      document.documentElement.style.setProperty('--scrollbar-compensation', '0px');
     }
   }
   scrollLockCount += 1;
@@ -590,6 +604,7 @@ export function acquireScrollLock(): () => void {
     if (scrollLockCount === 0) {
       document.body.style.overflow = savedBodyOverflow;
       document.body.style.paddingRight = savedBodyPaddingRight;
+      document.documentElement.style.removeProperty('--scrollbar-compensation');
     }
   };
 }
@@ -608,7 +623,11 @@ const FOCUSABLE_SELECTOR = [
   'textarea:not([disabled])',
   'input:not([disabled]):not([type="hidden"])',
   'select:not([disabled])',
+  'summary',
   '[tabindex]:not([tabindex="-1"])',
+  '[contenteditable="true"]',
+  'audio[controls]',
+  'video[controls]',
 ].join(', ');
 
 /* ── 4.2 Focus trap (scroll lock + Escape + focus restore) ── */

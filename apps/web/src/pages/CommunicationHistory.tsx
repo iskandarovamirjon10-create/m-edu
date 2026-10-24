@@ -8,9 +8,10 @@ import { useQuery } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
 import { GlassPageHeader, GlassPageLoader, GlassTable, GlassTHead, GlassTBody, GlassTR, GlassTH, GlassTD, GlassEmptyState, GlassErrorState, GlassSelect, GlassButton, GlassInput, GlassTabs } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { communicationApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 
 const SPRING = {
   snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
@@ -62,7 +63,7 @@ function getStatusConfig(status: string) {
  case'SENT': return { bg:'bg-brand-500/10', text:'text-brand-600', border:'border-blue-500/20', dot:'bg-blue-500', fill:'#3b82f6'};
  case'FAILED': return { bg:'bg-rose-500/10', text:'text-rose-600', border:'border-rose-500/20', dot:'bg-rose-500', fill:'#f43f5e'};
  case'BOUNCED': return { bg:'bg-amber-500/10', text:'text-amber-600', border:'border-amber-500/20', dot:'bg-amber-500', fill:'#f59e0b'};
- case'QUEUED': return { bg:'bg-[var(--bg-surface)]0/10', text:'text-[var(--text-secondary)]', border:'border-gray-500/20', dot:'bg-gray-400 animate-pulse', fill:'#9ca3af'};
+ case'QUEUED': return { bg:'bg-slate-500/10', text:'text-slate-500 dark:text-slate-400', border:'border-slate-500/20', dot:'bg-slate-400 animate-pulse', fill:'#94a3b8'};
  default: return { bg:'bg-[var(--state-hover)]', text:'text-[var(--text-secondary)]', border:'border-[var(--border-subtle)]/50', dot:'bg-gray-400', fill:'#9ca3af'};
 }
 }
@@ -92,7 +93,7 @@ function CommStatCard({ label, value, highlightColor}: { label: string; value: s
 /* ── TABS ─────────────────────────────────────────────────────────────────── */
 
 function TimelineTab() {
- const { t} = useI18n();
+ const { t } = useSafeI18n();
  usePageTitle(t('communication.title'));
  const [entityType, setEntityType] = useState('STUDENT');
  const [entityId, setEntityId] = useState('');
@@ -225,7 +226,7 @@ function TimelineTab() {
 }
 
 function HistoryTab() {
- const { t} = useI18n();
+ const { t } = useSafeI18n();
  const [page, setPage] = useState(1);
  const [channelFilter, setChannelFilter] = useState('');
  const [statusFilter, setStatusFilter] = useState('');
@@ -391,7 +392,7 @@ function HistoryTab() {
 // ── SVG Donut & Bar Chart Components ────────────────────────────────────────
 
 function DonutChart({ data}: { data: any[]}) {
- const { t } = useI18n();
+ const { t } = useSafeI18n();
  const total = data.reduce((sum, d) => sum + d.value, 0) || 1;
  let cumulative = 0;
  
@@ -440,7 +441,7 @@ function DonutChart({ data}: { data: any[]}) {
 }
 
 function StatsTab() {
- const { t} = useI18n();
+ const { t } = useSafeI18n();
 
  const statsQuery = useQuery({
  queryKey: ['communication-stats'],
@@ -563,24 +564,20 @@ function StatsTab() {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 export function CommunicationHistoryPage() {
- const { t} = useI18n();
+ const { t } = useSafeI18n();
  const [activeTab, setActiveTab] = useState('timeline');
 
  const tabs = TABS.map((tab) => ({ id: tab.id, label: t(`communication.tab.${tab.id}`) || tab.labelKey}));
 
   return (
     <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
-      {/* Soft Apple-style Background Ambient Orbs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div className="absolute top-[0%] left-[-10%] w-[40%] h-[40%] rounded-full bg-brand-400/5 blur-[120px]" />
-        <div className="absolute bottom-[20%] right-[-5%] w-[30%] h-[50%] rounded-full bg-indigo-400/5 blur-[130px]" />
-      </div>
+      <AuroraMesh variant="corporate" opacity={0.65} />
 
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="relative z-10 w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6"
+        className="relative z-10 w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))]"
       >
         <motion.div variants={itemVariants}>
           <GlassPageHeader

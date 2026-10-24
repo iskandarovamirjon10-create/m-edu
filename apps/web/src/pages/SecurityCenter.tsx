@@ -14,11 +14,12 @@ import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
 import { GlassBadge, GlassPageLoader, GlassErrorState, GlassEmptyState, GlassButton, GlassStatCard } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { useToast } from '@/components/ui/GlassToast';
 import { securityApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 
@@ -94,7 +95,7 @@ const FILTER_LABEL_KEYS: Record<'all' | 'new' | 'critical', string> = {
 };
 
 export function SecurityCenterPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('security.title'));
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'new' | 'critical'>('new');
@@ -138,9 +139,9 @@ export function SecurityCenterPage() {
       id: alert.id,
       title: alert.title,
       subtitle: `${alert.type} · ${alert.severity}`,
-      status: {
-        label: alert.status,
-        tone: alert.status === 'RESOLVED' ? 'green' : alert.severity === 'CRITICAL' ? 'red' : 'amber',
+      badge: {
+        text: alert.status,
+        tone: alert.status === 'RESOLVED' ? 'emerald' : alert.severity === 'CRITICAL' ? 'rose' : 'amber',
       },
       metrics: [
         { label: 'Daraja', value: alert.severity },
@@ -202,13 +203,10 @@ export function SecurityCenterPage() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={SPRING.smooth}
-      className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto"
+      className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
-      {/* Ambient glass lighting substrate */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-        <div className={`absolute -top-[12%] right-[10%] h-[420px] w-[500px] rounded-full blur-[140px] ${isHealthyRisk ? 'bg-emerald-500/10 dark:bg-emerald-600/[0.08]' : 'bg-rose-500/10 dark:bg-rose-600/[0.08]'}`} />
-        <div className="absolute top-[40%] left-[5%] h-[380px] w-[460px] rounded-full bg-violet-500/10 blur-[130px] dark:bg-violet-600/[0.07]" />
-      </div>
+      {/* Ambient AuroraMesh substrate */}
+      <AuroraMesh variant="security" />
 
       {/* ── Apple V2 Hero Header ── */}
       <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
@@ -321,7 +319,7 @@ export function SecurityCenterPage() {
                 playTick();
                 setFilter(f);
               }}
-              className={`relative px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
+              className={`relative px-4 py-2.5 min-h-[44px] inline-flex items-center justify-center text-xs font-semibold rounded-xl transition-all duration-200 ${
                 isActive
                   ? 'text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
@@ -400,7 +398,7 @@ export function SecurityCenterPage() {
                   <button
                     type="button"
                     onClick={() => handleOpenSecuritySidecar(alert)}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:border-indigo-400 hover:bg-indigo-50/50 hover:text-indigo-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200 dark:hover:text-indigo-400"
+                    className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:border-indigo-400 hover:bg-indigo-50/50 hover:text-indigo-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200 dark:hover:text-indigo-400"
                     title="macOS Split-View Sidecar (◨)"
                   >
                     <span>◨</span>
@@ -408,6 +406,7 @@ export function SecurityCenterPage() {
                   </button>
                   <GlassButton
                     size="sm"
+                    className="min-h-[44px]"
                     variant={alert.status === 'RESOLVED' ? 'ghost' : 'secondary'}
                     onClick={() => resolveMutation.mutate(alert.id)}
                     disabled={alert.status === 'RESOLVED'}

@@ -168,6 +168,9 @@ const CATALOGUE: Catalogue = {
     'btn.copilot': '🤖 Copilot',
 
     'help.title': '❓ Available commands',
+    'briefing.title': 'Executive morning briefing',
+    'calendar.title': 'Apple & Google Calendar sync',
+    'cockpit.title': 'Teacher cockpit & smart board',
     'help.hint': 'Send a command or open the menu.',
 
     'day.MONDAY': 'Mon',
@@ -316,6 +319,9 @@ const CATALOGUE: Catalogue = {
     'btn.copilot': '🤖 Copilot',
 
     'help.title': '❓ Доступные команды',
+    'briefing.title': 'Утренний брифинг руководителя',
+    'calendar.title': 'Синхронизация с календарем (Apple/Google)',
+    'cockpit.title': 'Панель преподавателя и смарт-доска',
     'help.hint': 'Отправьте команду или откройте меню.',
 
     'day.MONDAY': 'Пн',
@@ -464,6 +470,9 @@ const CATALOGUE: Catalogue = {
     'btn.copilot': '🤖 Copilot',
 
     'help.title': '❓ Mavjud buyruqlar',
+    'briefing.title': 'Rahbariyat ertalabki brifingi',
+    'calendar.title': 'Apple & Google Calendar sinxronizatsiyasi',
+    'cockpit.title': 'O\'qituvchi paneli va smart doska',
     'help.hint': 'Buyruq yuboring yoki menyuni oching.',
 
     'day.MONDAY': 'Du',

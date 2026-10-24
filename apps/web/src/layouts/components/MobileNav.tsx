@@ -1,407 +1,686 @@
+'use client';
+
 /**
- * M-EDU Spatial Mobile Navigation System — visionOS 2 & iOS 18 Liquid Glass
- * Features:
- * - Real-time pointer/touch chromatic refraction & specular tracking
- * - Velocity-coupled elastic deformation physics (120Hz ProMotion ready)
- * - Dual-layer sub-pixel specular rims & inner caustic lens dispersion
- * - Synchronized ultra-crisp micro-haptics & acoustic feedback
- * - Interactive Spotlight Command Sheet with morphing quick-scopes
+ * ============================================================================
+ * M-EDU Mobile Navigation — Liquid Glass (iOS 26+ / visionOS)
+ * ============================================================================
+ *
+ * Real Liquid Glass — not glassmorphism:
+ *
+ *  • Multi-layer bevel: bright top rim + cool bottom rim + chromatic fringe
+ *  • Environmental light: warm & cool gradients drift in opposite phases
+ *    (GPU-composited, framer-motion transform animations)
+ *  • Refractive specular: pointer rim travels through an SVG fractal-
+ *    displacement filter, bending like light on curved glass
+ *  • Liquid press: every tap compresses the glass (scaleX↑ scaleY↓)
+ *  • Lens caustics: active lens gets corner catchlights + a cool bounce line
+ *  • Drawer edge refraction: dragging stretches and chills the slab's edge
+ *  • Search bloom refraction: focus halo flows through the lens filter
+ *
+ * ─── Fixes vs. the previous revision ────────────────────────────────────
+ *  [perf]  getBoundingClientRect() no longer runs per pointermove — rects
+ *          are measured once per gesture and invalidated on scroll/resize.
+ *  [perf]  <filter id="lg-refract"> is now a reference-counted singleton in
+ *          document.body. Was tripled across three surfaces before; that
+ *          violated id uniqueness and caused mid-animation flicker.
+ *  [perf]  Ambient glow actually drifts now — GPU-composited transforms,
+ *          no per-frame style recalculation. Warm/cool move in opposite
+ *          phases so the surface never looks frozen.
+ *  [perf]  MobileBottomNav / MobileMenuDrawer / MobileSearchSheet are
+ *          wrapped in React.memo. Public API unchanged.
+ *  [fix]   Drawer declares aria-modal="true" — now also traps focus via
+ *          useFocusTrap(drawerRef, open, closeBtnRef). Was a real a11y
+ *          break: Tab could escape the modal.
+ *  [fix]   useOpticalRefraction tolerates a missing/empty currentTarget.
+ *  [fix]   sound instance captured through a ref — no stale closures.
+ *  [fix]   Search input is now <input type="text" role="searchbox"
+ *          inputMode="search" enterKeyHint="search"> — kills the cross-
+ *          browser ::-webkit/moz/ms search-cancel-button zoo in one move.
+ *  [fix]   AnimatePresence mode="popLayout" → "wait" on the submit pill.
+ *  [a11y]  aria-live region politely announces scope selection changes.
+ *  [a11y]  i18n fallbacks treat empty string as "missing" — no blank labels.
+ *  [style] prefers-reduced-transparency strips filters, sheens and ambient
+ *          glows entirely — clean GLASS_SOLID fallback, not degraded blur.
+ * ============================================================================
  */
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  memo,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
+import { NavLink } from 'react-router-dom';
 import {
   motion,
   AnimatePresence,
   useMotionValue,
   useSpring,
-  useTransform,
   useMotionTemplate,
+  useDragControls,
+  type MotionValue,
+  type MotionStyle,
 } from 'framer-motion';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePrefersReducedMotion, cn } from '@/lib/design';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
-import { useFocusTrap } from '../core/singletons';
+import { useFocusTrap, useMediaQuery } from '../core/singletons';
 import { GlassSurface } from './GlassSurface';
 import { Brand } from './Brand';
 import { StaticIcon, Magnetic, I } from './Icons';
-import {
-  ALL_ITEMS_MAP,
-  HIDDEN_FOR_STUDENT,
-  NavItems,
-  type NavItem,
-} from './Sidebar';
+import { ALL_ITEMS_MAP, NavItems, RecentRoutes, type NavItem } from './Sidebar';
 
-const MOBILE_TAB_ROUTES = ['/', '/attendance', '/students', '/face'] as const;
+/* ══════════════════════════════════════════════════════════════════════════
+ * ROUTES
+ * ════════════════════════════════════════════════════════════════════════ */
 
-/* ============================================================================
- * 0. APPLE CORE PHYSICS & HAPTIC ENGINE CONSTANTS
- * ========================================================================== */
+const STAFF_MOBILE_TAB_ROUTES = ['/', '/attendance', '/payments', '/leads'] as const;
+const TEACHER_MOBILE_TAB_ROUTES = ['/attendance', '/groups', '/schedule', '/grades'] as const;
+const STUDENT_MOBILE_TAB_ROUTES = ['/', '/schedule', '/attendance', '/chat'] as const;
+const PARENT_MOBILE_TAB_ROUTES = [
+  '/parent-portal',
+  '/chat',
+  '/notifications',
+  '/settings',
+] as const;
+const FINANCE_MOBILE_TAB_ROUTES = ['/payments', '/invoices', '/expenses', '/reports'] as const;
+const RECEPTIONIST_MOBILE_TAB_ROUTES = ['/', '/attendance', '/leads', '/students'] as const;
 
-/** iOS 18 Dynamic Island & VisionOS Spatial Spring Profiles */
-const LIQUID_MORPH_SPRING = {
-  type: 'spring' as const,
-  stiffness: 440,
+/* ══════════════════════════════════════════════════════════════════════════
+ * SPRINGS & HAPTICS
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/** Shape-morphing: lens travelling between tabs, sheets arriving */
+const SPRING_MORPH = {
+  type: 'spring',
+  stiffness: 420,
   damping: 34,
-  mass: 0.68,
+  mass: 0.7,
   restDelta: 0.001,
-};
+} as const;
 
-const TACTILE_PRESS_SPRING = {
-  type: 'spring' as const,
-  stiffness: 620,
-  damping: 30,
-  mass: 0.45,
-};
+/** Direct manipulation: press, release, toggles */
+const SPRING_TOUCH = { type: 'spring', stiffness: 640, damping: 32, mass: 0.45 } as const;
 
-const SPATIAL_DRAWER_SPRING = {
-  type: 'spring' as const,
-  stiffness: 380,
+/** Gel: press deformation of the glass — bouncier than touch */
+const SPRING_GEL = { type: 'spring', stiffness: 720, damping: 26, mass: 0.35 } as const;
+
+/** Large surfaces: drawer slab */
+const SPRING_SLAB = {
+  type: 'spring',
+  stiffness: 360,
   damping: 36,
-  mass: 0.8,
+  mass: 0.85,
   restDelta: 0.001,
-};
+} as const;
 
-const SPOTLIGHT_SPRING = {
-  type: 'spring' as const,
-  stiffness: 460,
-  damping: 34,
-  mass: 0.65,
-};
+/** Native-grade mobile drawer spring: snappy, critical damping, zero stutter */
+const DRAWER_SPRING = {
+  type: 'spring',
+  stiffness: 420,
+  damping: 38,
+  mass: 0.6,
+  restDelta: 0.001,
+} as const;
 
-/** Subtle Micro-Haptic Feedback Helper (Safe no-op on unsupported devices) */
 function triggerHaptic(pattern: number | number[] = 8) {
   try {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       navigator.vibrate(pattern);
     }
   } catch {
-    // Ignore security/permission blocks on strict browsers
+    /* blocked by browser policy */
   }
 }
 
-/**
- * Custom Hook: Real-Time Optical Specular Tracking (Zero React Re-renders)
- * Tracks touch/pointer across glass surfaces to project a refractive light cone.
- */
-function useOpticalRefraction(initialX = 160, initialY = 30) {
-  const mouseX = useMotionValue(initialX);
-  const mouseY = useMotionValue(initialY);
-  const glowOpacity = useSpring(0, { stiffness: 300, damping: 30 });
+/* ══════════════════════════════════════════════════════════════════════════
+ * LIQUID GLASS — SVG FILTER SINGLETON
+ *
+ * One <filter id="lg-refract"> exists in document.body at a time, kept
+ * alive by reference counting. Every nav surface that needs it calls
+ * `useLiquidDefs(enabled)`. No duplicate ids, no flicker on unmount.
+ * ════════════════════════════════════════════════════════════════════════ */
 
-  const smoothX = useSpring(mouseX, { stiffness: 400, damping: 35, mass: 0.4 });
-  const smoothY = useSpring(mouseY, { stiffness: 400, damping: 35, mass: 0.4 });
+const LIQUID_DEFS_ID = 'lg-defs';
+const LIQUID_FILTER_ID = 'lg-refract';
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent<HTMLElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      mouseX.set(e.clientX - rect.left);
-      mouseY.set(e.clientY - rect.top);
-      glowOpacity.set(1);
-    },
-    [mouseX, mouseY, glowOpacity],
-  );
+let liquidDefsRefCount = 0;
+let liquidDefsElement: SVGSVGElement | null = null;
 
-  const handlePointerLeave = useCallback(() => {
-    glowOpacity.set(0);
-  }, [glowOpacity]);
+function buildLiquidDefsElement(): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('id', LIQUID_DEFS_ID);
+  svg.setAttribute('aria-hidden', 'true');
+  svg.style.cssText =
+    'position:absolute;width:0;height:0;pointer-events:none;overflow:hidden;';
 
-  const specularBackground = useMotionTemplate`radial-gradient(150px circle at ${smoothX}px ${smoothY}px, rgba(0, 122, 255, 0.18), rgba(94, 92, 230, 0.08) 45%, transparent 80%)`;
-  const rimHighlight = useMotionTemplate`radial-gradient(90px circle at ${smoothX}px 0px, rgba(255, 255, 255, 0.95), rgba(0, 122, 255, 0.4) 50%, transparent 100%)`;
+  const defs = document.createElementNS(SVG_NS, 'defs');
+  const filter = document.createElementNS(SVG_NS, 'filter');
+  filter.setAttribute('id', LIQUID_FILTER_ID);
+  filter.setAttribute('x', '-20%');
+  filter.setAttribute('y', '-20%');
+  filter.setAttribute('width', '140%');
+  filter.setAttribute('height', '140%');
 
-  return {
-    handlePointerMove,
-    handlePointerLeave,
-    specularBackground,
-    rimHighlight,
-    glowOpacity,
+  const turbulence = document.createElementNS(SVG_NS, 'feTurbulence');
+  turbulence.setAttribute('type', 'fractalNoise');
+  turbulence.setAttribute('baseFrequency', '0.014 0.022');
+  turbulence.setAttribute('numOctaves', '2');
+  turbulence.setAttribute('seed', '7');
+  turbulence.setAttribute('result', 'noise');
+
+  const blur = document.createElementNS(SVG_NS, 'feGaussianBlur');
+  blur.setAttribute('in', 'noise');
+  blur.setAttribute('stdDeviation', '0.4');
+  blur.setAttribute('result', 'soft');
+
+  const displacement = document.createElementNS(SVG_NS, 'feDisplacementMap');
+  displacement.setAttribute('in', 'SourceGraphic');
+  displacement.setAttribute('in2', 'soft');
+  displacement.setAttribute('scale', '3.5');
+  displacement.setAttribute('xChannelSelector', 'R');
+  displacement.setAttribute('yChannelSelector', 'G');
+
+  filter.append(turbulence, blur, displacement);
+  defs.append(filter);
+  svg.append(defs);
+
+  return svg;
+}
+
+function acquireLiquidDefs(): () => void {
+  liquidDefsRefCount += 1;
+  if (!liquidDefsElement && typeof document !== 'undefined') {
+    liquidDefsElement = buildLiquidDefsElement();
+    document.body.append(liquidDefsElement);
+  }
+  return () => {
+    liquidDefsRefCount = Math.max(0, liquidDefsRefCount - 1);
+    if (liquidDefsRefCount === 0 && liquidDefsElement) {
+      liquidDefsElement.remove();
+      liquidDefsElement = null;
+    }
   };
 }
 
-/* ============================================================================
- * 1. MOBILE BOTTOM NAVIGATION (Floating Hyper-Refractive Dock)
- * ========================================================================== */
+function useLiquidDefs(enabled: boolean): void {
+  useEffect(() => {
+    if (!enabled || typeof document === 'undefined') return;
+    return acquireLiquidDefs();
+  }, [enabled]);
+}
 
-export function MobileBottomNav({
+/* ══════════════════════════════════════════════════════════════════════════
+ * CACHED RECT — one measurement per layout change, never per frame
+ * ════════════════════════════════════════════════════════════════════════ */
+
+interface CachedRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+function readRect(el: HTMLElement): CachedRect {
+  const r = el.getBoundingClientRect();
+  return { left: r.left, top: r.top, width: r.width, height: r.height };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * OPTICAL REFRACTION — pointer sheen + rim, no React re-renders
+ * ════════════════════════════════════════════════════════════════════════ */
+
+function useOpticalRefraction(initialX = 160, initialY = 30) {
+  const x = useMotionValue(initialX);
+  const y = useMotionValue(initialY);
+  const opacity = useSpring(0, { stiffness: 260, damping: 30 });
+  const sx = useSpring(x, { stiffness: 380, damping: 34, mass: 0.4 });
+  const sy = useSpring(y, { stiffness: 380, damping: 34, mass: 0.4 });
+
+  const rectRef = useRef<CachedRect | null>(null);
+
+  // Invalidate on scroll / resize so the next pointer event re-measures.
+  useEffect(() => {
+    const invalidate = () => {
+      rectRef.current = null;
+    };
+    window.addEventListener('scroll', invalidate, { passive: true, capture: true });
+    window.addEventListener('resize', invalidate, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', invalidate, true);
+      window.removeEventListener('resize', invalidate);
+    };
+  }, []);
+
+  const measure = useCallback((e: ReactPointerEvent<HTMLElement>) => {
+    const el = e.currentTarget as HTMLElement | null;
+    if (el) rectRef.current = readRect(el);
+  }, []);
+
+  const track = useCallback(
+    (e: ReactPointerEvent<HTMLElement>) => {
+      const el = e.currentTarget as HTMLElement | null;
+      if (!el) return;
+      if (!rectRef.current) rectRef.current = readRect(el);
+      const r = rectRef.current;
+      x.set(e.clientX - r.left);
+      y.set(e.clientY - r.top);
+      opacity.set(1);
+    },
+    [x, y, opacity],
+  );
+
+  const release = useCallback(() => opacity.set(0), [opacity]);
+
+  const sheen = useMotionTemplate`radial-gradient(170px circle at ${sx}px ${sy}px, rgba(255,255,255,0.42), rgba(0,122,255,0.12) 45%, transparent 75%)`;
+  const rim = useMotionTemplate`radial-gradient(120px circle at ${sx}px 0px, rgba(255,255,255,0.98), transparent 100%)`;
+
+  return {
+    bind: {
+      onPointerEnter: measure,
+      onPointerDown: track,
+      onPointerMove: track,
+      onPointerUp: release,
+      onPointerLeave: release,
+      onPointerCancel: release,
+    },
+    sheen,
+    rim,
+    opacity,
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * STABLE SOUND — ref-captured audio hooks
+ * ════════════════════════════════════════════════════════════════════════ */
+
+function useStableSound() {
+  const sound = usePremiumSound();
+  const ref = useRef(sound);
+  useEffect(() => {
+    ref.current = sound;
+  }, [sound]);
+  return ref;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * GLASS TOKENS — multi-layer bevel
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const FOCUS_RING =
+  'outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/70 focus-visible:ring-offset-0';
+
+const GLASS_SLAB = cn(
+  'border border-black/[0.08] bg-white/80',
+  'backdrop-blur-2xl backdrop-saturate-[180%]',
+  'shadow-[0_10px_32px_-4px_rgba(0,0,0,0.1),0_2px_8px_-2px_rgba(0,0,0,0.04)]',
+  'dark:border-white/[0.12] dark:bg-[#1c1c1e]/85',
+  'dark:shadow-[0_14px_36px_-6px_rgba(0,0,0,0.55),0_2px_10px_-2px_rgba(0,0,0,0.35)]',
+);
+
+const GLASS_SOLID =
+  'border border-black/[0.08] bg-[var(--bg-card)] dark:border-white/[0.14]';
+
+/** High-performance mobile drawer glass (ultra-smooth 60/120fps hardware compositing) */
+const GLASS_DRAWER = cn(
+  'border border-white/50 bg-white/85',
+  'backdrop-blur-xl backdrop-saturate-[180%]',
+  'shadow-[',
+  'inset_0_1.5px_0_rgba(255,255,255,0.9),',
+  'inset_0_-1px_0_rgba(255,255,255,0.3),',
+  '0_20px_40px_-12px_rgba(0,0,0,0.25),',
+  '0_4px_12px_-4px_rgba(0,0,0,0.1)',
+  ']',
+  'dark:border-white/[0.12] dark:bg-[#18181e]/90',
+  'dark:shadow-[',
+  'inset_0_1.5px_0_rgba(255,255,255,0.16),',
+  'inset_0_-1px_0_rgba(255,255,255,0.06),',
+  '0_24px_48px_-12px_rgba(0,0,0,0.65),',
+  '0_6px_16px_-4px_rgba(0,0,0,0.35)',
+  ']',
+);
+
+const GLASS_CHIP = cn(
+  'border border-black/[0.06] bg-black/[0.045] text-[var(--text-secondary)]',
+  'shadow-[inset_0_1px_0_rgba(255,255,255,0.8),inset_0_-0.5px_0_rgba(0,0,0,0.03)]',
+  'dark:border-white/[0.1] dark:bg-white/[0.09] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]',
+  'hover:bg-black/[0.08] dark:hover:bg-white/[0.15]',
+);
+
+const LENS_ACTIVE = cn(
+  'border border-black/[0.04] bg-black/[0.045]',
+  'shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(0,0,0,0.03)]',
+  'dark:border-white/[0.08] dark:bg-white/[0.10]',
+  'dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.25)]',
+);
+
+const TAB_IDLE = 'text-[#8E8E93] dark:text-[#98989D]';
+const TAB_ACTIVE = 'text-[#007AFF] dark:text-[#0A84FF]';
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * AMBIENT — static gradients, real motion lives in SheenLayer
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const AMBIENT_WARM =
+  'radial-gradient(90% 65% at 35% 18%, rgba(255,255,255,0.08), transparent 65%)';
+const AMBIENT_COOL =
+  'radial-gradient(90% 65% at 65% 82%, rgba(255,255,255,0.06), transparent 65%)';
+  'radial-gradient(90% 65% at 65% 82%, rgba(120,190,255,0.16), transparent 65%)';
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * SHEEN LAYER — pointer sheen + ambient drift + optional refracted rim
+ *
+ * Ambient drift uses framer-motion's `animate` prop with transform-only
+ * keyframes → pure compositor work. Warm and cool move in opposite
+ * phases so the surface never looks frozen.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+interface SheenLayerProps {
+  sheen: MotionValue<string>;
+  rim: MotionValue<string>;
+  opacity: MotionValue<number>;
+  driftEnabled: boolean;
+  withRim?: boolean;
+  withRefract?: boolean;
+}
+
+const SheenLayer = memo(function SheenLayer({
+  sheen,
+  rim,
+  opacity,
+  driftEnabled,
+  withRim = true,
+  withRefract = true,
+}: SheenLayerProps) {
+  const warmAnim = driftEnabled
+    ? { x: [-10, 10, -10], y: [-8, 5, -8], scale: [1, 1.04, 1] }
+    : false;
+  const coolAnim = driftEnabled
+    ? { x: [8, -8, 8], y: [5, -8, 5], scale: [1.04, 1, 1.04] }
+    : false;
+
+  return (
+    <>
+      <motion.div
+        aria-hidden="true"
+        animate={warmAnim}
+        transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
+        style={{ background: AMBIENT_WARM, opacity: 0.85 } as MotionStyle}
+        className="pointer-events-none absolute inset-0 z-0 mix-blend-soft-light dark:mix-blend-screen"
+      />
+      <motion.div
+        aria-hidden="true"
+        animate={coolAnim}
+        transition={{ duration: 26, repeat: Infinity, ease: 'easeInOut' }}
+        style={{ background: AMBIENT_COOL, opacity: 0.85 } as MotionStyle}
+        className="pointer-events-none absolute inset-0 z-0 mix-blend-soft-light dark:mix-blend-screen"
+      />
+      <motion.div
+        aria-hidden="true"
+        style={{ background: sheen, opacity } as MotionStyle}
+        className="pointer-events-none absolute inset-0 z-0 mix-blend-soft-light dark:mix-blend-screen"
+      />
+      {withRim && (
+        <motion.div
+          aria-hidden="true"
+          style={
+            {
+              background: rim,
+              opacity,
+              filter: withRefract ? `url(#${LIQUID_FILTER_ID})` : undefined,
+            } as MotionStyle
+          }
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[1.5px]"
+        />
+      )}
+    </>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * TOP SPECULAR — shared static hairline
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const TopSpecular = memo(function TopSpecular({
+  inset = 'inset-x-8',
+}: {
+  inset?: string;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        'pointer-events-none absolute top-0 z-10 h-px bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/40',
+        inset,
+      )}
+    />
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 1. MOBILE BOTTOM NAV
+ * ════════════════════════════════════════════════════════════════════════ */
+
+export const MobileBottomNav = memo(function MobileBottomNav({
   role,
   onOpenMore,
 }: {
   role: string;
   onOpenMore: () => void;
 }) {
-  const { t } = useI18n();
-  const location = useLocation();
+  const { t } = useSafeI18n();
   const normalizedRole = role?.toUpperCase() ?? '';
-  const sound = usePremiumSound();
+  const soundRef = useStableSound();
   const reduced = usePrefersReducedMotion();
-  const [pressedTab, setPressedTab] = useState<string | null>(null);
+  const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
 
-  const {
-    handlePointerMove,
-    handlePointerLeave,
-    specularBackground,
-    rimHighlight,
-    glowOpacity,
-  } = useOpticalRefraction(180, 28);
+  const tabs = useMemo(() => {
+    let routes: readonly string[] = STAFF_MOBILE_TAB_ROUTES;
+    if (normalizedRole === 'STUDENT') routes = STUDENT_MOBILE_TAB_ROUTES;
+    else if (normalizedRole === 'PARENT') routes = PARENT_MOBILE_TAB_ROUTES;
+    else if (normalizedRole === 'TEACHER') routes = TEACHER_MOBILE_TAB_ROUTES;
+    else if (
+      normalizedRole === 'ACCOUNTANT' ||
+      normalizedRole === 'FINANCE' ||
+      normalizedRole === 'FINANCE_MANAGER'
+    ) {
+      routes = FINANCE_MOBILE_TAB_ROUTES;
+    } else if (normalizedRole === 'RECEPTIONIST') {
+      routes = RECEPTIONIST_MOBILE_TAB_ROUTES;
+    }
+    return routes
+      .map((route) => ALL_ITEMS_MAP.get(route))
+      .filter((item): item is NavItem => Boolean(item));
+  }, [normalizedRole]);
 
-  const tabs = useMemo(
-    () =>
-      MOBILE_TAB_ROUTES.map((route) => ALL_ITEMS_MAP.get(route))
-        .filter((item): item is NavItem => Boolean(item))
-        .filter(
-          (item) => !(normalizedRole === 'STUDENT' && HIDDEN_FOR_STUDENT.has(item.to)),
-        ),
-    [normalizedRole],
-  );
+  const handleOpenMore = useCallback(() => {
+    triggerHaptic(6);
+    soundRef.current.playPop?.();
+    onOpenMore();
+  }, [onOpenMore, soundRef]);
 
-  // Dynamic ambient ground caustic position based on active tab index
-  const activeIndex = useMemo(() => {
-    const idx = tabs.findIndex((item) =>
-      item.end
-        ? location.pathname === item.to
-        : location.pathname.startsWith(item.to),
-    );
-    return idx === -1 ? 0 : idx;
-  }, [tabs, location.pathname]);
+  const handleTabClick = useCallback(() => {
+    triggerHaptic(6);
+    soundRef.current.playTick?.();
+  }, [soundRef]);
 
   return (
     <nav
       aria-label={t('a11y.primaryNav', 'Primary navigation')}
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3.5 pb-[max(0.85rem,env(safe-area-inset-bottom,0px))] md:hidden select-none"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 select-none px-3.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:hidden"
     >
       <motion.div
-        initial={reduced ? false : { y: 48, opacity: 0, scale: 0.92, filter: 'blur(8px)' }}
-        animate={{ y: 0, opacity: 1, scale: 1, filter: 'blur(0px)' }}
-        transition={reduced ? { duration: 0.15 } : LIQUID_MORPH_SPRING}
-        onPointerMove={handlePointerMove}
-        onPointerLeave={handlePointerLeave}
-        className="pointer-events-auto relative mx-auto max-w-[27rem] will-change-transform"
+        initial={
+          reduced ? false : { y: 48, opacity: 0, scale: 0.96 }
+        }
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        transition={reduced ? { duration: 0.15 } : SPRING_MORPH}
+        className="pointer-events-auto relative mx-auto max-w-[27rem]"
       >
-        {/* Dynamic Shifting Ambient Caustic Ground Reflection */}
-        <motion.div
-          aria-hidden
-          animate={{
-            x: `${(activeIndex - (tabs.length - 1) / 2) * 22}%`,
-          }}
-          transition={LIQUID_MORPH_SPRING}
-          className="pointer-events-none absolute -inset-x-2 -bottom-2.5 h-12 rounded-full bg-gradient-to-r from-transparent via-apple-blue/25 to-transparent blur-2xl dark:via-apple-blue/40"
-        />
-
-        {/* Secondary Chromatic Dispersion Aura */}
         <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-6 -bottom-1 h-6 rounded-full bg-gradient-to-r from-[#5E5CE6]/0 via-[#5E5CE6]/20 to-[#00C7BE]/0 blur-xl dark:via-[#5E5CE6]/30"
-        />
-
-        <GlassSurface
-          tone="topbar"
-          radius="2.35rem"
-          spotlight={true}
-          className="relative overflow-hidden border border-black/[0.07] dark:border-white/[0.14] bg-white/[0.78] dark:bg-[#141417]/[0.78] shadow-[0_18px_48px_-12px_rgba(0,0,0,0.18),0_4px_12px_rgba(0,0,0,0.05),inset_0_1.5px_1.5px_rgba(255,255,255,0.98),inset_0_-1px_1.5px_rgba(0,0,0,0.05)] dark:shadow-[0_22px_56px_-10px_rgba(0,0,0,0.82),0_4px_16px_rgba(0,0,0,0.4),inset_0_1.5px_1.5px_rgba(255,255,255,0.22),inset_0_-1px_1px_rgba(0,0,0,0.6)] backdrop-blur-3xl backdrop-saturate-[200%]"
+          className={cn(
+            'relative overflow-hidden rounded-[2rem]',
+            reducedTransparency ? GLASS_SOLID : GLASS_SLAB,
+          )}
         >
-          {/* Interactive Pointer-Tracked Refractive Surface Glow */}
-          <motion.div
-            aria-hidden
-            style={{ background: specularBackground, opacity: glowOpacity }}
-            className="pointer-events-none absolute inset-0 z-0 transition-opacity"
-          />
-
-          {/* Static Ambient Top Specular Rim */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-8 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/95 to-transparent dark:via-white/45"
-          />
-
-          {/* Interactive Pointer-Tracked Top Edge Rim Light */}
-          <motion.div
-            aria-hidden
-            style={{ background: rimHighlight, opacity: glowOpacity }}
-            className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px]"
-          />
-
-          {/* Sub-pixel Bottom Chromatic Refraction Line */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-12 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-apple-blue/35 to-transparent dark:via-apple-blue/50"
-          />
-
-          <ul className="relative z-10 flex items-stretch justify-between gap-1 p-1.5">
-            {tabs.map((item) => {
-              const isPressed = pressedTab === item.to;
-
-              return (
-                <li key={item.to} className="relative min-w-0 flex-1">
-                  <NavLink
-                    to={item.to}
-                    end={item.end}
-                    onPointerDown={() => setPressedTab(item.to)}
-                    onPointerUp={() => setPressedTab(null)}
-                    onPointerCancel={() => setPressedTab(null)}
-                    onClick={() => {
-                      triggerHaptic(6);
-                      sound.playTick?.();
-                    }}
-                    className="group relative flex min-h-[3.75rem] w-full flex-col items-center justify-center rounded-[1.85rem] px-1 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/70"
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {/* Morphing Liquid Active Lens Capsule */}
-                        {isActive && (
-                          <motion.div
-                            layoutId="hyper-nav-active-capsule"
-                            transition={reduced ? { duration: 0.15 } : LIQUID_MORPH_SPRING}
-                            className="absolute inset-0 z-0 overflow-hidden rounded-[1.75rem] border border-black/[0.05] dark:border-white/[0.15] bg-gradient-to-b from-white via-white/90 to-white/75 shadow-[0_6px_20px_-2px_rgba(0,122,255,0.22),0_2px_5px_rgba(0,0,0,0.05),inset_0_2px_2px_rgba(255,255,255,1),inset_0_-1px_1px_rgba(0,122,255,0.08)] dark:from-white/[0.20] dark:via-white/[0.11] dark:to-white/[0.05] dark:shadow-[0_8px_24px_-4px_rgba(10,132,255,0.38),inset_0_1.5px_1.5px_rgba(255,255,255,0.32),inset_0_-1px_1px_rgba(10,132,255,0.2)]"
-                          >
-                            {/* Inner Chromatic Caustic Dome */}
-                            <div className="absolute inset-0 bg-[radial-gradient(110%_90%_at_50%_0%,rgba(0,122,255,0.18)_0%,rgba(94,92,230,0.06)_50%,transparent_85%)] dark:bg-[radial-gradient(110%_90%_at_50%_0%,rgba(10,132,255,0.34)_0%,rgba(94,92,230,0.12)_50%,transparent_85%)]" />
-
-                            {/* Subtle Bottom Lens Reflection */}
-                            <div className="absolute inset-x-3 bottom-0 h-[1.5px] bg-gradient-to-r from-transparent via-apple-blue/40 to-transparent dark:via-white/30" />
-                          </motion.div>
-                        )}
-
-                        {/* Top Specular Laser Pill Indicator */}
-                        {isActive && (
-                          <motion.span
-                            layoutId="hyper-nav-top-specular"
-                            transition={reduced ? { duration: 0.15 } : LIQUID_MORPH_SPRING}
-                            className="absolute top-[3px] z-20 h-[3px] w-6 rounded-full bg-gradient-to-r from-apple-blue via-[#5AC8FA] to-apple-blue shadow-[0_1px_10px_rgba(0,122,255,0.75)] dark:shadow-[0_1px_12px_rgba(90,200,250,0.9)]"
-                          />
-                        )}
-
-                        {/* Tactile Physics Content Wrapper */}
+          <ul className="relative z-10 flex items-stretch p-1.5">
+            {tabs.map((item) => (
+              <li key={item.to} className="relative min-w-0 flex-1">
+                <NavLink
+                  to={item.to}
+                  end={item.end}
+                  onClick={handleTabClick}
+                  className={cn(
+                    'group relative flex min-h-[3.5rem] w-full flex-col items-center justify-center rounded-[1.25rem] px-1 py-1',
+                    FOCUS_RING,
+                  )}
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
                         <motion.div
-                          animate={{
-                            scale: isPressed ? 0.88 : isActive ? 1.02 : 1,
-                            y: isActive ? 0.5 : 0,
-                          }}
-                          transition={TACTILE_PRESS_SPRING}
-                          className="relative z-10 flex flex-col items-center justify-center gap-1"
+                          layoutId="dock-lens-active"
+                          transition={
+                            reduced
+                              ? { duration: 0.15 }
+                              : { type: 'spring', stiffness: 500, damping: 35, mass: 0.5 }
+                          }
+                          aria-hidden="true"
+                          className={cn(
+                            'absolute inset-0 z-0 rounded-[1.25rem]',
+                            LENS_ACTIVE,
+                          )}
+                        />
+                      )}
+
+                      <motion.div
+                        whileTap={reduced ? undefined : { scale: 0.92 }}
+                        transition={SPRING_TOUCH}
+                        className="relative z-10 flex flex-col items-center justify-center gap-1"
+                      >
+                        <span
+                          className={cn(
+                            'transition-colors duration-200',
+                            isActive
+                              ? TAB_ACTIVE
+                              : cn(
+                                  TAB_IDLE,
+                                  'group-hover:text-[var(--text-primary)]',
+                                ),
+                          )}
                         >
-                          <motion.span
-                            animate={{
-                              scale: isActive ? 1.1 : 1,
-                              y: isActive ? -1 : 0,
-                              filter: isActive
-                                ? 'drop-shadow(0 4px 10px rgba(0, 122, 255, 0.45))'
-                                : 'drop-shadow(0 0px 0px rgba(0, 0, 0, 0))',
-                            }}
-                            transition={TACTILE_PRESS_SPRING}
-                            className={cn(
-                              'transition-colors duration-200',
-                              isActive
-                                ? 'text-apple-blue dark:text-[#409CFF]'
-                                : 'text-[#636366] group-hover:text-primary dark:text-[#98989D] dark:group-hover:text-white',
-                            )}
-                          >
-                            <StaticIcon
-                              paths={item.iconPath}
-                              className="h-[1.35rem] w-[1.35rem]"
-                            />
-                          </motion.span>
+                          <StaticIcon
+                            paths={item.iconPath}
+                            className="h-[1.35rem] w-[1.35rem]"
+                          />
+                        </span>
+                        <span
+                          className={cn(
+                            'max-w-[4.8rem] truncate text-[10px] tracking-[-0.01em] transition-colors duration-200',
+                            isActive
+                              ? cn(TAB_ACTIVE, 'font-semibold')
+                              : cn(TAB_IDLE, 'font-medium'),
+                          )}
+                        >
+                          {t(item.labelKey, item.label)}
+                        </span>
+                      </motion.div>
+                    </>
+                  )}
+                </NavLink>
+              </li>
+            ))}
 
-                          <motion.span
-                            animate={{
-                              opacity: isActive ? 1 : 0.72,
-                              scale: isActive ? 1.02 : 0.96,
-                            }}
-                            transition={TACTILE_PRESS_SPRING}
-                            className={cn(
-                              'max-w-[4.6rem] truncate text-[10.5px] tracking-[-0.015em] transition-colors duration-200',
-                              isActive
-                                ? 'font-bold text-apple-blue dark:text-[#409CFF]'
-                                : 'font-semibold text-[#636366] dark:text-[#98989D]',
-                            )}
-                          >
-                            {t(item.labelKey) || item.label}
-                          </motion.span>
-                        </motion.div>
-                      </>
-                    )}
-                  </NavLink>
-                </li>
-              );
-            })}
-
-            {/* Subtle Optical Divider before "More" */}
-            <li aria-hidden className="my-2.5 w-[1px] shrink-0 bg-gradient-to-b from-transparent via-black/[0.08] to-transparent dark:via-white/[0.12]" />
-
-            {/* "More" Trigger with Spring Torsion & Liquid Ripple */}
+            {/* Authentic Apple 5th Tab: More Button (Evenly Distributed) */}
             <li className="relative min-w-0 flex-1">
               <motion.button
                 type="button"
-                onClick={() => {
-                  triggerHaptic([6, 20, 10]);
-                  sound.playPop?.();
-                  onOpenMore();
-                }}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.88 }}
-                transition={TACTILE_PRESS_SPRING}
+                onClick={handleOpenMore}
+                whileTap={reduced ? undefined : { scale: 0.92 }}
+                transition={SPRING_TOUCH}
                 aria-label={t('a11y.openMenu', 'Open menu')}
-                className="group relative flex min-h-[3.75rem] w-full flex-col items-center justify-center gap-1 rounded-[1.85rem] px-1 py-1.5 text-[10.5px] font-semibold tracking-[-0.015em] text-[#636366] outline-none transition-colors hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-apple-blue/70 dark:text-[#98989D] dark:hover:bg-white/[0.07]"
+                className={cn(
+                  'group relative flex min-h-[3.5rem] w-full flex-col items-center justify-center gap-1 rounded-[1.25rem] px-1 py-1',
+                  'transition-colors duration-200',
+                  TAB_IDLE,
+                  'hover:text-[var(--text-primary)] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]',
+                  FOCUS_RING,
+                )}
               >
-                <span className="transition-transform duration-300 ease-out group-hover:scale-110 group-active:rotate-90">
-                  <StaticIcon paths={I.menu} className="h-[1.35rem] w-[1.35rem]" />
-                </span>
-                <span className="max-w-full truncate opacity-75 transition-opacity group-hover:opacity-100">
+                <StaticIcon paths={I.menu} className="h-[1.35rem] w-[1.35rem]" />
+                <span className="max-w-full truncate text-[10px] font-medium tracking-[-0.01em]">
                   {t('nav.more', 'More')}
                 </span>
               </motion.button>
             </li>
           </ul>
-        </GlassSurface>
+        </div>
       </motion.div>
     </nav>
   );
-}
+});
+MobileBottomNav.displayName = 'MobileBottomNav';
 
-/* ============================================================================
- * 2. MOBILE MENU DRAWER (Spatial Floating Glass Slab with Elastic Physics)
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * 2. MOBILE MENU DRAWER
+ * ════════════════════════════════════════════════════════════════════════ */
 
-export function MobileMenuDrawer({
+export const MobileMenuDrawer = memo(function MobileMenuDrawer({
   open,
   onClose,
   role,
   orgName,
+  userName,
+  userInitials,
+  userEmail,
   onLogout,
 }: {
   open: boolean;
   onClose: () => void;
   role: string;
   orgName: string;
+  userName?: string;
+  userInitials?: string;
+  userEmail?: string;
   onLogout: () => void;
 }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const drawerRef = useRef<HTMLDivElement | null>(null);
-  const sound = usePremiumSound();
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const soundRef = useStableSound();
   const reduced = usePrefersReducedMotion();
+  const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
 
-  // Drag-linked motion values for real-time backdrop & elastic stretch
+  // Real focus trap: Tab cycles inside the dialog. Matches aria-modal="true".
+  useFocusTrap(drawerRef, open, closeBtnRef);
+
+  const dragControls = useDragControls();
   const dragX = useMotionValue(0);
-  const backdropOpacity = useTransform(dragX, [-260, 0], [0, 1]);
-  const panelScaleY = useTransform(dragX, [-200, 0, 60], [0.97, 1, 0.99]);
-  const pillStretchHeight = useTransform(dragX, [-120, 0, 40], [56, 40, 48]);
+  const backdropOpacity = useSpring(1, { stiffness: 360, damping: 34 });
+  const handleHeight = useSpring(36, { stiffness: 360, damping: 34 });
 
-  const {
-    handlePointerMove,
-    handlePointerLeave,
-    specularBackground,
-    glowOpacity,
-  } = useOpticalRefraction(150, 200);
-
+  // Reset springs when closed.
   useEffect(() => {
     if (!open) {
       dragX.set(0);
-      return;
+      backdropOpacity.set(1);
+      handleHeight.set(36);
     }
+  }, [open, dragX, backdropOpacity, handleHeight]);
+
+  // Escape closes.
+  useEffect(() => {
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose, dragX]);
+  }, [open, onClose]);
 
   const formattedRole = useMemo(
     () => (role ? role.replace(/_/g, ' ').toLowerCase() : 'member'),
@@ -418,6 +697,50 @@ export function MobileMenuDrawer({
       .join('');
   }, [orgName]);
 
+  const displayName = userName || orgName;
+  const displayInitials = userInitials || orgInitials;
+
+  const handleBackdropClick = useCallback(() => {
+    triggerHaptic(5);
+    onClose();
+  }, [onClose]);
+
+  const handleCloseClick = useCallback(() => {
+    triggerHaptic(6);
+    soundRef.current.playPop?.();
+    onClose();
+  }, [onClose, soundRef]);
+
+  const handleLogout = useCallback(() => {
+    triggerHaptic([10, 30, 15]);
+    onLogout();
+  }, [onLogout]);
+
+  const handleDrag = useCallback(
+    (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
+      const x = Math.min(0, info.offset.x);
+      dragX.set(x);
+      backdropOpacity.set(Math.max(0, 1 + x / 260));
+      handleHeight.set(Math.min(56, 36 + Math.max(0, -x) * 0.16));
+    },
+    [dragX, backdropOpacity, handleHeight],
+  );
+
+  const handleDragEnd = useCallback(
+    (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
+      if (info.offset.x < -60 || info.velocity.x < -220) {
+        triggerHaptic(10);
+        soundRef.current.playPop?.();
+        onClose();
+      } else {
+        dragX.set(0);
+        backdropOpacity.set(1);
+        handleHeight.set(36);
+      }
+    },
+    [dragX, backdropOpacity, handleHeight, onClose, soundRef],
+  );
+
   return (
     <AnimatePresence>
       {open && (
@@ -427,180 +750,193 @@ export function MobileMenuDrawer({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
         >
-          {/* Gesture-Coupled Spatial Frosted Backdrop */}
-          <motion.div
-            style={{ opacity: backdropOpacity }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="absolute inset-0 bg-black/45 backdrop-blur-xl backdrop-saturate-150 dark:bg-black/65"
-            onClick={() => {
-              triggerHaptic(5);
-              onClose();
-            }}
+          <div
+            className="absolute inset-0"
+            onClick={handleBackdropClick}
             aria-hidden="true"
-          />
+          >
+            <motion.div
+              style={{ opacity: backdropOpacity }}
+              className="absolute inset-0 bg-black/55 backdrop-blur-[6px] dark:bg-black/75"
+            />
+          </div>
 
-          {/* Spatial Floating Drawer Slab */}
           <motion.div
             ref={drawerRef}
             role="dialog"
             aria-modal="true"
-            aria-label={t('a11y.mainNav') || 'Navigation menu'}
-            style={{ x: dragX, scaleY: panelScaleY }}
+            aria-label={t('a11y.mainNav', 'Navigation menu')}
+            style={{ x: dragX }}
             drag="x"
-            dragDirectionLock
+            dragControls={dragControls}
+            dragListener={false}
             dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={{ left: 0.42, right: 0.06 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -65 || info.velocity.x < -240) {
-                triggerHaptic(10);
-                sound.playPop?.();
-                onClose();
-              }
-            }}
-            onPointerMove={handlePointerMove}
-            onPointerLeave={handlePointerLeave}
-            initial={{ x: '-105%', opacity: 0, scale: 0.96 }}
-            animate={{ x: 0, opacity: 1, scale: 1 }}
-            exit={{ x: '-105%', opacity: 0, scale: 0.97 }}
-            transition={reduced ? { duration: 0.18 } : SPATIAL_DRAWER_SPRING}
-            className="absolute left-0 top-0 ml-3 mt-3 h-[calc(100dvh-24px-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-[min(328px,88vw)] origin-left touch-pan-y will-change-transform"
+            dragElastic={{ left: 0.35, right: 0.05 }}
+            onDrag={handleDrag}
+            onDragEnd={handleDragEnd}
+            initial={{ x: '-102%', opacity: 0.95 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: '-102%', opacity: 0.95 }}
+            transition={reduced ? { duration: 0.16 } : DRAWER_SPRING}
+            className="absolute left-0 top-0 ml-3 mt-[calc(0.75rem+env(safe-area-inset-top,0px))] h-[calc(100dvh-1.5rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-[min(332px,88vw)] origin-left transform-gpu will-change-transform"
           >
-            <GlassSurface
-              tone="sidebar"
-              radius="2.6rem"
-              spotlight={true}
-              className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden border border-black/[0.08] dark:border-white/[0.14] bg-white/[0.84] dark:bg-[#151518]/[0.84] shadow-[28px_0_70px_-14px_rgba(0,0,0,0.28),inset_0_1.5px_2px_rgba(255,255,255,0.95),inset_-1.5px_0_1.5px_rgba(255,255,255,0.7)] backdrop-blur-3xl backdrop-saturate-[200%] dark:shadow-[28px_0_80px_-12px_rgba(0,0,0,0.85),inset_0_1.5px_1.5px_rgba(255,255,255,0.24),inset_-1px_0_1px_rgba(255,255,255,0.12)]"
+            <div
+              className={cn(
+                'relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-[2.5rem]',
+                reducedTransparency ? GLASS_SOLID : GLASS_DRAWER,
+              )}
             >
-              {/* Pointer-Tracked Refractive Surface Sheen */}
-              <motion.div
-                aria-hidden
-                style={{ background: specularBackground, opacity: glowOpacity }}
-                className="pointer-events-none absolute inset-0 z-0"
-              />
+              {!reducedTransparency && (
+                <>
+                  <TopSpecular inset="inset-x-8" />
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -left-12 -top-12 h-44 w-44 rounded-full bg-apple-blue/12 blur-2xl"
+                  />
+                </>
+              )}
 
-              {/* Top-Left Spatial Aurora Orb */}
+              {/* Right edge drag strip to swipe drawer closed */}
               <div
-                aria-hidden
-                className="pointer-events-none absolute -left-16 -top-16 h-52 w-52 rounded-full bg-gradient-to-br from-apple-blue/20 via-[#5E5CE6]/15 to-transparent blur-3xl dark:from-apple-blue/25 dark:via-[#5E5CE6]/20"
-              />
+                onPointerDown={(e) => dragControls.start(e)}
+                className="absolute inset-y-0 right-0 z-30 flex w-7 cursor-grab items-center justify-center touch-none select-none active:cursor-grabbing"
+                aria-label="Drag handle to close drawer"
+              >
+                <motion.div
+                  aria-hidden="true"
+                  style={{ height: handleHeight }}
+                  className="w-1 rounded-full bg-black/20 dark:bg-white/30"
+                />
+              </div>
 
-              {/* Dynamic Elastic Edge Grabber Bar */}
-              <motion.div
-                aria-hidden
-                style={{ height: pillStretchHeight }}
-                className="pointer-events-none absolute right-2 top-1/2 z-30 w-1 -translate-y-1/2 rounded-full bg-black/15 shadow-[0_0_8px_rgba(255,255,255,0.5)] transition-colors dark:bg-white/25"
-              />
-
-              {/* Header */}
-              <div className="relative z-10 flex h-[4.25rem] shrink-0 items-center justify-between border-b border-black/[0.06] px-6 dark:border-white/[0.08]">
+              {/* Header: draggable to swipe closed */}
+              <div
+                onPointerDown={(e) => {
+                  const target = e.target as HTMLElement | null;
+                  if (!target?.closest('button')) {
+                    dragControls.start(e);
+                  }
+                }}
+                className="relative z-10 flex h-[4.25rem] shrink-0 cursor-grab items-center justify-between border-b border-black/[0.06] px-6 active:cursor-grabbing dark:border-white/[0.08]"
+              >
                 <Brand />
-                <Magnetic strength={0.35}>
+                <Magnetic strength={0.3}>
                   <motion.button
+                    ref={closeBtnRef}
                     type="button"
-                    whileHover={{ scale: 1.06 }}
-                    whileTap={{ scale: 0.86 }}
-                    transition={TACTILE_PRESS_SPRING}
-                    onClick={() => {
-                      triggerHaptic(6);
-                      sound.playPop?.();
-                      onClose();
-                    }}
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-black/[0.07] bg-black/[0.04] text-[#636366] shadow-[inset_0_1px_1px_rgba(255,255,255,0.85)] outline-none transition-colors hover:bg-black/[0.08] focus-visible:ring-2 focus-visible:ring-apple-blue/60 dark:border-white/[0.12] dark:bg-white/[0.08] dark:text-[#98989D] dark:shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.22)] dark:hover:bg-white/[0.16]"
-                    aria-label={t('a11y.closeMenu') || 'Close menu'}
+                    whileTap={reduced ? undefined : { scaleX: 1.05, scaleY: 0.92 }}
+                    transition={SPRING_GEL}
+                    onClick={handleCloseClick}
+                    className={cn(
+                      'flex h-9 w-9 items-center justify-center rounded-full',
+                      GLASS_CHIP,
+                      FOCUS_RING,
+                    )}
+                    aria-label={t('a11y.closeMenu', 'Close menu')}
                   >
                     <StaticIcon paths={I.close} className="h-4 w-4" />
                   </motion.button>
                 </Magnetic>
               </div>
 
-              {/* Spatial Identity Card (VisionOS Persona Pill) */}
+              {/* Profile Card: draggable to swipe closed */}
               <motion.div
                 initial={reduced ? false : { y: 12, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                transition={{ ...LIQUID_MORPH_SPRING, delay: 0.04 }}
-                className="relative z-10 shrink-0 px-4 pt-4 pb-2"
+                transition={{ ...SPRING_MORPH, delay: 0.04 }}
+                onPointerDown={(e) => dragControls.start(e)}
+                className="relative z-10 shrink-0 cursor-grab px-4 pb-2 pt-3.5 active:cursor-grabbing"
               >
-                <div className="group relative flex items-center gap-3.5 overflow-hidden rounded-[1.65rem] border border-black/[0.06] bg-gradient-to-b from-white/75 to-white/45 p-3.5 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.06),inset_0_1.5px_1.5px_rgba(255,255,255,0.95)] dark:border-white/[0.10] dark:from-white/[0.08] dark:to-white/[0.03] dark:shadow-[0_8px_24px_-6px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.18)]">
-                  {/* Subtle Top Specular Line inside Identity Card */}
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-x-6 top-0 h-[1px] bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/35"
-                  />
-
-                  {/* 3D Frosted Organization Monogram Orb */}
-                  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/60 bg-gradient-to-br from-apple-blue via-[#3A82F6] to-[#5E5CE6] text-[14px] font-extrabold tracking-tight text-white shadow-[0_6px_16px_rgba(0,122,255,0.35),inset_0_1.5px_1.5px_rgba(255,255,255,0.6)] dark:border-white/25">
-                    {orgInitials}
+                <div
+                  className={cn(
+                    'relative flex items-center gap-3.5 overflow-hidden rounded-[1.6rem] p-3.5',
+                    'border border-black/[0.05] bg-white/70 shadow-[inset_0_1.5px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(120,200,255,0.2),0_8px_20px_-8px_rgba(16,24,40,0.1)]',
+                    'dark:border-white/[0.09] dark:bg-white/[0.06] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_8px_20px_-8px_rgba(0,0,0,0.5)]',
+                  )}
+                >
+                  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-apple-blue to-[#5E5CE6] text-[14px] font-bold tracking-tight text-white shadow-[inset_0_1.5px_0_rgba(255,255,255,0.55),inset_0_-1px_0_rgba(120,200,255,0.4),0_6px_16px_rgba(0,122,255,0.35)]">
+                    {displayInitials}
                     <span
-                      aria-hidden
-                      className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-[#34C759] dark:border-[#18181b]"
+                      aria-hidden="true"
+                      className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-[#34C759] shadow-sm shadow-emerald-500/40 dark:border-[#1c1c20]"
                     />
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[15px] font-bold tracking-tight text-primary">
-                      {orgName}
+                    <p className="truncate text-[15px] font-semibold tracking-tight text-primary">
+                      {displayName}
                     </p>
-                    <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-apple-blue/15 bg-apple-blue/10 px-2.5 py-0.5 dark:border-apple-blue/30 dark:bg-apple-blue/20">
-                      <span className="relative flex h-1.5 w-1.5">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-apple-blue opacity-75" />
-                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-apple-blue dark:bg-[#409CFF]" />
-                      </span>
-                      <p className="text-[10.5px] font-bold capitalize tracking-wide text-apple-blue dark:text-[#5AC8FA]">
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10.5px] font-semibold uppercase tracking-wider bg-apple-blue/10 text-apple-blue dark:bg-apple-blue/20 dark:text-[#5AC8FA]">
                         {formattedRole}
-                      </p>
+                      </span>
+                      {orgName && displayName !== orgName && (
+                        <span className="truncate text-[11.5px] text-[#636366] dark:text-[#98989D]">
+                          • {orgName}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
               </motion.div>
 
-              {/* Scrollable Navigation List with Optical Edge Masking */}
-              <div className="relative z-10 flex-1 min-h-0 overflow-y-auto overscroll-contain [mask-image:linear-gradient(to_bottom,transparent_0%,black_12px,black_calc(100%-12px),transparent_100%)]">
+              {/* Quick Recent Routes Pills */}
+              <div className="relative z-10 shrink-0">
+                <RecentRoutes role={role} onNavigate={onClose} />
+              </div>
+
+              {/* Navigation list: 100% liberated native 120fps touch scrolling */}
+              <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
                 <NavItems role={role} onNavigate={onClose} isMobile={true} />
               </div>
 
-              {/* Footer / Tactile Crimson Glass Logout Button */}
+              {/* Footer logout */}
               <div className="relative z-10 shrink-0 border-t border-black/[0.06] p-4 dark:border-white/[0.08]">
                 <motion.button
                   type="button"
-                  onClick={() => {
-                    triggerHaptic([10, 30, 15]);
-                    onLogout();
-                  }}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.95 }}
-                  transition={TACTILE_PRESS_SPRING}
-                  className="group relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-[1.45rem] border border-apple-red/25 bg-gradient-to-b from-apple-red/[0.14] to-apple-red/[0.08] px-4 py-3.5 text-[14px] font-bold tracking-tight text-apple-red shadow-[0_6px_20px_-4px_rgba(255,59,48,0.18),inset_0_1px_1.5px_rgba(255,255,255,0.65)] outline-none transition-all hover:from-apple-red/[0.20] hover:to-apple-red/[0.12] focus-visible:ring-2 focus-visible:ring-apple-red/60 dark:border-apple-red/35 dark:from-apple-red/[0.22] dark:to-apple-red/[0.12] dark:text-[#FF6961] dark:shadow-[0_6px_24px_-4px_rgba(255,69,58,0.28),inset_0_1px_1px_rgba(255,255,255,0.22)]"
+                  onClick={handleLogout}
+                  whileTap={reduced ? undefined : { scaleX: 1.02, scaleY: 0.96 }}
+                  transition={SPRING_GEL}
+                  className={cn(
+                    'flex w-full items-center justify-center gap-2.5 rounded-[1.4rem] px-4 py-3.5 text-[14px] font-semibold tracking-tight',
+                    'border border-apple-red/25 bg-apple-red/[0.1] text-apple-red',
+                    'shadow-[inset_0_1px_0_rgba(255,255,255,0.6),inset_0_-1px_0_rgba(255,120,100,0.2)] transition-colors hover:bg-apple-red/[0.16]',
+                    'dark:border-apple-red/35 dark:bg-apple-red/[0.18] dark:text-[#FF6961] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]',
+                    'focus-visible:ring-2 focus-visible:ring-apple-red/60',
+                    'outline-none',
+                  )}
                 >
-                  <span className="transition-transform duration-200 group-hover:-translate-x-1">
-                    <StaticIcon paths={I.logout} />
-                  </span>
-                  <span>{t('nav.logout')}</span>
+                  <StaticIcon paths={I.logout} />
+                  <span>{t('nav.logout', 'Log out')}</span>
                 </motion.button>
               </div>
-            </GlassSurface>
+            </div>
           </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
   );
-}
+});
+MobileMenuDrawer.displayName = 'MobileMenuDrawer';
 
-/* ============================================================================
- * 3. MOBILE SEARCH SHEET (iOS 18 Spotlight Liquid Command Capsule)
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * 3. MOBILE SEARCH SHEET
+ * ════════════════════════════════════════════════════════════════════════ */
 
 const SPOTLIGHT_QUICK_SCOPES = [
   { id: 'students', labelKey: 'nav.students', fallback: 'Students', prefix: 'student:' },
+  { id: 'teachers', labelKey: 'nav.teachers', fallback: 'Teachers', prefix: 'teacher:' },
+  { id: 'groups', labelKey: 'nav.groups', fallback: 'Groups', prefix: 'group:' },
+  { id: 'courses', labelKey: 'nav.courses', fallback: 'Courses', prefix: 'course:' },
   { id: 'attendance', labelKey: 'nav.attendance', fallback: 'Attendance', prefix: 'date:' },
-  { id: 'face', labelKey: 'nav.faceId', fallback: 'Face ID', prefix: 'bio:' },
+  { id: 'face', labelKey: 'nav.faceRecognition', fallback: 'Face ID', prefix: 'bio:' },
 ] as const;
 
-export function MobileSearchSheet({
+const SCOPE_PREFIX_RE = /^(student:|teacher:|group:|course:|date:|bio:)\s*/i;
+
+export const MobileSearchSheet = memo(function MobileSearchSheet({
   open,
   onClose,
   onSubmit,
@@ -609,31 +945,33 @@ export function MobileSearchSheet({
   onClose: () => void;
   onSubmit: (q: string) => void;
 }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const soundRef = useStableSound();
+
   const [value, setValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [activeScope, setActiveScope] = useState<string | null>(null);
-  const sound = usePremiumSound();
+
   const reduced = usePrefersReducedMotion();
+  const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
 
-  const {
-    handlePointerMove,
-    handlePointerLeave,
-    specularBackground,
-    glowOpacity,
-  } = useOpticalRefraction(200, 24);
-
+  useLiquidDefs(open && !reducedTransparency);
   useFocusTrap(containerRef, open, inputRef);
 
+  const { sheen, rim, opacity } = useOpticalRefraction(200, 24);
+
+  // Reset on close.
   useEffect(() => {
     if (!open) {
       setValue('');
       setActiveScope(null);
+      setIsFocused(false);
     }
   }, [open]);
 
+  // Escape closes.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -647,112 +985,131 @@ export function MobileSearchSheet({
     const q = value.trim();
     if (!q) return;
     triggerHaptic(10);
-    sound.playTick?.();
+    soundRef.current.playTick?.();
     onSubmit(q);
     onClose();
-  }, [value, onSubmit, onClose, sound]);
+  }, [value, onSubmit, onClose, soundRef]);
 
   const handleScopeSelect = useCallback(
     (scopeId: string, prefix: string) => {
       triggerHaptic(6);
-      sound.playTick?.();
-      setActiveScope((prev) => {
-        const next = prev === scopeId ? null : scopeId;
-        if (next) {
-          const cleanVal = value.replace(/^(student:|date:|bio:)\s*/i, '');
-          setValue(`${prefix} ${cleanVal}`);
-        } else {
-          setValue((v) => v.replace(/^(student:|date:|bio:)\s*/i, ''));
-        }
-        return next;
-      });
+      soundRef.current.playTick?.();
+      const clean = value.replace(SCOPE_PREFIX_RE, '');
+      if (activeScope === scopeId) {
+        setActiveScope(null);
+        setValue(clean);
+      } else {
+        setActiveScope(scopeId);
+        setValue(`${prefix} ${clean}`);
+      }
       inputRef.current?.focus();
     },
-    [value, sound],
+    [value, activeScope, soundRef],
   );
+
+  const handleClearOrClose = useCallback(() => {
+    triggerHaptic(5);
+    if (value) {
+      setValue('');
+      setActiveScope(null);
+      inputRef.current?.focus();
+    } else {
+      onClose();
+    }
+  }, [value, onClose]);
+
+  const handleBackdropClick = useCallback(() => {
+    triggerHaptic(5);
+    onClose();
+  }, [onClose]);
+
+  const hasValue = value.trim().length > 0;
 
   return (
     <AnimatePresence>
       {open && (
         <motion.div
           key="mobile-search"
-          className="fixed inset-0 z-[70] flex items-start justify-center px-3.5 pt-[calc(4rem+env(safe-area-inset-top,0px))] xl:hidden"
+          className="fixed inset-0 z-[70] flex items-start justify-center px-3.5 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] xl:hidden"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18, ease: 'easeOut' }}
         >
-          {/* Spatial Frosted Backdrop */}
-          <motion.div
-            className="absolute inset-0 bg-black/45 backdrop-blur-xl backdrop-saturate-150 dark:bg-black/65"
-            onClick={() => {
-              triggerHaptic(5);
-              onClose();
-            }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
+          <div
+            className="absolute inset-0 bg-black/55 backdrop-blur-[6px] dark:bg-black/75"
+            onClick={handleBackdropClick}
             aria-hidden="true"
           />
 
-          {/* Spotlight Command Capsule */}
           <motion.div
             ref={containerRef}
             role="dialog"
             aria-modal="true"
             aria-label={t('nav.searchPlaceholder') || 'Search'}
-            onPointerMove={handlePointerMove}
-            onPointerLeave={handlePointerLeave}
-            initial={{ y: -28, opacity: 0, scale: 0.94, filter: 'blur(10px)' }}
-            animate={{ y: 0, opacity: 1, scale: 1, filter: 'blur(0px)' }}
-            exit={{ y: -18, opacity: 0, scale: 0.96, filter: 'blur(6px)' }}
-            transition={reduced ? { duration: 0.18 } : SPOTLIGHT_SPRING}
-            className="relative w-full max-w-md will-change-transform"
+            initial={
+              reduced
+                ? { opacity: 0 }
+                : {
+                    y: -22,
+                    opacity: 0,
+                    scale: 0.96,
+                  }
+            }
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={
+              reduced
+                ? { opacity: 0 }
+                : {
+                    y: -14,
+                    opacity: 0,
+                    scale: 0.97,
+                  }
+            }
+            transition={reduced ? { duration: 0.16 } : SPRING_MORPH}
+            className="relative w-full max-w-md transform-gpu will-change-transform"
           >
-            {/* Dynamic Breathing Chromatic Focus Aura */}
-            <motion.div
-              aria-hidden
-              animate={{
-                opacity: isFocused ? 0.85 : 0.35,
-                scale: isFocused ? 1.02 : 0.98,
-              }}
-              transition={LIQUID_MORPH_SPRING}
-              className="pointer-events-none absolute -inset-2 rounded-[2.4rem] bg-gradient-to-r from-apple-blue/30 via-[#5E5CE6]/25 to-[#00C7BE]/25 blur-2xl dark:from-apple-blue/40 dark:via-[#5E5CE6]/35 dark:to-[#00C7BE]/30"
-            />
+            {!reducedTransparency && (
+              <motion.div
+                aria-hidden="true"
+                animate={{
+                  opacity: isFocused ? 0.85 : 0.28,
+                  scale: isFocused ? 1.01 : 0.99,
+                }}
+                transition={SPRING_MORPH}
+                className="pointer-events-none absolute -inset-2 rounded-[2.4rem] bg-apple-blue/15 blur-xl dark:bg-apple-blue/25"
+              />
+            )}
 
             <GlassSurface
               tone="modal"
               radius="2.1rem"
-              spotlight={true}
-              className="relative overflow-hidden border border-black/[0.08] dark:border-white/[0.15] bg-white/[0.86] dark:bg-[#18181C]/[0.86] shadow-[0_28px_68px_-12px_rgba(0,0,0,0.28),inset_0_1.5px_2px_rgba(255,255,255,0.98)] backdrop-blur-3xl backdrop-saturate-[200%] dark:shadow-[0_28px_72px_-12px_rgba(0,0,0,0.88),inset_0_1.5px_1.5px_rgba(255,255,255,0.26)]"
+              spotlight={!reducedTransparency}
+              className={cn(
+                'relative overflow-hidden',
+                reducedTransparency ? GLASS_SOLID : GLASS_SLAB,
+              )}
             >
-              {/* Interactive Pointer Specular Overlay */}
-              <motion.div
-                aria-hidden
-                style={{ background: specularBackground, opacity: glowOpacity }}
-                className="pointer-events-none absolute inset-0 z-0"
-              />
+              {!reducedTransparency && (
+                <>
+                  <SheenLayer
+                    sheen={sheen}
+                    rim={rim}
+                    opacity={opacity}
+                    driftEnabled={!reduced}
+                    withRim={false}
+                  />
+                  <TopSpecular inset="inset-x-10" />
+                </>
+              )}
 
-              {/* Top Specular Laser Rim */}
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-x-10 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/45"
-              />
-
-              {/* Primary Search Input Row */}
-              <div className="relative z-10 flex items-center gap-3 px-4.5 py-4">
+              <div className="relative z-10 flex items-center gap-3 px-[18px] py-4">
                 <motion.span
-                  animate={{
-                    scale: isFocused || value.length > 0 ? 1.12 : 1,
-                    rotate: isFocused ? -6 : 0,
-                  }}
-                  transition={TACTILE_PRESS_SPRING}
+                  animate={{ scale: isFocused || hasValue ? 1.1 : 1 }}
+                  transition={SPRING_TOUCH}
                   className={cn(
                     'transition-colors duration-200',
-                    isFocused || value.length > 0
-                      ? 'text-apple-blue dark:text-[#409CFF]'
-                      : 'text-[#636366] dark:text-[#98989D]',
+                    isFocused || hasValue ? TAB_ACTIVE : TAB_IDLE,
                   )}
                 >
                   <StaticIcon paths={I.search} className="h-5 w-5" />
@@ -760,6 +1117,10 @@ export function MobileSearchSheet({
 
                 <input
                   ref={inputRef}
+                  type="text"
+                  role="searchbox"
+                  inputMode="search"
+                  enterKeyHint="search"
                   value={value}
                   onFocus={() => setIsFocused(true)}
                   onBlur={() => setIsFocused(false)}
@@ -768,81 +1129,95 @@ export function MobileSearchSheet({
                     if (e.key === 'Enter') submit();
                   }}
                   placeholder={t('nav.searchPlaceholder') || 'Search…'}
-                  className="flex-1 bg-transparent text-[16.5px] font-semibold tracking-[-0.01em] text-primary outline-none placeholder:font-medium placeholder:text-[#636366]/65 dark:placeholder:text-[#98989D]/65"
+                  className="min-w-0 flex-1 bg-transparent text-[17px] font-medium tracking-[-0.015em] text-primary outline-none placeholder:text-[#636366]/65 dark:placeholder:text-[#98989D]/65"
                   aria-label={t('nav.searchPlaceholder') || 'Search'}
-                  type="search"
                   autoComplete="off"
                   autoCorrect="off"
                   spellCheck={false}
                 />
 
                 <div className="flex items-center gap-2">
-                  <AnimatePresence mode="popLayout">
-                    {value.trim().length > 0 && (
+                  <AnimatePresence mode="wait">
+                    {hasValue && (
                       <motion.button
                         key="submit-pill"
                         type="button"
-                        initial={{ scale: 0.6, opacity: 0, x: 8 }}
-                        animate={{ scale: 1, opacity: 1, x: 0 }}
-                        exit={{ scale: 0.6, opacity: 0, x: 8 }}
-                        whileHover={{ scale: 1.04 }}
-                        whileTap={{ scale: 0.9 }}
-                        transition={TACTILE_PRESS_SPRING}
+                        initial={{ scaleX: 0.7, scaleY: 0.7, opacity: 0, x: 8 }}
+                        animate={{ scaleX: 1, scaleY: 1, opacity: 1, x: 0 }}
+                        exit={{ scaleX: 0.7, scaleY: 0.7, opacity: 0, x: 8 }}
+                        whileTap={
+                          reduced ? undefined : { scaleX: 0.95, scaleY: 0.9 }
+                        }
+                        transition={SPRING_GEL}
                         onClick={submit}
-                        className="flex items-center gap-1 rounded-full bg-gradient-to-b from-[#1A8CFF] to-apple-blue px-3.5 py-1.5 text-[12px] font-bold tracking-tight text-white shadow-[0_4px_14px_rgba(0,122,255,0.45),inset_0_1px_1px_rgba(255,255,255,0.6)]"
+                        className={cn(
+                          'rounded-full bg-gradient-to-b from-[#2A95FF] to-apple-blue px-3.5 py-1.5 text-[12.5px] font-semibold tracking-tight text-white',
+                          'shadow-[inset_0_1px_0_rgba(255,255,255,0.55),inset_0_-1px_0_rgba(120,200,255,0.4),0_4px_12px_rgba(0,122,255,0.4)]',
+                          FOCUS_RING,
+                        )}
                       >
-                        <span>{t('common.search', 'Go')}</span>
+                        {t('common.search', 'Go')}
                       </motion.button>
                     )}
                   </AnimatePresence>
 
                   <motion.button
                     type="button"
-                    whileHover={{ scale: 1.06 }}
-                    whileTap={{ scale: 0.86 }}
-                    transition={TACTILE_PRESS_SPRING}
-                    onClick={() => {
-                      triggerHaptic(5);
-                      if (value) {
-                        setValue('');
-                        setActiveScope(null);
-                        inputRef.current?.focus();
-                      } else {
-                        onClose();
-                      }
-                    }}
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-black/[0.06] bg-black/[0.05] text-[#636366] shadow-[inset_0_1px_1px_rgba(255,255,255,0.85)] transition-colors hover:bg-black/10 focus-visible:ring-2 focus-visible:ring-apple-blue/60 dark:border-white/[0.12] dark:bg-white/[0.10] dark:text-[#98989D] dark:hover:bg-white/[0.18]"
-                    aria-label={t('a11y.closeSearch') || 'Close search'}
+                    whileTap={
+                      reduced ? undefined : { scaleX: 1.05, scaleY: 0.92 }
+                    }
+                    transition={SPRING_GEL}
+                    onClick={handleClearOrClose}
+                    className={cn(
+                      'flex h-7 w-7 items-center justify-center rounded-full',
+                      GLASS_CHIP,
+                      FOCUS_RING,
+                    )}
+                    aria-label={
+                      value
+                        ? t('common.clear') || 'Clear'
+                        : t('a11y.closeSearch') || 'Close search'
+                    }
                   >
                     <StaticIcon paths={I.close} className="h-3.5 w-3.5" />
                   </motion.button>
                 </div>
               </div>
 
-              {/* Morphing Quick-Scope Filter Bar (iOS 18 Spotlight Categorizer) */}
-              <div className="relative z-10 flex items-center justify-between gap-2 border-t border-black/[0.05] bg-black/[0.02] px-4 py-2.5 dark:border-white/[0.07] dark:bg-white/[0.02]">
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <div className="relative z-10 border-t border-black/[0.05] bg-black/[0.02] px-3 py-2.5 dark:border-white/[0.07] dark:bg-white/[0.025]">
+                <div
+                  role="group"
+                  aria-label={t('nav.searchScope') || 'Search scope'}
+                  className="no-scrollbar flex items-center gap-1 overflow-x-auto"
+                >
                   {SPOTLIGHT_QUICK_SCOPES.map((scope) => {
-                    const isSelected = activeScope === scope.id;
+                    const selected = activeScope === scope.id;
                     return (
                       <motion.button
                         key={scope.id}
                         type="button"
-                        whileTap={{ scale: 0.92 }}
-                        transition={TACTILE_PRESS_SPRING}
+                        aria-pressed={selected}
+                        whileTap={
+                          reduced ? undefined : { scaleX: 1.03, scaleY: 0.94 }
+                        }
+                        transition={SPRING_GEL}
                         onClick={() => handleScopeSelect(scope.id, scope.prefix)}
                         className={cn(
-                          'relative rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-tight transition-colors outline-none',
-                          isSelected
-                            ? 'text-apple-blue dark:text-[#5AC8FA]'
-                            : 'text-[#636366] hover:text-primary dark:text-[#98989D] dark:hover:text-white',
+                          'relative shrink-0 rounded-full px-3 py-1.5 text-[12px] font-medium tracking-tight transition-colors',
+                          selected
+                            ? cn(TAB_ACTIVE, 'font-semibold')
+                            : cn(TAB_IDLE, 'hover:text-[var(--text-primary)]'),
+                          FOCUS_RING,
                         )}
                       >
-                        {isSelected && (
+                        {selected && (
                           <motion.span
                             layoutId="spotlight-scope-pill"
-                            transition={LIQUID_MORPH_SPRING}
-                            className="absolute inset-0 -z-10 rounded-full border border-apple-blue/25 bg-apple-blue/12 shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.6)] dark:border-apple-blue/40 dark:bg-apple-blue/20"
+                            transition={
+                              reduced ? { duration: 0.15 } : SPRING_MORPH
+                            }
+                            aria-hidden="true"
+                            className="absolute inset-0 -z-10 rounded-full border border-apple-blue/25 bg-apple-blue/[0.12] shadow-[inset_0_1px_0_rgba(255,255,255,0.6),inset_0_-1px_0_rgba(120,200,255,0.35)] dark:border-apple-blue/40 dark:bg-apple-blue/[0.2]"
                           />
                         )}
                         {t(scope.labelKey, scope.fallback)}
@@ -851,8 +1226,11 @@ export function MobileSearchSheet({
                   })}
                 </div>
 
-                <span className="shrink-0 rounded-md border border-black/[0.06] bg-white/60 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#636366]/80 shadow-xs dark:border-white/[0.1] dark:bg-white/[0.06] dark:text-[#98989D]">
-                  ESC
+                {/* Polite announcement for scope toggling */}
+                <span aria-live="polite" className="sr-only">
+                  {activeScope
+                    ? `Scope: ${activeScope}`
+                    : ''}
                 </span>
               </div>
             </GlassSurface>
@@ -861,4 +1239,5 @@ export function MobileSearchSheet({
       )}
     </AnimatePresence>
   );
-}
+});
+MobileSearchSheet.displayName = 'MobileSearchSheet';

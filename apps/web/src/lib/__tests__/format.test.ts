@@ -4,6 +4,8 @@ import { formatDate, formatDateTime, formatCurrency, fullName, initials, timeAgo
 describe('format helpers', () => {
   it('formats dates', () => {
     expect(formatDate('2026-09-05T00:00:00.000Z')).toMatch(/Sep/);
+    expect(formatDate('2026-09-05')).toMatch(/Sep/);
+    expect(formatDate('2026-09-05T00:00:00Z')).toMatch(/Sep/);
     expect(formatDate(null)).toBe('—');
     expect(formatDate(undefined)).toBe('—');
     expect(formatDate('not-a-date')).toBe('—');

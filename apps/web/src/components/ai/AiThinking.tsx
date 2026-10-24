@@ -78,8 +78,8 @@ export function AiThinking({
   // Realistic step progression
   useEffect(() => {
     if (externalStep !== undefined) return;
-    const t1 = setTimeout(() => setInternalStep(2), 1600);
-    const t2 = setTimeout(() => setInternalStep(3), 3600);
+    const t1 = setTimeout(() => setInternalStep(2), 1000);
+    const t2 = setTimeout(() => setInternalStep(3), 2400);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
@@ -145,16 +145,16 @@ export function AiThinking({
     >
       {/* ═══ Header glass panel ═══════════════════════════════════════ */}
       <div className="relative">
-        {/* Ambient tone-aware leak — pulses with the current step */}
+        {/* Ambient tone-aware chromatic halo — pulses with the current step */}
         <div
           aria-hidden="true"
           className={cn(
-            'pointer-events-none absolute -inset-3 -z-10 rounded-3xl blur-2xl',
-            !reduced && 'motion-safe:animate-[aiAmbient_4.5s_ease-in-out_infinite]',
+            'pointer-events-none absolute -inset-2.5 -z-10 rounded-3xl blur-2xl transition-all duration-700',
+            !reduced && 'motion-safe:animate-[aiAmbient_4s_ease-in-out_infinite]',
           )}
           style={{
-            opacity: 0.55,
-            background: `radial-gradient(ellipse at 30% 30%, ${currentTone.glow}, transparent 65%), radial-gradient(ellipse at 75% 70%, rgba(175,82,222,0.28), transparent 65%)`,
+            opacity: 0.65,
+            background: `radial-gradient(ellipse at 25% 25%, ${currentTone.glow}, transparent 65%), radial-gradient(ellipse at 75% 70%, rgba(175,82,222,0.35), transparent 65%), radial-gradient(ellipse at 50% 50%, rgba(48,176,199,0.25), transparent 70%)`,
           }}
         />
 
@@ -220,17 +220,17 @@ export function AiThinking({
           <div className="relative flex items-center gap-3 px-3.5 py-2.5">
             {/* Avatar — liquid conic ring + glass tile */}
             <div className="relative h-9 w-9 shrink-0">
-              {/* Conic ring (rotating light on glass edge) */}
+              {/* Conic chromatic ring (Apple Intelligence signature glow) */}
               <motion.span
                 aria-hidden="true"
                 className="pointer-events-none absolute -inset-[2px] rounded-2xl"
                 style={{
                   background:
-                    'conic-gradient(from 0deg, #007AFF, #5856D6, #AF52DE, #FF2D55, #FF9500, #007AFF)',
+                    'conic-gradient(from 0deg, #30B0C7, #007AFF, #5856D6, #AF52DE, #FF2D55, #FF9500, #30B0C7)',
                   filter: 'blur(0.5px)',
                 }}
                 animate={reduced ? undefined : { rotate: 360 }}
-                transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
               />
 
               {/* Inner glass tile */}

@@ -81,6 +81,9 @@ export function GlassModal({
     };
   }, [open]);
 
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   /* ── Focus trap + Escape + focus restore ───────────── */
   useEffect(() => {
     if (!open) return;
@@ -90,11 +93,22 @@ export function GlassModal({
 
     const focusables = () =>
       Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-    focusables()[0]?.focus();
+
+    // Never steal focus if focus is already inside the modal (e.g. typing in an input).
+    // On open, prefer the first editable input/textarea instead of the close 'X' button.
+    if (!el.contains(document.activeElement)) {
+      const formInput = el.querySelector<HTMLElement>(
+        'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])',
+      );
+      const closeLabel = t('a11y.closeModal', 'Close modal');
+      const nonClose = focusables().find((b) => b.getAttribute('aria-label') !== closeLabel);
+      const target = formInput ?? nonClose ?? focusables()[0];
+      target?.focus();
+    }
 
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !persistent) {
-        onClose();
+        onCloseRef.current?.();
         return;
       }
       if (e.key !== 'Tab') return;
@@ -112,7 +126,7 @@ export function GlassModal({
       } else if (!e.shiftKey && active === last) {
         e.preventDefault();
         first.focus();
-      } else if (!list.includes(active as HTMLElement)) {
+      } else if (active && !el.contains(active)) {
         e.preventDefault();
         first.focus();
       }
@@ -123,7 +137,7 @@ export function GlassModal({
       document.removeEventListener('keydown', handleKey);
       prevFocus.current?.focus();
     };
-  }, [open, onClose, persistent]);
+  }, [open, persistent]);
 
   if (!open) return null;
 
@@ -181,6 +195,8 @@ export function GlassModal({
               )}
             </div>
             <GlassButton
+              type="button"
+              tabIndex={-1}
               variant="ghost"
               size="icon-sm"
               onClick={onClose}

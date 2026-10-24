@@ -85,12 +85,15 @@ async function bootstrap() {
   app.use(express.json({ limit: BODY_LIMIT }));
   app.use(express.urlencoded({ extended: true, limit: BODY_LIMIT }));
   // CORS origins — computed before helmet so CSP connectSrc can reference them.
-  const corsOrigin = process.env.CORS_ORIGIN?.trim();
+  const corsOrigin =
+    process.env.CORS_ORIGIN?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.FRONTEND_URL?.trim();
   const corsOriginList = corsOrigin
     ? corsOrigin.split(',').map((o) => o.trim())
     : process.env.NODE_ENV === 'production'
       ? []
-      : ['http://localhost:3000', 'http://localhost:5173'];
+      : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080'];
 
   // Security headers. Swagger UI is served under /api/docs — allow its
   // inline styles/scripts/eval only for that path so CSP does not break docs.

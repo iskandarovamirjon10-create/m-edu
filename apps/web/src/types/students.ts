@@ -25,7 +25,7 @@ export interface Student {
   groups?: { group: { id: string; name: string; room?: string | null }; isActive: boolean }[];
   payments?: Payment[];
   attendance?: Attendance[];
-  _count?: { payments: number };
+  _count?: { payments?: number; faceEnrollments?: number; attendance?: number };
 }
 
 export interface StudentSummary {

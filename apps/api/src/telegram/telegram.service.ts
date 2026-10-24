@@ -74,10 +74,10 @@ export class TelegramService {
   private readonly isEnabled: boolean;
   private readonly isMock: boolean;
 
-  constructor(private readonly configService: ConfigService) {
-    this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN') || '';
+  constructor(private readonly configService?: ConfigService) {
+    this.botToken = this.configService?.get<string>('TELEGRAM_BOT_TOKEN') || '';
 
-    const configuredBaseUrl = this.configService.get<string>('TELEGRAM_API_BASE_URL');
+    const configuredBaseUrl = this.configService?.get<string>('TELEGRAM_API_BASE_URL');
     this.apiBaseUrl = resolveTelegramApiBaseUrl(configuredBaseUrl);
     if (configuredBaseUrl && this.apiBaseUrl === DEFAULT_TELEGRAM_API_BASE_URL && configuredBaseUrl.trim() !== DEFAULT_TELEGRAM_API_BASE_URL) {
       this.logger.warn(
@@ -85,13 +85,13 @@ export class TelegramService {
       );
     }
 
-    const disabledByFlag = this.configService.get<string>('TELEGRAM_ENABLED') === 'false';
-    const nodeEnv = this.configService.get<string>('NODE_ENV') || process.env.NODE_ENV;
+    const disabledByFlag = this.configService?.get<string>('TELEGRAM_ENABLED') === 'false';
+    const nodeEnv = this.configService?.get<string>('NODE_ENV') || process.env.NODE_ENV;
     // DEV MOCK only in a real development shell. `NODE_ENV=test` must never
     // silently turn a missing token into a "working" integration — specs assert
     // that an unconfigured bot fails honestly instead of faking success.
     const isDev = nodeEnv !== 'production' && nodeEnv !== 'test';
-    this.isMock = this.configService.get<string>('TELEGRAM_MOCK') === 'true' || (isDev && (!this.botToken || this.botToken.startsWith('mock')));
+    this.isMock = this.configService?.get<string>('TELEGRAM_MOCK') === 'true' || (isDev && (!this.botToken || this.botToken.startsWith('mock')));
 
     this.isEnabled = (!!this.botToken || this.isMock) && !disabledByFlag;
 
@@ -334,6 +334,93 @@ export class TelegramService {
         JSON.stringify({
           event: 'telegram_send_error',
           endpoint: 'sendMessage',
+          errorCategory: isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return {
+        ok: false,
+        errorCategory: isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR',
+        retryable: true,
+      };
+    }
+  }
+
+  /**
+   * Send a photo (by URL or file_id) with an optional HTML caption and inline keyboard.
+   */
+  async sendPhoto(
+    chatId: string,
+    photoUrl: string,
+    caption?: string,
+    options?: { replyMarkup?: InlineKeyboardMarkup },
+  ): Promise<boolean> {
+    const result = await this.sendPhotoDetailed(chatId, photoUrl, caption, options);
+    return result.ok;
+  }
+
+  async sendPhotoDetailed(
+    chatId: string,
+    photoUrl: string,
+    caption?: string,
+    options?: { replyMarkup?: InlineKeyboardMarkup },
+  ): Promise<TelegramSendResult> {
+    if (!this.isEnabled) {
+      this.logger.warn('Telegram is disabled. Photo not sent.');
+      return { ok: false, errorCategory: 'NOT_CONFIGURED', retryable: false };
+    }
+
+    if (this.isMock || this.botToken.startsWith('mock')) {
+      this.logger.log(`[TelegramService DEV MOCK] Delivered photo to chat ${chatId}: ${photoUrl}`);
+      return { ok: true, retryable: false };
+    }
+
+    try {
+      const url = this.endpoint('sendPhoto');
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          photo: photoUrl,
+          caption: caption || undefined,
+          parse_mode: 'HTML',
+          ...(options?.replyMarkup ? { reply_markup: options.replyMarkup } : {}),
+        }),
+        signal: AbortSignal.timeout(TELEGRAM_API_TIMEOUT_MS),
+      });
+
+      if (response.ok) return { ok: true, retryable: false };
+
+      const status = response.status;
+      if (status === 429) {
+        return { ok: false, errorCategory: 'RATE_LIMITED', retryable: true };
+      }
+      if (status === 403) {
+        return { ok: false, errorCategory: 'BLOCKED_USER', retryable: false };
+      }
+      if (status === 400) {
+        return { ok: false, errorCategory: 'INVALID_CHAT', retryable: false };
+      }
+      if (status === 401) {
+        return { ok: false, errorCategory: 'UNAUTHORIZED', retryable: false };
+      }
+      if (status >= 500) {
+        return { ok: false, errorCategory: 'TELEGRAM_SERVER_ERROR', retryable: true };
+      }
+
+      this.logger.error(
+        JSON.stringify({ event: 'telegram_send_photo_failed', status, endpoint: 'sendPhoto' }),
+      );
+      return { ok: false, errorCategory: 'PERMANENT', retryable: false };
+    } catch (error: unknown) {
+      const isTimeout =
+        error instanceof Error &&
+        (error.name === 'TimeoutError' || error.name === 'AbortError');
+      this.logger.error(
+        JSON.stringify({
+          event: 'telegram_send_photo_error',
+          endpoint: 'sendPhoto',
           errorCategory: isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR',
           message: error instanceof Error ? error.message : String(error),
         }),

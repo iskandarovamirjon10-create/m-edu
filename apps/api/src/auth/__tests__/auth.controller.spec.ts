@@ -553,6 +553,32 @@ describe('AuthController', () => {
       });
     });
 
+    it('supports silent refresh of expired JWT via cookie using live DB session (LOGIC-04)', async () => {
+      const mockJwt = {
+        verify: vi.fn().mockReturnValue({
+          sub: 'u-user-expired',
+          sid: 'sess-live-in-db',
+          role: 'TEACHER',
+        }),
+      };
+      const controllerWithJwt = new AuthController(
+        authService as unknown as AuthService,
+        { authenticate: vi.fn() } as unknown as ParentPortalService,
+        mockJwt as any,
+      );
+      authService.refreshToken.mockResolvedValue(mockRefreshResult);
+      const res = createMockResponse();
+      const req = {
+        cookies: { access_token: 'expired_but_valid_jwt' },
+      } as any;
+
+      const result = await controllerWithJwt.refresh(req, res);
+
+      expect(mockJwt.verify).toHaveBeenCalledWith('expired_but_valid_jwt', { ignoreExpiration: true });
+      expect(authService.refreshToken).toHaveBeenCalledWith('u-user-expired', 'sess-live-in-db', 'TEACHER');
+      expect(result).toEqual({ user: mockRefreshResult.user });
+    });
+
     it('propagates errors when token refresh fails', async () => {
       authService.refreshToken.mockRejectedValue(new UnauthorizedException('Session expired'));
       const res = createMockResponse();

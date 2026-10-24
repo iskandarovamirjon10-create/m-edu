@@ -1,3 +1,4 @@
+import { DayOfWeek } from '@prisma/client';
 import { ParentPortalService } from '../../parent-portal/parent-portal.service';
 import { TelegramRequestContext } from './command.interface';
 import { TelegramReply } from '../ui/telegram-ui.types';
@@ -209,4 +210,34 @@ export function attendanceLine(
     status: escapeHtml(row.status),
     group,
   });
+}
+
+/**
+ * Resolves the uppercase DayOfWeek in the specified timezone (default Asia/Tashkent).
+ * Ensures UTC midnight boundary drift does not cause yesterday's or tomorrow's
+ * schedule to be served to users.
+ */
+export function getWeekdayInTimezone(
+  date: Date = new Date(),
+  timeZone = 'Asia/Tashkent',
+): DayOfWeek {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'long',
+    });
+    const weekday = formatter.format(date).toUpperCase();
+    return (DayOfWeek as any)[weekday] ?? DayOfWeek.MONDAY;
+  } catch {
+    const dowMap = [
+      DayOfWeek.SUNDAY,
+      DayOfWeek.MONDAY,
+      DayOfWeek.TUESDAY,
+      DayOfWeek.WEDNESDAY,
+      DayOfWeek.THURSDAY,
+      DayOfWeek.FRIDAY,
+      DayOfWeek.SATURDAY,
+    ];
+    return dowMap[date.getDay()] ?? DayOfWeek.MONDAY;
+  }
 }

@@ -76,6 +76,7 @@ export interface UseCameraResult {
   permission: CameraPermissionState;
   devices: MediaDeviceInfo[];
   selectedDeviceId: string;
+  facingMode: 'user' | 'environment';
   canSwitchCamera: boolean;
   /** True while frames are flowing. */
   isActive: boolean;
@@ -240,6 +241,18 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraResult {
           setStatus('starting');
           setStreamVersion((version) => version + 1);
           writeGrantedHint(storageKey, true);
+
+          // Track the actually acquired device ID and facingMode from the active stream
+          const activeTrack = stream.getVideoTracks()[0];
+          const settings = activeTrack && typeof activeTrack.getSettings === 'function' ? activeTrack.getSettings() : null;
+          if (settings?.deviceId) {
+            deviceIdRef.current = settings.deviceId;
+            setSelectedDeviceId(settings.deviceId);
+            writeStoredDeviceId(storageKey, settings.deviceId);
+          }
+          if (settings?.facingMode) {
+            facingRef.current = settings.facingMode as 'user' | 'environment';
+          }
 
           void refreshDevices();
           void queryCameraPermission().then((state) => {
@@ -443,6 +456,16 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraResult {
       deviceIdRef.current = next;
       setSelectedDeviceId(next);
       writeStoredDeviceId(storageKey, next);
+
+      // Inspect target device to see if it's environment or user
+      const targetDevice = devices.find((d) => d.deviceId === next);
+      if (targetDevice?.label && /back|rear|environment|world|arqa|orqa|задн|тыльн/i.test(targetDevice.label)) {
+        facingRef.current = 'environment';
+      } else if (targetDevice?.label && /front|user|face|selfie|old|передн|фронталь/i.test(targetDevice.label)) {
+        facingRef.current = 'user';
+      } else {
+        facingRef.current = facingRef.current === 'user' ? 'environment' : 'user';
+      }
     } else {
       // Single-camera device: flip facingMode so the browser can pick another
       // physical camera if it has one.
@@ -497,6 +520,7 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraResult {
     permission,
     devices,
     selectedDeviceId,
+    facingMode: facingRef.current,
     canSwitchCamera: devices.length > 1,
     isActive: status === 'ready',
     start,

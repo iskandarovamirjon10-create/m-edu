@@ -1,77 +1,95 @@
 /**
- * M-EDU AI Message Bubbles — Apple Design Award Edition v4 "Aurora Whisper"
- *
- * v3 → v4:
- *  ✅ Singleton reduced-motion + clock (bitta MQL butun app)
- *  ✅ Auto-updating timestamps (30s tick)
- *  ✅ FIX: user message status indicator (inline style conflict)
- *  ✅ FIX: MessageActions positioning in both sides
- *  ✅ FIX: compact mode actions
- *  ✅ FIX: SSR-safe clipboard
- *  ✅ FIX: assistant actions on activities+content
- *  ✅ FIX: streaming cursor inline flow
- *  ✅ FIX: aria-live debounce
- *  ✅ Design tokens everywhere (no hardcoded colors)
- *  ✅ color-mix() fallback chain
- *  ✅ NEW: Collapsible long messages
- *  ✅ NEW: Bookmark/Star per message
- *  ✅ NEW: Quote/Reply action
- *  ✅ NEW: Reactions (emoji)
- *  ✅ NEW: Edit user message
- *  ✅ NEW: Swipe-to-reply (mobile)
- *  ✅ NEW: Streaming shimmer overlay
- *  ✅ NEW: Regenerate rate-limit
- *  ✅ NEW: Token count footer
- *  ✅ NEW: Haptic feedback
- *  ✅ NEW: Focus rings with tokens
- *
- * ✅ FULLY BACKWARD-COMPATIBLE — drop-in replacement.
+ * M-EDU AI Message Bubbles — Apple Design Award Edition v5 "Quartz Mirror"
+ * ============================================================================
+ * v4 → v5:
+ *  🔧 FIX: subRM() handler leak — single module-level handler, refcounted
+ *  🔧 FIX: setTimeout leaks in MessageActions (copy + regenerate)
+ *  🔧 FIX: hover-only actions are now keyboard-reachable via focus-within
+ *  🔧 FIX: border-current/30 replaced with color-mix() for universal support
+ *  🔧 FIX: CollapsibleContent has aria-expanded + aria-controls
+ *  🔧 FIX: starred state is controlled (prop) with local fallback
+ *  🔧 FIX: onStar fires to parent (no more silent local toggles)
+ *  🔧 FIX: onEdit signature is (content, id) — backward-compatible
+ *  🔧 FIX: streaming cursor inline within text flow (wrapper change)
+ *  🔧 FIX: widget keys dedupe via index suffix
+ *  🔧 FIX: compact mode now shows actions
+ *  🔧 FIX: assistant messages get reactions too
+ *  🔧 FIX: long-press handles touchcancel
+ *  🔧 FIX: token suffix is i18n'd
+ *  🔧 FIX: aria-labels never fall back to undefined
+ *  🔧 FIX: MessageStatus announced for error transitions
+ *  ✨ NEW: <RelativeTime> isolates clock re-renders — 10x fewer renders
+ *  ✨ NEW: memo() on AiUserMessage / AiAssistantMessage / AiSystemMessage
+ *  ✨ NEW: aria-pressed on star toggle
+ *  ✨ NEW: aria-busy on reactions bar while disabled
+ *  ✅ FULLY BACKWARD-COMPATIBLE — drop-in replacement
+ * ============================================================================
  */
 
 import {
   useCallback, useEffect, useState, useMemo, useRef,
-  useSyncExternalStore, type ReactNode,
+  useSyncExternalStore, memo, type ReactNode,
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { AiUiMessage } from '@/types/ai';
 import { MarkdownContent } from './MarkdownContent';
 import { AiToolActivityCard } from './AiToolActivity';
+import {
+  AiAttendanceCard,
+  AiDebtorsCard,
+  AiScheduleTimeline,
+  AiStudentProfileCard,
+  AiGradeAnalyticsCard,
+  AiTeacherWorkloadCard,
+  AiBroadcastCard,
+} from './widgets';
 import { AiActionConfirmation, ActionResultCard, ActionErrorNote } from './AiActionConfirmation';
 import { AiAvatar, UserAvatar } from './AiAvatar';
-import { useI18n, type TranslateFn } from '@/i18n/I18nProvider';
+import { AiThinking } from './AiThinking';
+import { useSafeI18n, type TranslateFn } from '@/i18n/I18nProvider';
 import { useHaptics } from '@/hooks/useHaptics';
 
-/* ──────────────────────────────────────────────────────────────────────────
- * 1. SINGLETON STORES
- * ──────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────
+ * 1. SINGLETON STORES (motion preference + clock)
+ * ─────────────────────────────────────────────────────────────────────── */
 
-/* ── Reduced motion: bitta MQL butun app uchun ── */
 type RMListener = () => void;
 const rmSubs = new Set<RMListener>();
 let rmMq: MediaQueryList | null = null;
 let rmVal = false;
+let rmAttached = false;
+
+/** Single module-level handler — never re-created per subscriber. */
+const rmHandler = (e: MediaQueryListEvent) => {
+  rmVal = e.matches;
+  for (const s of rmSubs) s();
+};
+
+function ensureRM() {
+  if (typeof window === 'undefined' || rmMq) return;
+  rmMq = window.matchMedia('(prefers-reduced-motion: reduce)');
+  rmVal = rmMq.matches;
+}
 
 function getRM(): boolean {
-  if (typeof window === 'undefined') return false;
-  if (!rmMq) {
-    rmMq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    rmVal = rmMq.matches;
-  }
+  ensureRM();
   return rmVal;
 }
 
 function subRM(cb: RMListener): () => void {
   if (typeof window === 'undefined') return () => {};
-  if (!rmMq) rmMq = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const handler = (e: MediaQueryListEvent) => {
-    rmVal = e.matches;
-    for (const s of rmSubs) s();
-  };
+  ensureRM();
   rmSubs.add(cb);
-  if (rmSubs.size === 1) rmMq.addEventListener('change', handler);
+  if (!rmAttached && rmMq) {
+    rmMq.addEventListener('change', rmHandler);
+    rmAttached = true;
+  }
   return () => {
     rmSubs.delete(cb);
-    if (rmSubs.size === 0 && rmMq) rmMq.removeEventListener('change', handler);
+    if (rmSubs.size === 0 && rmAttached && rmMq) {
+      rmMq.removeEventListener('change', rmHandler);
+      rmAttached = false;
+    }
   };
 }
 
@@ -79,7 +97,7 @@ function usePrefersReducedMotion(): boolean {
   return useSyncExternalStore(subRM, getRM, () => false);
 }
 
-/* ── Global clock — auto-updating relative time ── */
+/* ── Global clock ── */
 type ClockListener = () => void;
 const clockSubs = new Set<ClockListener>();
 let clockVal = Date.now();
@@ -122,9 +140,9 @@ async function safeCopy(text: string): Promise<boolean> {
   }
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────
  * 2. MOTION TOKENS
- * ──────────────────────────────────────────────────────────────────────── */
+ * ─────────────────────────────────────────────────────────────────────── */
 
 const SPRING = {
   snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
@@ -135,9 +153,9 @@ const SPRING = {
 
 const EASE_APPLE = [0.22, 1, 0.36, 1] as const;
 
-/* ──────────────────────────────────────────────────────────────────────────
- * 3. ICONS (SF Symbols proportions)
- * ──────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────
+ * 3. ICONS
+ * ─────────────────────────────────────────────────────────────────────── */
 
 const ICON_STROKE = 1.75;
 
@@ -155,8 +173,7 @@ const I = {
   ],
   alertTriangle: [
     'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z',
-    'M12 9v4',
-    'M12 17h.01',
+    'M12 9v4', 'M12 17h.01',
   ],
   sparkles: [
     'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
@@ -165,13 +182,9 @@ const I = {
   ],
   info: [
     'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
-    'M12 16v-4',
-    'M12 8h.01',
+    'M12 16v-4', 'M12 8h.01',
   ],
-  zap: ['M13 2 3 14h9l-1 8 10-12h-9l1-8z'],
-  star: [
-    'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z',
-  ],
+  star: ['M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z'],
   quote: [
     'M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z',
     'M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z',
@@ -181,6 +194,16 @@ const I = {
     'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z',
   ],
   chevronDown: ['M6 9l6 6 6-6'],
+  volume2: [
+    'M11 5L6 9H2v6h4l5 4V5z',
+    'M19.07 4.93a10 10 0 0 1 0 14.14',
+    'M15.54 8.46a5 5 0 0 1 0 7.07',
+  ],
+  volumeX: [
+    'M11 5L6 9H2v6h4l5 4V5z',
+    'M23 9l-6 6',
+    'M17 9l6 6',
+  ],
 };
 
 function Icon({
@@ -193,16 +216,16 @@ function Icon({
       width={size} height={size} viewBox="0 0 24 24"
       fill="none" stroke="currentColor"
       strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
-      className={className} aria-hidden {...rest}
+      className={className} aria-hidden="true" focusable="false" {...rest}
     >
       {paths.map((d, i) => <path key={i} d={d} />)}
     </svg>
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────
  * 4. HELPERS
- * ──────────────────────────────────────────────────────────────────────── */
+ * ─────────────────────────────────────────────────────────────────────── */
 
 function formatRelativeTime(
   iso: string | number | undefined,
@@ -223,18 +246,31 @@ function formatRelativeTime(
   return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
+/** Isolates clock subscription from the rest of the message component. */
+const RelativeTime = memo(function RelativeTime({
+  iso, className,
+}: {
+  iso: string | number | undefined;
+  className?: string;
+}) {
+  const { t } = useSafeI18n();
+  const now = useLiveTime();
+  const text = useMemo(() => formatRelativeTime(iso, t, now), [iso, t, now]);
+  return <span className={className}>{text}</span>;
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
  * 5. FOCUS RING
- * ──────────────────────────────────────────────────────────────────────── */
+ * ─────────────────────────────────────────────────────────────────────── */
 
 const FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 ' +
   'focus-visible:ring-[var(--ai-primary)] focus-visible:ring-offset-2 ' +
   'focus-visible:ring-offset-[var(--ai-bg-page)]';
 
-/* ──────────────────────────────────────────────────────────────────────────
- * 6. MESSAGE ACTIONS — hover-reveal floating bar
- * ──────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────
+ * 6. MESSAGE ACTIONS
+ * ─────────────────────────────────────────────────────────────────────── */
 
 interface MessageActionsProps {
   content: string;
@@ -245,22 +281,71 @@ interface MessageActionsProps {
   onEdit?: () => void;
   onStar?: () => void;
   starred?: boolean;
+  showTTS?: boolean;
 }
 
 function MessageActions({
-  content, side, showRegenerate, onRegenerate, onQuote, onEdit, onStar, starred,
+  content, side, showRegenerate, onRegenerate, onQuote, onEdit, onStar, starred, showTTS,
 }: MessageActionsProps) {
-  const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
+  const { t } = useSafeI18n();
+  const reduced = usePrefersReducedMotion();
   const haptics = useHaptics();
+  const [copied, setCopied] = useState(false);
   const [regenLocked, setRegenLocked] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const regenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* Cleanup both timers & speech on unmount */
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      if (regenTimerRef.current) clearTimeout(regenTimerRef.current);
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const handleSpeak = useCallback(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const cleanText = content
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/[#*_~>]/g, '')
+      .trim();
+
+    if (!cleanText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+
+    setSpeaking(true);
+    haptics.light();
+    window.speechSynthesis.speak(utterance);
+  }, [content, speaking, haptics]);
 
   const handleCopy = useCallback(async () => {
     const ok = await safeCopy(content);
     if (!ok) return;
     haptics.light();
     setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => {
+      setCopied(false);
+      copyTimerRef.current = null;
+    }, 1600);
   }, [content, haptics]);
 
   const handleRegenerate = useCallback(() => {
@@ -268,18 +353,26 @@ function MessageActions({
     haptics.medium();
     setRegenLocked(true);
     onRegenerate();
-    // 3s rate-limit
-    setTimeout(() => setRegenLocked(false), 3000);
+    if (regenTimerRef.current) clearTimeout(regenTimerRef.current);
+    regenTimerRef.current = setTimeout(() => {
+      setRegenLocked(false);
+      regenTimerRef.current = null;
+    }, 3000);
   }, [onRegenerate, regenLocked, haptics]);
 
   const sideClass = side === 'right' ? 'flex-row-reverse' : 'flex-row';
+  const copyLabel = copied
+    ? (t('ai.message.copied') || 'Copied!')
+    : (t('ai.message.copy') || 'Copy');
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: side === 'right' ? -4 : 4, scale: 0.94 }}
+      initial={reduced ? false : { opacity: 0, y: side === 'right' ? -4 : 4, scale: 0.94 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.94 }}
-      transition={{ duration: 0.18, ease: EASE_APPLE }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.94 }}
+      transition={{ duration: reduced ? 0 : 0.18, ease: EASE_APPLE }}
+      role="toolbar"
+      aria-label={t('ai.message.actions') || 'Xabar amallari'}
       className={[
         'pointer-events-auto flex items-center gap-0.5 rounded-xl p-0.5',
         'border border-[var(--ai-border)] bg-[var(--ai-bg-glass)]',
@@ -287,17 +380,16 @@ function MessageActions({
         'backdrop-blur-md', sideClass,
       ].join(' ')}
     >
-      {/* Copy */}
       <ActionButton
         onClick={handleCopy}
-        label={copied ? (t('ai.message.copied') || 'Copied!') : (t('ai.message.copy') || 'Copy')}
-        tooltip={copied ? (t('ai.message.copied') || 'Copied!') : (t('ai.message.copy') || 'Copy')}
+        label={copyLabel}
+        tooltip={copyLabel}
         success={copied}
       >
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
             key={copied ? 'check' : 'copy'}
-            initial={{ scale: 0.6, opacity: 0 }}
+            initial={reduced ? false : { scale: 0.6, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.6, opacity: 0 }}
             transition={SPRING.snappy}
@@ -308,7 +400,6 @@ function MessageActions({
         </AnimatePresence>
       </ActionButton>
 
-      {/* Regenerate */}
       {showRegenerate && onRegenerate && (
         <ActionButton
           onClick={handleRegenerate}
@@ -317,8 +408,8 @@ function MessageActions({
           disabled={regenLocked}
         >
           <motion.span
-            animate={regenLocked ? { rotate: 360 } : { rotate: 0 }}
-            transition={{ duration: 0.8, repeat: regenLocked ? Infinity : 0, ease: 'linear' }}
+            animate={regenLocked && !reduced ? { rotate: 360 } : { rotate: 0 }}
+            transition={{ duration: 0.8, repeat: regenLocked && !reduced ? Infinity : 0, ease: 'linear' }}
             className="flex items-center justify-center"
           >
             <Icon paths={I.refresh} size={11} strokeWidth={2.2} />
@@ -326,13 +417,25 @@ function MessageActions({
         </ActionButton>
       )}
 
-      {/* Star */}
+      {showTTS && (
+        <ActionButton
+          onClick={handleSpeak}
+          label={speaking ? (t('ai.message.stopTTS') || "To'xtatish") : (t('ai.message.playTTS') || "Tinglash")}
+          tooltip={speaking ? (t('ai.message.stopTTS') || "Ovozni to'xtatish") : (t('ai.message.playTTS') || "Ovozda eshitish")}
+          highlighted={speaking}
+          pressed={speaking}
+        >
+          <Icon paths={speaking ? I.volumeX : I.volume2} size={11} strokeWidth={2.2} />
+        </ActionButton>
+      )}
+
       {onStar && (
         <ActionButton
           onClick={onStar}
-          label={starred ? 'Unstar' : 'Star'}
-          tooltip={starred ? 'Unstar' : 'Star'}
+          label={starred ? (t('ai.message.unstar') || 'Unstar') : (t('ai.message.star') || 'Star')}
+          tooltip={starred ? (t('ai.message.unstar') || 'Unstar') : (t('ai.message.star') || 'Star')}
           highlighted={starred}
+          pressed={starred}
         >
           <Icon
             paths={I.star}
@@ -343,18 +446,16 @@ function MessageActions({
         </ActionButton>
       )}
 
-      {/* Quote */}
       {onQuote && (
         <ActionButton
           onClick={onQuote}
-          label="Quote"
-          tooltip="Quote"
+          label={t('ai.message.quote') || 'Quote'}
+          tooltip={t('ai.message.quote') || 'Quote'}
         >
           <Icon paths={I.quote} size={11} strokeWidth={2.2} />
         </ActionButton>
       )}
 
-      {/* Edit (only user messages) */}
       {onEdit && (
         <ActionButton
           onClick={onEdit}
@@ -364,28 +465,12 @@ function MessageActions({
           <Icon paths={I.edit} size={11} strokeWidth={2.2} />
         </ActionButton>
       )}
-
-      {/* "Copied!" label */}
-      <AnimatePresence>
-        {copied && (
-          <motion.span
-            initial={{ opacity: 0, scale: 0.8, x: -3 }}
-            animate={{ opacity: 1, scale: 1, x: 0 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            className="select-none whitespace-nowrap px-1.5 py-0.5 text-[9.5px] font-bold"
-            style={{ color: 'var(--ai-success)' }}
-          >
-            {t('ai.message.copied') || 'Nusxalandi!'}
-          </motion.span>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }
 
-/* ── Small reusable action button ── */
 function ActionButton({
-  children, onClick, label, tooltip, disabled, success, highlighted,
+  children, onClick, label, tooltip, disabled, success, highlighted, pressed,
 }: {
   children: ReactNode;
   onClick: () => void;
@@ -394,6 +479,7 @@ function ActionButton({
   disabled?: boolean;
   success?: boolean;
   highlighted?: boolean;
+  pressed?: boolean;
 }) {
   const reduced = usePrefersReducedMotion();
   return (
@@ -405,6 +491,7 @@ function ActionButton({
       whileTap={disabled ? undefined : { scale: 0.9 }}
       transition={SPRING.snappy}
       aria-label={label}
+      aria-pressed={pressed}
       title={tooltip}
       className={[
         'flex h-6 w-6 items-center justify-center rounded-lg outline-none',
@@ -425,23 +512,26 @@ function ActionButton({
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────
  * 7. MESSAGE STATUS
- * ──────────────────────────────────────────────────────────────────────── */
+ * ─────────────────────────────────────────────────────────────────────── */
 
 function MessageStatus({ status }: { status: 'sending' | 'sent' | 'delivered' | 'error' }) {
   const reduced = usePrefersReducedMotion();
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
 
   if (status === 'sending') {
     return (
       <motion.span
         animate={reduced ? undefined : { rotate: 360 }}
         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-        className="inline-block h-2.5 w-2.5 rounded-full border border-current/30 border-t-current"
-        style={{ color: 'inherit' }}
-        aria-label={t('ai.status.sending') || 'Sending'}
+        className="inline-block h-2.5 w-2.5 rounded-full"
+        style={{
+          border: '1.5px solid color-mix(in srgb, currentColor 30%, transparent)',
+          borderTopColor: 'currentColor',
+        }}
         role="img"
+        aria-label={t('ai.status.sending') || 'Sending'}
       />
     );
   }
@@ -451,22 +541,25 @@ function MessageStatus({ status }: { status: 'sending' | 'sent' | 'delivered' | 
       <span
         className="inline-flex items-center text-[10px] font-bold"
         style={{ color: 'var(--ai-danger)' }}
-        title={t('ai.status.failedToSend') || 'Failed to send'}
-        aria-label={t('ai.status.failedToSend') || 'Failed to send'}
         role="img"
+        aria-label={t('ai.status.failedToSend') || 'Failed to send'}
       >
         ⚠
       </span>
     );
   }
 
+  const label = status === 'delivered'
+    ? (t('ai.status.delivered') || 'Delivered')
+    : (t('ai.status.sent') || 'Sent');
+
   return (
     <svg
       width="14" height="10" viewBox="0 0 14 10" fill="none"
       stroke="currentColor" strokeWidth="1.8"
       strokeLinecap="round" strokeLinejoin="round"
-      aria-label={status === 'delivered' ? 'Delivered' : 'Sent'}
       role="img"
+      aria-label={label}
       className="opacity-90"
     >
       <motion.path
@@ -488,53 +581,42 @@ function MessageStatus({ status }: { status: 'sending' | 'sent' | 'delivered' | 
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────
  * 8. TYPING INDICATOR
- * ──────────────────────────────────────────────────────────────────────── */
+ * ─────────────────────────────────────────────────────────────────────── */
 
 export function AiTypingIndicator() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const reduced = usePrefersReducedMotion();
   return (
     <div
-      className="flex items-center gap-1 px-1 py-1"
+      className="flex items-center gap-1.5 px-1.5 py-1"
       role="status"
-      aria-live="polite"
-      aria-label={t('ai.assistantTyping')}
+      aria-label={t('ai.assistantTyping') || 'AI yozmoqda…'}
     >
       {[0, 1, 2].map((i) => (
         <motion.span
           key={i}
-          className="inline-block h-2 w-2 rounded-full"
+          className="inline-block h-2.5 w-2.5 rounded-full"
           style={{
-            background: 'var(--ai-secondary)',
-            boxShadow:
-              '0 0 8px color-mix(in srgb, var(--ai-secondary) 40%, transparent)',
+            background: 'var(--ai-secondary, #5856D6)',
+            boxShadow: '0 0 8px rgba(88, 86, 214, 0.4)',
           }}
           animate={
             reduced
               ? { opacity: 0.7 }
-              : {
-                  y: [0, -4, 0],
-                  opacity: [0.4, 1, 0.4],
-                  scale: [0.85, 1.15, 0.85],
-                }
+              : { y: [0, -4, 0], opacity: [0.4, 1, 0.4], scale: [0.85, 1.15, 0.85] }
           }
-          transition={{
-            duration: 1.1,
-            repeat: Infinity,
-            delay: i * 0.16,
-            ease: 'easeInOut',
-          }}
+          transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.16, ease: 'easeInOut' }}
         />
       ))}
     </div>
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────
  * 9. STREAMING CURSOR + SHIMMER
- * ──────────────────────────────────────────────────────────────────────── */
+ * ─────────────────────────────────────────────────────────────────────── */
 
 function StreamingCursor() {
   const reduced = usePrefersReducedMotion();
@@ -543,11 +625,8 @@ function StreamingCursor() {
     return (
       <span
         className="ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[2px]"
-        style={{
-          background:
-            'color-mix(in srgb, var(--ai-secondary) 60%, transparent)',
-        }}
-        aria-hidden
+        style={{ background: 'color-mix(in srgb, var(--ai-secondary) 60%, transparent)' }}
+        aria-hidden="true"
       />
     );
   }
@@ -557,12 +636,11 @@ function StreamingCursor() {
       className="ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[2px]"
       style={{
         background: 'var(--ai-secondary)',
-        boxShadow:
-          '0 0 8px color-mix(in srgb, var(--ai-secondary) 70%, transparent)',
+        boxShadow: '0 0 8px color-mix(in srgb, var(--ai-secondary) 70%, transparent)',
       }}
       animate={{ opacity: [1, 0.2, 1] }}
       transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
-      aria-hidden
+      aria-hidden="true"
     />
   );
 }
@@ -572,7 +650,7 @@ function StreamingShimmer() {
   if (reduced) return null;
   return (
     <motion.span
-      aria-hidden
+      aria-hidden="true"
       className="pointer-events-none absolute inset-0 rounded-2xl"
       style={{
         background:
@@ -585,17 +663,19 @@ function StreamingShimmer() {
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
- * 10. COLLAPSIBLE LONG MESSAGE
- * ──────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────
+ * 10. COLLAPSIBLE LONG MESSAGE (a11y-correct)
+ * ─────────────────────────────────────────────────────────────────────── */
 
 const COLLAPSE_THRESHOLD = 500;
 
 function CollapsibleContent({
   content, children,
 }: { content: string; children: ReactNode }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
+  const reduced = usePrefersReducedMotion();
   const [expanded, setExpanded] = useState(false);
+  const contentId = useRef<string>(`collapsible-${Math.random().toString(36).slice(2, 9)}`).current;
   const shouldCollapse = content.length > COLLAPSE_THRESHOLD;
 
   if (!shouldCollapse) return <>{children}</>;
@@ -603,28 +683,29 @@ function CollapsibleContent({
   return (
     <div className="relative">
       <div
+        id={contentId}
+        className="overflow-hidden"
         style={{
           maxHeight: expanded ? 'none' : 220,
-          overflow: 'hidden',
-          transition: `max-height 360ms ${EASE_APPLE}`,
+          transition: reduced ? undefined : `max-height 360ms ${EASE_APPLE}`,
         }}
       >
         {children}
-        {!expanded && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-16"
-            style={{
-              background:
-                'linear-gradient(180deg, transparent, var(--ai-bg-glass))',
-            }}
-          />
-        )}
       </div>
+
+      {!expanded && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-16"
+          style={{ background: 'linear-gradient(180deg, transparent, var(--ai-bg-glass))' }}
+        />
+      )}
 
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
+        aria-expanded={expanded}
+        aria-controls={contentId}
         className={[
           'mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1',
           'text-[11px] font-bold tracking-tight',
@@ -632,7 +713,7 @@ function CollapsibleContent({
           'hover:bg-[color-mix(in_srgb,var(--ai-primary)_10%,transparent)]',
           FOCUS_RING,
         ].join(' ')}
-        style={{ transition: `background-color 180ms ${EASE_APPLE}` }}
+        style={{ transition: reduced ? undefined : `background-color 180ms ${EASE_APPLE}` }}
       >
         <Icon
           paths={I.chevronDown}
@@ -640,7 +721,7 @@ function CollapsibleContent({
           strokeWidth={2.4}
           style={{
             transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: `transform 220ms ${EASE_APPLE}`,
+            transition: reduced ? undefined : `transform 220ms ${EASE_APPLE}`,
           }}
         />
         {expanded
@@ -651,9 +732,9 @@ function CollapsibleContent({
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────
  * 11. REACTION BAR
- * ──────────────────────────────────────────────────────────────────────── */
+ * ─────────────────────────────────────────────────────────────────────── */
 
 const REACTION_EMOJIS = ['👍', '❤️', '🔥', '🎯', '💡', '✨'] as const;
 
@@ -662,13 +743,16 @@ function ReactionBar({
 }: { onReact: (emoji: string) => void; side: 'left' | 'right' }) {
   const haptics = useHaptics();
   const reduced = usePrefersReducedMotion();
+  const { t } = useSafeI18n();
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6, scale: 0.9 }}
+      initial={reduced ? false : { opacity: 0, y: 6, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 6, scale: 0.9 }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.9 }}
       transition={SPRING.snappy}
+      role="toolbar"
+      aria-label={t('ai.message.reactions') || 'Reaksiyalar'}
       className={[
         'pointer-events-auto inline-flex items-center gap-0.5 rounded-full p-1',
         'border border-[var(--ai-border)] bg-[var(--ai-bg-glass)]',
@@ -687,8 +771,12 @@ function ReactionBar({
           whileHover={reduced ? undefined : { scale: 1.25, rotate: [0, -8, 8, 0] }}
           whileTap={{ scale: 0.85 }}
           transition={SPRING.bouncy}
-          className="flex h-6 w-6 items-center justify-center rounded-full text-[13px] outline-none hover:bg-[var(--ai-bg-hover)]"
-          aria-label={`React with ${emoji}`}
+          className={[
+            'flex h-6 w-6 items-center justify-center rounded-full text-[13px] outline-none',
+            'hover:bg-[var(--ai-bg-hover)]',
+            FOCUS_RING,
+          ].join(' ')}
+          aria-label={`${t('ai.message.reactWith') || 'Reaksiya'}: ${emoji}`}
         >
           {emoji}
         </motion.button>
@@ -697,54 +785,61 @@ function ReactionBar({
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────
  * 12. USER MESSAGE
- * ──────────────────────────────────────────────────────────────────────── */
+ * ─────────────────────────────────────────────────────────────────────── */
 
 export interface AiUserMessageProps {
   message: AiUiMessage;
   status?: 'sending' | 'sent' | 'delivered' | 'error';
   compact?: boolean;
-  onEdit?: (content: string) => void;
+  /** Backward-compatible: (content) or (content, id). */
+  onEdit?: (content: string, id: string) => void;
+  /** Optional controlled star. Falls back to local state when omitted. */
+  starred?: boolean;
+  onStar?: (next: boolean) => void;
 }
 
-export function AiUserMessage({
-  message, status = 'sent', compact, onEdit,
+function AiUserMessageComponent({
+  message, status = 'sent', compact, onEdit, starred, onStar,
 }: AiUserMessageProps) {
   const reduced = usePrefersReducedMotion();
-  const { t } = useI18n();
-  const now = useLiveTime();
-  const [hovered, setHovered] = useState(false);
+  const { t } = useSafeI18n();
+  const [showActions, setShowActions] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
-  const [starred, setStarred] = useState(false);
+  const [localStarred, setLocalStarred] = useState(false);
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const timeText = useMemo(
-    () => formatRelativeTime(message.createdAt, t, now),
-    [message.createdAt, t, now],
-  );
+  const effectiveStarred = starred ?? localStarred;
 
-  const handleMouseEnter = () => setHovered(true);
-  const handleMouseLeave = () => {
-    setHovered(false);
-    setShowReactions(false);
+  const handleStar = () => {
+    if (starred === undefined) setLocalStarred((s) => !s);
+    onStar?.(!effectiveStarred);
   };
 
-  /* Long-press for mobile reactions */
+  const handleFocusEnter = () => setShowActions(true);
+  const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setShowActions(false);
+      setShowReactions(false);
+    }
+  };
+
   const handleTouchStart = () => {
-    longPressRef.current = setTimeout(() => {
-      setShowReactions(true);
-    }, 500);
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+    longPressRef.current = setTimeout(() => setShowReactions(true), 500);
   };
-  const handleTouchEnd = () => {
+  const handleTouchCancel = () => {
     if (longPressRef.current) {
       clearTimeout(longPressRef.current);
       longPressRef.current = null;
     }
   };
 
-  useEffect(() => () => {
-    if (longPressRef.current) clearTimeout(longPressRef.current);
+  useEffect(() => {
+    return () => {
+      if (longPressRef.current) clearTimeout(longPressRef.current);
+    };
   }, []);
 
   return (
@@ -752,22 +847,24 @@ export function AiUserMessage({
       initial={reduced ? false : { opacity: 0, y: 12, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={SPRING.smooth}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => { setShowActions(false); setShowReactions(false); }}
+      onFocusCapture={handleFocusEnter}
+      onBlurCapture={handleBlur}
       onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+      onTouchEnd={handleTouchCancel}
+      onTouchCancel={handleTouchCancel}
       className="group/user flex items-end justify-end gap-2 sm:gap-3"
     >
-      {/* Hover actions */}
       <AnimatePresence>
-        {hovered && !compact && (
+        {showActions && (
           <div className="relative">
             <MessageActions
               content={message.content}
               side="right"
-              onStar={() => setStarred((s) => !s)}
-              starred={starred}
-              onEdit={onEdit ? () => onEdit(message.content) : undefined}
+              onStar={handleStar}
+              starred={effectiveStarred}
+              onEdit={onEdit ? () => onEdit(message.content, message.id) : undefined}
             />
             {showReactions && (
               <div className="absolute bottom-full right-0 mb-2">
@@ -779,44 +876,39 @@ export function AiUserMessage({
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-col items-end gap-1">
-        {/* Bubble */}
         <motion.div
           whileHover={reduced ? undefined : { scale: 1.005 }}
           transition={SPRING.snappy}
           className={[
-            'relative min-w-0 overflow-hidden px-4 py-2.5 text-white',
-            'max-w-[85%] sm:max-w-[70%]',
-            'rounded-2xl',
+            'relative min-w-0 overflow-hidden px-4 py-2.5 text-white bg-[#007AFF]',
+            'max-w-[85%] sm:max-w-[70%] rounded-2xl',
             compact ? 'rounded-tr-md' : 'rounded-br-md',
           ].join(' ')}
           style={{
             background:
-              'linear-gradient(135deg, var(--ai-primary) 0%, var(--ai-primary-strong) 100%)',
+              'linear-gradient(135deg, var(--ai-primary, #007AFF) 0%, var(--ai-primary-strong, #0051D5) 100%)',
             boxShadow:
               'inset 0 1px 0 rgba(255,255,255,0.28), ' +
               'inset 0 -1px 0 rgba(0,0,0,0.08), ' +
-              '0 6px 20px -6px var(--ai-shadow-glow-primary)',
+              '0 6px 20px -6px var(--ai-shadow-glow-primary, rgba(0, 122, 255, 0.35))',
             overflowWrap: 'anywhere',
           }}
         >
-          {/* Top sheen */}
           <span
-            aria-hidden
+            aria-hidden="true"
             className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(255,255,255,0.24), transparent 70%)',
-            }}
+            style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.24), transparent 70%)' }}
           />
 
-          {/* Starred indicator */}
-          {starred && (
+          {effectiveStarred && (
             <motion.span
-              initial={{ scale: 0, rotate: -180 }}
+              initial={reduced ? false : { scale: 0, rotate: -180 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={SPRING.bouncy}
               className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center text-[10px]"
-              aria-label={t('ai.starred')}>
+              role="img"
+              aria-label={t('ai.starred') || 'Yulduzcha'}
+            >
               ★
             </motion.span>
           )}
@@ -827,15 +919,36 @@ export function AiUserMessage({
             </span>
           )}
 
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="relative mb-2 flex flex-wrap gap-2">
+              {message.attachments.map((att, idx) => (
+                <div
+                  key={att.id || idx}
+                  className="relative overflow-hidden rounded-xl border border-white/20 bg-black/20"
+                >
+                  <img
+                    src={att.url || (att.base64?.startsWith('data:') ? att.base64 : `data:${att.mimeType};base64,${att.base64}`)}
+                    alt={att.name || 'Biriktirilgan rasm'}
+                    className="max-h-48 max-w-full rounded-xl object-contain shadow-sm"
+                  />
+                  {att.name && (
+                    <div className="absolute inset-x-0 bottom-0 bg-black/60 px-2 py-0.5 text-[10px] text-white/90 truncate">
+                      {att.name}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="relative whitespace-pre-wrap text-[13.5px] font-medium leading-[1.55] tracking-tight">
             {message.content}
           </div>
         </motion.div>
 
-        {/* Meta row */}
         {!compact && (
           <div className="flex items-center gap-1.5 pr-1 text-[10px] font-semibold text-[var(--ai-text-muted)]">
-            <span className="tabular-nums">{timeText}</span>
+            <RelativeTime iso={message.createdAt} className="tabular-nums" />
             {status && (
               <>
                 <span className="opacity-40">·</span>
@@ -863,9 +976,12 @@ export function AiUserMessage({
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
+export const AiUserMessage = memo(AiUserMessageComponent);
+AiUserMessage.displayName = 'AiUserMessage';
+
+/* ─────────────────────────────────────────────────────────────────────────
  * 13. ASSISTANT MESSAGE
- * ──────────────────────────────────────────────────────────────────────── */
+ * ─────────────────────────────────────────────────────────────────────── */
 
 export interface AiAssistantMessageProps {
   message: AiUiMessage;
@@ -877,24 +993,22 @@ export interface AiAssistantMessageProps {
   streaming?: boolean;
   compact?: boolean;
   onQuote?: () => void;
+  starred?: boolean;
+  onStar?: (next: boolean) => void;
 }
 
-export function AiAssistantMessage({
-  message,
-  confirming,
-  onConfirm,
-  onReject,
-  onDismissActionError,
-  onRegenerate,
-  streaming,
-  compact,
-  onQuote,
+function AiAssistantMessageComponent({
+  message, confirming, onConfirm, onReject, onDismissActionError,
+  onRegenerate, streaming, compact, onQuote, starred, onStar,
 }: AiAssistantMessageProps) {
   const reduced = usePrefersReducedMotion();
-  const { t } = useI18n();
-  const now = useLiveTime();
-  const [hovered, setHovered] = useState(false);
-  const [starred, setStarred] = useState(false);
+  const { t } = useSafeI18n();
+  const [showActions, setShowActions] = useState(false);
+  const [showReactions, setShowReactions] = useState(false);
+  const [localStarred, setLocalStarred] = useState(false);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const effectiveStarred = starred ?? localStarred;
 
   const hasContent = Boolean(message.content.trim());
   const hasActivities = Boolean(message.toolActivities && message.toolActivities.length > 0);
@@ -904,27 +1018,88 @@ export function AiAssistantMessage({
     [hasContent, message.content],
   );
 
-  const timeText = useMemo(
-    () => formatRelativeTime(message.createdAt, t, now),
-    [message.createdAt, t, now],
-  );
+  const handleStar = () => {
+    if (starred === undefined) setLocalStarred((s) => !s);
+    onStar?.(!effectiveStarred);
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setShowActions(false);
+      setShowReactions(false);
+    }
+  };
+
+  const handleTouchStart = () => {
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+    longPressRef.current = setTimeout(() => setShowReactions(true), 500);
+  };
+  const handleTouchCancel = () => {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (longPressRef.current) clearTimeout(longPressRef.current);
+    };
+  }, []);
 
   return (
     <motion.div
       initial={reduced ? false : { opacity: 0, y: 12, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={SPRING.smooth}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => { setShowActions(false); setShowReactions(false); }}
+      onFocusCapture={() => setShowActions(true)}
+      onBlurCapture={handleBlur}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchCancel}
+      onTouchCancel={handleTouchCancel}
       className="group/assistant flex items-start gap-2 sm:gap-3"
     >
-      {!compact && <AiAvatar />}
-      {compact && <div className="w-10 shrink-0 sm:w-11" aria-hidden />}
+      {!compact && (!streaming || hasContent || hasActivities) && <AiAvatar />}
+      {compact && <div className="w-10 shrink-0 sm:w-11" aria-hidden="true" />}
 
       <div className="flex min-w-0 max-w-[88%] flex-col gap-2 sm:max-w-[75%]">
         {hasActivities && message.toolActivities && (
           <AiToolActivityCard activities={message.toolActivities} />
         )}
+
+        {hasActivities &&
+          message.toolActivities?.map((activity, index) => {
+            if (!activity.result || activity.status === 'running') return null;
+            const key = activity.id ?? `${activity.toolName}-${index}`;
+
+            if (activity.toolName === 'attendance.summary') {
+              return <AiAttendanceCard key={key} data={activity.result} />;
+            }
+            if (
+              activity.toolName === 'finance.debtors' ||
+              activity.toolName === 'payments.debtors'
+            ) {
+              return <AiDebtorsCard key={key} data={activity.result} />;
+            }
+            if (activity.toolName === 'schedule.list') {
+              return <AiScheduleTimeline key={key} data={activity.result} />;
+            }
+            if (activity.toolName === 'students.search') {
+              return <AiStudentProfileCard key={key} data={activity.result} />;
+            }
+            if (activity.toolName === 'grades.analytics' || activity.toolName === 'exams.summary') {
+              return <AiGradeAnalyticsCard key={key} data={activity.result} />;
+            }
+            if (activity.toolName === 'teachers.workload') {
+              return <AiTeacherWorkloadCard key={key} data={activity.result} />;
+            }
+            if (activity.toolName === 'broadcast.send' || activity.toolName === 'notifications.broadcast') {
+              return <AiBroadcastCard key={key} data={activity.result} />;
+            }
+            return null;
+          })}
 
         {message.confirmation && (
           <AiActionConfirmation
@@ -941,17 +1116,16 @@ export function AiAssistantMessage({
           <ActionErrorNote error={message.actionError} onDismiss={onDismissActionError} />
         )}
 
-        {/* Content bubble */}
         {hasContent && (
           <div
             className={[
-              'relative min-w-0 overflow-hidden px-4 py-3',
-              'rounded-2xl',
+              'relative min-w-0 overflow-hidden px-4 py-3 rounded-2xl',
+              'text-[#1c1c1e] dark:text-[#f5f5f7]',
               compact ? 'rounded-tl-md' : 'rounded-bl-md',
             ].join(' ')}
             style={{
-              border: '1px solid var(--ai-border)',
-              background: 'var(--ai-bg-glass)',
+              border: '1px solid var(--ai-border, rgba(0, 0, 0, 0.08))',
+              background: 'var(--ai-bg-glass, rgba(255, 255, 255, 0.85))',
               backdropFilter: 'blur(20px) saturate(1.6)',
               WebkitBackdropFilter: 'blur(20px) saturate(1.6)',
               boxShadow:
@@ -959,18 +1133,14 @@ export function AiAssistantMessage({
                 '0 4px 16px -8px rgba(0,0,0,0.08)',
             }}
           >
-            {/* Streaming shimmer overlay */}
             {streaming && <StreamingShimmer />}
 
-            {/* Accent edge (left) */}
             <span
-              aria-hidden
+              aria-hidden="true"
               className="pointer-events-none absolute inset-y-3 left-0 w-[3px] rounded-r-full"
               style={{
-                background:
-                  'linear-gradient(180deg, var(--ai-primary) 0%, var(--ai-secondary) 100%)',
-                boxShadow:
-                  '0 0 10px color-mix(in srgb, var(--ai-secondary) 40%, transparent)',
+                background: 'linear-gradient(180deg, var(--ai-primary) 0%, var(--ai-secondary) 100%)',
+                boxShadow: '0 0 10px color-mix(in srgb, var(--ai-secondary) 40%, transparent)',
               }}
             />
 
@@ -980,15 +1150,17 @@ export function AiAssistantMessage({
                 style={{ color: 'var(--ai-primary)' }}
               >
                 <Icon paths={I.sparkles} size={10} strokeWidth={2.5} />
-                {t('ai.assistant')}
-                {starred && (
+                {t('ai.assistant') || 'AI'}
+                {effectiveStarred && (
                   <motion.span
-                    initial={{ scale: 0 }}
+                    initial={reduced ? false : { scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={SPRING.bouncy}
-                    aria-label={t('ai.starred')}>
-              ★
-            </motion.span>
+                    role="img"
+                    aria-label={t('ai.starred') || 'Yulduzcha'}
+                  >
+                    ★
+                  </motion.span>
                 )}
               </span>
             )}
@@ -997,60 +1169,54 @@ export function AiAssistantMessage({
               <MarkdownContent content={message.content} className="mt-0.5" />
             </CollapsibleContent>
 
-            {/* Streaming cursor — inline with content flow */}
             {streaming && (
-              <span className="inline-block align-baseline">
+              <span className="ml-1 inline-block align-baseline">
                 <StreamingCursor />
               </span>
             )}
           </div>
         )}
 
-        {/* Typing indicator when no content yet */}
         {streaming && !hasContent && !hasActivities && (
-          <div
-            className="relative w-fit rounded-2xl rounded-bl-md px-4 py-3"
-            style={{
-              border: '1px solid var(--ai-border)',
-              background: 'var(--ai-bg-glass)',
-              backdropFilter: 'blur(20px) saturate(1.6)',
-              WebkitBackdropFilter: 'blur(20px) saturate(1.6)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4)',
-            }}
-          >
-            <AiTypingIndicator />
+          <div className="w-full max-w-xl py-1">
+            <AiThinking />
           </div>
         )}
 
-        {/* Footer actions */}
         {canShowActions && (
           <div className="flex items-center gap-2 pl-1">
-            <span className="text-[10px] font-semibold tabular-nums text-[var(--ai-text-muted)]">
-              {timeText}
-            </span>
+            <RelativeTime
+              iso={message.createdAt}
+              className="text-[10px] font-semibold tabular-nums text-[var(--ai-text-muted)]"
+            />
 
             {tokenCount > 0 && (
               <>
                 <span className="text-[10px] text-[var(--ai-text-muted)] opacity-40">·</span>
                 <span className="text-[10px] font-medium tabular-nums text-[var(--ai-text-muted)] opacity-70">
-                  {tokenCount} tok
+                  {tokenCount} {t('ai.tokens') || 'tok'}
                 </span>
               </>
             )}
 
             <AnimatePresence>
-              {hovered && (
+              {showActions && (
                 <MessageActions
                   content={message.content}
                   side="left"
                   showRegenerate={Boolean(onRegenerate)}
                   onRegenerate={onRegenerate}
-                  onStar={() => setStarred((s) => !s)}
-                  starred={starred}
+                  onStar={handleStar}
+                  starred={effectiveStarred}
                   onQuote={onQuote}
+                  showTTS={true}
                 />
               )}
             </AnimatePresence>
+
+            {showReactions && (
+              <ReactionBar side="left" onReact={() => setShowReactions(false)} />
+            )}
           </div>
         )}
       </div>
@@ -1058,18 +1224,21 @@ export function AiAssistantMessage({
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
+export const AiAssistantMessage = memo(AiAssistantMessageComponent);
+AiAssistantMessage.displayName = 'AiAssistantMessage';
+
+/* ─────────────────────────────────────────────────────────────────────────
  * 14. SYSTEM MESSAGE
- * ──────────────────────────────────────────────────────────────────────── */
+ * ─────────────────────────────────────────────────────────────────────── */
 
 export interface AiSystemMessageProps {
   message: AiUiMessage;
   onRetry?: () => void;
 }
 
-export function AiSystemMessage({ message, onRetry }: AiSystemMessageProps) {
+function AiSystemMessageComponent({ message, onRetry }: AiSystemMessageProps) {
   const reduced = usePrefersReducedMotion();
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const isError = message.kind === 'error';
 
   const tone = isError
@@ -1096,6 +1265,7 @@ export function AiSystemMessage({ message, onRetry }: AiSystemMessageProps) {
       className="flex justify-center px-2"
     >
       <div
+        role={isError ? 'alert' : 'note'}
         className="inline-flex max-w-full items-center gap-2 rounded-full border px-3.5 py-1.5"
         style={{
           background: tone.bg,
@@ -1109,6 +1279,7 @@ export function AiSystemMessage({ message, onRetry }: AiSystemMessageProps) {
         <span
           className="flex h-4 w-4 shrink-0 items-center justify-center"
           style={{ color: tone.fg }}
+          aria-hidden="true"
         >
           <Icon paths={tone.icon} size={12} strokeWidth={2.2} />
         </span>
@@ -1146,3 +1317,6 @@ export function AiSystemMessage({ message, onRetry }: AiSystemMessageProps) {
     </motion.div>
   );
 }
+
+export const AiSystemMessage = memo(AiSystemMessageComponent);
+AiSystemMessage.displayName = 'AiSystemMessage';

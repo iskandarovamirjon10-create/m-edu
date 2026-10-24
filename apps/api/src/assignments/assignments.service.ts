@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAssignmentDto, GradeSubmissionDto, SubmitAssignmentDto } from './assignment.dto';
 import { parsePagination } from '../lib/pagination';
@@ -237,4 +238,3 @@ export class AssignmentsService {
     });
   }
 }
-import type { Prisma } from '@prisma/client';

@@ -1,5 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Test, TestingModule } from '@nestjs/testing';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SecurityController } from '../security.controller';
 import { SecurityService, SecuritySummary } from '../security.service';
 
@@ -21,17 +20,7 @@ describe('SecurityController', () => {
       resolve: vi.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [SecurityController],
-      providers: [
-        {
-          provide: SecurityService,
-          useValue: service,
-        },
-      ],
-    }).compile();
-
-    controller = module.get<SecurityController>(SecurityController);
+    controller = new SecurityController(service as unknown as SecurityService);
   });
 
   it('should be defined', () => {

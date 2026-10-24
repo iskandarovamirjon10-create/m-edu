@@ -5,13 +5,17 @@ import type { PrismaService } from '../../prisma/prisma.service';
 function makePrisma() {
   return {
     payment: {
-      findMany: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     lead: {
-      findMany: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     attendance: {
-      findMany: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    auditLog: {
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({ id: 'log-1' }),
     },
   };
 }
@@ -62,6 +66,7 @@ describe('EarlyWarningService', () => {
           student: { user: { firstName: 'Sardor', lastName: 'Karimov' } },
         },
       ]);
+      prisma.auditLog.findMany.mockResolvedValue([]);
 
       const summary = await svc.getSummary('org-1');
       expect(summary.total).toBe(3);
@@ -70,6 +75,55 @@ describe('EarlyWarningService', () => {
       expect(summary.byRule['payment-overdue']).toBe(1);
       expect(summary.byRule['lead-stale']).toBe(1);
       expect(summary.byRule['attendance-low']).toBe(1);
+    });
+
+    it('does not falsely penalize LATE or EXCUSED attendance as truant (LOGIC-01)', async () => {
+      prisma.payment.findMany.mockResolvedValue([]);
+      prisma.lead.findMany.mockResolvedValue([]);
+      // 3 records: 1 PRESENT, 1 LATE, 1 EXCUSED -> 100% attendance rate (not <70%)
+      prisma.attendance.findMany.mockResolvedValue([
+        {
+          studentId: 'st-good',
+          status: 'PRESENT',
+          student: { user: { firstName: 'Jasur', lastName: 'Aliyev' } },
+        },
+        {
+          studentId: 'st-good',
+          status: 'LATE',
+          student: { user: { firstName: 'Jasur', lastName: 'Aliyev' } },
+        },
+        {
+          studentId: 'st-good',
+          status: 'EXCUSED',
+          student: { user: { firstName: 'Jasur', lastName: 'Aliyev' } },
+        },
+      ]);
+      prisma.auditLog.findMany.mockResolvedValue([]);
+
+      const summary = await svc.getSummary('org-1');
+      expect(summary.total).toBe(0);
+      expect(summary.high).toBe(0);
+      expect(summary.byRule['attendance-low']).toBe(0);
+    });
+
+    it('filters out resolved warnings and counts resolvedThisWeek', async () => {
+      prisma.payment.findMany.mockResolvedValue([
+        {
+          id: 'pay-1',
+          amount: 500,
+          updatedAt: new Date(),
+          student: { user: { firstName: 'Ali', lastName: 'Valiyev' } },
+        },
+      ]);
+      prisma.lead.findMany.mockResolvedValue([]);
+      prisma.attendance.findMany.mockResolvedValue([]);
+      prisma.auditLog.findMany.mockResolvedValue([
+        { resourceId: 'payment-pay-1' },
+      ]);
+
+      const summary = await svc.getSummary('org-1');
+      expect(summary.total).toBe(0);
+      expect(summary.resolvedThisWeek).toBe(1);
     });
   });
 
@@ -92,6 +146,7 @@ describe('EarlyWarningService', () => {
         },
       ]);
       prisma.attendance.findMany.mockResolvedValue([]);
+      prisma.auditLog.findMany.mockResolvedValue([]);
 
       const res = await svc.findAll('org-1', { severity: 'CRITICAL', page: 1, limit: 10 });
       expect(res.total).toBe(1);
@@ -110,6 +165,7 @@ describe('EarlyWarningService', () => {
         },
       ]);
       prisma.attendance.findMany.mockResolvedValue([]);
+      prisma.auditLog.findMany.mockResolvedValue([]);
 
       const res = await svc.findAll('org-1', { ruleId: 'lead-stale', entityType: 'LEAD' });
       expect(res.total).toBe(1);
@@ -122,6 +178,7 @@ describe('EarlyWarningService', () => {
       prisma.payment.findMany.mockResolvedValue([{ id: 'p1' }]);
       prisma.lead.findMany.mockResolvedValue([{ id: 'l1' }]);
       prisma.attendance.findMany.mockResolvedValue([]);
+      prisma.auditLog.findMany.mockResolvedValue([]);
 
       const res = await svc.runScan('org-1');
       expect(res.detected).toBe(2);
@@ -132,10 +189,24 @@ describe('EarlyWarningService', () => {
   });
 
   describe('resolve', () => {
-    it('fails loudly instead of faking success (M2)', async () => {
-      await expect(
-        svc.resolve('org-1', 'payment-1', 'user-1', 'Handled'),
-      ).rejects.toThrow('EarlyWarning model');
+    it('persists early warning resolution to audit log and returns ok', async () => {
+      const res = await svc.resolve('org-1', 'payment-1', 'user-1', 'Handled');
+      expect(res).toEqual({ ok: true });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: {
+          organizationId: 'org-1',
+          userId: 'user-1',
+          action: 'EARLY_WARNING_RESOLVED',
+          resource: 'EarlyWarning',
+          resourceId: 'payment-1',
+          changes: {
+            warningId: 'payment-1',
+            note: 'Handled',
+            resolvedBy: 'user-1',
+            resolvedAt: expect.any(String),
+          },
+        },
+      });
     });
   });
 });

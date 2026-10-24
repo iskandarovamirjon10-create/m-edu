@@ -653,6 +653,7 @@ const StatTile = memo(function StatTile({
   return (
     <motion.button
       type="button"
+      data-testid={`metric-pill-${tone}`}
       variants={tileVariants}
       whileHover={reduced ? undefined : { y: -3, scale: 1.008 }}
       whileTap={reduced ? undefined : { scale: 0.985 }}
@@ -1332,20 +1333,22 @@ export function StudentsPage() {
         `"${name.replace(/"/g, '""')}"`,
         s.user?.email || '',
         s.user?.phone || s.parentPhone || '',
-        `"${activeGroups}"`,
+        `"${activeGroups.replace(/"/g, '""')}"`,
         `"${(s.parentName || '').replace(/"/g, '""')}"`,
         status,
       ].join(',');
     });
 
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = `medu-students-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     push('success', `${source.length} ta talaba ma'lumoti CSV formatda yuklab olindi`);
   }, [selectedIds, studentList, push]);
 
@@ -1504,6 +1507,7 @@ export function StudentsPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex-1">
             <div className="relative">
               <GlassInput
+                data-testid="students-search-input"
                 ref={searchInputRef}
                 placeholder={t('students.searchPlaceholderEmail')}
                 value={search}
@@ -1598,6 +1602,7 @@ export function StudentsPage() {
               <div className="inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-100/75 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
                 <button
                   type="button"
+                  data-testid="segment-table"
                   onClick={() => setViewMode('table')}
                   aria-label="Jadval ko'rinishi"
                   title="Jadval ko'rinishi"
@@ -1611,6 +1616,7 @@ export function StudentsPage() {
                 </button>
                 <button
                   type="button"
+                  data-testid="segment-grid"
                   onClick={() => setViewMode('grid')}
                   aria-label="Kartochkalar (Bento) ko'rinishi"
                   title="Kartochkalar (Bento) ko'rinishi"

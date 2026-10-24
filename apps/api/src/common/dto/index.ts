@@ -152,10 +152,18 @@ export class UpdateParentLinkDto {
 // ==================== Teachers ====================
 
 export class CreateTeacherDto {
-  @ApiPropertyOptional() @IsOptional() @IsEmail()
+  @ApiPropertyOptional()
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim().toLowerCase() : undefined))
+  @IsOptional()
+  @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(6)
+  @ApiPropertyOptional()
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : undefined))
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  @MaxLength(128)
   password?: string;
 
   @ApiProperty() @Transform(stripHtmlTags) @IsString() @IsNotEmpty() @MaxLength(100)
@@ -164,16 +172,28 @@ export class CreateTeacherDto {
   @ApiProperty() @Transform(stripHtmlTags) @IsString() @IsNotEmpty() @MaxLength(100)
   lastName: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(20)
+  @ApiPropertyOptional()
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : undefined))
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
   phone?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsArray() @IsString({ each: true })
   specializations?: string[];
 
+  @ApiPropertyOptional({ enum: ['MONTHLY', 'HOURLY', 'PER_LESSON'] })
+  @IsOptional()
+  @IsEnum(['MONTHLY', 'HOURLY', 'PER_LESSON'])
+  salaryType?: 'MONTHLY' | 'HOURLY' | 'PER_LESSON';
+
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0)
   hourlyRate?: number;
 
-  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000)
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0)
+  lessonRate?: number;
+
+  @ApiPropertyOptional() @Transform(stripHtmlTags) @IsOptional() @IsString() @MaxLength(2000)
   bio?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0)
@@ -181,22 +201,51 @@ export class CreateTeacherDto {
 }
 
 export class UpdateTeacherDto {
+  @ApiPropertyOptional()
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim().toLowerCase() : undefined))
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @ApiPropertyOptional()
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : undefined))
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  @MaxLength(128)
+  password?: string;
+
   @ApiPropertyOptional() @Transform(stripHtmlTags) @IsOptional() @IsString() @MaxLength(100)
   firstName?: string;
 
   @ApiPropertyOptional() @Transform(stripHtmlTags) @IsOptional() @IsString() @MaxLength(100)
   lastName?: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(20)
+  @ApiPropertyOptional()
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : undefined))
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
   phone?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean()
+  isActive?: boolean;
 
   @ApiPropertyOptional() @IsOptional() @IsArray() @IsString({ each: true })
   specializations?: string[];
 
+  @ApiPropertyOptional({ enum: ['MONTHLY', 'HOURLY', 'PER_LESSON'] })
+  @IsOptional()
+  @IsEnum(['MONTHLY', 'HOURLY', 'PER_LESSON'])
+  salaryType?: 'MONTHLY' | 'HOURLY' | 'PER_LESSON';
+
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0)
   hourlyRate?: number;
 
-  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000)
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0)
+  lessonRate?: number;
+
+  @ApiPropertyOptional() @Transform(stripHtmlTags) @IsOptional() @IsString() @MaxLength(2000)
   bio?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0)

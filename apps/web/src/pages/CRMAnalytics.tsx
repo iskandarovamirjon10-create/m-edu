@@ -27,6 +27,7 @@ import {
   GlassTH,
   GlassTD,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { analyticsApi } from '@/lib/api';
 import type {
   CRMFunnelResponse,
@@ -40,7 +41,7 @@ import type {
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { getErrorMessage } from '@/lib/errorMessages';
 
 /* ============================================================================
@@ -216,7 +217,7 @@ const TABS: { id: TabId; labelKey: string; icon: string[]; tone: Tone }[] = [
  * ========================================================================== */
 
 function AmbientOrbs() {
-  return null;
+  return <AuroraMesh variant="corporate" />;
 }
 
 function CountUp({ value, duration = 1.1, suffix = '', decimals = 0 }: { value: number; duration?: number; suffix?: string; decimals?: number }) {
@@ -332,7 +333,7 @@ function PremiumTabs({
   active: TabId;
   onChange: (id: TabId) => void;
 }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const reduced = useReducedMotion();
 
   return (
@@ -354,7 +355,7 @@ function PremiumTabs({
             whileHover={reduced ? undefined : { y: -1 }}
             whileTap={{ scale: 0.97 }}
             transition={SPRING.snappy}
-            className="relative shrink-0 overflow-hidden rounded-xl px-3.5 py-2 text-[12.5px] font-bold tracking-tight outline-none transition-colors whitespace-nowrap"
+            className="relative inline-flex items-center justify-center min-h-[44px] shrink-0 overflow-hidden rounded-xl px-3.5 py-2 text-[12.5px] font-bold tracking-tight outline-none transition-colors whitespace-nowrap"
             style={{ color: isActive ? c.fg : '#64748B' }}
             tabIndex={0}
             onKeyDown={(e: any) => {
@@ -506,7 +507,7 @@ function FunnelBar({
  * ========================================================================== */
 
 function FunnelTab({ data }: { data: CRMFunnelResponse }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const maxCount = Math.max(...data.funnel.map((s) => s.count), 1);
   const activeLeads =
     data.total -
@@ -582,7 +583,7 @@ function FunnelTab({ data }: { data: CRMFunnelResponse }) {
  * ========================================================================== */
 
 function SourcesTab({ data }: { data: CRMSources[] }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
 
   if (data.length === 0) {
     return (
@@ -693,7 +694,7 @@ function SourcesTab({ data }: { data: CRMSources[] }) {
  * ========================================================================== */
 
 function VelocityTab({ data }: { data: CRMVelocityResponse }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
 
   return (
     <motion.div
@@ -780,7 +781,7 @@ function VelocityTab({ data }: { data: CRMVelocityResponse }) {
  * ========================================================================== */
 
 function LostReasonsTab({ data }: { data: CRMLostReasonsResponse }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const reduced = useReducedMotion();
   const maxCount = Math.max(...data.reasons.map((r) => r.count), 1);
 
@@ -926,7 +927,7 @@ function handleOpenLeadSidecar(lead: CRMAgingLead) {
 }
 
 function AgingTab({ data }: { data: CRMAgingResponse }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
 
   if (data.total === 0) {
     return (
@@ -1080,7 +1081,7 @@ function AgingTab({ data }: { data: CRMAgingResponse }) {
  * ========================================================================== */
 
 function ModeratorsTab({ data }: { data: CRMModeratorStats[] }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
 
   if (data.length === 0) {
     return (
@@ -1229,7 +1230,7 @@ function ModeratorsTab({ data }: { data: CRMModeratorStats[] }) {
  * ========================================================================== */
 
 export function CRMAnalyticsPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('crm.title'));
   const [activeTab, setActiveTab] = useState<TabId>('funnel');
   const { playTick } = usePremiumSound();
@@ -1355,7 +1356,7 @@ export function CRMAnalyticsPage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="relative page-container space-y-5"
+      className="relative page-container space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
       <AmbientOrbs />
 

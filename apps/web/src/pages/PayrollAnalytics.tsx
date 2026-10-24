@@ -22,11 +22,12 @@ import {
   GlassErrorState,
   GlassTabs,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { analyticsApi } from '@/lib/api';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { getErrorMessage } from '@/lib/errorMessages';
 
 /* ============================================================================
@@ -1362,7 +1363,7 @@ function EfficiencyTab({ t }: { t: (k: string) => string }) {
 
 export function PayrollAnalyticsPage() {
   const { playTick } = usePremiumSound();
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('payrollAnalytics.title'));
   const [activeTab, setActiveTab] = useState<Tab>('summary');
 
@@ -1382,8 +1383,9 @@ export function PayrollAnalyticsPage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="page-container space-y-5"
+      className="relative page-container space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
+      <AuroraMesh variant="corporate" />
       {/* ============================================================
           HERO HEADER
       ============================================================ */}

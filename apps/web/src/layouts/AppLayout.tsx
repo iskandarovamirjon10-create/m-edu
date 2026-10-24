@@ -10,9 +10,9 @@
  */
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { useScroll, useTransform } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import { useAuth } from '@/auth/AuthContext';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { CommandPalette } from '@/components/CommandPalette';
 import { GlobalAiCopilot } from '@/components/ai';
@@ -23,6 +23,7 @@ import { DynamicWallpaper } from '@/components/wallpaper';
 import { LiquidGlassStudio } from '@/components/ui';
 import { FloatingPiPCamera } from '@/components/camera/FloatingPiPCamera';
 import { initials, fullName } from '@/lib/format';
+import { cn, usePrefersReducedMotion, SPRING } from '@/lib/design';
 
 import { DeviceProfileProvider, usePersistedState, useMediaQuery } from './core/singletons';
 import { Sidebar, ALL_ITEMS_MAP } from './components/Sidebar';
@@ -52,7 +53,7 @@ export function AppLayout() {
 
 function AppLayoutInner() {
   const { user, logout, loading: authLoading } = useAuth();
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const navigate = useNavigate();
   const location = useLocation();
   useAttendanceSocket();
@@ -66,6 +67,7 @@ function AppLayoutInner() {
   const isWide = useMediaQuery('(min-width: 1280px)');
   const showRail = useMediaQuery('(min-width: 768px)');
   const isPhone = !showRail;
+  const reducedMotion = usePrefersReducedMotion();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -80,8 +82,8 @@ function AppLayoutInner() {
   const mainRef = useRef<HTMLElement | null>(null);
 
   const { scrollY } = useScroll({ container: mainRef });
-  const headerY = useTransform(scrollY, [0, 80], [0, -6]);
-  const headerScale = useTransform(scrollY, [0, 80], [1, 0.985]);
+  const headerY = useTransform(scrollY, [0, 80], [0, -3]);
+  const headerScale = useTransform(scrollY, [0, 80], [1, 1]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -120,13 +122,67 @@ function AppLayoutInner() {
     [navigate],
   );
 
-  // Scroll to top on route change
+  // Scroll to hash target on route change if a hash is present (regular scroll is handled by ScrollToTop)
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el || !location.hash) return;
+    const id = decodeURIComponent(location.hash.slice(1));
+    const target = el.querySelector(`#${id}`) || document.getElementById(id);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [location.hash]);
+
+  // Close mobile navigation drawer on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setMobileSearchOpen(false);
+  }, [location.pathname]);
+
+  // Focus main container on mount so keyboard scroll (PageDown, PageUp, ArrowDown) works out of the box
   useEffect(() => {
     const el = mainRef.current;
     if (!el) return;
-    if (typeof el.scrollTo === 'function') el.scrollTo({ top: 0, behavior: 'auto' });
-    else el.scrollTop = 0;
-  }, [location.pathname]);
+    const raf = requestAnimationFrame(() => {
+      if (document.activeElement === document.body || !document.activeElement) {
+        el.focus({ preventScroll: true });
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Forward wheel events from layout chrome (margins, gutters) to <main> without forced reflow
+  useEffect(() => {
+    const mainEl = mainRef.current;
+    if (!mainEl) return;
+
+    const onWheel = (e: WheelEvent) => {
+      // If cursor is already inside main, native hardware-accelerated scroll handles it
+      if (e.target instanceof Node && mainEl.contains(e.target)) return;
+
+      // Don't forward if interacting with modals, popovers, or form inputs
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('[role="dialog"], [role="menu"], select, textarea, input, [data-scroll-prevent]')) {
+        return;
+      }
+
+      // If over sidebar, only preserve if sidebar itself is actively scrollable
+      const aside = target?.closest?.('aside');
+      if (aside && aside.scrollHeight > aside.clientHeight) {
+        return;
+      }
+
+      // Fast non-blocking scroll forwarding without DOM style recalculations
+      if (typeof mainEl.scrollBy === 'function') {
+        mainEl.scrollBy({ top: e.deltaY, behavior: 'auto' });
+      } else {
+        mainEl.scrollTop += e.deltaY;
+      }
+    };
+
+    window.addEventListener('wheel', onWheel, { passive: true });
+    return () => window.removeEventListener('wheel', onWheel);
+  }, []);
 
   // Sequence shortcut tracker (e.g., G then S)
   const lastKeyRef = useRef<{ key: string; time: number } | null>(null);
@@ -174,6 +230,33 @@ function AppLayoutInner() {
         e.preventDefault();
         searchRef.current?.focus();
         return;
+      }
+
+      // Keyboard-driven smooth page scrolling when not in an input
+      if (!inInput && !anyDialogOpen && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const main = mainRef.current;
+        if (main) {
+          if (e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey)) {
+            e.preventDefault();
+            main.scrollBy({ top: Math.max(200, main.clientHeight * 0.82), behavior: 'smooth' });
+            return;
+          }
+          if (e.key === 'PageUp' || (e.key === ' ' && e.shiftKey)) {
+            e.preventDefault();
+            main.scrollBy({ top: -Math.max(200, main.clientHeight * 0.82), behavior: 'smooth' });
+            return;
+          }
+          if (e.key === 'Home') {
+            e.preventDefault();
+            main.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+          if (e.key === 'End') {
+            e.preventDefault();
+            main.scrollTo({ top: main.scrollHeight, behavior: 'smooth' });
+            return;
+          }
+        }
       }
 
       // Linear-style Go-to sequence shortcuts (G then S/F/A/D/G)
@@ -243,20 +326,21 @@ function AppLayoutInner() {
 
   const currentNav = ALL_ITEMS_MAP.get(location.pathname);
   const currentTitle = currentNav ? t(currentNav.labelKey) || currentNav.label : '';
+  const isAiCopilot = location.pathname.startsWith('/ai-copilot');
 
   if (authLoading) {
     return (
       <div
         role="status"
         aria-live="polite"
-        className="fixed inset-0 flex items-center justify-center bg-[var(--bg-base)]"
+        className="fixed inset-0 flex items-center justify-center bg-[var(--bg-base)] backdrop-blur-2xl"
       >
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-4 rounded-3xl border border-white/60 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.035] p-8 shadow-2xl backdrop-blur-xl">
           <span
             aria-hidden="true"
             className="h-10 w-10 animate-spin rounded-full border-[3px] border-brand-500/25 border-t-brand-500"
           />
-          <p className="text-[13px] font-medium text-secondary">
+          <p className="text-[13px] font-semibold text-secondary">
             {t('common.loadingSession') || 'Loading session…'}
           </p>
         </div>
@@ -267,8 +351,7 @@ function AppLayoutInner() {
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
 
   const SIDEBAR_W = collapsed ? 84 : 270;
-  const SIDEBAR_GAP = 20;
-  const mainPaddingLeft = showRail ? SIDEBAR_W + SIDEBAR_GAP : 0;
+  const mainPaddingLeft = showRail ? SIDEBAR_W : 0;
 
   return (
     <div
@@ -303,11 +386,13 @@ function AppLayoutInner() {
         />
       )}
 
-      {/* Phone / Tablet Top Bar */}
-      <MobileTopBar
-        onOpenSearch={() => setMobileSearchOpen(true)}
-        onOpenMenu={() => setMobileMenuOpen(true)}
-      />
+      {/* Phone Top Bar */}
+      {isPhone && !isAiCopilot && (
+        <MobileTopBar
+          onOpenSearch={() => setMobileSearchOpen(true)}
+          onOpenMenu={() => setMobileMenuOpen(true)}
+        />
+      )}
 
       {/* Mobile Drawer */}
       <MobileMenuDrawer
@@ -315,6 +400,9 @@ function AppLayoutInner() {
         onClose={() => setMobileMenuOpen(false)}
         role={userRole}
         orgName={orgName}
+        userName={userFullName}
+        userInitials={userInitials}
+        userEmail={user?.email}
         onLogout={handleLogout}
       />
 
@@ -328,50 +416,67 @@ function AppLayoutInner() {
       <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       {/* Main Content Column */}
-      <div
+      <motion.div
         className="relative z-10 flex h-full min-h-0 min-w-0 flex-1 flex-col"
-        style={{
-          paddingLeft: mainPaddingLeft,
-          transition: 'padding-left 240ms cubic-bezier(0.32, 0.72, 0, 1)',
-          willChange: 'padding-left',
-        }}
+        animate={{ paddingLeft: mainPaddingLeft }}
+        transition={reducedMotion ? { duration: 0 } : SPRING.smooth}
       >
-        <TopBar
-          search={search}
-          setSearch={setSearch}
-          searchRef={searchRef}
-          isSearchFocused={isSearchFocused}
-          setIsSearchFocused={setIsSearchFocused}
-          onSearchKeyDown={handleSearchKeyDown}
-          userFullName={userFullName}
-          userInitials={userInitials}
-          userRole={userRole}
-          orgName={orgName}
-          headerY={headerY}
-          headerScale={headerScale}
-          onCommandPalette={handleCommandPalette}
-          onOpenShortcuts={() => setShortcutsOpen(true)}
-          onLogout={handleLogout}
-        />
+        {showRail && (
+          <TopBar
+            search={search}
+            setSearch={setSearch}
+            searchRef={searchRef}
+            isSearchFocused={isSearchFocused}
+            setIsSearchFocused={setIsSearchFocused}
+            onSearchKeyDown={handleSearchKeyDown}
+            userFullName={userFullName}
+            userInitials={userInitials}
+            userRole={userRole}
+            orgName={orgName}
+            headerY={headerY}
+            headerScale={headerScale}
+            onCommandPalette={handleCommandPalette}
+            onOpenShortcuts={() => setShortcutsOpen(true)}
+            onLogout={handleLogout}
+            onOpenMenu={() => setMobileMenuOpen(true)}
+            user={user}
+          />
+        )}
 
-        {isPhone && <MobileBottomNav role={userRole} onOpenMore={() => setMobileMenuOpen(true)} />}
+        {isPhone && !isSearchFocused && !isAiCopilot && (
+          <MobileBottomNav role={userRole} onOpenMore={() => setMobileMenuOpen(true)} />
+        )}
 
         <main
           ref={mainRef}
           id="main-content"
+          role="main"
           tabIndex={-1}
-          className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pt-[calc(5.25rem+env(safe-area-inset-top,0px))] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] outline-none scrollbar-thin sm:px-6 md:px-6 md:pt-2 md:pb-8 xl:px-8 xl:pb-10 xl:pt-2"
-          style={{ WebkitOverflowScrolling: 'touch' }}
+          data-scroll-container
+          data-scroll-focus
+          className={cn(
+            'relative min-h-0 min-w-0 flex-1 outline-none overscroll-y-contain touch-pan-y',
+            isAiCopilot
+              ? 'flex flex-col min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-0 pt-[env(safe-area-inset-top,0px)] pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] scrollbar-thin md:px-6 md:pt-3 md:pb-8'
+              : 'overflow-y-auto overflow-x-hidden px-4 pt-[calc(5.25rem+env(safe-area-inset-top,0px))] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] scrollbar-thin sm:px-6 md:px-6 md:pt-3 md:pb-8 xl:px-8 xl:pb-10 xl:pt-3',
+          )}
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehaviorY: 'contain',
+            touchAction: 'pan-y',
+          }}
         >
           <ScrollProgress containerRef={mainRef} />
           <ErrorBoundary>
             <AnimatedOutlet />
           </ErrorBoundary>
         </main>
-      </div>
+      </motion.div>
 
       <CommandPalette />
-      <GlobalAiCopilot />
+      <ErrorBoundary>
+        <GlobalAiCopilot />
+      </ErrorBoundary>
       <GlobalCalculator />
       <QuickLookModal />
       <SplitViewSidecar />

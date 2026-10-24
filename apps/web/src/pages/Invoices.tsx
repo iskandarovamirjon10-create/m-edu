@@ -14,7 +14,7 @@
  */
 
 import { formatDate } from '../lib/format';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, type SVGProps } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
 import { Printer } from 'lucide-react';
@@ -38,7 +38,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { Invoice, InvoicePayment, InvoiceRefund } from '@/lib/types';
 import { queryKeys } from '@/lib/query-keys.factory';
 
@@ -189,7 +189,7 @@ function Icon({
   paths, size = 18, className = '', strokeWidth = ICON_STROKE, ...rest
 }: {
   paths: string[]; size?: number; className?: string; strokeWidth?: number;
-} & React.SVGProps<SVGSVGElement>) {
+} & SVGProps<SVGSVGElement>) {
   return (
     <svg
       width={size} height={size} viewBox="0 0 24 24"
@@ -300,8 +300,14 @@ function invGradient(seed: string): string {
  * PREMIUM SUB-COMPONENTS
  * ========================================================================== */
 
-function AmbientOrbs() {
-  return null;
+function AuroraMesh() {
+  return (
+    <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+      <div className="absolute -top-[10%] -left-[10%] h-[560px] w-[560px] rounded-full bg-gradient-to-br from-blue-500/12 via-indigo-500/8 to-transparent blur-[130px] dark:from-blue-600/14 dark:via-indigo-600/10" />
+      <div className="absolute top-[25%] -right-[10%] h-[520px] w-[520px] rounded-full bg-gradient-to-bl from-emerald-500/12 via-teal-500/8 to-transparent blur-[130px] dark:from-emerald-600/14 dark:via-teal-600/10" />
+      <div className="absolute -bottom-[15%] left-[25%] h-[480px] w-[480px] rounded-full bg-gradient-to-tr from-purple-500/10 via-pink-500/6 to-transparent blur-[120px] dark:from-purple-600/12" />
+    </div>
+  );
 }
 
 function CountUp({ value, duration = 1.1, suffix = '', currency = false }: { value: number; duration?: number; suffix?: string; currency?: boolean }) {
@@ -459,7 +465,7 @@ function TextAreaFieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Ton
  * ========================================================================== */
 
 export function InvoicesPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('nav.invoices'));
   const { push } = useToast();
   const queryClient = useQueryClient();
@@ -483,7 +489,7 @@ export function InvoicesPage() {
     monthlyTuition: '',
     totalLessons: '12',
     attendedLessons: '6',
-    reason: 'Oy o\'rtasidan qo\'shilgan talaba uchun kunbay hisob',
+    reason: t('invoices.prorate.defaultReason'),
   });
 
   const paymentLinksQuery = useQuery({
@@ -495,14 +501,14 @@ export function InvoicesPage() {
   const createProratedInvoice = useMutation({
     mutationFn: (data: any) => invoicesApi.createProrated(data),
     onSuccess: () => {
-      push('success', 'Kunbay hisob-faktura muvaffaqiyatli shakllantirildi');
+      push('success', t('invoices.prorate.success'));
       setProrateOpen(false);
       setProrateForm({
         studentId: '',
         monthlyTuition: '',
         totalLessons: '12',
         attendedLessons: '6',
-        reason: 'Oy o\'rtasidan qo\'shilgan talaba uchun kunbay hisob',
+        reason: t('invoices.prorate.defaultReason'),
       });
       invalidateAll();
     },
@@ -533,6 +539,8 @@ export function InvoicesPage() {
     onSuccess: () => {
       push('success', t('invoices.createSuccess'));
       setCreateOpen(false);
+      setCreateForm({ description: '', unitPrice: '' });
+      setCreateErrors({});
       invalidateAll();
     },
     onError: (err: any) => setCreateErrors({ _error: getErrorMessage(err) }),
@@ -620,61 +628,61 @@ export function InvoicesPage() {
     sound.playPop();
     const studentName = inv.student?.user
       ? `${inv.student.user.firstName} ${inv.student.user.lastName}`
-      : inv.studentId?.slice(0, 8) ?? 'Talaba';
+      : inv.studentId?.slice(0, 8) ?? t('invoices.col.student');
     setStudioDocData({
       id: inv.number || `INV-${inv.id.slice(0, 8)}`,
       docType: 'receipt',
-      title: `Rasmiy Hisob-faktura (Invoice #${inv.number || inv.id.slice(0, 6)})`,
+      title: t('invoices.sidecar.officialReceipt', { number: inv.number || inv.id.slice(0, 6) }),
       recipientName: studentName,
       recipientId: inv.studentId ? `STD-${inv.studentId.slice(0, 8)}` : undefined,
       amount: formatCurrency(inv.total),
-      courseName: inv.items?.[0]?.description || 'Ta\'lim xizmati to\'lovi',
+      courseName: inv.items?.[0]?.description || t('invoices.sidecar.curriculumService'),
       dateStr: formatDate(inv.createdAt),
       items: [
-        { label: 'Hisob-faktura raqami', value: inv.number || inv.id.slice(0, 8) },
-        { label: 'Jami summa', value: formatCurrency(inv.total) },
-        { label: 'To\'langan summa', value: formatCurrency(inv.paidAmount || 0) },
-        { label: 'Qoldiq qarzdorlik', value: formatCurrency(remaining(inv)) },
-        { label: 'To\'lov holati', value: inv.status },
-        { label: 'Muddati', value: inv.dueDate ? formatDate(inv.dueDate) : 'Ko\'rsatilmagan' },
+        { label: t('invoices.numberLabel'), value: inv.number || inv.id.slice(0, 8) },
+        { label: t('invoices.total'), value: formatCurrency(inv.total) },
+        { label: t('invoices.col.totalPaid'), value: formatCurrency(inv.paidAmount || 0) },
+        { label: t('invoices.col.balanceDue'), value: formatCurrency(remaining(inv)) },
+        { label: t('common.status'), value: t(invoiceStatusKey(inv.status)) },
+        { label: t('payments.form.dueDate'), value: inv.dueDate ? formatDate(inv.dueDate) : t('common.none') },
       ],
     });
-  }, [sound]);
+  }, [sound, t]);
 
   /* ── macOS Split-View Detail Sidecar ──────────────────────────────── */
   const handleOpenInvoiceSidecar = useCallback((inv: any) => {
     sound.playTick();
     const studentName = inv.student?.user
       ? `${inv.student.user.firstName} ${inv.student.user.lastName}`
-      : inv.studentId?.slice(0, 8) ?? 'Talaba';
+      : inv.studentId?.slice(0, 8) ?? t('invoices.col.student');
     const bal = remaining(inv);
     const data: QuickLookData = {
       id: inv.id,
       type: 'general',
-      title: `${inv.number || 'Invoys'} — ${formatCurrency(inv.total)}`,
-      subtitle: `${studentName} · ${inv.status}`,
+      title: `${inv.number || t('invoices.invoiceLabel')} — ${formatCurrency(inv.total)}`,
+      subtitle: `${studentName} · ${t(invoiceStatusKey(inv.status))}`,
       badge: {
-        text: inv.status,
+        text: t(invoiceStatusKey(inv.status)),
         tone: inv.status === 'PAID' ? 'emerald' : inv.status === 'OVERDUE' ? 'rose' : 'amber',
       },
       metrics: [
-        { label: 'Jami', value: formatCurrency(inv.total) },
-        { label: 'To\'langan', value: formatCurrency(inv.paidAmount || 0), trend: 'up' },
-        { label: 'Qoldiq', value: formatCurrency(bal), trend: bal > 0 ? 'down' : 'neutral' },
-        { label: 'Holat', value: inv.status },
+        { label: t('invoices.total'), value: formatCurrency(inv.total) },
+        { label: t('invoices.col.totalPaid'), value: formatCurrency(inv.paidAmount || 0), trend: 'up' },
+        { label: t('invoices.col.balanceDue'), value: formatCurrency(bal), trend: bal > 0 ? 'down' : 'neutral' },
+        { label: t('common.status'), value: t(invoiceStatusKey(inv.status)) },
       ],
       details: [
-        { label: 'Invoys raqami', value: inv.number || inv.id, copyable: true },
-        { label: 'Talaba', value: studentName },
-        { label: 'Yaratilgan sana', value: formatDate(inv.createdAt) },
-        { label: 'To\'lov muddati', value: inv.dueDate ? formatDate(inv.dueDate) : '—' },
+        { label: t('invoices.numberLabel'), value: inv.number || inv.id, copyable: true },
+        { label: t('invoices.col.student'), value: studentName },
+        { label: t('common.date'), value: formatDate(inv.createdAt) },
+        { label: t('payments.form.dueDate'), value: inv.dueDate ? formatDate(inv.dueDate) : '—' },
       ],
       primaryAction: {
-        label: 'Executive PDF Studio',
+        label: t('invoices.sidecar.pdfStudioAria'),
         onExecute: () => openExecutiveInvoiceStudio(inv),
       },
       secondaryAction: bal > 0 ? {
-        label: 'To\'lov qabul qilish',
+        label: t('invoices.sidecar.receivePayment'),
         onExecute: () => {
           setPayTarget(inv);
           setPaymentForm({
@@ -687,7 +695,7 @@ export function InvoicesPage() {
       } : undefined,
     };
     openSidecar(data);
-  }, [sound, openExecutiveInvoiceStudio]);
+  }, [sound, openExecutiveInvoiceStudio, t]);
 
   /* ── Superhuman Keyboard Navigation ───────────────────────────────── */
   const {
@@ -727,8 +735,8 @@ export function InvoicesPage() {
       inv.status,
       inv.createdAt,
     ]);
-    const csvContent = [headers.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvContent = [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\r\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -736,8 +744,9 @@ export function InvoicesPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    push('success', `${selectedList.length} ta hisob-faktura CSV ga eksport qilindi`);
-  }, [items, selectedIds, push]);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    push('success', t('invoices.batch.exportedCsv', { count: selectedList.length }));
+  }, [items, selectedIds, push, t]);
 
   /* ── Loading ──────────────────────────────────────────────────────── */
   if (invoices.isLoading) {
@@ -767,9 +776,9 @@ export function InvoicesPage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="relative page-container space-y-5 pb-24"
+      className="relative page-container space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
-      <AmbientOrbs />
+      <AuroraMesh />
 
       {/* ============================================================
           HERO HEADER
@@ -815,7 +824,7 @@ export function InvoicesPage() {
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#2563EB]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#2563EB]">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
-                  {stats.count} total
+                  {stats.count} {t('invoices.kpi.total')}
                 </span>
                 {stats.overdue > 0 && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EF4444]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#EF4444]">
@@ -827,7 +836,7 @@ export function InvoicesPage() {
                       />
                       <span className="relative h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
                     </span>
-                    {stats.overdue} overdue
+                    {stats.overdue} {t('invoices.kpi.overdue')}
                   </span>
                 )}
               </div>
@@ -849,6 +858,7 @@ export function InvoicesPage() {
                 <GlassButton
                   variant="secondary"
                   onClick={() => setProrateOpen(true)}
+                  className="min-h-[44px] px-4"
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e: any) => {
@@ -860,7 +870,7 @@ export function InvoicesPage() {
                 >
                   <span className="inline-flex items-center gap-2">
                     <Icon paths={I.calculator} size={15} strokeWidth={2.2} />
-                    Kunbay Hisob (Prorate)
+                    {t('invoices.prorate.button')}
                   </span>
                 </GlassButton>
               </motion.div>
@@ -872,6 +882,7 @@ export function InvoicesPage() {
               <GlassButton
                 variant="primary"
                 onClick={() => setCreateOpen(true)}
+                className="min-h-[44px] px-5"
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e: any) => {
@@ -915,6 +926,7 @@ export function InvoicesPage() {
         >
           <div className="overflow-x-auto">
             <GlassTabs
+              aria-label={t('invoices.filterByStatus') || 'Invoices status filter'}
               active={statusFilter}
               onChange={setStatusFilter}
               tabs={FILTER_TABS.map((opt) => ({
@@ -1012,26 +1024,29 @@ export function InvoicesPage() {
                 >
                   {/* Top / Left: Selection + Tile + Details */}
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    {/* Selection Checkbox */}
-                    <button
-                      type="button"
+                    {/* Selection Checkbox with 44x44px touch hitbox */}
+                    <div
+                      className="flex h-11 w-11 shrink-0 items-center justify-center cursor-pointer -ml-2"
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleSelection(inv.id);
                       }}
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
-                        isRowSelected
-                          ? 'border-primary bg-primary text-white'
-                          : 'border-zinc-300 bg-white/50 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800/50'
-                      }`}
-                      aria-label={isRowSelected ? 'Tanlovni bekor qilish' : 'Tanlash'}
                     >
-                      {isRowSelected && (
-                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                    </button>
+                      <div
+                        className={`flex h-5 w-5 items-center justify-center rounded-md border transition-all ${
+                          isRowSelected
+                            ? 'border-primary bg-primary text-white shadow-sm'
+                            : 'border-zinc-300 bg-white/50 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800/50'
+                        }`}
+                        aria-label={t('invoices.selectAria', { number: inv.number || inv.id.slice(0, 8) })}
+                      >
+                        {isRowSelected && (
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
 
                     <InvoiceTile seed={seed} />
 
@@ -1076,15 +1091,15 @@ export function InvoicesPage() {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                       {inv.status === 'DRAFT' && (
                         <motion.button
                           type="button"
                           onClick={() => setIssueTarget(inv)}
-                          whileHover={{ scale: 1.06, y: -1 }}
-                          whileTap={{ scale: 0.94 }}
+                          whileHover={{ scale: 1.04, y: -1 }}
+                          whileTap={{ scale: 0.96 }}
                           transition={SPRING.snappy}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 sm:px-2.5 text-[11px] font-bold tracking-tight outline-none"
+                          className="inline-flex min-h-[44px] h-11 items-center gap-1.5 rounded-xl px-3 text-[11px] font-bold tracking-tight outline-none"
                           style={{
                             background: 'rgba(37,99,235,0.10)',
                             color: '#2563EB',
@@ -1092,24 +1107,22 @@ export function InvoicesPage() {
                           }}
                           role="button"
                           tabIndex={0}
-                          onKeyDown={(e: any) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              e.currentTarget.click();
-                            }
-                          }}>
-                          <Icon paths={I.upload} size={12} strokeWidth={2.4} />
+                        >
+                          <Icon paths={I.upload} size={14} strokeWidth={2.4} />
                           <span className="hidden sm:inline">{t('invoices.confirmIssue')}</span>
                         </motion.button>
                       )}
                       {inv.status !== 'DRAFT' && bal > 0 && (
                         <motion.button
                           type="button"
+                          data-testid="invoice-record-payment-btn"
                           onClick={() => setPayTarget(inv)}
-                          whileHover={{ scale: 1.06, y: -1 }}
-                          whileTap={{ scale: 0.94 }}
+                          whileHover={{ scale: 1.04, y: -1 }}
+                          whileTap={{ scale: 0.96 }}
                           transition={SPRING.snappy}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 sm:px-2.5 text-[11px] font-bold tracking-tight outline-none"
+                          aria-label={t('invoices.recordPayment')}
+                          title={t('invoices.recordPayment')}
+                          className="inline-flex min-h-[44px] h-11 items-center gap-1.5 rounded-xl px-3 text-[11px] font-bold tracking-tight outline-none"
                           style={{
                             background: 'rgba(16,185,129,0.10)',
                             color: '#10B981',
@@ -1117,13 +1130,8 @@ export function InvoicesPage() {
                           }}
                           role="button"
                           tabIndex={0}
-                          onKeyDown={(e: any) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              e.currentTarget.click();
-                            }
-                          }}>
-                          <Icon paths={I.cash} size={12} strokeWidth={2.4} />
+                        >
+                          <Icon paths={I.cash} size={14} strokeWidth={2.4} />
                           <span className="hidden sm:inline">{t('invoices.recordPayment')}</span>
                         </motion.button>
                       )}
@@ -1131,10 +1139,10 @@ export function InvoicesPage() {
                         <motion.button
                           type="button"
                           onClick={() => setRefundTarget(inv)}
-                          whileHover={{ scale: 1.06, y: -1 }}
-                          whileTap={{ scale: 0.94 }}
+                          whileHover={{ scale: 1.04, y: -1 }}
+                          whileTap={{ scale: 0.96 }}
                           transition={SPRING.snappy}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 sm:px-2.5 text-[11px] font-bold tracking-tight outline-none"
+                          className="inline-flex min-h-[44px] h-11 items-center gap-1.5 rounded-xl px-3 text-[11px] font-bold tracking-tight outline-none"
                           style={{
                             background: 'rgba(244,63,94,0.10)',
                             color: '#F43F5E',
@@ -1142,25 +1150,20 @@ export function InvoicesPage() {
                           }}
                           role="button"
                           tabIndex={0}
-                          onKeyDown={(e: any) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              e.currentTarget.click();
-                            }
-                          }}>
-                          <Icon paths={I.refresh} size={12} strokeWidth={2.4} />
+                        >
+                          <Icon paths={I.refresh} size={14} strokeWidth={2.4} />
                           <span className="hidden sm:inline">{t('invoices.recordRefund')}</span>
                         </motion.button>
                       )}
                       <motion.button
                         type="button"
                         onClick={() => setPaymentLinksTarget(inv)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
                         transition={SPRING.snappy}
-                        aria-label="Payme & Click to'lov"
-                        title="Payme & Click to'lov havolalari va QR"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
+                        aria-label={t('invoices.payLinks.aria')}
+                        title={t('invoices.payLinks.aria')}
+                        className="flex h-11 w-11 items-center justify-center rounded-xl outline-none"
                         style={{
                           background: 'rgba(2,132,199,0.12)',
                           color: '#2563EB',
@@ -1168,24 +1171,20 @@ export function InvoicesPage() {
                         }}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(e: any) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            e.currentTarget.click();
-                          }
-                        }}>
-                        <Icon paths={I.qrCode} size={13} strokeWidth={2.2} />
+                      >
+                        <Icon paths={I.qrCode} size={15} strokeWidth={2.2} />
                       </motion.button>
 
                       {/* Sidecar Split-View trigger */}
                       <motion.button
                         type="button"
+                        data-testid="invoice-sidecar-btn"
                         onClick={() => handleOpenInvoiceSidecar(inv)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        aria-label="Sidecar tafsilotlarini ochish"
-                        title="Sidecar tafsilotlari (Split-View · Space)"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-subtle bg-surface/80 text-secondary hover:text-primary hover:border-primary/40 transition-colors"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        aria-label={t('invoices.sidecar.title')}
+                        title={t('invoices.sidecar.title')}
+                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-subtle bg-surface/80 text-secondary hover:text-primary hover:border-primary/40 transition-colors"
                       >
                         <span className="text-[13px] leading-none">◨</span>
                       </motion.button>
@@ -1194,13 +1193,13 @@ export function InvoicesPage() {
                       <motion.button
                         type="button"
                         onClick={() => openExecutiveInvoiceStudio(inv)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        aria-label="Rasmiy PDF Studio"
-                        title="Executive PDF Studio (A4 Guilloché & QR · Enter)"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        aria-label={t('invoices.sidecar.pdfStudioAria')}
+                        title={t('invoices.sidecar.pdfStudioAria')}
+                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                       >
-                        <Printer className="h-3.5 w-3.5" />
+                        <Printer className="h-4 w-4" />
                       </motion.button>
                     </div>
                   </div>
@@ -2176,13 +2175,13 @@ export function InvoicesPage() {
       <GlassModal
         open={prorateOpen}
         onClose={() => setProrateOpen(false)}
-        title="Kunbay Hisob-faktura (Prorated Tuition)"
+        title={t('invoices.prorate.title')}
       >
         <form
           onSubmit={(e) => {
             e.preventDefault();
             if (!prorateForm.studentId) {
-              push('error', 'Iltimos, talabani tanlang');
+              push('error', t('payments.form.selectStudent'));
               return;
             }
             createProratedInvoice.mutate({
@@ -2196,19 +2195,20 @@ export function InvoicesPage() {
           className="space-y-4"
         >
           <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-3.5 text-xs text-sky-800 dark:text-sky-200">
-            <p className="font-semibold">Oy o'rtasida qo'shilgan talabalar uchun kunbay biling</p>
+            <p className="font-semibold">{t('invoices.prorate.title')}</p>
             <p className="mt-1 text-[11px] opacity-80">
-              Talaba to'liq oy emas, faqat o'zining dars boshlagan kunidan boshlab qolgan darslar soni bo'yicha to'lov qiladi.
+              {t('invoices.prorate.desc')}
             </p>
           </div>
 
-          <GlassField label="Talabani tanlang" required>
+          <GlassField label={t('invoices.prorate.student')} required>
             <GlassSelect
               value={prorateForm.studentId}
               onChange={(e) => setProrateForm({ ...prorateForm, studentId: e.target.value })}
               required
+              className="min-h-[44px]"
             >
-              <option value="">Talabani tanlang...</option>
+              <option value="">{t('payments.form.selectStudent')}</option>
               {((students.data as any)?.items || []).map((s: any) => (
                 <option key={s.id} value={s.id}>
                   {s.user?.firstName} {s.user?.lastName} {s.phone ? `(${s.phone})` : ''}
@@ -2218,31 +2218,34 @@ export function InvoicesPage() {
           </GlassField>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <GlassField label="Oylik to'lov (UZS)" required>
+            <GlassField label={t('invoices.prorate.monthlyTuition')} required>
               <GlassInput
                 type="number"
                 placeholder="800 000"
                 value={prorateForm.monthlyTuition}
                 onChange={(e) => setProrateForm({ ...prorateForm, monthlyTuition: e.target.value })}
                 required
+                className="min-h-[44px]"
               />
             </GlassField>
 
-            <GlassField label="Oydagi jami darslar" required>
+            <GlassField label={t('invoices.prorate.totalLessons')} required>
               <GlassInput
                 type="number"
                 value={prorateForm.totalLessons}
                 onChange={(e) => setProrateForm({ ...prorateForm, totalLessons: e.target.value })}
                 required
+                className="min-h-[44px]"
               />
             </GlassField>
 
-            <GlassField label="Qatnashadigan darslar" required>
+            <GlassField label={t('invoices.prorate.attendedLessons')} required>
               <GlassInput
                 type="number"
                 value={prorateForm.attendedLessons}
                 onChange={(e) => setProrateForm({ ...prorateForm, attendedLessons: e.target.value })}
                 required
+                className="min-h-[44px]"
               />
             </GlassField>
           </div>
@@ -2256,7 +2259,7 @@ export function InvoicesPage() {
                 </span>
               </div>
               <div className="mt-2 flex items-center justify-between border-t border-black/[0.05] pt-2 text-sm font-bold dark:border-white/[0.05]">
-                <span className="text-[#1D1D1F] dark:text-[#F5F5F7]">Hisoblangan summa:</span>
+                <span className="text-[#1D1D1F] dark:text-[#F5F5F7]">{t('invoices.prorate.calculatedTotal')}:</span>
                 <span className="font-mono text-base text-emerald-600 dark:text-emerald-400">
                   {formatCurrency(
                     Math.round(
@@ -2269,20 +2272,21 @@ export function InvoicesPage() {
             </div>
           )}
 
-          <GlassField label="Izoh / Asos">
+          <GlassField label={t('common.description')}>
             <GlassInput
               value={prorateForm.reason}
               onChange={(e) => setProrateForm({ ...prorateForm, reason: e.target.value })}
-              placeholder="Oy o'rtasidan kelgan talaba uchun..."
+              placeholder={t('invoices.prorate.defaultReason')}
+              className="min-h-[44px]"
             />
           </GlassField>
 
           <div className="flex justify-end gap-2 pt-2">
-            <GlassButton type="button" variant="secondary" onClick={() => setProrateOpen(false)}>
-              Bekor qilish
+            <GlassButton type="button" variant="secondary" onClick={() => setProrateOpen(false)} className="min-h-[44px]">
+              {t('common.cancel')}
             </GlassButton>
-            <GlassButton type="submit" variant="primary" disabled={createProratedInvoice.isPending}>
-              {createProratedInvoice.isPending ? 'Hisoblanmoqda...' : 'Hisoblash va Invoys yaratish'}
+            <GlassButton type="submit" variant="primary" disabled={createProratedInvoice.isPending} className="min-h-[44px]">
+              {createProratedInvoice.isPending ? t('common.saving') : t('invoices.prorate.submit')}
             </GlassButton>
           </div>
         </form>
@@ -2294,19 +2298,19 @@ export function InvoicesPage() {
       <GlassModal
         open={!!paymentLinksTarget}
         onClose={() => setPaymentLinksTarget(null)}
-        title="To'lov havolasi va QR kod (Payme / Click)"
+        title={t('invoices.payLinks.title')}
       >
         {paymentLinksTarget && (
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-4 dark:border-white/[0.06] dark:bg-white/[0.03]">
               <div className="flex items-center justify-between text-xs text-[#64748B]">
-                <span>Invoys raqami:</span>
+                <span>{t('invoices.numberLabel')}:</span>
                 <span className="font-mono font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {paymentLinksTarget.number || paymentLinksTarget.id.slice(0, 8)}
                 </span>
               </div>
               <div className="mt-1.5 flex items-center justify-between text-xs text-[#64748B]">
-                <span>Qolgan to'lov summasi:</span>
+                <span>{t('invoices.col.balanceDue')}:</span>
                 <span className="font-mono text-sm font-bold text-[#F43F5E]">
                   {formatCurrency(remaining(paymentLinksTarget))}
                 </span>
@@ -2315,7 +2319,7 @@ export function InvoicesPage() {
 
             {paymentLinksQuery.isLoading ? (
               <div className="flex h-32 items-center justify-center">
-                <span className="text-xs text-[#64748B]">Havolalar generatsiya qilinmoqda...</span>
+                <span className="text-xs text-[#64748B]">{t('invoices.loading')}</span>
               </div>
             ) : paymentLinksQuery.data ? (
               <div className="space-y-4">
@@ -2327,24 +2331,24 @@ export function InvoicesPage() {
                         href={paymentLinksQuery.data.paymeUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-lg bg-cyan-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-cyan-700"
+                        className="rounded-lg bg-cyan-600 px-3 py-1.5 text-[11.5px] font-bold text-white hover:bg-cyan-700 min-h-[36px] inline-flex items-center justify-center"
                       >
-                        To'lash
+                        {t('invoices.pay')}
                       </a>
                     </div>
                     <p className="mt-1 text-[10px] text-cyan-900/70 dark:text-cyan-200/70">
-                      Ilova yoki brauzerda to'g'ridan-to'g'ri ochiladi
+                      {t('invoices.payLinks.desc')}
                     </p>
                     <button
                       type="button"
                       onClick={() => {
                         navigator.clipboard.writeText(paymentLinksQuery.data.paymeUrl);
-                        push('success', 'Payme havolasi nusxalandi');
+                        push('success', t('invoices.payLinks.copied'));
                       }}
-                      className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-cyan-700 dark:text-cyan-300 hover:underline"
+                      className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-cyan-700 dark:text-cyan-300 hover:underline min-h-[36px]"
                     >
                       <Icon paths={I.copy} size={11} strokeWidth={2} />
-                      Havolani nusxalash
+                      {t('invoices.payLinks.copyLink')}
                     </button>
                   </div>
 
@@ -2355,24 +2359,24 @@ export function InvoicesPage() {
                         href={paymentLinksQuery.data.clickUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-blue-700"
+                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-[11.5px] font-bold text-white hover:bg-blue-700 min-h-[36px] inline-flex items-center justify-center"
                       >
-                        To'lash
+                        {t('invoices.pay')}
                       </a>
                     </div>
                     <p className="mt-1 text-[10px] text-blue-900/70 dark:text-blue-200/70">
-                      Click Up yoki veb interfeys orqali tezkor to'lov
+                      {t('invoices.payLinks.desc')}
                     </p>
                     <button
                       type="button"
                       onClick={() => {
                         navigator.clipboard.writeText(paymentLinksQuery.data.clickUrl);
-                        push('success', 'Click havolasi nusxalandi');
+                        push('success', t('invoices.payLinks.copied'));
                       }}
-                      className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300 hover:underline"
+                      className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300 hover:underline min-h-[36px]"
                     >
                       <Icon paths={I.copy} size={11} strokeWidth={2} />
-                      Havolani nusxalash
+                      {t('invoices.payLinks.copyLink')}
                     </button>
                   </div>
                 </div>
@@ -2384,10 +2388,10 @@ export function InvoicesPage() {
                     className="h-44 w-44 rounded-xl border border-black/[0.08] p-2 dark:border-white/[0.08]"
                   />
                   <p className="mt-3 text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                    Payme yoki Click kamerasi orqali skanerlang
+                    Payme / Click QR
                   </p>
                   <p className="mt-0.5 text-[11px] text-[#64748B]">
-                    Ota-ona telefonidan skaner qilib bir zumda to'lov qila oladi
+                    {t('invoices.payLinks.desc')}
                   </p>
                 </div>
 
@@ -2399,17 +2403,17 @@ export function InvoicesPage() {
                   )}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-sky-600"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 py-3 text-xs font-bold text-white shadow-sm hover:bg-sky-600 min-h-[44px]"
                 >
                   <Icon paths={I.telegram} size={14} strokeWidth={2} />
-                  Ota-onaga Telegram orqali yuborish
+                  {t('invoices.preview.paymentInstructions')} (Telegram)
                 </a>
               </div>
             ) : null}
 
             <div className="flex justify-end pt-2">
-              <GlassButton type="button" variant="secondary" onClick={() => setPaymentLinksTarget(null)}>
-                Yopish
+              <GlassButton type="button" variant="secondary" onClick={() => setPaymentLinksTarget(null)} className="min-h-[44px]">
+                {t('common.close')}
               </GlassButton>
             </div>
           </div>
@@ -2419,7 +2423,7 @@ export function InvoicesPage() {
       {/* Floating Action Island for batch operations */}
       <FloatingActionIsland
         selectedCount={selectedCount}
-        onClearSelection={clearSelection}
+        onClear={clearSelection}
         actions={[
           {
             label: 'CSV Eksport',

@@ -29,6 +29,10 @@ export class EmailService {
   }
 
   private createTransporter(): Transporter | null {
+    if (!this.configService?.get) {
+      this.logger.warn('SMTP is not configured (ConfigService unavailable).');
+      return null;
+    }
     const host = this.configService.get<string>('SMTP_HOST');
     const port = Number(this.configService.get<string>('SMTP_PORT') || 587);
     const user = this.configService.get<string>('SMTP_USER');

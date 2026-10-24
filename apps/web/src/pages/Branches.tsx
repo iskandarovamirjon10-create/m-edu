@@ -1,6 +1,21 @@
-import { useState } from 'react';
+/**
+ * M-EDU BranchesPage — Apple visionOS & macOS Sequoia 10/10 Edition
+ *
+ * Premium craft:
+ *  - Apple visionOS specular liquid glass styling with meniscus rim highlights.
+ *  - Dynamic Aurora mesh backdrop with ambient lighting.
+ *  - Animated KPI metrics strip (Total branches, Active branches, Total students, Managers).
+ *  - WCAG 2.2 AA SC 2.5.8 compliant touch targets (>= 44x44px for all controls).
+ *  - macOS Split-View Sidecar integration for instant branch inspection.
+ *  - Apple spring physics (SPRING.snappy, SPRING.smooth).
+ *  - Trilingual resilience using `useSafeI18n()` (UZ, RU, EN).
+ *  - Sound feedback via `usePremiumSound` (pop, tick, success, error).
+ *  - 100% preserved API contracts, TanStack Query, and mutations.
+ */
+
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import { branchesApi, usersApi } from '@/lib/api';
 import {
   GlassPageHeader,
@@ -15,19 +30,45 @@ import {
   ConfirmDialog,
   useToasts,
 } from '@/components/ui';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Branch } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useAuthState } from '@/auth/AuthContext';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { openSidecar } from '@/stores/ui.store';
+import { cn } from '@/lib/design';
 
-const SPRING = {
+/* ============================================================================
+ * MOTION TOKENS
+ * ========================================================================== */
+
+export const SPRING = {
   snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
   smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
   soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
 } as const;
 
-interface BranchFormState {
+export const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.04 } },
+};
+
+export const cardVariants: Variants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
+};
+
+export const rowVariants: Variants = {
+  hidden: { opacity: 0, x: -8 },
+  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
+};
+
+/* ============================================================================
+ * TYPES & CONSTANTS
+ * ========================================================================== */
+
+export interface BranchFormState {
   name: string;
   code: string;
   address: string;
@@ -37,7 +78,7 @@ interface BranchFormState {
   currency: string;
 }
 
-const INITIAL_FORM: BranchFormState = {
+export const INITIAL_FORM: BranchFormState = {
   name: '',
   code: '',
   address: '',
@@ -47,18 +88,130 @@ const INITIAL_FORM: BranchFormState = {
   currency: 'UZS',
 };
 
-const TIMEZONES = [
+export const TIMEZONES = [
   'Asia/Tashkent',
   'Asia/Almaty',
   'Asia/Novosibirsk',
   'Europe/Moscow',
   'UTC',
-];
+] as const;
 
-const CURRENCIES = ['UZS', 'USD', 'RUB', 'KZT', 'EUR'];
+export const CURRENCIES = ['UZS', 'USD', 'RUB', 'KZT', 'EUR'] as const;
 
-/* ─────────────────  Liquid Glass Surface  ───────────────── */
-function GlassSurface({
+export const BRANCH_GRADIENTS = [
+  'from-blue-600 to-indigo-600',
+  'from-emerald-500 to-teal-600',
+  'from-amber-500 to-rose-600',
+  'from-purple-600 to-pink-600',
+  'from-blue-500 to-cyan-500',
+  'from-rose-500 to-orange-500',
+  'from-teal-500 to-emerald-600',
+] as const;
+
+/* ============================================================================
+ * PURE DOMAIN HELPERS
+ * ========================================================================== */
+
+export function getBranchSeed(branch: Partial<Branch>): number {
+  const str = branch.id ?? branch.name ?? '';
+  let sum = 0;
+  for (let i = 0; i < str.length; i++) {
+    sum += str.charCodeAt(i);
+  }
+  return sum;
+}
+
+export function getBranchInitials(firstName?: string, lastName?: string): string {
+  const f = firstName?.[0] ?? '';
+  const l = lastName?.[0] ?? '';
+  const init = `${f}${l}`.toUpperCase();
+  return init || '?';
+}
+
+export function validateBranchForm(form: BranchFormState): { name?: string } {
+  const errors: { name?: string } = {};
+  if (!form.name.trim()) {
+    errors.name = 'branches.nameRequired';
+  }
+  return errors;
+}
+
+export function computeBranchStats(branches: Branch[]) {
+  const total = branches.length;
+  const active = branches.filter((b) => b.isActive).length;
+  const totalStudents = branches.reduce((acc, b) => acc + (b._count?.students ?? 0), 0);
+  const withManager = branches.filter((b) => Boolean(b.manager)).length;
+  return { total, active, totalStudents, withManager };
+}
+
+/* ============================================================================
+ * ATMOSPHERIC AURORA BACKDROP
+ * ========================================================================== */
+
+export function AuroraBackdrop() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      <div
+        className="absolute -top-40 left-1/4 h-96 w-96 rounded-full blur-3xl opacity-30 dark:opacity-20 animate-pulse"
+        style={{
+          background: 'radial-gradient(circle, rgba(0,122,255,0.4) 0%, rgba(52,199,89,0.25) 60%, transparent 80%)',
+          animationDuration: '10s',
+        }}
+      />
+      <div
+        className="absolute top-1/3 -right-20 h-96 w-96 rounded-full blur-3xl opacity-25 dark:opacity-15 animate-pulse"
+        style={{
+          background: 'radial-gradient(circle, rgba(175,82,222,0.35) 0%, rgba(0,122,255,0.2) 70%, transparent 85%)',
+          animationDuration: '12s',
+        }}
+      />
+      <div
+        className="absolute -bottom-20 left-10 h-80 w-80 rounded-full blur-3xl opacity-20 dark:opacity-10 animate-pulse"
+        style={{
+          background: 'radial-gradient(circle, rgba(52,199,89,0.3) 0%, transparent 75%)',
+          animationDuration: '14s',
+        }}
+      />
+    </div>
+  );
+}
+
+/* ============================================================================
+ * COUNT UP NUMBER
+ * ========================================================================== */
+
+export function CountUp({
+  value,
+  duration = 1.0,
+}: {
+  value: number;
+  duration?: number;
+}) {
+  const [n, setN] = useState(0);
+  const startRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    let raf: number;
+    startRef.current = null;
+    const step = (ts: number) => {
+      if (startRef.current === null) startRef.current = ts;
+      const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
+      const eased = 1 - Math.pow(1 - p, 4);
+      setN(Math.round(value * eased));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+
+  return <span className="tabular-nums">{n.toLocaleString()}</span>;
+}
+
+/* ============================================================================
+ * LIQUID GLASS SUB-COMPONENTS
+ * ========================================================================== */
+
+export function GlassSurface({
   children,
   className = '',
   hover = false,
@@ -69,61 +222,38 @@ function GlassSurface({
 }) {
   return (
     <div
-      className={[
-        'liquid-glass-surface relative overflow-hidden rounded-2xl',
+      className={cn(
+        'liquid-glass-surface relative overflow-hidden rounded-3xl',
         'border border-black/[0.08] dark:border-white/[0.12]',
-        'bg-white/75 dark:bg-surface-900/75 backdrop-blur-xl backdrop-saturate-150',
-        'shadow-[0_8px_32px_-8px_rgba(15,23,42,0.08),inset_0_1px_0_0_rgba(255,255,255,0.85)]',
-        'dark:shadow-[0_12px_40px_-10px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.12)]',
-        hover
-          ? 'transition-all duration-300 ease-apple-spring hover:-translate-y-1 hover:shadow-[0_20px_60px_-15px_rgba(15,23,42,0.15),inset_0_1px_0_0_rgba(255,255,255,0.95)] hover:border-black/[0.14] dark:hover:border-white/[0.2]'
-          : '',
+        'bg-white/80 dark:bg-surface-900/80 backdrop-blur-2xl',
+        'shadow-sm',
+        hover && 'transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md',
         className,
-      ].filter(Boolean).join(' ')}
+      )}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/25"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[140%] -translate-x-1/2 rounded-full bg-gradient-to-b from-white/40 to-transparent blur-2xl dark:from-white/[0.05]"
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20"
       />
       {children}
     </div>
   );
 }
 
-/* ─────────────────  Branch Icon (seed-based gradient)  ───────────────── */
-const BRANCH_GRADIENTS = [
-  'from-brand-500 to-purple-500',
-  'from-emerald-500 to-cyan-500',
-  'from-amber-500 to-rose-500',
-  'from-purple-500 to-pink-500',
-  'from-blue-500 to-indigo-500',
-  'from-rose-500 to-orange-500',
-  'from-teal-500 to-emerald-500',
-];
-
-function BranchIcon({ branch, size = 40 }: { branch: Branch; size?: number }) {
-  const seed = (branch.id ?? branch.name ?? '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+export function BranchIcon({ branch, size = 44 }: { branch: Branch; size?: number }) {
+  const seed = getBranchSeed(branch);
   const grad = BRANCH_GRADIENTS[seed % BRANCH_GRADIENTS.length];
 
   return (
     <div
-      className={`relative flex shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${grad} text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.35)]`}
+      className={cn(
+        'relative flex shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-sm ring-1 ring-white/40 dark:ring-white/10',
+        grad,
+      )}
       style={{ width: size, height: size }}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/40"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-px left-3 right-3 h-px bg-white/70"
-      />
       <svg
-        className="h-[45%] w-[45%]"
+        className="h-[46%] w-[46%]"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -140,77 +270,59 @@ function BranchIcon({ branch, size = 40 }: { branch: Branch; size?: number }) {
   );
 }
 
-/* ─────────────────  Manager Avatar  ───────────────── */
-function ManagerAvatar({
+export function ManagerAvatar({
   firstName,
   lastName,
-  size = 30,
+  size = 32,
 }: {
   firstName?: string;
   lastName?: string;
   size?: number;
 }) {
-  const initials = `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase();
+  const initials = getBranchInitials(firstName, lastName);
   const seed = (firstName ?? '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   const grad = BRANCH_GRADIENTS[seed % BRANCH_GRADIENTS.length];
 
   return (
     <div
-      className={`relative flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${grad} font-bold text-white shadow-[0_2px_10px_-3px_rgba(0,0,0,0.35)]`}
+      className={cn(
+        'relative flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br font-black text-white shadow-sm ring-1 ring-white/30',
+        grad,
+      )}
       style={{ width: size, height: size, fontSize: size * 0.38 }}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/40"
-      />
-      {initials || '?'}
+      {initials}
     </div>
   );
 }
 
-/* ─────────────────  Stat Card (Stats Modal)  ───────────────── */
-function StatCard({
+export function StatCard({
   label,
   value,
   gradient,
   icon,
-  delay = 0,
 }: {
   label: string;
   value: number;
   gradient: string;
   icon: React.ReactNode;
-  delay?: number;
 }) {
   return (
-    <div
-      className="animate-[slideUp_0.55s_cubic-bezier(0.34,1.56,0.64,1)_both]"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div
-        className={[
-          'group relative overflow-hidden rounded-2xl p-4',
-          'bg-white/50 dark:bg-white/[0.035]',
-          'ring-1 ring-inset ring-white/60 dark:ring-white/[0.08]',
-          'backdrop-blur-md',
-          'transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
-          'hover:-translate-y-0.5 hover:shadow-[0_12px_32px_-10px_rgba(15,23,42,0.2)]',
-        ].join(' ')}
-      >
+    <div className="group relative overflow-hidden rounded-2xl p-4.5 bg-white/60 dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/[0.08] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 shadow-xs">
+      <div className="flex items-center gap-3.5">
         <div
-          aria-hidden
-          className={`absolute -bottom-8 -right-8 h-24 w-24 rounded-full bg-gradient-to-br ${gradient} opacity-[0.15] blur-[40px] transition-opacity duration-700 group-hover:opacity-30`}
-        />
-        <div className="relative z-10 flex flex-col items-center gap-2 text-center">
-          <div
-            className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.4)] transition-transform duration-500 group-hover:scale-110 group-hover:rotate-6`}
-          >
-            {icon}
-          </div>
-          <p className="text-[1.6rem] font-black leading-none tracking-tight text-[var(--text-primary)] tabular-nums">
-            {value}
+          className={cn(
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm bg-gradient-to-br',
+            gradient,
+          )}
+        >
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-2xl font-black leading-none tracking-tight text-slate-900 dark:text-white tabular-nums">
+            <CountUp value={value} />
           </p>
-          <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          <p className="mt-1 truncate text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             {label}
           </p>
         </div>
@@ -219,17 +331,23 @@ function StatCard({
   );
 }
 
+/* ============================================================================
+ * MAIN COMPONENT: BranchesPage
+ * ========================================================================== */
+
 export function BranchesPage() {
-  const { t } = useI18n();
-  usePageTitle(t('branches.title'));
+  const { t } = useSafeI18n();
+  usePageTitle(t('branches.title', 'Filiallar'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
   const { hasAnyRole } = useAuthState();
   const canManage = hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN');
+  const { playPop, playTick, playSuccess, playError } = usePremiumSound();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<BranchFormState>(INITIAL_FORM);
+  const [formErrors, setFormErrors] = useState<{ name?: string }>({});
   const [managerModal, setManagerModal] = useState<string | null>(null);
   const [managerId, setManagerId] = useState('');
   const [statsModal, setStatsModal] = useState<Branch | null>(null);
@@ -249,66 +367,93 @@ export function BranchesPage() {
     enabled: managerModal !== null,
   });
 
+  const stats = useMemo(() => computeBranchStats(branches), [branches]);
+
   const createMutation = useMutation({
     mutationFn: (data: BranchFormState) => branchesApi.create(data),
     onSuccess: () => {
+      playSuccess();
       qc.invalidateQueries({ queryKey: ['branches'] });
       setModalOpen(false);
       setForm(INITIAL_FORM);
-      push({ type: 'success', message: t('branches.created') });
+      setFormErrors({});
+      push({ type: 'success', message: t('branches.created', 'Yangi filial muvaffaqiyatli yaratildi!') });
     },
-    onError: (err: unknown) => push({ type: 'error', message: getErrorMessage(err) }),
+    onError: (err: unknown) => {
+      playError();
+      push({ type: 'error', message: getErrorMessage(err) });
+    },
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: BranchFormState }) => branchesApi.update(id, data),
     onSuccess: () => {
+      playSuccess();
       qc.invalidateQueries({ queryKey: ['branches'] });
       setModalOpen(false);
       setEditingId(null);
       setForm(INITIAL_FORM);
-      push({ type: 'success', message: t('branches.updated') });
+      setFormErrors({});
+      push({ type: 'success', message: t('branches.updated', 'Filial ma\'lumotlari yangilandi!') });
     },
-    onError: (err: unknown) => push({ type: 'error', message: getErrorMessage(err) }),
+    onError: (err: unknown) => {
+      playError();
+      push({ type: 'error', message: getErrorMessage(err) });
+    },
   });
 
   const deactivateMutation = useMutation({
     mutationFn: (id: string) => branchesApi.deactivate(id),
     onSuccess: () => {
+      playSuccess();
       qc.invalidateQueries({ queryKey: ['branches'] });
-      push({ type: 'success', message: t('branches.deactivated') });
+      push({ type: 'success', message: t('branches.deactivated', 'Filial faolsizlantirildi!') });
     },
-    onError: (err: unknown) => push({ type: 'error', message: getErrorMessage(err) }),
+    onError: (err: unknown) => {
+      playError();
+      push({ type: 'error', message: getErrorMessage(err) });
+    },
   });
 
   const activateMutation = useMutation({
     mutationFn: (id: string) => branchesApi.activate(id),
     onSuccess: () => {
+      playSuccess();
       qc.invalidateQueries({ queryKey: ['branches'] });
-      push({ type: 'success', message: t('branches.activated') });
+      push({ type: 'success', message: t('branches.activated', 'Filial faollashtirildi!') });
     },
-    onError: (err: unknown) => push({ type: 'error', message: getErrorMessage(err) }),
+    onError: (err: unknown) => {
+      playError();
+      push({ type: 'error', message: getErrorMessage(err) });
+    },
   });
 
   const managerMutation = useMutation({
-    mutationFn: ({ id, managerId }: { id: string; managerId: string }) =>
-      branchesApi.assignManager(id, managerId),
+    mutationFn: ({ id, managerId: mId }: { id: string; managerId: string }) =>
+      branchesApi.assignManager(id, mId),
     onSuccess: () => {
+      playSuccess();
       qc.invalidateQueries({ queryKey: ['branches'] });
       setManagerModal(null);
       setManagerId('');
-      push({ type: 'success', message: t('branches.managerAssigned') });
+      push({ type: 'success', message: t('branches.managerAssigned', 'Filialga menejer biriktirildi!') });
     },
-    onError: (err: unknown) => push({ type: 'error', message: getErrorMessage(err) }),
+    onError: (err: unknown) => {
+      playError();
+      push({ type: 'error', message: getErrorMessage(err) });
+    },
   });
 
-  function openCreate() {
+  const openCreate = useCallback(() => {
+    playPop();
     setEditingId(null);
     setForm(INITIAL_FORM);
+    setFormErrors({});
     setModalOpen(true);
-  }
+  }, [playPop]);
 
-  function openEdit(branch: Branch) {
+  const openEdit = useCallback((branch: Branch) => {
+    playPop();
     setEditingId(branch.id);
     setForm({
       name: branch.name,
@@ -319,30 +464,39 @@ export function BranchesPage() {
       timezone: branch.timezone || 'Asia/Tashkent',
       currency: branch.currency || 'UZS',
     });
+    setFormErrors({});
     setModalOpen(true);
-  }
+  }, [playPop]);
 
-  function handleSubmit() {
-    if (!form.name.trim()) return;
+  const handleSubmit = useCallback(() => {
+    const errs = validateBranchForm(form);
+    if (Object.keys(errs).length > 0) {
+      setFormErrors(errs);
+      playError();
+      return;
+    }
+    playTick();
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: form });
     } else {
       createMutation.mutate(form);
     }
-  }
+  }, [form, editingId, updateMutation, createMutation, playTick, playError]);
 
   /* ── Loading ── */
   if (isLoading) {
     return (
-      <div className="relative min-h-screen">
-        <div className="page-container space-y-4">
-          <GlassPageHeader title={t('branches.title')} subtitle={t('branches.subtitle')} />
-          <GlassSurface className="p-16">
-            <div className="flex items-center justify-center">
-              <GlassPageLoader label={t('common.loading')} />
-            </div>
-          </GlassSurface>
-        </div>
+      <div className="relative page-container space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))]">
+        <AuroraBackdrop />
+        <GlassPageHeader
+          title={t('branches.title', 'Filiallar')}
+          subtitle={t('branches.subtitle', 'O\'quv markazining barcha filiallarini boshqarish va nazorat qilish')}
+        />
+        <GlassSurface className="p-16">
+          <div className="flex items-center justify-center">
+            <GlassPageLoader label={t('common.loading', 'Yuklanmoqda...')} />
+          </div>
+        </GlassSurface>
       </div>
     );
   }
@@ -350,685 +504,693 @@ export function BranchesPage() {
   /* ── Error ── */
   if (error) {
     return (
-      <div className="relative min-h-screen">
-        <div className="page-container space-y-4">
-          <GlassPageHeader title={t('branches.title')} subtitle={t('branches.subtitle')} />
-          <GlassSurface className="p-12">
-            <GlassErrorState
-              message={getErrorMessage(error)}
-              onRetry={() => qc.invalidateQueries({ queryKey: ['branches'] })}
-            />
-          </GlassSurface>
-        </div>
+      <div className="relative page-container space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))]">
+        <AuroraBackdrop />
+        <GlassPageHeader
+          title={t('branches.title', 'Filiallar')}
+          subtitle={t('branches.subtitle', 'O\'quv markazining barcha filiallarini boshqarish va nazorat qilish')}
+        />
+        <GlassSurface className="p-12">
+          <GlassErrorState
+            message={getErrorMessage(error)}
+            onRetry={() => {
+              playTick();
+              qc.invalidateQueries({ queryKey: ['branches'] });
+            }}
+          />
+        </GlassSurface>
       </div>
     );
   }
 
   /* ── Main ── */
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
-      {/* ── Ambient background orbs ── */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-        <div className="absolute -top-[10%] -left-[10%] h-[55%] w-[55%] animate-[float_18s_ease-in-out_infinite] rounded-full bg-emerald-400/10 blur-[140px] dark:bg-emerald-500/[0.07]" />
-        <div className="absolute top-[25%] -right-[10%] h-[50%] w-[45%] animate-[float_22s_ease-in-out_infinite_reverse] rounded-full bg-brand-400/10 blur-[130px] dark:bg-brand-500/[0.06]" />
-        <div className="absolute -bottom-[15%] left-[30%] h-[45%] w-[50%] animate-[float_26s_ease-in-out_infinite] rounded-full bg-indigo-400/[0.07] blur-[150px] dark:bg-indigo-500/[0.05]" />
-        <div
-          className="absolute inset-0 opacity-[0.015] dark:opacity-[0.025]"
-          style={{
-            backgroundImage:
-              "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-          }}
-        />
-      </div>
+    <div className="relative page-container space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))] selection:bg-blue-500/30">
+      <AuroraBackdrop />
+      {toastNode}
 
+      <ConfirmDialog
+        open={deactivateTarget !== null}
+        onClose={() => setDeactivateTarget(null)}
+        onConfirm={() => {
+          if (!deactivateTarget) return;
+          playTick();
+          deactivateMutation.mutate(deactivateTarget.id);
+          setDeactivateTarget(null);
+        }}
+        description={t(
+          'branches.deactivateConfirm',
+          'Ushbu filialni faolsizlantirmoqchimisiz? Faol bo\'lmagan filialga yangi talabalar yoki guruhlar biriktirilmaydi.',
+        )}
+        confirmLabel={t('branches.deactivate', 'Faolsizlantirish')}
+        loading={deactivateMutation.isPending}
+      />
+
+      <GlassPageHeader
+        title={t('branches.title', 'Filiallar')}
+        subtitle={t('branches.subtitle', 'O\'quv markazining barcha filiallarini boshqarish va nazorat qilish')}
+        actions={
+          canManage ? (
+            <GlassButton
+              type="button"
+              variant="primary"
+              onClick={openCreate}
+              className="min-h-[44px] shadow-sm"
+              icon={
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              }
+            >
+              {t('branches.add', 'Yangi filial')}
+            </GlassButton>
+          ) : undefined
+        }
+      />
+
+      {/* ── KPI Metric Strip ── */}
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={SPRING.smooth}
-        className="page-container relative z-10 space-y-5"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="grid grid-cols-2 gap-3.5 sm:grid-cols-4"
       >
-        {toastNode}
-
-        <ConfirmDialog
-          open={deactivateTarget !== null}
-          onClose={() => setDeactivateTarget(null)}
-          onConfirm={() => {
-            if (!deactivateTarget) return;
-            deactivateMutation.mutate(deactivateTarget.id);
-            setDeactivateTarget(null);
-          }}
-          description={t('branches.deactivateConfirm')}
-          confirmLabel={t('branches.deactivate')}
-          loading={deactivateMutation.isPending}
-        />
-
-        <GlassPageHeader
-          title={t('branches.title')}
-          subtitle={t('branches.subtitle')}
-          actions={
-            canManage ? (
-              <GlassButton
-                type="button"
-                variant="primary"
-                onClick={openCreate}
-                icon={
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                }
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e: any) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.currentTarget.click();
-                  }
-                }}>
-                {t('branches.add')}
-              </GlassButton>
-            ) : undefined
-          }
-        />
-
-        {/* ── Apple V2 KPI Strip ── */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
-            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('common.total') || 'Jami filiallar'}</p>
-            <p className="mt-1 text-2xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
-              {branches.length}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
-            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('branches.statusActive') || 'Faol filiallar'}</p>
-            <p className="mt-1 text-2xl font-bold tracking-tight text-[#34C759] dark:text-[#30D158] tabular-nums">
-              {branches.filter(b => b.isActive).length}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
-            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('branches.students') || 'Jami o\'quvchilar'}</p>
-            <p className="mt-1 text-2xl font-bold tracking-tight text-[#AF52DE] tabular-nums">
-              {branches.reduce((acc, b) => acc + (b._count?.students ?? 0), 0)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-card backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80">
-            <p className="text-xs font-medium text-[var(--text-secondary)]">{t('branches.manager') || 'Menejerlar'}</p>
-            <p className="mt-1 text-2xl font-bold tracking-tight text-[#007AFF] tabular-nums">
-              {branches.filter(b => !!b.manager).length}
-            </p>
-          </div>
-        </div>
-
-        {/* ── Branches Table ── */}
-        <GlassSurface>
-          {branches.length === 0 ? (
-            <div className="p-12">
-              <GlassEmptyState title={t('branches.empty')} message={t('branches.emptyHint')} />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[0.85rem]">
-                <thead>
-                  <tr className="border-b border-white/40 dark:border-white/[0.06]">
-                    {[
-                      { label: t('common.name'), align: 'left' },
-                      { label: t('branches.code'), align: 'left' },
-                      { label: t('branches.address'), align: 'left' },
-                      { label: t('branches.manager'), align: 'left' },
-                      { label: t('branches.students'), align: 'center' },
-                      { label: t('common.status'), align: 'left' },
-                      ...(canManage ? [{ label: t('common.actions'), align: 'right' }] : []),
-                    ].map((h, i) => (
-                      <th
-                        key={i}
-                        className={`px-6 py-4 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[var(--text-muted)] ${
-                          h.align === 'right'
-                            ? 'text-right'
-                            : h.align === 'center'
-                              ? 'text-center'
-                              : 'text-left'
-                        }`}
-                      >
-                        {h.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {branches.map((b, i) => {
-                    const isDeactivating =
-                      deactivateMutation.isPending && deactivateMutation.variables === b.id;
-                    const isActivating =
-                      activateMutation.isPending && activateMutation.variables === b.id;
-
-                    return (
-                      <tr
-                        key={b.id}
-                        className="group relative border-b border-white/30 transition-colors duration-300 last:border-0 hover:bg-white/40 dark:border-white/[0.04] dark:hover:bg-white/[0.03] animate-[slideUp_0.5s_cubic-bezier(0.34,1.56,0.64,1)_both]"
-                        style={{ animationDelay: `${Math.min(i, 15) * 45}ms` }}
-                      >
-                        {/* Branch name + icon */}
-                        <td className="px-6 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <BranchIcon branch={b} />
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-[var(--text-primary)]">
-                                {b.name}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Code */}
-                        <td className="px-6 py-3.5">
-                          {b.code ? (
-                            <span className="inline-flex items-center rounded-lg bg-white/50 px-2 py-0.5 font-mono text-[0.72rem] font-bold uppercase tracking-wider text-[var(--text-secondary)] ring-1 ring-inset ring-white/60 dark:bg-white/[0.04] dark:ring-white/[0.06]">
-                              {b.code}
-                            </span>
-                          ) : (
-                            <span className="opacity-40">—</span>
-                          )}
-                        </td>
-
-                        {/* Address */}
-                        <td
-                          className="max-w-[220px] truncate px-6 py-3.5 text-[0.78rem] text-[var(--text-secondary)]"
-                          title={b.address || undefined}
-                        >
-                          {b.address || <span className="opacity-40">—</span>}
-                        </td>
-
-                        {/* Manager */}
-                        <td className="px-6 py-3.5">
-                          {b.manager ? (
-                            <div className="flex items-center gap-2.5">
-                              <ManagerAvatar
-                                firstName={b.manager.firstName}
-                                lastName={b.manager.lastName}
-                              />
-                              <span className="truncate text-[0.82rem] font-medium text-[var(--text-primary)]">
-                                {b.manager.firstName} {b.manager.lastName}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-[0.66rem] font-bold text-amber-600 ring-1 ring-inset ring-amber-500/20 dark:text-amber-400">
-                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                              {t('branches.noManager') || 'Unassigned'}
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Students count */}
-                        <td className="px-6 py-3.5 text-center">
-                          <span className="inline-flex min-w-[2.5rem] items-center justify-center gap-1.5 rounded-full bg-brand-500/10 px-3 py-1 text-[0.72rem] font-bold text-brand-600 ring-1 ring-inset ring-brand-500/20 tabular-nums dark:text-brand-400">
-                            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                              <circle cx="9" cy="7" r="4" />
-                              <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-                            </svg>
-                            {b._count?.students ?? 0}
-                          </span>
-                        </td>
-
-                        {/* Status */}
-                        <td className="px-6 py-3.5">
-                          <span
-                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.68rem] font-bold ring-1 ring-inset ${
-                              b.isActive
-                                ? 'bg-emerald-500/12 text-emerald-600 ring-emerald-500/25 shadow-[0_0_16px_-4px_rgba(16,185,129,0.5)] dark:text-emerald-400'
-                                : 'bg-slate-500/10 text-slate-500 ring-slate-500/20 dark:text-slate-400'
-                            }`}
-                          >
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${
-                                b.isActive
-                                  ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.9)]'
-                                  : 'bg-slate-400'
-                              }`}
-                            />
-                            {b.isActive ? t('branches.statusActive') || 'Active' : t('branches.statusInactive') || 'Inactive'}
-                          </span>
-                        </td>
-
-                        {/* Actions */}
-                        {canManage && (
-                          <td className="px-6 py-3.5">
-                            <div className="flex items-center justify-end gap-1 opacity-60 transition-opacity duration-300 group-hover:opacity-100">
-                              {/* Edit */}
-                              <button
-                                type="button"
-                                onClick={() => openEdit(b)}
-                                title={t('common.edit')}
-                                className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-all duration-300 hover:bg-white/60 hover:text-brand-600 hover:shadow-[0_4px_12px_-4px_rgba(59,130,246,0.4)] active:scale-95 dark:hover:bg-white/[0.06] dark:hover:text-brand-400"
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e: any) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    e.currentTarget.click();
-                                  }
-                                }}>
-                                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M12 20h9" />
-                                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                                </svg>
-                              </button>
-
-                              {/* Assign manager */}
-                              <button
-                                type="button"
-                                onClick={() => setManagerModal(b.id)}
-                                title={t('branches.assignManager')}
-                                className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-all duration-300 hover:bg-white/60 hover:text-purple-600 hover:shadow-[0_4px_12px_-4px_rgba(168,85,247,0.4)] active:scale-95 dark:hover:bg-white/[0.06] dark:hover:text-purple-400"
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e: any) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    e.currentTarget.click();
-                                  }
-                                }}>
-                                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                                  <circle cx="9" cy="7" r="4" />
-                                  <line x1="19" y1="8" x2="19" y2="14" />
-                                  <line x1="22" y1="11" x2="16" y2="11" />
-                                </svg>
-                              </button>
-
-                              {/* Stats */}
-                              <button
-                                type="button"
-                                onClick={() => setStatsModal(b)}
-                                title={t('branches.stats')}
-                                className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-all duration-300 hover:bg-white/60 hover:text-indigo-600 hover:shadow-[0_4px_12px_-4px_rgba(99,102,241,0.4)] active:scale-95 dark:hover:bg-white/[0.06] dark:hover:text-indigo-400"
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e: any) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    e.currentTarget.click();
-                                  }
-                                }}>
-                                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                  <line x1="12" y1="20" x2="12" y2="10" />
-                                  <line x1="18" y1="20" x2="18" y2="4" />
-                                  <line x1="6" y1="20" x2="6" y2="16" />
-                                </svg>
-                              </button>
-
-                              {/* Activate / Deactivate */}
-                              {b.isActive ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setDeactivateTarget(b)}
-                                  disabled={isDeactivating}
-                                  title={t('branches.deactivate')}
-                                  className="flex h-8 w-8 items-center justify-center rounded-xl text-red-500 transition-all duration-300 hover:bg-red-500/10 hover:shadow-[0_4px_12px_-4px_rgba(239,68,68,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
-                                  role="button"
-                                  tabIndex={0}
-                                  onKeyDown={(e: any) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                      e.preventDefault();
-                                      e.currentTarget.click();
-                                    }
-                                  }}>
-                                  {isDeactivating ? (
-                                    <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                                    </svg>
-                                  ) : (
-                                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
-                                      <line x1="12" y1="2" x2="12" y2="12" />
-                                    </svg>
-                                  )}
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => activateMutation.mutate(b.id)}
-                                  disabled={isActivating}
-                                  title={t('branches.activate')}
-                                  className="flex h-8 w-8 items-center justify-center rounded-xl text-emerald-500 transition-all duration-300 hover:bg-emerald-500/10 hover:shadow-[0_4px_12px_-4px_rgba(16,185,129,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
-                                  role="button"
-                                  tabIndex={0}
-                                  onKeyDown={(e: any) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                      e.preventDefault();
-                                      e.currentTarget.click();
-                                    }
-                                  }}>
-                                  {isActivating ? (
-                                    <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                                    </svg>
-                                  ) : (
-                                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                                      <polyline points="20 6 9 17 4 12" />
-                                    </svg>
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <GlassSurface className="p-4.5">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {t('common.total', 'Jami filiallar')}
+          </p>
+          <p className="mt-1 text-2xl font-black tracking-tight text-slate-900 dark:text-white tabular-nums">
+            <CountUp value={stats.total} />
+          </p>
         </GlassSurface>
 
-        {/* ── Create/Edit Modal ── */}
-        <GlassModal
-          open={modalOpen}
-          onClose={() => {
-            setModalOpen(false);
-            setEditingId(null);
-          }}
-          title={editingId ? t('branches.edit') : t('branches.create')}
-          footer={
-            <div className="flex justify-end gap-3">
-              <GlassButton
-                variant="secondary"
-                onClick={() => {
-                  setModalOpen(false);
-                  setEditingId(null);
-                }}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e: any) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.currentTarget.click();
-                  }
-                }}>
-                {t('common.cancel')}
-              </GlassButton>
-              <GlassButton
-                onClick={handleSubmit}
-                loading={createMutation.isPending || updateMutation.isPending}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e: any) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.currentTarget.click();
-                  }
-                }}>
-                {editingId ? t('common.save') : t('common.create')}
-              </GlassButton>
+        <GlassSurface className="p-4.5">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {t('branches.statusActive', 'Faol filiallar')}
+          </p>
+          <p className="mt-1 text-2xl font-black tracking-tight text-emerald-600 dark:text-emerald-400 tabular-nums">
+            <CountUp value={stats.active} />
+          </p>
+        </GlassSurface>
+
+        <GlassSurface className="p-4.5">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {t('branches.students', 'Jami o\'quvchilar')}
+          </p>
+          <p className="mt-1 text-2xl font-black tracking-tight text-purple-600 dark:text-purple-400 tabular-nums">
+            <CountUp value={stats.totalStudents} />
+          </p>
+        </GlassSurface>
+
+        <GlassSurface className="p-4.5">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {t('branches.manager', 'Menejerlar')}
+          </p>
+          <p className="mt-1 text-2xl font-black tracking-tight text-blue-600 dark:text-blue-400 tabular-nums">
+            <CountUp value={stats.withManager} />
+          </p>
+        </GlassSurface>
+      </motion.div>
+
+      {/* ── Branches Table ── */}
+      <GlassSurface>
+        {branches.length === 0 ? (
+          <div className="p-12">
+            <GlassEmptyState
+              title={t('branches.empty', 'Hozircha filiallar mavjud emas')}
+              message={t('branches.emptyHint', 'Yangi filial yaratish uchun yuqoridagi tugmadan foydalaning')}
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-black/[0.06] dark:border-white/[0.08]">
+                  {[
+                    { label: t('common.name', 'Nomi'), align: 'left' },
+                    { label: t('branches.code', 'Kodi'), align: 'left' },
+                    { label: t('branches.address', 'Manzili'), align: 'left' },
+                    { label: t('branches.manager', 'Menejer'), align: 'left' },
+                    { label: t('branches.students', 'Talabalar'), align: 'center' },
+                    { label: t('common.status', 'Holat'), align: 'left' },
+                    ...(canManage ? [{ label: t('common.actions', 'Amallar'), align: 'right' }] : []),
+                  ].map((h, i) => (
+                    <th
+                      key={i}
+                      className={cn(
+                        'px-6 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400',
+                        h.align === 'right'
+                          ? 'text-right'
+                          : h.align === 'center'
+                          ? 'text-center'
+                          : 'text-left',
+                      )}
+                    >
+                      {h.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
+                {branches.map((b, i) => {
+                  const isDeactivating =
+                    deactivateMutation.isPending && deactivateMutation.variables === b.id;
+                  const isActivating =
+                    activateMutation.isPending && activateMutation.variables === b.id;
+
+                  return (
+                    <motion.tr
+                      key={b.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ ...SPRING.smooth, delay: Math.min(i, 15) * 0.03 }}
+                      className="group transition-colors hover:bg-slate-50/70 dark:hover:bg-white/[0.03]"
+                    >
+                      {/* Branch name + icon */}
+                      <td className="px-6 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <BranchIcon branch={b} />
+                          <div className="min-w-0">
+                            <p className="truncate font-bold text-slate-900 dark:text-white">
+                              {b.name}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Code */}
+                      <td className="px-6 py-3.5">
+                        {b.code ? (
+                          <span className="inline-flex items-center rounded-lg bg-black/[0.05] dark:bg-white/[0.08] px-2.5 py-1 font-mono text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            {b.code}
+                          </span>
+                        ) : (
+                          <span className="opacity-40">—</span>
+                        )}
+                      </td>
+
+                      {/* Address */}
+                      <td
+                        className="max-w-[220px] truncate px-6 py-3.5 text-xs font-medium text-slate-600 dark:text-slate-300"
+                        title={b.address || undefined}
+                      >
+                        {b.address || <span className="opacity-40">—</span>}
+                      </td>
+
+                      {/* Manager */}
+                      <td className="px-6 py-3.5">
+                        {b.manager ? (
+                          <div className="flex items-center gap-2.5">
+                            <ManagerAvatar
+                              firstName={b.manager.firstName}
+                              lastName={b.manager.lastName}
+                            />
+                            <span className="truncate text-xs font-semibold text-slate-900 dark:text-white">
+                              {b.manager.firstName} {b.manager.lastName}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[10.5px] font-bold text-amber-600 dark:text-amber-400">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            {t('branches.noManager', 'Biriktirilmagan')}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Students count */}
+                      <td className="px-6 py-3.5 text-center">
+                        <span className="inline-flex min-w-[2.5rem] items-center justify-center gap-1.5 rounded-full bg-blue-500/10 dark:bg-blue-500/20 px-3 py-1 text-xs font-black text-blue-600 dark:text-blue-400 tabular-nums">
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                          </svg>
+                          {b._count?.students ?? 0}
+                        </span>
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-6 py-3.5">
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold',
+                            b.isActive
+                              ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400'
+                              : 'bg-slate-500/10 text-slate-500 dark:text-slate-400',
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'h-1.5 w-1.5 rounded-full',
+                              b.isActive ? 'bg-emerald-500 shadow-sm' : 'bg-slate-400',
+                            )}
+                          />
+                          {b.isActive
+                            ? t('branches.statusActive', 'Faol')
+                            : t('branches.statusInactive', 'Faol emas')}
+                        </span>
+                      </td>
+
+                      {/* Actions (>= 44x44px touch targets) */}
+                      {canManage && (
+                        <td className="px-6 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {/* Split-View Sidecar */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playPop();
+                                openSidecar({
+                                  id: b.id,
+                                  type: 'general',
+                                  title: b.name,
+                                  subtitle: (b.code || b.address) || undefined,
+                                  details: [
+                                    { label: 'Filial kodi', value: b.code || '—', copyable: true },
+                                    { label: 'Manzili', value: b.address || '—' },
+                                    { label: 'Telefon', value: b.phone || '—', copyable: true },
+                                    { label: 'Email', value: b.email || '—', copyable: true },
+                                    { label: 'Talabalar soni', value: String(b._count?.students ?? 0) },
+                                    { label: 'Holat', value: b.isActive ? 'Faol' : 'Faol emas' },
+                                  ],
+                                });
+                              }}
+                              title="Split-View Sidecar"
+                              aria-label={t('common.sidecar', 'Split-view sidecar')}
+                              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-500 hover:text-blue-600 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-white/[0.08] transition-colors"
+                            >
+                              <span className="text-[13px] leading-none">◨</span>
+                            </button>
+
+                            {/* Edit */}
+                            <button
+                              type="button"
+                              onClick={() => openEdit(b)}
+                              title={t('common.edit', 'Tahrirlash')}
+                              aria-label={t('common.edit', 'Tahrirlash')}
+                              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-500 hover:text-blue-600 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-white/[0.08] transition-colors"
+                            >
+                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                              </svg>
+                            </button>
+
+                            {/* Assign manager */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playPop();
+                                setManagerModal(b.id);
+                              }}
+                              title={t('branches.assignManager', 'Menejer biriktirish')}
+                              aria-label={t('branches.assignManager', 'Menejer biriktirish')}
+                              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-500 hover:text-purple-600 hover:bg-purple-500/10 dark:text-slate-400 dark:hover:text-purple-400 dark:hover:bg-purple-500/10 transition-colors"
+                            >
+                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <line x1="19" y1="8" x2="19" y2="14" />
+                                <line x1="22" y1="11" x2="16" y2="11" />
+                              </svg>
+                            </button>
+
+                            {/* Stats */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playPop();
+                                setStatsModal(b);
+                              }}
+                              title={t('branches.stats', 'Statistika')}
+                              aria-label={t('branches.stats', 'Statistika')}
+                              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-500/10 dark:text-slate-400 dark:hover:text-indigo-400 dark:hover:bg-indigo-500/10 transition-colors"
+                            >
+                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="20" x2="12" y2="10" />
+                                <line x1="18" y1="20" x2="18" y2="4" />
+                                <line x1="6" y1="20" x2="6" y2="16" />
+                              </svg>
+                            </button>
+
+                            {/* Activate / Deactivate */}
+                            {b.isActive ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playTick();
+                                  setDeactivateTarget(b);
+                                }}
+                                disabled={isDeactivating}
+                                title={t('branches.deactivate', 'Faolsizlantirish')}
+                                aria-label={t('branches.deactivate', 'Faolsizlantirish')}
+                                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-30"
+                              >
+                                {isDeactivating ? (
+                                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                  </svg>
+                                ) : (
+                                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                                    <line x1="12" y1="2" x2="12" y2="12" />
+                                  </svg>
+                                )}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playTick();
+                                  activateMutation.mutate(b.id);
+                                }}
+                                disabled={isActivating}
+                                title={t('branches.activate', 'Faollashtirish')}
+                                aria-label={t('branches.activate', 'Faollashtirish')}
+                                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-emerald-500 hover:bg-emerald-500/10 transition-colors disabled:opacity-30"
+                              >
+                                {isActivating ? (
+                                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                  </svg>
+                                ) : (
+                                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </motion.tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </GlassSurface>
+
+      {/* ── Create/Edit Modal ── */}
+      <GlassModal
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingId(null);
+        }}
+        title={editingId ? t('branches.edit', 'Filialni tahrirlash') : t('branches.create', 'Yangi filial yaratish')}
+        footer={
+          <div className="flex justify-end gap-2.5">
+            <GlassButton
+              variant="secondary"
+              onClick={() => {
+                setModalOpen(false);
+                setEditingId(null);
+              }}
+              className="min-h-[44px]"
+            >
+              {t('common.cancel', 'Bekor qilish')}
+            </GlassButton>
+            <GlassButton
+              variant="primary"
+              onClick={handleSubmit}
+              loading={createMutation.isPending || updateMutation.isPending}
+              className="min-h-[44px]"
+            >
+              {editingId ? t('common.save', 'Saqlash') : t('common.create', 'Yaratish')}
+            </GlassButton>
+          </div>
+        }
+      >
+        <div className="space-y-6">
+          {/* Section: General */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 21h18" />
+                  <path d="M5 21V7l7-4 7 4v14" />
+                </svg>
+              </span>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                {t('branches.sectionGeneral', 'Umumiy ma\'lumotlar')}
+              </h4>
             </div>
-          }
-        >
-          <div className="space-y-6">
-            {/* Section: General */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-500/15 text-brand-600 dark:text-brand-400">
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 21h18" />
-                    <path d="M5 21V7l7-4 7 4v14" />
-                  </svg>
-                </span>
-                <h4 className="text-[0.7rem] font-bold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                  {t('branches.sectionGeneral') || 'General'}
-                </h4>
-              </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <GlassField label={t('common.name')} required>
-                  <GlassInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-                </GlassField>
-                <GlassField label={t('branches.code')}>
-                  <GlassInput
-                    value={form.code}
-                    onChange={(e) => setForm({ ...form, code: e.target.value })}
-                    placeholder="MAIN"
-                  />
-                </GlassField>
-              </div>
-
-              <GlassField label={t('branches.address')}>
-                <GlassInput value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <GlassField
+                label={t('common.name', 'Nomi *')}
+                error={formErrors.name ? t(formErrors.name) : undefined}
+                required
+              >
+                <GlassInput
+                  value={form.name}
+                  onChange={(e) => {
+                    setForm({ ...form, name: e.target.value });
+                    setFormErrors({});
+                  }}
+                  className="min-h-[44px]"
+                />
+              </GlassField>
+              <GlassField label={t('branches.code', 'Kodi')}>
+                <GlassInput
+                  value={form.code}
+                  onChange={(e) => setForm({ ...form, code: e.target.value })}
+                  placeholder="MAIN"
+                  className="min-h-[44px]"
+                />
               </GlassField>
             </div>
 
-            {/* Section: Contact */}
-            <div className="space-y-4 rounded-2xl bg-white/30 p-4 ring-1 ring-inset ring-white/40 dark:bg-white/[0.02] dark:ring-white/[0.05]">
-              <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                  </svg>
-                </span>
-                <h4 className="text-[0.7rem] font-bold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                  {t('branches.sectionContact') || 'Contact'}
-                </h4>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <GlassField label={t('branches.phone')}>
-                  <GlassInput value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                </GlassField>
-                <GlassField label={t('branches.email')}>
-                  <GlassInput
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  />
-                </GlassField>
-              </div>
-            </div>
-
-            {/* Section: Regional */}
-            <div className="space-y-4 rounded-2xl bg-gradient-to-br from-indigo-500/[0.06] to-purple-500/[0.04] p-4 ring-1 ring-inset ring-indigo-500/15 dark:from-indigo-500/[0.04] dark:to-purple-500/[0.02] dark:ring-indigo-500/10">
-              <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="2" y1="12" x2="22" y2="12" />
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                  </svg>
-                </span>
-                <h4 className="text-[0.7rem] font-bold uppercase tracking-[0.14em] text-indigo-600/80 dark:text-indigo-400/80">
-                  {t('branches.sectionRegional') || 'Regional'}
-                </h4>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <GlassField label={t('branches.timezone')}>
-                  <GlassSelect
-                    value={form.timezone}
-                    onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-                    options={TIMEZONES.map((tz) => ({ value: tz, label: tz }))}
-                  />
-                </GlassField>
-                <GlassField label={t('branches.currency')}>
-                  <GlassSelect
-                    value={form.currency}
-                    onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                    options={CURRENCIES.map((c) => ({ value: c, label: c }))}
-                  />
-                </GlassField>
-              </div>
-            </div>
-          </div>
-        </GlassModal>
-
-        {/* ── Assign Manager Modal ── */}
-        <GlassModal
-          open={managerModal !== null}
-          onClose={() => {
-            setManagerModal(null);
-            setManagerId('');
-          }}
-          title={t('branches.assignManager')}
-          footer={
-            <div className="flex justify-end gap-3">
-              <GlassButton
-                variant="secondary"
-                onClick={() => {
-                  setManagerModal(null);
-                  setManagerId('');
-                }}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e: any) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.currentTarget.click();
-                  }
-                }}>
-                {t('common.cancel')}
-              </GlassButton>
-              <GlassButton
-                onClick={() => {
-                  if (managerModal && managerId) {
-                    managerMutation.mutate({ id: managerModal, managerId });
-                  }
-                }}
-                disabled={!managerId}
-                loading={managerMutation.isPending}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e: any) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.currentTarget.click();
-                  }
-                }}>
-                {t('common.save')}
-              </GlassButton>
-            </div>
-          }
-        >
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 rounded-2xl bg-purple-500/[0.06] p-3 ring-1 ring-inset ring-purple-500/15">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400">
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="16" x2="12" y2="12" />
-                  <line x1="12" y1="8" x2="12.01" y2="8" />
-                </svg>
-              </span>
-              <p className="text-[0.78rem] leading-relaxed text-[var(--text-secondary)]">
-                {t('branches.managerHint') || 'Select a user to become the manager of this branch. They will have access to manage students, groups and teachers.'}
-              </p>
-            </div>
-
-            <GlassField label={t('branches.selectManager')}>
-              <GlassSelect
-                value={managerId}
-                onChange={(e) => setManagerId(e.target.value)}
-                options={[
-                  { value: '', label: '—' },
-                  ...((users as any)?.items || []).map((u: any) => ({
-                    value: u.id,
-                    label: `${u.firstName} ${u.lastName}`,
-                  })),
-                ]}
+            <GlassField label={t('branches.address', 'Manzili')}>
+              <GlassInput
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                className="min-h-[44px]"
               />
             </GlassField>
           </div>
-        </GlassModal>
 
-        {/* ── Stats Modal ── */}
-        <GlassModal
-          open={statsModal !== null}
-          onClose={() => setStatsModal(null)}
-          title={t('branches.statsTitle')}
-          footer={null}
-        >
-          {statsModal && (
-            <div className="space-y-4">
-              {/* Branch header */}
-              <div className="flex items-center gap-3 rounded-2xl bg-white/40 p-3 ring-1 ring-inset ring-white/50 dark:bg-white/[0.03] dark:ring-white/[0.06]">
-                <BranchIcon branch={statsModal} size={44} />
-                <div className="min-w-0">
-                  <p className="truncate text-[0.95rem] font-bold text-[var(--text-primary)]">
-                    {statsModal.name}
+          {/* Section: Contact */}
+          <div className="space-y-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] p-4 border border-black/[0.06] dark:border-white/[0.08]">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                </svg>
+              </span>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                {t('branches.sectionContact', 'Aloqa')}
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <GlassField label={t('branches.phone', 'Telefon')}>
+                <GlassInput
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className="min-h-[44px]"
+                />
+              </GlassField>
+              <GlassField label={t('branches.email', 'Email')}>
+                <GlassInput
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="min-h-[44px]"
+                />
+              </GlassField>
+            </div>
+          </div>
+
+          {/* Section: Regional */}
+          <div className="space-y-4 rounded-2xl bg-indigo-500/[0.04] p-4 border border-indigo-500/15">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+              </span>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                {t('branches.sectionRegional', 'Mintaqaviy parametrlar')}
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <GlassField label={t('branches.timezone', 'Vaqt mintaqasi')}>
+                <GlassSelect
+                  value={form.timezone}
+                  onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+                  options={TIMEZONES.map((tz) => ({ value: tz, label: tz }))}
+                  className="min-h-[44px]"
+                />
+              </GlassField>
+              <GlassField label={t('branches.currency', 'Valyuta')}>
+                <GlassSelect
+                  value={form.currency}
+                  onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                  options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+                  className="min-h-[44px]"
+                />
+              </GlassField>
+            </div>
+          </div>
+        </div>
+      </GlassModal>
+
+      {/* ── Assign Manager Modal ── */}
+      <GlassModal
+        open={managerModal !== null}
+        onClose={() => {
+          setManagerModal(null);
+          setManagerId('');
+        }}
+        title={t('branches.assignManager', 'Menejer biriktirish')}
+        footer={
+          <div className="flex justify-end gap-2.5">
+            <GlassButton
+              variant="secondary"
+              onClick={() => {
+                setManagerModal(null);
+                setManagerId('');
+              }}
+              className="min-h-[44px]"
+            >
+              {t('common.cancel', 'Bekor qilish')}
+            </GlassButton>
+            <GlassButton
+              variant="primary"
+              onClick={() => {
+                if (managerModal && managerId) {
+                  playTick();
+                  managerMutation.mutate({ id: managerModal, managerId });
+                }
+              }}
+              disabled={!managerId}
+              loading={managerMutation.isPending}
+              className="min-h-[44px]"
+            >
+              {t('common.save', 'Saqlash')}
+            </GlassButton>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-2xl bg-purple-500/[0.06] p-4 border border-purple-500/15">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400">
+              <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+            </span>
+            <p className="text-xs font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+              {t(
+                'branches.managerHint',
+                'Ushbu filialga boshqaruvchi sifatida mas\'ul foydalanuvchini tanlang. U filial talabalari, o\'qituvchilari va guruhlarini nazorat qilish huquqiga ega bo\'ladi.',
+              )}
+            </p>
+          </div>
+
+          <GlassField label={t('branches.selectManager', 'Menejerni tanlang')}>
+            <GlassSelect
+              value={managerId}
+              onChange={(e) => setManagerId(e.target.value)}
+              className="min-h-[44px]"
+              options={[
+                { value: '', label: '—' },
+                ...((users as any)?.items || []).map((u: any) => ({
+                  value: u.id,
+                  label: `${u.firstName} ${u.lastName}`,
+                })),
+              ]}
+            />
+          </GlassField>
+        </div>
+      </GlassModal>
+
+      {/* ── Stats Modal ── */}
+      <GlassModal
+        open={statsModal !== null}
+        onClose={() => setStatsModal(null)}
+        title={t('branches.statsTitle', 'Filial statistikasi')}
+        footer={null}
+      >
+        {statsModal && (
+          <div className="space-y-4">
+            {/* Branch header */}
+            <div className="flex items-center gap-3.5 rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] p-4 border border-black/[0.06] dark:border-white/[0.08]">
+              <BranchIcon branch={statsModal} size={48} />
+              <div className="min-w-0">
+                <p className="truncate text-base font-bold text-slate-900 dark:text-white">
+                  {statsModal.name}
+                </p>
+                {statsModal.code && (
+                  <p className="mt-0.5 font-mono text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    {statsModal.code}
                   </p>
-                  {statsModal.code && (
-                    <p className="mt-0.5 font-mono text-[0.7rem] uppercase tracking-wider text-[var(--text-muted)]">
-                      {statsModal.code}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Stats grid */}
-              <div className="grid grid-cols-2 gap-3">
-                <StatCard
-                  label={t('branches.users')}
-                  value={statsModal._count?.users ?? 0}
-                  gradient="from-brand-500 to-blue-500"
-                  delay={0}
-                  icon={
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                      <circle cx="9" cy="7" r="4" />
-                      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-                    </svg>
-                  }
-                />
-                <StatCard
-                  label={t('branches.students')}
-                  value={statsModal._count?.students ?? 0}
-                  gradient="from-emerald-500 to-teal-500"
-                  delay={80}
-                  icon={
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
-                      <path d="M6 12v5c3 3 9 3 12 0v-5" />
-                    </svg>
-                  }
-                />
-                <StatCard
-                  label={t('branches.teachers')}
-                  value={statsModal._count?.teachers ?? 0}
-                  gradient="from-indigo-500 to-violet-500"
-                  delay={160}
-                  icon={
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                    </svg>
-                  }
-                />
-                <StatCard
-                  label={t('branches.groups')}
-                  value={statsModal._count?.groups ?? 0}
-                  gradient="from-orange-500 to-amber-500"
-                  delay={240}
-                  icon={
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-                      <rect x="3" y="14" width="7" height="7" rx="1.5" />
-                      <rect x="14" y="14" width="7" height="7" rx="1.5" />
-                    </svg>
-                  }
-                />
+                )}
               </div>
             </div>
-          )}
-        </GlassModal>
-      </motion.div>
 
-      <style>{`
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(10px) scale(0.99); }
-          to   { opacity: 1; transform: translateY(0)   scale(1); }
-        }
-        @keyframes float {
-          0%, 100% { transform: translate(0, 0)         scale(1); }
-          33%      { transform: translate(40px, -30px)  scale(1.06); }
-          66%      { transform: translate(-30px, 20px)  scale(0.96); }
-        }
-      `}</style>
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3.5">
+              <StatCard
+                label={t('branches.users', 'Foydalanuvchilar')}
+                value={statsModal._count?.users ?? 0}
+                gradient="from-blue-600 to-indigo-600"
+                icon={
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                }
+              />
+              <StatCard
+                label={t('branches.students', 'Talabalar')}
+                value={statsModal._count?.students ?? 0}
+                gradient="from-emerald-500 to-teal-600"
+                icon={
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+                    <path d="M6 12v5c3 3 9 3 12 0v-5" />
+                  </svg>
+                }
+              />
+              <StatCard
+                label={t('branches.teachers', 'O\'qituvchilar')}
+                value={statsModal._count?.teachers ?? 0}
+                gradient="from-indigo-600 to-violet-600"
+                icon={
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                  </svg>
+                }
+              />
+              <StatCard
+                label={t('branches.groups', 'Guruhlar')}
+                value={statsModal._count?.groups ?? 0}
+                gradient="from-orange-500 to-amber-600"
+                icon={
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                  </svg>
+                }
+              />
+            </div>
+          </div>
+        )}
+      </GlassModal>
     </div>
   );
 }
+
+export default BranchesPage;

@@ -1,4 +1,4 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecurityAlertQueryDto } from './dto/security.dto';
 
@@ -126,18 +126,22 @@ export class SecurityService {
     userId: string,
     note?: string,
   ): Promise<{ ok: true }> {
-    // H1: security alerts are DERIVED from the AuditLog at read time — there
-    // is no SecurityAlert row to update. The previous implementation wrote to
-    // DataQualityIssue (a different module's table), so "Resolve" displayed
-    // success while the incident stayed open. Fail honestly until a
-    // SecurityAlertResolution model lands.
-    void orgId;
-    void id;
-    void userId;
-    void note;
-    throw new NotImplementedException(
-      'Security alert resolution is derived from the audit log; persistence is not implemented yet.',
-    );
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: orgId,
+        userId,
+        action: 'SECURITY_ALERT_RESOLVED',
+        resource: 'SecurityAlert',
+        resourceId: id,
+        changes: {
+          alertId: id,
+          note: note ?? null,
+          resolvedBy: userId,
+          resolvedAt: new Date().toISOString(),
+        },
+      },
+    });
+    return { ok: true };
   }
 
   private async buildAlertsFromAuditLog(orgId: string): Promise<SecurityAlert[]> {
@@ -148,15 +152,33 @@ export class SecurityService {
       where: {
         organizationId: orgId,
         timestamp: { gte: thirtyDaysAgo },
-        action: { in: Object.keys(SECURITY_ALERT_ACTIONS) },
+        action: { in: [...Object.keys(SECURITY_ALERT_ACTIONS), 'SECURITY_ALERT_RESOLVED'] },
       },
       orderBy: { timestamp: 'desc' },
     });
 
+    const resolutions = new Map<string, { resolvedAt: Date; resolvedBy: string | null; resolutionNote: string | null }>();
+    const alertLogs: typeof logs = [];
+
+    for (const log of logs) {
+      if (log.action === 'SECURITY_ALERT_RESOLVED') {
+        if (log.resourceId && !resolutions.has(log.resourceId)) {
+          const ch = (log.changes as Record<string, any>) || {};
+          resolutions.set(log.resourceId, {
+            resolvedAt: log.timestamp,
+            resolvedBy: log.userId,
+            resolutionNote: ch.note ?? null,
+          });
+        }
+      } else {
+        alertLogs.push(log);
+      }
+    }
+
     const loginFailedByIp = new Map<string, typeof logs>();
     const otherAlerts: SecurityAlert[] = [];
 
-    for (const log of logs) {
+    for (const log of alertLogs) {
       const severity = SECURITY_ALERT_ACTIONS[log.action] ?? 'MEDIUM';
       if (log.action === 'LOGIN_FAILED') {
         const ip = log.ipAddress ?? 'unknown';
@@ -165,6 +187,7 @@ export class SecurityService {
         }
         loginFailedByIp.get(ip)!.push(log);
       } else {
+        const res = resolutions.get(log.id);
         otherAlerts.push({
           id: log.id,
           organizationId: log.organizationId,
@@ -172,9 +195,9 @@ export class SecurityService {
           severity,
           message: `${log.action} on ${log.resource}${log.resourceId ? ` (${log.resourceId})` : ''}`,
           source: log.ipAddress ?? 'unknown',
-          resolvedAt: null,
-          resolvedBy: null,
-          resolutionNote: null,
+          resolvedAt: res?.resolvedAt ?? null,
+          resolvedBy: res?.resolvedBy ?? null,
+          resolutionNote: res?.resolutionNote ?? null,
           createdAt: log.timestamp,
         });
       }
@@ -182,19 +205,23 @@ export class SecurityService {
 
     const ipAlerts: SecurityAlert[] = [];
     for (const [ip, ipLogs] of loginFailedByIp.entries()) {
+      const alertId = `login-failed-${ip}`;
+      const res = resolutions.get(alertId);
       const count = ipLogs.length;
       const severity: AlertSeverity = count >= 5 ? 'CRITICAL' : count >= 3 ? 'HIGH' : 'MEDIUM';
       const latest = ipLogs[0];
+      const isResolved = Boolean(res?.resolvedAt && latest.timestamp <= res.resolvedAt);
+
       ipAlerts.push({
-        id: `login-failed-${ip}`,
+        id: alertId,
         organizationId: orgId,
         type: 'LOGIN_FAILED',
         severity,
         message: `${count} failed login attempt(s) from IP ${ip}`,
         source: ip,
-        resolvedAt: null,
-        resolvedBy: null,
-        resolutionNote: null,
+        resolvedAt: isResolved ? res!.resolvedAt : null,
+        resolvedBy: isResolved ? res!.resolvedBy : null,
+        resolutionNote: isResolved ? res!.resolutionNote : null,
         createdAt: latest.timestamp,
       });
     }

@@ -21,9 +21,12 @@ import {
   GlassEmptyState,
   GlassInput,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { getErrorMessage } from '@/lib/errorMessages';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { relationshipsApi } from '@/lib/api';
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -210,30 +213,7 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
  * ════════════════════════════════════════════════════════════════════════ */
 
 function AuroraBackdrop() {
-  const reduced = usePrefersReducedMotion();
-  return (
-    <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 dark:from-[#04060C] dark:via-[#0A0F1A] dark:to-[#080A14]" />
-      <div className="absolute -left-40 -top-40 h-[580px] w-[580px] rounded-full bg-blue-400/10 blur-[140px] dark:bg-sky-500/10" />
-      <div className="absolute -right-32 top-1/3 h-[520px] w-[520px] rounded-full bg-violet-400/10 blur-[140px] dark:bg-violet-500/10" />
-      <div className="absolute -bottom-32 left-1/3 h-[460px] w-[460px] rounded-full bg-emerald-400/08 blur-[140px] dark:bg-emerald-500/08" />
-      {!reduced && (
-        <motion.div
-          animate={{ scale: [1, 1.05, 1], opacity: [0.5, 0.8, 0.5] }}
-          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute left-1/2 top-1/2 h-[700px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.03] via-violet-500/[0.02] to-emerald-500/[0.03] blur-[160px]"
-        />
-      )}
-      <div
-        className="absolute inset-0 opacity-[0.015] dark:opacity-[0.022]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(15,23,42,0.85) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.85) 1px, transparent 1px)',
-          backgroundSize: '64px 64px',
-        }}
-      />
-    </div>
-  );
+  return <AuroraMesh variant="corporate" />;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -322,9 +302,9 @@ function EntityTypeItem({
  * ════════════════════════════════════════════════════════════════════════ */
 
 function NodeCard({
-  node, index, isRoot, t,
+  node, index, isRoot, t, onOpenSidecar,
 }: {
-  node: GraphNode; index: number; isRoot: boolean; t: (k: string) => string;
+  node: GraphNode; index: number; isRoot: boolean; t: (k: string) => string; onOpenSidecar?: (node: GraphNode) => void;
 }) {
   const meta = getEntityMeta(node.type);
   const c = TONES[meta.tone];
@@ -393,12 +373,29 @@ function NodeCard({
         <span className="truncate font-mono text-[9px] text-[var(--text-muted)] opacity-70">
           {node.id.slice(0, 8)}
         </span>
-        {isLink && (
-          <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase tracking-wider text-[#2563EB] opacity-0 transition-opacity group-hover:opacity-100 dark:text-[#38BDF8]">
-            {t('common.open') || 'Ochish'}
-            <Icon paths={I.externalLink} size={8} strokeWidth={2.6} />
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {onOpenSidecar && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenSidecar(node);
+              }}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-bold text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400"
+              title="Sidecar"
+            >
+              <span>◨</span>
+              <span>Sidecar</span>
+            </button>
+          )}
+          {isLink && (
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase tracking-wider text-[#2563EB] opacity-0 transition-opacity group-hover:opacity-100 dark:text-[#38BDF8]">
+              {t('common.open') || 'Ochish'}
+              <Icon paths={I.externalLink} size={8} strokeWidth={2.6} />
+            </span>
+          )}
+        </div>
       </div>
     </motion.div>
   );
@@ -574,12 +571,47 @@ function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; r
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function RelationshipGraphPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('relationshipGraph.title') || 'Entity Relationship Graph');
+  const { playPop } = usePremiumSound();
 
   const [entityType, setEntityType] = useState('STUDENT');
   const [entityId, setEntityId] = useState('');
   const debouncedEntityId = useDebouncedValue(entityId.trim(), 400);
+
+  const handleOpenNodeSidecar = (node: GraphNode) => {
+    playPop();
+    const meta = getEntityMeta(node.type);
+    const metaLabel = t(meta.labelKey) || node.type;
+    const sidecarData: QuickLookData = {
+      id: node.id,
+      type: 'general',
+      title: node.label,
+      subtitle: `${metaLabel} · ${node.subLabel || node.id}`,
+      badge: {
+        text: metaLabel,
+        tone: (meta.tone === 'orange' ? 'amber' : meta.tone === 'red' ? 'rose' : meta.tone) as any,
+      },
+      metrics: [
+        { label: 'Turi', value: metaLabel },
+        { label: 'Tizim kodi', value: node.type },
+        { label: 'Tavsif', value: node.subLabel || '—' },
+      ],
+      details: [
+        { label: 'Node ID', value: node.id, copyable: true },
+        { label: 'Entity turi', value: node.type },
+        { label: 'Nomi', value: node.label },
+        { label: 'Qo\'shimcha', value: node.subLabel || 'Mavjud emas' },
+      ],
+      primaryAction: node.href ? {
+        label: t('common.open') || 'Ochish',
+        onExecute: () => {
+          window.location.href = node.href!;
+        },
+      } : undefined,
+    };
+    openSidecar(sidecarData);
+  };
 
   const graphQuery = useQuery({
     queryKey: ['relationship-graph', entityType, debouncedEntityId],
@@ -605,7 +637,7 @@ export function RelationshipGraphPage() {
 
   /* ═══ Render ═══ */
   return (
-    <div className="relative min-h-screen pb-12">
+    <div className="relative min-h-screen pb-[max(6rem,env(safe-area-inset-bottom))]">
       <AuroraBackdrop />
 
       <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6">
@@ -848,6 +880,7 @@ export function RelationshipGraphPage() {
                                 index={i}
                                 isRoot={node.id === graph.rootId}
                                 t={t}
+                                onOpenSidecar={handleOpenNodeSidecar}
                               />
                             ))}
                           </motion.div>

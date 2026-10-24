@@ -20,7 +20,17 @@ import {
 } from'@/components/ui';
 import { getErrorMessage} from'@/lib/errorMessages';
 import { usePageTitle} from'@/hooks/usePageTitle';
-import { useI18n} from'@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+
+function AuroraMesh() {
+  return (
+    <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+      <div className="absolute -top-[10%] -left-[10%] h-[560px] w-[560px] rounded-full bg-gradient-to-br from-emerald-500/12 via-teal-500/8 to-transparent blur-[130px] dark:from-emerald-600/14 dark:via-teal-600/10" />
+      <div className="absolute top-[25%] -right-[10%] h-[520px] w-[520px] rounded-full bg-gradient-to-bl from-blue-500/12 via-indigo-500/8 to-transparent blur-[130px] dark:from-blue-600/14 dark:via-indigo-600/10" />
+      <div className="absolute -bottom-[15%] left-[25%] h-[480px] w-[480px] rounded-full bg-gradient-to-tr from-amber-500/10 via-orange-500/6 to-transparent blur-[120px] dark:from-amber-600/12" />
+    </div>
+  );
+}
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { useEffect } from 'react';
@@ -473,62 +483,63 @@ function HistoryTab({ t}: { t: (key: string) => string}) {
 }
 
 export function ReconciliationPage() {
- const { t} = useI18n();
- usePageTitle(t('reconciliation.title'));
+  const { t } = useSafeI18n();
+  usePageTitle(t('reconciliation.title'));
 
- const [activeTab, setActiveTab] = useState<TabId>('overview');
- const { playTick } = usePremiumSound();
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const { playTick } = usePremiumSound();
 
- useEffect(() => {
-   const handleKeyDown = (e: KeyboardEvent) => {
-     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
-     if (e.key === '1') { setActiveTab('overview'); playTick(); }
-     else if (e.key === '2') { setActiveTab('discrepancies'); playTick(); }
-     else if (e.key === '3') { setActiveTab('studentBalances'); playTick(); }
-     else if (e.key === '4') { setActiveTab('history'); playTick(); }
-   };
-   window.addEventListener('keydown', handleKeyDown);
-   return () => window.removeEventListener('keydown', handleKeyDown);
- }, [playTick]);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      if (e.key === '1') { setActiveTab('overview'); playTick(); }
+      else if (e.key === '2') { setActiveTab('discrepancies'); playTick(); }
+      else if (e.key === '3') { setActiveTab('studentBalances'); playTick(); }
+      else if (e.key === '4') { setActiveTab('history'); playTick(); }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playTick]);
 
- const tabs = [
- { id:'overview', label: t('reconciliation.tab.overview')},
- { id:'discrepancies', label: t('reconciliation.tab.discrepancies')},
- { id:'studentBalances', label: t('reconciliation.tab.studentBalances')},
- { id:'history', label: t('reconciliation.tab.history')},
- ];
+  const tabs = [
+    { id: 'overview', label: t('reconciliation.tab.overview') },
+    { id: 'discrepancies', label: t('reconciliation.tab.discrepancies') },
+    { id: 'studentBalances', label: t('reconciliation.tab.studentBalances') },
+    { id: 'history', label: t('reconciliation.tab.history') },
+  ];
 
- const renderTab = () => {
- switch (activeTab) {
- case'overview':
- return <OverviewTab t={t} />;
- case'discrepancies':
- return <DiscrepanciesTab t={t} />;
- case'studentBalances':
- return <StudentBalancesTab t={t} />;
- case'history':
- return <HistoryTab t={t} />;
- default:
- return null;
-}
-};
+  const renderTab = () => {
+    switch (activeTab) {
+      case 'overview':
+        return <OverviewTab t={t} />;
+      case 'discrepancies':
+        return <DiscrepanciesTab t={t} />;
+      case 'studentBalances':
+        return <StudentBalancesTab t={t} />;
+      case 'history':
+        return <HistoryTab t={t} />;
+      default:
+        return null;
+    }
+  };
 
- return (
- <div className="min-h-screen bg-transparent">
- <div className="relative z-10 w-full max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500 liquid-glass-surface rounded-3xl">
- <GlassPageHeader
- title={t('reconciliation.title')}
- subtitle={t('reconciliation.subtitle')}
- />
+  return (
+    <div className="relative min-h-screen bg-transparent pb-[max(6rem,env(safe-area-inset-bottom))]">
+      <AuroraMesh />
+      <div className="relative z-10 w-full max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500 liquid-glass-surface rounded-3xl">
+        <GlassPageHeader
+          title={t('reconciliation.title')}
+          subtitle={t('reconciliation.subtitle')}
+        />
 
- <GlassTabs tabs={tabs} active={activeTab} onChange={(id) => { playTick(); setActiveTab(id as TabId); }} />
+        <GlassTabs tabs={tabs} active={activeTab} onChange={(id) => { playTick(); setActiveTab(id as TabId); }} />
 
- <div className="mt-2">
- {renderTab()}
- </div>
- </div>
- </div>
- );
+        <div className="mt-2">
+          {renderTab()}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default ReconciliationPage;

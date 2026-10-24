@@ -65,7 +65,6 @@ function renderLogin() {
 const emailInput = () => screen.getByLabelText(/^email$/i);
 const passwordInput = () => screen.getByLabelText(/^password$/i);
 const submitButton = () => screen.getByRole('button', { name: 'Continue' });
-const googleButton = () => screen.getByRole('button', { name: /continue with google/i });
 
 describe('LoginPage critical flows', () => {
   beforeEach(() => {
@@ -124,7 +123,7 @@ describe('LoginPage critical flows', () => {
   });
 });
 
-describe('LoginPage Google OAuth', () => {
+describe('LoginPage Clean Design & API Contract', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
@@ -133,35 +132,28 @@ describe('LoginPage Google OAuth', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders a keyboard-accessible "Continue with Google" button', () => {
-    renderLogin();
-    const btn = googleButton();
-    expect(btn).toBeTruthy();
-    expect(btn.tagName).toBe('BUTTON');
-    expect(btn.getAttribute('type')).toBe('button');
-    expect(btn).not.toBeDisabled();
-  });
-
-  it('targets the real backend OAuth initiation endpoint', () => {
-    // The endpoint is verified against the live API (302 to Google with a
-    // state nonce); jsdom cannot execute navigation, so we assert the exact
-    // URL the button redirects to.
+  it('targets the real backend OAuth initiation endpoint constant', () => {
+    // The endpoint is preserved for API contract stability
     expect(googleOAuthUrl).toBe('/api/auth/google');
   });
 
-  it('shows a loading state and prevents double submission while redirecting', async () => {
-    const user = userEvent.setup();
+  it('keeps login clean: does NOT render third-party Google button or clutter', () => {
     renderLogin();
+    expect(screen.queryByRole('button', { name: /google/i })).toBeNull();
+    expect(screen.queryByText(/continue with google/i)).toBeNull();
+  });
 
-    const btn = googleButton();
-    await user.click(btn);
+  it('renders essential clean login form elements', () => {
+    renderLogin();
+    expect(emailInput()).toBeInTheDocument();
+    expect(passwordInput()).toBeInTheDocument();
+    expect(submitButton()).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /forgot password/i })).toBeInTheDocument();
+  });
 
-    const loadingBtn = await screen.findByRole('button', { name: /redirecting to google/i });
-    expect(loadingBtn).toBeDisabled();
-    expect(loadingBtn.getAttribute('aria-busy')).toBe('true');
-    // All other submit controls are disabled too while the OAuth redirect is pending.
-    expect(emailInput()).toBeDisabled();
-    expect(passwordInput()).toBeDisabled();
-    expect(submitButton()).toBeDisabled();
+  it('renders top-level theme toggle and language switcher', () => {
+    renderLogin();
+    expect(screen.getByRole('button', { name: /switch to (light|dark) mode/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Language/i)).toBeInTheDocument();
   });
 });

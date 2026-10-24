@@ -31,13 +31,14 @@ import {
   GlassField,
   GlassButton,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { PayrollRun, PayrollPeriodSummary } from '@/lib/types';
 
 /* ============================================================================
@@ -568,7 +569,7 @@ function FieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Tone }) {
  * ========================================================================== */
 
 export function PayrollPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('payroll.title'));
   const { push, toastNode } = useToast();
   const queryClient = useQueryClient();
@@ -782,8 +783,9 @@ export function PayrollPage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="page-container space-y-5"
+      className="relative page-container space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
+      <AuroraMesh variant="corporate" />
       {toastNode}
 
       {/* ============================================================

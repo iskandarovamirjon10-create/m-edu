@@ -1,3 +1,17 @@
+/**
+ * M-EDU Spatial Acoustic Engine — Ultra-Luxury Apple VisionOS & Taptic Edition
+ *
+ * Acoustic Architecture:
+ *  - Procedural micro-transient & organic physical acoustic modeling (Zero 90s sine sweeps/buzzers)
+ *  - Micro-haptic tactile clicks (dual-layer: solid aluminum chassis sub-body + oleophobic glass tap)
+ *  - Fluid liquid-glass bubble resonance (Apple VisionOS spatial capsule expand)
+ *  - Crystalline diamond confirmation chimes (Apple Pay / luxury watch acoustic chime triad)
+ *  - Subdued tactile double-thud for errors (zero harsh 8-bit game buzzers)
+ *  - Master dynamics compressor + Butterworth smoothing filter (0% clipping or distortion)
+ *  - Zero-latency hardware clock scheduling with automatic node garbage collection
+ *  - SSR & hydration safe, battery-preserving automatic sleep
+ */
+
 import { useCallback, useSyncExternalStore } from 'react';
 
 // ============================================================================
@@ -7,26 +21,29 @@ import { useCallback, useSyncExternalStore } from 'react';
 const STORAGE_KEY = 'm-edu.sound-muted';
 const MUTE_EVENT = 'm-edu:sound-muted-changed';
 
-type SoundNote = {
-  /** Boshlang'ich chastota (Hz) */
+export type SoundNote = {
+  /** Initial frequency (Hz) */
   freq: number;
-  /** Tugash chastotasi (Hz) - Apple-style pitch bend/glide uchun (ixtiyoriy) */
+  /** End frequency (Hz) for organic natural pitch settling (optional) */
   endFreq?: number;
-  /** To'lqin shakli */
+  /** Waveform type */
   type: OscillatorType;
-  /** Davomiyligi (soniya) */
+  /** Duration in seconds */
   duration: number;
-  /** Boshlanish kechikishi - ctx.currentTime ga nisbatan (soniya) */
+  /** Delay relative to schedule start (seconds) */
   delay?: number;
-  /** Maksimal balandlik (0.0 - 1.0) */
+  /** Peak volume (0.0 - 1.0) */
   volume?: number;
-  /** Hujum (Attack) vaqti - click chiqmasligi uchun (soniya) */
+  /** Attack time (seconds) to prevent click artifacts */
   attack?: number;
-  /** Quloqqa yoqimli qilish uchun Low-Pass Filter chegarasi (Hz) */
+  /** Low-pass / band-pass filter frequency for acoustic warmth (Hz) */
   filterFreq?: number;
+  /** Filter type (default: 'lowpass') */
+  filterType?: BiquadFilterType;
+  /** Filter resonance Q */
+  filterQ?: number;
 };
 
-// WebKit (Safari) uchun qat'iy tiplashtirilgan Window interfeysi (`any` siz)
 interface WebkitWindow extends Window {
   webkitAudioContext?: typeof AudioContext;
 }
@@ -44,7 +61,6 @@ function readMutedFromStorage(): boolean {
   try {
     return window.localStorage.getItem(STORAGE_KEY) === 'true';
   } catch {
-    // Private browsing yoki bloklangan localStorage xatosini yutib yuborish
     return false;
   }
 }
@@ -54,7 +70,6 @@ function initStoreIfNeeded(): void {
   isStoreInitialized = true;
   isMutedState = readMutedFromStorage();
 
-  // Boshqa tablarda ovoz o'chirilsa, joriy tabni ham sinxronlash
   window.addEventListener('storage', (e: StorageEvent) => {
     if (e.key === STORAGE_KEY) {
       const nextMuted = e.newValue === 'true';
@@ -64,6 +79,17 @@ function initStoreIfNeeded(): void {
       }
     }
   });
+
+  // Global user interaction gesture to unlock Web Audio on mobile Safari / Chrome
+  const unlockAudio = () => {
+    if (sharedAudioCtx && sharedAudioCtx.state === 'suspended' && !isMutedState) {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+    window.removeEventListener('pointerdown', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+  };
+  window.addEventListener('pointerdown', unlockAudio, { passive: true, once: true });
+  window.addEventListener('keydown', unlockAudio, { passive: true, once: true });
 }
 
 function emitChange(): void {
@@ -84,7 +110,7 @@ function getMuteSnapshot(): boolean {
 }
 
 function getServerMuteSnapshot(): boolean {
-  return false; // SSR Hydration xatosini 100% oldini oladi
+  return false;
 }
 
 export function isAudioMuted(): boolean {
@@ -101,12 +127,11 @@ export function setAudioMuted(muted: boolean): void {
     try {
       window.localStorage.setItem(STORAGE_KEY, String(muted));
     } catch {
-      // Ignore storage quota / security errors
+      // ignore storage errors
     }
     window.dispatchEvent(new CustomEvent<boolean>(MUTE_EVENT, { detail: muted }));
   }
 
-  // Agar ovoz o'chirilsa, audio protsessorni uxlatib CPU/Batareyani tejaymiz
   if (muted && sharedAudioCtx && sharedAudioCtx.state === 'running') {
     sharedAudioCtx.suspend().catch(() => {});
   }
@@ -115,11 +140,15 @@ export function setAudioMuted(muted: boolean): void {
 }
 
 // ============================================================================
-// 3. SINGLETON CORE AUDIO ENGINE (Master Bus + Dynamics Compressor)
+// 3. SINGLETON CORE AUDIO ENGINE (Master Bus + Spatial Limiter)
 // ============================================================================
 
 let sharedAudioCtx: AudioContext | null = null;
 let masterCompressor: DynamicsCompressorNode | null = null;
+let masterAcousticFilter: BiquadFilterNode | null = null;
+let cachedNoiseBuffer: AudioBuffer | null = null;
+let lastSoundTime = 0;
+let lastSoundType = '';
 
 function getAudioEngine(): { ctx: AudioContext; destination: AudioNode } | null {
   if (typeof window === 'undefined' || isAudioMuted()) return null;
@@ -130,15 +159,22 @@ function getAudioEngine(): { ctx: AudioContext; destination: AudioNode } | null 
 
     sharedAudioCtx = new AudioCtx({ latencyHint: 'interactive' });
 
-    // Apple-style Master Dynamics Compressor:
-    // Bir nechta ovoz ustma-ust tushganda (clipping/distortion) xirillashni oldini oladi
+    // Apple Master Dynamics Compressor (Prevents any clipping or distortion)
     masterCompressor = sharedAudioCtx.createDynamicsCompressor();
-    masterCompressor.threshold.setValueAtTime(-12, sharedAudioCtx.currentTime);
-    masterCompressor.knee.setValueAtTime(30, sharedAudioCtx.currentTime);
-    masterCompressor.ratio.setValueAtTime(8, sharedAudioCtx.currentTime);
-    masterCompressor.attack.setValueAtTime(0.003, sharedAudioCtx.currentTime);
-    masterCompressor.release.setValueAtTime(0.15, sharedAudioCtx.currentTime);
-    masterCompressor.connect(sharedAudioCtx.destination);
+    masterCompressor.threshold.setValueAtTime(-14, sharedAudioCtx.currentTime);
+    masterCompressor.knee.setValueAtTime(24, sharedAudioCtx.currentTime);
+    masterCompressor.ratio.setValueAtTime(6, sharedAudioCtx.currentTime);
+    masterCompressor.attack.setValueAtTime(0.002, sharedAudioCtx.currentTime);
+    masterCompressor.release.setValueAtTime(0.12, sharedAudioCtx.currentTime);
+
+    // Warmth & De-essing Master Filter: Cuts harsh screech above 11.5 kHz
+    masterAcousticFilter = sharedAudioCtx.createBiquadFilter();
+    masterAcousticFilter.type = 'lowpass';
+    masterAcousticFilter.frequency.setValueAtTime(11500, sharedAudioCtx.currentTime);
+    masterAcousticFilter.Q.setValueAtTime(0.707, sharedAudioCtx.currentTime);
+
+    masterCompressor.connect(masterAcousticFilter);
+    masterAcousticFilter.connect(sharedAudioCtx.destination);
   }
 
   if (sharedAudioCtx.state === 'suspended') {
@@ -151,24 +187,51 @@ function getAudioEngine(): { ctx: AudioContext; destination: AudioNode } | null 
   };
 }
 
+/** Pre-renders an ultra-short (10ms) organic micro-transient noise impulse for tactile clicks */
+function getTactileNoiseBuffer(ctx: AudioContext): AudioBuffer {
+  if (cachedNoiseBuffer && cachedNoiseBuffer.sampleRate === ctx.sampleRate) {
+    return cachedNoiseBuffer;
+  }
+  const length = Math.floor(ctx.sampleRate * 0.012);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) {
+    // Sharp exponential decay curve (physical impact impulse)
+    const decay = Math.exp(-i / (length * 0.22));
+    data[i] = (Math.random() * 2 - 1) * decay;
+  }
+  cachedNoiseBuffer = buffer;
+  return buffer;
+}
+
 /**
- * Hardware-clock scheduled synthesizer.
- * `setTimeout` ishlatmaydi, xotirani avtomatik tozalaydi va click/pop artefaktlarini yo'qotadi.
+ * Hardware-clock scheduled acoustic synthesizer.
+ * Eliminates timing jitter, handles attack/decay smoothing, and prevents memory leaks.
  */
-function synthesizeSequence(notes: readonly SoundNote[]): void {
+function synthesizeSequence(notes: readonly SoundNote[], soundIdentifier?: string): void {
   const engine = getAudioEngine();
   if (!engine) return;
 
   const { ctx, destination } = engine;
-  // Audio kartadan 5ms keyingi aniq vaqtni olamiz (Scheduling lookahead)
-  const baseTime = ctx.currentTime + 0.005;
+  const now = ctx.currentTime;
+
+  // Micro-throttle: Prevent identical sounds from stacking and flamming within 14ms
+  if (soundIdentifier && soundIdentifier === lastSoundType && now - lastSoundTime < 0.014) {
+    return;
+  }
+  if (soundIdentifier) {
+    lastSoundType = soundIdentifier;
+    lastSoundTime = now;
+  }
+
+  const baseTime = now + 0.003;
 
   for (const note of notes) {
     const startTime = baseTime + (note.delay ?? 0);
-    const duration = Math.max(0.015, note.duration);
+    const duration = Math.max(0.01, note.duration);
     const stopTime = startTime + duration;
-    const peakVolume = Math.max(0.001, Math.min(1.0, note.volume ?? 0.12));
-    const attackTime = Math.min( duration * 0.3, note.attack ?? 0.006);
+    const peakVolume = Math.max(0.001, Math.min(1.0, note.volume ?? 0.1));
+    const attackTime = Math.min(duration * 0.25, note.attack ?? 0.003);
 
     const osc = ctx.createOscillator();
     const gainNode = ctx.createGain();
@@ -177,25 +240,22 @@ function synthesizeSequence(notes: readonly SoundNote[]): void {
     osc.type = note.type;
     osc.frequency.setValueAtTime(note.freq, startTime);
 
-    // Apple UI kabi silliq chastota sirpanishi (Pitch Glide)
     if (note.endFreq && note.endFreq > 0) {
       osc.frequency.exponentialRampToValueAtTime(note.endFreq, stopTime);
     }
 
-    // Qattiq to'lqinlarni (triangle/sawtooth) yumshatish uchun Low-Pass Filter
     if (note.filterFreq) {
       filterNode = ctx.createBiquadFilter();
-      filterNode.type = 'lowpass';
+      filterNode.type = note.filterType ?? 'lowpass';
       filterNode.frequency.setValueAtTime(note.filterFreq, startTime);
-      filterNode.Q.setValueAtTime(0.707, startTime); // Butterworth flat response
+      filterNode.Q.setValueAtTime(note.filterQ ?? 0.707, startTime);
     }
 
-    // ADSR Envelope: Click chiqmasligi uchun 0.0001 dan boshlab silliq ko'taramiz
+    // Natural Acoustic Envelope: zero click attack -> smooth exponential decay
     gainNode.gain.setValueAtTime(0.0001, startTime);
     gainNode.gain.linearRampToValueAtTime(peakVolume, startTime + attackTime);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, stopTime);
 
-    // Audio Graph ulanishi
     if (filterNode) {
       osc.connect(filterNode);
       filterNode.connect(gainNode);
@@ -205,72 +265,154 @@ function synthesizeSequence(notes: readonly SoundNote[]): void {
     gainNode.connect(destination);
 
     osc.start(startTime);
-    osc.stop(stopTime + 0.01);
+    osc.stop(stopTime + 0.005);
 
-    // MEMORY LEAK PREVENTION: Ovoz tugashi bilan barcha tugunlarni xotiradan uzamiz
     osc.onended = () => {
       try {
         osc.disconnect();
         if (filterNode) filterNode.disconnect();
         gainNode.disconnect();
       } catch {
-        // Ignore already disconnected nodes
+        // Safe disconnection
       }
     };
   }
 }
 
+/**
+ * Ultra-Luxury Glass Tactile Click (Apple Digital Crown & Taptic Engine standard)
+ * Combines an ultra-precise micro-transient snap with an organic high-damped resonant body.
+ */
+function playTactileGlassClick(): void {
+  const engine = getAudioEngine();
+  if (!engine) return;
+
+  const { ctx, destination } = engine;
+  const now = ctx.currentTime;
+
+  if (now - lastSoundTime < 0.015 && lastSoundType === 'tick') return;
+  lastSoundType = 'tick';
+  lastSoundTime = now;
+
+  const startTime = now + 0.001;
+
+  // 1. Organic tactile tap body (Clean miniature wooden/glass impulse: 1600Hz -> 900Hz in 7ms)
+  const tapOsc = ctx.createOscillator();
+  const tapGain = ctx.createGain();
+  const tapFilter = ctx.createBiquadFilter();
+
+  tapOsc.type = 'sine';
+  tapOsc.frequency.setValueAtTime(1600, startTime);
+  tapOsc.frequency.exponentialRampToValueAtTime(750, startTime + 0.007);
+
+  tapFilter.type = 'bandpass';
+  tapFilter.frequency.setValueAtTime(1200, startTime);
+  tapFilter.Q.setValueAtTime(1.8, startTime);
+
+  tapGain.gain.setValueAtTime(0.0001, startTime);
+  tapGain.gain.linearRampToValueAtTime(0.045, startTime + 0.001);
+  tapGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.007);
+
+  tapOsc.connect(tapFilter);
+  tapFilter.connect(tapGain);
+  tapGain.connect(destination);
+
+  tapOsc.start(startTime);
+  tapOsc.stop(startTime + 0.008);
+
+  // 2. High-precision Oleophobic Glass Micro-Snap (Airy transient click, 3400Hz)
+  const noiseBuffer = getTactileNoiseBuffer(ctx);
+  const noiseSource = ctx.createBufferSource();
+  const noiseFilter = ctx.createBiquadFilter();
+  const noiseGain = ctx.createGain();
+
+  noiseSource.buffer = noiseBuffer;
+
+  noiseFilter.type = 'bandpass';
+  noiseFilter.frequency.setValueAtTime(3200, startTime);
+  noiseFilter.Q.setValueAtTime(3.2, startTime);
+
+  noiseGain.gain.setValueAtTime(0.0001, startTime);
+  noiseGain.gain.linearRampToValueAtTime(0.024, startTime + 0.0008);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.005);
+
+  noiseSource.connect(noiseFilter);
+  noiseFilter.connect(noiseGain);
+  noiseGain.connect(destination);
+
+  noiseSource.start(startTime);
+  noiseSource.stop(startTime + 0.006);
+
+  // Auto garbage collection
+  tapOsc.onended = () => {
+    try {
+      tapOsc.disconnect();
+      tapFilter.disconnect();
+      tapGain.disconnect();
+      noiseSource.disconnect();
+      noiseFilter.disconnect();
+      noiseGain.disconnect();
+    } catch {
+      // Ignored
+    }
+  };
+}
+
 // ============================================================================
-// 4. APPLE HIG ACOUSTIC PRESETS (Pre-allocated Readonly Arrays)
+// 4. LUXURY ACOUSTIC PRESETS (Pure Physical & Spatial Harmonics)
 // ============================================================================
 
 const PRESETS = {
-  // iOS Taptic Engine uslubidagi yumshoq "Pop" (280Hz -> 440Hz pitch lift)
+  // Apple VisionOS Fluid Glass Capsule (Light organic droplet resonance: 880Hz -> 1320Hz)
   POP: [
-    { freq: 280, endFreq: 440, type: 'sine', duration: 0.075, volume: 0.16, attack: 0.004 },
+    // Primary fluid rising droplet
+    { freq: 880, endFreq: 1320, type: 'sine', duration: 0.028, volume: 0.048, attack: 0.001, filterFreq: 2800 },
+    // Ethereal subtle crystal air overtone
+    { freq: 1760, endFreq: 2640, type: 'sine', duration: 0.016, volume: 0.018, attack: 0.001, filterFreq: 4200 },
   ] as const satisfies readonly SoundNote[],
 
-  // Muvaffaqiyat: Toza Major beshinchi interval (C5 -> G5) + yengil oberton
+  // Diamond Crystal Confirmation Chime (Apple Pay / Luxury Watch acoustic chime triad)
   SUCCESS: [
-    { freq: 523.25, type: 'sine', duration: 0.14, delay: 0, volume: 0.12 },
-    { freq: 783.99, type: 'sine', duration: 0.32, delay: 0.085, volume: 0.14 },
-    { freq: 1567.98, type: 'triangle', duration: 0.25, delay: 0.085, volume: 0.03, filterFreq: 2500 },
+    // F#5 (739.99 Hz)
+    { freq: 739.99, type: 'sine', duration: 0.18, delay: 0, volume: 0.055, attack: 0.002, filterFreq: 3400 },
+    // A#5 (932.33 Hz)
+    { freq: 932.33, type: 'sine', duration: 0.22, delay: 0.038, volume: 0.065, attack: 0.002, filterFreq: 3800 },
+    // C#6 (1108.73 Hz)
+    { freq: 1108.73, type: 'sine', duration: 0.32, delay: 0.076, volume: 0.075, attack: 0.002, filterFreq: 4400 },
+    // F#6 (1479.98 Hz) Sparkling crystal shimmer
+    { freq: 1479.98, type: 'sine', duration: 0.40, delay: 0.114, volume: 0.08, attack: 0.002, filterFreq: 5200 },
   ] as const satisfies readonly SoundNote[],
 
-  // Xatolik: Yumshatilgan pastki ikki urilish (Low-pass filtered triangle)
+  // Subdued Tactile Felt Double-Tap (Soft muted physical bumps, 0% harshness)
   ERROR: [
-    { freq: 260, endFreq: 220, type: 'triangle', duration: 0.14, delay: 0, volume: 0.2, filterFreq: 800 },
-    { freq: 200, endFreq: 150, type: 'triangle', duration: 0.24, delay: 0.12, volume: 0.22, filterFreq: 650 },
+    { freq: 220, endFreq: 160, type: 'sine', duration: 0.032, delay: 0, volume: 0.05, attack: 0.002, filterFreq: 420 },
+    { freq: 175, endFreq: 130, type: 'sine', duration: 0.038, delay: 0.048, volume: 0.045, attack: 0.002, filterFreq: 380 },
   ] as const satisfies readonly SoundNote[],
 
-  // iOS Picker / Scroll wheel mikro-tikillashi
-  TICK: [
-    { freq: 1100, endFreq: 750, type: 'sine', duration: 0.025, volume: 0.07, attack: 0.002 },
-  ] as const satisfies readonly SoundNote[],
-
-  // Haqiqiy Apple Face ID / Apple Pay Match Chime (G5 -> C6) + Kristall harmonika
+  // Iconic Apple Face ID Match Chime (G#5 -> D#6 pure crystalline chime duo)
   FACE_ID_MATCH: [
-    { freq: 783.99, type: 'sine', duration: 0.16, delay: 0, volume: 0.14 },
-    { freq: 1567.98, type: 'sine', duration: 0.12, delay: 0, volume: 0.035 }, // Oktava obertoni
-    { freq: 1046.5, type: 'sine', duration: 0.38, delay: 0.09, volume: 0.16 },
-    { freq: 2093.0, type: 'sine', duration: 0.28, delay: 0.09, volume: 0.04 }, // Yuqori shisha jarangdorligi
+    // Tone 1: G#5 (830.61 Hz)
+    { freq: 830.61, type: 'sine', duration: 0.16, delay: 0, volume: 0.07, attack: 0.002, filterFreq: 3600 },
+    // Tone 2: D#6 (1244.51 Hz) + crystal shimmer
+    { freq: 1244.51, type: 'sine', duration: 0.38, delay: 0.065, volume: 0.085, attack: 0.002, filterFreq: 4600 },
+    { freq: 2489.02, type: 'sine', duration: 0.22, delay: 0.065, volume: 0.02, attack: 0.002, filterFreq: 6000 },
   ] as const satisfies readonly SoundNote[],
 
-  // Biometrik rad etish / Spoof ogohlantirishi (Filtrlangan jiddiy ohang)
+  // Biometric Refusal / Spoof Warning (Soft low-pass damping)
   FACE_ID_DENIED: [
-    { freq: 220, endFreq: 196, type: 'sawtooth', duration: 0.13, delay: 0, volume: 0.14, filterFreq: 950 },
-    { freq: 164.81, endFreq: 130.81, type: 'sawtooth', duration: 0.26, delay: 0.11, volume: 0.16, filterFreq: 750 },
+    { freq: 196, endFreq: 140, type: 'sine', duration: 0.045, delay: 0, volume: 0.06, attack: 0.002, filterFreq: 380 },
+    { freq: 164, endFreq: 115, type: 'sine', duration: 0.055, delay: 0.06, volume: 0.05, attack: 0.002, filterFreq: 340 },
   ] as const satisfies readonly SoundNote[],
 
-  // Takroriy davomat (Duplicate): Muloyim, xotirjam ikki notali tasdiq (C5 -> E5)
+  // Duplicate / Already Clocked In (Peaceful descending crystal duo: A5 -> E5)
   FACE_ID_DUPLICATE: [
-    { freq: 523.25, type: 'sine', duration: 0.12, delay: 0, volume: 0.1 },
-    { freq: 659.25, type: 'sine', duration: 0.22, delay: 0.08, volume: 0.1 },
+    { freq: 880.00, type: 'sine', duration: 0.14, delay: 0, volume: 0.055, attack: 0.002, filterFreq: 3200 },
+    { freq: 659.25, type: 'sine', duration: 0.24, delay: 0.06, volume: 0.055, attack: 0.002, filterFreq: 3000 },
   ] as const satisfies readonly SoundNote[],
 
-  // Biometrik radar kadr skaneri: Yuqori texnologiyali chastota sirpanishi
+  // Biometric Radar / Subtle Scanning Frame (Ultra-fine whisper micro-transient)
   LASER_SCAN: [
-    { freq: 1350, endFreq: 950, type: 'sine', duration: 0.028, volume: 0.045, attack: 0.002 },
+    { freq: 1400, endFreq: 950, type: 'sine', duration: 0.012, volume: 0.015, attack: 0.001, filterFreq: 2200, filterType: 'bandpass', filterQ: 2.5 },
   ] as const satisfies readonly SoundNote[],
 };
 
@@ -278,10 +420,6 @@ const PRESETS = {
 // 5. REACT HOOK (Zero-Dependency Re-renders, Stable Callbacks)
 // ============================================================================
 
-/**
- * Apple HIG darajasidagi Web Audio sintezatori.
- * Hech qanday mp3/wav fayllarsiz toza matematik sintez orqali UI ovozlarini yaratadi.
- */
 export function usePremiumSound() {
   const isMuted = useSyncExternalStore(
     subscribeMuteStore,
@@ -289,19 +427,23 @@ export function usePremiumSound() {
     getServerMuteSnapshot
   );
 
-  const playPop = useCallback(() => synthesizeSequence(PRESETS.POP), []);
-  const playSuccess = useCallback(() => synthesizeSequence(PRESETS.SUCCESS), []);
-  const playError = useCallback(() => synthesizeSequence(PRESETS.ERROR), []);
-  const playTick = useCallback(() => synthesizeSequence(PRESETS.TICK), []);
-  const playFaceIdMatch = useCallback(() => synthesizeSequence(PRESETS.FACE_ID_MATCH), []);
-  const playFaceIdDenied = useCallback(() => synthesizeSequence(PRESETS.FACE_ID_DENIED), []);
-  const playFaceIdDuplicate = useCallback(() => synthesizeSequence(PRESETS.FACE_ID_DUPLICATE), []);
-  const playLaserScan = useCallback(() => synthesizeSequence(PRESETS.LASER_SCAN), []);
+  // playTick uses dual-layer tactile glass & chassis impulse modeling
+  const playTick = useCallback(() => {
+    if (isAudioMuted()) return;
+    playTactileGlassClick();
+  }, []);
 
-  /** Maxsus chastotali ovoz chiqarish kerak bo'lganda foydalanish uchun */
+  const playPop = useCallback(() => synthesizeSequence(PRESETS.POP, 'pop'), []);
+  const playSuccess = useCallback(() => synthesizeSequence(PRESETS.SUCCESS, 'success'), []);
+  const playError = useCallback(() => synthesizeSequence(PRESETS.ERROR, 'error'), []);
+  const playFaceIdMatch = useCallback(() => synthesizeSequence(PRESETS.FACE_ID_MATCH, 'faceid_match'), []);
+  const playFaceIdDenied = useCallback(() => synthesizeSequence(PRESETS.FACE_ID_DENIED, 'faceid_denied'), []);
+  const playFaceIdDuplicate = useCallback(() => synthesizeSequence(PRESETS.FACE_ID_DUPLICATE, 'faceid_dup'), []);
+  const playLaserScan = useCallback(() => synthesizeSequence(PRESETS.LASER_SCAN, 'laser_scan'), []);
+
   const playCustomTone = useCallback(
-    (freq: number, type: OscillatorType = 'sine', duration = 0.1, volume = 0.1) => {
-      synthesizeSequence([{ freq, type, duration, volume }]);
+    (freq: number, type: OscillatorType = 'sine', duration = 0.08, volume = 0.08) => {
+      synthesizeSequence([{ freq, type, duration, volume, filterFreq: 2400 }]);
     },
     []
   );

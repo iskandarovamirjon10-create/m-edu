@@ -95,9 +95,31 @@ export class GradesService {
       where: { studentId: data.studentId, groupId: data.groupId, organizationId, isActive: true },
     });
     if (!membership) {
-      throw new BadRequestException(
-        `Student ${data.studentId} is not enrolled in group ${data.groupId}`,
-      );
+      let studentName: string | null = null;
+      try {
+        const student = await this.prisma.student?.findUnique?.({
+          where: { id: data.studentId },
+          include: { user: { select: { firstName: true, lastName: true } } },
+        });
+        if (student?.user) {
+          studentName = `${student.user.firstName} ${student.user.lastName}`.trim();
+        }
+      } catch {
+        // mock safe
+      }
+      const groupName = group?.name || null;
+      const friendlyMsg = studentName && groupName
+        ? `Student "${studentName}" is not enrolled in group "${groupName}".`
+        : 'Student is not enrolled in group.';
+
+      throw new BadRequestException({
+        code: 'STUDENT_NOT_ENROLLED_IN_GROUP',
+        message: friendlyMsg,
+        studentId: data.studentId,
+        studentName,
+        groupId: data.groupId,
+        groupName,
+      });
     }
 
     return this.prisma.grade.create({

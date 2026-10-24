@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { InvoiceStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -902,8 +903,12 @@ export class InvoicesService {
       remainingLessons = Math.max(1, Math.min(totalLessons, Math.round(totalLessons * ratio)));
     }
 
-    const lessonRate = Math.round(dto.fullMonthlyAmount / totalLessons);
-    const proratedTotal = Math.round(lessonRate * remainingLessons);
+    const proratedTotal = remainingLessons >= totalLessons
+      ? dto.fullMonthlyAmount
+      : Math.round((dto.fullMonthlyAmount * remainingLessons) / totalLessons);
+    const lessonRate = remainingLessons > 0
+      ? Math.round(proratedTotal / remainingLessons)
+      : Math.round(dto.fullMonthlyAmount / totalLessons);
 
     return {
       studentId: dto.studentId,
@@ -931,8 +936,8 @@ export class InvoicesService {
       items: [
         {
           description: `Prorated Tuition: ${preview.remainingLessons}/${preview.totalLessonsInMonth} lessons from ${dto.startDate}`,
-          quantity: preview.remainingLessons,
-          unitPrice: preview.lessonRate,
+          quantity: 1,
+          unitPrice: preview.proratedTotal,
         },
       ],
     };

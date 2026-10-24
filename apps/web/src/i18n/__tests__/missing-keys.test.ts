@@ -33,6 +33,8 @@ function walk(dir: string, out: string[] = []): string[] {
 const REFERENCE_PATTERNS: RegExp[] = [
   /\bt\(\s*'([^']+)'/g,
   /\bt\(\s*"([^"]+)"/g,
+  /\btr\(\s*'([^']+)'/g,
+  /\btr\(\s*"([^"]+)"/g,
   /\btranslate\(\s*[^,]+,\s*'([^']+)'/g,
 ];
 

@@ -36,12 +36,6 @@ interface RecentAttendanceRecord {
   time: string;
 }
 
-const DEMO_RECENT_FACES: RecentAttendanceRecord[] = [
-  { id: '1', name: 'Alisher Qodirov', group: '9-A', time: 'Hozirgina' },
-  { id: '2', name: 'Madina Karimova', group: '9-A', time: '1 daqiqa oldin' },
-  { id: '3', name: 'Jasur Bekmurodov', group: '10-B', time: '3 daqiqa oldin' },
-];
-
 export const FloatingPiPCamera = memo(function FloatingPiPCamera() {
   const isOpen = useFloatingCameraOpen();
   const sound = usePremiumSound();
@@ -50,7 +44,7 @@ export const FloatingPiPCamera = memo(function FloatingPiPCamera() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
-  const [recentAttendee, setRecentAttendee] = useState<RecentAttendanceRecord>(DEMO_RECENT_FACES[0]);
+  const [recentAttendee, setRecentAttendee] = useState<RecentAttendanceRecord | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -96,20 +90,22 @@ export const FloatingPiPCamera = memo(function FloatingPiPCamera() {
     };
   }, [isOpen, startCamera, stopCamera]);
 
-  // Simulate periodic face check-in events
+  // Real-time Face ID attendance monitoring via global event bus
   useEffect(() => {
     if (!isOpen) return;
-    const interval = setInterval(() => {
-      const nextFace = DEMO_RECENT_FACES[Math.floor(Math.random() * DEMO_RECENT_FACES.length)];
-      setRecentAttendee({
-        ...nextFace,
-        time: 'Hozirgina',
-      });
-      if (!isMuted) {
-        sound.playTick();
+    const handleDetection = (event: Event) => {
+      const custom = event as CustomEvent<RecentAttendanceRecord>;
+      if (custom.detail) {
+        setRecentAttendee(custom.detail);
+        if (!isMuted) {
+          sound.playFaceIdMatch();
+        }
       }
-    }, 12000);
-    return () => clearInterval(interval);
+    };
+    window.addEventListener('medu:attendance-logged', handleDetection);
+    return () => {
+      window.removeEventListener('medu:attendance-logged', handleDetection);
+    };
   }, [isOpen, isMuted, sound]);
 
   const handleClose = useCallback(() => {
@@ -253,11 +249,17 @@ export const FloatingPiPCamera = memo(function FloatingPiPCamera() {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
                   <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span className="font-semibold truncate">{recentAttendee.name}</span>
-                  <span className="text-white/60">({recentAttendee.group})</span>
+                  {recentAttendee ? (
+                    <>
+                      <span className="font-semibold truncate">{recentAttendee.name}</span>
+                      {recentAttendee.group && <span className="text-white/60">({recentAttendee.group})</span>}
+                    </>
+                  ) : (
+                    <span className="text-white/80 font-medium">Face ID monitoring faol</span>
+                  )}
                 </div>
                 <span className="text-[10px] text-emerald-400 font-mono shrink-0">
-                  {recentAttendee.time}
+                  {recentAttendee ? recentAttendee.time : 'Jonli'}
                 </span>
               </div>
             </div>

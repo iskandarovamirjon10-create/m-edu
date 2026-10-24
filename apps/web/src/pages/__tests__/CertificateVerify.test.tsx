@@ -3,7 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import { CertificateVerifyPage } from '../CertificateVerify';
+import {
+  CertificateVerifyPage,
+  cleanVerificationCode,
+  formatVerificationDate,
+} from '../CertificateVerify';
 import { certificatesApi } from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
@@ -17,10 +21,23 @@ vi.mock('@/i18n/I18nProvider', () => ({
     t: (_key: string, fallback?: string) => fallback || _key,
     locale: 'uz',
   }),
+  useSafeI18n: () => ({
+    t: (_key: string, fallback?: string) => fallback || _key,
+    locale: 'uz',
+  }),
 }));
 
 vi.mock('@/hooks/usePageTitle', () => ({
   usePageTitle: vi.fn(),
+}));
+
+vi.mock('@/hooks/usePremiumSound', () => ({
+  usePremiumSound: () => ({
+    playTick: vi.fn(),
+    playPop: vi.fn(),
+    playSuccess: vi.fn(),
+    playError: vi.fn(),
+  }),
 }));
 
 vi.mock('@/components/ui', () => ({
@@ -50,7 +67,7 @@ function renderWithClient(initialRoute = '/verify') {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[initialRoute]}>
+      <MemoryRouter initialEntries={[initialRoute]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/verify" element={<CertificateVerifyPage />} />
           <Route path="/verify/:code" element={<CertificateVerifyPage />} />
@@ -65,6 +82,27 @@ describe('CertificateVerifyPage', () => {
     vi.clearAllMocks();
   });
 
+  /* --------------------------------------------------------------------------
+   * 1. PURE DOMAIN HELPERS
+   * ------------------------------------------------------------------------ */
+  describe('Pure Domain Helpers', () => {
+    it('cleanVerificationCode trims, uppercases, and strips invalid chars', () => {
+      expect(cleanVerificationCode('  cert-123_abc!  ')).toBe('CERT-123ABC');
+      expect(cleanVerificationCode('')).toBe('');
+      expect(cleanVerificationCode(null)).toBe('');
+    });
+
+    it('formatVerificationDate formats valid date or returns fallback', () => {
+      expect(formatVerificationDate(null)).toBe('—');
+      expect(formatVerificationDate('invalid-date')).toBe('invalid-date');
+      const formatted = formatVerificationDate('2026-05-20T00:00:00.000Z', 'en-US');
+      expect(formatted).toMatch(/2026/);
+    });
+  });
+
+  /* --------------------------------------------------------------------------
+   * 2. ROUTING & RENDERING
+   * ------------------------------------------------------------------------ */
   it('renders search input when no code is supplied in route', () => {
     renderWithClient('/verify');
     expect(screen.getByPlaceholderText(/9B47FA2B8C11/i)).toBeDefined();

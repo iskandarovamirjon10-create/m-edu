@@ -73,6 +73,27 @@ describe('MarkdownContent rendering', () => {
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer nofollow');
   });
+
+  it('renders allowed internal routes without opening new tab', () => {
+    render(<MarkdownContent content="[Davomat](/attendance) va [Talaba](/students/std-123)" />);
+    const attLink = screen.getByRole('link', { name: 'Davomat' });
+    expect(attLink).toHaveAttribute('href', '/attendance');
+    expect(attLink).not.toHaveAttribute('target');
+
+    const stdLink = screen.getByRole('link', { name: 'Talaba' });
+    expect(stdLink).toHaveAttribute('href', '/students/std-123');
+    expect(stdLink).not.toHaveAttribute('target');
+  });
+
+  it('rejects disallowed internal routes and traversal attempts', () => {
+    const { container } = render(
+      <MarkdownContent content="[Secret](/secret/admin) va [Traverse](/students/../../etc/passwd)" />
+    );
+    expect(screen.queryByRole('link', { name: 'Secret' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Traverse' })).toBeNull();
+    expect(container.textContent).toContain('Secret (/secret/admin)');
+    expect(container.textContent).toContain('Traverse (/students/../../etc/passwd)');
+  });
 });
 
 describe('MarkdownContent safety', () => {

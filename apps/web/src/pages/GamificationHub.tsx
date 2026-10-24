@@ -14,7 +14,8 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassPageHeader } from '@/components/ui';
-import { useI18n } from '@/i18n/I18nProvider';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
 import { openSidecar } from '@/stores/ui.store';
@@ -269,7 +270,7 @@ function LevelRing({ level, progress }: { level: number; progress: number }) {
  * ══════════════════════════════════════════════════════════════════ */
 
 function StreakFlame({ streak }: { streak: number }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   return (
     <div className="relative flex items-center gap-3">
       <motion.div
@@ -561,7 +562,7 @@ function RewardCard({ reward, canAfford, isPending, onClaim, index }: RewardCard
  * ══════════════════════════════════════════════════════════════════ */
 
 function DailyCheckIn({ streak = 0 }: { streak?: number }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const days = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
   const today = new Date().getDay();
   const todayIndex = today === 0 ? 6 : today - 1;
@@ -669,7 +670,7 @@ function AchievementBadge({ achievement, index }: { achievement: Achievement; in
  * ══════════════════════════════════════════════════════════════════ */
 
 export function GamificationHubPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle('M-Coins & Gamifikatsiya');
   const { push } = useToast();
   const queryClient = useQueryClient();
@@ -708,7 +709,10 @@ export function GamificationHubPage() {
     openSidecar({
       title: entry.studentName,
       subtitle: `${entry.groupName || 'Guruh'} • #${resolvedRank} o'rin`,
-      badge: `LVL ${entry.level}`,
+      badge: {
+        text: `LVL ${entry.level}`,
+        tone: resolvedRank <= 3 ? 'amber' : 'purple',
+      },
       status: {
         label: resolvedRank <= 3 ? 'Top 3 Lider' : 'Faol Ishtirokchi',
         tone: resolvedRank <= 3 ? 'amber' : 'emerald',
@@ -826,7 +830,8 @@ export function GamificationHubPage() {
   }, [myStats?.xp]);
 
   return (
-    <div className="page-container space-y-6">
+    <div className="relative page-container space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))]">
+      <AuroraMesh variant="playful" />
       <Confetti trigger={confettiTrigger} />
 
       <GlassPageHeader

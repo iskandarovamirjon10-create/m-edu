@@ -87,7 +87,7 @@ describe('RecognitionDecisionPolicy', () => {
       expect(result).toHaveProperty('reason', 'SIMILARITY_TOO_LOW');
     });
 
-    it('returns uncertain when similarity is near threshold', () => {
+    it('returns uncertain when similarity is near threshold from above (e.g. 0.63 with threshold 0.60, margin 0.05)', () => {
       const result = policy.decide({
         qualityScore: 0.8,
         livenessDecision: 'PASS',
@@ -95,6 +95,18 @@ describe('RecognitionDecisionPolicy', () => {
         bestMatchFound: true,
       });
       expect(result.outcome).toBe('UNCERTAIN');
+      expect(result).toHaveProperty('reason', 'SIMILARITY_UNCERTAIN');
+    });
+
+    it('returns uncertain when similarity is near threshold from below (e.g. 0.58 with threshold 0.60, margin 0.05)', () => {
+      const result = policy.decide({
+        qualityScore: 0.8,
+        livenessDecision: 'PASS',
+        similarityScore: 0.58,
+        bestMatchFound: true,
+      });
+      expect(result.outcome).toBe('UNCERTAIN');
+      expect(result).toHaveProperty('reason', 'SIMILARITY_UNCERTAIN');
     });
 
     it('identifies with HIGH confidence when similarity >= 0.8', () => {

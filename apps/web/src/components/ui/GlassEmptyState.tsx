@@ -160,14 +160,32 @@ const DefaultEmptyIcon = ({ className }: IconProps) => (
     className={className}
     viewBox="0 0 24 24"
     fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
+    shapeRendering="geometricPrecision"
     aria-hidden="true"
     focusable="false"
   >
-    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+    {/* Duotone subtle volume fill */}
+    <path
+      d="M22 13h-6l-2 2.5h-4L8 13H2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6z"
+      fill="currentColor"
+      fillOpacity="0.14"
+      stroke="none"
+    />
+    {/* Crisp outline */}
+    <path
+      d="M5.45 5.11 2 12v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-7l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M22 13h-6l-2 2.5h-4L8 13H2"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
@@ -176,14 +194,27 @@ const DefaultErrorIcon = ({ className }: IconProps) => (
     className={className}
     viewBox="0 0 24 24"
     fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
+    shapeRendering="geometricPrecision"
     aria-hidden="true"
     focusable="false"
   >
-    <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+    {/* Duotone inner alert aura */}
+    <path
+      d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+      fill="currentColor"
+      fillOpacity="0.12"
+      stroke="none"
+    />
+    {/* Crisp outline */}
+    <path
+      d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="12" cy="17" r="1" fill="currentColor" />
   </svg>
 );
 

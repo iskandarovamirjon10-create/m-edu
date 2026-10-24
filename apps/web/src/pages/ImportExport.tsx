@@ -27,7 +27,17 @@ import { openSidecar } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import request, { downloadFile } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+
+function AuroraMesh() {
+  return (
+    <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+      <div className="absolute -top-[10%] -left-[10%] h-[560px] w-[560px] rounded-full bg-gradient-to-br from-blue-500/12 via-indigo-500/8 to-transparent blur-[130px] dark:from-blue-600/14 dark:via-indigo-600/10" />
+      <div className="absolute top-[25%] -right-[10%] h-[520px] w-[520px] rounded-full bg-gradient-to-bl from-teal-500/12 via-cyan-500/8 to-transparent blur-[130px] dark:from-teal-600/14 dark:via-cyan-600/10" />
+      <div className="absolute -bottom-[15%] left-[25%] h-[480px] w-[480px] rounded-full bg-gradient-to-tr from-purple-500/10 via-pink-500/6 to-transparent blur-[120px] dark:from-purple-600/12" />
+    </div>
+  );
+}
 
 const SPRING = {
   snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
@@ -69,7 +79,7 @@ interface ImportJob {
 }
 
 export function ImportExportPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('importExport.title'));
   const queryClient = useQueryClient();
   const { push } = useToast();
@@ -85,12 +95,17 @@ export function ImportExportPage() {
   const handleOpenJobSidecar = (job: ImportJob) => {
     playPop();
     openSidecar({
+      id: job.id,
+      type: 'general',
       title: `${job.entityType} Importi`,
       subtitle: job.fileName,
-      badge: job.status,
-      status: {
-        label: job.status === 'COMPLETED' ? 'Muvaffaqiyatli' : job.status === 'FAILED' ? 'Xatolik' : 'Jarayonda',
+      badge: {
+        text: job.status,
         tone: job.status === 'COMPLETED' ? 'emerald' : job.status === 'FAILED' ? 'rose' : 'amber',
+      },
+      avatar: {
+        text: job.entityType.slice(0, 2).toUpperCase(),
+        color: job.status === 'COMPLETED' ? '#10B981' : job.status === 'FAILED' ? '#F43F5E' : '#F59E0B',
       },
       metrics: [
         { label: 'Jami qatorlar', value: job.total },
@@ -206,12 +221,8 @@ export function ImportExportPage() {
   const failedJobs = jobs.filter((j) => j.status === 'FAILED').length;
 
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
-      {/* Ambient background lighting */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        <div className="absolute top-[5%] left-[-5%] w-[45%] h-[40%] rounded-full bg-blue-400/5 blur-[120px]" />
-        <div className="absolute bottom-[10%] right-[-5%] w-[40%] h-[45%] rounded-full bg-indigo-400/5 blur-[120px]" />
-      </div>
+    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30 pb-[max(6rem,env(safe-area-inset-bottom))]">
+      <AuroraMesh />
 
       <motion.div
         variants={containerVariants}

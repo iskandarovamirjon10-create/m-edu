@@ -20,7 +20,8 @@ import { motion, AnimatePresence, type Variants } from 'framer-motion';
 
 import { telegramApi, type TelegramStatusResponse, type TelegramAdminOverview } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import {
   GlassErrorState,
   GlassButton,
@@ -538,7 +539,7 @@ function FeatureCard({
  * ========================================================================== */
 
 export function TelegramPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('nav.telegram') || 'Telegram Integration');
   const { user } = useAuth();
   const { push, toastNode } = useToasts();
@@ -697,12 +698,14 @@ export function TelegramPage() {
 
   /* ── Render ───────────────────────────────────────────────────────── */
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="page-container mx-auto max-w-5xl space-y-5"
-    >
+    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+      <AuroraMesh variant="corporate" opacity={0.65} />
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="page-container mx-auto max-w-5xl space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
+      >
       {toastNode}
 
       {/* ============================================================
@@ -1291,6 +1294,7 @@ export function TelegramPage() {
         loading={unlinkMut.isPending}
       />
     </motion.div>
+  </div>
   );
 }
 

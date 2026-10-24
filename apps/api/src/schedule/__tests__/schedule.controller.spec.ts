@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ScheduleController } from '../schedule.controller';
 import { ScheduleService } from '../schedule.service';
@@ -26,17 +26,7 @@ describe('ScheduleController', () => {
       remove: vi.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [ScheduleController],
-      providers: [
-        {
-          provide: ScheduleService,
-          useValue: service,
-        },
-      ],
-    }).compile();
-
-    controller = module.get<ScheduleController>(ScheduleController);
+    controller = new ScheduleController(service as unknown as ScheduleService);
   });
 
   it('should be defined', () => {

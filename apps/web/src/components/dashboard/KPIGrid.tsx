@@ -5,6 +5,7 @@
  */
 
 import { Icon } from '@/lib/design';
+import { useI18n } from '@/i18n/I18nProvider';
 import type { DashboardStats } from '@/lib/types';
 import { KPICard } from './KPICard';
 
@@ -26,6 +27,7 @@ function monthOverMonth(trend?: number[]): number | null {
 }
 
 export function KPIGrid({ stats, paidShare, revenueTrend }: KPIGridProps) {
+  const { t } = useI18n();
   const todayRevenue = Number(stats.todayRevenue ?? 0);
   const todayPaymentsCount = Number(stats.todayPaymentsCount ?? 0);
 
@@ -43,44 +45,48 @@ export function KPIGrid({ stats, paidShare, revenueTrend }: KPIGridProps) {
   const activeStudents = stats.activeStudents || stats.totalStudents || 0;
 
   const mom = monthOverMonth(revenueTrend);
-  const paidLabel = typeof paidShare === 'number' ? `${Math.round(paidShare)}% yig'ildi` : null;
+  const paidLabel = typeof paidShare === 'number' ? `${Math.round(paidShare)}% ${t('dashboard.collectedShare', "yig'ildi")}` : null;
 
   return (
-    <section aria-label="Asosiy boshqaruv ko'rsatkichlari">
+    <section aria-label={t('dashboard.kpiSection', "Asosiy boshqaruv ko'rsatkichlari")}>
       <div className="grid grid-cols-1 gap-4.5 sm:grid-cols-2 xl:grid-cols-4">
         <KPICard
-          title="Bugungi tushum"
+          title={t('dashboard.todayRevenue', 'Bugungi tushum')}
           value={todayRevenue}
           formattedValue={`${todayRevenue.toLocaleString()} UZS`}
-          description={todayPaymentsCount > 0 ? `${todayPaymentsCount} ta to'lov` : 'To\'lov qayd etilmagan'}
+          description={
+            todayPaymentsCount > 0
+              ? `${todayPaymentsCount} ${t('dashboard.paymentsCountSuffix', "ta to'lov")}`
+              : t('dashboard.noPaymentsRecorded', "To'lov qayd etilmagan")
+          }
           trend={
             mom !== null
-              ? { label: `${mom >= 0 ? '+' : ''}${mom}% oy`, isPositive: mom > 0, isNeutral: mom === 0 }
-              : { label: 'Bugun', isPositive: true }
+              ? { label: `${mom >= 0 ? '+' : ''}${mom}% ${t('dashboard.monthSuffix', 'oy')}`, isPositive: mom > 0, isNeutral: mom === 0 }
+              : { label: t('dashboard.today', 'Bugun'), isPositive: true }
           }
           accentColor="#34C759"
           href="/payments"
           icon={<Icon name="creditCard" size={18} />}
         />
         <KPICard
-          title="Bugungi davomat"
+          title={t('dashboard.todayAttendance', 'Bugungi davomat')}
           value={todayRate ?? 0}
-          formattedValue={todayRate !== null ? `${todayRate}%` : 'Kutilmoqda'}
+          formattedValue={todayRate !== null ? `${todayRate}%` : t('dashboard.pendingRate', 'Kutilmoqda')}
           description={
             todayTotal > 0
-              ? `${todayInClass}/${todayTotal} kelgan · ${todayAbsent} yo'q`
+              ? `${todayInClass}/${todayTotal} ${t('attendance.present', 'kelgan')} · ${todayAbsent} ${t('attendance.absent', "yo'q")}`
               : stats.todayLessonsCount
-                ? `${stats.todayLessonsCount} ta dars rejalashtirilgan`
-                : 'Davomat kutilmoqda'
+                ? `${stats.todayLessonsCount} ${t('dashboard.lessonsScheduled', 'ta dars rejalashtirilgan')}`
+                : t('dashboard.attendancePending', 'Davomat kutilmoqda')
           }
           trend={
             todayRate === null
-              ? { label: 'Dars vaqti', isNeutral: true }
+              ? { label: t('dashboard.lessonTime', 'Dars vaqti'), isNeutral: true }
               : todayRate >= 85
-                ? { label: 'A\'lo', isPositive: true }
+                ? { label: t('dashboard.gradeExcellent', "A'lo"), isPositive: true }
                 : todayRate >= 70
-                  ? { label: 'O\'rtacha', isNeutral: true }
-                  : { label: 'Past', isPositive: false }
+                  ? { label: t('dashboard.gradeAverage', "O'rtacha"), isNeutral: true }
+                  : { label: t('dashboard.gradeLow', 'Past'), isPositive: false }
           }
           accentColor="#0A84FF"
           href="/attendance"
@@ -88,18 +94,18 @@ export function KPIGrid({ stats, paidShare, revenueTrend }: KPIGridProps) {
           delay={0.06}
         />
         <KPICard
-          title="Muddati o'tgan qarzdorlik"
+          title={t('dashboard.overdueBalance', "Muddati o'tgan qarzdorlik")}
           value={totalOverdue}
           formattedValue={`${totalOverdue.toLocaleString()} UZS`}
           description={
             paidLabel
-              ? `Kutilmoqda: ${totalPending.toLocaleString()} · ${paidLabel}`
-              : `Kutilmoqda: ${totalPending.toLocaleString()} UZS`
+              ? `${t('dashboard.pending', 'Kutilmoqda')}: ${totalPending.toLocaleString()} · ${paidLabel}`
+              : `${t('dashboard.pending', 'Kutilmoqda')}: ${totalPending.toLocaleString()} UZS`
           }
           trend={
             totalOverdue > 0
-              ? { label: 'Muddati o\'tgan', isPositive: false }
-              : { label: 'Qarz yo\'q', isPositive: true }
+              ? { label: t('dashboard.overdue', "Muddati o'tgan"), isPositive: false }
+              : { label: t('dashboard.noDebt', "Qarz yo'q"), isPositive: true }
           }
           accentColor="#FF9F0A"
           href="/invoices?status=OVERDUE"
@@ -107,11 +113,11 @@ export function KPIGrid({ stats, paidShare, revenueTrend }: KPIGridProps) {
           delay={0.12}
         />
         <KPICard
-          title="Faol o'quvchilar"
+          title={t('dashboard.activeStudents', "Faol o'quvchilar")}
           value={activeStudents}
           formattedValue={activeStudents.toLocaleString()}
-          description={`Jami: ${stats.totalStudents || 0} · ${stats.activeGroups || 0} ta guruh`}
-          trend={{ label: 'Faol', isPositive: true }}
+          description={`${t('common.total', 'Jami')}: ${stats.totalStudents || 0} · ${stats.activeGroups || 0} ${t('dashboard.groupsSuffix', 'ta guruh')}`}
+          trend={{ label: t('common.active', 'Faol'), isPositive: true }}
           accentColor="#5E5CE6"
           href="/students"
           icon={<Icon name="users" size={18} />}

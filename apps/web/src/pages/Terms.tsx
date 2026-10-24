@@ -5,11 +5,11 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { GlassButton } from '@/components/ui';
 
 export function TermsPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('terms.title') || 'Terms of Service');
 
   return (

@@ -32,7 +32,7 @@ describe('CopilotContextPanel', () => {
     expect(screen.queryByText(/insights/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/suggested prompts/i)).not.toBeInTheDocument();
     // Quick actions should still be there
-    expect(screen.getByText(/quick actions/i)).toBeInTheDocument();
+    expect(screen.getByText(/tezkor amallar/i)).toBeInTheDocument();
   });
 
   it('shows insights and suggestions when flags are true', () => {
@@ -44,7 +44,7 @@ describe('CopilotContextPanel', () => {
       { wrapper }
     );
     
-    expect(screen.getByText(/insights/i)).toBeInTheDocument();
-    expect(screen.getByText(/suggested prompts/i)).toBeInTheDocument();
+    expect(screen.getByText(/signallar/i)).toBeInTheDocument();
+    expect(screen.getByText(/tavsiya etilgan savollar/i)).toBeInTheDocument();
   });
 });

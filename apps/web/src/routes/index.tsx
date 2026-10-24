@@ -78,7 +78,7 @@ const AppLayout = lazyPage(() => import('@/layouts/AppLayout'), 'AppLayout');
 
 // Auth & public
 const LoginPage            = lazyPage(() => import('@/pages/Login'), 'LoginPage');
-const RegisterPage         = lazyPage(() => import('@/pages/Register'), 'RegisterPage');
+
 const AuthCallbackPage     = lazyPage(() => import('@/pages/AuthCallback'), 'AuthCallbackPage');
 const ForgotPasswordPage   = lazyPage(() => import('@/pages/ForgotPassword'), 'ForgotPasswordPage');
 const ResetPasswordPage    = lazyPage(() => import('@/pages/ResetPassword'), 'ResetPasswordPage');
@@ -201,7 +201,7 @@ export interface RouteConfig {
 export const routeConfig: RouteConfig[] = [
   /* -------- Public -------- */
   { path: '/login', element: <LoginPage />, type: 'public', title: 'Sign In', titleKey: 'nav.signIn' },
-  { path: '/register', element: <RegisterPage />, type: 'public', title: 'Create Account', titleKey: 'nav.createAccount' },
+  { path: '/register', element: <Navigate to="/login" replace />, type: 'none' },
   { path: '/auth/callback', element: <AuthCallbackPage />, type: 'none' },
   { path: '/forgot-password', element: <ForgotPasswordPage />, type: 'public', title: 'Reset Password', titleKey: 'auth.forgotPasswordTitle' },
   { path: '/reset-password', element: <ResetPasswordPage />, type: 'public', title: 'Set New Password', titleKey: 'auth.resetPasswordTitle' },
@@ -338,22 +338,17 @@ function escapeRegex(s: string): string {
 }
 
 function buildRegexPattern(path: string, index?: boolean): RegExp {
-  if (index || path === '') return /^\/$/;
-  if (path === '*') return /^\/.*$/;   // v2: proper wildcard
+  if (index || path === '') return /^\/?$/;
+  if (path === '*') return /^\/.*$/; // wildcard support
 
-  // Convert `:param` → `([^/]+)` BEFORE escaping
-  const withParams = path.replace(/:[^/]+/g, '([^/]+)');
-  // Escape the rest (the `([^/]+)` we inserted is safe — brackets are not special after escaping)
-  // Simpler: split on our markers, escape the rest.
   const parts = path.split(/(:[^/]+)/g);
   const escaped = parts
     .map((part) => (part.startsWith(':') ? '([^/]+)' : escapeRegex(part)))
     .join('');
 
   const withLeading = escaped.startsWith('/') ? escaped : `/${escaped}`;
-  // Suppress unused var warning
-  void withParams;
-  return new RegExp(`^${withLeading}$`);
+  // Supports both exact path and trailing slash (e.g. /students and /students/)
+  return new RegExp(`^${withLeading}\\/?$`);
 }
 
 /* ============================================================================
@@ -432,12 +427,17 @@ function wrapElement(route: RouteConfig): ReactNode {
 const EASE_APPLE = [0.22, 1, 0.36, 1] as const;
 
 function RouteMotion({ children }: { children: ReactNode }) {
+  const reduced =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -4 }}
-      transition={{ duration: 0.28, ease: EASE_APPLE }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, y: -4 }}
+      transition={{ duration: reduced ? 0.15 : 0.28, ease: EASE_APPLE }}
       style={{ minHeight: 1, transform: 'translateZ(0)' }}
     >
       {children}
@@ -448,11 +448,11 @@ function RouteMotion({ children }: { children: ReactNode }) {
 function RouteLoadingFallback() {
   return (
     <div
-      className="relative w-full min-h-[50vh] flex flex-col justify-start pt-6 space-y-5 animate-pulse"
+      className="relative w-full min-h-[50vh] flex flex-col justify-start pt-6 space-y-5 animate-pulse px-4 sm:px-6"
       aria-busy="true"
     >
-      {/* Top glowing progress bar */}
-      <div className="fixed top-0 inset-x-0 z-[100] h-[3px] overflow-hidden bg-transparent">
+      {/* Top glowing progress bar with mobile safe-area-inset */}
+      <div className="fixed top-0 inset-x-0 z-[100] h-[3px] overflow-hidden bg-transparent pt-[env(safe-area-inset-top,0px)]">
         <motion.div
           className="h-full w-full bg-gradient-to-r from-[#007AFF] via-[#AF52DE] to-[#34C759]"
           initial={{ x: '-100%' }}
@@ -462,13 +462,16 @@ function RouteLoadingFallback() {
       </div>
 
       {/* Shimmer skeleton matching Apple design cards */}
-      <div className="h-16 w-full rounded-3xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl" />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="h-16 w-full rounded-2xl sm:rounded-3xl border border-white/60 dark:border-white/[0.08] bg-white/60 dark:bg-white/[0.035] backdrop-blur-xl" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 sm:gap-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-24 rounded-2xl bg-black/[0.03] dark:bg-white/[0.03]" />
+          <div
+            key={i}
+            className="h-24 rounded-2xl border border-white/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03]"
+          />
         ))}
       </div>
-      <div className="h-80 rounded-3xl bg-black/[0.03] dark:bg-white/[0.03]" />
+      <div className="h-72 sm:h-80 rounded-2xl sm:rounded-3xl border border-white/60 dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.03]" />
     </div>
   );
 }
@@ -494,18 +497,26 @@ function renderRoute(route: RouteConfig, i: number): ReactNode {
   );
 }
 
+const STANDALONE_PUBLIC_PREFIXES = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/terms',
+  '/privacy',
+  '/tg-app',
+  '/verify',
+];
+
 export function AppRoutes() {
   const location = useLocation();
 
-  // Public routes get AnimatePresence transitions.
+  // Public & standalone routes get AnimatePresence transitions.
   // Protected routes are nested under AppLayout's AnimatedOutlet.
-  const isPublicRoute =
-    location.pathname === '/login' ||
-    location.pathname === '/register' ||
-    location.pathname === '/forgot-password' ||
-    location.pathname === '/reset-password' ||
-    location.pathname === '/terms' ||
-    location.pathname === '/privacy';
+  const isPublicRoute = STANDALONE_PUBLIC_PREFIXES.some(
+    (prefix) =>
+      location.pathname === prefix || location.pathname.startsWith(`${prefix}/`),
+  );
 
   const routes = <Routes>{routeConfig.map((route, i) => renderRoute(route, i))}</Routes>;
 

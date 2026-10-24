@@ -17,7 +17,7 @@
     "test": "turbo test --concurrency=1",
     "test:integration": "npm run test:integration -w @medu/api",
     "test:e2e:web": "playwright test",
-    "typecheck": "turbo typecheck",
+    "typecheck": "cross-env NODE_OPTIONS=--max-old-space-size=4096 turbo typecheck --concurrency=2",
     "test:e2e": "npm run test:e2e -w @medu/api",
     "db:generate": "cd apps/api && npx prisma generate",
     "db:push": "cd apps/api && npx prisma db push",

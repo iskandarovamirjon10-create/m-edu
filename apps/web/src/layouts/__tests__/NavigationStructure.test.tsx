@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { I18nProvider } from '../../i18n/I18nProvider';
 import { ThemeProvider } from '../../hooks/useTheme';
@@ -25,14 +25,14 @@ import {
   ALL_ITEMS_MAP,
   NavItems,
 } from '../components/Sidebar';
-import { MobileBottomNav } from '../components/MobileNav';
+import { MobileBottomNav, MobileMenuDrawer } from '../components/MobileNav';
 
 function renderNavItems(role: string, collapsed = false, filter = '') {
   return render(
     <DeviceProfileProvider>
       <I18nProvider initialLocale="en">
         <ThemeProvider>
-          <MemoryRouter>
+          <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <NavItems role={role} collapsed={collapsed} filter={filter} />
           </MemoryRouter>
         </ThemeProvider>
@@ -143,14 +143,14 @@ describe('4-Pillar Navigation Structure Contracts', () => {
     expect(screen.getByRole('link', { name: 'Payments' })).toBeInTheDocument();
   });
 
-  it('renders 4 pillar mobile tabs for staff and student', () => {
+  it('renders 4 pillar mobile tabs for staff, student, and parent', () => {
     const onOpenMore = vi.fn();
 
     // Staff view
     const { unmount } = render(
       <DeviceProfileProvider>
         <I18nProvider initialLocale="en">
-          <MemoryRouter>
+          <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <MobileBottomNav role="ADMIN" onOpenMore={onOpenMore} />
           </MemoryRouter>
         </I18nProvider>
@@ -165,10 +165,10 @@ describe('4-Pillar Navigation Structure Contracts', () => {
     unmount();
 
     // Student view
-    render(
+    const studentRender = render(
       <DeviceProfileProvider>
         <I18nProvider initialLocale="en">
-          <MemoryRouter>
+          <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <MobileBottomNav role="STUDENT" onOpenMore={onOpenMore} />
           </MemoryRouter>
         </I18nProvider>
@@ -179,5 +179,55 @@ describe('4-Pillar Navigation Structure Contracts', () => {
     expect(screen.getByRole('link', { name: 'Schedule' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Attendance' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Chat' })).toBeInTheDocument();
+    studentRender.unmount();
+
+    // Parent view
+    render(
+      <DeviceProfileProvider>
+        <I18nProvider initialLocale="en">
+          <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <MobileBottomNav role="PARENT" onOpenMore={onOpenMore} />
+          </MemoryRouter>
+        </I18nProvider>
+      </DeviceProfileProvider>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Parent Portal' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Chat' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Notifications' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
+  });
+
+  it('renders MobileMenuDrawer with all navigation sections and triggers onClose', () => {
+    const onClose = vi.fn();
+    const onLogout = vi.fn();
+
+    render(
+      <DeviceProfileProvider>
+        <I18nProvider initialLocale="en">
+          <ThemeProvider>
+            <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <MobileMenuDrawer
+                open={true}
+                onClose={onClose}
+                role="ADMIN"
+                orgName="Test Academy"
+                onLogout={onLogout}
+              />
+            </MemoryRouter>
+          </ThemeProvider>
+        </I18nProvider>
+      </DeviceProfileProvider>,
+    );
+
+    expect(screen.getByText('Test Academy')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Students' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Teachers' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Audit Log' })).toBeInTheDocument();
+
+    const closeBtn = screen.getByRole('button', { name: /Close menu/i });
+    expect(closeBtn).toBeInTheDocument();
+    fireEvent.click(closeBtn);
+    expect(onClose).toHaveBeenCalled();
   });
 });

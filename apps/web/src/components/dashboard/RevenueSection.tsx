@@ -1,6 +1,8 @@
 import { useState, Suspense, lazy } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { motion, LayoutGroup } from 'framer-motion';
+import { cn } from '@/lib/design';
 import { dashboardApi } from '@/lib/api';
 import { useI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
@@ -30,7 +32,7 @@ export function RevenueSection({ initialData }: RevenueSectionProps) {
   const chartData = revenueData?.length ? revenueData : (period === '1Y' ? initialData : []);
 
   return (
-    <div className="relative overflow-hidden flex flex-col justify-between rounded-2xl border border-subtle/80 bg-card/85 backdrop-blur-xl p-5 shadow-card before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent dark:before:via-white/10 sm:p-6">
+    <div className="relative overflow-hidden flex flex-col justify-between rounded-[2rem] border border-white/60 bg-white/75 backdrop-blur-3xl backdrop-saturate-[200%] p-5 sm:p-6 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.08),inset_0_1.5px_1.5px_rgba(255,255,255,0.9)] dark:border-white/[0.12] dark:bg-[#161618]/75 dark:shadow-[0_20px_50px_-16px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.18)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-[1.5px] before:bg-gradient-to-r before:from-transparent before:via-white/70 before:to-transparent dark:before:via-white/20">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-primary">
@@ -43,34 +45,44 @@ export function RevenueSection({ initialData }: RevenueSectionProps) {
 
         <div className="flex items-center gap-3">
           {/* Period selector tabs with macOS Segmented Control feel */}
-          <div
-            className="inline-flex rounded-xl bg-surface/80 p-1 border border-subtle backdrop-blur-sm"
-            role="tablist"
-            aria-label="Revenue chart period"
-          >
-            {PERIOD_OPTIONS.map((p) => {
-              const active = period === p;
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => {
-                    sound.playTick();
-                    setPeriod(p);
-                  }}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold tracking-tight transition-all duration-200 ${
-                    active
-                      ? 'bg-card text-primary shadow-xs'
-                      : 'text-tertiary hover:text-primary'
-                  }`}
-                >
-                  {p}
-                </button>
-              );
-            })}
-          </div>
+          <LayoutGroup id="revenue-period-control">
+            <div
+              className="relative inline-flex items-center rounded-2xl bg-black/[0.04] p-1 border border-black/[0.05] dark:bg-white/[0.06] dark:border-white/[0.08] backdrop-blur-md"
+              role="tablist"
+              aria-label="Revenue chart period"
+            >
+              {PERIOD_OPTIONS.map((p) => {
+                const active = period === p;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => {
+                      sound.playTick?.();
+                      setPeriod(p);
+                    }}
+                    className={cn(
+                      'relative z-10 rounded-xl px-2.5 py-1 text-xs font-semibold tracking-tight transition-colors duration-200',
+                      active
+                        ? 'text-primary'
+                        : 'text-tertiary hover:text-primary'
+                    )}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="revenue-period-active"
+                        className="absolute inset-0 rounded-xl bg-card shadow-xs border border-black/[0.04] dark:border-white/[0.08]"
+                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    <span className="relative z-10">{p}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </LayoutGroup>
 
           <Link
             to="/payments"

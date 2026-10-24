@@ -1,592 +1,768 @@
 /**
- * M-EDU v2.0 — Apple Ultra-Premium Design Tokens (HIG Compliant)
+ * M-EDU v2.0 — Apple Ultra-Premium Design Tokens (iOS 27 & macOS Sequoia Liquid Glass)
  *
  * Architecture:
- *   - 100% backward-compatible with v1 variable names
- *   - Clean ASCII formatting (zero NBSP characters)
- *   - Complete scales for spacing, radii, shadows, typography & z-index
- *   - Symmetric semantic states & tone systems (fg, bg, border, subtlering)
- *   - True Apple HIG P3-inspired color calibration & contrast ratios
- *   - Full Accessibility: Reduced Transparency, Reduced Motion, High Contrast & OLED
+ *   - Strict @layer cascade: reset, tokens, base, typography, glass, components, motion, focus, utilities, print
+ *   - 100% backward-compatible with all v1 and v2 token variables
+ *   - Unified Apple HIG Liquid Glass material optics (translucency, specular key-light, retina hairlines)
+ *   - Triple-Theme System: Light, Dark, and True Pitch-Black OLED (#000000)
+ *   - Physical Apple Spring motion physics & 4px Fibonacci rhythmic spacing
+ *   - Comprehensive accessibility: Reduced Transparency, Reduced Motion, High Contrast & Forced Colors
  */
 
-:root {
-  color-scheme: light;
+@layer reset, tokens, base, typography, glass, components, motion, focus, utilities, print;
 
-  /* ── 1. Brand & Accent (Apple System Blue) ──────────────────── */
-  --primary: #007AFF;
-  --primary-hover: #0062CC;
-  --primary-active: #004999;
-  --primary-soft: rgba(0, 122, 255, 0.10);
-  --primary-soft-hover: rgba(0, 122, 255, 0.16);
-  --primary-border: rgba(0, 122, 255, 0.24);
-  --primary-ring: rgba(0, 122, 255, 0.30);
-  
-  --m-vivid: #007AFF;
-  --m-deep: #004999;
-  --brand-400: #3395FF;
-  --brand-500: #007AFF;
-  --brand-600: #0062CC;
-  --brand-700: #004999;
-
-  /* ── 2. Semantic States (Symmetric System) ──────────────────── */
-  /* Success (Apple Green) */
-  --success: #34C759;
-  --success-hover: #2DB14E;
-  --success-active: #248F3F;
-  --success-soft: rgba(52, 199, 89, 0.10);
-  --success-border: rgba(52, 199, 89, 0.26);
-
-  /* Warning (Apple Orange) */
-  --warning: #FF9500;
-  --warning-hover: #E08300;
-  --warning-active: #B86B00;
-  --warning-soft: rgba(255, 149, 0, 0.10);
-  --warning-border: rgba(255, 149, 0, 0.26);
-
-  /* Danger (Apple Red) */
-  --danger: #FF3B30;
-  --danger-hover: #E03026;
-  --danger-active: #BA261E;
-  --danger-soft: rgba(255, 59, 48, 0.10);
-  --danger-border: rgba(255, 59, 48, 0.26);
-
-  /* Info (System Blue / Teal) */
-  --info: #007AFF;
-  --info-hover: #0062CC;
-  --info-active: #004999;
-  --info-soft: rgba(0, 122, 255, 0.10);
-  --info-border: rgba(0, 122, 255, 0.24);
-
-  /* Interactive States */
-  --state-hover: rgba(0, 0, 0, 0.04);
-  --state-active: rgba(0, 0, 0, 0.08);
-  --state-selected: rgba(0, 122, 255, 0.08);
-  --state-error: var(--danger);
-  --state-success: var(--success);
-
-  /* ── 3. Surfaces & Backgrounds ──────────────────────────────── */
-  --bg-base: #F5F5F7;
-  --bg-app: #F5F5F7;
-  --bg-page: #F5F5F7;
-  --bg-surface: #FFFFFF;
-  --bg-surface-secondary: #F2F2F7;
-  --bg-card: #FFFFFF;
-  --bg-card-elevated: #FFFFFF;
-  --bg-card-hover: #FAFAFC;
-  --bg-elevated: #FFFFFF;
-  --bg-input: #FFFFFF;
-  --bg-input-hover: #FAFAFC;
-  --bg-input-focus: #FFFFFF;
-  --bg-input-disabled: #F2F2F7;
-  --bg-overlay: rgba(0, 0, 0, 0.36);
-  --bg-muted: #EFEFF4;
-  --surface-soft: #F5F5F7;
-
-  /* ── 4. Apple Material & Vibrancy (Glass) ───────────────────── */
-  --bg-glass: rgba(255, 255, 255, 0.78);
-  --bg-glass-hover: rgba(255, 255, 255, 0.88);
-  --glass-bg: rgba(255, 255, 255, 0.78);
-  --glass-surface-bg: rgba(255, 255, 255, 0.78);
-  --glass-surface-bg-dark: rgba(28, 28, 30, 0.78);
-  --glass-blur-subtle: 12px;
-  --glass-blur-strong: 20px;
-  --glass-blur-ultra: 32px;
-  --glass-saturate: 1.8;
-  --glass-backdrop: saturate(180%) blur(20px);
-
-  /* Tunable Optics (macOS Sequoia / visionOS Material Tokens) */
-  --liquid-glass-opacity: 0.80;
-  --liquid-glass-blur: 20px;
-  --liquid-glass-saturate: 180%;
-  --liquid-glass-specular: 0.45;
-  --liquid-glass-refraction: 0px; /* Restrained per design philosophy */
-
-  /* ── 5. Typography & Hierarchy ──────────────────────────────── */
-  --text-primary: #1D1D1F;
-  --text-secondary: #515154; /* Upgraded for WCAG AA contrast on #F5F5F7 */
-  --text-tertiary: #86868B;
-  --text-muted: #86868B;
-  --text-disabled: #C7C7CC;
-  --text-inverse: #FFFFFF;
-  --text-on-brand: #FFFFFF;
-  --text-placeholder: #8E8E93;
-  --_slate-900: #1D1D1F;
-  --_slate-50: #FFFFFF;
-
-  /* Apple Font Stacks */
-  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', system-ui, -apple-system-body, Inter, sans-serif;
-  --font-heading: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, Inter, sans-serif;
-  --font-rounded: ui-rounded, 'SF Pro Rounded', -apple-system, system-ui, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --font-sans: var(--font-body);
-
-  /* Type Scale (Apple HIG Modular Scale) */
-  --text-2xs: 11px;
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-md: 14px;
-  --text-lg: 15px;
-  --text-xl: 17px;
-  --text-body-lg: 17px;
-  --text-body: 15px;
-  --text-body-sm: 13px;
-  --text-caption: 12px;
-  --text-label: 12px;
-  --text-overline: 11px;
-  --text-h4: 15px;
-  --text-h3: 18px;
-  --text-h2: clamp(21px, 2.4vw, 26px);
-  --text-h1: clamp(26px, 3vw, 34px);
-  --text-display: clamp(32px, 4vw, 44px);
-  --text-numeric-sm: 15px;
-  --text-numeric-md: 22px;
-  --text-numeric-lg: 30px;
-
-  /* True Apple Font Weights (Fixed from v1) */
-  --fw-regular: 400;
-  --fw-medium: 500;
-  --fw-semibold: 600;
-  --fw-bold: 700;
-  --fw-extrabold: 800;
-  --fw-black: 900;
-
-  /* Line Heights & Optical Tracking */
-  --lh-none: 1;
-  --lh-tight: 1.18;
-  --lh-snug: 1.32;
-  --lh-normal: 1.47059; /* Apple's exact body line-height ratio */
-  --lh-relaxed: 1.62;
-  --lh-loose: 1.8;
-  --ls-tighter: -0.022em;
-  --ls-tight: -0.015em;
-  --ls-snug: -0.008em;
-  --ls-normal: 0em;
-  --ls-wide: 0.012em;
-  --ls-wider: 0.04em;
-  --ls-widest: 0.08em;
-
-  /* ── 6. Hairline Borders & Dividers ─────────────────────────── */
-  --border: rgba(0, 0, 0, 0.09);
-  --border-subtle: rgba(0, 0, 0, 0.05);
-  --border-medium: rgba(0, 0, 0, 0.13);
-  --border-strong: rgba(0, 0, 0, 0.20);
-  --border-glass: rgba(255, 255, 255, 0.72);
-  --border-focus: #007AFF;
-  --divider-color: rgba(60, 60, 67, 0.12); /* Official iOS Separator */
-  --glass-border: rgba(0, 0, 0, 0.08);
-  --glass-specular: rgba(255, 255, 255, 0.90);
-  --inset-top-light: inset 0 1px 0 rgba(255, 255, 255, 0.90);
-  --inset-top-strong: inset 0 1px 0 rgba(255, 255, 255, 1);
-  --inset-bottom-dark: inset 0 -1px 0 rgba(0, 0, 0, 0.05);
-
-  /* ── 7. Focus Rings ─────────────────────────────────────────── */
-  --focus-ring: rgba(0, 122, 255, 0.28);
-  --focus-ring-danger: rgba(255, 59, 48, 0.28);
-  --focus-ring-success: rgba(52, 199, 89, 0.28);
-  --focus-glow: rgba(0, 122, 255, 0.16);
-  --focus-outline: 0 0 0 3px var(--focus-ring);
-
-  /* ── 8. Elevation & Shadows (Complete Scale) ────────────────── */
-  --shadow-none: none;
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04); /* Added missing token */
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.11), 0 4px 12px rgba(0, 0, 0, 0.05);
-  --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.15), 0 6px 18px rgba(0, 0, 0, 0.07);
-  --shadow-lifted: var(--shadow-lg);
-  --shadow-floating: 0 12px 32px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.05);
-  --shadow-float: var(--shadow-floating);
-  
-  /* Restrained Ambient Color Shadows */
-  --shadow-glow-brand: 0 2px 10px rgba(0, 122, 255, 0.16);
-  --shadow-glow-accent: var(--shadow-glow-brand);
-  --shadow-brand: var(--shadow-glow-brand);
-  --shadow-brand-strong: 0 4px 14px rgba(0, 122, 255, 0.25);
-  --shadow-glow-success: 0 2px 10px rgba(52, 199, 89, 0.18);
-  --shadow-glow-danger: 0 2px 10px rgba(255, 59, 48, 0.18);
-  --glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-
-  /* ── 9. Border Radii (Continuous Squircle Proportions) ──────── */
-  --radius-none: 0px;
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 20px;
-  --radius-3xl: 24px;
-  --radius-pill: 9999px;
-
-  /* ── 10. Spacing Scale (Complete 4px Grid + Fibonacci) ──────── */
-  --space-0: 0px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-7: 28px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
-  
-  --space-fib-1: 4px;
-  --space-fib-2: 8px;
-  --space-fib-3: 12px;
-  --space-fib-5: 20px;
-  --space-fib-8: 32px;
-  --space-fib-13: 52px;
-  --space-fib-21: 84px;
-  --space-fib-34: 136px;
-  --space-fib-55: 220px;
-  --scroll-padding-top: 88px;
-
-  /* ── 11. Motion & Apple Spring Physics ──────────────────────── */
-  --duration-instant: 80ms;
-  --duration-fast: 150ms;
-  --duration-normal: 220ms;
-  --duration-slow: 300ms;
-  --duration-slower: 400ms;
-  --dur-instant: var(--duration-instant);
-  --dur-fast: var(--duration-fast);
-  --dur-normal: var(--duration-normal);
-  --dur-slow: var(--duration-slow);
-  --dur-ambient: var(--duration-slower);
-  --duration-ambient: var(--duration-slower);
-
-  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-apple-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-apple-spring: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-apple-snappy: cubic-bezier(0.2, 0.9, 0.2, 1);
-  --ease-apple-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-emphasized: var(--ease-apple-snappy);
-  --ease-glide: var(--ease-soft);
-  
-  --spring-snappy: var(--ease-apple-spring);
-  --spring-smooth: var(--ease-soft);
-  --spring-soft: var(--ease-apple-out);
-  --spring-bouncy: var(--ease-apple-bounce);
-  --spring-magnetic: var(--ease-apple-snappy);
-  
-  --opacity-disabled: 0.42;
-  --spinner-pulse: 1.6s;
-
-  /* ── 12. Z-Index Layering ───────────────────────────────────── */
-  --z-behind: -1;
-  --z-base: 0;
-  --z-raised: 1;
-  --z-sticky: 100;
-  --z-drawer: 200;
-  --z-dropdown: 900;
-  --z-modal: 1000;
-  --z-popover: 1100;
-  --z-toast: 1200;
-  --z-tooltip: 1300;
-
-  /* ── 13. Layout & Scrollbars ────────────────────────────────── */
-  --top-bar-height: 64px;
-  --sidebar-width: 264px;
-  --sidebar-width-collapsed: 68px;
-  --scrollbar-size: 10px;
-  --scrollbar-size-thin: 6px;
-  --scrollbar-track: transparent;
-  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
-  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
-  --scrollbar-radius: 9999px;
-
-  /* ── 14. Semantic Tones (Chips / Badges — Fully Symmetric) ──── */
-  --tone-fg: var(--text-primary);
-  --tone-bg: rgba(0, 0, 0, 0.05);
-  --tone-border: rgba(0, 0, 0, 0.10);
-  --tone-glow: transparent;
-
-  --tone-red-fg: #D70015;
-  --tone-red-bg: rgba(255, 59, 48, 0.10);
-  --tone-red-border: rgba(255, 59, 48, 0.24);
-  --tone-red-glow: rgba(255, 59, 48, 0.16);
-
-  --tone-orange-fg: #C93400;
-  --tone-orange-bg: rgba(255, 149, 0, 0.10);
-  --tone-orange-border: rgba(255, 149, 0, 0.24);
-  --tone-orange-glow: rgba(255, 149, 0, 0.16);
-
-  --tone-blue-fg: #0055B3;
-  --tone-blue-bg: rgba(0, 122, 255, 0.10);
-  --tone-blue-border: rgba(0, 122, 255, 0.24);
-  --tone-blue-glow: rgba(0, 122, 255, 0.16);
-
-  --tone-green-fg: #1E7E34;
-  --tone-green-bg: rgba(52, 199, 89, 0.10);
-  --tone-green-border: rgba(52, 199, 89, 0.24);
-  --tone-green-glow: rgba(52, 199, 89, 0.16);
-
-  --tone-purple-fg: #8944AB;
-  --tone-purple-bg: rgba(175, 82, 222, 0.10);
-  --tone-purple-border: rgba(175, 82, 222, 0.24);
-  --tone-purple-glow: rgba(175, 82, 222, 0.16);
-
-  --tone-slate-fg: #636366;
-  --tone-slate-bg: rgba(142, 142, 147, 0.12);
-  --tone-slate-border: rgba(142, 142, 147, 0.22);
-  --tone-slate-glow: transparent;
-
-  /* ── 15. Gradients & Legacy Compatibility ───────────────────── */
-  --gradient-hero: linear-gradient(180deg, #FFFFFF 0%, #F5F5F7 100%);
-  --aurora-conic-angle: 0deg;
-  --spot-x: 50%;
-  --spot-y: 50%;
-  --spot-o: 0;
-  --divider-glow: transparent;
-  --divider-label-size: 11px;
-  --divider-label-color: var(--text-muted);
-  --gs-duration: 1.4s;
-  --gs-len: 100;
-  --skel-breathe-duration: 2s;
-  --btn-press-y: 0px;
-  --btn-press-scale: 0.98;
-}
-
-/* ── Dark Mode (macOS / iOS System Dark) ──────────────────────── */
-.dark,
-[data-theme="dark"],
-[data-theme="oled"] {
-  color-scheme: dark;
-
-  /* Brand & Accent */
-  --primary: #0A84FF;
-  --primary-hover: #409CFF;
-  --primary-active: #6FB3FF;
-  --primary-soft: rgba(10, 132, 255, 0.16);
-  --primary-soft-hover: rgba(10, 132, 255, 0.24);
-  --primary-border: rgba(10, 132, 255, 0.32);
-  --primary-ring: rgba(10, 132, 255, 0.38);
-  
-  --m-vivid: #0A84FF;
-  --m-deep: #6FB3FF;
-  --brand-400: #6FB3FF;
-  --brand-500: #0A84FF;
-  --brand-600: #409CFF; /* Fixed: Was missing in v1 dark mode */
-  --brand-700: #0070E0; /* Fixed: Was missing in v1 dark mode */
-
-  /* Semantic States */
-  --success: #30D158;
-  --success-hover: #4AE06E;
-  --success-active: #28B84C;
-  --success-soft: rgba(48, 209, 88, 0.16);
-  --success-border: rgba(48, 209, 88, 0.32);
-
-  --warning: #FF9F0A;
-  --warning-hover: #FFB340;
-  --warning-active: #E08900;
-  --warning-soft: rgba(255, 159, 10, 0.16);
-  --warning-border: rgba(255, 159, 10, 0.32);
-
-  --danger: #FF453A;
-  --danger-hover: #FF6961;
-  --danger-active: #E0352B;
-  --danger-soft: rgba(255, 69, 58, 0.16);
-  --danger-border: rgba(255, 69, 58, 0.32);
-
-  --info: #0A84FF;
-  --info-hover: #409CFF;
-  --info-active: #6FB3FF;
-  --info-soft: rgba(10, 132, 255, 0.16);
-  --info-border: rgba(10, 132, 255, 0.32);
-
-  --state-hover: rgba(255, 255, 255, 0.06);
-  --state-active: rgba(255, 255, 255, 0.11);
-  --state-selected: rgba(10, 132, 255, 0.16);
-  --state-error: var(--danger);
-  --state-success: var(--success);
-
-  /* Surfaces */
-  --bg-base: #000000;
-  --bg-app: #000000;
-  --bg-page: #000000;
-  --bg-surface: #1C1C1E;
-  --bg-surface-secondary: #2C2C2E;
-  --bg-card: #1C1C1E;
-  --bg-card-elevated: #2C2C2E;
-  --bg-card-hover: #242426;
-  --bg-elevated: #2C2C2E;
-  --bg-input: #1C1C1E;
-  --bg-input-hover: #242426;
-  --bg-input-focus: #1C1C1E;
-  --bg-input-disabled: #121214;
-  --bg-overlay: rgba(0, 0, 0, 0.62);
-  --bg-muted: #141416;
-  --surface-soft: #141416;
-
-  /* Apple Dark Glass & Vibrancy */
-  --bg-glass: rgba(28, 28, 30, 0.74);
-  --bg-glass-hover: rgba(44, 44, 46, 0.82);
-  --glass-bg: rgba(28, 28, 30, 0.74);
-  --glass-surface-bg: rgba(28, 28, 30, 0.74);
-  --liquid-glass-opacity: 0.74;
-  --liquid-glass-specular: 0.12;
-
-  /* Typography */
-  --text-primary: #F5F5F7;
-  --text-secondary: #A1A1A6;
-  --text-tertiary: #6E6E73;
-  --text-muted: #6E6E73;
-  --text-disabled: #48484A;
-  --text-inverse: #1D1D1F;
-  --text-placeholder: #636366;
-  --_slate-900: #F5F5F7;
-  --_slate-50: #1C1C1E;
-
-  /* Borders & Dividers */
-  --border: rgba(255, 255, 255, 0.11);
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-medium: rgba(255, 255, 255, 0.15);
-  --border-strong: rgba(255, 255, 255, 0.24);
-  --border-glass: rgba(255, 255, 255, 0.12);
-  --border-focus: #0A84FF;
-  --divider-color: rgba(84, 84, 88, 0.36); /* Official iOS Dark Separator */
-  --glass-border: rgba(255, 255, 255, 0.10);
-  --glass-specular: rgba(255, 255, 255, 0.07);
-  --inset-top-light: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --inset-top-strong: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  --inset-bottom-dark: inset 0 -1px 0 rgba(0, 0, 0, 0.45);
-
-  /* Focus */
-  --focus-ring: rgba(10, 132, 255, 0.40);
-  --focus-ring-danger: rgba(255, 69, 58, 0.40);
-  --focus-ring-success: rgba(48, 209, 88, 0.40);
-  --focus-glow: rgba(10, 132, 255, 0.24);
-
-  /* Shadows */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.30);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.48), 0 2px 4px rgba(0, 0, 0, 0.32);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.54), 0 2px 6px rgba(0, 0, 0, 0.36);
-  --shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.62), 0 4px 12px rgba(0, 0, 0, 0.40);
-  --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.72), 0 6px 18px rgba(0, 0, 0, 0.45);
-  --shadow-lifted: var(--shadow-lg);
-  --shadow-floating: 0 12px 32px rgba(0, 0, 0, 0.58), 0 2px 8px rgba(0, 0, 0, 0.38);
-  --shadow-float: var(--shadow-floating);
-  
-  --shadow-glow-brand: 0 2px 12px rgba(10, 132, 255, 0.28);
-  --shadow-glow-accent: var(--shadow-glow-brand);
-  --shadow-brand: var(--shadow-glow-brand);
-  --shadow-brand-strong: 0 4px 16px rgba(10, 132, 255, 0.38);
-  --shadow-glow-success: 0 2px 12px rgba(48, 209, 88, 0.28);
-  --shadow-glow-danger: 0 2px 12px rgba(255, 69, 58, 0.28);
-  --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-
-  /* Tones (Legible Pastels on Dark Surfaces) */
-  --tone-fg: var(--text-primary);
-  --tone-bg: rgba(255, 255, 255, 0.08);
-  --tone-border: rgba(255, 255, 255, 0.14);
-
-  --tone-red-fg: #FF6961;
-  --tone-red-bg: rgba(255, 69, 58, 0.16);
-  --tone-red-border: rgba(255, 69, 58, 0.30);
-  --tone-red-glow: rgba(255, 69, 58, 0.24);
-
-  --tone-orange-fg: #FFB340;
-  --tone-orange-bg: rgba(255, 159, 10, 0.16);
-  --tone-orange-border: rgba(255, 159, 10, 0.30);
-  --tone-orange-glow: rgba(255, 159, 10, 0.24);
-
-  --tone-blue-fg: #409CFF;
-  --tone-blue-bg: rgba(10, 132, 255, 0.16);
-  --tone-blue-border: rgba(10, 132, 255, 0.30);
-  --tone-blue-glow: rgba(10, 132, 255, 0.24);
-
-  --tone-green-fg: #4AE06E;
-  --tone-green-bg: rgba(48, 209, 88, 0.16);
-  --tone-green-border: rgba(48, 209, 88, 0.30);
-  --tone-green-glow: rgba(48, 209, 88, 0.24);
-
-  --tone-purple-fg: #DA8FFF;
-  --tone-purple-bg: rgba(191, 90, 242, 0.16);
-  --tone-purple-border: rgba(191, 90, 242, 0.30);
-  --tone-purple-glow: rgba(191, 90, 242, 0.24);
-
-  --tone-slate-fg: #A1A1A6;
-  --tone-slate-bg: rgba(142, 142, 147, 0.16);
-  --tone-slate-border: rgba(142, 142, 147, 0.28);
-
-  --gradient-hero: linear-gradient(180deg, #1C1C1E 0%, #000000 100%);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.20);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.34);
-}
-
-/* ── True Pitch-Black OLED Calibration ────────────────────────── */
-[data-theme="oled"] {
-  --bg-surface: #0D0D0F;
-  --bg-card: #0D0D0F;
-  --bg-card-elevated: #18181A;
-  --bg-card-hover: #141416;
-  --bg-elevated: #18181A;
-  --bg-input: #0D0D0F;
-  --bg-glass: rgba(13, 13, 15, 0.80);
-  --glass-bg: rgba(13, 13, 15, 0.80);
-  --glass-surface-bg: rgba(13, 13, 15, 0.80);
-  --border: rgba(255, 255, 255, 0.09);
-}
-
-/* ── Accessibility 1: Reduced Transparency (macOS/iOS) ────────── */
-@media (prefers-reduced-transparency: reduce) {
+@layer tokens {
   :root {
-    --bg-glass: #FFFFFF;
-    --bg-glass-hover: #F5F5F7;
-    --glass-bg: #FFFFFF;
-    --glass-surface-bg: #FFFFFF;
-    --liquid-glass-opacity: 1;
-    --glass-blur-subtle: 0px;
-    --glass-blur-strong: 0px;
-    --glass-blur-ultra: 0px;
-    --glass-backdrop: none;
+    color-scheme: light;
+
+    /* ── 1. Brand & Accent (Apple System Blue & Indigo) ───────── */
+    --primary: #007AFF;
+    --primary-hover: #0062CC;
+    --primary-active: #004999;
+    --primary-soft: rgba(0, 122, 255, 0.10);
+    --primary-soft-hover: rgba(0, 122, 255, 0.16);
+    --primary-border: rgba(0, 122, 255, 0.24);
+    --primary-ring: rgba(0, 122, 255, 0.30);
+    
+    --m-vivid: #007AFF;
+    --m-deep: #004999;
+    --brand-50: #EAF3FF;
+    --brand-100: #D6E8FF;
+    --brand-200: #ADCCFF;
+    --brand-300: #7FB3FF;
+    --brand-400: #3395FF;
+    --brand-500: #007AFF;
+    --brand-600: #0062CC;
+    --brand-700: #004999;
+    --brand-800: #003D80;
+    --brand-900: #002B5C;
+    --brand-950: #001C3D;
+
+    /* ── 2. Semantic States (Apple System Colors) ─────────────── */
+    /* Success (Apple Green #34C759) */
+    --success: #34C759;
+    --success-hover: #2DB14E;
+    --success-active: #248F3F;
+    --success-soft: rgba(52, 199, 89, 0.10);
+    --success-border: rgba(52, 199, 89, 0.26);
+
+    /* Warning (Apple Orange #FF9500) */
+    --warning: #FF9500;
+    --warning-hover: #E08300;
+    --warning-active: #B86B00;
+    --warning-soft: rgba(255, 149, 0, 0.10);
+    --warning-border: rgba(255, 149, 0, 0.26);
+
+    /* Danger (Apple Red #FF3B30) */
+    --danger: #FF3B30;
+    --danger-hover: #E03026;
+    --danger-active: #BA261E;
+    --danger-soft: rgba(255, 59, 48, 0.10);
+    --danger-border: rgba(255, 59, 48, 0.26);
+
+    /* Info (Apple Sky/Teal #007AFF) */
+    --info: #007AFF;
+    --info-hover: #0062CC;
+    --info-active: #004999;
+    --info-soft: rgba(0, 122, 255, 0.10);
+    --info-border: rgba(0, 122, 255, 0.24);
+
+    /* Interactive States */
+    --state-hover: rgba(0, 0, 0, 0.04);
+    --state-active: rgba(0, 0, 0, 0.08);
+    --state-selected: rgba(0, 122, 255, 0.08);
+    --state-error: var(--danger);
+    --state-success: var(--success);
+
+    /* ── 3. Surfaces & Backgrounds ────────────────────────────── */
+    --bg-base: #F5F5F7;
+    --bg-app: #F5F5F7;
+    --bg-page: #F5F5F7;
+    --bg-surface: #FFFFFF;
+    --bg-surface-secondary: #F2F2F7;
+    --bg-card: #FFFFFF;
+    --bg-card-elevated: #FFFFFF;
+    --bg-card-hover: #FAFAFC;
+    --bg-elevated: #FFFFFF;
+    --bg-input: #FFFFFF;
+    --bg-input-hover: #FAFAFC;
+    --bg-input-focus: #FFFFFF;
+    --bg-input-disabled: #F2F2F7;
+    --bg-overlay: rgba(0, 0, 0, 0.36);
+    --bg-muted: #EFEFF4;
+    --surface-soft: #F5F5F7;
+
+    /* ── 4. iOS 27 Liquid Glass Optics (Light Mode) ───────────── */
+    --bg-glass: rgba(255, 255, 255, 0.78);
+    --bg-glass-hover: rgba(255, 255, 255, 0.88);
+    --glass-bg: rgba(255, 255, 255, 0.78);
+    --glass-surface-bg: rgba(255, 255, 255, 0.78);
+    --glass-surface-bg-dark: rgba(28, 28, 30, 0.78);
+    
+    /* Optical Scales */
+    --glass-blur-subtle: 12px;
+    --glass-blur-strong: 20px;
+    --glass-blur-ultra: 32px;
+    --glass-saturate: 1.8;
+    --glass-backdrop: saturate(180%) blur(20px);
+
+    /* Three Unified Liquid Glass Tiers */
+    --glass-tier-subtle-bg: rgba(255, 255, 255, 0.70);
+    --glass-tier-subtle-blur: 14px;
+    --glass-tier-card-bg: rgba(255, 255, 255, 0.80);
+    --glass-tier-card-blur: 20px;
+    --glass-tier-floating-bg: rgba(255, 255, 255, 0.88);
+    --glass-tier-floating-blur: 28px;
+
+    /* Tunable Liquid Optics (macOS Sequoia / visionOS / iOS 27) */
+    --liquid-glass-opacity: 0.80;
+    --liquid-glass-blur: 20px;
+    --liquid-glass-saturate: 180%;
+    --liquid-glass-specular: 0.65;
+    --liquid-glass-refraction: 1.2px;
+
+    /* Key-light & Rim Reflections */
+    --glass-surface-edge: rgba(0, 0, 0, 0.065);
+    --glass-surface-edge-dark: rgba(255, 255, 255, 0.11);
+    --glass-inner-rim: rgba(255, 255, 255, 0.85);
+    --glass-inner-rim-dark: rgba(255, 255, 255, 0.16);
+
+    /* ── 5. Typography & SF Pro Hierarchy ─────────────────────── */
+    --text-primary: #1D1D1F;
+    --text-secondary: #515154; /* 4.8:1 WCAG AA contrast against #F5F5F7 & white cards */
+    --text-tertiary: #86868B;
+    --text-muted: #86868B;
+    --text-disabled: #C7C7CC;
+    --text-inverse: #FFFFFF;
+    --text-on-brand: #FFFFFF;
+    --text-placeholder: #8E8E93;
+    --_slate-900: #1D1D1F;
+    --_slate-50: #FFFFFF;
+
+    /* Apple Font Stacks */
+    --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', system-ui, -apple-system-body, Inter, sans-serif;
+    --font-heading: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, Inter, sans-serif;
+    --font-rounded: ui-rounded, 'SF Pro Rounded', -apple-system, system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-sans: var(--font-body);
+
+    /* Type Scale */
+    --text-2xs: 11px;
+    --text-xs: 12px;
+    --text-sm: 13px;
+    --text-md: 14px;
+    --text-lg: 15px;
+    --text-xl: 17px;
+    --text-body-lg: 17px;
+    --text-body: 15px;
+    --text-body-sm: 13px;
+    --text-caption: 12px;
+    --text-label: 12px;
+    --text-overline: 11px;
+    --text-h4: 15px;
+    --text-h3: 18px;
+    --text-h2: clamp(21px, 2.4vw, 26px);
+    --text-h1: clamp(26px, 3vw, 34px);
+    --text-display: clamp(32px, 4vw, 44px);
+    --text-numeric-sm: 15px;
+    --text-numeric-md: 22px;
+    --text-numeric-lg: 30px;
+
+    /* Font Weights */
+    --fw-regular: 400;
+    --fw-medium: 500;
+    --fw-semibold: 600;
+    --fw-bold: 700;
+    --fw-extrabold: 800;
+    --fw-black: 900;
+
+    /* Line Heights & Tracking */
+    --lh-none: 1;
+    --lh-tight: 1.18;
+    --lh-snug: 1.32;
+    --lh-normal: 1.47059;
+    --lh-relaxed: 1.62;
+    --lh-loose: 1.8;
+    --ls-tighter: -0.022em;
+    --ls-tight: -0.015em;
+    --ls-snug: -0.008em;
+    --ls-normal: 0em;
+    --ls-wide: 0.012em;
+    --ls-wider: 0.04em;
+    --ls-widest: 0.08em;
+
+    /* ── 6. Hairline Borders & Dividers ───────────────────────── */
+    --border: rgba(0, 0, 0, 0.09);
+    --border-subtle: rgba(0, 0, 0, 0.055);
+    --border-medium: rgba(0, 0, 0, 0.13);
+    --border-strong: rgba(0, 0, 0, 0.20);
+    --border-glass: rgba(255, 255, 255, 0.72);
+    --border-focus: #007AFF;
+    --divider-color: rgba(60, 60, 67, 0.12);
+    --glass-border: rgba(0, 0, 0, 0.08);
+    --glass-specular: rgba(255, 255, 255, 0.90);
+    --inset-top-light: inset 0 1px 0 rgba(255, 255, 255, 0.90);
+    --inset-top-strong: inset 0 1px 0 rgba(255, 255, 255, 1);
+    --inset-bottom-dark: inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+
+    /* ── 7. Focus Rings ───────────────────────────────────────── */
+    --focus-ring: rgba(0, 122, 255, 0.28);
+    --focus-ring-danger: rgba(255, 59, 48, 0.28);
+    --focus-ring-success: rgba(52, 199, 89, 0.28);
+    --focus-glow: rgba(0, 122, 255, 0.16);
+    --focus-outline: 0 0 0 3px var(--focus-ring);
+
+    /* ── 8. Elevation & Shadows (Apple Multi-Layer Ambient) ────── */
+    --shadow-none: none;
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+    --shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.11), 0 4px 12px rgba(0, 0, 0, 0.05);
+    --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.15), 0 6px 18px rgba(0, 0, 0, 0.07);
+    --shadow-lifted: var(--shadow-lg);
+    --shadow-floating: 0 12px 32px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.05);
+    --shadow-float: var(--shadow-floating);
+    
+    /* Natural Glows (Non-Neon) */
+    --shadow-glow-brand: 0 2px 10px rgba(0, 122, 255, 0.16);
+    --shadow-glow-accent: var(--shadow-glow-brand);
+    --shadow-brand: var(--shadow-glow-brand);
+    --shadow-brand-strong: 0 4px 14px rgba(0, 122, 255, 0.25);
+    --shadow-glow-success: 0 2px 10px rgba(52, 199, 89, 0.18);
+    --shadow-glow-danger: 0 2px 10px rgba(255, 59, 48, 0.18);
+    --glass-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+
+    /* ── 9. Border Radii (Continuous Apple Squircles) ──────────── */
+    --radius-none: 0px;
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-2xl: 20px;
+    --radius-3xl: 24px;
+    --radius-pill: 9999px;
+
+    /* ── 10. Spacing Scale (4px Grid & Fibonacci) ─────────────── */
+    --space-0: 0px;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-7: 28px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+    
+    --space-fib-1: 4px;
+    --space-fib-2: 8px;
+    --space-fib-3: 12px;
+    --space-fib-5: 20px;
+    --space-fib-8: 32px;
+    --space-fib-13: 52px;
+    --space-fib-21: 84px;
+    --space-fib-34: 136px;
+    --space-fib-55: 220px;
+    --scroll-padding-top: 88px;
+
+    /* ── 11. Motion & Apple Spring Physics ────────────────────── */
+    --duration-instant: 80ms;
+    --duration-fast: 150ms;
+    --duration-normal: 220ms;
+    --duration-slow: 300ms;
+    --duration-slower: 400ms;
+    --dur-instant: var(--duration-instant);
+    --dur-fast: var(--duration-fast);
+    --dur-normal: var(--duration-normal);
+    --dur-slow: var(--duration-slow);
+    --dur-ambient: 16s;
+    --duration-ambient: 16s;
+
+    --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+    --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-apple-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-apple-spring: cubic-bezier(0.32, 0.72, 0, 1);
+    --ease-apple-snappy: cubic-bezier(0.2, 0.9, 0.2, 1);
+    --ease-apple-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-emphasized: var(--ease-apple-snappy);
+    --ease-glide: var(--ease-soft);
+    
+    --spring-snappy: var(--ease-apple-spring);
+    --spring-smooth: var(--ease-soft);
+    --spring-soft: var(--ease-apple-out);
+    --spring-bouncy: var(--ease-apple-bounce);
+    --spring-magnetic: var(--ease-apple-snappy);
+    
+    --opacity-disabled: 0.42;
+    --spinner-pulse: 1.6s;
+
+    /* ── 12. Normalized Conflict-Free Z-Index Layering ────────── */
+    --z-below: -1;
+    --z-behind: -1;
+    --z-base: 0;
+    --z-raised: 1;
+    --z-elevated: 1;
+    --z-dock: 10;
+    --z-sticky: 20;
+    --z-header: 30;
+    --z-sidebar: 40;
+    --z-drawer: 45;
+    --z-dropdown: 50;
+    --z-copilot: 60;
+    --z-modal-backdrop: 70;
+    --z-modal: 75;
+    --z-popover: 80;
+    --z-toast: 90;
+    --z-tooltip: 100;
+    --z-max: 999;
+    --z-overlay: var(--z-modal-backdrop);
+    --z-top: var(--z-toast);
+
+    /* ── 13. Layout & Scrollbars ──────────────────────────────── */
+    --top-bar-height: 64px;
+    --sidebar-width: 264px;
+    --sidebar-width-collapsed: 68px;
+    --scrollbar-size: 10px;
+    --scrollbar-size-thin: 6px;
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
+    --scrollbar-radius: 9999px;
+
+    /* ── 14. Semantic Tones (Chips / Badges / Status) ─────────── */
+    --tone-fg: var(--text-primary);
+    --tone-bg: rgba(0, 0, 0, 0.05);
+    --tone-border: rgba(0, 0, 0, 0.10);
+    --tone-glow: transparent;
+
+    --tone-red-fg: #D70015;
+    --tone-red-bg: rgba(255, 59, 48, 0.10);
+    --tone-red-border: rgba(255, 59, 48, 0.24);
+    --tone-red-glow: rgba(255, 59, 48, 0.16);
+
+    --tone-orange-fg: #C93400;
+    --tone-orange-bg: rgba(255, 149, 0, 0.10);
+    --tone-orange-border: rgba(255, 149, 0, 0.24);
+    --tone-orange-glow: rgba(255, 149, 0, 0.16);
+
+    --tone-blue-fg: #0055B3;
+    --tone-blue-bg: rgba(0, 122, 255, 0.10);
+    --tone-blue-border: rgba(0, 122, 255, 0.24);
+    --tone-blue-glow: rgba(0, 122, 255, 0.16);
+
+    --tone-green-fg: #1E7E34;
+    --tone-green-bg: rgba(52, 199, 89, 0.10);
+    --tone-green-border: rgba(52, 199, 89, 0.24);
+    --tone-green-glow: rgba(52, 199, 89, 0.16);
+
+    --tone-purple-fg: #8944AB;
+    --tone-purple-bg: rgba(175, 82, 222, 0.10);
+    --tone-purple-border: rgba(175, 82, 222, 0.24);
+    --tone-purple-glow: rgba(175, 82, 222, 0.16);
+
+    --tone-slate-fg: #636366;
+    --tone-slate-bg: rgba(142, 142, 147, 0.12);
+    --tone-slate-border: rgba(142, 142, 147, 0.22);
+    --tone-slate-glow: transparent;
+
+    /* ── 15. Gradients & Legacy Compatibility ─────────────────── */
+    --gradient-hero: linear-gradient(180deg, #FFFFFF 0%, #F5F5F7 100%);
+    --aurora-conic-angle: 0deg;
+    --spot-x: 50%;
+    --spot-y: 50%;
+    --spot-o: 0;
+    --divider-glow: transparent;
+    --divider-label-size: 11px;
+    --divider-label-color: var(--text-muted);
+    --gs-duration: 1.4s;
+    --gs-len: 100;
+    --skel-breathe-duration: 2s;
+    --btn-press-y: 0px;
+    --btn-press-scale: 0.98;
+
+    /* ── 16. AI & Copilot Design Tokens ───────────────────────── */
+    --ai-primary: #007AFF;
+    --ai-primary-strong: #0051D5;
+    --ai-secondary: #AF52DE;
+    --ai-shadow-glow-primary: rgba(0, 122, 255, 0.35);
+    --ai-danger: #FF3B30;
+    --ai-warning: #FF9500;
+    --ai-success: #34C759;
+    --ai-text-primary: #1C1C1E;
+    --ai-text-muted: #8E8E93;
+    --ai-border: rgba(0, 0, 0, 0.08);
+    --ai-bg-page: #F5F5F7;
+    --ai-bg-glass: rgba(255, 255, 255, 0.85);
+    --ai-bg-hover: rgba(0, 0, 0, 0.04);
+
+    --cp-text: #1C1C1E;
+    --cp-text-secondary: #636366;
+    --cp-text-tertiary: #8E8E93;
+    --cp-text-quaternary: #C7C7CC;
+    --cp-accent: #007AFF;
+    --cp-accent-soft: rgba(0, 122, 255, 0.12);
+    --cp-accent-line: rgba(0, 122, 255, 0.35);
+    --cp-surface-raised: rgba(255, 255, 255, 0.85);
+    --cp-surface-sunken: rgba(0, 0, 0, 0.035);
+    --cp-surface-solid: #FFFFFF;
+    --cp-hairline: rgba(0, 0, 0, 0.08);
+    --cp-hairline-strong: rgba(0, 0, 0, 0.16);
+    --cp-separator: rgba(0, 0, 0, 0.06);
+    --cp-danger: #FF3B30;
+    --cp-warning: #FF9500;
+    --cp-success-bright: #34C759;
+    --cp-shadow-1: 0 2px 8px -2px rgba(0, 0, 0, 0.08);
+    --cp-shadow-2: 0 8px 24px -4px rgba(0, 0, 0, 0.12);
+    --cp-shadow-3: 0 16px 40px -8px rgba(0, 0, 0, 0.18);
+    --cp-inner-rim: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    --cp-brand-gradient: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
   }
+
+  /* ── Dark Mode (macOS / iOS System Dark) ────────────────────── */
   .dark,
-  [data-theme="dark"],
-  [data-theme="oled"] {
-    --bg-glass: #1C1C1E;
-    --bg-glass-hover: #2C2C2E;
-    --glass-bg: #1C1C1E;
-    --glass-surface-bg: #1C1C1E;
-    --liquid-glass-opacity: 1;
-  }
-}
+  [data-theme="dark"] {
+    color-scheme: dark;
 
-/* ── Accessibility 2: Reduced Motion (Vestibular Safety) ──────── */
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --duration-instant: 1ms;
-    --duration-fast: 1ms;
-    --duration-normal: 1ms;
-    --duration-slow: 1ms;
-    --duration-slower: 1ms;
-    --ease-apple-bounce: var(--ease-standard);
-    --spring-bouncy: var(--ease-standard);
-    --btn-press-scale: 1;
-  }
-}
+    /* Brand & Accent */
+    --primary: #0A84FF;
+    --primary-hover: #409CFF;
+    --primary-active: #6FB3FF;
+    --primary-soft: rgba(10, 132, 255, 0.16);
+    --primary-soft-hover: rgba(10, 132, 255, 0.24);
+    --primary-border: rgba(10, 132, 255, 0.32);
+    --primary-ring: rgba(10, 132, 255, 0.38);
+    
+    --m-vivid: #0A84FF;
+    --m-deep: #6FB3FF;
+    --brand-400: #6FB3FF;
+    --brand-500: #0A84FF;
+    --brand-600: #409CFF;
+    --brand-700: #0070E0;
 
-/* ── Accessibility 3: Increased Contrast (macOS High Contrast) ── */
-@media (prefers-contrast: more) {
-  :root {
-    --text-secondary: #1D1D1F;
-    --text-tertiary: #3A3A3C;
-    --border: rgba(0, 0, 0, 0.28);
-    --border-subtle: rgba(0, 0, 0, 0.18);
-    --divider-color: rgba(0, 0, 0, 0.28);
+    /* Semantic States */
+    --success: #30D158;
+    --success-hover: #4AE06E;
+    --success-active: #28B84C;
+    --success-soft: rgba(48, 209, 88, 0.16);
+    --success-border: rgba(48, 209, 88, 0.32);
+
+    --warning: #FF9F0A;
+    --warning-hover: #FFB340;
+    --warning-active: #E08900;
+    --warning-soft: rgba(255, 159, 10, 0.16);
+    --warning-border: rgba(255, 159, 10, 0.32);
+
+    --danger: #FF453A;
+    --danger-hover: #FF6961;
+    --danger-active: #E0352B;
+    --danger-soft: rgba(255, 69, 58, 0.16);
+    --danger-border: rgba(255, 69, 58, 0.32);
+
+    --info: #0A84FF;
+    --info-hover: #409CFF;
+    --info-active: #6FB3FF;
+    --info-soft: rgba(10, 132, 255, 0.16);
+    --info-border: rgba(10, 132, 255, 0.32);
+
+    --state-hover: rgba(255, 255, 255, 0.06);
+    --state-active: rgba(255, 255, 255, 0.11);
+    --state-selected: rgba(10, 132, 255, 0.16);
+    --state-error: var(--danger);
+    --state-success: var(--success);
+
+    /* Surfaces */
+    --bg-base: #0B0F19;
+    --bg-app: #0B0F19;
+    --bg-page: #0B0F19;
+    --bg-surface: #161B26;
+    --bg-surface-secondary: #1F2433;
+    --bg-card: #161B26;
+    --bg-card-elevated: #1F2433;
+    --bg-card-hover: #1E2332;
+    --bg-elevated: #1F2433;
+    --bg-input: #161B26;
+    --bg-input-hover: #1E2332;
+    --bg-input-focus: #161B26;
+    --bg-input-disabled: #0E121C;
+    --bg-overlay: rgba(0, 0, 0, 0.65);
+    --bg-muted: #121622;
+    --surface-soft: #121622;
+
+    /* Apple Dark Liquid Glass & Vibrancy */
+    --bg-glass: rgba(22, 27, 38, 0.74);
+    --bg-glass-hover: rgba(31, 36, 51, 0.82);
+    --glass-bg: rgba(22, 27, 38, 0.74);
+    --glass-surface-bg: rgba(22, 27, 38, 0.74);
+    --glass-tier-subtle-bg: rgba(22, 27, 38, 0.65);
+    --glass-tier-subtle-blur: 14px;
+    --glass-tier-card-bg: rgba(22, 27, 38, 0.76);
+    --glass-tier-card-blur: 22px;
+    --glass-tier-floating-bg: rgba(22, 27, 38, 0.86);
+    --glass-tier-floating-blur: 30px;
+
+    --liquid-glass-opacity: 0.74;
+    --liquid-glass-specular: 0.28;
+    --liquid-glass-saturate: 190%;
+
+    /* Typography */
+    --text-primary: #F5F5F7;
+    --text-secondary: #A1A1A6;
+    --text-tertiary: #6E6E73;
+    --text-muted: #6E6E73;
+    --text-disabled: #48484A;
+    --text-inverse: #1D1D1F;
+    --text-placeholder: #636366;
+    --_slate-900: #F5F5F7;
+    --_slate-50: #1C1C1E;
+
+    /* Borders & Dividers */
+    --border: rgba(255, 255, 255, 0.11);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-medium: rgba(255, 255, 255, 0.15);
+    --border-strong: rgba(255, 255, 255, 0.24);
+    --border-glass: rgba(255, 255, 255, 0.12);
+    --border-focus: #0A84FF;
+    --divider-color: rgba(84, 84, 88, 0.36);
+    --glass-border: rgba(255, 255, 255, 0.10);
+    --glass-specular: rgba(255, 255, 255, 0.12);
+    --inset-top-light: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    --inset-top-strong: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    --inset-bottom-dark: inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+
+    /* Focus */
+    --focus-ring: rgba(10, 132, 255, 0.40);
+    --focus-ring-danger: rgba(255, 69, 58, 0.40);
+    --focus-ring-success: rgba(48, 209, 88, 0.40);
+    --focus-glow: rgba(10, 132, 255, 0.24);
+
+    /* Shadows */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.30);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.48), 0 2px 4px rgba(0, 0, 0, 0.32);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.54), 0 2px 6px rgba(0, 0, 0, 0.36);
+    --shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.62), 0 4px 12px rgba(0, 0, 0, 0.40);
+    --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.72), 0 6px 18px rgba(0, 0, 0, 0.45);
+    --shadow-lifted: var(--shadow-lg);
+    --shadow-floating: 0 12px 32px rgba(0, 0, 0, 0.58), 0 2px 8px rgba(0, 0, 0, 0.38);
+    --shadow-float: var(--shadow-floating);
+    
+    --shadow-glow-brand: 0 2px 12px rgba(10, 132, 255, 0.28);
+    --shadow-glow-accent: var(--shadow-glow-brand);
+    --shadow-brand: var(--shadow-glow-brand);
+    --shadow-brand-strong: 0 4px 16px rgba(10, 132, 255, 0.38);
+    --shadow-glow-success: 0 2px 12px rgba(48, 209, 88, 0.28);
+    --shadow-glow-danger: 0 2px 12px rgba(255, 69, 58, 0.28);
+    --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+    /* Tones */
+    --tone-fg: var(--text-primary);
+    --tone-bg: rgba(255, 255, 255, 0.08);
+    --tone-border: rgba(255, 255, 255, 0.14);
+
+    --tone-red-fg: #FF6961;
+    --tone-red-bg: rgba(255, 69, 58, 0.16);
+    --tone-red-border: rgba(255, 69, 58, 0.30);
+    --tone-red-glow: rgba(255, 69, 58, 0.24);
+
+    --tone-orange-fg: #FFB340;
+    --tone-orange-bg: rgba(255, 159, 10, 0.16);
+    --tone-orange-border: rgba(255, 159, 10, 0.30);
+    --tone-orange-glow: rgba(255, 159, 10, 0.24);
+
+    --tone-blue-fg: #409CFF;
+    --tone-blue-bg: rgba(10, 132, 255, 0.16);
+    --tone-blue-border: rgba(10, 132, 255, 0.30);
+    --tone-blue-glow: rgba(10, 132, 255, 0.24);
+
+    --tone-green-fg: #4AE06E;
+    --tone-green-bg: rgba(48, 209, 88, 0.16);
+    --tone-green-border: rgba(48, 209, 88, 0.30);
+    --tone-green-glow: rgba(48, 209, 88, 0.24);
+
+    --tone-purple-fg: #DA8FFF;
+    --tone-purple-bg: rgba(191, 90, 242, 0.16);
+    --tone-purple-border: rgba(191, 90, 242, 0.30);
+    --tone-purple-glow: rgba(191, 90, 242, 0.24);
+
+    --tone-slate-fg: #A1A1A6;
+    --tone-slate-bg: rgba(142, 142, 147, 0.16);
+    --tone-slate-border: rgba(142, 142, 147, 0.28);
+
+    --gradient-hero: linear-gradient(180deg, #1C1C1E 0%, #000000 100%);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.20);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.34);
+
+    /* AI & Copilot Dark Tokens */
+    --ai-primary: #0A84FF;
+    --ai-primary-strong: #0070E0;
+    --ai-secondary: #BF5AF2;
+    --ai-shadow-glow-primary: rgba(10, 132, 255, 0.45);
+    --ai-danger: #FF453A;
+    --ai-warning: #FF9F0A;
+    --ai-success: #30D158;
+    --ai-text-primary: #F5F5F7;
+    --ai-text-muted: #8E8E93;
+    --ai-border: rgba(255, 255, 255, 0.12);
+    --ai-bg-page: #0B0F19;
+    --ai-bg-glass: rgba(28, 28, 30, 0.85);
+    --ai-bg-hover: rgba(255, 255, 255, 0.06);
+
+    --cp-text: #F5F5F7;
+    --cp-text-secondary: #AEAEB2;
+    --cp-text-tertiary: #8E8E93;
+    --cp-text-quaternary: #636366;
+    --cp-accent: #0A84FF;
+    --cp-accent-soft: rgba(10, 132, 255, 0.18);
+    --cp-accent-line: rgba(10, 132, 255, 0.40);
+    --cp-surface-raised: rgba(36, 36, 42, 0.85);
+    --cp-surface-sunken: rgba(255, 255, 255, 0.04);
+    --cp-surface-solid: #1C1C1E;
+    --cp-hairline: rgba(255, 255, 255, 0.12);
+    --cp-hairline-strong: rgba(255, 255, 255, 0.22);
+    --cp-separator: rgba(255, 255, 255, 0.08);
+    --cp-danger: #FF453A;
+    --cp-warning: #FF9F0A;
+    --cp-success-bright: #30D158;
+    --cp-shadow-1: 0 2px 8px -2px rgba(0, 0, 0, 0.35);
+    --cp-shadow-2: 0 8px 24px -4px rgba(0, 0, 0, 0.50);
+    --cp-shadow-3: 0 16px 40px -8px rgba(0, 0, 0, 0.65);
+    --cp-inner-rim: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    --cp-brand-gradient: linear-gradient(135deg, #0A84FF 0%, #5E5CE6 100%);
   }
-  .dark,
-  [data-theme="dark"],
+
+  /* ── True Pitch-Black OLED Mode (Power Saving & Non-Neon) ───── */
   [data-theme="oled"] {
-    --text-secondary: #F5F5F7;
-    --text-tertiary: #C7C7CC;
-    --border: rgba(255, 255, 255, 0.32);
-    --border-subtle: rgba(255, 255, 255, 0.22);
-    --divider-color: rgba(255, 255, 255, 0.32);
+    color-scheme: dark;
+
+    --bg-base: #000000;
+    --bg-app: #000000;
+    --bg-page: #000000;
+    --bg-surface: #0A0A0C;
+    --bg-surface-secondary: #121214;
+    --bg-card: #0E0E11;
+    --bg-card-elevated: #161619;
+    --bg-card-hover: #141417;
+    --bg-elevated: #161619;
+    --bg-input: #0A0A0C;
+    --bg-input-hover: #121214;
+    --bg-input-focus: #0A0A0C;
+    --bg-input-disabled: #050507;
+    --bg-overlay: rgba(0, 0, 0, 0.85);
+    --bg-muted: #0A0A0C;
+    --surface-soft: #0A0A0C;
+
+    --bg-glass: rgba(10, 10, 12, 0.82);
+    --bg-glass-hover: rgba(18, 18, 22, 0.90);
+    --glass-bg: rgba(10, 10, 12, 0.82);
+    --glass-surface-bg: rgba(10, 10, 12, 0.82);
+    --glass-surface-bg-dark: rgba(10, 10, 12, 0.82);
+    --glass-tier-subtle-bg: rgba(10, 10, 12, 0.75);
+    --glass-tier-card-bg: rgba(14, 14, 17, 0.85);
+    --glass-tier-floating-bg: rgba(16, 16, 20, 0.92);
+
+    --liquid-glass-opacity: 0.86;
+    --liquid-glass-specular: 0.22;
+    --liquid-glass-saturate: 160%;
+
+    --text-primary: #FFFFFF;
+    --text-secondary: #A8A8AD;
+    --text-tertiary: #75757A;
+
+    --border: rgba(255, 255, 255, 0.12);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-medium: rgba(255, 255, 255, 0.18);
+    --border-strong: rgba(255, 255, 255, 0.28);
+    --border-glass: rgba(255, 255, 255, 0.14);
+    --divider-color: rgba(255, 255, 255, 0.10);
+    --glass-inner-rim-dark: rgba(255, 255, 255, 0.20);
+
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.80);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.90);
+    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.95);
+    --shadow-floating: 0 20px 56px rgba(0, 0, 0, 0.98);
+  }
+
+  /* ── Accessibility 1: Reduced Transparency (macOS/iOS) ──────── */
+  @media (prefers-reduced-transparency: reduce) {
+    :root {
+      --bg-glass: #FFFFFF;
+      --bg-glass-hover: #F5F5F7;
+      --glass-bg: #FFFFFF;
+      --glass-surface-bg: #FFFFFF;
+      --glass-tier-subtle-bg: #FFFFFF;
+      --glass-tier-card-bg: #FFFFFF;
+      --glass-tier-floating-bg: #FFFFFF;
+      --liquid-glass-opacity: 1;
+      --glass-blur-subtle: 0px;
+      --glass-blur-strong: 0px;
+      --glass-blur-ultra: 0px;
+      --glass-backdrop: none;
+    }
+    .dark,
+    [data-theme="dark"] {
+      --bg-glass: #161B26;
+      --bg-glass-hover: #1F2433;
+      --glass-bg: #161B26;
+      --glass-surface-bg: #161B26;
+      --glass-tier-subtle-bg: #161B26;
+      --glass-tier-card-bg: #161B26;
+      --glass-tier-floating-bg: #161B26;
+      --liquid-glass-opacity: 1;
+    }
+    [data-theme="oled"] {
+      --bg-glass: #000000;
+      --bg-glass-hover: #0E0E11;
+      --glass-bg: #000000;
+      --glass-surface-bg: #000000;
+      --glass-tier-subtle-bg: #000000;
+      --glass-tier-card-bg: #0E0E11;
+      --glass-tier-floating-bg: #0E0E11;
+      --liquid-glass-opacity: 1;
+    }
+  }
+
+  /* ── Accessibility 2: Reduced Motion (Vestibular Safety) ────── */
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --duration-instant: 1ms;
+      --duration-fast: 1ms;
+      --duration-normal: 1ms;
+      --duration-slow: 1ms;
+      --duration-slower: 1ms;
+      --dur-instant: 1ms;
+      --dur-fast: 1ms;
+      --dur-normal: 1ms;
+      --dur-slow: 1ms;
+      --dur-ambient: 1ms;
+      --ease-apple-bounce: var(--ease-standard);
+      --spring-bouncy: var(--ease-standard);
+      --btn-press-scale: 1;
+    }
+  }
+
+  /* ── Accessibility 3: High Contrast (WCAG AAA) ──────────────── */
+  @media (prefers-contrast: more) {
+    :root {
+      --text-secondary: #1D1D1F;
+      --text-tertiary: #3A3A3C;
+      --border: rgba(0, 0, 0, 0.32);
+      --border-subtle: rgba(0, 0, 0, 0.22);
+      --divider-color: rgba(0, 0, 0, 0.30);
+    }
+    .dark,
+    [data-theme="dark"],
+    [data-theme="oled"] {
+      --text-secondary: #F5F5F7;
+      --text-tertiary: #C7C7CC;
+      --border: rgba(255, 255, 255, 0.36);
+      --border-subtle: rgba(255, 255, 255, 0.26);
+      --divider-color: rgba(255, 255, 255, 0.32);
+    }
   }
 }

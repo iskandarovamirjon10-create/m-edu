@@ -51,7 +51,27 @@ export const userStore = {
     }
   },
   set<T>(user: T) {
-    localStorage.setItem('medu_user', JSON.stringify(user));
+    if (!user || typeof user !== 'object') {
+      localStorage.setItem('medu_user', JSON.stringify(user));
+      return;
+    }
+    // Defense-in-depth (SEC-08): strip any accidental sensitive credentials before localStorage write
+    const sanitized = { ...(user as Record<string, unknown>) };
+    const sensitiveKeys = [
+      'password',
+      'passwordHash',
+      'token',
+      'accessToken',
+      'refreshToken',
+      'secret',
+      'twoFactorSecret',
+      'faceDescriptor',
+      'embedding',
+    ];
+    for (const key of sensitiveKeys) {
+      delete sanitized[key];
+    }
+    localStorage.setItem('medu_user', JSON.stringify(sanitized));
   },
   clear() {
     localStorage.removeItem('medu_user');
@@ -239,10 +259,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!res.ok) {
-    const serverMessage =
-      (body as { message?: string } | null)?.message ||
-      (Array.isArray(body) ? (body as { message?: string }[]).map((b) => b.message).join('; ') : null) ||
-      null;
+    const rawMsg = (body as { message?: unknown } | null)?.message;
+    const serverMessage = Array.isArray(rawMsg)
+      ? rawMsg.join('; ')
+      : typeof rawMsg === 'string'
+      ? rawMsg
+      : Array.isArray(body)
+      ? body.map((b: any) => (typeof b === 'string' ? b : b?.message)).filter(Boolean).join('; ')
+      : null;
     const message = friendlyHttpMessage(res.status, serverMessage);
     throw new ApiError(res.status, message, body);
   }
@@ -397,6 +421,40 @@ export const paymentsApi = {
       idempotencyKey: options?.idempotencyKey || generateIdempotencyKey(),
       ...options,
     }),
+  getExecutiveBriefing: (options: RequestOptions = {}) =>
+    request<AiExecutiveBriefing>('/ai/executive-briefing', options),
+  diagnoseStudent: (studentId: string, options: RequestOptions = {}) =>
+    request<AiStudentDiagnostic>('/ai/diagnose/student/' + encodeURIComponent(studentId), options),
+  draftParentMessage: (
+    data: {
+      studentId?: string;
+      studentName: string;
+      tone?: 'friendly' | 'formal' | 'urgent';
+      topic?: 'attendance' | 'debt' | 'praise' | 'exam' | 'custom';
+      details?: string;
+      balanceDue?: number;
+    },
+    options: RequestOptions = {},
+  ) =>
+    request<AiDraftMessageResponse>('/ai/draft-parent-message', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
+  generateQuiz: (
+    data: {
+      topic: string;
+      subject?: string;
+      level?: string;
+      questionCount?: number;
+    },
+    options: RequestOptions = {},
+  ) =>
+    request<AiGeneratedQuizResponse>('/ai/generate-quiz', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
 };
 export const expensesApi = {
   ...crud('/expenses'),
@@ -502,16 +560,94 @@ export const telegramApi = {
   unlink: () => request<{ disconnected: boolean }>('/telegram/link', { method: 'DELETE' }),
   testNotification: () =>
     request<{ sent: boolean }>('/telegram/test-notification', { method: 'POST' }),
+  webappAuth: (initData: string) =>
+    request<{
+      authenticated: boolean;
+      accessToken?: string;
+      user?: unknown;
+      role?: string;
+      organization?: unknown;
+      message?: string;
+    }>('/telegram/webapp/auth', {
+      method: 'POST',
+      body: JSON.stringify({ initData }),
+    }),
 };
 
 export const aiApi = {
-  chat: (body: { message: string; history?: unknown[]; conversationId?: string }, options: RequestOptions = {}) =>
+  chat: (body: { message: string; history?: unknown[]; conversationId?: string; attachments?: unknown[]; model?: string }, options: RequestOptions = {}) =>
     request<{ content: string; conversationId?: string; role?: string }>('/ai/chat', {
       method: 'POST',
       body: JSON.stringify(body),
       ...options,
     }),
 };
+export interface AiExecutiveBriefing {
+  summary: string;
+  sentiment: 'positive' | 'attention' | 'critical';
+  metrics: {
+    studentsCount: number;
+    groupsCount: number;
+    teachersCount: number;
+    attendanceRate: number;
+    presentToday: number;
+    absentToday: number;
+    lateToday: number;
+    debtorsCount: number;
+    overdueAmount: number;
+    highRiskStudents: number;
+    monthlyRevenue: number;
+  };
+  priorityActions: Array<{
+    id: string;
+    category: 'attendance' | 'finance' | 'risk' | 'academics';
+    title: string;
+    actionLabel: string;
+    prompt: string;
+  }>;
+  generatedAt: string;
+}
+
+export interface AiStudentDiagnostic {
+  studentId: string;
+  studentName: string;
+  overallScore: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  attendanceRate: number;
+  averageGrade: number | null;
+  balance: number;
+  groups: string[];
+  summary: string;
+  strengths: string[];
+  riskFactors: string[];
+  recommendations: string[];
+  suggestedParentMessage: string;
+}
+
+export interface AiDraftMessageResponse {
+  message: string;
+  tone: string;
+  topic: string;
+  charCount: number;
+}
+
+export interface AiGeneratedQuizResponse {
+  topic: string;
+  subject: string;
+  level: string;
+  lessonPlan: {
+    title: string;
+    durationMinutes: number;
+    steps: Array<{ minute: string; name: string; goal: string }>;
+  };
+  questions: Array<{
+    question: string;
+    options: string[];
+    correctAnswer: string;
+    explanation: string;
+  }>;
+}
+
 export const gradesApi = crud('/grades');
 export const homeworkApi = crud('/homework');
 export const attendanceApi = {
@@ -849,7 +985,6 @@ export const invoicesApi = {
     }),
   rejectRefund: (id: string, reason?: string, options?: RequestOptions) =>
     request(`/invoices/refunds/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }), ...options }),
-  totals: (params?: object) => request(`/invoices/totals${buildQuery(params)}`),
   getPaymentLinks: (id: string) => request<any>(`/invoices/${id}/payment-links`),
   proratePreview: (data: unknown) =>
     request<any>('/invoices/prorate-preview', { method: 'POST', body: JSON.stringify(data) }),
@@ -956,6 +1091,8 @@ export const parentPortalApi = {
     request(`/parent-portal/children/${studentId}/grades${buildQuery(params)}`),
   invoices: (studentId: string, params?: object) =>
     request(`/parent-portal/children/${studentId}/invoices${buildQuery(params)}`),
+  schedule: (studentId: string) =>
+    request<Array<{ id: string; dayOfWeek: string; startTime: string; endTime: string; room?: string | null; group: { id: string; name: string } }>>(`/parent-portal/children/${studentId}/schedule`),
 };
 
 export const payrollApi = {

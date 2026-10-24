@@ -36,7 +36,7 @@ import type { Organization, User } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useTheme, type Theme } from '@/hooks/useTheme';
 import { usePersistSettings } from '@/hooks/usePersistSettings';
-import { useI18n, isLocale } from '@/i18n/I18nProvider';
+import { useSafeI18n, isLocale } from '@/i18n/I18nProvider';
 import { usePrefersReducedMotion } from '@/layouts/core/singletons';
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -578,7 +578,7 @@ function NavRail({
  * ════════════════════════════════════════════════════════════════════════ */
 
 function ThemeSwitcher() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const { theme, setTheme } = useTheme();
   const persist = usePersistSettings();
 
@@ -718,7 +718,7 @@ function PasswordInput({
  * ════════════════════════════════════════════════════════════════════════ */
 
 function PasswordStrengthMeter({ value }: { value: string }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const { score, label, tone } = getPasswordStrength(value);
   const translatedLabel = t(label) || label;
   const c = TONES[tone];
@@ -796,7 +796,7 @@ function SettingsSkeleton() {
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function SettingsPage() {
-  const { setLocale, locale, t } = useI18n();
+  const { setLocale, locale, t } = useSafeI18n();
   usePageTitle(t('settings.title'));
   const { push, toastNode } = useToasts();
   const { user, setUser, hasAnyRole } = useAuth();
@@ -1147,7 +1147,7 @@ export function SettingsPage() {
 
   /* ── Main Render ───────────────────────────────────────────── */
   return (
-    <div className="page-container relative z-10 mx-auto max-w-6xl pb-12">
+    <div className="page-container relative z-10 mx-auto max-w-6xl pb-[max(6rem,env(safe-area-inset-bottom))]">
       <AuroraBackdrop />
 
       <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-5">

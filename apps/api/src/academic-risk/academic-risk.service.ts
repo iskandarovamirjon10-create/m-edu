@@ -280,8 +280,8 @@ export class AcademicRiskService {
         lastGrade,
         attendanceRate,
         homeworkCompletion,
-        phone: (student as any).user?.phone ?? null,
-        parentPhone: (student as any).parentPhone ?? null,
+        phone: student.user?.phone ?? null,
+        parentPhone: student.parentPhone ?? null,
         suggestedAction,
       });
     }

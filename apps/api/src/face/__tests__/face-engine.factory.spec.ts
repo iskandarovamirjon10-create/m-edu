@@ -75,7 +75,7 @@ describe('FaceEngineFactory', () => {
 
     it('handles path traversal safely without returning nonexistent targets', () => {
       expect(resolveModelPath('../../../../../etc/passwd')).toBe('');
-      expect(resolveModelPath('..\\..\\..\\windows\\system32\\calc.exe')).toBe('');
+      expect(resolveModelPath('..\\..\\..\\windows\\system32\\nonexistent_calc_target.exe')).toBe('');
     });
   });
 

@@ -327,12 +327,18 @@ export function WebcamCapture({
 
   const {
     status: cameraStatus, failure, devices, selectedDeviceId,
-    canSwitchCamera, requestPermission, retry, stop, selectDevice,
+    facingMode, canSwitchCamera, requestPermission, retry, stop, selectDevice,
     switchCamera, setVideoElement, captureFrame,
   } = camera;
 
   const status = cameraStatus as CameraStatus;
   const isScanningActive = busy || isCapturing;
+
+  // Mirroring rule: Front (selfie) camera should be mirrored for natural user feel.
+  // Back (environment) camera should NEVER be mirrored, so subjects are not inverted.
+  useEffect(() => {
+    setIsMirrored(facingMode !== 'environment');
+  }, [facingMode]);
 
   /* ── Focus trap for permission dialog ──────────────────────── */
   useFocusTrap(permissionDialogRef, status === 'needs-permission');
@@ -484,7 +490,15 @@ export function WebcamCapture({
         {/* ── Live video stream ── */}
         {cameraOn && (
           <video
-            ref={setVideoElement}
+            ref={(el) => {
+              if (el) {
+                el.muted = true;
+                el.defaultMuted = true;
+                el.setAttribute('playsinline', 'true');
+                el.setAttribute('webkit-playsinline', 'true');
+              }
+              setVideoElement(el);
+            }}
             autoPlay
             playsInline
             muted

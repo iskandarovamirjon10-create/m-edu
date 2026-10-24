@@ -4,14 +4,19 @@ export function formatDate(value?: string | null, locale?: string): string {
   if (Number.isNaN(d.getTime())) return '—';
   const loc = locale || (typeof navigator !== 'undefined' ? navigator.language : undefined) || 'en-US';
   
-  // [Fix #62] Prevent timezone shift for dates that are midnight UTC
-  const isMidnightUTC = typeof value === 'string' && value.endsWith('T00:00:00.000Z');
-  
-  return d.toLocaleDateString(loc, { 
-    year: 'numeric', 
-    month: 'short', 
+  // [Fix #62] Prevent timezone shift for dates that are midnight UTC or date-only (YYYY-MM-DD)
+  const isDateOnlyOrMidnight =
+    typeof value === 'string' &&
+    (/^\d{4}-\d{2}-\d{2}$/.test(value.trim()) ||
+      value.endsWith('T00:00:00.000Z') ||
+      value.endsWith('T00:00:00Z') ||
+      value.endsWith('T00:00:00'));
+
+  return d.toLocaleDateString(loc, {
+    year: 'numeric',
+    month: 'short',
     day: 'numeric',
-    timeZone: isMidnightUTC ? 'UTC' : undefined 
+    timeZone: isDateOnlyOrMidnight ? 'UTC' : undefined,
   });
 }
 

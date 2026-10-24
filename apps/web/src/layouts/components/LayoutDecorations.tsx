@@ -239,7 +239,7 @@ export const AnimatedOutlet = memo(function AnimatedOutlet() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
-      className="min-h-[1px] w-full"
+      className="min-h-full w-full flex-1 flex flex-col"
     >
       {outlet}
     </motion.div>

@@ -150,6 +150,18 @@ describe('TelegramCallbackRouter — envelope security', () => {
     expect(result.reply?.text).toBe('cmd-ok');
   });
 
+  it('dispatches executive briefing when "brf" callback is received', async () => {
+    const result = await press(router, callbacks, 'brf', 'refresh');
+    expect(deps.executeCommand).toHaveBeenCalledWith('briefing', CHAT, expect.anything());
+    expect(result.reply?.text).toBe('cmd-ok');
+  });
+
+  it('dispatches command dynamically when "cmd" callback is received', async () => {
+    const result = await press(router, callbacks, 'cmd', 'attendance');
+    expect(deps.executeCommand).toHaveBeenCalledWith('attendance', CHAT, expect.anything());
+    expect(result.reply?.text).toBe('cmd-ok');
+  });
+
   it('rejects a forged payload (bad HMAC) without dispatching', async () => {
     const forged = `${CallbackCodes.MAIN_MENU}~~1zzzzz~AAAA`;
     const result = await router.handle({ chatId: CHAT, data: forged, telegramLanguageCode: 'en' });

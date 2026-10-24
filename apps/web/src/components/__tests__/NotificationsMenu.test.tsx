@@ -25,7 +25,7 @@ function renderMenu() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <NotificationsMenu />
       </MemoryRouter>
     </QueryClientProvider>,

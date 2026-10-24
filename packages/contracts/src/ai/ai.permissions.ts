@@ -24,6 +24,8 @@ export const AiPermission = {
   PAYMENTS_WRITE: 'payments:write',
   DASHBOARD_READ: 'dashboard:read',
   REPORTS_READ: 'reports:read',
+  NOTIFICATIONS_READ: 'notifications:read',
+  NOTIFICATIONS_WRITE: 'notifications:write',
 } as const;
 export type AiPermission = (typeof AiPermission)[keyof typeof AiPermission];
 
@@ -40,12 +42,15 @@ const READ_ONLY_AI_PERMISSIONS: AiPermission[] = [
   AiPermission.PAYMENTS_READ,
   AiPermission.DASHBOARD_READ,
   AiPermission.REPORTS_READ,
+  AiPermission.NOTIFICATIONS_READ,
 ];
 
 /** Role → AI permissions. Unknown/absent roles get nothing. */
 export const AiRolePermissions: Record<string, AiPermission[]> = {
   SUPER_ADMIN: ALL_AI_PERMISSIONS,
   ORG_ADMIN: ALL_AI_PERMISSIONS,
+  // Legacy alias kept for callers that still emit `ADMIN` (older JWTs/tests).
+  ADMIN: ALL_AI_PERMISSIONS,
   MANAGER: [
     ...READ_ONLY_AI_PERMISSIONS,
     AiPermission.ATTENDANCE_WRITE,
@@ -54,6 +59,15 @@ export const AiRolePermissions: Record<string, AiPermission[]> = {
     AiPermission.TEACHERS_WRITE,
     AiPermission.GROUPS_WRITE,
     AiPermission.COURSES_WRITE,
+    AiPermission.NOTIFICATIONS_WRITE,
+  ],
+  // Finance staff read money but must not change rosters or the catalogue.
+  ACCOUNTANT: [
+    AiPermission.STUDENTS_READ,
+    AiPermission.GROUPS_READ,
+    AiPermission.PAYMENTS_READ,
+    AiPermission.DASHBOARD_READ,
+    AiPermission.REPORTS_READ,
   ],
   TEACHER: [
     AiPermission.STUDENTS_READ,

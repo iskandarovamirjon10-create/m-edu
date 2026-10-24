@@ -104,17 +104,7 @@ describe('FaceController', () => {
       getEngineStatus: vi.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [FaceController],
-      providers: [
-        {
-          provide: FaceService,
-          useValue: service,
-        },
-      ],
-    }).compile();
-
-    controller = module.get<FaceController>(FaceController);
+    controller = new FaceController(service as unknown as FaceService);
   });
 
   it('should be defined', () => {

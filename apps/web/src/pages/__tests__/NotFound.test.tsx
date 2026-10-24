@@ -19,7 +19,7 @@ vi.mock('@/hooks/usePageTitle', () => ({
 function renderPage() {
   return render(
     <I18nProvider initialLocale="en">
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <NotFoundPage />
       </MemoryRouter>
     </I18nProvider>,

@@ -1,16 +1,15 @@
-// M-EDU AI Copilot — integration pass
 /**
- * useAiCopilot — the AI Copilot state machine.
+ * useAiCopilot — Authoritative AI Copilot State Engine.
  *
- * Responsibilities kept in one place so both the dedicated page and the
- * global overlay behave identically:
- *   - request lifecycle (sending → idle) with a single abortable in-flight call
- *   - tool round-trips (result is fed back so the model can answer)
- *   - explicit action confirmation (nothing executes without approval)
- *   - user-safe error mapping and a retry that never duplicates a message
- *   - localStorage persistence of the conversation for the current device
+ * Responsibilities:
+ *   - Typed state transitions via reducer (predictable state machine).
+ *   - Abortable request lifecycle (sending -> thinking -> streaming -> idle).
+ *   - Automatic tool roundtrips & explicit action approvals.
+ *   - Safe SSE stream parsing with partial content preservation on abort.
+ *   - Robust cancellation & cleanup on unmount or conversation switch.
+ *   - LocalStorage persistence (when persistence === 'local') and server sync.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 import {
   aiChat,
   aiChatStream,
@@ -21,9 +20,10 @@ import {
   prettifyArguments,
   toAiErrorInfo,
 } from '@/lib/ai';
-import { AI_FLAGS } from '../lib/ai/flags';
+import { AI_FLAGS } from '@/lib/ai/flags';
 import type {
   AiActionResult,
+  AiAttachment,
   AiChatResponse,
   AiErrorInfo,
   AiPendingAction,
@@ -48,16 +48,12 @@ export interface AiCopilotOptions {
   conversationId?: string;
   initialMessages?: AiUiMessage[];
   persistence?: 'local' | 'server';
+  route?: string;
+  model?: string;
 }
 
 const STORAGE_KEY = 'medu:ai-copilot:v1';
 const STORAGE_VERSION = 1;
-
-interface PersistedConversation {
-  version: number;
-  messages: AiUiMessage[];
-  history: AiWireMessage[];
-}
 
 let sequence = 0;
 function nextId(prefix: string): string {
@@ -83,6 +79,7 @@ function buildActivities(
       toolCalls[index]?.function.name ||
       '',
     status: activityStatus(result),
+    result: (result as any).result || (result as any).data,
   }));
 }
 
@@ -110,7 +107,6 @@ function markActivities(
   );
 }
 
-/** Restore the previous conversation, dropping any now-meaningless approvals. */
 function readPersistedConversation(): { messages: AiUiMessage[]; history: AiWireMessage[] } {
   const empty = { messages: [] as AiUiMessage[], history: [] as AiWireMessage[] };
   if (typeof window === 'undefined') return empty;
@@ -119,32 +115,24 @@ function readPersistedConversation(): { messages: AiUiMessage[]; history: AiWire
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return empty;
 
-    const parsed = JSON.parse(raw) as PersistedConversation;
-    if (!parsed || parsed.version !== STORAGE_VERSION || !Array.isArray(parsed.messages)) {
-      return empty;
-    }
+    const parsed = JSON.parse(raw) as {
+      version?: number;
+      messages?: AiUiMessage[];
+      history?: AiWireMessage[];
+    };
+    if (parsed.version !== STORAGE_VERSION || !Array.isArray(parsed.messages)) return empty;
 
-    const messages = parsed.messages.map((message) => {
-      const activities = message.toolActivities ?? [];
-      const hadConfirmation =
-        Boolean(message.confirmation) ||
-        activities.some((activity) => activity.status === 'pending_confirmation');
-      if (!hadConfirmation) return message;
-
-      const restored: AiUiMessage = {
+    const cleanedMessages = parsed.messages.map((message) => {
+      if (!message.confirmation) return message;
+      return {
         ...message,
-        toolActivities: activities.map((activity) =>
-          activity.status === 'pending_confirmation'
-            ? { ...activity, status: 'cancelled' as const }
-            : activity,
-        ),
+        confirmation: undefined,
+        toolActivities: markActivities(message.toolActivities, 'cancelled'),
       };
-      delete restored.confirmation;
-      return restored;
     });
 
     return {
-      messages,
+      messages: cleanedMessages,
       history: Array.isArray(parsed.history) ? parsed.history : [],
     };
   } catch {
@@ -152,217 +140,384 @@ function readPersistedConversation(): { messages: AiUiMessage[]; history: AiWire
   }
 }
 
-export function useAiCopilot(options: AiCopilotOptions = {}) {
-  const [initial] = useState(() => {
-    if (options.conversationId && options.initialMessages) return { messages: options.initialMessages, history: [] };
-    if (options.persistence === 'server') return { messages: options.initialMessages || [], history: [] };
-    return readPersistedConversation();
-  });
-  const [messages, setMessages] = useState<AiUiMessage[]>(initial.messages);
-  const [status, setStatus] = useState<AiStatus>('idle');
-  const [error, setError] = useState<AiErrorInfo | null>(null);
-  const [lastPrompt, setLastPrompt] = useState('');
-  const [conversationId, setConversationId] = useState<string | undefined>(options.conversationId);
-
-  const conversationIdRef = useRef<string | undefined>(options.conversationId);
-  const historyRef = useRef<AiWireMessage[]>(initial.history);
-  const messagesRef = useRef<AiUiMessage[]>(initial.messages);
-  const statusRef = useRef<AiStatus>('idle');
-  const abortRef = useRef<AbortController | null>(null);
-  const cancelReasonRef = useRef<'none' | 'user' | 'reset'>('none');
-
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
-
-  useEffect(() => {
-    conversationIdRef.current = conversationId;
-  }, [conversationId]);
-
-  useEffect(() => {
-    if (options.conversationId !== undefined) {
-      setConversationId(options.conversationId);
-      conversationIdRef.current = options.conversationId;
+function persistConversation(messages: AiUiMessage[], history: AiWireMessage[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (messages.length === 0) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return;
     }
-  }, [options.conversationId]);
-
-  /** Persist on every visible change; an empty conversation clears the key. */
-  useEffect(() => {
-    if (typeof window === 'undefined' || options.persistence === 'server') return;
-    try {
-      if (messages.length === 0 && historyRef.current.length === 0) {
-        window.localStorage.removeItem(STORAGE_KEY);
-        return;
-      }
-      const payload: PersistedConversation = {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
         version: STORAGE_VERSION,
         messages,
-        history: historyRef.current,
-      };
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    } catch {
-      // Storage disabled or full — the conversation simply stays in memory.
+        history,
+      }),
+    );
+  } catch {
+    // quota exceeded or storage disabled — fail safely
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Reducer State & Actions
+ * ────────────────────────────────────────────────────────────────────────── */
+
+interface CopilotState {
+  messages: AiUiMessage[];
+  status: AiStatus;
+  error: AiErrorInfo | null;
+  lastPrompt: string;
+  conversationId?: string;
+}
+
+type CopilotAction =
+  | { type: 'SET_STATUS'; status: AiStatus }
+  | { type: 'SET_ERROR'; error: AiErrorInfo | null }
+  | { type: 'SET_CONVERSATION_ID'; conversationId?: string }
+  | { type: 'APPEND_MESSAGE'; message: AiUiMessage }
+  | { type: 'UPDATE_LAST_MESSAGE'; updater: (prev: AiUiMessage) => AiUiMessage }
+  | { type: 'UPDATE_MESSAGES'; updater: (prev: AiUiMessage[]) => AiUiMessage[] }
+  | { type: 'RESET'; messages?: AiUiMessage[]; conversationId?: string }
+  | { type: 'SET_LAST_PROMPT'; prompt: string };
+
+function copilotReducer(state: CopilotState, action: CopilotAction): CopilotState {
+  switch (action.type) {
+    case 'SET_STATUS':
+      return { ...state, status: action.status };
+    case 'SET_ERROR':
+      return { ...state, error: action.error };
+    case 'SET_CONVERSATION_ID':
+      return { ...state, conversationId: action.conversationId };
+    case 'APPEND_MESSAGE':
+      return { ...state, messages: [...state.messages, action.message] };
+    case 'UPDATE_LAST_MESSAGE': {
+      if (state.messages.length === 0) return state;
+      const next = [...state.messages];
+      const lastIdx = next.length - 1;
+      next[lastIdx] = action.updater(next[lastIdx]);
+      return { ...state, messages: next };
     }
-  }, [messages]);
+    case 'UPDATE_MESSAGES':
+      return { ...state, messages: action.updater(state.messages) };
+    case 'RESET':
+      return {
+        messages: action.messages ?? [],
+        status: 'idle',
+        error: null,
+        lastPrompt: '',
+        conversationId: action.conversationId,
+      };
+    case 'SET_LAST_PROMPT':
+      return { ...state, lastPrompt: action.prompt };
+    default:
+      return state;
+  }
+}
 
-  const updateStatus = useCallback((next: AiStatus) => {
-    statusRef.current = next;
-    setStatus(next);
+/* ──────────────────────────────────────────────────────────────────────────
+ * Main Hook
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export function useAiCopilot(options: AiCopilotOptions = {}) {
+  const {
+    persistence = 'local',
+    getContext,
+    conversationId: initialConversationId,
+    initialMessages,
+    route: explicitRoute,
+    model: explicitModel,
+  } = options;
+
+  const [state, dispatch] = useReducer(copilotReducer, undefined, () => {
+    if (initialMessages && initialMessages.length > 0) {
+      return {
+        messages: initialMessages,
+        status: 'idle' as AiStatus,
+        error: null,
+        lastPrompt: '',
+        conversationId: initialConversationId,
+      };
+    }
+    if (persistence === 'local') {
+      const stored = readPersistedConversation();
+      return {
+        messages: stored.messages,
+        status: 'idle' as AiStatus,
+        error: null,
+        lastPrompt: '',
+        conversationId: initialConversationId,
+      };
+    }
+    return {
+      messages: [],
+      status: 'idle' as AiStatus,
+      error: null,
+      lastPrompt: '',
+      conversationId: initialConversationId,
+    };
+  });
+
+  const abortRef = useRef<AbortController | null>(null);
+  const cancelReasonRef = useRef<'user' | 'reset' | 'none'>('none');
+  const historyRef = useRef<AiWireMessage[]>([]);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      abortRef.current?.abort();
+    };
   }, []);
 
-  const appendMessage = useCallback((message: AiUiMessage) => {
-    setMessages((prev) => [...prev, message]);
+  // Initialize history wire messages from initial storage/hydration
+  useEffect(() => {
+    if (persistence === 'local') {
+      const stored = readPersistedConversation();
+      if (stored.history.length > 0) {
+        historyRef.current = stored.history;
+      }
+    }
+  }, [persistence]);
+
+  // Persist conversation updates
+  useEffect(() => {
+    if (persistence === 'local') {
+      persistConversation(state.messages, historyRef.current);
+    }
+  }, [state.messages, persistence]);
+
+  // Synchronize conversationId changes from parent
+  useEffect(() => {
+    if (initialConversationId !== undefined && initialConversationId !== stateRef.current.conversationId) {
+      dispatch({ type: 'SET_CONVERSATION_ID', conversationId: initialConversationId });
+    }
+  }, [initialConversationId]);
+
+  const updateStatus = useCallback((status: AiStatus) => {
+    if (!isMountedRef.current) return;
+    dispatch({ type: 'SET_STATUS', status });
   }, []);
 
-  /** One abortable request cycle, including tool round-trips. */
-  const runChat = useCallback(
-    async (wire: AiWireMessage[]) => {
-      updateStatus('sending');
-      setError(null);
+  const stop = useCallback(() => {
+    if (!abortRef.current) return;
+    cancelReasonRef.current = 'user';
+    abortRef.current.abort();
+    abortRef.current = null;
+  }, []);
 
+  const send = useCallback(
+    async (prompt: string, attachments?: AiAttachment[]) => {
+      const text = prompt.trim();
+      if (!text && (!attachments || attachments.length === 0)) return;
+      if (stateRef.current.status !== 'idle') return;
+
+      abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
       cancelReasonRef.current = 'none';
 
-      const activeConvId = conversationIdRef.current || options.conversationId;
+      dispatch({ type: 'SET_ERROR', error: null });
+      dispatch({ type: 'SET_LAST_PROMPT', prompt: text });
+
+      const userMessage: AiUiMessage = {
+        id: nextId('user'),
+        role: 'user',
+        content: text,
+        attachments,
+        createdAt: Date.now(),
+      };
+      dispatch({ type: 'APPEND_MESSAGE', message: userMessage });
+
+      // The authenticated context travels as structured `route` metadata, so
+      // the prompt itself stays exactly what the user typed. Prefixing
+      // `[Context: …]` leaked UI chrome into persisted history and into the
+      // markdown transcript.
+      const userWireMessage: AiWireMessage = {
+        role: 'user',
+        content: text,
+        attachments,
+      };
+
+      const wire: AiWireMessage[] = [...historyRef.current, userWireMessage];
+      historyRef.current = wire;
+
+      updateStatus('sending');
 
       try {
-        let response;
+        let response: AiChatResponse & { conversationId?: string };
+        const activeConvId = stateRef.current.conversationId;
+
         if (AI_FLAGS.streaming) {
+          updateStatus('thinking');
           const partialId = nextId('assistant');
-          const partialMessage = {
-            id: partialId,
-            role: 'assistant' as const,
-            content: '',
-            createdAt: Date.now(),
-            streaming: true
+          let hasPendingAction = false;
+          let hasAppendedAssistant = false;
+
+          const ensureAssistantAppended = () => {
+            if (!hasAppendedAssistant) {
+              hasAppendedAssistant = true;
+              updateStatus('streaming');
+              dispatch({
+                type: 'APPEND_MESSAGE',
+                message: {
+                  id: partialId,
+                  role: 'assistant',
+                  content: '',
+                  createdAt: Date.now(),
+                  streaming: true,
+                },
+              });
+            }
           };
-          setMessages(prev => [...prev, partialMessage]);
-          
+
+          const activeRoute =
+            explicitRoute || (typeof window !== 'undefined' ? window.location.pathname : undefined);
+
           const streamRes = await aiChatStream(wire, {
             signal: controller.signal,
             conversationId: activeConvId,
-            onDelta: (chunk) => {
-              if (statusRef.current !== 'streaming' && statusRef.current !== 'awaiting_confirmation') {
-                updateStatus('streaming');
-              }
-              setMessages(prev => {
-                const newMessages = [...prev];
-                const lastIdx = newMessages.length - 1;
-                if (lastIdx >= 0 && newMessages[lastIdx].id === partialId) {
-                  newMessages[lastIdx] = { ...newMessages[lastIdx], content: newMessages[lastIdx].content + chunk };
-                }
-                return newMessages;
+            route: activeRoute,
+            model: explicitModel,
+            onDelta: (delta: string) => {
+              if (!isMountedRef.current) return;
+              ensureAssistantAppended();
+              dispatch({
+                type: 'UPDATE_LAST_MESSAGE',
+                updater: (prev) =>
+                  prev.id === partialId ? { ...prev, content: (prev.content || '') + delta } : prev,
               });
             },
             onTool: (toolEvent: any) => {
-              if (!toolEvent) return;
-              const tType = toolEvent.type;
-              if (tType === 'tool_running') {
-                setMessages((prev) => {
-                  const newMessages = [...prev];
-                  const lastIdx = newMessages.length - 1;
-                  if (lastIdx >= 0 && newMessages[lastIdx].id === partialId) {
-                    const activities = newMessages[lastIdx].toolActivities || [];
-                    const existingIdx = activities.findIndex((a) => a.toolName === toolEvent.toolName);
-                    const updated = existingIdx >= 0
-                      ? activities.map((a, i) => (i === existingIdx ? { ...a, status: 'running' as const } : a))
-                      : [...activities, { id: toolEvent.toolName, toolName: toolEvent.toolName, status: 'running' as const }];
-                    newMessages[lastIdx] = { ...newMessages[lastIdx], toolActivities: updated };
-                  }
-                  return newMessages;
+              if (!isMountedRef.current) return;
+              ensureAssistantAppended();
+              if (toolEvent.type === 'tool_running') {
+                dispatch({
+                  type: 'UPDATE_LAST_MESSAGE',
+                  updater: (prev) => {
+                    if (prev.id !== partialId) return prev;
+                    const existing = prev.toolActivities || [];
+                    return {
+                      ...prev,
+                      toolActivities: [
+                        ...existing,
+                        { id: toolEvent.toolName, toolName: toolEvent.toolName, status: 'running' },
+                      ],
+                    };
+                  },
                 });
-              } else if (tType === 'tool_result') {
-                setMessages((prev) => {
-                  const newMessages = [...prev];
-                  const lastIdx = newMessages.length - 1;
-                  if (lastIdx >= 0 && newMessages[lastIdx].id === partialId) {
-                    const activities = newMessages[lastIdx].toolActivities || [];
-                    const status = toolEvent.status === 'success' ? ('success' as const) : ('error' as const);
-                    const existingIdx = activities.findIndex((a) => a.toolName === toolEvent.toolName);
-                    const updated = existingIdx >= 0
-                      ? activities.map((a, i) => (i === existingIdx ? { ...a, status } : a))
-                      : [...activities, { id: toolEvent.toolName, toolName: toolEvent.toolName, status }];
-                    newMessages[lastIdx] = { ...newMessages[lastIdx], toolActivities: updated };
-                  }
-                  return newMessages;
+              } else if (toolEvent.type === 'tool_result') {
+                dispatch({
+                  type: 'UPDATE_LAST_MESSAGE',
+                  updater: (prev) => {
+                    if (prev.id !== partialId) return prev;
+                    const existing = prev.toolActivities || [];
+                    return {
+                      ...prev,
+                      toolActivities: existing.map((act) =>
+                        act.toolName === toolEvent.toolName
+                          ? {
+                              ...act,
+                              status: toolEvent.status || 'success',
+                              result: toolEvent.result !== undefined ? toolEvent.result : act.result,
+                            }
+                          : act,
+                      ),
+                    };
+                  },
                 });
-              } else if (tType === 'action_pending') {
-                const rawArgs = typeof toolEvent.parameters === 'string'
-                  ? toolEvent.parameters
-                  : JSON.stringify(toolEvent.parameters || {});
+              } else if (toolEvent.type === 'action_pending') {
+                ensureAssistantAppended();
+                hasPendingAction = true;
                 const pendingAction: AiPendingAction = {
-                  actionId: toolEvent.actionId || '',
-                  toolName: toolEvent.toolName || '',
-                  parameters: parseActionParameters(rawArgs),
-                  rawArguments: prettifyArguments(rawArgs),
+                  actionId: toolEvent.actionId,
+                  toolName: toolEvent.toolName,
+                  parameters: parseActionParameters(JSON.stringify(toolEvent.parameters || {})),
                   backendMessage: toolEvent.message,
                 };
                 updateStatus('awaiting_confirmation');
-                setMessages((prev) => {
-                  const newMessages = [...prev];
-                  const lastIdx = newMessages.length - 1;
-                  if (lastIdx >= 0 && newMessages[lastIdx].id === partialId) {
-                    newMessages[lastIdx] = {
-                      ...newMessages[lastIdx],
+                dispatch({
+                  type: 'UPDATE_LAST_MESSAGE',
+                  updater: (prev) => {
+                    if (prev.id !== partialId) return prev;
+                    return {
+                      ...prev,
                       confirmation: pendingAction,
                       toolActivities: [
-                        ...(newMessages[lastIdx].toolActivities || []),
+                        ...(prev.toolActivities || []),
                         {
                           id: toolEvent.actionId || toolEvent.toolName,
                           toolName: toolEvent.toolName,
-                          status: 'pending_confirmation' as const,
+                          status: 'pending_confirmation',
                         },
                       ],
                     };
-                  }
-                  return newMessages;
+                  },
                 });
               }
             },
           });
-          
+
           if (streamRes.conversationId) {
-            setConversationId(streamRes.conversationId);
-            conversationIdRef.current = streamRes.conversationId;
+            dispatch({ type: 'SET_CONVERSATION_ID', conversationId: streamRes.conversationId });
           }
 
-          setMessages(prev => {
-            const newMessages = [...prev];
-            const lastIdx = newMessages.length - 1;
-            if (lastIdx >= 0 && newMessages[lastIdx].id === partialId) {
-              newMessages[lastIdx] = { ...newMessages[lastIdx], streaming: false };
-            }
-            return newMessages;
-          });
-          
+          if (!hasAppendedAssistant) {
+            hasAppendedAssistant = true;
+            dispatch({
+              type: 'APPEND_MESSAGE',
+              message: {
+                id: partialId,
+                role: 'assistant',
+                content: streamRes.content || '',
+                createdAt: Date.now(),
+                streaming: false,
+              },
+            });
+          } else {
+            dispatch({
+              type: 'UPDATE_LAST_MESSAGE',
+              updater: (prev) => (prev.id === partialId ? { ...prev, streaming: false } : prev),
+            });
+          }
+
           response = {
             type: 'message',
             message: { role: 'assistant', content: streamRes.content },
-            conversationId: streamRes.conversationId
-          } as AiChatResponse & { conversationId?: string };
-          
+            conversationId: streamRes.conversationId,
+          };
+
           historyRef.current = [...wire, { role: 'assistant', content: streamRes.content }];
-          const msgsNow = messagesRef.current;
-          const lastMsg = msgsNow[msgsNow.length - 1];
-          const hasPending = Boolean(lastMsg?.confirmation) || statusRef.current === 'awaiting_confirmation';
-          if (!hasPending) {
+          if (!hasPendingAction) {
             updateStatus('idle');
           } else {
             updateStatus('awaiting_confirmation');
           }
           return;
-        } else {
-          response = await aiChat(wire, { signal: controller.signal, conversationId: activeConvId });
-          if ((response as any)?.conversationId) {
-            setConversationId((response as any).conversationId);
-            conversationIdRef.current = (response as any).conversationId;
-          }
         }
+
+        const activeRoute =
+          explicitRoute || (typeof window !== 'undefined' ? window.location.pathname : undefined);
+
+        // Non-streaming REST execution
+        response = await aiChat(wire, {
+          signal: controller.signal,
+          conversationId: activeConvId,
+          route: activeRoute,
+          model: explicitModel,
+        });
+        if ((response as any)?.conversationId) {
+          dispatch({ type: 'SET_CONVERSATION_ID', conversationId: (response as any).conversationId });
+        }
+
         if (controller.signal.aborted) return;
 
         if (response.type === 'tool_calls') {
-          const toolCalls = response.message.toolCalls ?? [];
+          const toolCalls = response.message?.toolCalls ?? [];
           const toolResults = response.toolResults ?? [];
           const activities = buildActivities(toolCalls, toolResults);
           const pending = toolResults.find(isPendingConfirmation);
@@ -370,30 +525,36 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
           if (pending) {
             const call = toolCalls.find((item: { id: string }) => item.id === pending.id) ?? toolCalls[0];
             historyRef.current = wire;
-            appendMessage({
-              id: nextId('assistant'),
-              role: 'assistant',
-              content: response.message.content ?? '',
-              createdAt: Date.now(),
-              toolActivities: activities,
-              confirmation: buildPendingAction(pending, call),
+            dispatch({
+              type: 'APPEND_MESSAGE',
+              message: {
+                id: nextId('assistant'),
+                role: 'assistant',
+                content: response.message?.content ?? '',
+                createdAt: Date.now(),
+                toolActivities: activities,
+                confirmation: buildPendingAction(pending, call),
+              },
             });
             updateStatus('awaiting_confirmation');
             return;
           }
 
-          appendMessage({
-            id: nextId('assistant'),
-            role: 'assistant',
-            content: response.message.content ?? '',
-            createdAt: Date.now(),
-            toolActivities: activities,
+          dispatch({
+            type: 'APPEND_MESSAGE',
+            message: {
+              id: nextId('assistant'),
+              role: 'assistant',
+              content: response.message?.content ?? '',
+              createdAt: Date.now(),
+              toolActivities: activities,
+            },
           });
 
           const withTools: AiWireMessage[] = [
             ...wire,
-            { role: 'assistant', content: response.message.content ?? '', toolCalls },
-            ...toolResults.map((result: { id: string, error?: unknown, result?: unknown }) => ({
+            { role: 'assistant', content: response.message?.content ?? '', toolCalls },
+            ...toolResults.map((result: { id: string; error?: unknown; result?: unknown }) => ({
               role: 'tool' as const,
               toolCallId: result.id,
               content: JSON.stringify(result.error ?? result.result ?? result),
@@ -407,37 +568,46 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
 
           historyRef.current = [
             ...withTools,
-            { role: 'assistant', content: followUp.message.content ?? '' },
+            { role: 'assistant', content: followUp.message?.content ?? '' },
           ];
-          appendMessage({
-            id: nextId('assistant'),
-            role: 'assistant',
-            content: followUp.message.content ?? '',
-            createdAt: Date.now(),
+          dispatch({
+            type: 'APPEND_MESSAGE',
+            message: {
+              id: nextId('assistant'),
+              role: 'assistant',
+              content: followUp.message?.content ?? '',
+              createdAt: Date.now(),
+            },
           });
           updateStatus('idle');
           return;
         }
 
-        const content = response.message.content ?? '';
+        const content = response.message?.content ?? '';
         historyRef.current = [...wire, { role: 'assistant', content }];
-        appendMessage({
-          id: nextId('assistant'),
-          role: 'assistant',
-          content,
-          createdAt: Date.now(),
+        dispatch({
+          type: 'APPEND_MESSAGE',
+          message: {
+            id: nextId('assistant'),
+            role: 'assistant',
+            content,
+            createdAt: Date.now(),
+          },
         });
         updateStatus('idle');
       } catch (thrown) {
         if (controller.signal.aborted) {
           const cancelReason: string = cancelReasonRef.current;
           if (cancelReason === 'user') {
-            appendMessage({
-              id: nextId('system'),
-              role: 'system',
-              content: 'Javob bekor qilindi.',
-              createdAt: Date.now(),
-              kind: 'info',
+            dispatch({
+              type: 'APPEND_MESSAGE',
+              message: {
+                id: nextId('system'),
+                role: 'system',
+                content: 'Javob bekor qilindi.',
+                createdAt: Date.now(),
+                kind: 'info',
+              },
             });
           }
           cancelReasonRef.current = 'none';
@@ -445,120 +615,123 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
           return;
         }
 
-        setError(toAiErrorInfo(thrown, 'chat'));
+        dispatch({ type: 'SET_ERROR', error: toAiErrorInfo(thrown, 'chat') });
         updateStatus('idle');
       } finally {
-        if (abortRef.current === controller) abortRef.current = null;
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
       }
     },
-    [appendMessage, updateStatus],
+    [getContext, updateStatus, explicitModel],
   );
 
-  const send = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed || statusRef.current !== 'idle') return;
-
-      const turn: AiWireMessage = { role: 'user', content: trimmed };
-      const wire = [...historyRef.current, turn];
-      historyRef.current = wire;
-      appendMessage({
-        id: nextId('user'),
-        role: 'user',
-        content: trimmed,
-        createdAt: Date.now(),
-      });
-      setLastPrompt(trimmed);
-      await runChat(wire);
-    },
-    [appendMessage, runChat],
-  );
-
-  /** Re-issue the last request with the exact same history (no duplication). */
   const retry = useCallback(async () => {
-    if (statusRef.current !== 'idle') return;
-    const wire = historyRef.current;
-    if (wire.length === 0) return;
-    await runChat(wire);
-  }, [runChat]);
+    const prompt = stateRef.current.lastPrompt;
+    if (!prompt) return;
 
-  const stop = useCallback(() => {
-    const controller = abortRef.current;
-    if (!controller || controller.signal.aborted) return;
-    cancelReasonRef.current = 'user';
-    controller.abort();
-  }, []);
+    // Remove the trailing error state and last user message from UI list so it is re-sent cleanly
+    dispatch({
+      type: 'UPDATE_MESSAGES',
+      updater: (prev) => {
+        const lastIdx = prev.length - 1;
+        if (lastIdx >= 0 && prev[lastIdx].role === 'user') {
+          return prev.slice(0, lastIdx);
+        }
+        return prev;
+      },
+    });
+
+    if (historyRef.current.length > 0) {
+      const lastWire = historyRef.current[historyRef.current.length - 1];
+      if (lastWire?.role === 'user') {
+        historyRef.current = historyRef.current.slice(0, -1);
+      }
+    }
+
+    dispatch({ type: 'SET_ERROR', error: null });
+    await send(prompt);
+  }, [send]);
 
   const confirm = useCallback(async () => {
-    const action = messagesRef.current.find((message) => message.confirmation)?.confirmation;
+    const action = stateRef.current.messages.find((message) => message.confirmation)?.confirmation;
     if (!action) return;
 
     updateStatus('confirming');
-
     try {
       const result = await confirmAiAction(action.actionId);
       const actionResult: AiActionResult = buildActionResult(result);
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.confirmation?.actionId === action.actionId
-            ? {
-                ...message,
-                confirmation: undefined,
-                actionError: undefined,
-                actionResult,
-                toolActivities: markActivities(message.toolActivities, 'success'),
-              }
-            : message,
-        ),
-      );
+
+      dispatch({
+        type: 'UPDATE_MESSAGES',
+        updater: (prev) =>
+          prev.map((message) =>
+            message.confirmation?.actionId === action.actionId
+              ? {
+                  ...message,
+                  confirmation: undefined,
+                  actionError: undefined,
+                  actionResult,
+                  toolActivities: markActivities(message.toolActivities, 'success'),
+                }
+              : message,
+          ),
+      });
       updateStatus('idle');
     } catch (thrown) {
       const info = toAiErrorInfo(thrown, 'confirm');
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.confirmation?.actionId === action.actionId
-            ? {
-                ...message,
-                confirmation: undefined,
-                actionError: info,
-                toolActivities: markActivities(message.toolActivities, 'error'),
-              }
-            : message,
-        ),
-      );
+      dispatch({
+        type: 'UPDATE_MESSAGES',
+        updater: (prev) =>
+          prev.map((message) =>
+            message.confirmation?.actionId === action.actionId
+              ? {
+                  ...message,
+                  confirmation: undefined,
+                  actionError: info,
+                  toolActivities: markActivities(message.toolActivities, 'error'),
+                }
+              : message,
+          ),
+      });
       updateStatus('idle');
     }
   }, [updateStatus]);
 
   const reject = useCallback(() => {
-    const action = messagesRef.current.find((message) => message.confirmation)?.confirmation;
+    const action = stateRef.current.messages.find((message) => message.confirmation)?.confirmation;
     if (!action) return;
 
-    setMessages((prev) => [
-      ...prev.map((message) =>
-        message.confirmation?.actionId === action.actionId
-          ? {
-              ...message,
-              confirmation: undefined,
-              toolActivities: markActivities(message.toolActivities, 'cancelled'),
-            }
-          : message,
-      ),
-      {
-        id: nextId('system'),
-        role: 'system',
-        content: 'Amal bekor qilindi. Boshqa topshiriq berishingiz mumkin.',
-        createdAt: Date.now(),
-        kind: 'info',
-      },
-    ]);
+    dispatch({
+      type: 'UPDATE_MESSAGES',
+      updater: (prev) => [
+        ...prev.map((message) =>
+          message.confirmation?.actionId === action.actionId
+            ? {
+                ...message,
+                confirmation: undefined,
+                toolActivities: markActivities(message.toolActivities, 'cancelled'),
+              }
+            : message,
+        ),
+        {
+          id: nextId('system'),
+          role: 'system',
+          content: 'Amal bekor qilindi. Boshqa topshiriq berishingiz mumkin.',
+          createdAt: Date.now(),
+          kind: 'info',
+        },
+      ],
+    });
     updateStatus('idle');
   }, [updateStatus]);
 
   const dismissActionError = useCallback(() => {
-    setMessages((prev) =>
-      prev.map((message) => (message.actionError ? { ...message, actionError: undefined } : message)),
-    );
+    dispatch({
+      type: 'UPDATE_MESSAGES',
+      updater: (prev) =>
+        prev.map((message) => (message.actionError ? { ...message, actionError: undefined } : message)),
+    });
   }, []);
 
   const clear = useCallback(() => {
@@ -566,48 +739,49 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
     abortRef.current?.abort();
     abortRef.current = null;
     historyRef.current = [];
-    messagesRef.current = [];
-    setMessages([]);
-    setError(null);
-    setLastPrompt('');
-    setConversationId(undefined);
-    conversationIdRef.current = undefined;
-    updateStatus('idle');
+    dispatch({ type: 'RESET' });
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.removeItem(STORAGE_KEY);
       } catch {
-        // ignore — nothing else to clean up
+        // ignore
       }
     }
-  }, [updateStatus]);
+  }, []);
 
-  const hydrate = useCallback((newMessages: AiUiMessage[], newHistory: AiWireMessage[] = [], newConversationId?: string) => {
-    cancelReasonRef.current = 'reset';
-    abortRef.current?.abort();
-    abortRef.current = null;
-    historyRef.current = newHistory;
-    messagesRef.current = newMessages;
-    setMessages(newMessages);
-    setError(null);
-    setLastPrompt('');
-    if (newConversationId !== undefined) {
-      setConversationId(newConversationId);
-      conversationIdRef.current = newConversationId;
-    }
-    updateStatus('idle');
-  }, [updateStatus]);
+  const hydrate = useCallback(
+    (newMessages: AiUiMessage[], newHistory: AiWireMessage[] = [], newConversationId?: string) => {
+      cancelReasonRef.current = 'reset';
+      abortRef.current?.abort();
+      abortRef.current = null;
+      historyRef.current = newHistory;
+      dispatch({
+        type: 'RESET',
+        messages: newMessages,
+        conversationId: newConversationId,
+      });
+    },
+    [],
+  );
 
-  const busy = status === 'sending' || status === 'thinking' || status === 'streaming' || status === 'confirming';
+  const setConversationId = useCallback((id?: string) => {
+    dispatch({ type: 'SET_CONVERSATION_ID', conversationId: id });
+  }, []);
+
+  const busy =
+    state.status === 'sending' ||
+    state.status === 'thinking' ||
+    state.status === 'streaming' ||
+    state.status === 'confirming';
 
   return {
-    messages,
-    status,
-    error,
+    messages: state.messages,
+    status: state.status,
+    error: state.error,
     busy,
-    canSend: status === 'idle',
-    lastPrompt,
-    conversationId,
+    canSend: state.status === 'idle',
+    lastPrompt: state.lastPrompt,
+    conversationId: state.conversationId,
     setConversationId,
     send,
     retry,

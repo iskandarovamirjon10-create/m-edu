@@ -1,6 +1,8 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import type { Observable } from 'rxjs';
+import { IS_PUBLIC_KEY } from './public.decorator';
 
 /**
  * Route-level JWT guard.
@@ -15,9 +17,23 @@ import type { Observable } from 'rxjs';
  */
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
+  constructor(private readonly reflector?: Reflector) {
+    super();
+  }
+
   canActivate(
     context: ExecutionContext,
   ): boolean | Promise<boolean> | Observable<boolean> {
+    if (this.reflector) {
+      const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+      if (isPublic === true) {
+        return true;
+      }
+    }
+
     if (context.getType() === 'http') {
       const req = context.switchToHttp().getRequest() as {
         user?: unknown;
@@ -31,5 +47,19 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       }
     }
     return super.canActivate(context);
+  }
+
+  handleRequest(err: any, user: any, info: any, context: ExecutionContext, status?: any) {
+    if (user) return user;
+
+    // LOGIC-04: On /auth/refresh, if the access token has expired but was signed legitimately,
+    // allow the request into AuthController.refresh to check and rotate the active DB session
+    const req = context.switchToHttp().getRequest();
+    const url = req.url || req.path || '';
+    if (url.includes('/auth/refresh') && info?.name === 'TokenExpiredError') {
+      return null;
+    }
+
+    return super.handleRequest(err, user, info, context, status);
   }
 }

@@ -26,42 +26,87 @@ interface ToolMeta {
   proposal?: string;
 }
 
+/**
+ * Tool vocabulary keyed by the names the backend registry actually exposes
+ * (`apps/api/src/ai/tools/**`). Legacy aliases are kept so older transcript
+ * entries still render a human label instead of a raw `a.b` string.
+ */
 const TOOL_META: Record<string, ToolMeta> = {
-  'attendance.today': { subject: 'Davomat ma\'lumotlari' },
-  'attendance.summary': { subject: 'Davomat hisoboti' },
-  'schedule.today': { subject: 'Darslar jadvali' },
-  'students.search': { subject: 'O\'quvchilar ro\'yxati' },
-  'groups.list': { subject: 'Guruhlar ro\'yxati' },
-  'finance.debtors': { subject: 'Qarzdorlar ro\'yxati' },
+  'attendance.summary': { subject: "Davomat ma'lumotlari" },
+  'attendance.today': { subject: "Davomat ma'lumotlari" },
+  'schedule.list': { subject: 'Dars jadvali' },
+  'schedule.today': { subject: 'Dars jadvali' },
+  'students.search': { subject: "O'quvchilar ro'yxati" },
+  'teachers.list': { subject: "O'qituvchilar ro'yxati" },
+  'groups.list': { subject: "Guruhlar ro'yxati" },
+  'courses.list': { subject: "Kurslar ro'yxati" },
+  'finance.debtors': { subject: "Qarzdorlar ro'yxati" },
   'finance.summary': { subject: 'Moliyaviy hisobot' },
   'reports.summary': { subject: 'Kunlik hisobot' },
+  'notifications.broadcast': {
+    subject: 'Xabarnoma',
+    proposal: 'Xabarnoma yuborish',
+  },
   'telegram.prepareMessage': {
     subject: 'Telegram xabari',
     proposal: 'Telegram xabari tayyorlash',
   },
   'students.create': {
-    subject: 'Yangi o\'quvchi',
-    proposal: 'Yangi o\'quvchi qo\'shish',
+    subject: "Yangi o'quvchi",
+    proposal: "Yangi o'quvchi qo'shish",
+  },
+  'teachers.create': {
+    subject: "Yangi o'qituvchi",
+    proposal: "Yangi o'qituvchi qo'shish",
+  },
+  'groups.create': {
+    subject: 'Yangi guruh',
+    proposal: 'Yangi guruh yaratish',
+  },
+  'courses.create': {
+    subject: 'Yangi kurs',
+    proposal: 'Yangi kurs yaratish',
+  },
+  'schedule.create': {
+    subject: 'Dars jadvali',
+    proposal: "Jadvalga dars qo'shish",
   },
 };
 
 const TOOL_SUCCESS: Record<string, string> = {
-  'attendance.today': 'Davomat ma\'lumotlari olindi',
-  'attendance.summary': 'Davomat hisoboti olindi',
-  'schedule.today': 'Darslar jadvali olindi',
-  'students.search': 'O\'quvchilar ro\'yxati olindi',
-  'groups.list': 'Guruhlar ro\'yxati olindi',
-  'finance.debtors': 'Qarzdorlar ro\'yxati olindi',
+  'attendance.summary': "Davomat ma'lumotlari olindi",
+  'attendance.today': "Davomat ma'lumotlari olindi",
+  'schedule.list': 'Dars jadvali olindi',
+  'schedule.today': 'Dars jadvali olindi',
+  'students.search': "O'quvchilar ro'yxati olindi",
+  'teachers.list': "O'qituvchilar ro'yxati olindi",
+  'groups.list': "Guruhlar ro'yxati olindi",
+  'courses.list': "Kurslar ro'yxati olindi",
+  'finance.debtors': "Qarzdorlar ro'yxati olindi",
   'finance.summary': 'Moliyaviy hisobot olindi',
   'reports.summary': 'Hisobot tayyorlandi',
+  'notifications.broadcast': 'Xabarnoma yuborish tayyorlandi',
   'telegram.prepareMessage': 'Telegram xabari tayyorlandi',
-  'students.create': 'Yangi o\'quvchi qo\'shish tayyorlandi',
+  'students.create': "Yangi o'quvchi qo'shish tayyorlandi",
+  'teachers.create': "Yangi o'qituvchi qo'shish tayyorlandi",
+  'groups.create': 'Yangi guruh yaratish tayyorlandi',
+  'courses.create': 'Yangi kurs yaratish tayyorlandi',
+  'schedule.create': "Jadvalga dars qo'shish tayyorlandi",
 };
 
 /** Parameter labels used by both confirmation and result cards. */
 const PARAMETER_LABELS: Record<string, string> = {
   message: 'Xabar',
-  audience: 'Olchov',
+  audience: 'Kimga',
+  title: 'Sarlavha',
+  recipientGroup: 'Qabul qiluvchilar',
+  dayOfWeek: 'Hafta kuni',
+  startTime: 'Boshlanish',
+  endTime: 'Tugash',
+  room: 'Xona',
+  courseId: 'Kurs',
+  teacherId: "O'qituvchi",
+  name: 'Nomi',
   group: 'Guruh',
   groupId: 'Guruh',
   student: 'O\'quvchi',
@@ -300,18 +345,38 @@ export function toAiErrorInfo(error: unknown, context: AiErrorContext = 'chat'):
  */
 export async function aiChat(
   messages: AiWireMessage[],
-  options: { signal?: AbortSignal; conversationId?: string } = {},
+  options: {
+    signal?: AbortSignal;
+    conversationId?: string;
+    route?: string;
+    model?: string;
+  } = {},
 ): Promise<AiChatResponse & { conversationId?: string }> {
   const wire = messages ?? [];
   const last = wire[wire.length - 1];
   const message = (last?.role === 'user' ? last.content : '') || '';
+  const attachments = last?.attachments?.map((att) => ({
+    type: att.type,
+    mimeType: att.mimeType,
+    base64: att.base64 || '',
+    name: att.name,
+  }));
   const history = wire
     .slice(0, last?.role === 'user' ? -1 : undefined)
     .filter((entry) => entry.role === 'user' || entry.role === 'assistant')
     .filter((entry) => (entry.content || '').trim().length > 0)
     .map((entry) => ({ role: entry.role, content: entry.content || '' }));
 
-  const response = await aiApi.chat({ message, history, conversationId: options.conversationId as string | undefined }, { signal: options.signal });
+  const response = await aiApi.chat(
+    {
+      message,
+      history,
+      conversationId: options.conversationId as string | undefined,
+      attachments,
+      model: options.model,
+    },
+    { signal: options.signal }
+  );
 
   return {
     type: 'message',
@@ -322,11 +387,24 @@ export async function aiChat(
 
 export async function aiChatStream(
   messages: AiWireMessage[],
-  options: { signal?: AbortSignal; conversationId?: string; onDelta: (chunk: string) => void; onTool?: (event: unknown) => void }
+  options: {
+    signal?: AbortSignal;
+    conversationId?: string;
+    route?: string;
+    model?: string;
+    onDelta: (chunk: string) => void;
+    onTool?: (event: unknown) => void;
+  }
 ): Promise<{ conversationId: string; content: string }> {
   const wire = messages ?? [];
   const last = wire[wire.length - 1];
   const message = (last?.role === 'user' ? last.content : '') || '';
+  const attachments = last?.attachments?.map((att) => ({
+    type: att.type,
+    mimeType: att.mimeType,
+    base64: att.base64 || '',
+    name: att.name,
+  }));
   const history = wire
     .slice(0, last?.role === 'user' ? -1 : undefined)
     .filter((entry) => entry.role === 'user' || entry.role === 'assistant')
@@ -340,6 +418,10 @@ export async function aiChatStream(
   // session cookie entirely, so this endpoint could never authorize.
   await ensureCsrfCookie();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (options.route) {
+    const cleanRoute = options.route.replace(/[\r\n]/g, '').slice(0, 200);
+    headers['X-Page-Context'] = cleanRoute;
+  }
   const xsrf = readXsrfCookie();
   if (xsrf) headers['x-xsrf-token'] = xsrf;
 
@@ -347,7 +429,14 @@ export async function aiChatStream(
     method: 'POST',
     headers,
     credentials: 'include',
-    body: JSON.stringify({ message, history, conversationId: options.conversationId ?? undefined }),
+    body: JSON.stringify({
+      message,
+      history,
+      conversationId: options.conversationId ?? undefined,
+      route: options.route ? options.route.slice(0, 200) : undefined,
+      model: options.model ?? undefined,
+      attachments: attachments && attachments.length > 0 ? attachments : undefined,
+    }),
     signal: options.signal,
   });
 
@@ -439,12 +528,11 @@ export async function aiChatStream(
 }
 
 /**
- * Execute a previously proposed action.
+ * Execute a previously confirmed action.
  *
- * Backend limitation (documented, not worked around): `POST /ai/chat` is the
- * only AI route the API exposes today — it cannot yet resume a parked tool
- * call, so no endpoint accepts an `actionId`. The confirmation UI therefore
- * fails loudly and safely instead of pretending the action ran.
+ * Confirmation is re-authorized server-side (identity, tenant, permission,
+ * expiry, status and parameters) and the execution gate is atomic, so a
+ * double click can never write twice.
  */
 export async function confirmAiAction(actionId: string): Promise<Record<string, unknown>> {
   return await request<Record<string, unknown>>(`/workspace/ai/actions/${actionId}/confirm`, {
@@ -486,7 +574,11 @@ export const aiConversationsApi = {
 };
 
 export const aiInsightsApi = {
-  list: (scope = 'current') => request<AiInsight[]>(`/ai/insights?scope=${scope}`),
+  /** Page-scoped insights: the route travels as a header, never as `scope`. */
+  list: (route?: string) =>
+    request<AiInsight[]>('/ai/insights?scope=page', {
+      headers: route ? { 'X-Page-Context': route } : undefined,
+    }),
 };
 
 export const aiSuggestionsApi = {

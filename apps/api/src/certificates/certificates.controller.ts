@@ -28,13 +28,12 @@ import { AllowAnyRole } from '../auth/roles.decorator';
 import { AllowPublic } from '../auth/public.decorator';
 
 @Controller('certificates')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(RolesGuard)
 export class CertificatesController {
   constructor(private readonly certificatesService: CertificatesService) {}
 
   // ===================== Certificate Management =====================
 
-  @AllowAnyRole()
   @Get()
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER)
   async findAllCertificates(@CurrentUser() user: RequestUser) {
@@ -45,7 +44,6 @@ export class CertificatesController {
   // route — NestJS matches controllers routes in declaration order, so a
   // `GET /certificates/templates` would otherwise be captured by `:id` and
   // rejected by ParseUUIDPipe with a 400 before ever reaching its handler.
-  @AllowAnyRole()
   @Get('student/:studentId')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER, Role.STUDENT)
   async getStudentCertificates(
@@ -61,14 +59,12 @@ export class CertificatesController {
     return this.certificatesService.verifyCertificate(code);
   }
 
-  @AllowAnyRole()
   @Get('templates')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findAllTemplates(@CurrentUser() user: RequestUser) {
     return this.certificatesService.findAllTemplates(user.organizationId);
   }
 
-  @AllowAnyRole()
   @Get(':id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER, Role.TEACHER, Role.STUDENT)
   async findCertificateById(
@@ -102,7 +98,6 @@ export class CertificatesController {
 
   // ===================== Templates =====================
 
-  @AllowAnyRole()
   @Get('templates/:id')
   @Roles(Role.ORG_ADMIN, Role.MANAGER)
   async findTemplateById(

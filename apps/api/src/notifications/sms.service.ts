@@ -42,14 +42,14 @@ export class SmsService {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    const rawProvider = this.configService.get<string>('SMS_PROVIDER', 'STUB');
+    const rawProvider = this.configService?.get?.<string>('SMS_PROVIDER', 'STUB') || 'STUB';
     this.provider = (['Eskiz', 'PlayMobile'] as const).includes(rawProvider as never)
       ? (rawProvider as 'Eskiz' | 'PlayMobile')
       : 'STUB';
-    this.eskizEmail = this.configService.get<string>('ESKIZ_EMAIL');
-    this.eskizPassword = this.configService.get<string>('ESKIZ_PASSWORD');
-    this.playmobileBaseUrl = this.configService.get<string>('PLAYMOBILE_BASE_URL');
-    this.playmobileToken = this.configService.get<string>('PLAYMOBILE_TOKEN');
+    this.eskizEmail = this.configService?.get?.<string>('ESKIZ_EMAIL');
+    this.eskizPassword = this.configService?.get?.<string>('ESKIZ_PASSWORD');
+    this.playmobileBaseUrl = this.configService?.get?.<string>('PLAYMOBILE_BASE_URL');
+    this.playmobileToken = this.configService?.get?.<string>('PLAYMOBILE_TOKEN');
 
     if (this.provider !== 'STUB' && !this.isConfigured()) {
       this.logger.warn(

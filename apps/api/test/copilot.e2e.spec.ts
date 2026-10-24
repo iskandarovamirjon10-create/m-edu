@@ -8,8 +8,8 @@ describe('AI Copilot E2E', () => {
   const prisma = new PrismaClient();
   let tokenA = '';
   let tokenB = '';
-  const orgAId = '';
-  const orgBId = '';
+
+
 
   let csrfToken = '';
   let csrfCookie = '';

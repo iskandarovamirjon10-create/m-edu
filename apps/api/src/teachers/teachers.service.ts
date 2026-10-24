@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { hashPassword } from '../auth/auth.config';
+import { normalizeEmail } from '../auth/auth.utils';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePagination } from '../lib/pagination';
@@ -56,35 +57,37 @@ export class TeachersService {
   }
 
   async create(organizationId: string, data: CreateTeacherDto) {
-    if (data.email) {
-      const existing = await this.prisma.user.findFirst({ where: { email: data.email, organizationId } });
+    const normalizedEmail = data.email ? normalizeEmail(data.email) : null;
+    if (normalizedEmail) {
+      // User.email is globally unique across the whole system
+      const existing = await this.prisma.user.findFirst({
+        where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+      });
       if (existing) throw new BadRequestException('Email already registered');
     }
 
-    // Mirrors student/user provisioning: the password is optional in the DTO,
-    // and a passwordless account simply cannot sign in with a password (login
-    // rejects a null hash). It is activated later via invite/Google linking.
-    // Demanding a password here contradicted both the DTO contract and the
-    // placeholder-email fallback below.
     const passwordHash = data.password ? await hashPassword(data.password) : null;
-    const email = data.email || `teacher-${randomUUID()}@placeholder.local`;
+    const email = normalizedEmail || `teacher-${randomUUID()}@placeholder.local`;
+    const phone = data.phone?.trim() || null;
 
     try {
       return await this.prisma.teacher.create({
         data: {
           organization: { connect: { id: organizationId } },
           specializations: data.specializations || [],
-          hourlyRate: data.hourlyRate,
-          bio: data.bio,
-          experience: data.experience,
+          salaryType: data.salaryType || 'MONTHLY',
+          hourlyRate: data.hourlyRate ?? null,
+          lessonRate: data.lessonRate ?? null,
+          bio: data.bio?.trim() || null,
+          experience: data.experience ?? null,
           user: {
             create: {
               organization: { connect: { id: organizationId } },
               email,
               passwordHash,
-              firstName: data.firstName,
-              lastName: data.lastName,
-              phone: data.phone,
+              firstName: data.firstName.trim(),
+              lastName: data.lastName.trim(),
+              phone,
               role: 'TEACHER',
               settings: { create: {} },
             },
@@ -94,38 +97,66 @@ export class TeachersService {
       });
     } catch (error: unknown) {
       if ((error as { code?: string })?.code === 'P2002') {
-        throw new BadRequestException('This email is unavailable');
+        throw new BadRequestException('Email already registered');
       }
       throw error;
     }
   }
 
   async update(organizationId: string, id: string, data: UpdateTeacherDto) {
-    await this.findOne(organizationId, id);
+    const teacher = await this.findOne(organizationId, id);
 
     const teacherData: Prisma.TeacherUpdateInput = {};
     if (data.specializations !== undefined) teacherData.specializations = data.specializations;
+    if (data.salaryType !== undefined) teacherData.salaryType = data.salaryType;
     if (data.hourlyRate !== undefined) teacherData.hourlyRate = data.hourlyRate;
-    if (data.bio !== undefined) teacherData.bio = data.bio;
+    if (data.lessonRate !== undefined) teacherData.lessonRate = data.lessonRate;
+    if (data.bio !== undefined) teacherData.bio = data.bio?.trim() || null;
     if (data.experience !== undefined) teacherData.experience = data.experience;
 
     const userData: Prisma.UserUpdateInput = {};
-    if (data.firstName !== undefined) userData.firstName = data.firstName;
-    if (data.lastName !== undefined) userData.lastName = data.lastName;
-    if (data.phone !== undefined) userData.phone = data.phone;
+    if (data.firstName !== undefined) userData.firstName = data.firstName.trim();
+    if (data.lastName !== undefined) userData.lastName = data.lastName.trim();
+    if (data.phone !== undefined) userData.phone = data.phone?.trim() || null;
+    if (data.isActive !== undefined) userData.isActive = data.isActive;
+
+    if (data.email !== undefined) {
+      const normalizedEmail = data.email ? normalizeEmail(data.email) : null;
+      if (normalizedEmail) {
+        const existing = await this.prisma.user.findFirst({
+          where: {
+            email: { equals: normalizedEmail, mode: 'insensitive' },
+            id: { not: teacher.userId },
+          },
+        });
+        if (existing) throw new BadRequestException('Email already registered');
+        userData.email = normalizedEmail;
+      }
+    }
+
+    if (data.password) {
+      userData.passwordHash = await hashPassword(data.password);
+    }
 
     if (Object.keys(teacherData).length === 0 && Object.keys(userData).length === 0) {
       return this.findOne(organizationId, id);
     }
 
-    return this.prisma.teacher.update({
-      where: { id, organizationId },
-      data: {
-        ...teacherData,
-        ...(Object.keys(userData).length > 0 ? { user: { update: userData } } : {}),
-      },
-      include: { user: userPublicSelect },
-    });
+    try {
+      return await this.prisma.teacher.update({
+        where: { id, organizationId },
+        data: {
+          ...teacherData,
+          ...(Object.keys(userData).length > 0 ? { user: { update: userData } } : {}),
+        },
+        include: { user: userPublicSelect },
+      });
+    } catch (error: unknown) {
+      if ((error as { code?: string })?.code === 'P2002') {
+        throw new BadRequestException('Email already registered');
+      }
+      throw error;
+    }
   }
 
   /**

@@ -111,8 +111,16 @@ describe('GlobalAuthGuard (fail-closed HTTP)', () => {
       imports: [PassportModule],
       controllers: [ClassOpenController, ClassClosedController],
       providers: [
-        { provide: APP_GUARD, useClass: GlobalAuthGuard },
-        JwtStrategy,
+        {
+          provide: APP_GUARD,
+          useFactory: (reflector: Reflector) => new GlobalAuthGuard(reflector),
+          inject: [Reflector],
+        },
+        {
+          provide: JwtStrategy,
+          useFactory: (cfg: ConfigService, pr: PrismaService) => new JwtStrategy(cfg, pr),
+          inject: [ConfigService, PrismaService],
+        },
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: { get: (key: string) => (key === 'JWT_SECRET' ? SECRET : undefined) } },
       ],

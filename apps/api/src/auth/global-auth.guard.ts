@@ -51,4 +51,18 @@ export class GlobalAuthGuard extends AuthGuard('jwt') {
 
     return super.canActivate(context);
   }
+
+  handleRequest(err: any, user: any, info: any, context: ExecutionContext, status?: any) {
+    if (user) return user;
+
+    // LOGIC-04: On /auth/refresh, if the access token has expired but was signed legitimately,
+    // allow the request into AuthController.refresh to check and rotate the active DB session
+    const req = context.switchToHttp().getRequest();
+    const url = req.url || req.path || '';
+    if (url.includes('/auth/refresh') && info?.name === 'TokenExpiredError') {
+      return null;
+    }
+
+    return super.handleRequest(err, user, info, context, status);
+  }
 }

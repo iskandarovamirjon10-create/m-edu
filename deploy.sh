@@ -73,6 +73,8 @@ if [ ! -f .env ]; then
   # Biometric 256-bit key (64 hex characters)
   BIO_KEY=$(openssl rand -hex 32)
   SESSION_SECRET=$(openssl rand -hex 32)
+  ADMIN_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16)
+  ADMIN_EMAIL="admin@medu.test"
 
   read -r -p "Enter your application domain or IP (default: localhost): " DOMAIN_INPUT
   APP_DOMAIN="${DOMAIN_INPUT:-localhost}"
@@ -102,6 +104,8 @@ REDIS_URL=redis://redis:6379
 JWT_SECRET=${JWT_SECRET}
 BIOMETRIC_ENCRYPTION_KEY=${BIO_KEY}
 OAUTH_SESSION_SECRET=${SESSION_SECRET}
+SEED_ADMIN_EMAIL=${ADMIN_EMAIL}
+SEED_ADMIN_PASSWORD=${ADMIN_PASS}
 CORS_ORIGIN=${APP_URL}
 NEXT_PUBLIC_APP_URL=${APP_URL}
 TRUST_PROXY=1
@@ -179,8 +183,8 @@ echo -e "Web Application: ${CYAN}http://$(curl -s ifconfig.me 2>/dev/null || ech
 echo -e "API Endpoint:    ${CYAN}http://$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP"):8080/api/health${NC}"
 echo ""
 echo -e "Default Super Admin Credentials:"
-echo -e "  Email:    ${YELLOW}admin@medu.test${NC}"
-echo -e "  Password: ${YELLOW}Password123!${NC}"
+echo -e "  Email:    ${YELLOW}${ADMIN_EMAIL:-admin@medu.test}${NC}"
+echo -e "  Password: ${YELLOW}${ADMIN_PASS:-[See SEED_ADMIN_PASSWORD in .env]}${NC}"
 echo ""
 echo -e "Useful Commands:"
 echo -e "  View Logs:      ${CYAN}docker compose logs -f${NC}"

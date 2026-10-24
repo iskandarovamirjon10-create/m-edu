@@ -52,7 +52,7 @@ export class StudentsService {
         include: {
           user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, isActive: true } },
           groups: { where: { isActive: true }, include: { group: { select: { id: true, name: true } } } },
-          _count: { select: { payments: true } },
+          _count: { select: { payments: true, faceEnrollments: true, attendance: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip,

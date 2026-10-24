@@ -21,9 +21,10 @@ import {
 import { analyticsApi } from '@/lib/api';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { getErrorMessage } from '@/lib/errorMessages';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 
 interface Anomaly {
   type: string;
@@ -300,7 +301,7 @@ function FilterTab({
  * ═══════════════════════════════════════════════════════════════════ */
 
 function AnomalyRow({ anomaly, onOpenSidecar }: { anomaly: Anomaly; onOpenSidecar: () => void }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const cfg = severityConfig(anomaly.severity);
   const delta = formatDelta(anomaly.observed, anomaly.baseline);
 
@@ -396,7 +397,7 @@ function AnomalyRow({ anomaly, onOpenSidecar }: { anomaly: Anomaly; onOpenSideca
 type SeverityFilter = 'ALL' | 'HIGH' | 'MEDIUM' | 'LOW';
 
 export function AnomalyDetectionPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('anomaly.title'));
   const { playTick, playPop } = usePremiumSound();
 
@@ -533,17 +534,13 @@ export function AnomalyDetectionPage() {
 
   return (
     <div className="relative min-h-screen bg-transparent selection:bg-indigo-500/25">
-      {/* Ambient atmosphere — super subtle */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-        <div className="absolute left-[-15%] top-[-10%] h-[50%] w-[45%] rounded-full bg-rose-500/[0.03] blur-[120px] dark:bg-rose-500/[0.04]" />
-        <div className="absolute bottom-[-10%] right-[-10%] h-[45%] w-[40%] rounded-full bg-indigo-500/[0.03] blur-[120px] dark:bg-indigo-500/[0.04]" />
-      </div>
+      <AuroraMesh variant="security" opacity={0.65} />
 
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="relative z-10 mx-auto w-full max-w-[1400px] space-y-5 p-4 sm:p-6 lg:p-8"
+        className="relative z-10 mx-auto w-full max-w-[1400px] space-y-5 p-4 sm:p-6 lg:p-8 pb-[max(6rem,env(safe-area-inset-bottom))]"
       >
         {/* Header */}
         <motion.div variants={itemVariants}>

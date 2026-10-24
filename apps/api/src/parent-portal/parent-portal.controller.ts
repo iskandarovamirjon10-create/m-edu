@@ -82,7 +82,16 @@ export class ParentPortalController {
     return this.parentPortal.getChildGrades(this.ctx(user), studentId);
   }
 
-  @AllowAnyRole()
+  @Get('children/:studentId/schedule')
+  @Roles(Role.PARENT)
+  @ApiOperation({ summary: 'Weekly class schedule for one of my children' })
+  childSchedule(
+    @CurrentUser() user: { sub: string; organizationId: string },
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.parentPortal.getChildSchedule(this.ctx(user), studentId);
+  }
+
   @Get('children/:studentId/invoices')
   @Roles(Role.PARENT)
   @ApiOperation({ summary: 'Invoices, payments and balance for one of my children' })

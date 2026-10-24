@@ -1,50 +1,86 @@
-import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+/**
+ * M-EDU PrivacyPage — Apple Cupertino Legal Layout
+ * Liquid Glass substrate with ambient illumination & fluid typography.
+ */
+
+import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+import { GlassButton } from '@/components/ui';
 
 export function PrivacyPage() {
-  const { t } = useI18n();
-  usePageTitle(t('privacy.title'));
-  return (
-    <div className="page-container">
-      
+  const { t } = useSafeI18n();
+  usePageTitle(t('privacy.title') || 'Privacy Policy');
 
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-12 glass-card" style={{ position: 'relative', zIndex: 1, padding: '32px' }}>
-      <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-        {t('privacy.title')}
-      </h1>
-      <div className="prose max-w-none space-y-4 text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-        <p>
-          {t('privacy.intro')}
-        </p>
-        <h2 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>{t('privacy.section1Title')}</h2>
-        <p>
-          {t('privacy.section1Body')}
-        </p>
-        <h2 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>{t('privacy.section2Title')}</h2>
-        <p>
-          {t('privacy.section2Body')}
-        </p>
-        <h2 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>{t('privacy.section3Title')}</h2>
-        <p>
-          {t('privacy.section3Body')}
-        </p>
-        <h2 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>{t('privacy.section4Title')}</h2>
-        <p>
-          {t('privacy.section4Body')}
-        </p>
-        <h2 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>{t('privacy.section5Title')}</h2>
-        <p>
-          {t('privacy.section5Body')}
-        </p>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          {t('privacy.footer')}
-        </p>
-      </div>
-      <Link to="/login" className="text-sm hover:underline" style={{ color: 'var(--m-vivid)' }}>
-        ← {t('auth.backToSignIn')}
-      </Link>
-      </div>
+  return (
+    <div className="relative min-h-screen px-4 py-12 sm:px-6 lg:px-8">
+      {/* Ambient background glows */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed -top-40 right-10 h-96 w-96 rounded-full bg-brand-500/10 blur-[100px] dark:bg-blue-500/15"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none fixed top-1/2 left-10 h-96 w-96 rounded-full bg-indigo-500/10 blur-[100px] dark:bg-indigo-500/15"
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+        className="relative z-10 mx-auto max-w-3xl overflow-hidden rounded-[2.5rem] bg-white/60 p-8 sm:p-12 ring-1 ring-inset ring-white/70 backdrop-blur-md shadow-xl dark:bg-white/[0.035] dark:ring-white/[0.08]"
+      >
+        <div className="mb-6 flex items-center justify-between">
+          <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)]">
+            M-EDU Privacy & Security
+          </span>
+          <GlassButton asChild variant="ghost" size="sm">
+            <Link to="/login">← {t('auth.backToSignIn') || 'Sign In'}</Link>
+          </GlassButton>
+        </div>
+
+        <h1 className="text-3xl font-black tracking-tight text-[var(--text-primary)] sm:text-4xl">
+          {t('privacy.title') || 'Privacy Policy'}
+        </h1>
+
+        <div className="mt-8 space-y-6 text-[14px] leading-relaxed text-[var(--text-secondary)]">
+          <p className="text-base text-[var(--text-primary)]">
+            {t('privacy.intro')}
+          </p>
+
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('privacy.section1Title')}</h2>
+            <p>{t('privacy.section1Body')}</p>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('privacy.section2Title')}</h2>
+            <p>{t('privacy.section2Body')}</p>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('privacy.section3Title')}</h2>
+            <p>{t('privacy.section3Body')}</p>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('privacy.section4Title')}</h2>
+            <p>{t('privacy.section4Body')}</p>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('privacy.section5Title')}</h2>
+            <p>{t('privacy.section5Body')}</p>
+          </div>
+
+          <div className="border-t border-white/40 pt-6 text-[12px] text-[var(--text-muted)] dark:border-white/[0.06]">
+            {t('privacy.footer')}
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 }
+
+export default PrivacyPage;

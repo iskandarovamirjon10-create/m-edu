@@ -6,14 +6,17 @@ import { getSocketBaseUrl } from '@/lib/socketUrl';
 import { queryKeys } from '@/lib/query-keys.factory';
 
 export interface AttendanceEventPayload {
-  type: 'AttendanceCreated';
+  type?: string;
   organizationId: string;
   attendanceId: string;
   studentId: string;
-  cameraId: string;
-  status: string;
-  timestamp: string;
-  eventId: string;
+  studentName?: string;
+  groupName?: string;
+  cameraId?: string;
+  status?: string;
+  recognizedAt?: string;
+  timestamp?: string;
+  eventId?: string;
 }
 
 let sharedSocket: Socket | null = null;
@@ -57,12 +60,32 @@ export function useAttendanceSocket() {
       setIsConnected(false);
     };
 
-    const onAttendanceCreated = (_payload: AttendanceEventPayload) => {
+    const onAttendanceCreated = (payload: AttendanceEventPayload) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.face.history() });
       queryClient.invalidateQueries({ queryKey: queryKeys.face.all() });
       queryClient.invalidateQueries({ queryKey: queryKeys.attendance.all() });
       queryClient.invalidateQueries({ queryKey: queryKeys.attendance.analyticsAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
+
+      if (typeof window !== 'undefined') {
+        const timeStr = payload?.recognizedAt || payload?.timestamp
+          ? new Date(payload.recognizedAt || payload.timestamp || Date.now()).toLocaleTimeString('uz-UZ', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+
+        window.dispatchEvent(
+          new CustomEvent('medu:attendance-logged', {
+            detail: {
+              id: payload?.attendanceId || payload?.studentId || 'attendance',
+              name: payload?.studentName || "O'quvchi",
+              group: payload?.groupName || '',
+              time: timeStr,
+            },
+          }),
+        );
+      }
     };
 
     currentSocket.on('connect', onConnect);

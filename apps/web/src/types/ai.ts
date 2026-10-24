@@ -72,7 +72,129 @@ export interface AiToolActivity {
   id?: string;
   toolName?: string;
   status?: AiToolActivityStatus;
+  result?: any;
+  error?: string;
   [key: string]: any;
+}
+
+// ── Tool Result Payload Schemas (v2) ──────────────────────────
+
+export interface AiAttendanceStatusCount {
+  status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED' | string;
+  _count: { status: number };
+}
+
+export interface AiAttendanceSummaryData {
+  overall?: {
+    total: number;
+    present: number;
+    rate: number;
+  };
+  byStatus?: AiAttendanceStatusCount[];
+  byGroup?: Array<{ groupId: string; _count: { status: number } }>;
+}
+
+export interface AiDebtorItem {
+  id: string;
+  student: string;
+  total: number;
+  paidAmount: number;
+  status: string;
+  dueDate: string | Date;
+}
+
+export interface AiDebtorsData {
+  total: number;
+  outstanding: number;
+  debtors: AiDebtorItem[];
+}
+
+export interface AiScheduleLessonItem {
+  id: string;
+  group?: string | null;
+  dayOfWeek: string;
+  startTime: string;
+  endTime: string;
+  room?: string;
+  teacher?: string;
+}
+
+export interface AiScheduleListData {
+  total: number;
+  lessons: AiScheduleLessonItem[];
+}
+
+export interface AiStudentSearchItem {
+  id: string;
+  firstName: string;
+  lastName: string;
+  groups?: string[];
+  email?: string;
+  phone?: string;
+  balance?: number;
+  attendanceRate?: number;
+}
+
+export interface AiStudentSearchData {
+  total: number;
+  students: AiStudentSearchItem[];
+}
+
+export interface AiGradeExamItem {
+  id: string;
+  title: string;
+  subject: string;
+  examDate?: string;
+  averageMarks?: number;
+  totalMarks: number;
+  passingMarks: number;
+  passedCount?: number;
+  failedCount?: number;
+  totalStudents?: number;
+  passRate?: number;
+}
+
+export interface AiGradeAnalyticsData {
+  totalExams: number;
+  overallAverage: number;
+  overallPassRate: number;
+  exams: AiGradeExamItem[];
+}
+
+export interface AiBroadcastData {
+  channel: 'sms' | 'telegram' | 'platform' | 'all';
+  recipientGroup: string;
+  recipientCount: number;
+  title?: string;
+  message: string;
+  scheduledAt?: string;
+}
+
+export interface AiTeacherWorkloadItem {
+  id: string;
+  name: string;
+  groupsCount: number;
+  studentsCount: number;
+  weeklyHours: number;
+  attendanceRate: number;
+  specializations?: string[];
+}
+
+export interface AiTeacherWorkloadData {
+  totalTeachers: number;
+  totalHours: number;
+  averageAttendanceRate: number;
+  teachers: AiTeacherWorkloadItem[];
+}
+
+export interface AiAttachment {
+  id: string;
+  type: 'image';
+  url: string;
+  base64?: string;
+  mimeType: string;
+  name?: string;
+  size?: number;
 }
 
 export interface AiParameterField {
@@ -120,6 +242,7 @@ export interface AiUiMessage {
   timestamp?: string;
   createdAt?: number;
   kind?: string;
+  attachments?: AiAttachment[];
   activities?: AiToolActivity[];
   toolActivities?: AiToolActivity[];
   pendingAction?: AiPendingAction;
@@ -151,6 +274,7 @@ export interface AiWireToolResult {
 export interface AiWireMessage {
   role: 'user' | 'assistant' | 'tool' | string;
   content?: string;
+  attachments?: AiAttachment[];
   tool_calls?: AiWireToolCall[];
   tool_call_id?: string;
   toolCallId?: string;

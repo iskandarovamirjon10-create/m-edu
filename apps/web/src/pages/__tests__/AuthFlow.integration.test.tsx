@@ -55,7 +55,7 @@ const SEED_USER = {
 
 function renderRoutes(initialEntry: string) {
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
+    <MemoryRouter initialEntries={[initialEntry]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<PublicOnly><div>LOGIN_PAGE</div></PublicOnly>} />

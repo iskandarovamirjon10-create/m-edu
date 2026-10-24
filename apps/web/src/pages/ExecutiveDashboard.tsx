@@ -22,7 +22,8 @@ import { analyticsApi } from '@/lib/api';
 import { GlassErrorState } from '@/components/ui';
 import { formatCurrency } from '@/lib/format';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -215,10 +216,6 @@ const SEVERITY_TONE: Record<string, Tone> = {
  * PREMIUM SUB-COMPONENTS
  * ========================================================================== */
 
-function AmbientOrbs() {
-  return null;
-}
-
 function CountUp({
   value, duration = 1.1, prefix = '', suffix = '',
 }: { value: number; duration?: number; prefix?: string; suffix?: string }) {
@@ -372,7 +369,7 @@ function RevenueExpenseChart({
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
 
   if (!data || data.length === 0) return null;
 
@@ -690,7 +687,7 @@ function SeverityBadge({ severity }: { severity: string }) {
  * ========================================================================== */
 
 export function ExecutiveDashboardPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('executive.title'));
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<ExecutiveSummary>({
@@ -749,9 +746,9 @@ export function ExecutiveDashboardPage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="relative page-container space-y-5"
+      className="relative page-container space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
-      <AmbientOrbs />
+      <AuroraMesh variant="corporate" opacity={0.65} />
 
       {/* ============================================================
           HERO HEADER

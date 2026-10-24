@@ -1,5 +1,7 @@
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import request from 'supertest';
 import { AiModule } from '../ai.module';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -14,8 +16,15 @@ describe('AiController (Integration)', () => {
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AiModule],
+      imports: [ConfigModule.forRoot({ isGlobal: true }), AiModule],
     })
+      .overrideProvider(ConfigService)
+      .useValue({
+        get: vi.fn((key: string) => {
+          if (key === 'JWT_SECRET') return 'test-jwt-secret-key-at-least-32-chars-long';
+          return process.env[key] || '';
+        }),
+      })
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: (context: any) => {
           const req = context.switchToHttp().getRequest();

@@ -32,12 +32,13 @@ import {
   GlassTD,
   GlassSelect,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { analyticsApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import type {
   CashFlowData,
   FinancialAnomaly,
@@ -232,7 +233,7 @@ function fmtUZS(val: number) {
  * ========================================================================== */
 
 function AmbientOrbs() {
-  return null;
+  return <AuroraMesh variant="corporate" />;
 }
 
 function CountUp({ value, duration = 1.1, suffix = '', decimals = 0, currency = false }: { value: number; duration?: number; suffix?: string; decimals?: number; currency?: boolean }) {
@@ -352,7 +353,7 @@ function PremiumTabs({
   active: TabId;
   onChange: (id: TabId) => void;
 }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const reduced = useReducedMotion();
 
   return (
@@ -373,7 +374,7 @@ function PremiumTabs({
             whileHover={reduced ? undefined : { y: -1 }}
             whileTap={{ scale: 0.97 }}
             transition={SPRING.snappy}
-            className="relative shrink-0 overflow-hidden rounded-xl px-3.5 py-2 text-[12.5px] font-bold tracking-tight outline-none transition-colors whitespace-nowrap"
+            className="relative inline-flex items-center justify-center min-h-[44px] shrink-0 overflow-hidden rounded-xl px-3.5 py-2 text-[12.5px] font-bold tracking-tight outline-none transition-colors whitespace-nowrap"
             style={{ color: isActive ? c.fg : '#64748B' }}
             tabIndex={0}
             onKeyDown={(e: any) => {
@@ -1282,7 +1283,7 @@ function ReconciliationView({ t }: { t: (key: string) => string }) {
 
 export function FinancialAnalyticsPage() {
   const { playTick } = usePremiumSound();
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('nav.financialAnalytics'));
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [range] = useState(getDefaultDateRange());
@@ -1323,7 +1324,7 @@ export function FinancialAnalyticsPage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="relative page-container space-y-5"
+      className="relative page-container space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
       <AmbientOrbs />
 

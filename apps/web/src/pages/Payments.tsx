@@ -1,17 +1,15 @@
 /**
- * M-EDU PaymentsPage — Apple Design Award Edition
+ * M-EDU PaymentsPage — iOS 27 Liquid Glass Edition (Solarium Architecture)
  *
- * Premium craft:
- *  - Hero header with gradient wallet tile + live stats chips + primary CTA
- *  - Animated KPI bar (Total, Paid, Pending, Overdue) with count-up
- *  - Premium filter toolbar with squircle leading icons
- *  - Premium payment rows: gradient avatar + method chip + status badge + amount
- *  - Inline status segmented control (tone-aware)
- *  - Premium receipt modal with M-EDU branded print layout
- *  - Custom SVG icons in SF Symbols proportions
- *  - Shimmer skeletons (not pulse)
- *  - Framer Motion spring physics + staggered blur-in
- *  - Full i18n preserved
+ * Premium Craft & Optical Physics:
+ *  - True Liquid Glass surfaces: multi-layered specular rims, inner meniscus highlights & caustic glow
+ *  - Bespoke Jewel & Iridescent Titanium color palette (zero legacy iOS 14 flat neon hexes)
+ *  - 3D Liquid Orb hero tile + floating optical pill indicators
+ *  - Refractive KPI lenses with tabular count-up and ambient bottom caustics
+ *  - Fluid payment rows with liquid squircle avatars, jewel method chips & tactile status capsules
+ *  - Tone-aware Liquid Pill segmented status controller
+ *  - Bespoke M-EDU Official Receipt with holographic verification bar & Executive PDF Studio
+ *  - Full i18n, keyboard navigation, and React Query mutations preserved 1:1
  */
 
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
@@ -44,38 +42,161 @@ import type {
   PaymentMethod,
 } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 
 /* ============================================================================
- * MOTION TOKENS
+ * iOS 27 FLUID MOTION TOKENS
  * ========================================================================== */
 
 const SPRING = {
-  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
-  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
-  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
+  snappy: { type: 'spring', stiffness: 520, damping: 32, mass: 0.65 },
+  smooth: { type: 'spring', stiffness: 360, damping: 30, mass: 0.85 },
+  liquid: { type: 'spring', stiffness: 260, damping: 26, mass: 0.95 },
 } as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.08 } },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.055, delayChildren: 0.05 },
+  },
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 14 },
-  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 16, scale: 0.985 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: SPRING.liquid },
 };
 
 const rowVariants: Variants = {
-  hidden: { opacity: 0, x: -8 },
-  visible: { opacity: 1, x: 0, transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 8 },
+  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * iOS 27 LIQUID GLASS OPTICAL SURFACES & JEWEL PALETTE
  * ========================================================================== */
 
-const ICON_STROKE = 1.75;
+const LIQUID_PANEL =
+  'relative overflow-hidden rounded-[28px] border border-white/75 dark:border-white/[0.12] ' +
+  'bg-gradient-to-b from-white/[0.72] via-white/[0.52] to-white/[0.64] ' +
+  'dark:from-white/[0.09] dark:via-white/[0.04] dark:to-white/[0.07] ' +
+  'backdrop-blur-3xl backdrop-saturate-[200%] ' +
+  'shadow-[0_24px_48px_-12px_rgba(15,23,42,0.07),0_4px_16px_-4px_rgba(15,23,42,0.04),inset_0_1.5px_1px_rgba(255,255,255,0.92),inset_0_-1px_1px_rgba(255,255,255,0.45)] ' +
+  'dark:shadow-[0_24px_56px_-12px_rgba(0,0,0,0.65),inset_0_1px_0.5px_rgba(255,255,255,0.22),inset_0_-1px_0.5px_rgba(255,255,255,0.05)]';
+
+const LIQUID_CARD =
+  'relative overflow-hidden rounded-[24px] border border-white/80 dark:border-white/[0.12] ' +
+  'bg-gradient-to-br from-white/[0.76] via-white/[0.54] to-white/[0.68] ' +
+  'dark:from-white/[0.10] dark:via-white/[0.04] dark:to-white/[0.07] ' +
+  'backdrop-blur-2xl backdrop-saturate-[190%] ' +
+  'shadow-[0_16px_36px_-10px_rgba(15,23,42,0.06),inset_0_1.5px_1px_rgba(255,255,255,0.95),inset_0_-1px_1px_rgba(255,255,255,0.4)] ' +
+  'dark:shadow-[0_16px_36px_-10px_rgba(0,0,0,0.55),inset_0_1px_0.5px_rgba(255,255,255,0.22),inset_0_-1px_0.5px_rgba(255,255,255,0.04)]';
+
+const LIQUID_PILL_RECESSED =
+  'rounded-2xl border border-slate-900/[0.06] dark:border-white/[0.08] ' +
+  'bg-slate-900/[0.035] dark:bg-black/35 ' +
+  'shadow-[inset_0_2px_4px_rgba(15,23,42,0.05),0_1px_0_rgba(255,255,255,0.7)] ' +
+  'dark:shadow-[inset_0_2px_5px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.07)]';
+
+type Tone =
+  | 'sapphire'
+  | 'jade'
+  | 'amber'
+  | 'coral'
+  | 'amethyst'
+  | 'celeste'
+  | 'titanium';
+
+const LIQUID_TONES: Record<
+  Tone,
+  {
+    fg: string;
+    darkFg: string;
+    surface: string;
+    rim: string;
+    caustic: string;
+    orbGradient: string;
+    dot: string;
+  }
+> = {
+  sapphire: {
+    fg: '#1D4ED8',
+    darkFg: '#60A5FA',
+    surface:
+      'linear-gradient(135deg, rgba(59,130,246,0.16) 0%, rgba(99,102,241,0.06) 100%)',
+    rim: 'rgba(59,130,246,0.28)',
+    caustic: 'rgba(59,130,246,0.32)',
+    orbGradient: 'linear-gradient(135deg, #2563EB 0%, #4F46E5 50%, #0EA5E9 100%)',
+    dot: '#3B82F6',
+  },
+  jade: {
+    fg: '#047857',
+    darkFg: '#34D399',
+    surface:
+      'linear-gradient(135deg, rgba(16,185,129,0.16) 0%, rgba(20,184,166,0.06) 100%)',
+    rim: 'rgba(16,185,129,0.30)',
+    caustic: 'rgba(16,185,129,0.32)',
+    orbGradient: 'linear-gradient(135deg, #059669 0%, #10B981 55%, #0D9488 100%)',
+    dot: '#10B981',
+  },
+  amber: {
+    fg: '#B45309',
+    darkFg: '#FBBF24',
+    surface:
+      'linear-gradient(135deg, rgba(245,158,11,0.16) 0%, rgba(249,115,22,0.06) 100%)',
+    rim: 'rgba(245,158,11,0.30)',
+    caustic: 'rgba(245,158,11,0.30)',
+    orbGradient: 'linear-gradient(135deg, #D97706 0%, #F59E0B 55%, #EA580C 100%)',
+    dot: '#F59E0B',
+  },
+  coral: {
+    fg: '#BE123C',
+    darkFg: '#FB7185',
+    surface:
+      'linear-gradient(135deg, rgba(244,63,94,0.16) 0%, rgba(225,29,72,0.06) 100%)',
+    rim: 'rgba(244,63,94,0.30)',
+    caustic: 'rgba(244,63,94,0.34)',
+    orbGradient: 'linear-gradient(135deg, #E11D48 0%, #F43F5E 55%, #EC4899 100%)',
+    dot: '#F43F5E',
+  },
+  amethyst: {
+    fg: '#6D28D9',
+    darkFg: '#C084FC',
+    surface:
+      'linear-gradient(135deg, rgba(139,92,246,0.16) 0%, rgba(192,132,252,0.06) 100%)',
+    rim: 'rgba(139,92,246,0.28)',
+    caustic: 'rgba(139,92,246,0.32)',
+    orbGradient: 'linear-gradient(135deg, #7C3AED 0%, #9333EA 55%, #DB2777 100%)',
+    dot: '#8B5CF6',
+  },
+  celeste: {
+    fg: '#0369A1',
+    darkFg: '#38BDF8',
+    surface:
+      'linear-gradient(135deg, rgba(14,165,233,0.16) 0%, rgba(56,189,248,0.06) 100%)',
+    rim: 'rgba(14,165,233,0.28)',
+    caustic: 'rgba(14,165,233,0.30)',
+    orbGradient: 'linear-gradient(135deg, #0284C7 0%, #0EA5E9 55%, #2563EB 100%)',
+    dot: '#0EA5E9',
+  },
+  titanium: {
+    fg: '#475569',
+    darkFg: '#94A3B8',
+    surface:
+      'linear-gradient(135deg, rgba(100,116,139,0.14) 0%, rgba(148,163,184,0.05) 100%)',
+    rim: 'rgba(100,116,139,0.24)',
+    caustic: 'rgba(100,116,139,0.20)',
+    orbGradient: 'linear-gradient(135deg, #475569 0%, #64748B 100%)',
+    dot: '#64748B',
+  },
+};
+
+/* ============================================================================
+ * CUSTOM ICONS (SF Symbols Proportions)
+ * ========================================================================== */
+
+const ICON_STROKE = 1.8;
 
 const I: Record<string, string[]> = {
   wallet: [
@@ -95,7 +216,8 @@ const I: Record<string, string[]> = {
   banknote: [
     'M2 6h20v12H2z',
     'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
-    'M6 12h.01', 'M18 12h.01',
+    'M6 12h.01',
+    'M18 12h.01',
   ],
   check: ['M20 6 9 17l-5-5'],
   checkCircle: [
@@ -108,11 +230,13 @@ const I: Record<string, string[]> = {
   ],
   alertCircle: [
     'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
-    'M12 8v4', 'M12 16h.01',
+    'M12 8v4',
+    'M12 16h.01',
   ],
   xCircle: [
     'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
-    'M15 9l-6 6', 'M9 9l6 6',
+    'M15 9l-6 6',
+    'M9 9l6 6',
   ],
   plus: ['M12 5v14', 'M5 12h14'],
   search: [
@@ -122,7 +246,9 @@ const I: Record<string, string[]> = {
   filter: ['M22 3H2l8 9.46V19l4 2v-8.54z'],
   receipt: [
     'M4 2v20l3-2 3 2 3-2 3 2 3-2V2H4z',
-    'M8 8h8', 'M8 12h8', 'M8 16h5',
+    'M8 8h8',
+    'M8 12h8',
+    'M8 16h5',
   ],
   printer: [
     'M6 9V2h12v7',
@@ -135,10 +261,11 @@ const I: Record<string, string[]> = {
   ],
   sparkles: [
     'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
-    'M18.5 3.5v3', 'M20 5h-3',
-    'M5.5 18v2.5', 'M6.75 19.25h-2.5',
+    'M18.5 3.5v3',
+    'M20 5h-3',
+    'M5.5 18v2.5',
+    'M6.75 19.25h-2.5',
   ],
-  trending: ['M23 6l-9.5 9.5-5-5L1 18', 'M17 6h6v6'],
   user: [
     'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
     'M20 21v-1a8 8 0 0 0-16 0v1',
@@ -148,12 +275,15 @@ const I: Record<string, string[]> = {
     'M22 6 12 13 2 6',
   ],
   empty: [
-    'M20 7h-9', 'M14 17H5',
+    'M20 7h-9',
+    'M14 17H5',
     'M19 19v-2a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v2',
     'M10 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   ],
   calendar: [
-    'M8 2v4', 'M16 2v4', 'M3 10h18',
+    'M8 2v4',
+    'M16 2v4',
+    'M3 10h18',
     'M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z',
   ],
   layers: [
@@ -161,7 +291,10 @@ const I: Record<string, string[]> = {
     'M2 17l10 5 10-5',
     'M2 12l10 5 10-5',
   ],
-  arrowUp: ['M12 19V5', 'M5 12l7-7 7 7'],
+  sidecar: [
+    'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z',
+    'M15 3v18',
+  ],
 };
 
 function Icon({
@@ -198,24 +331,7 @@ function Icon({
 }
 
 /* ============================================================================
- * TONES
- * ========================================================================== */
-
-type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald';
-
-const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
-  blue:    { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)', border: 'rgba(0,122,255,0.20)' },
-  green:   { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)',  border: 'rgba(52,199,89,0.20)' },
-  orange:  { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)',  border: 'rgba(255,149,0,0.20)' },
-  red:     { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)',  border: 'rgba(255,59,48,0.20)' },
-  purple:  { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)', border: 'rgba(175,82,222,0.20)' },
-  cyan:    { fg: '#32ADE6', bg: 'rgba(50,173,230,0.10)', glow: 'rgba(50,173,230,0.28)', border: 'rgba(50,173,230,0.20)' },
-  gray:    { fg: '#86868B', bg: 'rgba(134,134,139,0.10)', glow: 'rgba(134,134,139,0.22)', border: 'rgba(134,134,139,0.20)' },
-  emerald: { fg: '#10B981', bg: 'rgba(16,185,129,0.10)', glow: 'rgba(16,185,129,0.28)', border: 'rgba(16,185,129,0.20)' },
-};
-
-/* ============================================================================
- * CONSTANTS
+ * CONSTANTS & MAPPINGS
  * ========================================================================== */
 
 const PAYMENT_STATUSES: PaymentStatus[] = ['PAID', 'PENDING', 'OVERDUE', 'CANCELLED'];
@@ -230,10 +346,10 @@ const PAYMENT_METHODS: PaymentMethod[] = [
 ];
 
 const STATUS_TONE: Record<PaymentStatus, Tone> = {
-  PAID: 'emerald',
-  PENDING: 'orange',
-  OVERDUE: 'red',
-  CANCELLED: 'gray',
+  PAID: 'jade',
+  PENDING: 'amber',
+  OVERDUE: 'coral',
+  CANCELLED: 'titanium',
 };
 
 const STATUS_PULSE: Record<PaymentStatus, boolean> = {
@@ -251,13 +367,13 @@ const STATUS_ICON: Record<PaymentStatus, string[]> = {
 };
 
 const METHOD_TONE: Record<PaymentMethod, Tone> = {
-  CASH: 'emerald',
-  CARD: 'blue',
-  BANK_TRANSFER: 'purple',
-  PAYME: 'cyan',
-  CLICK: 'blue',
-  UZUM: 'purple',
-  OTHER: 'gray',
+  CASH: 'jade',
+  CARD: 'sapphire',
+  BANK_TRANSFER: 'amethyst',
+  PAYME: 'celeste',
+  CLICK: 'sapphire',
+  UZUM: 'amethyst',
+  OTHER: 'titanium',
 };
 
 const METHOD_ICON: Record<PaymentMethod, string[]> = {
@@ -294,7 +410,7 @@ const INITIAL_FORM: PaymentFormState = {
 };
 
 /* ============================================================================
- * HELPERS
+ * HELPERS & BESPOKE AVATAR PALETTES
  * ========================================================================== */
 
 export function formatStudentName(student: Student | undefined): string {
@@ -311,7 +427,6 @@ export function formatPaymentMethod(method: PaymentMethod): string {
   return method.charAt(0) + method.slice(1).toLowerCase();
 }
 
-/** Normalizes a loosely-typed API method value into a known PaymentMethod. */
 export function toPaymentMethod(method?: string | null): PaymentMethod {
   return method && (PAYMENT_METHODS as string[]).includes(method)
     ? (method as PaymentMethod)
@@ -336,40 +451,55 @@ function nameHash(str: string): number {
   return Math.abs(h);
 }
 
-const AVATAR_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
-  ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
-  ['#FF2D55', '#FF9500'],
-  ['#30D158', '#34C759'],
+/** Curated iOS 27 Jewel & Aurora Avatar Gradients */
+const LIQUID_AVATAR_PALETTES = [
+  ['#2563EB', '#7C3AED'], // Sapphire -> Amethyst
+  ['#059669', '#0284C7'], // Jade -> Celeste
+  ['#7C3AED', '#DB2777'], // Amethyst -> Rose Quartz
+  ['#0284C7', '#4F46E5'], // Celeste -> Indigo
+  ['#D97706', '#E11D48'], // Liquid Amber -> Crimson Coral
+  ['#0D9488', '#2563EB'], // Teal -> Sapphire
+  ['#4F46E5', '#9333EA'], // Deep Indigo -> Violet
+  ['#10B981', '#059669'], // Emerald -> Deep Jade
 ];
 
 function avatarGradient(name: string): string {
-  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
+  const [a, b] = LIQUID_AVATAR_PALETTES[nameHash(name) % LIQUID_AVATAR_PALETTES.length];
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 }
 
 /* ============================================================================
- * PREMIUM SUB-COMPONENTS
+ * iOS 27 LIQUID GLASS SUB-COMPONENTS
  * ========================================================================== */
 
-function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
+/** Top specular meniscus reflection inside any Liquid Glass container */
+function LiquidMeniscus() {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-x-0 top-0 h-20 opacity-80 dark:opacity-30"
+      style={{
+        background:
+          'radial-gradient(120% 100% at 50% 0%, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.2) 45%, transparent 100%)',
+      }}
+    />
+  );
+}
+
+function Shimmer({ className = '', radius = '1.5rem' }: { className?: string; radius?: string }) {
   return (
     <div
-      className={`relative overflow-hidden bg-[#E5E5EA]/60 dark:bg-[#2C2C2E]/60 ${className}`}
+      className={`relative overflow-hidden border border-white/60 bg-white/40 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-white/[0.04] ${className}`}
       style={{ borderRadius: radius }}
     >
       <motion.div
         className="absolute inset-0"
         style={{
           background:
-            'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.65) 50%, transparent 100%)',
+            'linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.75) 50%, transparent 80%)',
         }}
         animate={{ x: ['-100%', '100%'] }}
-        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+        transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
       />
     </div>
   );
@@ -378,11 +508,13 @@ function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; r
 function PaymentsSkeleton() {
   return (
     <div className="space-y-5">
-      <Shimmer className="h-28 w-full" radius="1.75rem" />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[88px]" radius="1rem" />)}
+      <Shimmer className="h-32 w-full" radius="1.75rem" />
+      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Shimmer key={i} className="h-[96px]" radius="1.5rem" />
+        ))}
       </div>
-      <Shimmer className="h-12 w-full" radius="1rem" />
+      <Shimmer className="h-16 w-full" radius="1.5rem" />
       <Shimmer className="h-96 w-full" radius="1.75rem" />
     </div>
   );
@@ -415,52 +547,57 @@ function CountUp({
   return <span className="tabular-nums">{Math.round(n).toLocaleString('uz-UZ')}</span>;
 }
 
-/** Premium KPI tile */
+/** Refractive iOS 27 KPI Lens Tile */
 function KpiTile({
   label,
   value,
   icon,
-  tone = 'blue',
+  tone = 'sapphire',
 }: {
   label: string;
   value: number;
   icon: string[];
   tone?: Tone;
 }) {
-  const c = TONES[tone];
+  const c = LIQUID_TONES[tone];
   return (
     <motion.div
       variants={rowVariants}
-      whileHover={{ y: -3 }}
-      transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
+      whileHover={{ y: -4, scale: 1.01 }}
+      transition={SPRING.liquid}
+      className={`group flex items-center gap-3.5 px-4 py-4 ${LIQUID_CARD}`}
     >
+      <LiquidMeniscus />
+      {/* Ambient caustic glow at bottom corner */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
+        className="pointer-events-none absolute -bottom-6 -right-6 h-20 w-20 rounded-full blur-2xl transition-opacity duration-500 group-hover:opacity-100 opacity-65"
+        style={{ background: c.caustic }}
       />
+
+      {/* 3D Liquid Glass Squircle Icon */}
       <div
-        className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] text-white"
         style={{
-          background: c.bg,
-          color: c.fg,
-          border: `1px solid ${c.border}`,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
+          background: c.orbGradient,
+          boxShadow: `0 10px 22px -6px ${c.caustic}, inset 0 1.5px 1px rgba(255,255,255,0.65), inset 0 -1px 1px rgba(0,0,0,0.15)`,
         }}
       >
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-xl"
-          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent)' }}
+          className="pointer-events-none absolute inset-x-1 top-0.5 h-1/2 rounded-t-[14px]"
+          style={{
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.55) 0%, transparent 100%)',
+          }}
         />
-        <Icon paths={icon} size={18} strokeWidth={2} className="relative" />
+        <Icon paths={icon} size={19} strokeWidth={2.1} className="relative drop-shadow-sm" />
       </div>
+
       <div className="relative min-w-0 flex-1">
-        <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
+        <div className="text-[24px] font-bold tracking-tight leading-none text-slate-900 dark:text-white">
           <CountUp value={value} />
         </div>
-        <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#86868B]">
+        <div className="mt-1.5 truncate text-[10.5px] font-semibold uppercase tracking-[0.13em] text-slate-500 dark:text-slate-400">
           {label}
         </div>
       </div>
@@ -468,71 +605,78 @@ function KpiTile({
   );
 }
 
-/** Premium status badge with pulse */
+/** Tactile Liquid Glass Status Capsule */
 function StatusBadge({ status, label }: { status: PaymentStatus; label: string }) {
   const tone = STATUS_TONE[status];
-  const c = TONES[tone];
+  const c = LIQUID_TONES[tone];
   const pulse = STATUS_PULSE[status];
   return (
     <span
-      className="relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em]"
+      className="relative inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10.5px] font-bold uppercase tracking-[0.11em] backdrop-blur-md"
       style={{
-        background: c.bg,
+        background: c.surface,
         color: c.fg,
-        border: `1px solid ${c.border}`,
+        border: `1px solid ${c.rim}`,
+        boxShadow: `inset 0 1px 0.5px rgba(255,255,255,0.7), 0 4px 12px -4px ${c.caustic}`,
       }}
     >
       <span className="relative flex h-1.5 w-1.5">
         {pulse && (
           <motion.span
             className="absolute inset-0 rounded-full"
-            style={{ background: c.fg, opacity: 0.6 }}
-            animate={{ scale: [1, 2.4, 1], opacity: [0.6, 0, 0.6] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+            style={{ background: c.dot }}
+            animate={{ scale: [1, 2.5, 1], opacity: [0.7, 0, 0.7] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
           />
         )}
-        <span className="relative h-1.5 w-1.5 rounded-full" style={{ background: c.fg }} />
+        <span className="relative h-1.5 w-1.5 rounded-full" style={{ background: c.dot }} />
       </span>
-      {label}
+      <span className="dark:brightness-125">{label}</span>
     </span>
   );
 }
 
-/** Method chip */
+/** Jewel-Toned Payment Method Chip */
 function MethodChip({ method, label }: { method: PaymentMethod; label: string }) {
-  const tone = METHOD_TONE[method] ?? 'gray';
-  const c = TONES[tone];
+  const tone = METHOD_TONE[method] ?? 'titanium';
+  const c = LIQUID_TONES[tone];
   const icon = METHOD_ICON[method] ?? METHOD_ICON.OTHER;
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.10em]"
+      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.09em] backdrop-blur-md"
       style={{
-        background: c.bg,
+        background: c.surface,
         color: c.fg,
-        border: `1px solid ${c.border}`,
+        border: `1px solid ${c.rim}`,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.65)',
       }}
     >
-      <Icon paths={icon} size={10} strokeWidth={2.2} />
-      {label}
+      <Icon paths={icon} size={10.5} strokeWidth={2.2} className="dark:brightness-125" />
+      <span className="dark:brightness-125">{label}</span>
     </span>
   );
 }
 
-/** Squircle leading icon for inputs */
-function FieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Tone }) {
-  const c = TONES[tone];
+/** Refractive Squircle Leading Icon for Inputs */
+function FieldIcon({ icon, tone = 'sapphire' }: { icon: string[]; tone?: Tone }) {
+  const c = LIQUID_TONES[tone];
   return (
     <span
-      className="pointer-events-none absolute left-3 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg"
-      style={{ background: c.bg, color: c.fg }}
+      className="pointer-events-none absolute left-3 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[9px]"
+      style={{
+        background: c.surface,
+        color: c.fg,
+        border: `1px solid ${c.rim}`,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.75)',
+      }}
       aria-hidden
     >
-      <Icon paths={icon} size={12} strokeWidth={2.2} />
+      <Icon paths={icon} size={12.5} strokeWidth={2.2} className="dark:brightness-125" />
     </span>
   );
 }
 
-/** Inline status segmented control (compact) */
+/** iOS 27 Recessed Liquid Pill Status Controller */
 function InlineStatusSelector({
   value,
   onChange,
@@ -550,11 +694,11 @@ function InlineStatusSelector({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-flex items-center gap-0.5 rounded-xl border border-[#00000008] bg-[#00000002] p-0.5 dark:border-[#ffffff08] dark:bg-[#ffffff04]"
+      className={`inline-flex items-center gap-0.5 p-1 ${LIQUID_PILL_RECESSED}`}
     >
       {PAYMENT_STATUSES.map((s) => {
         const active = value === s;
-        const c = TONES[STATUS_TONE[s]];
+        const c = LIQUID_TONES[STATUS_TONE[s]];
         return (
           <motion.button
             key={s}
@@ -563,19 +707,22 @@ function InlineStatusSelector({
             aria-checked={active}
             disabled={disabled}
             onClick={() => onChange(s)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.93 }}
             transition={SPRING.snappy}
-            className="relative flex h-6 w-6 items-center justify-center rounded-lg outline-none disabled:opacity-40"
+            className="relative flex h-6 w-6 items-center justify-center rounded-xl outline-none transition-colors disabled:opacity-40"
             title={t(`payments.status.${s}`)}
             aria-label={t(`payments.status.${s}`)}
             style={{
-              background: active ? c.bg : 'transparent',
-              color: active ? c.fg : '#B0B0B5',
-              border: active ? `1px solid ${c.border}` : '1px solid transparent',
+              background: active ? c.surface : 'transparent',
+              color: active ? c.fg : '#94A3B8',
+              border: active ? `1px solid ${c.rim}` : '1px solid transparent',
+              boxShadow: active
+                ? `inset 0 1px 0.5px rgba(255,255,255,0.85), 0 2px 6px -2px ${c.caustic}`
+                : 'none',
             }}
           >
-            <Icon paths={STATUS_ICON[s]} size={11} strokeWidth={2.4} />
+            <Icon paths={STATUS_ICON[s]} size={11.5} strokeWidth={2.3} className="dark:brightness-125" />
           </motion.button>
         );
       })}
@@ -588,7 +735,7 @@ function InlineStatusSelector({
  * ========================================================================== */
 
 export function PaymentsPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('payments.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
@@ -668,19 +815,19 @@ export function PaymentsPage() {
       },
       avatar: {
         text: getInitials(studentName),
-        color: payment.status === 'PAID' ? '#10B981' : '#6366F1',
+        color: payment.status === 'PAID' ? '#059669' : '#4F46E5',
       },
       metrics: [
         { label: 'Summa', value: formatCurrency(payment.amount), trend: 'up' },
         { label: 'Holat', value: payment.status },
-        { label: 'To\'lov usuli', value: payment.method || 'CASH' },
+        { label: "To'lov usuli", value: payment.method || 'CASH' },
         { label: 'Sana', value: formatDate(payment.createdAt) },
       ],
       details: [
-        { label: 'To\'lov ID', value: payment.id, copyable: true },
+        { label: "To'lov ID", value: payment.id, copyable: true },
         { label: 'Talaba', value: studentName },
-        { label: 'Izoh / Tavsif', value: payment.description || 'To\'lov qayd etildi' },
-        { label: 'O\'zgartirilgan', value: formatDate((payment as any).updatedAt || payment.createdAt) },
+        { label: 'Izoh / Tavsif', value: payment.description || "To'lov qayd etildi" },
+        { label: "O'zgartirilgan", value: formatDate((payment as any).updatedAt || payment.createdAt) },
       ],
       primaryAction: {
         label: 'Rasmiy Kvitansiya (PDF Studio)',
@@ -720,7 +867,7 @@ export function PaymentsPage() {
     }
     qc.invalidateQueries({ queryKey: queryKeys.payments.all() });
     clearSelection();
-    push('success', `${count} ta to'lov "To'langan" deb yangilandi`);
+    push('success', t('payments.batchPaidSuccess', { count }));
   };
 
   const handleExportSelectedPaymentsCSV = () => {
@@ -731,8 +878,8 @@ export function PaymentsPage() {
         .concat(
           selectedRows.map(
             (p) =>
-              `"${p.id}","${formatStudentName(p.student)}","${p.amount}","${p.status}","${p.method}","${p.createdAt}"`
-          )
+              `"${p.id}","${formatStudentName(p.student)}","${p.amount}","${p.status}","${p.method}","${p.createdAt}"`,
+          ),
         )
         .join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -742,7 +889,8 @@ export function PaymentsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    push('success', `${selectedRows.length} ta to'lov CSV formatida yuklandi`);
+    clearSelection();
+    push('success', t('payments.exportSuccess', { count: selectedRows.length }));
   };
 
   /* ── Create mutation ──────────────────────────────────────────────── */
@@ -866,8 +1014,7 @@ export function PaymentsPage() {
   /* ── Loading ──────────────────────────────────────────────────────── */
   if (payments.isLoading && !data) {
     return (
-      <div className="page-container space-y-5">
-        <div className="h-28 rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80" />
+      <div className="page-container max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] space-y-5 pb-24 sm:pb-8">
         <PaymentsSkeleton />
       </div>
     );
@@ -876,8 +1023,9 @@ export function PaymentsPage() {
   /* ── Error ────────────────────────────────────────────────────────── */
   if (payments.isError) {
     return (
-      <div className="page-container space-y-5">
-        <div className="glass-card p-8">
+      <div className="page-container max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] space-y-5 pb-24 sm:pb-8">
+        <div className={`${LIQUID_PANEL} p-8`}>
+          <LiquidMeniscus />
           <GlassErrorState
             title={t('payments.loadError')}
             message={getErrorMessage(payments.error as Error)}
@@ -894,78 +1042,113 @@ export function PaymentsPage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="page-container space-y-5"
+      className="page-container max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] relative space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
+      <AuroraMesh variant="corporate" opacity={0.65} />
       {toastNode}
 
       {/* ============================================================
-          HERO HEADER
+          iOS 27 LIQUID GLASS HERO HEADER
       ============================================================ */}
       <motion.div variants={cardVariants}>
-        <div
-          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-7"
-        >
+        <div className={`${LIQUID_PANEL} p-6 sm:p-7`}>
+          <LiquidMeniscus />
+          {/* Ambient Aurora Caustics behind Hero */}
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-24"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-            }}
+            className="pointer-events-none absolute -left-12 -top-12 h-44 w-44 rounded-full bg-emerald-400/20 blur-3xl dark:bg-emerald-500/15"
           />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -right-10 -bottom-12 h-44 w-44 rounded-full bg-blue-500/15 blur-3xl dark:bg-indigo-500/15"
+          />
+
           <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-            {/* Gradient wallet tile */}
+            {/* 3D Liquid Jewel Wallet Orb */}
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, rotate: -6 }}
+              initial={{ scale: 0.88, opacity: 0, rotate: -6 }}
               animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              transition={SPRING.smooth}
-              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white"
+              transition={SPRING.liquid}
+              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] text-white"
               style={{
-                background: 'linear-gradient(135deg, #34C759 0%, #32ADE6 100%)',
+                background:
+                  'linear-gradient(135deg, #059669 0%, #0EA5E9 55%, #4F46E5 100%)',
                 boxShadow:
-                  '0 12px 28px -10px rgba(52,199,89,0.55), inset 0 2px 0 rgba(255,255,255,0.35)',
+                  '0 18px 36px -10px rgba(14,165,233,0.48), inset 0 2px 1px rgba(255,255,255,0.65), inset 0 -2px 2px rgba(0,0,0,0.2)',
               }}
             >
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-0 rounded-2xl"
+                className="pointer-events-none absolute inset-x-1 top-1 h-1/2 rounded-t-[18px]"
                 style={{
                   background:
-                    'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)',
+                    'linear-gradient(180deg, rgba(255,255,255,0.58), transparent)',
                 }}
               />
-              <Icon paths={I.wallet} size={28} strokeWidth={2.2} className="relative" />
+              <Icon paths={I.wallet} size={28} strokeWidth={2.1} className="relative drop-shadow-sm" />
             </motion.div>
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#34C759]">
-                  <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Payments
+                {/* Jade Liquid Pill */}
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em]"
+                  style={{
+                    background: LIQUID_TONES.jade.surface,
+                    color: LIQUID_TONES.jade.fg,
+                    border: `1px solid ${LIQUID_TONES.jade.rim}`,
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.75)',
+                  }}
+                >
+                  <Icon paths={I.sparkles} size={11} strokeWidth={2.4} />
+                  <span className="dark:brightness-125">Payments</span>
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#007AFF]">
-                  <Icon paths={I.layers} size={11} strokeWidth={2.5} />
-                  {totalPayments} {totalPayments === 1 ? t('payments.countOne') : t('payments.countMany')}
+
+                {/* Sapphire Count Pill */}
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em]"
+                  style={{
+                    background: LIQUID_TONES.sapphire.surface,
+                    color: LIQUID_TONES.sapphire.fg,
+                    border: `1px solid ${LIQUID_TONES.sapphire.rim}`,
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.75)',
+                  }}
+                >
+                  <Icon paths={I.layers} size={11} strokeWidth={2.4} />
+                  <span className="dark:brightness-125">
+                    {totalPayments} {totalPayments === 1 ? t('payments.countOne') : t('payments.countMany')}
+                  </span>
                 </span>
+
+                {/* Coral Overdue Pill */}
                 {stats.overdue > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF3B30]/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#FF3B30]">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FF3B30]" />
-                    {stats.overdue} overdue
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em]"
+                    style={{
+                      background: LIQUID_TONES.coral.surface,
+                      color: LIQUID_TONES.coral.fg,
+                      border: `1px solid ${LIQUID_TONES.coral.rim}`,
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.75)',
+                    }}
+                  >
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500" />
+                    <span className="dark:brightness-125">{stats.overdue} overdue</span>
                   </span>
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-2.5 text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
                 {t('payments.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
+              <p className="mt-1 text-[13.5px] font-medium text-slate-500 dark:text-slate-400">
                 {t('payments.subtitle')}
               </p>
             </div>
 
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            {/* Action Buttons */}
+            <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row">
               <motion.div
-                whileHover={{ scale: 1.03 }}
+                whileHover={{ scale: 1.03, y: -1 }}
                 whileTap={{ scale: 0.97 }}
                 transition={SPRING.snappy}
               >
@@ -976,26 +1159,32 @@ export function PaymentsPage() {
                     window.dispatchEvent(
                       new CustomEvent('open-ai-copilot', {
                         detail: {
-                          prompt: "Qarzdor o'quvchilar, kechikkan to'lovlar va umumiy kassa intizomi bo'yicha tahliliy hisobot ber.",
+                          prompt: t('payments.aiPrompt'),
                         },
                       }),
                     );
                   }}
-                  className="!border-purple-500/30 hover:!border-purple-500/50"
+                  className="!rounded-2xl !border-violet-400/35 !bg-violet-500/[0.08] hover:!bg-violet-500/[0.14] !shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.8)]"
                 >
-                  <span className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium">
+                  <span className="inline-flex items-center gap-2 font-semibold text-violet-700 dark:text-violet-300">
                     <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
-                    AI Tahlil
+                    {t('attendance.aiAnalysis')}
                   </span>
                 </GlassButton>
               </motion.div>
+
               <motion.div
-                whileHover={{ scale: 1.03 }}
+                whileHover={{ scale: 1.03, y: -1 }}
                 whileTap={{ scale: 0.97 }}
                 transition={SPRING.snappy}
               >
-                <GlassButton type="button" variant="primary" onClick={handleOpenModal}>
-                  <span className="inline-flex items-center gap-2">
+                <GlassButton
+                  type="button"
+                  variant="primary"
+                  onClick={handleOpenModal}
+                  className="!rounded-2xl !border-white/30 !bg-gradient-to-r !from-blue-600 !via-indigo-600 !to-violet-600 !text-white !shadow-[0_12px_24px_-6px_rgba(37,99,235,0.45),inset_0_1.5px_1px_rgba(255,255,255,0.5)]"
+                >
+                  <span className="inline-flex items-center gap-2 font-semibold">
                     <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                     {t('payments.add')}
                   </span>
@@ -1007,29 +1196,28 @@ export function PaymentsPage() {
       </motion.div>
 
       {/* ============================================================
-          KPI STATS
+          REFRACTIVE KPI LENS BAR
       ============================================================ */}
       <motion.div
         variants={containerVariants}
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        className="grid grid-cols-2 gap-3.5 sm:grid-cols-4"
       >
-        <KpiTile label={t('payments.allStatuses')} value={stats.total} icon={I.receipt} tone="blue" />
-        <KpiTile label={t('payments.status.PAID')} value={stats.paid} icon={I.checkCircle} tone="emerald" />
-        <KpiTile label={t('payments.status.PENDING')} value={stats.pending} icon={I.clock} tone="orange" />
-        <KpiTile label={t('payments.status.OVERDUE')} value={stats.overdue} icon={I.alertCircle} tone="red" />
+        <KpiTile label={t('payments.allStatuses')} value={stats.total} icon={I.receipt} tone="sapphire" />
+        <KpiTile label={t('payments.status.PAID')} value={stats.paid} icon={I.checkCircle} tone="jade" />
+        <KpiTile label={t('payments.status.PENDING')} value={stats.pending} icon={I.clock} tone="amber" />
+        <KpiTile label={t('payments.status.OVERDUE')} value={stats.overdue} icon={I.alertCircle} tone="coral" />
       </motion.div>
 
       {/* ============================================================
-          FILTER TOOLBAR
+          LIQUID GLASS FILTER TOOLBAR
       ============================================================ */}
       <motion.div variants={cardVariants}>
-        <div
-          className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm"
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className={`${LIQUID_CARD} p-4`}>
+          <LiquidMeniscus />
+          <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center">
             {/* Search */}
             <div className="relative flex-1">
-              <FieldIcon icon={I.search} tone="blue" />
+              <FieldIcon icon={I.search} tone="sapphire" />
               <GlassInput
                 placeholder={t('payments.searchPlaceholder')}
                 value={search}
@@ -1040,8 +1228,8 @@ export function PaymentsPage() {
               />
             </div>
             {/* Status */}
-            <div className="relative sm:w-56">
-              <FieldIcon icon={I.filter} tone="orange" />
+            <div className="relative sm:w-60">
+              <FieldIcon icon={I.filter} tone="amber" />
               <GlassSelect
                 value={status}
                 onChange={handleStatusFilterChange}
@@ -1061,37 +1249,28 @@ export function PaymentsPage() {
       </motion.div>
 
       {/* ============================================================
-          PAYMENTS LIST
+          LIQUID GLASS PAYMENTS LEDGER
       ============================================================ */}
-      <motion.div
-        variants={cardVariants}
-        className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
-      >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-16"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 100%)',
-          }}
-        />
+      <motion.div variants={cardVariants} className={LIQUID_PANEL}>
+        <LiquidMeniscus />
 
         {paymentList.length === 0 ? (
-          <div className="relative p-10">
+          <div className="relative p-12">
             <div className="flex flex-col items-center text-center">
               <div
-                className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#007AFF]/10 text-[#007AFF]"
+                className="relative flex h-16 w-16 items-center justify-center rounded-[22px] text-white"
                 style={{
+                  background: LIQUID_TONES.sapphire.orbGradient,
                   boxShadow:
-                    'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px -12px rgba(0,122,255,0.4)',
+                    '0 14px 28px -8px rgba(37,99,235,0.4), inset 0 1.5px 1px rgba(255,255,255,0.65)',
                 }}
               >
-                <Icon paths={I.empty} size={26} strokeWidth={1.8} />
+                <Icon paths={I.empty} size={26} strokeWidth={1.9} />
               </div>
-              <p className="mt-4 text-[15px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+              <p className="mt-4 text-[15.5px] font-bold tracking-tight text-slate-900 dark:text-white">
                 {hasActiveFilters ? t('payments.emptyFiltered') : t('payments.empty')}
               </p>
-              <p className="mt-1 max-w-sm text-[12.5px] font-medium text-[#86868B]">
+              <p className="mt-1 max-w-sm text-[13px] font-medium text-slate-500 dark:text-slate-400">
                 {hasActiveFilters
                   ? t('payments.emptyFilteredHint')
                   : t('payments.emptyHint')}
@@ -1112,7 +1291,7 @@ export function PaymentsPage() {
           </div>
         ) : (
           <>
-            <div className="relative divide-y divide-[#00000008] dark:divide-[#ffffff08]">
+            <div className="relative divide-y divide-slate-900/[0.05] dark:divide-white/[0.06]">
               {paymentList.map((payment, idx) => {
                 const studentName = formatStudentName(payment.student);
                 const initials = getInitials(studentName);
@@ -1126,67 +1305,87 @@ export function PaymentsPage() {
                   <motion.div
                     key={payment.id}
                     id={`payment-row-${payment.id}`}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                    className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-3.5 transition-all ${
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ ...SPRING.smooth, delay: idx * 0.025 }}
+                    className={`group flex flex-col gap-3 px-4 py-3.5 transition-all sm:flex-row sm:items-center sm:justify-between sm:px-6 ${
                       isRowFocused
-                        ? 'ring-2 ring-[#007AFF] bg-[#007AFF]/[0.06] rounded-xl'
+                        ? 'rounded-2xl bg-blue-500/[0.08] ring-2 ring-blue-500/60'
                         : isRowSelected
-                        ? 'bg-[#007AFF]/[0.04]'
-                        : 'hover:bg-[#34C759]/[0.03]'
+                        ? 'bg-blue-500/[0.05]'
+                        : 'hover:bg-white/55 dark:hover:bg-white/[0.04]'
                     }`}
                   >
                     {/* Student Info Group */}
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {/* Selection Checkbox */}
+                    <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                      {/* Liquid Checkbox with guaranteed >= 44x44px touch target */}
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleSelection(payment.id);
                         }}
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
+                        className="h-9 w-9 min-h-[44px] min-w-[44px] -m-2 inline-flex items-center justify-center shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors"
+                        aria-label={
                           isRowSelected
-                            ? 'border-[#007AFF] bg-[#007AFF] text-white'
-                            : 'border-zinc-300 bg-white/50 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800/50'
-                        }`}
-                        aria-label={isRowSelected ? "Tanlovni bekor qilish" : "Tanlash"}
+                            ? t('payments.deselectRowAria', { name: studentName })
+                            : t('payments.selectRowAria', { name: studentName })
+                        }
                       >
-                        {isRowSelected && (
-                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        )}
+                        <span
+                          className={`flex h-5 w-5 items-center justify-center rounded-[7px] border transition-all ${
+                            isRowSelected
+                              ? 'border-blue-600 bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-[0_4px_10px_rgba(37,99,235,0.35),inset_0_1px_0.5px_rgba(255,255,255,0.5)]'
+                              : 'border-slate-300/90 bg-white/70 hover:border-blue-400 dark:border-white/20 dark:bg-white/[0.06]'
+                          }`}
+                        >
+                          {isRowSelected && (
+                            <svg
+                              className="h-3.5 w-3.5"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="3"
+                            >
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          )}
+                        </span>
                       </button>
-                      {/* Avatar */}
+
+                      {/* 3D Liquid Squircle Avatar */}
                       <div
-                        className="relative flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
+                        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] text-[12.5px] font-bold tracking-tight text-white"
                         style={{
                           background: gradient,
                           boxShadow:
-                            'inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 12px -4px rgba(0,0,0,0.25)',
+                            '0 8px 18px -6px rgba(15,23,42,0.28), inset 0 1.5px 1px rgba(255,255,255,0.55), inset 0 -1px 1px rgba(0,0,0,0.18)',
                         }}
                       >
                         <span
                           aria-hidden
-                          className="pointer-events-none absolute inset-0 rounded-full"
+                          className="pointer-events-none absolute inset-x-1 top-0.5 h-1/2 rounded-t-[13px]"
                           style={{
                             background:
-                              'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)',
+                              'linear-gradient(180deg, rgba(255,255,255,0.45), transparent)',
                           }}
                         />
-                        <span className="relative">{initials}</span>
+                        <span className="relative drop-shadow-sm">{initials}</span>
                       </div>
 
-                      {/* Student + meta */}
+                      {/* Student + Meta */}
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                        <p className="truncate text-[14px] font-semibold tracking-tight text-slate-900 dark:text-white">
                           {studentName}
                         </p>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-medium text-[#86868B]">
-                          <span className="inline-flex items-center gap-1 tabular-nums shrink-0">
-                            <Icon paths={I.calendar} size={10} strokeWidth={2.2} className="opacity-60" />
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11.5px] font-medium text-slate-500 dark:text-slate-400">
+                          <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
+                            <Icon
+                              paths={I.calendar}
+                              size={11}
+                              strokeWidth={2.1}
+                              className="opacity-65"
+                            />
                             {formatDate(payment.createdAt)}
                           </span>
                           <MethodChip
@@ -1195,7 +1394,7 @@ export function PaymentsPage() {
                           />
                           {payment.description && (
                             <span
-                              className="max-w-[12rem] sm:max-w-[16rem] truncate"
+                              className="max-w-[12rem] truncate text-slate-500/90 dark:text-slate-400/90 sm:max-w-[16rem]"
                               title={payment.description}
                             >
                               {payment.description}
@@ -1205,25 +1404,26 @@ export function PaymentsPage() {
                       </div>
                     </div>
 
-                    {/* Amount, Status & Actions */}
-                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0 shrink-0">
-                      {/* Amount */}
-                      <div className="flex flex-col items-start sm:items-end shrink-0">
-                        <span className="text-[9.5px] sm:text-[10px] font-bold uppercase tracking-[0.14em] text-[#10B981]">
+                    {/* Amount, Status & Optical Actions */}
+                    <div className="flex w-full shrink-0 items-center justify-between gap-3.5 border-t border-slate-900/[0.04] pt-2.5 dark:border-white/[0.05] sm:w-auto sm:justify-end sm:border-0 sm:pt-0">
+                      {/* Jade Amount Display */}
+                      <div className="flex shrink-0 flex-col items-start sm:items-end">
+                        <span className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
                           {t('payments.col.amount')}
                         </span>
-                        <span className="mt-0.5 text-[14px] sm:text-[15px] font-bold tabular-nums tracking-tight text-[#10B981]">
+                        <span className="mt-0.5 bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-[15px] font-extrabold tabular-nums tracking-tight text-transparent dark:from-emerald-400 dark:to-teal-300">
                           {formatCurrency(payment.amount)}
                         </span>
                       </div>
 
-                      {/* Status badge + inline selector */}
-                      <div className="flex items-center gap-2 shrink-0">
+                      {/* Status + Controls */}
+                      <div className="flex shrink-0 items-center gap-2">
                         <StatusBadge
                           status={payment.status}
                           label={t(`payments.status.${payment.status}`)}
                         />
-                        <div className="hidden sm:flex items-center">
+
+                        <div className="hidden items-center sm:flex">
                           <InlineStatusSelector
                             value={payment.status}
                             onChange={(s) => handleUpdateStatus(payment.id, s)}
@@ -1232,45 +1432,56 @@ export function PaymentsPage() {
                             t={t}
                           />
                         </div>
+
                         {isUpdatingStatus && (
                           <motion.span
-                            className="h-3.5 w-3.5 rounded-full border-2 border-[#007AFF]/30 border-t-[#007AFF]"
+                            className="h-3.5 w-3.5 rounded-full border-2 border-blue-500/30 border-t-blue-600"
                             animate={{ rotate: 360 }}
-                            transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                            transition={{ duration: 0.85, repeat: Infinity, ease: 'linear' }}
                           />
                         )}
 
-                        {/* Sidecar Split-View trigger */}
+                        {/* Sidecar Split-View Optical Button with guaranteed >= 44x44px touch target */}
                         <motion.button
                           type="button"
                           onClick={() => handleOpenPaymentSidecar(payment)}
-                          whileHover={{ scale: 1.08 }}
-                          whileTap={{ scale: 0.92 }}
-                          aria-label="Sidecar tafsilotlarini ochish"
-                          title="Sidecar tafsilotlari (Split-View · Space)"
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-subtle bg-surface/80 text-secondary hover:text-primary hover:border-primary/40 transition-colors"
+                          whileHover={{ scale: 1.07, y: -1 }}
+                          whileTap={{ scale: 0.93 }}
+                          transition={SPRING.snappy}
+                          aria-label={t('payments.sidecarAria')}
+                          title={t('payments.sidecarTitle')}
+                          className="h-9 w-9 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl border border-white/80 bg-white/60 text-slate-600 shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.9),0_2px_6px_rgba(15,23,42,0.05)] backdrop-blur-md transition-colors hover:border-blue-400/50 hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-white/[0.12] dark:bg-white/[0.06] dark:text-slate-300 dark:hover:text-blue-400"
                         >
-                          <span className="text-[13px] leading-none">◨</span>
+                          <Icon paths={I.sidecar} size={15} strokeWidth={2} />
                         </motion.button>
 
-                        {/* Receipt action */}
+                        {/* Liquid Sapphire Receipt Button with guaranteed >= 44px min height & touch target */}
                         <motion.button
                           type="button"
                           onClick={() => setReceiptTarget(payment)}
-                          whileHover={{ scale: 1.06, y: -1 }}
+                          whileHover={{ scale: 1.05, y: -1 }}
                           whileTap={{ scale: 0.94 }}
                           transition={SPRING.snappy}
                           aria-label={t('payments.receipt')}
                           title={t('payments.receipt')}
-                          className="flex h-8 items-center gap-1.5 rounded-lg px-2 sm:px-2.5 text-[11px] font-bold tracking-tight outline-none"
+                          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-3 text-[11.5px] font-bold tracking-tight outline-none backdrop-blur-md focus-visible:ring-2 focus-visible:ring-blue-500"
                           style={{
-                            background: 'rgba(0,122,255,0.10)',
-                            color: '#007AFF',
-                            border: '1px solid rgba(0,122,255,0.2)',
+                            background: LIQUID_TONES.sapphire.surface,
+                            color: LIQUID_TONES.sapphire.fg,
+                            border: `1px solid ${LIQUID_TONES.sapphire.rim}`,
+                            boxShadow:
+                              'inset 0 1px 0.5px rgba(255,255,255,0.8), 0 4px 10px -4px rgba(37,99,235,0.28)',
                           }}
                         >
-                          <Icon paths={I.receipt} size={12} strokeWidth={2.2} />
-                          <span className="hidden sm:inline">{t('payments.receipt')}</span>
+                          <Icon
+                            paths={I.receipt}
+                            size={13.5}
+                            strokeWidth={2.2}
+                            className="dark:brightness-125"
+                          />
+                          <span className="hidden dark:brightness-125 sm:inline">
+                            {t('payments.receipt')}
+                          </span>
                         </motion.button>
                       </div>
                     </div>
@@ -1280,7 +1491,7 @@ export function PaymentsPage() {
             </div>
 
             {/* Pagination */}
-            <div className="relative border-t border-[#00000008] px-4 py-3 dark:border-[#ffffff08]">
+            <div className="relative border-t border-slate-900/[0.05] px-5 py-3.5 dark:border-white/[0.06]">
               <GlassPagination
                 page={page}
                 totalPages={data?.totalPages ?? 1}
@@ -1295,17 +1506,17 @@ export function PaymentsPage() {
       <FloatingActionIsland
         selectedCount={selectedCount}
         onClearSelection={clearSelection}
-        entityName="to'lov"
+        entityName={t('payments.entityName')}
         actions={[
           {
-            label: "To'langan deb belgilash",
+            label: t('payments.bulkMarkPaid'),
             shortcut: 'P',
             icon: <Icon paths={I.check} size={13} strokeWidth={2.4} />,
             variant: 'primary',
             onClick: handleBatchMarkAsPaid,
           },
           {
-            label: 'CSV Eksport',
+            label: t('payments.bulkExportCsv'),
             shortcut: 'C',
             icon: <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />,
             variant: 'default',
@@ -1324,12 +1535,25 @@ export function PaymentsPage() {
         wide
       >
         <form className="space-y-5" onSubmit={handleSubmit} noValidate>
-          {/* Hint banner */}
-          <div className="flex items-center gap-3 rounded-2xl border border-[#34C75933] bg-[#34C759]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#34C759]/15 text-[#34C759]">
-              <Icon paths={I.sparkles} size={18} strokeWidth={2} />
+          {/* Liquid Jade Hint Banner */}
+          <div
+            className="relative flex items-center gap-3.5 overflow-hidden rounded-2xl px-4 py-3.5 backdrop-blur-xl"
+            style={{
+              background: LIQUID_TONES.jade.surface,
+              border: `1px solid ${LIQUID_TONES.jade.rim}`,
+              boxShadow: 'inset 0 1px 0.5px rgba(255,255,255,0.75)',
+            }}
+          >
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white"
+              style={{
+                background: LIQUID_TONES.jade.orbGradient,
+                boxShadow: 'inset 0 1px 0.5px rgba(255,255,255,0.6)',
+              }}
+            >
+              <Icon paths={I.sparkles} size={17} strokeWidth={2.1} />
             </div>
-            <p className="text-[12px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+            <p className="text-[12.5px] font-medium leading-snug text-slate-800 dark:text-slate-100">
               {t('payments.modalSubtitle')}
             </p>
           </div>
@@ -1341,15 +1565,13 @@ export function PaymentsPage() {
               error={formErrors.studentId ? t(formErrors.studentId) : undefined}
             >
               <div className="relative">
-                <FieldIcon icon={I.user} tone="purple" />
+                <FieldIcon icon={I.user} tone="amethyst" />
                 <GlassSelect
                   value={form.studentId}
                   onChange={handleFormChange('studentId')}
                   required
                   aria-invalid={Boolean(formErrors.studentId)}
-                  aria-describedby={
-                    formErrors.studentId ? 'student-error' : undefined
-                  }
+                  aria-describedby={formErrors.studentId ? 'student-error' : undefined}
                   className="pl-11"
                 >
                   <option value="">{t('payments.form.selectStudent')}</option>
@@ -1361,11 +1583,7 @@ export function PaymentsPage() {
                 </GlassSelect>
               </div>
               {formErrors.studentId && (
-                <span
-                  id="student-error"
-                  className="mt-1 text-sm"
-                  style={{ color: 'var(--state-error)' }}
-                >
+                <span id="student-error" className="mt-1 text-sm text-rose-600 dark:text-rose-400">
                   {t(formErrors.studentId)}
                 </span>
               )}
@@ -1377,7 +1595,7 @@ export function PaymentsPage() {
               error={formErrors.amount ? t(formErrors.amount) : undefined}
             >
               <div className="relative">
-                <FieldIcon icon={I.cash} tone="emerald" />
+                <FieldIcon icon={I.cash} tone="jade" />
                 <GlassInput
                   type="number"
                   step="0.01"
@@ -1386,19 +1604,13 @@ export function PaymentsPage() {
                   onChange={handleFormChange('amount')}
                   required
                   aria-invalid={Boolean(formErrors.amount)}
-                  aria-describedby={
-                    formErrors.amount ? 'amount-error' : undefined
-                  }
+                  aria-describedby={formErrors.amount ? 'amount-error' : undefined}
                   placeholder="299.99"
                   className="pl-11"
                 />
               </div>
               {formErrors.amount && (
-                <span
-                  id="amount-error"
-                  className="mt-1 text-sm"
-                  style={{ color: 'var(--state-error)' }}
-                >
+                <span id="amount-error" className="mt-1 text-sm text-rose-600 dark:text-rose-400">
                   {t(formErrors.amount)}
                 </span>
               )}
@@ -1406,7 +1618,7 @@ export function PaymentsPage() {
 
             <GlassField label={t('payments.form.method')}>
               <div className="relative">
-                <FieldIcon icon={I.creditCard} tone="blue" />
+                <FieldIcon icon={I.creditCard} tone="sapphire" />
                 <GlassSelect
                   value={form.method}
                   onChange={handleFormChange('method')}
@@ -1424,7 +1636,7 @@ export function PaymentsPage() {
 
             <GlassField label={t('payments.form.dueDate')}>
               <div className="relative">
-                <FieldIcon icon={I.calendar} tone="orange" />
+                <FieldIcon icon={I.calendar} tone="amber" />
                 <GlassInput
                   type="date"
                   value={form.dueDate}
@@ -1443,7 +1655,7 @@ export function PaymentsPage() {
             />
           </GlassField>
 
-          <div className="flex justify-end gap-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="flex justify-end gap-2.5 border-t border-slate-900/[0.06] pt-4 dark:border-white/[0.08]">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <GlassButton
                 type="button"
@@ -1455,7 +1667,12 @@ export function PaymentsPage() {
               </GlassButton>
             </motion.div>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton type="submit" variant="primary" disabled={create.isPending}>
+              <GlassButton
+                type="submit"
+                variant="primary"
+                disabled={create.isPending}
+                className="!bg-gradient-to-r !from-blue-600 !to-indigo-600 !text-white !shadow-[0_10px_20px_-6px_rgba(37,99,235,0.45),inset_0_1px_0.5px_rgba(255,255,255,0.5)]"
+              >
                 <span className="inline-flex items-center gap-2">
                   {create.isPending ? (
                     <>
@@ -1480,7 +1697,7 @@ export function PaymentsPage() {
       </GlassModal>
 
       {/* ============================================================
-          RECEIPT MODAL
+          iOS 27 LIQUID GLASS RECEIPT MODAL
       ============================================================ */}
       <GlassModal
         open={receiptTarget !== null}
@@ -1490,59 +1707,66 @@ export function PaymentsPage() {
       >
         {receiptTarget && (
           <div className="space-y-5">
-            <div
-              id="medu-printable-receipt"
-              className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/90 p-6 text-[var(--text-primary)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/90 dark:text-[var(--text-primary)] shadow-card"
-            >
+            <div id="medu-printable-receipt" className={`${LIQUID_CARD} p-6 text-slate-900 dark:text-white`}>
+              <LiquidMeniscus />
+
               {/* Header */}
-              <div className="flex items-start justify-between border-b border-black/[0.05] pb-4 dark:border-white/[0.05]">
-                <div className="flex items-start gap-3">
+              <div className="relative flex items-start justify-between border-b border-slate-900/[0.06] pb-4 dark:border-white/[0.08]">
+                <div className="flex items-start gap-3.5">
                   <div
-                    className="flex h-10 w-10 items-center justify-center rounded-xl text-[15px] font-black text-white"
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl text-[15px] font-black text-white"
                     style={{
-                      background: 'linear-gradient(135deg, #007AFF 0%, #AF52DE 100%)',
-                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)',
+                      background: LIQUID_TONES.sapphire.orbGradient,
+                      boxShadow:
+                        '0 10px 20px -6px rgba(37,99,235,0.45), inset 0 1.5px 1px rgba(255,255,255,0.65)',
                     }}
                   >
                     {t('payments.receipt.academyName').charAt(0)}
                   </div>
                   <div>
-                    <h3 className="text-[16px] font-bold tracking-tight">
+                    <h3 className="text-[16.5px] font-bold tracking-tight">
                       {t('payments.receipt.academyName')}
                     </h3>
-                    <p className="mt-0.5 text-[11px] font-medium text-[var(--text-secondary)]">
+                    <p className="mt-0.5 text-[11.5px] font-medium text-slate-500 dark:text-slate-400">
                       {t('payments.receipt.title')}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="rounded-lg bg-[#007AFF]/10 px-2 py-1 font-mono text-[11px] font-bold text-[#007AFF]">
+                  <span
+                    className="inline-block rounded-xl px-2.5 py-1 font-mono text-[11px] font-bold"
+                    style={{
+                      background: LIQUID_TONES.sapphire.surface,
+                      color: LIQUID_TONES.sapphire.fg,
+                      border: `1px solid ${LIQUID_TONES.sapphire.rim}`,
+                    }}
+                  >
                     RCP-{receiptTarget.id.slice(0, 8).toUpperCase()}
                   </span>
-                  <p className="mt-1.5 text-[11px] font-medium text-[var(--text-secondary)]">
+                  <p className="mt-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
                     {formatDate(receiptTarget.createdAt)}
                   </p>
                 </div>
               </div>
 
               {/* Student / Status */}
-              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="relative mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                  <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
                     {t('payments.form.student')}
                   </span>
-                  <p className="mt-1 text-[14px] font-semibold tracking-tight">
+                  <p className="mt-1 text-[14.5px] font-semibold tracking-tight">
                     {formatStudentName(receiptTarget.student)}
                   </p>
                   {receiptTarget.student?.user?.email && (
-                    <p className="mt-0.5 inline-flex items-center gap-1 text-[11.5px] font-medium text-[var(--text-secondary)]">
-                      <Icon paths={I.mail} size={11} strokeWidth={2} className="opacity-60" />
+                    <p className="mt-0.5 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-slate-500 dark:text-slate-400">
+                      <Icon paths={I.mail} size={11} strokeWidth={2} className="opacity-70" />
                       {receiptTarget.student.user.email}
                     </p>
                   )}
                 </div>
                 <div className="sm:text-right">
-                  <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                  <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
                     {t('common.status')}
                   </span>
                   <div className="mt-1.5">
@@ -1554,23 +1778,23 @@ export function PaymentsPage() {
                 </div>
               </div>
 
-              {/* Item + amount panel */}
-              <div className="mt-5 rounded-2xl border border-black/[0.05] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]">
-                <div className="flex items-center justify-between border-b border-black/[0.05] pb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)] dark:border-white/[0.05]">
+              {/* Recessed Optical Ledger Panel */}
+              <div className={`relative mt-5 p-4 ${LIQUID_PILL_RECESSED}`}>
+                <div className="flex items-center justify-between border-b border-slate-900/[0.06] pb-2.5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:border-white/[0.06] dark:text-slate-500">
                   <span>{t('common.description')}</span>
                   <span>{t('payments.col.amount')}</span>
                 </div>
                 <div className="flex items-center justify-between pt-3">
-                  <span className="text-[13px] font-medium">
+                  <span className="text-[13.5px] font-medium">
                     {receiptTarget.description || '—'}
                   </span>
-                  <span className="text-[14px] font-bold tabular-nums">
+                  <span className="text-[14.5px] font-bold tabular-nums">
                     {formatCurrency(receiptTarget.amount)}
                   </span>
                 </div>
-                <div className="mt-3 flex items-center justify-between border-t border-black/[0.05] pt-3 dark:border-white/[0.05]">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+                <div className="mt-3.5 flex items-center justify-between border-t border-slate-900/[0.06] pt-3.5 dark:border-white/[0.06]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                       {t('payments.form.method')}:
                     </span>
                     <MethodChip
@@ -1578,29 +1802,29 @@ export function PaymentsPage() {
                       label={t(`payments.method.${toPaymentMethod(receiptTarget.method)}`)}
                     />
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                  <div className="flex items-baseline gap-2.5">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
                       {t('payments.receipt.total')}
                     </span>
-                    <span className="text-[20px] font-black tracking-tighter text-[#34C759] dark:text-[#30D158]">
+                    <span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-[21px] font-black tracking-tight text-transparent dark:from-emerald-400 dark:to-teal-300">
                       {formatCurrency(receiptTarget.amount)}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Verification footer */}
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.05] pt-4 text-[10.5px] font-medium text-[var(--text-tertiary)] dark:border-white/[0.05]">
+              {/* Verification Footer */}
+              <div className="relative mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-900/[0.06] pt-4 text-[11px] font-medium text-slate-500 dark:border-white/[0.08] dark:text-slate-400">
                 <div className="inline-flex items-center gap-1.5">
-                  <Icon paths={I.shield} size={13} strokeWidth={2.2} className="text-[#34C759]" />
+                  <Icon paths={I.shield} size={14} strokeWidth={2.2} className="text-emerald-600 dark:text-emerald-400" />
                   <span>{t('payments.receipt.footer')}</span>
                 </div>
-                <span className="font-mono">ID: {receiptTarget.id.slice(0, 12)}</span>
+                <span className="font-mono text-slate-400">ID: {receiptTarget.id.slice(0, 12)}</span>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex justify-end gap-2">
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-2.5">
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <GlassButton
                   type="button"
@@ -1627,9 +1851,9 @@ export function PaymentsPage() {
                   type="button"
                   variant="primary"
                   onClick={() => setPdfStudioOpen(true)}
-                  className="!bg-gradient-to-r !from-blue-600 !to-indigo-600 !text-white !border-blue-400/40"
+                  className="!rounded-2xl !border-white/30 !bg-gradient-to-r !from-blue-600 !via-indigo-600 !to-violet-600 !text-white !shadow-[0_12px_24px_-6px_rgba(37,99,235,0.45),inset_0_1.5px_1px_rgba(255,255,255,0.5)]"
                 >
-                  <span className="inline-flex items-center gap-2">
+                  <span className="inline-flex items-center gap-2 font-semibold">
                     <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
                     Executive PDF Studio
                   </span>
@@ -1656,9 +1880,9 @@ export function PaymentsPage() {
             items: [
               { label: "O'quvchi / Student", value: formatStudentName(receiptTarget.student) },
               { label: "To'lov usuli / Method", value: t(`payments.method.${toPaymentMethod(receiptTarget.method)}`) },
-              { label: "Status / Status", value: t(`payments.status.${receiptTarget.status}`) },
-              { label: "Izoh / Description", value: receiptTarget.description || "O'quv kursi to'lovi" },
-              { label: "Sana / Transaction Date", value: formatDate(receiptTarget.createdAt) },
+              { label: 'Status / Status', value: t(`payments.status.${receiptTarget.status}`) },
+              { label: 'Izoh / Description', value: receiptTarget.description || "O'quv kursi to'lovi" },
+              { label: 'Sana / Transaction Date', value: formatDate(receiptTarget.createdAt) },
             ],
           }}
         />

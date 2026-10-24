@@ -17,11 +17,11 @@ export function FinancialSummaryCard({
   const { t } = useI18n();
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-subtle/80 bg-card/85 backdrop-blur-xl p-5 shadow-card before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent dark:before:via-white/10 sm:p-6">
+    <div className="relative overflow-hidden rounded-[2rem] border border-white/60 bg-white/75 backdrop-blur-3xl backdrop-saturate-[200%] p-5 sm:p-6 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.08),inset_0_1.5px_1.5px_rgba(255,255,255,0.9)] dark:border-white/[0.12] dark:bg-[#161618]/75 dark:shadow-[0_20px_50px_-16px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.18)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-[1.5px] before:bg-gradient-to-r before:from-transparent before:via-white/70 before:to-transparent dark:before:via-white/20">
       <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
         {/* Left: Indicator & Paid Info */}
         <div className="flex items-center gap-3.5">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-apple-green/10 text-apple-green ring-1 ring-apple-green/20">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-apple-green/10 text-apple-green ring-1 ring-apple-green/20">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
               <polyline points="22 4 12 14.01 9 11.01" />
@@ -52,16 +52,16 @@ export function FinancialSummaryCard({
             </span>
           </div>
 
-          <div className="h-2 w-full overflow-hidden rounded-full bg-surface">
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08] p-0.5">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-apple-blue to-apple-green transition-all duration-700"
+              className="h-full rounded-full bg-gradient-to-r from-apple-blue to-apple-green shadow-xs transition-all duration-700"
               style={{ width: `${Math.min(100, Math.max(0, paidShare))}%` }}
             />
           </div>
         </div>
 
         {/* Right: Overdue & Pending Pills */}
-        <div className="flex w-full items-center justify-between gap-4 rounded-xl border border-subtle bg-surface/70 p-3 sm:w-auto sm:justify-start sm:gap-6 backdrop-blur-sm">
+        <div className="flex w-full items-center justify-between gap-4 rounded-2xl border border-black/[0.05] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.03] p-3 sm:w-auto sm:justify-start sm:gap-6 backdrop-blur-md">
           <div className="min-w-0 flex-1 sm:flex-initial">
             <p className="text-[10px] font-bold uppercase tracking-wider text-tertiary">
               {t('dashboard.overdue') || 'Overdue'}
@@ -71,7 +71,7 @@ export function FinancialSummaryCard({
             </p>
           </div>
 
-          <div className="h-7 w-px shrink-0 bg-subtle" />
+          <div className="h-7 w-px shrink-0 bg-black/[0.08] dark:bg-white/[0.1]" />
 
           <div className="min-w-0 flex-1 sm:flex-initial">
             <p className="text-[10px] font-bold uppercase tracking-wider text-tertiary">

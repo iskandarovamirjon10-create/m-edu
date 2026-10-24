@@ -1,11 +1,21 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { GlassPageHeader, GlassPageLoader, GlassEmptyState, GlassErrorState, GlassButton } from '@/components/ui';
 import { observabilityApi } from '@/lib/api';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+
+function AuroraMesh() {
+  return (
+    <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+      <div className="absolute -top-[10%] -left-[10%] h-[560px] w-[560px] rounded-full bg-gradient-to-br from-emerald-500/12 via-teal-500/8 to-transparent blur-[130px] dark:from-emerald-600/14 dark:via-teal-600/10" />
+      <div className="absolute top-[25%] -right-[10%] h-[520px] w-[520px] rounded-full bg-gradient-to-bl from-blue-500/12 via-indigo-500/8 to-transparent blur-[130px] dark:from-blue-600/14 dark:via-indigo-600/10" />
+      <div className="absolute -bottom-[15%] left-[25%] h-[480px] w-[480px] rounded-full bg-gradient-to-tr from-cyan-500/10 via-purple-500/6 to-transparent blur-[120px] dark:from-cyan-600/12" />
+    </div>
+  );
+}
 
 type Tab = 'health' | 'queues' | 'integrations' | 'api-metrics';
 
@@ -38,7 +48,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function GlassCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+function GlassCard({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
     <div className={`liquid-glass-card liquid-glass-surface relative overflow-hidden rounded-2xl p-5 sm:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ${className}`}>
       <div className="absolute inset-0 rounded-2xl pointer-events-none ring-1 ring-inset ring-black/5 dark:ring-white/5" aria-hidden />
@@ -57,7 +67,7 @@ function MetricRow({ label, value}: { label: string; value: string | number}) {
 }
 
 export function ObservabilityPage() {
- const { t} = useI18n();
+  const { t } = useSafeI18n();
  const [activeTab, setActiveTab] = useState<Tab>('health');
  const [autoRefresh, setAutoRefresh] = useState(false);
 
@@ -252,12 +262,9 @@ export function ObservabilityPage() {
  const apiMetrics = apiMetricsQuery.data as any;
  const dbMetrics = dbQuery.data as any;
 
- return (
- <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
- <div className="fixed inset-0 pointer-events-none overflow-hidden"aria-hidden>
- <div className="absolute top-[0%] left-[10%] w-[40%] h-[40%] rounded-full bg-brand-400/5 blur-[120px]"/>
- <div className="absolute bottom-[20%] right-[-5%] w-[30%] h-[50%] rounded-full bg-cyan-400/5 blur-[100px]"/>
- </div>
+  return (
+    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30 pb-[max(6rem,env(safe-area-inset-bottom))]">
+      <AuroraMesh />
 
  <div className="relative z-10 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8 animate-in fade-in duration-500">
  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
