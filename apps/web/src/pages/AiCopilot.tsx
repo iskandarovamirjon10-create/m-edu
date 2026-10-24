@@ -1,22 +1,38 @@
 /**
- * M-EDU AI Copilot — "Liquid Glass Studio".
+ * M-EDU AI Copilot — V2.0 "Liquid Glass Studio — Ultra Edition".
  * ============================================================================
  * Layout contract
- *   Desktop  (≥1024px): [History | Conversation | Context] + command palette
- *   Tablet   (768–1023px): [History | Conversation] + slide-over Context
- *   Mobile   (<768px): single canvas + history drawer + context bottom sheet
- *                      + a thumb-reachable quick action dock
+ *   Desktop  (≥1024px): [History | Conversation | Context] + Command Palette
+ *   Tablet   (768–1023px): [History | Conversation] + Slide-over Glass Sheet
+ *   Mobile   (<768px): Single Canvas + History Drawer + Context Bottom Sheet
+ *                      + Thumb-reachable Spatial Quick Dock
  *
- * Premium comfort
- *   - ⌘K command palette, ⌘B history, ⌘. focus mode, ⌘⇧O new chat, ⌘⇧E export
- *   - Focus mode hides both rails for distraction-free work
- *   - Persisted density / calm-motion / sound preferences
- *   - Day / night / OLED / sepia via `--cp-*` design tokens
- *   - Drag-to-dismiss overlays, focus trap, scroll lock, safe-area padding
+ * V2 Ultra Upgrades
+ *   • Full Hotkey Engine: ⌘K (Command), ⌘B (History), ⌘I (Context), ⌘. (Focus),
+ *     ⌘⇧O (New Chat), ⌘⇧E (Export PDF), ⌘⇧M (Export Markdown), Esc (Stop AI)
+ *   • Spatial DragControls: Mobile bottom sheet only drags via grab handle,
+ *     preventing scroll conflicts inside the context list
+ *   • Interactive Cursor Spotlight: Tracks pointer on desktop to illuminate
+ *     `.cp-glass--interactive` surfaces via `--cp-spot-x` / `--cp-spot-y`
+ *   • Drag-and-Drop Canvas Overlay: Drop text/prompt files directly into chat
+ *   • Floating Focus Mode Pill & Offline Connection Banner
  * ============================================================================
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion, type PanInfo } from 'framer-motion';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
+import {
+  AnimatePresence,
+  motion,
+  useDragControls,
+  type PanInfo,
+} from 'framer-motion';
 import {
   AiComposer,
   AiCopilotHeader,
@@ -46,41 +62,98 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useAiContextSuggestions } from '@/hooks/useAiContextSuggestions';
 import { useConversations } from '@/hooks/useConversations';
-import { useCopilotPreferences, copilotComfortClass } from '@/hooks/useCopilotPreferences';
+import {
+  useCopilotPreferences,
+  copilotComfortClass,
+} from '@/hooks/useCopilotPreferences';
 import { useTheme } from '@/hooks/useTheme';
 import { AI_MODELS, type ModelOption } from '@/components/ai/AiCopilotHeader';
 import { ConfirmDialog } from '@/components/ui';
-import { exportConversationToMarkdown, exportConversationToPrint } from '@/lib/ai/exportUtils';
+import {
+  exportConversationToMarkdown,
+  exportConversationToPrint,
+} from '@/lib/ai/exportUtils';
 import type { AiUiMessage } from '@/types/ai';
 import { cn } from '@/lib/design';
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Hooks
+ * Constants & Spring Physics (iOS 27 Fluid Motion)
  * ─────────────────────────────────────────────────────────────────────── */
 
-function useMediaQuery(query: string) {
+const SPRING_PANEL = {
+  type: 'spring' as const,
+  damping: 32,
+  stiffness: 350,
+  mass: 0.85,
+};
+
+const SPRING_SHEET = {
+  type: 'spring' as const,
+  damping: 36,
+  stiffness: 380,
+  mass: 0.8,
+};
+
+const DOCK_ACTIONS = [
+  {
+    id: 'attendance',
+    label: 'Davomat',
+    icon: <IconAttendance size={14} />,
+    prompt: "Bugungi davomatni ko'rsat va tahlil qilib ber",
+  },
+  {
+    id: 'finance',
+    label: 'Qarzdorlar',
+    icon: <IconFinance size={14} />,
+    prompt: "Muddati o'tgan to'lovlar va qarzdorlar ro'yxatini ko'rsat",
+  },
+  {
+    id: 'schedule',
+    label: 'Jadval',
+    icon: <IconSchedule size={14} />,
+    prompt: "Bugungi darslar jadvalini ko'rsat",
+  },
+  {
+    id: 'report',
+    label: 'Hisobot',
+    icon: <IconReport size={14} />,
+    prompt: 'Bugungi boshqaruv hisobotini tayyorla',
+  },
+] as const;
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Custom Ergonomic Hooks
+ * ─────────────────────────────────────────────────────────────────────── */
+
+function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
   );
+
   useEffect(() => {
     const mq = window.matchMedia(query);
-    const onChange = () => setMatches(mq.matches);
+    const onChange = (event: MediaQueryListEvent) => setMatches(event.matches);
     setMatches(mq.matches);
     mq.addEventListener?.('change', onChange);
     return () => mq.removeEventListener?.('change', onChange);
   }, [query]);
+
   return matches;
 }
 
-function useBodyScrollLock(locked: boolean) {
+function useBodyScrollLock(locked: boolean): void {
   useEffect(() => {
-    if (!locked) return;
-    const body = document.body;
+    if (!locked || typeof document === 'undefined') return;
+    const { body, documentElement } = document;
     const prevOverflow = body.style.overflow;
     const prevPaddingRight = body.style.paddingRight;
-    const scrollbar = window.innerWidth - document.documentElement.clientWidth;
+    const scrollbarWidth = window.innerWidth - documentElement.clientWidth;
+
     body.style.overflow = 'hidden';
-    if (scrollbar > 0) body.style.paddingRight = `${scrollbar}px`;
+    if (scrollbarWidth > 0) {
+      body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
     return () => {
       body.style.overflow = prevOverflow;
       body.style.paddingRight = prevPaddingRight;
@@ -92,7 +165,7 @@ function useFocusTrap(
   active: boolean,
   ref: { readonly current: HTMLElement | null },
   onClose?: () => void,
-) {
+): void {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -104,14 +177,15 @@ function useFocusTrap(
     const prevFocused = document.activeElement as HTMLElement | null;
     const SELECTOR =
       'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
     const getFocusable = () =>
       Array.from(node.querySelectorAll<HTMLElement>(SELECTOR)).filter(
-        (element) => !element.hasAttribute('aria-hidden') && element.offsetParent !== null,
+        (el) => !el.hasAttribute('aria-hidden') && el.offsetParent !== null,
       );
 
     const raf = requestAnimationFrame(() => {
       const elements = getFocusable();
-      (elements[0] ?? node).focus();
+      (elements[0] ?? node).focus({ preventScroll: true });
     });
 
     const onKey = (event: KeyboardEvent) => {
@@ -125,6 +199,7 @@ function useFocusTrap(
       if (elements.length === 0) return;
       const first = elements[0];
       const last = elements[elements.length - 1];
+
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
@@ -143,15 +218,19 @@ function useFocusTrap(
   }, [active, ref]);
 }
 
-function useHotkeys(map: Record<string, () => void>) {
+function useHotkeys(map: Record<string, () => void>): void {
   const mapRef = useRef(map);
   mapRef.current = map;
 
   useEffect(() => {
     const isEditable = (target: EventTarget | null) => {
-      const element = target as HTMLElement | null;
-      if (!element) return false;
-      return element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.isContentEditable;
+      const el = target as HTMLElement | null;
+      if (!el) return false;
+      return (
+        el.tagName === 'INPUT' ||
+        el.tagName === 'TEXTAREA' ||
+        el.isContentEditable
+      );
     };
 
     const onKey = (event: KeyboardEvent) => {
@@ -161,9 +240,13 @@ function useHotkeys(map: Record<string, () => void>) {
       if (event.shiftKey) parts.push('shift');
       if (event.altKey) parts.push('alt');
       parts.push(event.key.toLowerCase());
-      const handler = mapRef.current[parts.join('+')];
+
+      const combo = parts.join('+');
+      const handler = mapRef.current[combo];
       if (!handler) return;
-      if (!mod && isEditable(event.target)) return;
+
+      // Allow Escape and Mod+ shortcuts even inside inputs
+      if (!mod && event.key !== 'Escape' && isEditable(event.target)) return;
       event.preventDefault();
       handler();
     };
@@ -174,18 +257,7 @@ function useHotkeys(map: Record<string, () => void>) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Mobile dock data
- * ─────────────────────────────────────────────────────────────────────── */
-
-const DOCK_ACTIONS = [
-  { id: 'attendance', label: 'Davomat', icon: <IconAttendance size={14} />, prompt: "Bugungi davomatni ko'rsat" },
-  { id: 'finance', label: "Qarzdorlar", icon: <IconFinance size={14} />, prompt: "Muddati o'tgan to'lovlar va qarzdorlar ro'yxatini ko'rsat" },
-  { id: 'schedule', label: 'Jadval', icon: <IconSchedule size={14} />, prompt: "Bugungi darslar jadvalini ko'rsat" },
-  { id: 'report', label: 'Hisobot', icon: <IconReport size={14} />, prompt: "Bugungi boshqaruv hisobotini tayyorla" },
-];
-
-/* ─────────────────────────────────────────────────────────────────────────
- * Component
+ * Main V2 Component
  * ─────────────────────────────────────────────────────────────────────── */
 
 export function AiCopilot() {
@@ -198,6 +270,7 @@ export function AiCopilot() {
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const isTabletUp = useMediaQuery('(min-width: 768px)');
 
+  /* ── UI Layout States ─────────────────────────────────────────── */
   const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [isMobileHistoryOpen, setIsMobileHistoryOpen] = useState(false);
@@ -206,10 +279,16 @@ export function AiCopilot() {
   const [selectedModel, setSelectedModel] = useState<ModelOption>(AI_MODELS[0]);
   const [commandOpen, setCommandOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [loadingConvId, setLoadingConvId] = useState<string | null>(null);
 
+  const shellRef = useRef<HTMLDivElement>(null);
   const historyDrawerRef = useRef<HTMLDivElement>(null);
   const contextSheetRef = useRef<HTMLDivElement>(null);
+  const dragDepthRef = useRef(0);
+  const sheetDragControls = useDragControls();
 
+  /* ── Copilot Engine Hook ──────────────────────────────────────── */
   const {
     messages,
     status,
@@ -229,32 +308,52 @@ export function AiCopilot() {
     hydrate,
   } = useAiCopilot({
     persistence: 'local',
-    // The header picker is the source of truth: previously it changed state
-    // only locally and every request still went to the default model.
     model: selectedModel.id,
   });
 
   const { createNew, deleteConversation, loadMessages } = useConversations();
 
-  /* ── Data handlers ────────────────────────────────────────────── */
+  const isStreaming = status === 'streaming';
+  const isThinking = busy && !isStreaming;
+
+  /* ── V2 Interactive Spotlight Tracker (Desktop Fine Pointer) ──── */
+  const handleShellPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!isDesktop || preferences.calmMotion) return;
+      const el = shellRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 100;
+      const y = ((event.clientY - rect.top) / rect.height) * 100;
+      el.style.setProperty('--cp-spot-x', `${x.toFixed(1)}%`);
+      el.style.setProperty('--cp-spot-y', `${y.toFixed(1)}%`);
+    },
+    [isDesktop, preferences.calmMotion],
+  );
+
+  /* ── Data & Conversation Handlers ─────────────────────────────── */
   const handleSelectConversation = useCallback(
     async (id: string) => {
+      if (loadingConvId === id) return;
+      setLoadingConvId(id);
       try {
         const wire = await loadMessages(id);
+        const now = Date.now();
         const ui: AiUiMessage[] = wire.map((message, index) => ({
           id: `msg-${id}-${index}`,
           role: message.role,
           content: message.content || '',
-          createdAt: Date.now() - (wire.length - index) * 60_000,
+          createdAt: now - (wire.length - index) * 60_000,
         }));
         hydrate(ui, wire, id);
       } catch {
         setConversationId(id);
       } finally {
+        setLoadingConvId(null);
         setIsMobileHistoryOpen(false);
       }
     },
-    [loadMessages, hydrate, setConversationId],
+    [loadMessages, hydrate, setConversationId, loadingConvId],
   );
 
   const handleNewChat = useCallback(async () => {
@@ -264,7 +363,7 @@ export function AiCopilot() {
       const response = await createNew();
       if (response?.id) setConversationId(response.id);
     } catch {
-      /* offline: local-only new chat */
+      /* Offline resilience: operates cleanly in local session mode */
     }
   }, [clear, createNew, setConversationId]);
 
@@ -282,64 +381,149 @@ export function AiCopilot() {
   }, [clear]);
 
   const handleExportChat = useCallback(() => {
+    if (messages.length === 0) return;
     exportConversationToPrint(messages, 'M-EDU AI Copilot — Suhbat Hisoboti');
+  }, [messages]);
+
+  const handleExportMarkdown = useCallback(() => {
+    if (messages.length === 0) return;
+    exportConversationToMarkdown(messages);
   }, [messages]);
 
   const handleContextAction = useCallback(
     (prompt: string) => {
       if (!canSend) return;
       setIsMobileContextOpen(false);
-      setIsContextOpen(false);
+      if (!isDesktop) setIsContextOpen(false);
       send(prompt);
+    },
+    [canSend, isDesktop, send],
+  );
+
+  const handleToggleHistory = useCallback(() => {
+    if (isTabletUp) {
+      if (focusMode) setFocusMode(false);
+      setIsHistoryCollapsed((prev) => !prev);
+    } else {
+      setIsMobileHistoryOpen((prev) => !prev);
+    }
+  }, [isTabletUp, focusMode]);
+
+  const handleToggleContext = useCallback(() => {
+    if (isDesktop) {
+      if (focusMode) setFocusMode(false);
+      setIsContextOpen((prev) => !prev);
+    } else {
+      setIsMobileContextOpen((prev) => !prev);
+    }
+  }, [isDesktop, focusMode]);
+
+  /* ── Drag & Drop Prompt / File Support ────────────────────────── */
+  const handleDragEnter = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    if (event.dataTransfer?.types.includes('Files')) {
+      setIsDraggingFile(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) {
+      setIsDraggingFile(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    async (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      dragDepthRef.current = 0;
+      setIsDraggingFile(false);
+      if (!canSend) return;
+
+      const file = event.dataTransfer?.files?.[0];
+      if (!file) return;
+
+      if (
+        file.type.startsWith('text/') ||
+        /\.(txt|md|csv|json)$/i.test(file.name)
+      ) {
+        try {
+          const text = await file.text();
+          const clipped = text.slice(0, 8000);
+          send(
+            `📄 **${file.name}** fayli mazmuni bo'yicha tahlil qilib ber:\n\n\`\`\`\n${clipped}\n\`\`\``,
+          );
+        } catch {
+          /* Ignore unreadable file */
+        }
+      }
     },
     [canSend, send],
   );
 
-  /* ── Overlay coordination ─────────────────────────────────────── */
+  /* ── Overlay & Viewport Coordination ──────────────────────────── */
   useEffect(() => {
-    if (isMobileHistoryOpen && isMobileContextOpen) setIsMobileContextOpen(false);
+    if (isMobileHistoryOpen && isMobileContextOpen) {
+      setIsMobileContextOpen(false);
+    }
   }, [isMobileHistoryOpen, isMobileContextOpen]);
 
   useEffect(() => {
     if (isTabletUp) setIsMobileHistoryOpen(false);
   }, [isTabletUp]);
+
   useEffect(() => {
     if (isDesktop) setIsMobileContextOpen(false);
   }, [isDesktop]);
 
   useBodyScrollLock(isMobileHistoryOpen || isMobileContextOpen);
-  useFocusTrap(isMobileHistoryOpen, historyDrawerRef, () => setIsMobileHistoryOpen(false));
-  useFocusTrap(isMobileContextOpen, contextSheetRef, () => setIsMobileContextOpen(false));
+  useFocusTrap(isMobileHistoryOpen, historyDrawerRef, () =>
+    setIsMobileHistoryOpen(false),
+  );
+  useFocusTrap(isMobileContextOpen, contextSheetRef, () =>
+    setIsMobileContextOpen(false),
+  );
 
-  /* ── Hotkeys ──────────────────────────────────────────────────── */
+  /* ── Complete V2 Hotkey Matrix ────────────────────────────────── */
   useHotkeys({
-    'mod+b': () => {
-      if (isTabletUp) setIsHistoryCollapsed((value) => !value);
-      else setIsMobileHistoryOpen((value) => !value);
-    },
-    'mod+.': () => setFocusMode((value) => !value),
+    'mod+k': () => setCommandOpen((prev) => !prev),
+    'mod+b': handleToggleHistory,
+    'mod+i': handleToggleContext,
+    'mod+.': () => setFocusMode((prev) => !prev),
     'mod+shift+o': () => void handleNewChat(),
-    'mod+shift+e': () => {
-      if (messages.length > 0) handleExportChat();
+    'mod+shift+e': handleExportChat,
+    'mod+shift+m': handleExportMarkdown,
+    'mod+shift+backspace': () => {
+      if (messages.length > 0) setClearDialogOpen(true);
+    },
+    escape: () => {
+      if (busy) stop();
+      else if (focusMode) setFocusMode(false);
     },
   });
 
-  /* ── Drag to dismiss ──────────────────────────────────────────── */
+  /* ── Gesture Drag Dismiss Handlers ────────────────────────────── */
   const onHistoryDragEnd = useCallback((_event: unknown, info: PanInfo) => {
-    if (info.offset.x < -80 || info.velocity.x < -420) setIsMobileHistoryOpen(false);
+    if (info.offset.x < -75 || info.velocity.x < -380) {
+      setIsMobileHistoryOpen(false);
+    }
   }, []);
 
   const onSheetDragEnd = useCallback((_event: unknown, info: PanInfo) => {
-    if (info.offset.y > 100 || info.velocity.y > 520) setIsMobileContextOpen(false);
+    if (info.offset.y > 95 || info.velocity.y > 480) {
+      setIsMobileContextOpen(false);
+    }
   }, []);
 
-  /* ── Command palette ──────────────────────────────────────────── */
+  /* ── Command Palette Actions & Model Switcher ─────────────────── */
   const commands = useMemo<CopilotCommand[]>(() => {
-    const list: CopilotCommand[] = [
+    const coreActions: CopilotCommand[] = [
       {
         id: 'new',
         label: t('ai.newChat') || 'Yangi suhbat',
-        hint: 'Toza suhbat boshlash',
+        hint: 'Toza suhbat oynasini ochish',
         group: 'Amallar',
         shortcut: '⌘⇧O',
         icon: <IconCompose size={14} />,
@@ -347,113 +531,141 @@ export function AiCopilot() {
       },
       {
         id: 'focus',
-        label: focusMode ? 'Diqqat rejimini yopish' : 'Diqqat rejimi',
-        hint: 'Yon panellarni yashirish',
-        group: 'Amallar',
+        label: focusMode ? 'Diqqat rejimidan chiqish' : 'Diqqat rejimi (Focus)',
+        hint: 'Chalg‘ituvchi yon panellarni yashirish',
+        group: 'Ko‘rinish',
         shortcut: '⌘.',
         icon: <IconSliders size={14} />,
-        run: () => setFocusMode((value) => !value),
+        run: () => setFocusMode((prev) => !prev),
       },
       {
         id: 'history',
         label: 'Suhbatlar tarixi',
-        hint: isHistoryCollapsed ? 'Panelni yoyish' : "Panelni yig'ish",
+        hint: isHistoryCollapsed ? 'Chap panelni yoyish' : "Chap panelni yig'ish",
         group: 'Ko‘rinish',
         shortcut: '⌘B',
         icon: <IconHistory size={14} />,
-        run: () => {
-          if (isTabletUp) setIsHistoryCollapsed((value) => !value);
-          else setIsMobileHistoryOpen(true);
-        },
+        run: handleToggleHistory,
       },
       {
         id: 'context',
-        label: 'Kontekst paneli',
-        hint: 'Insight va tezkor amallar',
+        label: 'Kontekst va vositalar paneli',
+        hint: 'Sahifa bo‘yicha tahlil va tezkor amallar',
         group: 'Ko‘rinish',
+        shortcut: '⌘I',
         icon: <IconCompass size={14} />,
-        run: () => {
-          if (isDesktop) setIsContextOpen((value) => !value);
-          else setIsMobileContextOpen(true);
-        },
+        run: handleToggleContext,
       },
       {
         id: 'theme',
         label: isDark ? "Yorug' rejimga o'tish" : "Qorong'i rejimga o'tish",
-        hint: 'Kun / tun',
+        hint: 'Liquid Glass kun / tun mavzusi',
         group: 'Ko‘rinish',
         icon: isDark ? <IconSun size={14} /> : <IconMoon size={14} />,
         run: toggleTheme,
       },
       {
+        id: 'density',
+        label:
+          preferences.density === 'compact'
+            ? 'Qulay (Comfortable) zichlik'
+            : 'Ixcham (Compact) zichlik',
+        hint: 'Xabarlar orasidagi masofani moslash',
+        group: 'Ko‘rinish',
+        icon: <IconSliders size={14} />,
+        run: () =>
+          setPreference(
+            'density',
+            preferences.density === 'compact' ? 'comfortable' : 'compact',
+          ),
+      },
+      {
         id: 'export',
         label: 'Suhbatni chop etish / PDF',
-        hint: 'A4 formati',
-        group: 'Amallar',
+        hint: 'Rasmiy A4 hisobot formatida saqlash',
+        group: 'Eksport',
         shortcut: '⌘⇧E',
         icon: <IconDownload size={14} />,
-        run: () => messages.length > 0 && handleExportChat(),
+        run: handleExportChat,
       },
       {
         id: 'export-md',
-        label: 'Suhbatni Markdown (.md) yuklab olish',
-        hint: 'Faylga saqlash',
-        group: 'Amallar',
+        label: 'Markdown (.md) sifatida yuklab olish',
+        hint: 'Hujjat sifatida saqlash',
+        group: 'Eksport',
+        shortcut: '⌘⇧M',
         icon: <IconDownload size={14} />,
-        run: () => messages.length > 0 && exportConversationToMarkdown(messages),
+        run: handleExportMarkdown,
       },
       {
         id: 'clear',
-        label: 'Chatni tozalash',
-        hint: "Tarix butunlay o'chiriladi",
+        label: 'Suhbatni tozalash',
+        hint: "Joriy suhbat tarixini butunlay o'chirish",
         group: 'Amallar',
+        shortcut: '⌘⇧⌫',
         icon: <IconTrash size={14} />,
         run: () => setClearDialogOpen(true),
       },
     ];
 
-    const prompts: CopilotCommand[] = [
-      { id: 'p-attendance', label: 'Davomat tahlili', hint: "Bugungi davomatni ko'rsat", group: 'Tezkor so‘rovlar', icon: <IconAttendance size={14} />, run: () => canSend && send("Bugungi davomatni ko'rsat") },
-      { id: 'p-finance', label: 'Qarzdorlar', hint: "To'lovlar va qarzdorlar", group: 'Tezkor so‘rovlar', icon: <IconFinance size={14} />, run: () => canSend && send("Muddati o'tgan to'lovlar va qarzdorlar ro'yxatini ko'rsat") },
-      { id: 'p-schedule', label: 'Dars jadvali', hint: 'Bugungi darslar', group: 'Tezkor so‘rovlar', icon: <IconSchedule size={14} />, run: () => canSend && send("Bugungi darslar jadvalini ko'rsat") },
-      { id: 'p-report', label: 'Boshqaruv hisoboti', hint: 'Kunlik xulosa', group: 'Tezkor so‘rovlar', icon: <IconReport size={14} />, run: () => canSend && send('Bugungi boshqaruv hisobotini tayyorla') },
-    ];
+    const quickPrompts: CopilotCommand[] = DOCK_ACTIONS.map((item) => ({
+      id: `prompt-${item.id}`,
+      label: `${item.label} tahlili`,
+      hint: item.prompt,
+      group: 'Tezkor so‘rovlar',
+      icon: item.icon,
+      run: () => canSend && send(item.prompt),
+    }));
 
-    return [...list, ...prompts];
+    const modelSwitchers: CopilotCommand[] = AI_MODELS.map((model) => ({
+      id: `model-${model.id}`,
+      label: `Model: ${model.name}`,
+      hint:
+        selectedModel.id === model.id
+          ? '✓ Hozir faol model'
+          : model.description || "Ushbu AI modelga o'tish",
+      group: 'AI Modellar',
+      icon: <IconSliders size={14} />,
+      run: () => setSelectedModel(model),
+    }));
+
+    return [...coreActions, ...quickPrompts, ...modelSwitchers];
   }, [
     t,
     focusMode,
     isHistoryCollapsed,
-    isTabletUp,
-    isDesktop,
     isDark,
     toggleTheme,
+    preferences.density,
+    setPreference,
     handleNewChat,
+    handleToggleHistory,
+    handleToggleContext,
     handleExportChat,
-    messages.length,
+    handleExportMarkdown,
     canSend,
     send,
+    selectedModel.id,
   ]);
-
-  const contextNode = (
-    <CopilotContextPanel
-      routeContext={routeContext}
-      onActionClick={handleContextAction}
-      onClose={() => setIsContextOpen(false)}
-      className="h-full w-[344px]"
-    />
-  );
 
   /* ── Render ───────────────────────────────────────────────────── */
   return (
     <div
+      ref={shellRef}
+      onPointerMove={handleShellPointerMove}
+      onDragEnter={handleDragEnter}
+      onDragOver={(e) => e.preventDefault()}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      data-busy={busy ? 'true' : 'false'}
+      data-thinking={isThinking ? 'true' : 'false'}
       className={cn(
-        'cp-shell relative flex w-full overflow-hidden',
+        'cp-shell relative flex w-full overflow-hidden select-none sm:select-auto',
         copilotComfortClass(preferences),
       )}
       style={{ height: 'calc(100dvh - 4rem)' }}
     >
-      {/* Ambient light */}
+      {/* ── 1. Spatial Aurora Ambient Layer ──────────────────────── */}
       <div aria-hidden="true" className="cp-aurora">
         <div className="cp-aurora__blob cp-aurora__blob--a" />
         <div className="cp-aurora__blob cp-aurora__blob--b" />
@@ -461,24 +673,58 @@ export function AiCopilot() {
         <div className="cp-aurora__grain" />
       </div>
 
-      {/* Left rail */}
-      {!focusMode && (
-        <div className="relative z-10 hidden h-full shrink-0 md:flex">
-          <CopilotHistoryRail
-            collapsed={isHistoryCollapsed}
-            onToggleCollapse={() => setIsHistoryCollapsed((value) => !value)}
-            activeId={conversationId ?? null}
-            onSelect={handleSelectConversation}
-            onNew={handleNewChat}
-            onDelete={handleDeleteConversation}
-            className="h-full"
-          />
-        </div>
-      )}
+      {/* ── 2. Drag-and-Drop File Glass Overlay ──────────────────── */}
+      <AnimatePresence>
+        {isDraggingFile && (
+          <motion.div
+            key="drop-zone"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className="pointer-events-none absolute inset-3 z-[180] flex flex-col items-center justify-center rounded-[var(--cp-radius-xl)] cp-glass--floating border-2 border-dashed border-[color:var(--cp-accent)]"
+          >
+            <div className="cp-badge cp-badge--accent mb-2 px-3 py-1 text-xs">
+              M-EDU AI Dropzone
+            </div>
+            <p className="text-base font-semibold text-[color:var(--cp-text)]">
+              Tahlil qilish uchun faylni shu yerga tashlang
+            </p>
+            <p className="mt-1 text-xs text-[color:var(--cp-text-tertiary)]">
+              .txt, .md, .csv yoki .json formatidagi ma’lumotlar qo‘llab-quvvatlanadi
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Canvas */}
+      {/* ── 3. Left Rail: Conversation History (Animated) ────────── */}
+      <AnimatePresence initial={false}>
+        {!focusMode && isTabletUp && (
+          <motion.div
+            key="desktop-history-rail"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 'auto', opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={SPRING_PANEL}
+            className="relative z-10 hidden h-full shrink-0 overflow-hidden md:flex"
+          >
+            <CopilotHistoryRail
+              collapsed={isHistoryCollapsed}
+              onToggleCollapse={() => setIsHistoryCollapsed((prev) => !prev)}
+              activeId={conversationId ?? null}
+              onSelect={handleSelectConversation}
+              onNew={handleNewChat}
+              onDelete={handleDeleteConversation}
+              className="h-full"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 4. Central Conversation Studio Canvas ────────────────── */}
       <main
         aria-label="AI Copilot conversation"
+        aria-busy={busy}
         className="relative z-10 flex h-full min-w-0 flex-1 flex-col overflow-hidden"
       >
         <AiCopilotHeader
@@ -487,15 +733,9 @@ export function AiCopilot() {
           selectedModel={selectedModel}
           onSelectModel={setSelectedModel}
           isHistoryCollapsed={isHistoryCollapsed}
-          onToggleHistory={() => {
-            if (isTabletUp) setIsHistoryCollapsed((value) => !value);
-            else setIsMobileHistoryOpen(true);
-          }}
+          onToggleHistory={handleToggleHistory}
           isContextOpen={isContextOpen}
-          onToggleContext={() => {
-            if (isDesktop) setIsContextOpen((value) => !value);
-            else setIsMobileContextOpen(true);
-          }}
+          onToggleContext={handleToggleContext}
           onOpenHistoryDrawer={() => setIsMobileHistoryOpen(true)}
           onOpenContextDrawer={() => setIsMobileContextOpen(true)}
           onNewChat={handleNewChat}
@@ -509,9 +749,45 @@ export function AiCopilot() {
           preferences={preferences}
           onPreferenceChange={setPreference}
           focusMode={focusMode}
-          onToggleFocusMode={() => setFocusMode((value) => !value)}
+          onToggleFocusMode={() => setFocusMode((prev) => !prev)}
         />
 
+        {/* Top Floating Status Bar: Offline Warning & Focus Mode Pill */}
+        <AnimatePresence>
+          {(!online || focusMode) && (
+            <motion.div
+              key="status-bar"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="pointer-events-none absolute inset-x-0 top-16 z-30 flex items-center justify-center gap-2 px-4"
+            >
+              {!online && (
+                <div
+                  role="status"
+                  className="pointer-events-auto cp-badge border-[color:var(--cp-danger-bright)] bg-[color:var(--cp-surface-floating)] px-3 py-1 text-xs text-[color:var(--cp-danger-bright)] shadow-[var(--cp-shadow-2)]"
+                >
+                  <span className="cp-live-dot cp-live-dot--offline mr-1" />
+                  Oflayn rejim — internet aloqasi kutilmoqda
+                </div>
+              )}
+
+              {focusMode && (
+                <button
+                  type="button"
+                  onClick={() => setFocusMode(false)}
+                  className="pointer-events-auto cp-badge cp-badge--accent cp-hover-lift cursor-pointer px-3 py-1 text-xs shadow-[var(--cp-shadow-2)]"
+                  title="Diqqat rejimidan chiqish (⌘.)"
+                >
+                  <span>Diqqat rejimi faol</span>
+                  <kbd className="cp-kbd ml-1">⌘.</kbd>
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Message Stream Area */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <AiMessageList
             messages={messages}
@@ -524,12 +800,12 @@ export function AiCopilot() {
             onConfirm={confirm}
             onReject={reject}
             onDismissActionError={dismissActionError}
-            isStreaming={status === 'streaming'}
+            isStreaming={isStreaming}
           />
         </div>
 
-        {/* Mobile thumb dock */}
-        <div className="relative z-10 shrink-0 px-3 pb-0.5 md:hidden">
+        {/* Mobile Spatial Quick Dock */}
+        <div className="relative z-10 shrink-0 px-3 pb-1 md:hidden">
           <div className="cp-dock" role="group" aria-label="Tezkor amallar">
             {DOCK_ACTIONS.map((action) => (
               <button
@@ -539,7 +815,10 @@ export function AiCopilot() {
                 onClick={() => send(action.prompt)}
                 className="cp-dock__chip disabled:opacity-45"
               >
-                <span aria-hidden="true" className="text-[color:var(--cp-accent)]">
+                <span
+                  aria-hidden="true"
+                  className="text-[color:var(--cp-accent)]"
+                >
                   {action.icon}
                 </span>
                 {action.label}
@@ -549,15 +828,20 @@ export function AiCopilot() {
               type="button"
               onClick={() => setCommandOpen(true)}
               className="cp-dock__chip"
+              aria-label="Barcha buyruqlar"
             >
-              <span aria-hidden="true" className="text-[color:var(--cp-accent)]">
+              <span
+                aria-hidden="true"
+                className="text-[color:var(--cp-accent)]"
+              >
                 <IconPlus size={14} />
               </span>
-              Ko‘proq
+              Buyruqlar
             </button>
           </div>
         </div>
 
+        {/* AI Composer Input */}
         <AiComposer
           status={status}
           onSend={send}
@@ -567,127 +851,140 @@ export function AiCopilot() {
         />
       </main>
 
-      {/* Desktop context panel */}
+      {/* ── 5. Right Rail: Desktop Context & Insights Panel ──────── */}
       <AnimatePresence initial={false}>
         {isDesktop && isContextOpen && !focusMode && (
           <motion.aside
-            key="context-panel"
+            key="desktop-context-panel"
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 344, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={{ type: 'spring', damping: 32, stiffness: 340, mass: 0.9 }}
+            transition={SPRING_PANEL}
             className="relative z-10 hidden h-full shrink-0 overflow-hidden border-l border-[color:var(--cp-hairline)] lg:flex"
             aria-label="Context and tools"
           >
-            {contextNode}
+            <CopilotContextPanel
+              routeContext={routeContext}
+              onActionClick={handleContextAction}
+              onClose={() => setIsContextOpen(false)}
+              className="h-full w-[344px]"
+            />
           </motion.aside>
         )}
       </AnimatePresence>
 
-      {/* Mobile history drawer */}
+      {/* ── 6. Mobile History Drawer (Left Glass Slide-Over) ─────── */}
       <AnimatePresence>
         {isMobileHistoryOpen && (
-          <motion.div
-            key="history-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            onClick={() => setIsMobileHistoryOpen(false)}
-            className="cp-overlay md:hidden"
-            aria-hidden="true"
-          />
-        )}
-        {isMobileHistoryOpen && (
-          <motion.div
-            key="history-drawer"
-            ref={historyDrawerRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Conversation history"
-            tabIndex={-1}
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ type: 'spring', damping: 34, stiffness: 360, mass: 0.9 }}
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={{ left: 0.4, right: 0 }}
-            onDragEnd={onHistoryDragEnd}
-            className="fixed inset-y-0 left-0 z-[150] flex w-[min(86vw,20rem)] flex-col overflow-hidden bg-[var(--bg-card,var(--cp-surface-solid))] shadow-[var(--cp-shadow-3)] md:hidden"
-          >
-            <CopilotHistoryRail
-              collapsed={false}
-              onToggleCollapse={() => setIsMobileHistoryOpen(false)}
-              activeId={conversationId ?? null}
-              onSelect={handleSelectConversation}
-              onNew={handleNewChat}
-              onDelete={handleDeleteConversation}
-              className="h-full w-full border-r-0"
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Mobile context bottom sheet */}
-      <AnimatePresence>
-        {isMobileContextOpen && (
-          <motion.div
-            key="context-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            onClick={() => setIsMobileContextOpen(false)}
-            className="cp-overlay lg:hidden"
-            aria-hidden="true"
-          />
-        )}
-        {isMobileContextOpen && (
-          <motion.div
-            key="context-sheet"
-            ref={contextSheetRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Context and tools"
-            tabIndex={-1}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 34, stiffness: 360, mass: 0.9 }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.4 }}
-            onDragEnd={onSheetDragEnd}
-            className="fixed inset-x-0 bottom-0 z-[150] flex max-h-[86dvh] flex-col overflow-hidden rounded-t-[26px] bg-[var(--bg-card,var(--cp-surface-solid))] shadow-[var(--cp-shadow-3)] lg:hidden"
-            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 10px)' }}
-          >
-            <div
+          <>
+            <motion.div
+              key="history-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsMobileHistoryOpen(false)}
+              className="cp-overlay md:hidden"
               aria-hidden="true"
-              className="flex w-full shrink-0 cursor-grab items-center justify-center pb-1 pt-3 active:cursor-grabbing"
+            />
+            <motion.div
+              key="history-drawer"
+              ref={historyDrawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Suhbatlar tarixi"
+              tabIndex={-1}
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={SPRING_SHEET}
+              drag="x"
+              dragDirectionLock
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={{ left: 0.45, right: 0 }}
+              onDragEnd={onHistoryDragEnd}
+              className="cp-glass--floating fixed inset-y-0 left-0 z-[165] flex w-[min(86vw,20.5rem)] flex-col overflow-hidden border-r border-[color:var(--cp-hairline-strong)] md:hidden"
             >
-              <div className="h-1.5 w-10 rounded-full bg-[color:var(--cp-hairline-strong)]" />
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <CopilotContextPanel
-                routeContext={routeContext}
-                onActionClick={handleContextAction}
-                onClose={() => setIsMobileContextOpen(false)}
-                className="h-full w-full border-l-0"
+              <CopilotHistoryRail
+                collapsed={false}
+                onToggleCollapse={() => setIsMobileHistoryOpen(false)}
+                activeId={conversationId ?? null}
+                onSelect={handleSelectConversation}
+                onNew={handleNewChat}
+                onDelete={handleDeleteConversation}
+                className="h-full w-full border-r-0 bg-transparent"
               />
-            </div>
-          </motion.div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
-      {/* Command palette */}
+      {/* ── 7. Mobile / Tablet Context Bottom Sheet (Handle-Driven) ─ */}
+      <AnimatePresence>
+        {isMobileContextOpen && (
+          <>
+            <motion.div
+              key="context-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsMobileContextOpen(false)}
+              className="cp-overlay lg:hidden"
+              aria-hidden="true"
+            />
+            <motion.div
+              key="context-sheet"
+              ref={contextSheetRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Kontekst va tezkor amallar"
+              tabIndex={-1}
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={SPRING_SHEET}
+              drag="y"
+              dragControls={sheetDragControls}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.45 }}
+              onDragEnd={onSheetDragEnd}
+              className="cp-glass--floating cp-specular fixed inset-x-0 bottom-0 z-[165] flex max-h-[86dvh] flex-col overflow-hidden rounded-t-[28px] border-t border-[color:var(--cp-hairline-strong)] lg:hidden"
+              style={{
+                paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 10px)',
+              }}
+            >
+              {/* Dedicated Drag Grabber Handle (Prevents inner scroll conflict) */}
+              <div
+                aria-hidden="true"
+                onPointerDown={(event) => sheetDragControls.start(event)}
+                className="flex w-full shrink-0 cursor-grab touch-none items-center justify-center pb-2 pt-3.5 active:cursor-grabbing"
+              >
+                <div className="h-1.5 w-11 rounded-full bg-[color:var(--cp-hairline-strong)] transition-transform active:scale-95" />
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <CopilotContextPanel
+                  routeContext={routeContext}
+                  onActionClick={handleContextAction}
+                  onClose={() => setIsMobileContextOpen(false)}
+                  className="h-full w-full border-l-0 bg-transparent"
+                />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── 8. Command Palette (⌘K) ──────────────────────────────── */}
       <CopilotCommandPalette
         open={commandOpen}
         onClose={() => setCommandOpen(false)}
         commands={commands}
       />
 
-      {/* Clear confirmation */}
+      {/* ── 9. Clear Chat Confirmation Dialog ────────────────────── */}
       <ConfirmDialog
         open={clearDialogOpen}
         onClose={() => setClearDialogOpen(false)}
