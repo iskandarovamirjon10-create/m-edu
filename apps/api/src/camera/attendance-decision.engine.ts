@@ -165,7 +165,7 @@ const LATE_THRESHOLD_MINUTES = 15;
 const MAX_FUTURE_DRIFT_MS = 5_000;
 
 const MINUTES_PER_DAY = 24 * 60;
-const DEFAULT_TIMEZONE = process.env.DEFAULT_TIMEZONE || 'Asia/Tashkent';
+const DEFAULT_TIMEZONE = process.env.DEFAULT_TIMEZONE || 'UTC';
 const MAX_TIMEZONE_CACHE_SIZE = 128;
 
 const ATTENDANCE_UNIQUE_TARGET = 'studentId_groupId_date';

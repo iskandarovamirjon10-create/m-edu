@@ -2415,6 +2415,7 @@ const ru: Record<string, string> = {
   "login.wrongEmailOrPassword": "Неверный email или пароль. Попробуйте ещё раз.",
   "nav.academics": "Учебный процесс",
   "nav.administration": "Администрирование",
+  "nav.resultsFound": "результатов найдено",
   "nav.aiCopilot": "AI-ассистент",
   "nav.anomalyDetection": "Обнаружение аномалий",
   "nav.assessment": "Оценка и тесты",

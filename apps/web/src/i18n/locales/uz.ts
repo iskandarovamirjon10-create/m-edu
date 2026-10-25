@@ -141,6 +141,7 @@ const uz = {
   'nav.users': 'Foydalanuvchilar',
   'nav.audit': 'Audit jurnali',
   'nav.administration': 'Boshqaruv',
+  'nav.resultsFound': 'ta natija topildi',
   'nav.searchPlaceholder': 'O\'quvchi, o\'qituvchi, guruhlarni qidirish…',
   'nav.signIn': 'Kirish',
   'nav.createAccount': 'Hisob yaratish',

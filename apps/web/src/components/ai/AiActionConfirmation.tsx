@@ -862,16 +862,18 @@ export function AiActionConfirmation({
     cancelRef.current?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
       if (stack[stack.length - 1] !== titleId) return;
 
-      // Escape → reject (unless busy)
+      // Escape → reject (unless busy). Must run even if page-level hotkey handler captured event.
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
         if (!busyRef.current) rejectRef.current();
         return;
       }
+
+      if (event.defaultPrevented) return;
+
       // Cmd/Ctrl+Enter → confirm (only when phrase is satisfied)
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         if (!busyRef.current && phraseOk) {

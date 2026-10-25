@@ -1,4 +1,4 @@
-﻿/* ═══════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
  * M-EDU GLOBAL STYLES V2.0 — Chromatic Liquid Glass & 120Hz ProMotion Optics
  * reset · tokens · base · typography · glass · components · motion · focus · utilities · print
  *
@@ -805,8 +805,8 @@
     .glass-floating,
     .glass-modal,
     .auth-glass-panel {
-      backdrop-filter: blur(16px) saturate(170%) !important;
-      -webkit-backdrop-filter: blur(16px) saturate(170%) !important;
+      backdrop-filter: blur(14px) saturate(170%) !important;
+      -webkit-backdrop-filter: blur(14px) saturate(170%) !important;
     }
   }
 

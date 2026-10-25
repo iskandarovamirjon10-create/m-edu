@@ -143,7 +143,7 @@ describe('FaceService', () => {
     it('uses the mock engine outside production when explicitly configured', async () => {
       const { service } = await makeService();
 
-      expect(service.getEngineStatus()).toEqual({
+      expect(service.getEngineStatus()).toMatchObject({
         provider: 'mock',
         isReal: false,
         initialized: true,

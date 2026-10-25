@@ -139,6 +139,7 @@ const en = {
   'nav.users': 'Users',
   'nav.audit': 'Audit Log',
   'nav.administration': 'Administration',
+  'nav.resultsFound': 'results found',
   'nav.searchPlaceholder': 'Search students, teachers, groupsâ€¦',
   'nav.signIn': 'Sign In',
   'nav.createAccount': 'Create Account',
