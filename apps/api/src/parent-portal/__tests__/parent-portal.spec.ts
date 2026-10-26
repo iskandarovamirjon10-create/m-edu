@@ -12,6 +12,10 @@ function createMockPrisma() {
       findMany: vi.fn(),
       update: vi.fn(),
     },
+    studentGroup: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+    },
     parentStudent: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -19,6 +23,9 @@ function createMockPrisma() {
     attendance: {
       findMany: vi.fn(),
       groupBy: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
     },
     grade: {
       findMany: vi.fn(),
@@ -313,4 +320,68 @@ describe('ParentPortalModule Unit Tests', () => {
       );
     });
   });
+
+  describe('ParentPortalService - reportAbsence', () => {
+      it('creates an EXCUSED attendance record if none exists for the date', async () => {
+        prisma.parentStudent.findFirst.mockResolvedValue({
+          studentId: 's-1',
+          canViewAttendance: true,
+          canViewGrades: true,
+          canViewPayments: true,
+        });
+        (prisma as any).studentGroup = (prisma as any).studentGroup || { findFirst: vi.fn() };
+        (prisma as any).studentGroup.findFirst.mockResolvedValue({
+          groupId: 'grp-1',
+        });
+        prisma.attendance.findFirst.mockResolvedValue(null);
+        prisma.attendance.create.mockResolvedValue({
+          id: 'att-excused-1',
+          date: new Date('2026-10-27T00:00:00.000Z'),
+          status: 'EXCUSED',
+          source: 'PARENT_PORTAL',
+          note: 'Salomatligi tufayli',
+          markedAt: new Date(),
+        });
+
+        const result = await service.reportAbsence(mockCtx, 's-1', {
+          date: '2026-10-27',
+          reason: 'Salomatligi tufayli',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.attendance.status).toBe('EXCUSED');
+        expect(prisma.attendance.create).toHaveBeenCalled();
+      });
+
+      it('updates existing attendance record if already marked', async () => {
+        prisma.parentStudent.findFirst.mockResolvedValue({
+          studentId: 's-1',
+          canViewAttendance: true,
+          canViewGrades: true,
+          canViewPayments: true,
+        });
+        (prisma as any).studentGroup = (prisma as any).studentGroup || { findFirst: vi.fn() };
+        (prisma as any).studentGroup.findFirst.mockResolvedValue({
+          groupId: 'grp-1',
+        });
+        prisma.attendance.findFirst.mockResolvedValue({
+          id: 'existing-att-1',
+          status: 'ABSENT',
+        });
+        prisma.attendance.update.mockResolvedValue({
+          id: 'existing-att-1',
+          status: 'EXCUSED',
+          source: 'PARENT_PORTAL',
+          note: 'Doctor ruxsati bilan',
+        });
+
+        const result = await service.reportAbsence(mockCtx, 's-1', {
+          date: '2026-10-27',
+          reason: 'Doctor ruxsati bilan',
+        });
+
+        expect(result.success).toBe(true);
+        expect(prisma.attendance.update).toHaveBeenCalled();
+      });
+    });
 });

@@ -166,6 +166,23 @@ export const I: Readonly<Record<string, readonly string[]>> = {
     'M8 4v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7.242a2 2 0 0 0-.602-1.43L16.083 2.57A2 2 0 0 0 14.685 2H10a2 2 0 0 0-2 2z',
     'M16 18v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2',
   ],
+  building: [
+    'M3 21h18',
+    'M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16',
+    'M9 9h1',
+    'M9 13h1',
+    'M9 17h1',
+    'M14 9h1',
+    'M14 13h1',
+    'M14 17h1',
+  ],
+  fileText: [
+    'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z',
+    'M14 2v6h6',
+    'M16 13H8',
+    'M16 17H8',
+    'M10 9H8',
+  ],
 };
 
 export function Icon({

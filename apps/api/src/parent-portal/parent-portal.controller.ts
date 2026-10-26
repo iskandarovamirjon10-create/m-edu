@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
@@ -20,6 +20,18 @@ import { AllowAnyRole } from '../auth/roles.decorator';
  * ParentStudent link — the guard proves *who* the caller is, the service
  * proves *what* they may see.
  */
+
+
+export class ReportAbsenceDto {
+  @ApiProperty({ example: '2026-10-27', description: 'Dars qoldiriladigan sana' })
+  @IsString()
+  date!: string;
+
+  @ApiProperty({ example: 'Salomatligi sababli (shifokor ko‘rigi)', description: 'Sabab izohi' })
+  @IsString()
+  @MinLength(2)
+  reason!: string;
+}
 
 export class ParentLoginDto {
   @ApiProperty() @IsEmail()
@@ -101,5 +113,16 @@ export class ParentPortalController {
   ) {
     return this.parentPortal.getChildInvoices(this.ctx(user), studentId);
   }
-}
 
+  @AllowAnyRole()
+  @Post('children/:studentId/absence')
+  @Roles(Role.PARENT)
+  @ApiOperation({ summary: 'Submit excused absence notice for a child' })
+  reportAbsence(
+    @CurrentUser() user: { sub: string; organizationId: string },
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Body() body: ReportAbsenceDto,
+  ) {
+    return this.parentPortal.reportAbsence(this.ctx(user), studentId, body);
+  }
+}

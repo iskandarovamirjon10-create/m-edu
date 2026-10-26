@@ -16,6 +16,7 @@ describe('ParentPortalController', () => {
     getChildGrades: ReturnType<typeof vi.fn>;
     getChildSchedule: ReturnType<typeof vi.fn>;
     getChildInvoices: ReturnType<typeof vi.fn>;
+    reportAbsence: ReturnType<typeof vi.fn>;
   };
 
   const mockUser = {
@@ -38,6 +39,7 @@ describe('ParentPortalController', () => {
       getChildGrades: vi.fn(),
       getChildSchedule: vi.fn(),
       getChildInvoices: vi.fn(),
+      reportAbsence: vi.fn(),
     };
 
     controller = new ParentPortalController(service as unknown as ParentPortalService);
@@ -246,6 +248,23 @@ describe('ParentPortalController', () => {
         const roles = Reflect.getMetadata(ROLES_KEY, handler);
         expect(roles).toEqual(['PARENT']);
       }
+    });
+  });
+
+  describe('reportAbsence', () => {
+    it('delegates to parentPortal.reportAbsence with resolved context, studentId and body', async () => {
+      const mockResult = {
+        success: true,
+        message: 'Arizangiz qabul qilindi',
+        attendance: { id: 'att-123', status: 'EXCUSED' },
+      };
+      service.reportAbsence.mockResolvedValue(mockResult);
+
+      const body = { date: '2026-10-27', reason: 'Salomatligi sababli' };
+      const result = await controller.reportAbsence(mockUser, studentId, body);
+
+      expect(service.reportAbsence).toHaveBeenCalledWith(expectedCtx, studentId, body);
+      expect(result).toEqual(mockResult);
     });
   });
 });

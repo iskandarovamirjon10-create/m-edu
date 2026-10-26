@@ -1109,6 +1109,11 @@ export const parentPortalApi = {
     request(`/parent-portal/children/${studentId}/invoices${buildQuery(params)}`),
   schedule: (studentId: string) =>
     request<Array<{ id: string; dayOfWeek: string; startTime: string; endTime: string; room?: string | null; group: { id: string; name: string } }>>(`/parent-portal/children/${studentId}/schedule`),
+  reportAbsence: (studentId: string, data: { date: string; reason: string }) =>
+    request<{ success: boolean; message: string; attendance: unknown }>(
+      `/parent-portal/children/${studentId}/absence`,
+      { method: 'POST', body: JSON.stringify(data) },
+    ),
 };
 
 export const payrollApi = {

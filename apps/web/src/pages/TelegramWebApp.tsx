@@ -290,6 +290,8 @@ interface AttendanceRow {
   status: AttendanceStatus;
   source?: string | null;
   note?: string | null;
+  markedAt?: string | null;
+  deviceId?: string | null;
   group: { id: string; name: string } | null;
   lesson?: { id: string; date: string; startTime: string; topic?: string | null } | null;
 }
@@ -434,12 +436,24 @@ interface PassUser {
 const STAFF_ROLES = ['TEACHER', 'ASSISTANT', 'SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN', 'MANAGER'] as const;
 const ADMIN_ROLES = ['SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN', 'MANAGER'] as const;
 
-const PAY_PROVIDERS = {
-  payme: { label: 'Payme', url: 'https://payme.uz' },
-  click: { label: 'Click Up', url: 'https://click.uz' },
-  uzum: { label: 'Uzum Bank', url: 'https://uzumbank.uz' },
+const PAYMENT_CHANNELS = {
+  cash: {
+    label: 'Markaz kassasi (Naqd)',
+    badge: 'Kassada (Naqd)',
+    desc: "O'quv markazining bosh kassa qabulxonasida naqd shaklda to'lanadi. Rasmiy kvitansiya chop etib beriladi.",
+  },
+  terminal: {
+    label: 'Terminal (Uzcard / Humo)',
+    badge: 'Terminal (Karta)',
+    desc: "Qabulxonadagi Uzcard / Humo bank POS-terminali orqali to'lov qabul qilinadi.",
+  },
+  bank: {
+    label: 'Bank o‘tkazmasi (Hisob raqam)',
+    badge: 'Bank o‘tkazmasi',
+    desc: "Tashkilotning rasmiy bank hisob raqamiga to'lov topshirig'i orqali pul o'tkaziladi. To'lov maqsadida o'quvchi ismi va invoys raqami ko'rsatiladi.",
+  },
 } as const;
-type PayMethod = keyof typeof PAY_PROVIDERS;
+type PayChannel = keyof typeof PAYMENT_CHANNELS;
 
 /** Tashqi havolani xavfsiz ochish: faqat ichki yo'l yoki https. */
 function openSafeLink(rawUrl: string, tg: TelegramWebApp | null): void {
@@ -465,10 +479,12 @@ function TodayCard({
   child,
   attendanceQ,
   summaryQ,
+  onOpenAbsence,
 }: {
   child: ParentChild;
   attendanceQ: UseQueryResult<AttendanceRow[]>;
   summaryQ: UseQueryResult<AttendanceSummary>;
+  onOpenAbsence?: () => void;
 }) {
   const isFirstLoad = attendanceQ.isLoading && summaryQ.isLoading;
   const rows = attendanceQ.data ?? [];
@@ -557,6 +573,42 @@ function TodayCard({
         </div>
       </div>
 
+      {/* Turniket / Face Kiosk jonli kirish holati */}
+      {today && (today.markedAt || today.source === 'FACE_KIOSK' || today.source === 'TURNSTILE' || today.source === 'CAMERA') && (
+        <div
+          className="mt-3.5 flex items-center justify-between rounded-2xl p-3"
+          style={{
+            background: 'color-mix(in srgb, #10B981 12%, transparent)',
+            border: '1px solid color-mix(in srgb, #10B981 26%, transparent)',
+            boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.16)',
+          }}
+        >
+          <div className="flex items-center gap-2.5">
+            <div
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-emerald-400"
+              style={{ background: 'color-mix(in srgb, #10B981 22%, transparent)' }}
+            >
+              <Icon paths={I.shieldCheck} size={16} strokeWidth={2.2} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[12px] font-bold text-emerald-500">
+                Turniket / Face ID orqali qayd etildi
+              </p>
+              <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                {today.markedAt ? `Kirish: ${new Date(today.markedAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}` : 'Vaqtida'} • Bino ichida
+              </p>
+            </div>
+          </div>
+          <span
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold text-emerald-400"
+            style={{ background: 'color-mix(in srgb, #10B981 18%, transparent)' }}
+          >
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            Jonli
+          </span>
+        </div>
+      )}
+
       {lesson ? (
         <div
           className="mt-4 flex items-center gap-3 rounded-2xl p-3"
@@ -643,6 +695,20 @@ function TodayCard({
           )}
         </div>
       </div>
+
+      {onOpenAbsence && (
+        <div className="mt-4 border-t pt-3.5" style={{ borderColor: 'var(--border-subtle)' }}>
+          <button
+            type="button"
+            onClick={onOpenAbsence}
+            className="liquid-btn flex w-full items-center justify-center gap-2 rounded-2xl py-2.5 text-[12px] font-bold transition-all"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            <Icon paths={I.calendar} size={15} strokeWidth={2.2} />
+            Sababli dars qoldirish arizasi yuborish
+          </button>
+        </div>
+      )}
     </Surface>
   );
 }
@@ -932,7 +998,7 @@ function PaymentSheet({
   const sheetRef = useRef<HTMLDivElement>(null);
   useFocusTrap(sheetRef, open);
   const copyTimer = useRef<number | undefined>(undefined);
-  const [payMethod, setPayMethod] = useState<PayMethod>('payme');
+  const [payChannel, setPayChannel] = useState<PayChannel>('cash');
   const [copied, setCopied] = useState(false);
 
   // onClose har renderda yangilansa ham effekt qayta ishga tushmasligi uchun ref
@@ -978,10 +1044,11 @@ function PaymentSheet({
   const invoices = data?.invoices ?? [];
   const payments = data?.payments ?? [];
   const outstanding = data?.outstanding ?? 0;
-  const provider = PAY_PROVIDERS[payMethod];
+  const channel = PAYMENT_CHANNELS[payChannel];
 
-  const handlePay = () => {
-    const payText = `M-EDU: ${childName} | Qarzdorlik: ${formatUZS(outstanding)} | Tizim: ${provider.label}`;
+  const handleCopyDetails = () => {
+    const invNumbers = invoices.map((inv) => `№ ${inv.number}`).join(', ');
+    const payText = `M-EDU To'lov ma'lumoti:\nO'quvchi: ${childName}\nQarzdorlik: ${formatUZS(outstanding)}\nHisob-faktura: ${invNumbers || 'Joriy oy'}\nTo'lov shakli: ${channel.label}`;
     try {
       void navigator.clipboard?.writeText?.(payText);
     } catch {
@@ -990,7 +1057,11 @@ function PaymentSheet({
     setCopied(true);
     window.clearTimeout(copyTimer.current);
     copyTimer.current = window.setTimeout(() => setCopied(false), 2500);
-    openSafeLink(provider.url, tg);
+    try {
+      tg?.HapticFeedback?.notificationOccurred?.('success');
+    } catch {
+      /* ignore */
+    }
   };
 
   return (
@@ -1110,18 +1181,18 @@ function PaymentSheet({
 
               {outstanding > 0 ? (
                 <div className="liquid-inset mt-4 p-4">
-                  <p className="lg-eyebrow">{t('tgapp.payment.selectMethod')}</p>
-                  <div className="mt-2.5 grid grid-cols-3 gap-2" role="radiogroup" aria-label={t('tgapp.payment.selectMethod')}>
-                    {(Object.keys(PAY_PROVIDERS) as PayMethod[]).map((method) => {
-                      const isSel = payMethod === method;
+                  <p className="lg-eyebrow">To'lov shaklini tanlang</p>
+                  <div className="mt-2.5 grid grid-cols-3 gap-2" role="radiogroup" aria-label="To'lov shakli">
+                    {(Object.keys(PAYMENT_CHANNELS) as PayChannel[]).map((method) => {
+                      const isSel = payChannel === method;
                       return (
                         <button
                           key={method}
                           type="button"
                           role="radio"
                           aria-checked={isSel}
-                          onClick={() => setPayMethod(method)}
-                          className="liquid-btn rounded-xl py-2 text-center text-[11.5px] font-bold"
+                          onClick={() => setPayChannel(method)}
+                          className="liquid-btn rounded-xl px-1.5 py-2 text-center text-[11px] font-bold transition-all"
                           style={{
                             background: isSel ? 'rgba(16, 185, 129, 0.2)' : undefined,
                             borderColor: isSel ? '#10B981' : undefined,
@@ -1129,18 +1200,22 @@ function PaymentSheet({
                             boxShadow: isSel ? '0 6px 16px -8px #10B981, inset 0 1px 0 rgba(255,255,255,0.3)' : undefined,
                           }}
                         >
-                          {PAY_PROVIDERS[method].label}
+                          {PAYMENT_CHANNELS[method].badge}
                         </button>
                       );
                     })}
                   </div>
                   <p className="mt-3 text-[11px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
-                    {childName} uchun {formatUZS(outstanding)} to'lovi ma'lumotlari nusxalanadi va {provider.label} ochiladi.
+                    {channel.desc}
                   </p>
-                  <div className="mt-3">
-                    <Btn className="w-full" onClick={handlePay}>
-                      <Icon paths={I.creditCard} size={15} strokeWidth={2.2} />
-                      {copied ? 'Nusxalandi!' : t('tgapp.payment.payButton', { provider: provider.label })}
+                  <div className="mt-3.5 flex gap-2">
+                    <Btn className="flex-1" onClick={handleCopyDetails}>
+                      <Icon paths={copied ? I.checkCircle : I.copy} size={15} strokeWidth={2.2} />
+                      {copied ? 'Nusxalandi!' : "Ma'lumotni nusxalash"}
+                    </Btn>
+                    <Btn tone="ghost" onClick={contactAdmin}>
+                      <Icon paths={I.send} size={15} strokeWidth={2.2} />
+                      Kassirga yozish
                     </Btn>
                   </div>
                 </div>
@@ -1162,6 +1237,258 @@ function PaymentSheet({
                 </Btn>
               </div>
             </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+
+/* ============================================================================
+ * SABABLI DARS QOLDIRISH ARIZASI (BOTTOM SHEET)
+ * ========================================================================== */
+
+function AbsenceReportSheet({
+  open,
+  onClose,
+  child,
+  onSuccess,
+  tg,
+}: {
+  open: boolean;
+  onClose: () => void;
+  child: ParentChild;
+  onSuccess: () => void;
+  tg: TelegramWebApp | null;
+}) {
+  const { push } = useToast();
+  const sheetRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(sheetRef, open);
+
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [date, setDate] = useState(todayStr);
+  const [reasonPreset, setReasonPreset] = useState('Salomatligi / Betobligi sababli');
+  const [customNote, setCustomNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const PRESET_REASONS = [
+    'Salomatligi / Betobligi sababli',
+    'Oilaviy sharoit tufayli',
+    'Shifokor ko‘rigi / Muolaja',
+    'Musobaqa / Olimpiada ishtiroki',
+    'Boshqa uzrli sabab',
+  ];
+
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClose = () => onCloseRef.current();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    window.addEventListener('keydown', onKey);
+
+    try {
+      tg?.BackButton?.show?.();
+      tg?.BackButton?.onClick?.(handleClose);
+    } catch {
+      /* ignore */
+    }
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+      try {
+        tg?.BackButton?.offClick?.(handleClose);
+        tg?.BackButton?.hide?.();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [open, tg]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!date) return;
+    const fullReason = customNote.trim()
+      ? `${reasonPreset}: ${customNote.trim()}`
+      : reasonPreset;
+
+    setSubmitting(true);
+    try {
+      await parentPortalApi.reportAbsence(child.studentId, {
+        date,
+        reason: fullReason,
+      });
+
+      try {
+        tg?.HapticFeedback?.notificationOccurred?.('success');
+      } catch {
+        /* ignore */
+      }
+
+      push({
+        title: 'Ariza qabul qilindi',
+        message: `${child.name} uchun ${date} sanasiga 'Sababli' holati qayd etildi.`,
+        type: 'success',
+      });
+
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      try {
+        tg?.HapticFeedback?.notificationOccurred?.('error');
+      } catch {
+        /* ignore */
+      }
+      push({
+        title: 'Xatolik',
+        message: getErrorMessage(err, 'Ariza yuborishda xatolik yuz berdi'),
+        type: 'error',
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="absence-sheet-title"
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="absolute inset-0 bg-black/50 backdrop-blur-xl"
+          />
+          <motion.div
+            ref={sheetRef}
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={SPRING_SHEET}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0.05, bottom: 0.6 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 110 || info.velocity.y > 500) onClose();
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="liquid-glass relative w-full max-w-md !rounded-b-none !rounded-t-[36px]"
+            style={{
+              paddingBottom: 'max(env(safe-area-inset-bottom), 24px)',
+            }}
+          >
+            <div className="mx-auto mt-3 h-1.5 w-12 cursor-grab rounded-full bg-slate-400/40 active:cursor-grabbing" />
+            <div className="flex items-start justify-between px-6 pt-3">
+              <div>
+                <p className="lg-eyebrow">Ota-ona arizasi</p>
+                <h3 id="absence-sheet-title" className="mt-1 text-[19px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                  Sababli dars qoldirish
+                </h3>
+                <p className="text-[12px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                  {child.name} uchun
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Yopish"
+                className="liquid-btn-ghost tap-target flex h-10 w-10 items-center justify-center rounded-full"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                <Icon paths={I.close} size={18} strokeWidth={2.2} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="max-h-[64vh] overflow-y-auto px-6 pt-4 space-y-4 no-scrollbar">
+              <div className="liquid-inset p-3.5 space-y-1.5">
+                <label className="lg-eyebrow block" htmlFor="absence-date">
+                  Dars qoldiriladigan sana
+                </label>
+                <input
+                  id="absence-date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full rounded-xl bg-transparent px-3 py-2 text-[14px] font-semibold outline-none"
+                  style={{
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                  required
+                />
+              </div>
+
+              <div className="liquid-inset p-3.5 space-y-2">
+                <label className="lg-eyebrow block">
+                  Asosiy sababni tanlang
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESET_REASONS.map((r) => {
+                    const isSel = reasonPreset === r;
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setReasonPreset(r)}
+                        className="rounded-xl px-3 py-1.5 text-[11.5px] font-semibold transition-all"
+                        style={{
+                          background: isSel ? 'rgba(10, 132, 255, 0.22)' : 'rgba(255,255,255,0.06)',
+                          color: isSel ? '#0A84FF' : 'var(--text-secondary)',
+                          border: isSel ? '1px solid #0A84FF' : '1px solid transparent',
+                        }}
+                      >
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="liquid-inset p-3.5 space-y-1.5">
+                <label className="lg-eyebrow block" htmlFor="absence-note">
+                  Qo‘shimcha izoh (ixtiyoriy)
+                </label>
+                <textarea
+                  id="absence-note"
+                  rows={2}
+                  value={customNote}
+                  onChange={(e) => setCustomNote(e.target.value)}
+                  placeholder="Masalan: Ertaga soat 10:00 da poliklinikada ko'rikda bo'lamiz..."
+                  className="w-full resize-none rounded-xl bg-transparent p-2.5 text-[13px] outline-none placeholder:text-slate-500"
+                  style={{
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                />
+              </div>
+
+              <div className="pt-2 pb-1 space-y-2">
+                <Btn type="submit" className="w-full" disabled={submitting}>
+                  <Icon paths={I.send} size={15} strokeWidth={2.2} />
+                  {submitting ? 'Yuborilmoqda...' : 'Arizani tasdiqlash'}
+                </Btn>
+                <Btn tone="ghost" className="w-full" onClick={onClose} type="button">
+                  Bekor qilish
+                </Btn>
+              </div>
+            </form>
           </motion.div>
         </div>
       )}
@@ -1227,6 +1554,17 @@ function ChildSection({
     setPayOpen(true);
   }, [haptic]);
 
+  const [absenceOpen, setAbsenceOpen] = useState(false);
+  const openAbsence = useCallback(() => {
+    haptic('medium');
+    setAbsenceOpen(true);
+  }, [haptic]);
+  const closeAbsence = useCallback(() => setAbsenceOpen(false), []);
+  const handleAbsenceSuccess = useCallback(() => {
+    attendanceQ.refetch();
+    summaryQ.refetch();
+  }, [attendanceQ, summaryQ]);
+
   if (!canAttendance && !canGrades && !canPayments) {
     return (
       <EmptyState
@@ -1245,7 +1583,23 @@ function ChildSection({
 
   return (
     <motion.div variants={STAGGER_CONTAINER} initial="hidden" animate="show" className="space-y-4">
-      {canAttendance && <TodayCard child={child} attendanceQ={attendanceQ} summaryQ={summaryQ} />}
+      {canAttendance && (
+        <>
+          <TodayCard
+            child={child}
+            attendanceQ={attendanceQ}
+            summaryQ={summaryQ}
+            onOpenAbsence={openAbsence}
+          />
+          <AbsenceReportSheet
+            open={absenceOpen}
+            onClose={closeAbsence}
+            child={child}
+            onSuccess={handleAbsenceSuccess}
+            tg={tg}
+          />
+        </>
+      )}
       {canGrades && <GradesCard child={child} gradesQ={gradesQ} />}
       <AssignmentsCard child={child} groupId={groupId} />
       {canPayments && (

@@ -295,6 +295,9 @@ export class ParentPortalService {
         date: true,
         status: true,
         note: true,
+        source: true,
+        markedAt: true,
+        deviceId: true,
         group: { select: { id: true, name: true } },
         lesson: { select: { id: true, date: true, startTime: true, topic: true } },
       },
@@ -409,5 +412,100 @@ export class ParentPortalService {
     }
     return { invoices, payments, outstanding, overdue };
   }
-}
 
+  /**
+   * Submit an absence request ("Sababli qoldirish arizasi") for a child.
+   * Gated by the parent->child verified link with canViewAttendance.
+   */
+  async reportAbsence(
+    ctx: ParentContext,
+    studentId: string,
+    data: { date: string; reason: string },
+  ) {
+    await this.requireLink(ctx, studentId, 'canViewAttendance');
+
+    if (!data.date) {
+      throw new BadRequestException('Sana kiritilishi shart');
+    }
+    const absenceDate = new Date(data.date);
+    if (isNaN(absenceDate.getTime())) {
+      throw new BadRequestException('Noto‘g‘ri sana formati');
+    }
+    absenceDate.setUTCHours(0, 0, 0, 0);
+
+    const enrollment = await this.prisma.studentGroup.findFirst({
+      where: {
+        studentId,
+        isActive: true,
+        organizationId: ctx.organizationId,
+      },
+      select: { groupId: true },
+    });
+
+    if (!enrollment) {
+      throw new BadRequestException('O‘quvchi faol guruhga biriktirilmagan');
+    }
+
+    const note = (data.reason || 'Sababli dars qoldirish (Ota-ona xabarnomasi)').trim();
+
+    const existing = await this.prisma.attendance.findFirst({
+      where: {
+        organizationId: ctx.organizationId,
+        studentId,
+        groupId: enrollment.groupId,
+        date: {
+          gte: absenceDate,
+          lt: new Date(absenceDate.getTime() + 24 * 60 * 60 * 1000),
+        },
+      },
+    });
+
+    let record;
+    if (existing) {
+      record = await this.prisma.attendance.update({
+        where: { id: existing.id },
+        data: {
+          status: 'EXCUSED',
+          source: 'PARENT_PORTAL',
+          note,
+          markedAt: new Date(),
+        },
+        select: {
+          id: true,
+          date: true,
+          status: true,
+          note: true,
+          source: true,
+          markedAt: true,
+        },
+      });
+    } else {
+      record = await this.prisma.attendance.create({
+        data: {
+          organizationId: ctx.organizationId,
+          studentId,
+          groupId: enrollment.groupId,
+          date: absenceDate,
+          status: 'EXCUSED',
+          source: 'PARENT_PORTAL',
+          note,
+          markedAt: new Date(),
+        },
+        select: {
+          id: true,
+          date: true,
+          status: true,
+          note: true,
+          source: true,
+          markedAt: true,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Sababli dars qoldirish arizasi muvaffaqiyatli qabul qilindi.',
+      attendance: record,
+    };
+  }
+}
