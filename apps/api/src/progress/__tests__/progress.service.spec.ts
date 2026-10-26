@@ -11,7 +11,10 @@ describe('ProgressService (Student 360 Aggregation & Risk Engine)', () => {
   beforeEach(async () => {
     prisma = {
       student: { findFirst: vi.fn() },
-      attendance: { groupBy: vi.fn().mockResolvedValue([]) },
+      attendance: {
+        groupBy: vi.fn().mockResolvedValue([]),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
       studentObjectiveMastery: { upsert: vi.fn() },
       studentProgressSnapshot: { create: vi.fn() },
       parentStudent: { findUnique: vi.fn() },
@@ -147,5 +150,70 @@ describe('ProgressService (Student 360 Aggregation & Risk Engine)', () => {
       role: 'PARENT',
     });
     expect(p.student.id).toBe('stu-4');
+  });
+
+  it('builds unified chronological timeline, monthly trends, and diagnostic interventions', async () => {
+    prisma.attendance.groupBy.mockResolvedValue([
+      { status: 'PRESENT', _count: { _all: 10 } },
+    ]);
+    prisma.attendance.findMany.mockResolvedValue([
+      {
+        id: 'att-1',
+        date: new Date('2026-10-25'),
+        status: 'PRESENT',
+        markedAt: new Date('2026-10-25T08:50:00.000Z'),
+        source: 'RFID_TURNSTILE',
+        group: { name: 'English C1' },
+      },
+    ]);
+    prisma.student.findFirst.mockResolvedValue({
+      id: 'stu-5',
+      organizationId: 'org-1',
+      user: { firstName: 'Sardor', lastName: 'Karimov', email: 's@k.uz' },
+      groups: [],
+      grades: [
+        { id: 'g-1', value: 95, label: 'Midterm', createdAt: new Date('2026-10-20') },
+      ],
+      AssignmentSubmission: [
+        {
+          id: 'as-1',
+          score: 90,
+          status: 'GRADED',
+          createdAt: new Date('2026-10-22'),
+          Assignment: { title: 'Essay Writing', maxScore: 100, Group: { name: 'English C1' } },
+        },
+      ],
+      QuizAttempt: [
+        {
+          id: 'qa-1',
+          score: 85,
+          isPassed: true,
+          status: 'GRADED',
+          createdAt: new Date('2026-10-24'),
+          quiz: { title: 'Grammar Unit 4', passingScore: 60 },
+        },
+      ],
+      ExamResult: [
+        {
+          id: 'er-1',
+          marksObtained: 92,
+          isPassed: true,
+          createdAt: new Date('2026-10-26'),
+          exam: { title: 'Final Placement Exam', totalMarks: 100 },
+        },
+      ],
+      objectiveMasteries: [],
+    });
+
+    const res = await service.getStudent360('org-1', 'stu-5');
+
+    expect(res.timeline).toBeDefined();
+    expect(res.timeline!.length).toBeGreaterThan(0);
+    expect(res.monthlyTrends).toBeDefined();
+    expect(res.monthlyTrends!.length).toBe(6);
+    expect(res.interventions).toBeDefined();
+    expect(res.interventions!.length).toBeGreaterThan(0);
+    expect(res.attendanceHistory).toBeDefined();
+    expect(res.attendanceHistory![0].status).toBe('PRESENT');
   });
 });

@@ -27,6 +27,7 @@ import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { SpatialIdentityCard360 } from '@/components/cards/SpatialIdentityCard360';
 import { usePrefersReducedMotion } from '@/layouts/core/singletons';
+import { formatDate } from '@/lib/format';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * MOTION TOKENS — 120Hz ProMotion · Apple-grade Physics
@@ -73,18 +74,55 @@ export interface SubjectMastery {
   masteryPercentage: number;
 }
 
+export interface StudentTelemetryEvent {
+  id: string;
+  type: 'EXAM' | 'QUIZ' | 'ASSIGNMENT' | 'GRADE' | 'ATTENDANCE';
+  title: string;
+  subtitle: string;
+  score?: number;
+  maxScore?: number;
+  timestamp: string;
+  tone: 'green' | 'blue' | 'orange' | 'purple' | 'slate';
+}
+
+export interface StudentInterventionItem {
+  id: string;
+  category: 'ATTENDANCE' | 'HOMEWORK' | 'MASTERY';
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  title: string;
+  description: string;
+  actionLabel: string;
+}
+
+export interface MonthlyMasteryTrendItem {
+  month: string;
+  mastery: number;
+  attendanceRate: number;
+}
+
 export interface Student360Profile {
   student: { id: string; name: string; [key: string]: unknown };
   attendance: { rate: number; present: number; absent: number };
+  attendanceHistory?: Array<{
+    id: string;
+    date: string;
+    status: string;
+    markedAt: string | null;
+    source?: string;
+    groupName?: string;
+  }>;
   academic: {
     overallMastery: number;
     quizzes: { avgScore: number; passedAttempts: number; totalAttempts: number };
     subjectsMastery?: SubjectMastery[];
   };
+  timeline?: StudentTelemetryEvent[];
+  monthlyTrends?: MonthlyMasteryTrendItem[];
+  interventions?: StudentInterventionItem[];
   risk: { level: RiskLevel; score: number; signals: string[] };
 }
 
-type SectionKey = 'hero' | 'stats' | 'risk' | 'mastery';
+type SectionKey = 'hero' | 'stats' | 'risk' | 'mastery' | 'timeline' | 'trends';
 type MasterySort = 'mastery' | 'name' | 'objectives';
 type MasteryFilter = 'ALL' | 'AT_RISK' | 'EXCELLENT';
 
@@ -279,6 +317,7 @@ const I = {
     'M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z',
   ],
   pieChart: ['M21.21 15.89A10 10 0 1 1 8 2.83', 'M22 12A10 10 0 0 0 12 2v10z'],
+  clock: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 6v6l4 2'],
   pulse: ['M22 12h-4l-3 9L9 3l-3 9H2'],
 } as const;
 
@@ -754,37 +793,64 @@ const RiskGauge = memo(function RiskGauge({
 const AttendanceHeatmap = memo(function AttendanceHeatmap({
   seed,
   rate,
+  history,
 }: {
   seed: number;
   rate: number;
+  history?: Array<{ id: string; date: string; status: string; groupName?: string }>;
 }) {
-  const days = useMemo(() => attendancePattern(seed, rate), [seed, rate]);
-  const presentCount = days.filter(Boolean).length;
+  const hasRealHistory = Boolean(history && history.length > 0);
+  const fallbackDays = useMemo(() => attendancePattern(seed, rate), [seed, rate]);
+
+  const items = useMemo(() => {
+    if (hasRealHistory && history) {
+      return history.slice(0, 30).map((h, i) => ({
+        index: i,
+        status: h.status,
+        date: h.date,
+        label: `${h.date}: ${h.status === 'PRESENT' ? 'Kelgan' : h.status === 'LATE' ? 'Kechikkan' : 'Sababli'}${h.groupName ? ` (${h.groupName})` : ''}`,
+        isPresent: h.status === 'PRESENT',
+        isLate: h.status === 'LATE',
+      }));
+    }
+    return fallbackDays.map((present, i) => ({
+      index: i,
+      status: present ? 'PRESENT' : 'ABSENT',
+      date: `Kun ${i + 1}`,
+      label: `Kun ${i + 1}: ${present ? 'Bor' : "Yo'q"}`,
+      isPresent: present,
+      isLate: false,
+    }));
+  }, [hasRealHistory, history, fallbackDays]);
+
+  const presentCount = items.filter((x) => x.isPresent || x.isLate).length;
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-          Oxirgi 30 kun
+          {hasRealHistory ? 'Davomat jurnali (Haqiqiy qaydlar)' : 'Oxirgi 30 kun'}
         </span>
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
           <span className="h-1 w-1 rounded-full bg-emerald-500" />
-          {presentCount} / 30 kun
+          {presentCount} / {items.length} kun
         </span>
       </div>
       <div className="flex gap-[3px]">
-        {days.map((present, i) => (
+        {items.map((item) => (
           <motion.div
-            key={i}
+            key={item.index}
             initial={{ opacity: 0, scale: 0.6 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.25, delay: i * 0.008, ease: EASE_APPLE }}
+            transition={{ duration: 0.25, delay: item.index * 0.008, ease: EASE_APPLE }}
             className={`h-6 flex-1 rounded-sm ${
-              present
+              item.isPresent
                 ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-[0_1px_3px_rgba(52,199,89,0.4)]'
+                : item.isLate
+                ? 'bg-gradient-to-br from-amber-400 to-amber-600 shadow-[0_1px_3px_rgba(245,158,11,0.4)]'
                 : 'bg-rose-400/25 dark:bg-rose-500/20'
             }`}
-            title={`Kun ${i + 1}: ${present ? 'Bor' : "Yo'q"}`}
+            title={item.label}
           />
         ))}
       </div>
@@ -1135,12 +1201,15 @@ export function Student360Page() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [masterySort, setMasterySort] = useState<MasterySort>('mastery');
   const [masteryFilter, setMasteryFilter] = useState<MasteryFilter>('ALL');
+  const [timelineFilter, setTimelineFilter] = useState<'ALL' | 'EXAM' | 'QUIZ' | 'ASSIGNMENT' | 'GRADE' | 'ATTENDANCE'>('ALL');
 
   const sectionRefs: Record<SectionKey, React.RefObject<HTMLDivElement>> = {
     hero: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
     stats: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
     risk: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
     mastery: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
+    timeline: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
+    trends: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
   };
 
   const {
@@ -1348,6 +1417,12 @@ export function Student360Page() {
     return list;
   }, [profile, masterySort, masteryFilter]);
 
+  const rawTimeline = profile?.timeline ?? [];
+  const filteredTimeline = useMemo(() => {
+    if (timelineFilter === 'ALL') return rawTimeline;
+    return rawTimeline.filter((e) => e.type === timelineFilter);
+  }, [rawTimeline, timelineFilter]);
+
   /* ── Command palette actions ─────────────────────────────── */
   const paletteActions = useMemo<PaletteAction[]>(() => {
     if (!profile) return [];
@@ -1471,7 +1546,7 @@ export function Student360Page() {
 
                   {/* Attendance heatmap */}
                   <div className="mt-4 max-w-sm">
-                    <AttendanceHeatmap seed={sparkSeed} rate={attendance.rate} />
+                    <AttendanceHeatmap seed={sparkSeed} rate={attendance.rate} history={profile?.attendanceHistory} />
                   </div>
                 </div>
               </div>
@@ -1580,6 +1655,8 @@ export function Student360Page() {
             { key: 'stats', label: 'Statistika', icon: I.pulse },
             { key: 'risk', label: 'Xavf', icon: I.shieldAlert },
             { key: 'mastery', label: 'Fanlar', icon: I.book },
+            { key: 'timeline', label: 'Xronologiya', icon: I.clock },
+            { key: 'trends', label: 'Dinamika', icon: I.sparkles },
           ]}
         />
 
@@ -1928,6 +2005,241 @@ export function Student360Page() {
                 )}
               </>
             )}
+          </div>
+        </motion.div>
+
+        {/* ═══ SECTION 5: CHRONOLOGICAL LONGITUDINAL TIMELINE ═══ */}
+        <motion.div ref={sectionRefs.timeline} data-section="timeline" variants={cardVariants}>
+          <div className="overflow-hidden rounded-3xl border border-white/40 bg-white/75 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.14)] backdrop-blur-xl dark:border-white/10 dark:bg-surface-900/75">
+            <div className="flex flex-col gap-3 border-b border-black/[0.04] px-6 py-4 dark:border-white/[0.06] sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                  <Icon paths={I.clock} size={17} strokeWidth={2} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-[14.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    Xronologik O&apos;sish Lentasi
+                  </h2>
+                  <p className="text-[11.5px] font-medium text-[#86868B]">
+                    Imtihonlar, topshiriqlar, viktorinalar va oraliq baholashlar tarixi ({rawTimeline.length} ta qayd)
+                  </p>
+                </div>
+              </div>
+
+              {/* Timeline Category Filters */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { id: 'ALL', label: 'Barchasi' },
+                  { id: 'EXAM', label: 'Imtihonlar' },
+                  { id: 'QUIZ', label: 'Viktorinalar' },
+                  { id: 'ASSIGNMENT', label: 'Topshiriqlar' },
+                  { id: 'GRADE', label: 'Baholar' },
+                  { id: 'ATTENDANCE', label: 'Davomat' },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setTimelineFilter(f.id as any)}
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
+                      timelineFilter === f.id
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'border border-slate-200/80 bg-white/60 text-slate-600 hover:text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400 dark:hover:text-white'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {filteredTimeline.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 p-12 text-center text-xs text-[var(--text-muted)]">
+                <span className="text-2xl">⏳</span>
+                <p className="font-semibold text-[var(--text-primary)]">Hozircha tanlangan toifadagi xronologik qaydlar topilmadi</p>
+                <p>O&apos;quvchi sinov va mashg&apos;ulotlarda ishtirok etgach, xronologiya avtomatik boyitiladi.</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
+                {filteredTimeline.map((ev, idx) => {
+                  const toneColors = TONE[ev.tone] ?? TONE.blue;
+                  const typeBadge = {
+                    EXAM: { label: 'Imtihon', icon: '🎯' },
+                    QUIZ: { label: 'Viktorina', icon: '💡' },
+                    ASSIGNMENT: { label: 'Topshiriq', icon: '📝' },
+                    GRADE: { label: 'Oraliq baho', icon: '⭐' },
+                    ATTENDANCE: { label: 'Davomat', icon: '🚪' },
+                  }[ev.type] ?? { label: ev.type, icon: '📌' };
+
+                  return (
+                    <motion.li
+                      key={ev.id || idx}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
+                      className="flex items-center justify-between gap-4 px-6 py-3.5 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm"
+                          style={{ background: toneColors.bg, color: toneColors.fg, border: `1px solid ${toneColors.border}` }}
+                        >
+                          <span>{typeBadge.icon}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-[13.5px] font-bold text-[var(--text-primary)]">
+                              {ev.title}
+                            </p>
+                            <span
+                              className="rounded px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider"
+                              style={{ background: toneColors.bg, color: toneColors.fg }}
+                            >
+                              {typeBadge.label}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 truncate text-[11.5px] font-medium text-[var(--text-muted)]">
+                            {ev.subtitle}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-3 text-right">
+                        {ev.score !== undefined && (
+                          <div className="flex flex-col items-end">
+                            <span className="text-sm font-black tabular-nums" style={{ color: toneColors.fg }}>
+                              {ev.score} {ev.maxScore ? `/ ${ev.maxScore}` : ''}
+                            </span>
+                            <span className="text-[10px] font-semibold text-[var(--text-muted)]">natija</span>
+                          </div>
+                        )}
+                        <span className="text-[11px] font-medium text-[var(--text-muted)] tabular-nums">
+                          {formatDate(ev.timestamp)}
+                        </span>
+                      </div>
+                    </motion.li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </motion.div>
+
+        {/* ═══ SECTION 6: MONTHLY MASTERY DYNAMICS & PEDAGOGICAL INTERVENTIONS ═══ */}
+        <motion.div ref={sectionRefs.trends} data-section="trends" variants={cardVariants}>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+            {/* Left: 6-Month Trajectory Bars */}
+            <div className="overflow-hidden rounded-3xl border border-white/40 bg-white/75 p-6 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.14)] backdrop-blur-xl dark:border-white/10 dark:bg-surface-900/75 lg:col-span-7">
+              <div className="flex items-center gap-3 border-b border-black/[0.04] pb-4 dark:border-white/[0.06]">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                  <Icon paths={I.sparkles} size={17} strokeWidth={2} />
+                </div>
+                <div>
+                  <h3 className="text-[14.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    6 Oylik O&apos;zlashtirish va Qatnashuv Dinamikasi
+                  </h3>
+                  <p className="text-[11.5px] font-medium text-[#86868B]">
+                    Oylik o&apos;zlashtirish (binafsha) va davomat ishonchliligi (yashil)
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                {(profile?.monthlyTrends ?? []).length === 0 ? (
+                  <p className="py-6 text-center text-xs text-[var(--text-muted)]">
+                    Dinamika ma&apos;lumotlari shakllanmoqda...
+                  </p>
+                ) : (
+                  (profile?.monthlyTrends ?? []).map((trend, i) => (
+                    <div key={i} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <span className="text-[var(--text-primary)]">{trend.month}</span>
+                        <div className="flex items-center gap-3 text-[11px]">
+                          <span className="text-purple-600 dark:text-purple-400">
+                            O&apos;zlashtirish: {trend.mastery}%
+                          </span>
+                          <span className="text-emerald-600 dark:text-emerald-400">
+                            Davomat: {trend.attendanceRate}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/10">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${trend.mastery}%` }}
+                            transition={{ duration: 0.8, delay: i * 0.05 }}
+                            className="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500"
+                          />
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/10">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${trend.attendanceRate}%` }}
+                            transition={{ duration: 0.8, delay: i * 0.05 }}
+                            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Right: Diagnostic Pedagogical Interventions */}
+            <div className="overflow-hidden rounded-3xl border border-white/40 bg-white/75 p-6 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.14)] backdrop-blur-xl dark:border-white/10 dark:bg-surface-900/75 lg:col-span-5">
+              <div className="flex items-center gap-3 border-b border-black/[0.04] pb-4 dark:border-white/[0.06]">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                  <Icon paths={I.shieldAlert} size={17} strokeWidth={2} />
+                </div>
+                <div>
+                  <h3 className="text-[14.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    Pedagogik Interventsiyalar
+                  </h3>
+                  <p className="text-[11.5px] font-medium text-[#86868B]">
+                    Individual ta&apos;lim yordami va tavsiyalar
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {(profile?.interventions ?? []).length === 0 ? (
+                  <p className="py-6 text-center text-xs text-[var(--text-muted)]">
+                    Faol tavsiyalar mavjud emas.
+                  </p>
+                ) : (
+                  (profile?.interventions ?? []).map((intv) => (
+                    <div
+                      key={intv.id}
+                      className="rounded-2xl border border-slate-200/70 bg-white/60 p-3.5 transition-all hover:border-indigo-500/30 dark:border-white/10 dark:bg-white/[0.02]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-black text-[var(--text-primary)]">
+                          {intv.title}
+                        </span>
+                        <span
+                          className={`rounded px-2 py-0.5 text-[9.5px] font-black uppercase tracking-wider ${
+                            intv.priority === 'HIGH'
+                              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                              : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+                          }`}
+                        >
+                          {intv.priority === 'HIGH' ? 'Yuqori daraja' : 'Tavsiya'}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11.5px] font-medium leading-relaxed text-[var(--text-muted)]">
+                        {intv.description}
+                      </p>
+                      <div className="mt-2.5 flex items-center justify-end">
+                        <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300">
+                          {intv.actionLabel} →
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </motion.div>
       </motion.div>

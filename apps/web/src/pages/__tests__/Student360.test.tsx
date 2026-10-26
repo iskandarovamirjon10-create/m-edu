@@ -93,6 +93,56 @@ const mockProfile = {
     score: 15,
     signals: ['Uyga vazifa 1 marta kechiktirildi'],
   },
+  attendanceHistory: [
+    {
+      id: 'att-1',
+      date: '2026-10-25',
+      status: 'PRESENT',
+      markedAt: '2026-10-25T08:50:00.000Z',
+      source: 'RFID_TURNSTILE',
+      groupName: 'Matematika',
+    },
+  ],
+  timeline: [
+    {
+      id: 'exam-1',
+      type: 'EXAM' as const,
+      title: 'Yakuniy Imtihon',
+      subtitle: 'Muvaffaqiyatli topshirildi',
+      score: 95,
+      maxScore: 100,
+      timestamp: '2026-10-26T10:00:00.000Z',
+      tone: 'green' as const,
+    },
+    {
+      id: 'as-1',
+      type: 'ASSIGNMENT' as const,
+      title: 'Trigonometriya mashqlari',
+      subtitle: 'Matematika guruhi',
+      score: 88,
+      maxScore: 100,
+      timestamp: '2026-10-24T14:00:00.000Z',
+      tone: 'purple' as const,
+    },
+  ],
+  monthlyTrends: [
+    { month: 'May', mastery: 75, attendanceRate: 85 },
+    { month: 'Iyun', mastery: 78, attendanceRate: 88 },
+    { month: 'Iyul', mastery: 80, attendanceRate: 90 },
+    { month: 'Avg', mastery: 82, attendanceRate: 90 },
+    { month: 'Sen', mastery: 84, attendanceRate: 92 },
+    { month: 'Okt', mastery: 84, attendanceRate: 92 },
+  ],
+  interventions: [
+    {
+      id: 'int-1',
+      category: 'MASTERY' as const,
+      priority: 'LOW' as const,
+      title: 'Iqtidorli o‘quvchilar ligasi',
+      description: "O‘zlashtirish a'lo darajada.",
+      actionLabel: 'Olimpiada dasturi',
+    },
+  ],
 };
 
 function renderComponent(studentId = 'student-360') {
@@ -224,6 +274,26 @@ describe('Student360Page (Apple 10/10 VisionOS / macOS Sequoia Edition)', () => 
 
       await waitFor(() => {
         expect(screen.getByTestId('spatial-identity-card-360')).toBeInTheDocument();
+      });
+    });
+
+    it('renders chronological longitudinal growth timeline with event cards', async () => {
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByText("Xronologik O'sish Lentasi")).toBeInTheDocument();
+        expect(screen.getByText('Yakuniy Imtihon')).toBeInTheDocument();
+        expect(screen.getByText('Trigonometriya mashqlari')).toBeInTheDocument();
+      });
+    });
+
+    it('renders 6-month mastery & attendance dynamics and pedagogical interventions', async () => {
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByText("6 Oylik O'zlashtirish va Qatnashuv Dinamikasi")).toBeInTheDocument();
+        expect(screen.getByText('Pedagogik Interventsiyalar')).toBeInTheDocument();
+        expect(screen.getByText('Iqtidorli o‘quvchilar ligasi')).toBeInTheDocument();
       });
     });
   });
