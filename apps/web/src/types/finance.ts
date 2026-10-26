@@ -97,3 +97,49 @@ export interface ReconciliationData {
   cashFlow?: { netCashFlow: number; outflows: number };
   expenses?: { total: number; general: number; payroll: number };
 }
+
+
+/**
+ * Cashier shift reconciliation & daily Z-Report types.
+ */
+export interface ZReportSummary {
+  period: { start: string; end: string };
+  totalPaymentsCount: number;
+  totalCollected: number;
+  byMethod: {
+    cash: { count: number; amount: number };
+    terminal: { count: number; amount: number };
+    bankTransfer: { count: number; amount: number };
+    other: { count: number; amount: number };
+  };
+  receiptsIssuedCount: number;
+  refunds: {
+    count: number;
+    totalAmount: number;
+    cashRefundsAmount: number;
+  };
+  netCashDrawerExpected: number;
+  firstPaymentTime: string | null;
+  lastPaymentTime: string | null;
+}
+
+export interface ZReportRecord {
+  id: string;
+  reportNumber: string;
+  closedAt: string;
+  cashierName: string;
+  period: { start: string; end: string };
+  summary: ZReportSummary;
+  actualCashCounted: number;
+  expectedCash: number;
+  variance: number;
+  status: 'BALANCED' | 'SHORTAGE' | 'SURPLUS';
+  closingNotes: string;
+}
+
+export interface CloseCashierShiftPayload {
+  startDate?: string;
+  endDate?: string;
+  actualCashCounted: number;
+  closingNotes?: string;
+}

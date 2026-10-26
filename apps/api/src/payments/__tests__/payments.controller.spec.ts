@@ -21,6 +21,9 @@ let service: {
       findOne: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      getZReportSummary: vi.fn(),
+      getRecentZReports: vi.fn(),
+      closeCashierShift: vi.fn(),
     };
 
     controller = new PaymentsController(service as unknown as PaymentsService);
@@ -68,6 +71,35 @@ describe('findOne', () => {
       const result = await controller.update(orgId, 'p-1', dto);
       expect(result).toEqual(mockPay);
       expect(service.update).toHaveBeenCalledWith(orgId, 'p-1', dto);
+    });
+  });
+
+  describe('cashier Z-report endpoints', () => {
+    it('delegates getZReportSummary to service', async () => {
+      const mockSummary = { totalCollected: 1000000 };
+      (service as any).getZReportSummary = vi.fn().mockResolvedValue(mockSummary);
+      const query = { startDate: '2026-10-26T00:00:00.000Z' };
+      const res = await controller.getZReportSummary(orgId, query);
+      expect(res).toEqual(mockSummary);
+      expect((service as any).getZReportSummary).toHaveBeenCalledWith(orgId, query);
+    });
+
+    it('delegates getZReportHistory to service', async () => {
+      const mockHistory = [{ reportNumber: 'Z-20261026-001' }];
+      (service as any).getRecentZReports = vi.fn().mockResolvedValue(mockHistory);
+      const res = await controller.getZReportHistory(orgId, 10);
+      expect(res).toEqual(mockHistory);
+      expect((service as any).getRecentZReports).toHaveBeenCalledWith(orgId, 10);
+    });
+
+    it('delegates closeCashierShift to service', async () => {
+      const mockClose = { success: true, reportNumber: 'Z-20261026-001' };
+      (service as any).closeCashierShift = vi.fn().mockResolvedValue(mockClose);
+      const user = { sub: 'user-1', firstName: 'Dilshod' };
+      const dto = { actualCashCounted: 500000 };
+      const res = await controller.closeCashierShift(orgId, user as any, dto);
+      expect(res).toEqual(mockClose);
+      expect((service as any).closeCashierShift).toHaveBeenCalledWith(orgId, user, dto);
     });
   });
 });

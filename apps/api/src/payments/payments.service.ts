@@ -5,6 +5,7 @@ import { FinancialPeriodService } from '../analytics/financial-period.service';
 import { parsePagination } from '../lib/pagination';
 import { PaymentStatus, Prisma } from '@prisma/client';
 import { CreatePaymentDto, UpdatePaymentDto } from '../common/dto';
+import { CloseCashierShiftDto, ZReportQueryDto } from './dto/z-report.dto';
 import { PaymentQuery } from '../common/dto/query';
 import { toMinor, fromMinor, DecimalLike } from '@medu/financial-engine';
 import {
@@ -300,5 +301,234 @@ export class PaymentsService {
     }
     throw new ConflictException('Payment was modified concurrently, retry');
   }
-}
 
+  /**
+   * Generates a live cashier shift & reconciliation summary (Z-Hisobot).
+   * Aggregates completed payments, payment methods (Cash/Terminal/Bank),
+   * processed refunds, and calculates net expected cash in the drawer.
+   */
+  async getZReportSummary(
+    organizationId: string,
+    params?: ZReportQueryDto,
+  ) {
+    const now = new Date();
+    const start = params?.startDate
+      ? new Date(params.startDate)
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const end = params?.endDate ? new Date(params.endDate) : now;
+
+    const [payments, refunds] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: {
+          organizationId,
+          status: 'PAID',
+          paidAt: {
+            gte: start,
+            lte: end,
+          },
+        },
+        select: {
+          id: true,
+          amount: true,
+          method: true,
+          receiptNumber: true,
+          paidAt: true,
+          student: {
+            select: {
+              user: { select: { firstName: true, lastName: true } },
+            },
+          },
+        },
+        orderBy: { paidAt: 'asc' },
+      }),
+      this.prisma.refund.findMany({
+        where: {
+          organizationId,
+          status: 'PROCESSED',
+          processedAt: {
+            gte: start,
+            lte: end,
+          },
+        },
+        select: {
+          id: true,
+          amount: true,
+          reason: true,
+          processedAt: true,
+          Payment: { select: { method: true } },
+        },
+      }),
+    ]);
+
+    let totalCollectedMinor = 0;
+    const byMethod: Record<string, { count: number; amountMinor: number; amount: number }> = {
+      CASH: { count: 0, amountMinor: 0, amount: 0 },
+      TERMINAL: { count: 0, amountMinor: 0, amount: 0 },
+      BANK: { count: 0, amountMinor: 0, amount: 0 },
+      OTHER: { count: 0, amountMinor: 0, amount: 0 },
+    };
+
+    let receiptsIssuedCount = 0;
+
+    for (const p of payments) {
+      const amtMinor = toMinor(p.amount);
+      totalCollectedMinor += amtMinor;
+      if (p.receiptNumber) receiptsIssuedCount++;
+
+      const methodKey = (p.method || '').toUpperCase();
+      let bucket = 'OTHER';
+      if (methodKey.includes('CASH') || methodKey.includes('NAQD')) bucket = 'CASH';
+      else if (
+        methodKey.includes('TERMINAL') ||
+        methodKey.includes('CARD') ||
+        methodKey.includes('UZCARD') ||
+        methodKey.includes('HUMO')
+      ) {
+        bucket = 'TERMINAL';
+      } else if (
+        methodKey.includes('BANK') ||
+        methodKey.includes('WIRE') ||
+        methodKey.includes('TRANSFER')
+      ) {
+        bucket = 'BANK';
+      }
+
+      byMethod[bucket].count++;
+      byMethod[bucket].amountMinor += amtMinor;
+      byMethod[bucket].amount = fromMinor(byMethod[bucket].amountMinor);
+    }
+
+    let totalRefundsMinor = 0;
+    let cashRefundsMinor = 0;
+    for (const r of refunds) {
+      const rAmtMinor = toMinor(r.amount);
+      totalRefundsMinor += rAmtMinor;
+      const refMethod = (r.Payment?.method || '').toUpperCase();
+      if (refMethod.includes('CASH') || refMethod.includes('NAQD')) {
+        cashRefundsMinor += rAmtMinor;
+      }
+    }
+
+    const netCashDrawerExpectedMinor = byMethod.CASH.amountMinor - cashRefundsMinor;
+
+    return {
+      period: {
+        start: start.toISOString(),
+        end: end.toISOString(),
+      },
+      totalPaymentsCount: payments.length,
+      totalCollected: fromMinor(totalCollectedMinor),
+      byMethod: {
+        cash: { count: byMethod.CASH.count, amount: byMethod.CASH.amount },
+        terminal: { count: byMethod.TERMINAL.count, amount: byMethod.TERMINAL.amount },
+        bankTransfer: { count: byMethod.BANK.count, amount: byMethod.BANK.amount },
+        other: { count: byMethod.OTHER.count, amount: byMethod.OTHER.amount },
+      },
+      receiptsIssuedCount,
+      refunds: {
+        count: refunds.length,
+        totalAmount: fromMinor(totalRefundsMinor),
+        cashRefundsAmount: fromMinor(cashRefundsMinor),
+      },
+      netCashDrawerExpected: fromMinor(netCashDrawerExpectedMinor),
+      firstPaymentTime: payments[0]?.paidAt?.toISOString() || null,
+      lastPaymentTime: payments[payments.length - 1]?.paidAt?.toISOString() || null,
+    };
+  }
+
+  /**
+   * Finalizes and closes a cashier shift, generates an immutable Z-Report
+   * with discrepancy calculation (variance between physical cash counted and
+   * ledger balance), and writes to the audit log.
+   */
+  async closeCashierShift(
+    organizationId: string,
+    user: { sub: string; firstName?: string; lastName?: string },
+    dto: CloseCashierShiftDto,
+  ) {
+    if (dto.actualCashCounted < 0) {
+      throw new BadRequestException('Kassadagi naqd pul manfiy bo‘lishi mumkin emas');
+    }
+
+    const summary = await this.getZReportSummary(organizationId, {
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+    });
+
+    const expectedMinor = toMinor(summary.netCashDrawerExpected);
+    const actualMinor = toMinor(dto.actualCashCounted);
+    const varianceMinor = actualMinor - expectedMinor;
+    const variance = fromMinor(varianceMinor);
+
+    let status: 'BALANCED' | 'SHORTAGE' | 'SURPLUS' = 'BALANCED';
+    if (varianceMinor < 0) status = 'SHORTAGE';
+    else if (varianceMinor > 0) status = 'SURPLUS';
+
+    const now = new Date();
+    const dateCode = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const reportNumber = `Z-${dateCode}-${randomSuffix}`;
+
+    const cashierName =
+      [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Kassir';
+
+    const zReportData = {
+      reportNumber,
+      closedAt: now.toISOString(),
+      closedByUserId: user.sub,
+      cashierName,
+      period: summary.period,
+      summary,
+      actualCashCounted: dto.actualCashCounted,
+      expectedCash: summary.netCashDrawerExpected,
+      variance,
+      status,
+      closingNotes: (dto.closingNotes || '').trim(),
+    };
+
+    const auditRecord = await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        userId: user.sub,
+        action: 'CASHIER_SHIFT_CLOSED',
+        resource: 'PAYMENT_REGISTER',
+        resourceId: reportNumber,
+        changes: zReportData,
+      },
+    });
+
+    return {
+      success: true,
+      reportId: auditRecord.id,
+      ...zReportData,
+    };
+  }
+
+  /**
+   * Fetches the recent Z-Reports audit log for this organization.
+   */
+  async getRecentZReports(organizationId: string, limit = 20) {
+    const logs = await this.prisma.auditLog.findMany({
+      where: {
+        organizationId,
+        action: 'CASHIER_SHIFT_CLOSED',
+        resource: 'PAYMENT_REGISTER',
+      },
+      orderBy: { timestamp: 'desc' },
+      take: Math.min(limit, 100),
+      select: {
+        id: true,
+        resourceId: true,
+        timestamp: true,
+        changes: true,
+      },
+    });
+
+    return logs.map((log) => ({
+      id: log.id,
+      reportNumber: log.resourceId,
+      timestamp: log.timestamp,
+      ...(log.changes as object),
+    }));
+  }
+}

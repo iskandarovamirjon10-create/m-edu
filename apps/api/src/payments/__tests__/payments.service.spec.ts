@@ -17,7 +17,14 @@ function createMockPrisma() {
       delete: vi.fn(),
       count: vi.fn(),
     },
-    refund: { aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 } }) },
+    refund: {
+      aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 } }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    auditLog: {
+      create: vi.fn().mockResolvedValue({ id: 'audit-log-uuid-1' }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     // FOR UPDATE lock row for PaymentsService.update
     $queryRaw: vi.fn().mockResolvedValue([]),
   };
@@ -274,6 +281,53 @@ describe('findAll', () => {
         svc.update('org-1', 'p1', { status: 'CANCELLED' }),
       ).rejects.toThrow('Cannot change status of payment with active or processed refunds away from PAID');
       expect(prisma.payment.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Z-Report Cashier Shift & Reconciliation', () => {
+    it('calculates live Z-Report summary with breakdown by payment method', async () => {
+      prisma.payment.findMany.mockResolvedValue([
+        { id: 'p1', amount: 300000, method: 'CASH', receiptNumber: 'RCP-001', paidAt: new Date() },
+        { id: 'p2', amount: 500000, method: 'TERMINAL', receiptNumber: 'RCP-002', paidAt: new Date() },
+        { id: 'p3', amount: 200000, method: 'BANK_TRANSFER', receiptNumber: 'RCP-003', paidAt: new Date() },
+      ]);
+      prisma.refund.findMany.mockResolvedValue([
+        { id: 'r1', amount: 50000, Payment: { method: 'CASH' }, processedAt: new Date() },
+      ]);
+
+      const res = await svc.getZReportSummary('org-1');
+
+      expect(res.totalPaymentsCount).toBe(3);
+      expect(res.totalCollected).toBe(1000000);
+      expect(res.byMethod.cash.amount).toBe(300000);
+      expect(res.byMethod.terminal.amount).toBe(500000);
+      expect(res.byMethod.bankTransfer.amount).toBe(200000);
+      expect(res.refunds.count).toBe(1);
+      expect(res.refunds.totalAmount).toBe(50000);
+      expect(res.netCashDrawerExpected).toBe(250000); // 300000 cash - 50000 refund
+    });
+
+    it('finalizes cashier shift and detects cash discrepancy (variance)', async () => {
+      prisma.payment.findMany.mockResolvedValue([
+        { id: 'p1', amount: 400000, method: 'CASH', receiptNumber: 'RCP-001', paidAt: new Date() },
+      ]);
+      prisma.refund.findMany.mockResolvedValue([]);
+      prisma.auditLog.create.mockResolvedValue({ id: 'audit-z-1' });
+
+      // Expected cash is 400,000, cashier counts 390,000 -> -10,000 shortage
+      const res = await svc.closeCashierShift(
+        'org-1',
+        { sub: 'cashier-uuid-1', firstName: 'Dilnoza', lastName: 'Karimova' },
+        { actualCashCounted: 390000, closingNotes: '10000 qaytim yetishmadi' },
+      );
+
+      expect(res.success).toBe(true);
+      expect(res.reportNumber).toMatch(/^Z-\d{8}-\d{4}$/);
+      expect(res.expectedCash).toBe(400000);
+      expect(res.actualCashCounted).toBe(390000);
+      expect(res.variance).toBe(-10000);
+      expect(res.status).toBe('SHORTAGE');
+      expect(prisma.auditLog.create).toHaveBeenCalled();
     });
   });
 });

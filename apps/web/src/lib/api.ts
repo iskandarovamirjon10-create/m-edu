@@ -4,6 +4,7 @@
 // or browser storage. Credentials are included so cookies travel.
 
 import type { DashboardStats, MonthlyRevenue } from './types';
+import type { ZReportSummary, ZReportRecord, CloseCashierShiftPayload } from '../types/finance';
 import { purgeSessionCaches } from './sessionCleanup';
 import type {
   Anomaly,
@@ -414,6 +415,16 @@ export const scheduleApi = {
 };
 export const paymentsApi = {
   ...crud('/payments'),
+  getZReportSummary: (params?: { startDate?: string; endDate?: string }, options: RequestOptions = {}) =>
+    request<ZReportSummary>(`/payments/cashier/z-report/summary${buildQuery(params)}`, options),
+  getRecentZReports: (limit?: number, options: RequestOptions = {}) =>
+    request<ZReportRecord[]>(`/payments/cashier/z-report/history${buildQuery({ limit })}`, options),
+  closeCashierShift: (data: CloseCashierShiftPayload, options: RequestOptions = {}) =>
+    request<ZReportRecord & { success: boolean }>('/payments/cashier/z-report/close', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
   create: (data: unknown, options?: RequestOptions) =>
     request<any>('/payments', {
       method: 'POST',

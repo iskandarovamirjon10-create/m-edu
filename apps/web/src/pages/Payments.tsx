@@ -22,6 +22,7 @@ import {
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { ExecutivePDFStudio } from '@/components/pdf-studio';
+import { CashierZReportModal } from '@/components/payments/CashierZReportModal';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -748,6 +749,7 @@ export function PaymentsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [receiptTarget, setReceiptTarget] = useState<Payment | null>(null);
   const [pdfStudioOpen, setPdfStudioOpen] = useState(false);
+  const [zReportModalOpen, setZReportModalOpen] = useState(false);
 
   /* ── Form state ───────────────────────────────────────────────────── */
   const [form, setForm] = useState<PaymentFormState>(INITIAL_FORM);
@@ -1150,6 +1152,23 @@ export function PaymentsPage() {
 
             {/* Action Buttons */}
             <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row">
+              <motion.div
+                whileHover={{ scale: 1.03, y: -1 }}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
+              >
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setZReportModalOpen(true)}
+                  className="!rounded-2xl !border-emerald-400/35 !bg-emerald-500/[0.08] hover:!bg-emerald-500/[0.14] !shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.8)]"
+                >
+                  <span className="inline-flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-300">
+                    <Icon paths={I.receipt} size={15} strokeWidth={2.2} />
+                    Kassa Z-Hisoboti
+                  </span>
+                </GlassButton>
+              </motion.div>
               <motion.div
                 whileHover={{ scale: 1.03, y: -1 }}
                 whileTap={{ scale: 0.97 }}
@@ -1890,6 +1909,13 @@ export function PaymentsPage() {
           }}
         />
       )}
+
+      {/* Cashier Shift Reconciliation & Z-Report Modal */}
+      <CashierZReportModal
+        open={zReportModalOpen}
+        onClose={() => setZReportModalOpen(false)}
+        onShiftClosed={() => void refetchPayments()}
+      />
     </motion.div>
   );
 }
