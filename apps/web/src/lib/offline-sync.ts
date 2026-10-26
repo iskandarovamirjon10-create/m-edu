@@ -11,6 +11,7 @@
  *  - Conflict-free merging and retry controls
  * ============================================================================
  */
+import { apiUrl, readXsrfCookie, ensureCsrfCookie } from './api';
 
 export interface QueuedAction {
   id: string;
@@ -286,8 +287,6 @@ export async function syncPendingQueue(): Promise<{
     notify();
 
     try {
-      // Dynamic import to avoid circular dependency
-      const { apiUrl, readXsrfCookie, ensureCsrfCookie } = await import('@/lib/api');
       await ensureCsrfCookie();
       const token = readXsrfCookie();
 

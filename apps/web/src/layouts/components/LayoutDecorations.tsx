@@ -232,14 +232,18 @@ export const ScrollProgress = memo(function ScrollProgress({
 export const AnimatedOutlet = memo(function AnimatedOutlet() {
   const location = useLocation();
   const outlet = useOutlet();
+  const reduced = usePrefersReducedMotion();
 
   return (
     <motion.div
       key={location.pathname}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
-      className="min-h-full w-full flex-1 flex flex-col"
+      initial={reduced ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: reduced ? 0 : 0.22,
+        ease: [0.16, 1, 0.3, 1],
+      }}
+      className="min-h-full w-full flex-1 flex flex-col transform-gpu will-change-[opacity,transform]"
     >
       {outlet}
     </motion.div>

@@ -267,7 +267,7 @@ export function KPICard({
         // Dual Specular Rim (Top 3D Lip + Bottom Inner Refraction + Ambient Elevation)
         'shadow-[0_18px_42px_-12px_rgba(15,23,42,0.07),0_4px_14px_-4px_rgba(15,23,42,0.04),inset_0_1.5px_1px_rgba(255,255,255,0.95),inset_0_-1px_1px_rgba(255,255,255,0.45)]',
         'dark:shadow-[0_20px_48px_-12px_rgba(0,0,0,0.62),inset_0_1.5px_1px_rgba(255,255,255,0.22),inset_0_-1px_0.5px_rgba(255,255,255,0.05)]',
-        'transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
+        'transform-gpu transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,box-shadow]',
         interactive &&
           cn(
             'cursor-pointer select-none outline-none',

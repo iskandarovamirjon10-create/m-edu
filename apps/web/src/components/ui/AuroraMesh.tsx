@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { usePrefersReducedMotion } from '@/lib/design';
 
 export type AuroraVariant = 'default' | 'corporate' | 'subtle' | 'security' | 'playful';
 
@@ -49,21 +50,22 @@ export const AuroraMesh = memo(function AuroraMesh({
   className = '',
 }: AuroraMeshProps) {
   const v = VARIANTS[variant] ?? VARIANTS.default;
+  const reduced = usePrefersReducedMotion();
 
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none fixed inset-0 -z-10 overflow-hidden ${className}`}
+      className={`pointer-events-none fixed inset-0 -z-10 overflow-hidden select-none transform-gpu [contain:strict] ${className}`}
       style={opacity !== undefined ? { opacity } : undefined}
     >
       <div
-        className={`absolute -left-[10%] -top-[15%] h-[560px] w-[560px] rounded-full bg-gradient-to-br ${v.orb1} blur-[120px]`}
+        className={`absolute -left-[10%] -top-[15%] h-[560px] w-[560px] rounded-full bg-gradient-to-br ${v.orb1} blur-[120px] transform-gpu will-change-transform ${reduced ? '' : 'animate-[orb-drift_38s_ease-in-out_infinite]'}`}
       />
       <div
-        className={`absolute -right-[10%] top-[30%] h-[520px] w-[520px] rounded-full bg-gradient-to-bl ${v.orb2} blur-[120px]`}
+        className={`absolute -right-[10%] top-[30%] h-[520px] w-[520px] rounded-full bg-gradient-to-bl ${v.orb2} blur-[120px] transform-gpu will-change-transform ${reduced ? '' : 'animate-[orb-drift_44s_ease-in-out_infinite_reverse]'}`}
       />
       <div
-        className={`absolute bottom-[-15%] left-[25%] h-[480px] w-[480px] rounded-full bg-gradient-to-tr ${v.orb3} blur-[110px]`}
+        className={`absolute bottom-[-15%] left-[25%] h-[480px] w-[480px] rounded-full bg-gradient-to-tr ${v.orb3} blur-[110px] transform-gpu will-change-transform ${reduced ? '' : 'animate-[orb-drift_50s_ease-in-out_infinite]'}`}
       />
       <div
         className="absolute inset-0 opacity-[0.015] dark:opacity-[0.025]"

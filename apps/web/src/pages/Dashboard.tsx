@@ -12,6 +12,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { usePrefersReducedMotion } from '@/lib/design';
 import { GlassErrorState, GlassSurface } from '@/components/ui';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -77,6 +78,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const sound = usePremiumSound();
+  const reduced = usePrefersReducedMotion();
 
   const role = user?.role?.toUpperCase();
   const isDedicatedRole = ['PARENT', 'TEACHER', 'STUDENT'].includes(role || '');
@@ -173,7 +175,7 @@ export function DashboardPage() {
       role="region"
       aria-label={t('dashboard.title', 'Asosiy')}
       variants={CONTAINER_VARIANTS}
-      initial="hidden"
+      initial={reduced ? false : 'hidden'}
       animate="visible"
       className="mx-auto max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] space-y-6 px-3 sm:px-6 lg:px-8 pt-2 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >

@@ -1518,6 +1518,31 @@
     white-space: inherit;
   }
 
+  /* 120Hz Hardware-Accelerated Rendering & Layout Performance */
+  .gpu-layer {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+  .contain-paint {
+    contain: paint;
+  }
+  .contain-layout {
+    contain: layout style;
+  }
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 100px;
+  }
+  .cv-card {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 240px;
+  }
+  .cv-row {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 56px;
+  }
+
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;

@@ -172,7 +172,7 @@ export function GlassModal({
         className={cn(
           'relative z-10 flex max-h-[min(88dvh,100%)] w-full min-w-0 flex-col overflow-hidden',
           'rounded-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white/85 dark:bg-surface-900/85 backdrop-blur-2xl backdrop-saturate-150 shadow-modal shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
-          'text-primary outline-none',
+          'text-primary outline-none transform-gpu will-change-[transform,opacity]',
           !reduced && 'animate-modal-in',
           SIZE_CLASSES[size],
           className,

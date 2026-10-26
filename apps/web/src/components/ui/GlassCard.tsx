@@ -27,7 +27,7 @@ interface GlassCardProps extends HTMLAttributes<HTMLDivElement> {
 
 const VARIANT_CLASSES: Record<GlassCardVariant, string> = {
   default:
-    'bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-card shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-200 hover:shadow-card-hover hover:border-black/[0.08] dark:hover:border-white/[0.12]',
+    'bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-card shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-[border-color,box-shadow,background-color] duration-200 hover:shadow-card-hover hover:border-black/[0.08] dark:hover:border-white/[0.12]',
   elevated:
     'bg-white/90 dark:bg-surface-900/90 backdrop-blur-2xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-card-elevated shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-200',
   flat:
@@ -35,7 +35,7 @@ const VARIANT_CLASSES: Record<GlassCardVariant, string> = {
   tactile:
     'bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-apple-card shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-200',
   interactive:
-    'bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-card shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] hover:shadow-card-hover hover:border-black/[0.1] dark:hover:border-white/[0.15] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.985] transition-all duration-200 cursor-pointer',
+    'bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-card shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] hover:shadow-card-hover hover:border-black/[0.1] dark:hover:border-white/[0.15] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.985] transform-gpu transition-[transform,box-shadow,border-color,background-color] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,box-shadow] cursor-pointer',
 };
 
 const PADDING_CLASSES: Record<string, string> = {
