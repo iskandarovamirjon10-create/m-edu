@@ -785,15 +785,31 @@ export class ImportExportService {
       res.setHeader("Content-Disposition", "attachment; filename=\"" + entityType.toLowerCase() + "_export.xlsx\"");
       
       const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
+      workbook.creator = "M-EDU Platform";
+      workbook.created = new Date();
       const sheet = workbook.addWorksheet(upper);
       
+      // Auto-size columns with readable padding
+      sheet.columns = headers.map(h => ({
+        key: h,
+        width: Math.max(h.length + 6, 14),
+      }));
+
       // CWE-1236: sanitize cells starting with formula triggers (=, +, -, @, \t, \r)
       const sanitizeExcelCell = (v: unknown): string => {
         const s = String(v ?? '');
         return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
       };
 
-      sheet.addRow(headers);
+      const headerRow = sheet.addRow(headers);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF0066FF' },
+      };
+      headerRow.height = 24;
+
       for await (const chunk of this.streamEntityForExport(orgId, upper)) {
         for (const row of chunk) {
           sheet.addRow(headers.map(h => sanitizeExcelCell(row[h])));
@@ -841,7 +857,8 @@ export class ImportExportService {
       const docDefinition = {
         pageOrientation: "landscape",
         content: [
-          { text: entityType + " Export", style: "header" },
+          { text: "M-EDU PLATFORM · " + entityType.toUpperCase() + " EXPORT", style: "header" },
+          { text: "Generated on: " + new Date().toISOString().replace('T', ' ').slice(0, 19) + " UTC · Records: " + allRows.length, style: "subHeader" },
           {
             table: {
               headerRows: 1,
@@ -850,9 +867,17 @@ export class ImportExportService {
             layout: "lightHorizontalLines",
           },
         ],
+        footer: (currentPage: number, pageCount: number) => ({
+          text: `Page ${currentPage} of ${pageCount} · M-EDU Education Operating System`,
+          alignment: "center",
+          fontSize: 8,
+          color: "#64748B",
+          margin: [0, 10, 0, 0],
+        }),
         styles: {
-          header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
-          tableHeader: { bold: true, fontSize: 13, color: "black" },
+          header: { fontSize: 16, bold: true, margin: [0, 0, 0, 4], color: "#0F172A" },
+          subHeader: { fontSize: 9, color: "#64748B", margin: [0, 0, 0, 12] },
+          tableHeader: { bold: true, fontSize: 10, color: "#FFFFFF", fillColor: "#0066FF" },
         },
         defaultStyle: { font: "NotoSans", fontSize: 8 },
       };

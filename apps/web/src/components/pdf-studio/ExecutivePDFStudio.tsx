@@ -20,6 +20,7 @@ import { memo, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { SPRING } from '@/layouts/core/tokens';
+import { RealQrCode } from '@/components/ui/RealQrCode';
 
 export type DocumentType = 'receipt' | 'certificate' | 'transcript';
 
@@ -306,24 +307,16 @@ export const ExecutivePDFStudio = memo(function ExecutivePDFStudio({
                 {/* Footer Security QR & Verification */}
                 <div className="relative mt-8 pt-5 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-600">
                   <div className="flex items-center gap-3">
-                    {/* High-density QR vector */}
+                    {/* High-density ISO/IEC 18004 compliant real QR vector */}
                     <div className="h-16 w-16 shrink-0 border border-slate-300 p-1 rounded-lg bg-white flex items-center justify-center shadow-xs">
-                      <svg viewBox="0 0 100 100" className="w-full h-full text-slate-900 fill-current">
-                        <rect x="0" y="0" width="30" height="30" />
-                        <rect x="5" y="5" width="20" height="20" fill="white" />
-                        <rect x="10" y="10" width="10" height="10" />
-                        <rect x="70" y="0" width="30" height="30" />
-                        <rect x="75" y="5" width="20" height="20" fill="white" />
-                        <rect x="80" y="10" width="10" height="10" />
-                        <rect x="0" y="70" width="30" height="30" />
-                        <rect x="5" y="75" width="20" height="20" fill="white" />
-                        <rect x="10" y="80" width="10" height="10" />
-                        <rect x="40" y="10" width="10" height="20" />
-                        <rect x="45" y="45" width="15" height="15" />
-                        <rect x="70" y="50" width="10" height="10" />
-                        <rect x="40" y="70" width="20" height="10" />
-                        <rect x="75" y="75" width="15" height="15" />
-                      </svg>
+                      <RealQrCode
+                        value={verifyUrl}
+                        className="w-full h-full"
+                        fgColor="#0F172A"
+                        bgColor="#FFFFFF"
+                        level="M"
+                        title="Rasmiy Sertifikat Tekshiruvi QR Kodi"
+                      />
                     </div>
                     <div className="text-[11px] leading-tight">
                       <p className="font-bold text-slate-900">Elektron Haqiqiylik Tekshiruvi</p>
@@ -473,25 +466,17 @@ export const ExecutivePDFStudio = memo(function ExecutivePDFStudio({
 
                 {/* Security & Verification Footer */}
                 <div className="relative mt-12 pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-6">
-                  {/* Dynamic Vector QR Code for Verification */}
+                  {/* Dynamic Vector QR Code for Verification (ISO/IEC 18004) */}
                   <div className="flex items-center gap-3">
                     <div className="h-20 w-20 shrink-0 border border-slate-300 p-1 rounded-lg bg-white flex items-center justify-center">
-                      <svg viewBox="0 0 100 100" className="w-full h-full text-slate-900 fill-current">
-                        <rect x="0" y="0" width="30" height="30" />
-                        <rect x="5" y="5" width="20" height="20" fill="white" />
-                        <rect x="10" y="10" width="10" height="10" />
-                        <rect x="70" y="0" width="30" height="30" />
-                        <rect x="75" y="5" width="20" height="20" fill="white" />
-                        <rect x="80" y="10" width="10" height="10" />
-                        <rect x="0" y="70" width="30" height="30" />
-                        <rect x="5" y="75" width="20" height="20" fill="white" />
-                        <rect x="10" y="80" width="10" height="10" />
-                        <rect x="40" y="10" width="10" height="20" />
-                        <rect x="45" y="45" width="15" height="15" />
-                        <rect x="70" y="50" width="10" height="10" />
-                        <rect x="40" y="70" width="20" height="10" />
-                        <rect x="75" y="75" width="15" height="15" />
-                      </svg>
+                      <RealQrCode
+                        value={verifyUrl}
+                        className="w-full h-full"
+                        fgColor="#0F172A"
+                        bgColor="#FFFFFF"
+                        level="M"
+                        title="Rasmiy Hujjat Tekshiruvi QR Kodi"
+                      />
                     </div>
                     <div className="text-[11px] leading-tight text-slate-500">
                       <p className="font-bold text-slate-800">Hujjat Haqiqiyligi</p>

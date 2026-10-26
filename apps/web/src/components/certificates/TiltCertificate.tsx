@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { formatDate } from '@/lib/format';
+import { RealQrCode } from '@/components/ui/RealQrCode';
 
 export interface TiltCertificateProps {
   data: {
@@ -176,7 +177,17 @@ export function TiltCertificate({ data }: TiltCertificateProps) {
             </div>
 
             {/* Security Crest & Verification Status (Center) */}
-            <div className="hidden sm:flex flex-col items-center">
+            <div className="hidden sm:flex flex-col items-center gap-1">
+              <div className="rounded-xl p-1 bg-white shadow-sm border border-[#C5A059]/30 transition-transform duration-300 hover:scale-105">
+                <RealQrCode
+                  value={verifyUrl}
+                  className="w-12 h-12"
+                  level="M"
+                  fgColor="#0A192F"
+                  bgColor="#FFFFFF"
+                  title="Rasmiy tekshiruv QR kodi"
+                />
+              </div>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                 <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />

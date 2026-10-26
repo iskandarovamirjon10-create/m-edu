@@ -677,7 +677,16 @@ export class ReportBuilderService {
       if (format === 'xlsx') {
         const ExcelJS = ((await import('exceljs')).default || (await import('exceljs'))) as unknown as {
           Workbook: new () => {
-            addWorksheet: (name: string) => { addRow: (r: unknown[]) => void };
+            creator?: string;
+            created?: Date;
+            addWorksheet: (name: string) => {
+              columns: Array<{ key: string; width: number }>;
+              addRow: (r: unknown[]) => {
+                font?: unknown;
+                fill?: unknown;
+                height?: number;
+              };
+            };
             xlsx: { writeBuffer: () => Promise<ArrayBuffer> };
           };
         };
@@ -686,8 +695,24 @@ export class ReportBuilderService {
           return /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
         };
         const workbook = new ExcelJS.Workbook();
-        const sheet = workbook.addWorksheet(params.type);
-        sheet.addRow(headers);
+        workbook.creator = 'M-EDU Platform';
+        workbook.created = new Date();
+        const sheet = workbook.addWorksheet(params.type.slice(0, 31));
+
+        sheet.columns = headers.map((h) => ({
+          key: h,
+          width: Math.max(h.length + 6, 14),
+        }));
+
+        const headerRow = sheet.addRow(headers);
+        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        headerRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF0066FF' },
+        };
+        headerRow.height = 24;
+
         matrix.forEach((r) => sheet.addRow(r.map(sanitizeExcelCell)));
         const buffer = await workbook.xlsx.writeBuffer();
         return {
@@ -707,26 +732,49 @@ export class ReportBuilderService {
       };
       pdfmake.setLocalAccessPolicy(() => true);
       pdfmake.setUrlAccessPolicy(() => false);
-            pdfmake.setFonts({
+      pdfmake.setFonts({
         NotoSans: {
-            normal: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf'),
-            bold: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf'),
-            italics: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf'),
-            bolditalics: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf'),
-          },
+          normal: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf'),
+          bold: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf'),
+          italics: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf'),
+          bolditalics: require('path').join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf'),
+        },
       });
+
+      const tableBody = [
+        headers.map((h) => ({ text: h, style: 'tableHeader' })),
+        ...matrix.map((r) => r.map((c) => ({ text: String(c ?? '') }))),
+      ];
+
       const doc = pdfmake.createPdf({
+        pageOrientation: headers.length > 5 ? 'landscape' : 'portrait',
         content: [
-          { text: `Report: ${params.type}`, style: 'header' },
+          { text: `M-EDU REPORT · ${params.type.toUpperCase()}`, style: 'header' },
+          {
+            text: `Generated on: ${new Date().toISOString().replace('T', ' ').slice(0, 19)} UTC · Total Records: ${matrix.length}`,
+            style: 'subHeader',
+          },
           {
             table: {
               headerRows: 1,
               widths: headers.map(() => 'auto'),
-              body: [headers, ...matrix],
+              body: tableBody,
             },
+            layout: 'lightHorizontalLines',
           },
         ],
-        styles: { header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] } },
+        footer: (currentPage: number, pageCount: number) => ({
+          text: `Page ${currentPage} of ${pageCount} · M-EDU Education Operating System`,
+          alignment: 'center',
+          fontSize: 8,
+          color: '#64748B',
+          margin: [0, 10, 0, 0],
+        }),
+        styles: {
+          header: { fontSize: 16, bold: true, margin: [0, 0, 0, 4], color: '#0F172A' },
+          subHeader: { fontSize: 9, color: '#64748B', margin: [0, 0, 0, 12] },
+          tableHeader: { bold: true, fontSize: 9, color: '#FFFFFF', fillColor: '#0066FF' },
+        },
         defaultStyle: { font: 'NotoSans', fontSize: 8 },
       });
       return { buffer: Buffer.from(await doc.getBuffer()), contentType: 'application/pdf', extension: 'pdf' };
