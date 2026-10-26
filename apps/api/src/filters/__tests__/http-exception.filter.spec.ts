@@ -85,6 +85,21 @@ describe('GlobalExceptionFilter', () => {
     expect(json.mock.calls[0][0].message).toBe('Request payload too large');
   });
 
+  it('maps Prisma database connection and timeout codes to 503/504', () => {
+    const { host, status, json } = createMockHost();
+    const err = new Error('Database connection failed');
+    Object.assign(err, { code: 'P1001' });
+    filter.catch(err, host);
+    expect(status).toHaveBeenCalledWith(503);
+    expect(json.mock.calls[0][0].message).toBe('Database connection failed');
+
+    const poolErr = new Error('Pool timeout');
+    Object.assign(poolErr, { code: 'P2024' });
+    filter.catch(poolErr, host);
+    expect(status).toHaveBeenCalledWith(503);
+    expect(json.mock.calls[1][0].message).toBe('Database connection pool timed out');
+  });
+
   it('returns 500 for unexpected errors with a generic-safe body', () => {
     const { host, status, json } = createMockHost();
     filter.catch(new Error('secret internal stack detail'), host);

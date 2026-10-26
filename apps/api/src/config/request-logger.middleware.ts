@@ -1,5 +1,5 @@
 /**
- * Request logging middleware with request IDs.
+ * Request logging middleware with request IDs & APM telemetry timing.
  *
  * Assigns a correlation ID (X-Request-Id) to every request, logs method,
  * path, status, duration and actor (when authenticated). Sensitive data is
@@ -7,8 +7,10 @@
  * not logged at all, and query-string values for known secrets (OAuth
  * `code`, `state`, `token`, `password`, …) are replaced with `***`.
  *
- * The request ID is also exposed on error responses so operators can
- * correlate a client-visible failure with server logs.
+ * Attaches standard enterprise APM headers:
+ *  - X-Request-Id: correlation tracking
+ *  - X-Response-Time: execution duration in milliseconds
+ *  - Server-Timing: W3C standard trace metrics
  */
 import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -74,6 +76,17 @@ export class RequestLoggerMiddleware implements NestMiddleware {
     const startedAt = process.hrtime.bigint();
     const { method, originalUrl } = req;
     const safeUrl = redactUrl(originalUrl);
+
+    // Attach W3C Server-Timing & X-Response-Time headers before response headers are flushed
+    const originalWriteHead = res.writeHead;
+    res.writeHead = function (...args: any[]) {
+      if (!res.headersSent) {
+        const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+        res.setHeader('X-Response-Time', `${durationMs.toFixed(1)}ms`);
+        res.setHeader('Server-Timing', `app;dur=${durationMs.toFixed(1)}`);
+      }
+      return originalWriteHead.apply(this, args as any);
+    };
 
     res.on('finish', () => {
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;

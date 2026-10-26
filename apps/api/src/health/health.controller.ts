@@ -20,8 +20,13 @@ export class HealthController {
   async check(@Res({ passthrough: true }) res: Response) {
     let database = 'down';
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
-      database = 'up';
+      if (typeof this.prisma.ping === 'function') {
+        const isUp = await this.prisma.ping();
+        database = isUp ? 'up' : 'down';
+      } else {
+        await this.prisma.$queryRaw`SELECT 1`;
+        database = 'up';
+      }
     } catch {
       database = 'down';
     }

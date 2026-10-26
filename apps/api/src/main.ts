@@ -15,6 +15,7 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './filters/http-exception.filter';
 import { RequestLoggerMiddleware } from './config/request-logger.middleware';
+import { SanitizeInputPipe } from './common/pipes/sanitize-input.pipe';
 import { assertValidConfig, configWarnings } from './config/config.validate';
 import { createOAuthSessionMiddleware } from './auth/oauth-session';
 import {
@@ -122,12 +123,27 @@ async function bootstrap() {
         directives: cspDirectives as never,
       },
       crossOriginEmbedderPolicy: false,
+      hsts:
+        process.env.NODE_ENV === 'production'
+          ? {
+              maxAge: 31536000,
+              includeSubDomains: true,
+              preload: true,
+            }
+          : false,
     }),
   );
   // OAuth state session (PostgreSQL-backed, tiny + short-lived) — must be
   // registered BEFORE passport so the Google strategy's state:true can
   // persist/verify its CSRF nonce in req.session.
   app.use(createOAuthSessionMiddleware());
+  app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    res.setHeader(
+      'Permissions-Policy',
+      'camera=(self), microphone=(), geolocation=(), payment=()',
+    );
+    next();
+  });
   app.useWebSocketAdapter(new IoAdapter(app));
   app.useGlobalFilters(new GlobalExceptionFilter());
 
@@ -163,6 +179,7 @@ async function bootstrap() {
     ],
   });
   app.useGlobalPipes(
+    new SanitizeInputPipe(),
     new ValidationPipe({
       whitelist: true,
       transform: true,

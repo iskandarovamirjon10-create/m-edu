@@ -85,6 +85,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       // Prisma known errors — map to appropriate HTTP status
       const prismaCode = (exception as any).code as string;
       const prismaMap: Record<string, [number, string]> = {
+        P1001: [HttpStatus.SERVICE_UNAVAILABLE, 'Database connection failed'],
+        P1002: [HttpStatus.GATEWAY_TIMEOUT, 'Database server timed out'],
+        P1008: [HttpStatus.GATEWAY_TIMEOUT, 'Database operation timed out'],
+        P2024: [HttpStatus.SERVICE_UNAVAILABLE, 'Database connection pool timed out'],
         P2002: [HttpStatus.CONFLICT, 'A record with this value already exists'],
         P2025: [HttpStatus.NOT_FOUND, 'Record not found'],
         P2003: [HttpStatus.BAD_REQUEST, 'Related record not found'],
