@@ -20,6 +20,7 @@ describe('LessonsService (Pedagogical Lifecycle)', () => {
       topic: { findUnique: vi.fn(), findFirst: vi.fn() },
       material: { findFirst: vi.fn() },
       lessonMaterial: { create: vi.fn() },
+      assignment: { findMany: vi.fn() },
     };
 
     service = new LessonsService(prisma as any);
@@ -141,6 +142,101 @@ describe('LessonsService (Pedagogical Lifecycle)', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('getLessonCopilotAnalysis', () => {
+    it('throws NotFoundException when lesson does not exist', async () => {
+      prisma.lesson.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.getLessonCopilotAnalysis('org-1', 'non-existent-id'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns copilot intelligence, at-risk students and pedagogical checkpoints', async () => {
+      const mockLesson = {
+        id: 'les-1',
+        groupId: 'grp-1',
+        topic: "Kvadrat tenglamalar",
+        notes: "Diskriminant formulasi",
+        date: new Date('2026-10-26T09:00:00Z'),
+        Group: {
+          name: 'Algebra 9-A',
+          course: { id: 'crs-1', name: 'Algebra' },
+          enrollments: [
+            {
+              studentId: 'stud-1',
+              student: {
+                id: 'stud-1',
+                user: { firstName: 'Ali', lastName: 'Valiyev', phone: '+998901234567' },
+              },
+            },
+            {
+              studentId: 'stud-2',
+              student: {
+                id: 'stud-2',
+                user: { firstName: 'Zarina', lastName: 'Karimova', phone: '+998909876543' },
+              },
+            },
+          ],
+        },
+        Topic: { id: 'top-1', title: 'Kvadrat tenglamalar', LearningObjective: [] },
+        Assignment: [],
+        attendances: [
+          { id: 'att-1', studentId: 'stud-1', status: 'PRESENT' },
+          { id: 'att-2', studentId: 'stud-2', status: 'ABSENT' },
+        ],
+      };
+
+      prisma.lesson.findFirst.mockResolvedValue(mockLesson);
+
+      // Past lessons
+      prisma.lesson.findMany.mockResolvedValue([
+        {
+          id: 'past-1',
+          attendances: [
+            { studentId: 'stud-1', status: 'PRESENT' },
+            { studentId: 'stud-2', status: 'ABSENT' },
+          ],
+        },
+      ]);
+
+      // Past assignments
+      prisma.assignment.findMany.mockResolvedValue([
+        {
+          id: 'asg-1',
+          maxScore: 100,
+          AssignmentSubmission: [
+            { studentId: 'stud-1', score: 90, status: 'SUBMITTED' },
+            { studentId: 'stud-2', score: 40, status: 'SUBMITTED' },
+          ],
+        },
+      ]);
+
+      const res = await service.getLessonCopilotAnalysis('org-1', 'les-1');
+
+      expect(res.lessonId).toBe('les-1');
+      expect(res.courseName).toBe('Algebra');
+      expect(res.groupName).toBe('Algebra 9-A');
+      expect(res.groupMetrics.totalStudents).toBe(2);
+      expect(res.groupMetrics.presentToday).toBe(1);
+      expect(res.groupMetrics.absentToday).toBe(1);
+      expect(res.groupMetrics.attendanceRateToday).toBe(50);
+
+      // Zarina should be detected as at-risk due to absence streak (absent in past-1 and today)
+      expect(res.atRiskStudents.length).toBeGreaterThanOrEqual(1);
+      const zarina = res.atRiskStudents.find((s) => s.studentId === 'stud-2');
+      expect(zarina).toBeDefined();
+      expect(zarina?.riskType).toBe('ABSENCE_STREAK');
+      expect(zarina?.level).toBe('HIGH');
+
+      // Check checkpoints and differentiated tasks
+      expect(res.pedagogicalCheckpoints).toHaveLength(4);
+      expect(res.differentiatedTasks).toHaveLength(3);
+      expect(res.differentiatedTasks[0].tier).toBe('FOUNDATION');
+      expect(res.differentiatedTasks[1].tier).toBe('CORE');
+      expect(res.differentiatedTasks[2].tier).toBe('ADVANCED');
     });
   });
 });

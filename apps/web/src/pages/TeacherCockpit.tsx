@@ -15,7 +15,7 @@ import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { SpatialIdentityCard360 } from '@/components/cards/SpatialIdentityCard360';
-import { AiLessonQuizStudioModal } from '@/components/ai';
+import { AiLessonQuizStudioModal, LessonCopilotPanel } from '@/components/ai';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -541,6 +541,7 @@ export function LessonStreamItem({
   onToggleHomeworkForm,
   onSaveHomework,
   homeworkPending,
+  onOpenAiQuizStudio,
 }: {
   lesson: LessonDetail;
   isExpanded: boolean;
@@ -572,6 +573,7 @@ export function LessonStreamItem({
   onToggleHomeworkForm: () => void;
   onSaveHomework: () => void;
   homeworkPending: boolean;
+  onOpenAiQuizStudio?: (topic: string, subject: string) => void;
 }) {
   const { t } = useSafeI18n();
   const reduced = useReducedMotion();
@@ -831,6 +833,20 @@ export function LessonStreamItem({
                         </div>
                       </div>
                     )}
+
+                    {/* AI Lesson Copilot & Differentiated Instruction Panel */}
+                    <LessonCopilotPanel
+                      lessonId={lesson.id}
+                      onApplyDifferentiatedTaskToNotes={(taskText) => {
+                        onNotesChange(lessonNotes ? `${lessonNotes}\n${taskText}` : taskText);
+                      }}
+                      onApplyDifferentiatedTaskToHomework={(task) => {
+                        onHomeworkTitleChange(task.title);
+                        onHomeworkDescriptionChange(task.description);
+                        if (!showHomeworkForm) onToggleHomeworkForm();
+                      }}
+                      onOpenAiQuizStudio={onOpenAiQuizStudio}
+                    />
 
                     {/* Student token grid */}
                     <div>
@@ -1568,6 +1584,9 @@ export function TeacherCockpitPage() {
                       onToggleHomeworkForm={() => setShowHomeworkForm((v) => !v)}
                       onSaveHomework={() => createHomeworkMutation.mutate()}
                       homeworkPending={createHomeworkMutation.isPending}
+                      onOpenAiQuizStudio={(_topic, _subj) => {
+                        setAiStudioOpen(true);
+                      }}
                     />
                   </div>
                 );

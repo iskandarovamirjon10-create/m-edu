@@ -5,6 +5,7 @@
 
 import type { DashboardStats, MonthlyRevenue } from './types';
 import type { ZReportSummary, ZReportRecord, CloseCashierShiftPayload } from '../types/finance';
+import type { LessonCopilotAnalysis } from '../types/academics';
 import { purgeSessionCaches } from './sessionCleanup';
 import type {
   Anomaly,
@@ -1247,6 +1248,8 @@ export const lessonsApi = {
     }),
   unlinkMaterial: (id: string, materialId: string) =>
     request<any>(`/lessons/${id}/materials/${materialId}`, { method: 'DELETE' }),
+  getCopilotAnalysis: (id: string) =>
+    request<LessonCopilotAnalysis>(`/lessons/${id}/copilot-analysis`),
 };
 
 export const assignmentsApi = {

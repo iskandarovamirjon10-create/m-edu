@@ -22,6 +22,16 @@ export class LessonsController {
     return this.lessonsService.findAll(orgId, query);
   }
 
+  @Get(':id/copilot-analysis')
+  @Roles(...STAFF_ROLES)
+  @ApiOperation({ summary: 'Get AI Lesson Copilot analytics, at-risk student interventions and differentiated tasks' })
+  getCopilotAnalysis(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.lessonsService.getLessonCopilotAnalysis(orgId, id);
+  }
+
   @Get(':id')
   @Roles(...STAFF_ROLES)
   @ApiOperation({ summary: 'Get full lesson details with pedagogical content' })

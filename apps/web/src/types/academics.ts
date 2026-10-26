@@ -102,3 +102,58 @@ export interface Homework {
   maxScore?: number | null;
   group?: Group;
 }
+
+export interface AtRiskStudent {
+  studentId: string;
+  fullName: string;
+  phone?: string | null;
+  riskType: 'ABSENCE_STREAK' | 'LOW_MASTERY' | 'FREQUENT_LATE';
+  level: 'HIGH' | 'MEDIUM' | 'LOW';
+  reason: string;
+  stats: {
+    absenceCount: number;
+    absenceStreak: number;
+    homeworkAverage: number;
+    latesCount: number;
+  };
+  recommendedIntervention: string;
+}
+
+export interface PedagogicalCheckpoint {
+  phase: 'WARM_UP' | 'ACTIVE_PRACTICE' | 'FORMATIVE_CHECK' | 'WRAP_UP';
+  title: string;
+  durationMinutes: number;
+  instruction: string;
+  promptExample: string;
+}
+
+export interface DifferentiatedTask {
+  tier: 'FOUNDATION' | 'CORE' | 'ADVANCED';
+  targetAudience: string;
+  badgeText: string;
+  taskTitle: string;
+  taskPrompt: string;
+  solutionHint: string;
+}
+
+export interface LessonCopilotAnalysis {
+  lessonId: string;
+  topic: string;
+  courseName: string;
+  groupName: string;
+  groupMetrics: {
+    totalStudents: number;
+    presentToday: number;
+    absentToday: number;
+    lateToday: number;
+    attendanceRateToday: number;
+    averageHistoricalAttendance: number;
+    homeworkCompletionRate: number;
+    groupMasteryIndex: number;
+    comprehensionStatus: 'EXCELLENT' | 'STABLE' | 'NEEDS_ATTENTION';
+  };
+  atRiskStudents: AtRiskStudent[];
+  pedagogicalCheckpoints: PedagogicalCheckpoint[];
+  differentiatedTasks: DifferentiatedTask[];
+}
+
