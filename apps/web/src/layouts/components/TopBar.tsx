@@ -58,6 +58,7 @@ import { Brand } from './Brand';
 import { StaticIcon, I } from './Icons';
 import { ALL_ITEMS_MAP } from './Sidebar';
 import { GlassModal } from '@/components/ui';
+import { useOfflineSync } from '@/lib/offline-sync';
 import { SpatialIdentityCard360 } from '@/components/cards/SpatialIdentityCard360';
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -507,10 +508,23 @@ const TelemetryChip = memo(function TelemetryChip() {
   const { t } = useSafeI18n();
   const online = useOnline();
   const reduced = usePrefersReducedMotion();
+  const { isSyncing, pendingCount, lastSyncTime, queue, syncNow } = useOfflineSync();
+  const errorCount = queue ? queue.filter((q) => q.status === 'failed').length : 0;
+  const lastSyncAt = lastSyncTime;
   const [latency, setLatency] = useState<number | null>(null);
   const [healthData, setHealthData] = useState<{ database?: string; uptime?: number; status?: string } | null>(null);
   const [open, setOpen] = useState(false);
+  const [manualSyncing, setManualSyncing] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  const handleManualSync = useCallback(async () => {
+    setManualSyncing(true);
+    try {
+      await syncNow();
+    } finally {
+      setManualSyncing(false);
+    }
+  }, [syncNow]);
 
   useEffect(() => {
     if (!online) {
@@ -573,9 +587,44 @@ const TelemetryChip = memo(function TelemetryChip() {
       >
         <LiveClock />
         <span className="hidden h-3 w-px bg-black/[0.08] dark:bg-white/[0.12] xl:inline" aria-hidden="true" />
-        <span className="hidden tabular-nums text-[var(--text-secondary)] xl:inline">
-          {online && latency !== null ? `${latency}ms` : t('common.offline', 'Offline')}
-        </span>
+        {isSyncing || manualSyncing ? (
+          <span className="hidden items-center gap-1.5 text-brand-600 dark:text-brand-400 font-semibold xl:inline-flex">
+            <motion.span
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+              className="inline-block text-xs"
+            >
+              ⟳
+            </motion.span>
+            <span className="text-[11px]">Sinxron...</span>
+          </span>
+        ) : pendingCount > 0 ? (
+          <span className="hidden items-center gap-1 text-amber-500 font-semibold xl:inline-flex text-[11px]">
+            <span>☁</span>
+            <span>${pendingCount} navbatda</span>
+          </span>
+        ) : (
+          <span className="hidden items-center gap-1.5 tabular-nums text-[var(--text-secondary)] xl:inline-flex">
+            {online && latency !== null ? (
+              <>
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    latency < 100
+                      ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]'
+                      : latency < 300
+                      ? 'bg-amber-500'
+                      : 'bg-rose-500',
+                  )}
+                  aria-hidden="true"
+                />
+                <span>${latency}ms</span>
+              </>
+            ) : (
+              t('common.offline', 'Offline')
+            )}
+          </span>
+        )}
       </motion.button>
 
       <AnimatePresence>
@@ -644,8 +693,51 @@ const TelemetryChip = memo(function TelemetryChip() {
                       online ? 'text-apple-green' : 'text-rose-500',
                     )}
                   >
-                    {online ? 'Online' : 'Offline'}
+                    {online ? 'Online (Ulangan)' : 'Offline (Uzilgan)'}
                   </span>
+                </div>
+
+                {/* Cloud & Offline Synchronization Section */}
+                <div className="mt-2.5 pt-2.5 border-t border-black/[0.06] dark:border-white/[0.08]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[var(--text-tertiary)]">Offline Sync Navbati:</span>
+                    <span
+                      className={cn(
+                        'font-bold text-[10.5px] px-2 py-0.5 rounded-full',
+                        pendingCount > 0
+                          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                          : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+                      )}
+                    >
+                      {pendingCount > 0 ? `${pendingCount} ta kutilmoqda` : 'Barchasi sinxron'}
+                    </span>
+                  </div>
+                  {errorCount > 0 && (
+                    <p className="mt-1 text-[10.5px] text-rose-500 font-medium">
+                      {errorCount} ta amal xato bilan to'xtagan
+                    </p>
+                  )}
+                  {lastSyncAt && (
+                    <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">
+                      Oxirgi sinxron: {new Date(lastSyncAt).toLocaleTimeString()}
+                    </p>
+                  )}
+                  {online && (
+                    <button
+                      type="button"
+                      disabled={isSyncing || manualSyncing}
+                      onClick={handleManualSync}
+                      className="mt-2.5 w-full flex items-center justify-center gap-1.5 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 py-1.5 text-xs font-semibold text-brand-600 dark:text-brand-300 transition-colors disabled:opacity-50"
+                    >
+                      <motion.span
+                        animate={isSyncing || manualSyncing ? { rotate: 360 } : undefined}
+                        transition={isSyncing || manualSyncing ? { repeat: Infinity, duration: 1, ease: 'linear' } : undefined}
+                      >
+                        ⟳
+                      </motion.span>
+                      <span>{isSyncing || manualSyncing ? 'Sinxronlanmoqda...' : 'Hozir Sinxronlash'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -789,6 +881,403 @@ const ActionButton = memo(function ActionButton({
     </motion.button>
   );
 });
+
+
+/* ══════════════════════════════════════════════════════════════════════
+ * TOPBAR BREADCRUMB — Adaptive hierarchical navigator
+ * ════════════════════════════════════════════════════════════════════ */
+
+const TopBarBreadcrumb = memo(function TopBarBreadcrumb({
+  currentTitle,
+  currentNav,
+  greeting,
+  orgName,
+  isSearchFocused,
+}: {
+  currentTitle: string;
+  currentNav?: { label: string; iconPath?: readonly string[] };
+  greeting: string;
+  orgName: string;
+  isSearchFocused: boolean;
+}) {
+  const navigate = useNavigate();
+  const reduced = usePrefersReducedMotion();
+
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="hidden h-4 w-px bg-black/[0.08] dark:bg-white/[0.1] 2xl:block" aria-hidden="true" />
+      <div className="hidden min-w-0 max-w-[150px] flex-col 2xl:flex">
+        <span className="truncate text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--text-tertiary)]">
+          {greeting}
+        </span>
+        <span className="truncate text-[13px] font-semibold tracking-tight text-[var(--text-primary)]">
+          {orgName || 'M-EDU'}
+        </span>
+      </div>
+
+      {currentTitle && !isSearchFocused && (
+        <motion.div
+          whileHover={reduced ? undefined : { scale: 1.01 }}
+          className={cn(
+            'hidden h-8.5 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 sm:px-3 text-xs transition-all md:flex',
+            LIQUID_PILL,
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="flex items-center gap-1 font-semibold text-[var(--text-tertiary)] hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+            title="Bosh sahifa (Dashboard)"
+          >
+            <span>M-EDU</span>
+          </button>
+          <span className="text-[var(--text-tertiary)] opacity-60" aria-hidden="true">
+            ›
+          </span>
+          <span className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)] max-w-[140px] truncate">
+            {currentNav?.iconPath && (
+              <span className="text-brand-600 dark:text-brand-400 shrink-0">
+                <StaticIcon paths={currentNav.iconPath} size={13} />
+              </span>
+            )}
+            <span className="truncate">{currentTitle}</span>
+          </span>
+        </motion.div>
+      )}
+    </div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════
+ * QUICK ACTION HUB — Fast 1-click creation center (+ Tezkor)
+ * ════════════════════════════════════════════════════════════════════ */
+
+export const QuickActionHub = memo(function QuickActionHub({
+  size = 'md',
+}: {
+  size?: 'sm' | 'md';
+}) {
+  const navigate = useNavigate();
+  const reduced = usePrefersReducedMotion();
+  const [open, setOpen] = useState(false);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const actions = useMemo(() => [
+    {
+      id: 'student',
+      title: "Yangi O'quvchi",
+      desc: "Qabul va o'quvchi anketasini ochish",
+      icon: I.students,
+      to: '/students?action=new',
+      tone: 'from-blue-500/20 to-blue-600/10 text-blue-600 dark:text-blue-400',
+      badge: 'O',
+    },
+    {
+      id: 'payment',
+      title: "To'lov Qabul Qilish",
+      desc: "Kassa tushumi va to'lov kvitansiyasi",
+      icon: I.payments,
+      to: '/payments?action=new',
+      tone: 'from-emerald-500/20 to-emerald-600/10 text-emerald-600 dark:text-emerald-400',
+      badge: 'T',
+    },
+    {
+      id: 'group',
+      title: "Yangi Guruh",
+      desc: "Kurs va yangi guruhni yo'lga qo'yish",
+      icon: I.groups,
+      to: '/groups?action=new',
+      tone: 'from-indigo-500/20 to-indigo-600/10 text-indigo-600 dark:text-indigo-400',
+      badge: 'G',
+    },
+    {
+      id: 'schedule',
+      title: "Dars Belgilash",
+      desc: "Haftalik dars jadvaliga dars kiritish",
+      icon: I.schedule,
+      to: '/schedule?action=new',
+      tone: 'from-purple-500/20 to-purple-600/10 text-purple-600 dark:text-purple-400',
+      badge: 'D',
+    },
+    {
+      id: 'certificate',
+      title: "Sertifikat Berish",
+      desc: "Bitiruvchiga rasmiy sertifikat chiqarish",
+      icon: I.cert,
+      to: '/certificates?action=new',
+      tone: 'from-amber-500/20 to-amber-600/10 text-amber-600 dark:text-amber-400',
+      badge: 'S',
+    },
+    {
+      id: 'ai',
+      title: "AI Copilot Maslahatchi",
+      desc: "Tezkor tahlil va boshqaruv tavsiyasi",
+      icon: I.ai,
+      to: '/ai-copilot',
+      tone: 'from-cyan-500/20 to-cyan-600/10 text-cyan-600 dark:text-cyan-400',
+      badge: 'AI',
+    },
+  ], []);
+
+  const handleSelect = (to: string) => {
+    setOpen(false);
+    navigate(to);
+  };
+
+  const isSm = size === 'sm';
+
+  return (
+    <div ref={rootRef} className="relative">
+      <motion.button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        whileHover={reduced ? undefined : { scale: 1.03 }}
+        whileTap={reduced ? undefined : { scale: 0.95 }}
+        transition={LIQUID_SPRING}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Tezkor yaratish amallari"
+        title="Tezkor yaratish markazi"
+        className={cn(
+          'flex items-center gap-1.5 transition-all duration-200 select-none min-h-[44px]',
+          isSm ? 'h-8.5 w-8.5 rounded-xl justify-center px-0 min-w-[36px]' : 'h-9 rounded-xl px-2.5 min-w-[44px]',
+          open ? LIQUID_PILL_ACTIVE : LIQUID_PILL,
+          'hover:border-brand-500/40 hover:text-brand-600 dark:hover:text-brand-300',
+          FOCUS,
+        )}
+      >
+        <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-brand-500/15 text-brand-600 dark:bg-brand-500/25 dark:text-brand-300">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+        </span>
+        {!isSm && (
+          <span className="hidden text-xs font-semibold tracking-tight xl:inline">
+            Yaratish
+          </span>
+        )}
+      </motion.button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.96 }}
+            transition={reduced ? { duration: 0 } : POPOVER_SPRING}
+            style={{ transformOrigin: 'top right' }}
+            className={cn(
+              'absolute right-0 top-[calc(100%+0.55rem)] z-50 w-72 rounded-2xl isolate overflow-hidden',
+              LIQUID_POPOVER,
+            )}
+          >
+            <TopSpecular inset="inset-x-6" animated={!reduced} />
+            <BottomChromatic inset="inset-x-8" />
+            <GrainOverlay opacity={0.03} />
+            <div className="relative z-20 p-2">
+              <div className="px-3 py-2 border-b border-black/[0.06] dark:border-white/[0.08]">
+                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+                  Tezkor Yaratish Markazi
+                </p>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  Tez-tez bajariladigan operatsiyalar
+                </p>
+              </div>
+
+              <div className="mt-1 space-y-0.5">
+                {actions.map((act, idx) => (
+                  <motion.button
+                    key={act.id}
+                    type="button"
+                    onClick={() => handleSelect(act.to)}
+                    onMouseEnter={() => setHoveredIdx(idx)}
+                    whileHover={reduced ? undefined : { x: 2 }}
+                    className={cn(
+                      'w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors',
+                      hoveredIdx === idx
+                        ? 'bg-black/[0.04] dark:bg-white/[0.06]'
+                        : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]',
+                    )}
+                  >
+                    <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br', act.tone)}>
+                      <StaticIcon paths={act.icon} size={16} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-[var(--text-primary)]">
+                        {act.title}
+                      </p>
+                      <p className="truncate text-[10.5px] text-[var(--text-tertiary)]">
+                        {act.desc}
+                      </p>
+                    </div>
+                    <span className="hidden sm:inline-block rounded px-1.5 py-0.5 text-[9px] font-mono font-bold bg-black/[0.05] dark:bg-white/[0.08] text-[var(--text-tertiary)]">
+                      {act.badge}
+                    </span>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════
+ * BRANCH SELECTOR MENU — Interactive Branch Hub
+ * ════════════════════════════════════════════════════════════════════ */
+
+const BranchSelectorMenu = memo(function BranchSelectorMenu({
+  orgName,
+  academicYear,
+  isStaff,
+}: {
+  orgName: string;
+  academicYear: string;
+  isStaff: boolean;
+}) {
+  const navigate = useNavigate();
+  const reduced = usePrefersReducedMotion();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative hidden xl:block">
+      <motion.button
+        type="button"
+        disabled={!isStaff}
+        onClick={() => isStaff && setOpen((v) => !v)}
+        whileHover={isStaff && !reduced ? { scale: 1.02 } : undefined}
+        whileTap={isStaff && !reduced ? { scale: 0.97 } : undefined}
+        transition={LIQUID_SPRING}
+        title={isStaff ? "Filiallar va Tashkilot Boshqaruvi" : orgName}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Tashkilot va Filiallar"
+        className={cn(
+          'flex h-9 min-h-[44px] items-center gap-2 rounded-xl px-3 text-left transition-all duration-200 select-none',
+          open ? LIQUID_PILL_ACTIVE : LIQUID_PILL,
+          !isStaff && 'cursor-default opacity-90',
+          FOCUS,
+        )}
+      >
+        <span className="flex min-w-0 flex-col">
+          <span className="max-w-[136px] truncate text-xs font-semibold leading-tight text-[var(--text-primary)]">
+            {orgName || 'M-EDU Academy'}
+          </span>
+          <span className="mt-0.5 text-[10.5px] font-medium leading-none tabular-nums text-[var(--text-tertiary)]">
+            {academicYear}
+          </span>
+        </span>
+        {isStaff && (
+          <StaticIcon
+            paths={I.chevronDown}
+            size={13}
+            className={cn('transition-transform duration-200', open && 'rotate-180 text-brand-500')}
+          />
+        )}
+      </motion.button>
+
+      <AnimatePresence>
+        {open && isStaff && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.96 }}
+            transition={reduced ? { duration: 0 } : POPOVER_SPRING}
+            style={{ transformOrigin: 'top right' }}
+            className={cn(
+              'absolute right-0 top-[calc(100%+0.55rem)] z-50 w-72 rounded-2xl isolate overflow-hidden',
+              LIQUID_POPOVER,
+            )}
+          >
+            <TopSpecular inset="inset-x-6" animated={!reduced} />
+            <BottomChromatic inset="inset-x-8" />
+            <GrainOverlay opacity={0.03} />
+            <div className="relative z-20 p-3">
+              <div className="border-b border-black/[0.06] pb-2.5 dark:border-white/[0.08]">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500/15 text-brand-600 dark:text-brand-300">
+                    <StaticIcon paths={I.branches} size={15} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-bold text-[var(--text-primary)]">
+                      {orgName || 'M-EDU Academy'}
+                    </p>
+                    <p className="text-[10px] text-[var(--text-tertiary)]">
+                      Bosh boshqarma · O'quv yili {academicYear}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center justify-between rounded-xl bg-black/[0.03] dark:bg-white/[0.05] p-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="font-semibold text-[var(--text-primary)]">Bosh filial (Asosiy)</span>
+                  </div>
+                  <span className="rounded bg-brand-500/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-600 dark:text-brand-300">
+                    Faol
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-3 pt-2 border-t border-black/[0.06] dark:border-white/[0.08]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    navigate('/branches');
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 py-2 text-xs font-semibold text-brand-600 dark:text-brand-300 transition-colors"
+                >
+                  <StaticIcon paths={I.settings} size={14} />
+                  <span>Filiallarni boshqarish</span>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
 
 /* ══════════════════════════════════════════════════════════════════════
  * FOCUS MODE CAPSULE — v2 chrome
@@ -1556,34 +2045,13 @@ export const TopBar = memo(function TopBar({
                 <TelemetryChip />
               </div>
 
-              <span className="hidden h-4 w-px bg-black/[0.08] dark:bg-white/[0.1] 2xl:block" aria-hidden="true" />
-              <div className="hidden min-w-0 max-w-[170px] flex-col 2xl:flex">
-                <span className="truncate text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-tertiary)]">
-                  {greeting}
-                </span>
-                <span className="truncate text-[13.5px] font-semibold tracking-tight text-[var(--text-primary)]">
-                  {currentTitle || orgName || 'M-EDU'}
-                </span>
-              </div>
-
-              {currentTitle && !isSearchFocused && (
-                <div
-                  className={cn(
-                    'hidden h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs md:flex xl:hidden 2xl:flex',
-                    LIQUID_PILL,
-                  )}
-                >
-                  <span className="hidden font-semibold text-[var(--text-primary)] 2xl:inline">
-                    M-EDU
-                  </span>
-                  <span className="hidden text-[var(--text-tertiary)] 2xl:inline" aria-hidden="true">
-                    ›
-                  </span>
-                  <span className="max-w-[130px] truncate font-semibold text-[var(--text-primary)] 2xl:font-medium 2xl:text-[var(--text-secondary)]">
-                    {currentTitle}
-                  </span>
-                </div>
-              )}
+              <TopBarBreadcrumb
+                currentTitle={currentTitle}
+                currentNav={currentNav}
+                greeting={greeting}
+                orgName={orgName}
+                isSearchFocused={isSearchFocused}
+              />
             </>
           )}
         </div>
@@ -1732,31 +2200,13 @@ export const TopBar = memo(function TopBar({
 
         {/* Right Action Cluster */}
         <div className="relative z-20 ml-auto flex shrink-0 items-center gap-1.5 lg:gap-2">
-          <motion.button
-            type="button"
-            disabled={!isStaff}
-            onClick={() => isStaff && navigate('/branches')}
-            whileTap={isStaff && !reduced ? { scale: 0.97 } : undefined}
-            transition={LIQUID_SPRING}
-            title={isStaff ? t('nav.branches', 'Branches') : orgName}
-            aria-label={t('nav.branches', 'Branches')}
-            className={cn(
-              'hidden h-9 min-h-[44px] items-center gap-2 rounded-xl px-3 text-left transition-all duration-200 xl:flex',
-              LIQUID_PILL,
-              !isStaff && 'cursor-default opacity-90',
-              FOCUS,
-            )}
-          >
-            <span className="flex min-w-0 flex-col">
-              <span className="max-w-[136px] truncate text-xs font-semibold leading-tight text-[var(--text-primary)]">
-                {orgName || 'M-EDU Academy'}
-              </span>
-              <span className="mt-0.5 text-[10.5px] font-medium leading-none tabular-nums text-[var(--text-tertiary)]">
-                {getAcademicYear(now)}
-              </span>
-            </span>
-            {isStaff && <StaticIcon paths={I.chevronDown} size={13} />}
-          </motion.button>
+          <BranchSelectorMenu
+            orgName={orgName}
+            academicYear={getAcademicYear(now)}
+            isStaff={isStaff}
+          />
+
+          {isStaff && <QuickActionHub />}
 
           {isStaff && (
             <ActionButton
@@ -1909,6 +2359,8 @@ export const MobileTopBar = memo(function MobileTopBar({
           >
             <SearchGlyph size={16} />
           </ActionButton>
+
+          <QuickActionHub size="sm" />
 
           <div className="hidden min-[380px]:block">
             <ActionButton
