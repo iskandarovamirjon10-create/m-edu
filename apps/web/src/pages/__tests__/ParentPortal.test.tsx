@@ -25,6 +25,7 @@ vi.mock('@/lib/api', () => {
       grades: vi.fn(),
       invoices: vi.fn(),
       schedule: vi.fn(),
+      weeklyDigest: vi.fn(),
     },
   };
 });
@@ -182,9 +183,59 @@ const mockInvoices = {
       id: 'pay-1',
       amount: 350000,
       status: 'PAID',
-      method: 'PAYME',
+      method: 'BANK_TRANSFER',
       receiptNumber: 'REC-9912',
       paidAt: '2026-10-05T12:00:00.000Z',
+    },
+  ],
+};
+
+const mockWeeklyDigest = {
+  student: {
+    id: 'child-1-id',
+    fullName: 'Aziza Alieva',
+    avatar: null,
+  },
+  period: {
+    startDate: '2026-10-19',
+    endDate: '2026-10-26',
+    weekNumber: 4,
+  },
+  metrics: {
+    attendanceRate: 100,
+    lessonsAttended: 6,
+    totalLessons: 6,
+    latesCount: 0,
+    excusedCount: 0,
+    homeworkCompletionRate: 100,
+    averageScore: 95,
+    weeklyMasteryScore: 98,
+    statusTone: 'EXCELLENT' as const,
+  },
+  highlights: [
+    "🌟 Haftadagi barcha darslarga to'liq va faol qatnashdi.",
+    "⏱️ Haftadagi barcha darslarga o'z vaqtida, kechikmasdan keldi.",
+  ],
+  recommendations: [
+    "Farzandingiz haftani a'lo natijalar bilan yakunladi.",
+  ],
+  recentAttendances: [
+    {
+      date: '2026-10-25',
+      status: 'PRESENT',
+      markedAt: '2026-10-25T08:55:00.000Z',
+      source: 'RFID_TURNSTILE',
+      groupName: 'English Advanced',
+    },
+  ],
+  recentAssignments: [
+    {
+      title: 'Essay 1',
+      groupName: 'English Advanced',
+      score: 95,
+      maxScore: 100,
+      submittedAt: '2026-10-24T18:00:00.000Z',
+      feedback: 'Ajoyib natija!',
     },
   ],
 };
@@ -260,12 +311,19 @@ describe('ParentPortalPage Integration Tests', () => {
     vi.mocked(parentPortalApi.grades).mockResolvedValue(mockGrades);
     vi.mocked(parentPortalApi.invoices).mockResolvedValue(mockInvoices);
     vi.mocked(parentPortalApi.schedule).mockResolvedValue(mockSchedule);
+    vi.mocked(parentPortalApi.weeklyDigest).mockResolvedValue(mockWeeklyDigest);
 
     renderWithQuery(<ParentPortalPage />);
 
     // Child name and status
     await waitFor(() => {
       expect(screen.getAllByText('Aziza Alieva')[0]).toBeInTheDocument();
+    });
+
+    // Weekly Academic Digest
+    await waitFor(() => {
+      expect(screen.getByText('Haftalik Akademik Digest')).toBeInTheDocument();
+      expect(screen.getByText("A'lo darajada")).toBeInTheDocument();
     });
 
     // Attendance records
@@ -275,7 +333,7 @@ describe('ParentPortalPage Integration Tests', () => {
 
     // Grades / assessments
     expect(screen.getByText('Essay 1')).toBeInTheDocument();
-    expect(screen.getByText('95')).toBeInTheDocument();
+    expect(screen.getAllByText('95').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Midterm Exam')).toBeInTheDocument();
 
     // Weekly Schedule
@@ -293,6 +351,7 @@ describe('ParentPortalPage Integration Tests', () => {
     vi.mocked(parentPortalApi.grades).mockResolvedValue(mockGrades);
     vi.mocked(parentPortalApi.invoices).mockResolvedValue(mockInvoices);
     vi.mocked(parentPortalApi.schedule).mockResolvedValue(mockSchedule);
+    vi.mocked(parentPortalApi.weeklyDigest).mockResolvedValue(mockWeeklyDigest);
 
     renderWithQuery(<ParentPortalPage />);
 

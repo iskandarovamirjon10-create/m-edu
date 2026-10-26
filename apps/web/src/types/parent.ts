@@ -86,3 +86,45 @@ export interface ParentInvoicesResponse {
     createdAt: string;
   }[];
 }
+
+export interface ParentWeeklyDigest {
+  student: {
+    id: string;
+    fullName: string;
+    avatar: string | null;
+  };
+  period: {
+    startDate: string;
+    endDate: string;
+    weekNumber: number;
+  };
+  metrics: {
+    attendanceRate: number;
+    lessonsAttended: number;
+    totalLessons: number;
+    latesCount: number;
+    excusedCount: number;
+    homeworkCompletionRate: number;
+    averageScore: number;
+    weeklyMasteryScore: number;
+    statusTone: 'EXCELLENT' | 'GOOD' | 'NEEDS_ATTENTION';
+  };
+  highlights: string[];
+  recommendations: string[];
+  recentAttendances: Array<{
+    date: string;
+    status: string;
+    markedAt: string | null;
+    source: string;
+    groupName: string;
+  }>;
+  recentAssignments: Array<{
+    title: string;
+    groupName: string;
+    score: number | null;
+    maxScore: number;
+    submittedAt: string;
+    feedback: string | null;
+  }>;
+}
+

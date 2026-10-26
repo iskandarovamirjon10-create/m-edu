@@ -39,6 +39,13 @@ function createMockPrisma() {
     payment: {
       findMany: vi.fn(),
     },
+    student: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+    },
+    assignmentSubmission: {
+      findMany: vi.fn(),
+    },
   };
 }
 
@@ -384,4 +391,70 @@ describe('ParentPortalModule Unit Tests', () => {
         expect(prisma.attendance.update).toHaveBeenCalled();
       });
     });
+    describe('getChildWeeklyDigest', () => {
+      it('calculates weekly attendance rate, homework scores and parental recommendations', async () => {
+        prisma.parentStudent.findFirst.mockResolvedValue({
+          studentId: 's-1',
+          canViewAttendance: true,
+          canViewGrades: true,
+          canViewPayments: true,
+        });
+
+        prisma.student.findFirst.mockResolvedValue({
+          id: 's-1',
+          user: { firstName: 'Jasur', lastName: 'Anvarov', avatar: null },
+          enrollments: [
+            {
+              group: { id: 'grp-1', name: 'Matematika 10-A', course: { name: 'Matematika' } },
+            },
+          ],
+        });
+
+        prisma.attendance.findMany.mockResolvedValue([
+          {
+            id: 'att-1',
+            date: new Date('2026-10-25'),
+            status: 'PRESENT',
+            source: 'TURNIKET',
+            markedAt: new Date('2026-10-25T08:25:00Z'),
+            group: { name: 'Matematika 10-A' },
+          },
+          {
+            id: 'att-2',
+            date: new Date('2026-10-23'),
+            status: 'PRESENT',
+            source: 'FACE_ID',
+            markedAt: new Date('2026-10-23T08:28:00Z'),
+            group: { name: 'Matematika 10-A' },
+          },
+        ]);
+
+        prisma.assignmentSubmission.findMany.mockResolvedValue([
+          {
+            id: 'sub-1',
+            score: 95,
+            feedback: "A'lo natija",
+            createdAt: new Date('2026-10-24'),
+            Assignment: {
+              title: 'Funksiyalar grafigi',
+              maxScore: 100,
+              Group: { name: 'Matematika 10-A' },
+            },
+          },
+        ]);
+
+        const digest = await service.getChildWeeklyDigest(mockCtx, 's-1');
+
+        expect(digest.student.fullName).toBe('Jasur Anvarov');
+        expect(digest.metrics.attendanceRate).toBe(100);
+        expect(digest.metrics.lessonsAttended).toBe(2);
+        expect(digest.metrics.averageScore).toBe(95);
+        expect(digest.metrics.statusTone).toBe('EXCELLENT');
+        expect(digest.highlights.length).toBeGreaterThanOrEqual(1);
+        expect(digest.recommendations.length).toBeGreaterThanOrEqual(1);
+        expect(digest.recentAttendances).toHaveLength(2);
+        expect(digest.recentAssignments).toHaveLength(1);
+      });
+    });
+
 });

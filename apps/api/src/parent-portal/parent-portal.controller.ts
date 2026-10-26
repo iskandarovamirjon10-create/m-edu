@@ -84,6 +84,17 @@ export class ParentPortalController {
   }
 
   @AllowAnyRole()
+  @Get('children/:studentId/weekly-digest')
+  @Roles(Role.PARENT)
+  @ApiOperation({ summary: 'Weekly performance digest and parental recommendations' })
+  childWeeklyDigest(
+    @CurrentUser() user: { sub: string; organizationId: string },
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.parentPortal.getChildWeeklyDigest(this.ctx(user), studentId);
+  }
+
+  @AllowAnyRole()
   @Get('children/:studentId/grades')
   @Roles(Role.PARENT)
   @ApiOperation({ summary: 'Grades for one of my children' })

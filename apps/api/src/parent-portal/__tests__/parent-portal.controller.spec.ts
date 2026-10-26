@@ -17,6 +17,7 @@ describe('ParentPortalController', () => {
     getChildSchedule: ReturnType<typeof vi.fn>;
     getChildInvoices: ReturnType<typeof vi.fn>;
     reportAbsence: ReturnType<typeof vi.fn>;
+    getChildWeeklyDigest: ReturnType<typeof vi.fn>;
   };
 
   const mockUser = {
@@ -40,6 +41,7 @@ describe('ParentPortalController', () => {
       getChildSchedule: vi.fn(),
       getChildInvoices: vi.fn(),
       reportAbsence: vi.fn(),
+      getChildWeeklyDigest: vi.fn(),
     };
 
     controller = new ParentPortalController(service as unknown as ParentPortalService);
@@ -267,4 +269,18 @@ describe('ParentPortalController', () => {
       expect(result).toEqual(mockResult);
     });
   });
+  describe('childWeeklyDigest', () => {
+    it('delegates to parentPortal.getChildWeeklyDigest with resolved context', async () => {
+      const mockDigest = {
+        student: { fullName: 'Jasur Anvarov' },
+        metrics: { weeklyMasteryScore: 92 },
+      };
+      service.getChildWeeklyDigest.mockResolvedValue(mockDigest);
+
+      const res = await controller.childWeeklyDigest(mockUser, studentId);
+      expect(service.getChildWeeklyDigest).toHaveBeenCalledWith(expectedCtx, studentId);
+      expect(res).toEqual(mockDigest);
+    });
+  });
+
 });

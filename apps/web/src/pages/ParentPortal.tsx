@@ -26,6 +26,7 @@ import {
 } from '@/components/ui';
 import { formatCurrency, formatDate, formatTime, fullName } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { ParentWeeklyDigestCard } from '@/components/parent/ParentWeeklyDigestCard';
 import type {
   ParentChild,
   ParentAttendanceRecord,
@@ -921,6 +922,14 @@ export function ParentPortalPage() {
               </div>
             </LiquidGlassCard>
           </motion.div>
+
+          {/* ═══ WEEKLY ACADEMIC DIGEST & PERFORMANCE ENGINE ═══ */}
+          {perms?.attendance && (
+            <ParentWeeklyDigestCard
+              studentId={activeChild.studentId}
+              studentName={studentName}
+            />
+          )}
 
           {/* ═══ MAIN GRID ═══ */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">

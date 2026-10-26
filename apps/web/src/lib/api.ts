@@ -6,6 +6,7 @@
 import type { DashboardStats, MonthlyRevenue } from './types';
 import type { ZReportSummary, ZReportRecord, CloseCashierShiftPayload } from '../types/finance';
 import type { LessonCopilotAnalysis } from '../types/academics';
+import type { ParentWeeklyDigest } from '../types/parent';
 import { purgeSessionCaches } from './sessionCleanup';
 import type {
   Anomaly,
@@ -1126,6 +1127,8 @@ export const parentPortalApi = {
       `/parent-portal/children/${studentId}/absence`,
       { method: 'POST', body: JSON.stringify(data) },
     ),
+  weeklyDigest: (studentId: string) =>
+    request<ParentWeeklyDigest>(`/parent-portal/children/${studentId}/weekly-digest`),
 };
 
 export const payrollApi = {

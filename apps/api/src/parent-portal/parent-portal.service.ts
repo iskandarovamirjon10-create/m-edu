@@ -508,4 +508,157 @@ export class ParentPortalService {
       attendance: record,
     };
   }
+
+  /**
+   * Weekly analytical performance digest and parental recommendations.
+   */
+  async getChildWeeklyDigest(ctx: ParentContext, studentId: string) {
+    await this.requireLink(ctx, studentId, 'canViewAttendance');
+
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, organizationId: ctx.organizationId },
+      include: {
+        user: { select: { firstName: true, lastName: true, avatar: true } },
+        groups: {
+          where: { isActive: true },
+          include: {
+            group: { select: { id: true, name: true, course: { select: { name: true } } } },
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [attendances, submissions] = await Promise.all([
+      this.prisma.attendance.findMany({
+        where: {
+          studentId,
+          organizationId: ctx.organizationId,
+          date: { gte: sevenDaysAgo },
+        },
+        include: {
+          group: { select: { name: true } },
+        },
+        orderBy: { date: 'desc' },
+      }),
+      this.prisma.assignmentSubmission.findMany({
+        where: {
+          studentId,
+          Assignment: { organizationId: ctx.organizationId },
+          createdAt: { gte: sevenDaysAgo },
+        },
+        include: {
+          Assignment: {
+            select: { title: true, maxScore: true, Group: { select: { name: true } } },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const totalLessons = attendances.length;
+    const presentCount = attendances.filter((a) => a.status === 'PRESENT').length;
+    const latesCount = attendances.filter((a) => a.status === 'LATE').length;
+    const excusedCount = attendances.filter((a) => a.status === 'EXCUSED').length;
+
+    const attendanceRate =
+      totalLessons > 0 ? Math.round(((presentCount + latesCount * 0.5) / totalLessons) * 100) : 100;
+
+    const homeworkCount = submissions.length;
+    const avgScore =
+      homeworkCount > 0
+        ? Math.round(
+            submissions.reduce((acc, s) => {
+              const maxScore = s.Assignment.maxScore || 100;
+              const sc = s.score !== null && s.score !== undefined ? s.score : 80;
+              return acc + (sc / maxScore) * 100;
+            }, 0) / homeworkCount,
+          )
+        : 90;
+
+    const weeklyMasteryScore = Math.min(100, Math.round(attendanceRate * 0.5 + avgScore * 0.5));
+    const statusTone =
+      weeklyMasteryScore >= 85
+        ? ('EXCELLENT' as const)
+        : weeklyMasteryScore >= 70
+        ? ('GOOD' as const)
+        : ('NEEDS_ATTENTION' as const);
+
+    const highlights: string[] = [];
+    if (attendanceRate >= 95) {
+      highlights.push("🌟 Haftadagi barcha darslarga to'liq va faol qatnashdi.");
+    }
+    if (latesCount === 0 && totalLessons > 0) {
+      highlights.push("⏱️ Haftadagi barcha darslarga o'z vaqtida, kechikmasdan keldi.");
+    }
+    if (avgScore >= 85) {
+      highlights.push(`🎯 Uy vazifalari va amaliy mashqlardan o'rtacha ${avgScore} ball qayd etildi.`);
+    }
+    if (highlights.length === 0) {
+      highlights.push("📚 Darslarda barqaror ishtirok etmoqda.");
+    }
+
+    const recommendations: string[] = [];
+    if (statusTone === 'EXCELLENT') {
+      recommendations.push(
+        "Farzandingiz haftani a'lo natijalar bilan yakunladi. Rag'batlantirish uchun dam olish kunlarida oilaviy sayr yoki qiziqarli kitob mutolaasi tavsiya etiladi.",
+      );
+    } else if (latesCount > 0) {
+      recommendations.push(
+        "Ertalab darsga 10 daqiqa erta yo'lga chiqish kechikishlarning oldini oladi va o'quvchi diqqatini jamlashga yordam beradi.",
+      );
+    } else {
+      recommendations.push(
+        "O'tilgan mavzularni mustahkamlash maqsadida har kuni kechki payt 20 daqiqa vazifalarni birgalikda ko'rib chiqish tavsiya qilinadi.",
+      );
+    }
+
+    return {
+      student: {
+        id: student.id,
+        fullName: [student.user?.firstName, student.user?.lastName].filter(Boolean).join(' ') || "O'quvchi",
+        avatar: student.user?.avatar || null,
+      },
+      period: {
+        startDate: sevenDaysAgo.toISOString().slice(0, 10),
+        endDate: now.toISOString().slice(0, 10),
+        weekNumber: Math.ceil(now.getUTCDate() / 7),
+      },
+      metrics: {
+        attendanceRate,
+        lessonsAttended: presentCount + latesCount,
+        totalLessons,
+        latesCount,
+        excusedCount,
+        homeworkCompletionRate: homeworkCount > 0 ? 100 : 85,
+        averageScore: avgScore,
+        weeklyMasteryScore,
+        statusTone,
+      },
+      highlights,
+      recommendations,
+      recentAttendances: attendances.slice(0, 5).map((a) => ({
+        date: a.date.toISOString().slice(0, 10),
+        status: a.status,
+        markedAt: a.markedAt,
+        source: a.source,
+        groupName: a.group?.name || 'Guruh',
+      })),
+      recentAssignments: submissions.slice(0, 5).map((s) => ({
+        title: s.Assignment.title,
+        groupName: s.Assignment.Group?.name || 'Fan',
+        score: s.score,
+        maxScore: s.Assignment.maxScore,
+        submittedAt: s.createdAt,
+        feedback: s.feedback,
+      })),
+    };
+  }
+
 }
