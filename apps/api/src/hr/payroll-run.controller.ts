@@ -103,6 +103,48 @@ export class PayrollRunController {
   }
 
   @AllowAnyRole()
+  @Get('smart-kpi')
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER)
+  async getSmartKpi(
+    @CurrentUser('organizationId') orgId: string,
+    @Query('teacherId') teacherId: string,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+  ) {
+    if (!teacherId) throw new BadRequestException('teacherId is required');
+    const y = year ? Number(year) : new Date().getFullYear();
+    const m = month ? Number(month) : new Date().getMonth() + 1;
+    if (!Number.isInteger(y) || y < 2000 || y > 2100) {
+      throw new BadRequestException('year must be an integer in 2000..2100');
+    }
+    if (!Number.isInteger(m) || m < 1 || m > 12) {
+      throw new BadRequestException('month must be an integer in 1..12');
+    }
+    return this.payrollService.calculateTeacherSmartKpi(orgId, {
+      teacherId,
+      year: y,
+      month: m,
+    });
+  }
+
+  @Post('smart-kpi')
+  @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER)
+  async createSmartKpiRun(
+    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: {
+      teacherId: string;
+      year: number;
+      month: number;
+      customBonus?: number;
+      notes?: string;
+    },
+  ) {
+    if (!body.teacherId) throw new BadRequestException('teacherId is required');
+    return this.payrollService.createSmartKpiRun(orgId, userId, body);
+  }
+
+  @AllowAnyRole()
   @Get(':id')
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER)
   async getRun(

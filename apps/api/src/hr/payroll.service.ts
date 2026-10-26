@@ -634,4 +634,295 @@ export class PayrollService {
       bonus: calc.retentionBonusEarned,
     });
   }
+
+  // ------------------------------------------------------------------
+  // Smart KPI & Dynamic Performance Bonus Engine
+  // ------------------------------------------------------------------
+
+  async calculateTeacherSmartKpi(
+    organizationId: string,
+    params: {
+      teacherId: string;
+      year: number;
+      month: number;
+    },
+  ) {
+    const { teacherId, year, month } = params;
+
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { id: teacherId, organizationId },
+      include: {
+        user: { select: { firstName: true, lastName: true, email: true, phone: true } },
+        groups: {
+          select: {
+            id: true,
+            name: true,
+            enrollments: {
+              select: { studentId: true, isActive: true },
+            },
+          },
+        },
+      },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found in organization');
+
+    const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+    const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+    const groupIds = teacher.groups.map((g) => g.id);
+
+    // 1. Retention KPI
+    let totalEnrolledCount = 0;
+    let activeStudentsCount = 0;
+    for (const g of teacher.groups) {
+      for (const enr of g.enrollments) {
+        totalEnrolledCount++;
+        if (enr.isActive) activeStudentsCount++;
+      }
+    }
+    const retentionRate =
+      totalEnrolledCount > 0 ? Math.round((activeStudentsCount / totalEnrolledCount) * 100) : 100;
+
+    // 2. Attendance KPI
+    let attendanceRate = 100;
+    let attendanceStats = { total: 0, present: 0, late: 0, absent: 0 };
+    if (groupIds.length > 0) {
+      const attendanceRecords = await this.prisma.attendance.findMany({
+        where: {
+          organizationId,
+          groupId: { in: groupIds },
+          date: { gte: startDate, lte: endDate },
+        },
+        select: { status: true },
+      });
+
+      const total = attendanceRecords.length;
+      const present = attendanceRecords.filter((a) => a.status === 'PRESENT').length;
+      const late = attendanceRecords.filter((a) => a.status === 'LATE').length;
+      const absent = attendanceRecords.filter((a) => a.status === 'ABSENT').length;
+
+      attendanceStats = { total, present, late, absent };
+      if (total > 0) {
+        attendanceRate = Math.round(((present + late * 0.5) / total) * 100);
+      }
+    }
+
+    // 3. Academic Grade / Exam KPI
+    let averageGradeScore = 85;
+    let gradeCount = 0;
+    if (groupIds.length > 0) {
+      const grades = await this.prisma.grade.findMany({
+        where: {
+          organizationId,
+          groupId: { in: groupIds },
+          createdAt: { gte: startDate, lte: endDate },
+        },
+        select: { value: true, maxValue: true },
+      });
+      if (grades.length > 0) {
+        gradeCount = grades.length;
+        const totalPct = grades.reduce(
+          (sum, g) => sum + (g.value / (g.maxValue || 100)) * 100,
+          0,
+        );
+        averageGradeScore = Math.round(totalPct / grades.length);
+      }
+    }
+
+    // 4. Conducted Lessons & Volume
+    const conductedLessons = await this.prisma.lesson.count({
+      where: {
+        organizationId,
+        teacherId,
+        status: 'CONDUCTED',
+        date: { gte: startDate, lte: endDate },
+      },
+    });
+
+    const lessonsForHours = await this.prisma.lesson.findMany({
+      where: {
+        organizationId,
+        teacherId,
+        status: 'CONDUCTED',
+        date: { gte: startDate, lte: endDate },
+      },
+      select: { startTime: true, endTime: true },
+    });
+
+    let totalMinutes = 0;
+    for (const l of lessonsForHours) {
+      const [sh, sm] = (l.startTime || '').split(':').map(Number);
+      const [eh, em] = (l.endTime || '').split(':').map(Number);
+      if ([sh, sm, eh, em].every(Number.isFinite)) {
+        totalMinutes += Math.max(0, eh * 60 + em - (sh * 60 + sm));
+      }
+    }
+    const hoursWorked = Math.round((totalMinutes / 60) * 10) / 10;
+
+    // 5. Base Salary Resolution for Bonus Scaling
+    const salaryType = (teacher.salaryType || 'MONTHLY') as 'MONTHLY' | 'HOURLY' | 'PER_LESSON';
+    let estimatedBase = 4_000_000;
+    if (salaryType === 'HOURLY' && teacher.hourlyRate) {
+      estimatedBase = Number(teacher.hourlyRate) * (hoursWorked || 20);
+    } else if (salaryType === 'PER_LESSON' && teacher.lessonRate) {
+      estimatedBase = Number(teacher.lessonRate) * (conductedLessons || 12);
+    }
+
+    // 6. Dynamic Bonus Pillars
+    // Attendance Bonus: >=92% -> +10%, >=85% -> +5%
+    let attendanceBonus = 0;
+    let attendanceBonusPct = 0;
+    if (attendanceRate >= 92) {
+      attendanceBonusPct = 10;
+      attendanceBonus = Math.round(estimatedBase * 0.10);
+    } else if (attendanceRate >= 85) {
+      attendanceBonusPct = 5;
+      attendanceBonus = Math.round(estimatedBase * 0.05);
+    }
+
+    // Retention Bonus: >=95% -> +15%, >=88% -> +10%
+    let retentionBonus = 0;
+    let retentionBonusPct = 0;
+    if (retentionRate >= 95) {
+      retentionBonusPct = 15;
+      retentionBonus = Math.round(estimatedBase * 0.15);
+    } else if (retentionRate >= 88) {
+      retentionBonusPct = 10;
+      retentionBonus = Math.round(estimatedBase * 0.10);
+    }
+
+    // Academic / Exam Bonus: >=88% -> +10%, >=80% -> +5%
+    let academicBonus = 0;
+    let academicBonusPct = 0;
+    if (averageGradeScore >= 88) {
+      academicBonusPct = 10;
+      academicBonus = Math.round(estimatedBase * 0.10);
+    } else if (averageGradeScore >= 80) {
+      academicBonusPct = 5;
+      academicBonus = Math.round(estimatedBase * 0.05);
+    }
+
+    const totalRecommendedBonus = attendanceBonus + retentionBonus + academicBonus;
+
+    // 7. Composite KPI Score (0-100) & Tier
+    const compositeScore = Math.min(
+      100,
+      Math.max(
+        0,
+        Math.round(attendanceRate * 0.35 + retentionRate * 0.35 + averageGradeScore * 0.30),
+      ),
+    );
+
+    let tier: 'EXEMPLARY' | 'PROFICIENT' | 'DEVELOPING' | 'NEEDS_IMPROVEMENT';
+    let tierLabel: string;
+    let badgeColor: string;
+    if (compositeScore >= 90) {
+      tier = 'EXEMPLARY';
+      tierLabel = "A'lo (Exemplary)";
+      badgeColor = '#10B981';
+    } else if (compositeScore >= 80) {
+      tier = 'PROFICIENT';
+      tierLabel = 'Yaxshi (Proficient)';
+      badgeColor = '#3B82F6';
+    } else if (compositeScore >= 70) {
+      tier = 'DEVELOPING';
+      tierLabel = 'Qoniqarli (Developing)';
+      badgeColor = '#F59E0B';
+    } else {
+      tier = 'NEEDS_IMPROVEMENT';
+      tierLabel = 'Rivojlanish talab etiladi';
+      badgeColor = '#EF4444';
+    }
+
+    const estimatedGross = estimatedBase + totalRecommendedBonus;
+
+    return {
+      teacherId,
+      teacherName: `${teacher.user.firstName} ${teacher.user.lastName ?? ''}`.trim(),
+      email: teacher.user.email,
+      salaryType,
+      periodYear: year,
+      periodMonth: month,
+      groupCount: teacher.groups.length,
+      groups: teacher.groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        
+        studentsCount: g.enrollments.length,
+      })),
+      pillars: {
+        attendance: {
+          rate: attendanceRate,
+          threshold: 85,
+          stats: attendanceStats,
+          bonusPct: attendanceBonusPct,
+          bonusEarned: attendanceBonus,
+        },
+        retention: {
+          rate: retentionRate,
+          threshold: 88,
+          activeStudents: activeStudentsCount,
+          totalStudents: totalEnrolledCount,
+          bonusPct: retentionBonusPct,
+          bonusEarned: retentionBonus,
+        },
+        academic: {
+          averageScore: averageGradeScore,
+          threshold: 80,
+          gradeCount,
+          bonusPct: academicBonusPct,
+          bonusEarned: academicBonus,
+        },
+        discipline: {
+          conductedLessons,
+          hoursWorked,
+        },
+      },
+      compositeScore,
+      tier,
+      tierLabel,
+      badgeColor,
+      estimatedBase,
+      totalRecommendedBonus,
+      estimatedGross,
+      formattedBonus: new Intl.NumberFormat('uz-UZ').format(totalRecommendedBonus) + " so'm",
+      formattedGross: new Intl.NumberFormat('uz-UZ').format(estimatedGross) + " so'm",
+    };
+  }
+
+  async createSmartKpiRun(
+    organizationId: string,
+    actorId: string,
+    params: {
+      teacherId: string;
+      year: number;
+      month: number;
+      customBonus?: number;
+      notes?: string;
+    },
+  ) {
+    const kpi = await this.calculateTeacherSmartKpi(organizationId, {
+      teacherId: params.teacherId,
+      year: params.year,
+      month: params.month,
+    });
+
+    const finalBonus =
+      params.customBonus !== undefined ? params.customBonus : kpi.totalRecommendedBonus;
+
+    const autoNotes =
+      params.notes ||
+      `Smart KPI Auto-Calc (${kpi.tierLabel}): Attendance=${kpi.pillars.attendance.rate}%, Retention=${kpi.pillars.retention.rate}%, Grade=${kpi.pillars.academic.averageScore}%, Score=${kpi.compositeScore}/100`;
+
+    return this.calculateRun(organizationId, actorId, {
+      teacherId: kpi.teacherId,
+      periodYear: kpi.periodYear,
+      periodMonth: kpi.periodMonth,
+      salaryType: kpi.salaryType,
+      baseAmount: kpi.estimatedBase,
+      bonus: finalBonus,
+      hoursWorked: kpi.pillars.discipline.hoursWorked,
+      lessonsCount: kpi.pillars.discipline.conductedLessons,
+    });
+  }
 }

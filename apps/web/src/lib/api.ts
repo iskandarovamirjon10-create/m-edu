@@ -1131,6 +1131,10 @@ export const payrollApi = {
     request<any>('/payroll/runs/revenue-share', { method: 'POST', body: JSON.stringify(data) }),
   createRevenueShareRun: (data: unknown) =>
     request<any>('/payroll/runs/revenue-share', { method: 'POST', body: JSON.stringify(data) }),
+  getSmartKpi: (params: { teacherId: string; year?: number; month?: number }) =>
+    request<any>(`/payroll/runs/smart-kpi${buildQuery(params)}`),
+  createSmartKpiRun: (data: { teacherId: string; year: number; month: number; customBonus?: number; notes?: string }) =>
+    request<any>('/payroll/runs/smart-kpi', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const performanceApi = {

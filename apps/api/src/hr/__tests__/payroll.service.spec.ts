@@ -16,7 +16,8 @@ function createMockPrisma() {
     tx,
     teacher: { findFirst: vi.fn() },
     group: { findMany: vi.fn(async () => []) },
-    attendance: { groupBy: vi.fn(async () => []) },
+    attendance: { findMany: vi.fn(async () => []), groupBy: vi.fn(async () => []) },
+    grade: { findMany: vi.fn(async () => []) },
     lesson: {
       count: vi.fn(async () => 0),
       findMany: vi.fn(async () => []),
@@ -462,4 +463,141 @@ describe('Payroll Golden Scenarios (P0-01 Verification)', () => {
     expect(run.tax).toBe(168_000);
     expect(run.netAmount).toBe(1_232_000);
   });
+
+  describe('PayrollService — Smart KPI & Performance Bonus Engine', () => {
+    it('calculates comprehensive multi-pillar KPI scorecard for high performing teacher', async () => {
+      prisma.teacher.findFirst.mockResolvedValueOnce({
+        id: 'teacher-kpi-1',
+        organizationId: 'org-1',
+        salaryType: 'MONTHLY',
+        baseSalary: 5_000_000,
+        user: { firstName: 'Aziz', lastName: 'Rahimov', email: 'aziz@medu.uz', phone: '+998901234567' },
+        groups: [
+          {
+            id: 'grp-1',
+            name: 'IELTS Band 7.5',
+            course: { name: 'IELTS Advanced' },
+            enrollments: [
+              { studentId: 's1', isActive: true },
+              { studentId: 's2', isActive: true },
+              { studentId: 's3', isActive: true },
+              { studentId: 's4', isActive: false }, // 3 active out of 4 = 75% or with grp 2
+            ],
+          },
+          {
+            id: 'grp-2',
+            name: 'General English C1',
+            course: { name: 'English C1' },
+            enrollments: [
+              { studentId: 's5', isActive: true },
+              { studentId: 's6', isActive: true },
+              { studentId: 's7', isActive: true },
+              { studentId: 's8', isActive: true },
+              { studentId: 's9', isActive: true },
+              { studentId: 's10', isActive: true }, // 6 active out of 6
+            ],
+          },
+        ],
+      });
+
+      // Attendance: 9 PRESENT, 1 LATE -> rate = 95%
+      prisma.attendance.findMany.mockResolvedValueOnce([
+        { status: 'PRESENT' },
+        { status: 'PRESENT' },
+        { status: 'PRESENT' },
+        { status: 'PRESENT' },
+        { status: 'PRESENT' },
+        { status: 'PRESENT' },
+        { status: 'PRESENT' },
+        { status: 'PRESENT' },
+        { status: 'PRESENT' },
+        { status: 'LATE' },
+      ]);
+
+      // Grades: avg = 90%
+      prisma.grade.findMany.mockResolvedValueOnce([
+        { value: 90, maxValue: 100 },
+        { value: 95, maxValue: 100 },
+        { value: 85, maxValue: 100 },
+      ]);
+
+      prisma.lesson.count.mockResolvedValueOnce(16);
+      prisma.lesson.findMany.mockResolvedValueOnce([
+        { startTime: '10:00', endTime: '12:00' }, // 2 hours
+      ]);
+
+      const kpi = await svc.calculateTeacherSmartKpi('org-1', {
+        teacherId: 'teacher-kpi-1',
+        year: 2026,
+        month: 10,
+      });
+
+      expect(kpi.teacherName).toBe('Aziz Rahimov');
+      // Total enrolled = 10, active = 9 -> retention = 90% (>=88% threshold earned 10% bonus)
+      expect(kpi.pillars.retention.rate).toBe(90);
+      expect(kpi.pillars.retention.bonusEarned).toBe(500_000); // 10% of 5M
+
+      // Attendance = 95% (>=92% threshold earned 10% bonus)
+      expect(kpi.pillars.attendance.rate).toBe(95);
+      expect(kpi.pillars.attendance.bonusEarned).toBe(500_000); // 10% of 5M
+
+      // Academic = 90% (>=88% threshold earned 10% bonus)
+      expect(kpi.pillars.academic.averageScore).toBe(90);
+      expect(kpi.pillars.academic.bonusEarned).toBe(500_000); // 10% of 5M
+
+      // Total bonus = 1,500,000
+      expect(kpi.totalRecommendedBonus).toBe(1_500_000);
+      // Composite Score: (95*0.35) + (90*0.35) + (90*0.30) = 33.25 + 31.5 + 27 = 92
+      expect(kpi.compositeScore).toBeGreaterThanOrEqual(90);
+      expect(kpi.tier).toBe('EXEMPLARY');
+    });
+
+    it('throws NotFoundException when teacher does not exist in organization', async () => {
+      prisma.teacher.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        svc.calculateTeacherSmartKpi('org-1', {
+          teacherId: 'non-existent',
+          year: 2026,
+          month: 10,
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('creates payroll run incorporating smart KPI recommendations', async () => {
+      // Mock teacher for KPI calculation
+      prisma.teacher.findFirst.mockResolvedValueOnce({
+        id: 'teacher-kpi-1',
+        organizationId: 'org-1',
+        salaryType: 'MONTHLY',
+        baseSalary: 4_000_000,
+        user: { firstName: 'Malika', lastName: 'Sobirova', email: 'malika@medu.uz' },
+        groups: [],
+      });
+      prisma.attendance.findMany.mockResolvedValueOnce([]);
+      prisma.grade.findMany.mockResolvedValueOnce([]);
+      prisma.lesson.count.mockResolvedValueOnce(12);
+      prisma.lesson.findMany.mockResolvedValueOnce([]);
+
+      // Mock teacher for calculateRun
+      prisma.teacher.findFirst.mockResolvedValueOnce({
+        id: 'teacher-kpi-1',
+        organizationId: 'org-1',
+        salaryType: 'MONTHLY',
+        user: { id: 'u1', isActive: true },
+      });
+
+      const run = (await svc.createSmartKpiRun('org-1', 'admin-1', {
+        teacherId: 'teacher-kpi-1',
+        year: 2026,
+        month: 10,
+      })) as Record<string, unknown>;
+
+      expect(run).toBeDefined();
+      expect(run.teacherId).toBe('teacher-kpi-1');
+      expect(run.periodYear).toBe(2026);
+      expect(run.periodMonth).toBe(10);
+    });
+  });
+
 });

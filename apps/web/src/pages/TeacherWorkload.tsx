@@ -13,7 +13,7 @@ import {
   GlassCard,
 } from '@/components/ui';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import request from '@/lib/api';
+import request, { payrollApi } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
@@ -824,7 +824,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
   const [retentionRate, setRetentionRate] = useState<number>(92);
   const [attendanceRate, setAttendanceRate] = useState<number>(88);
 
-  const handleTeacherChange = (id: string) => {
+  const handleTeacherChange = async (id: string) => {
     setSelectedTeacherId(id);
     if (id !== 'custom') {
       const found = teachers.find((t) => t.teacherId === id);
@@ -833,6 +833,18 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
         setHourlyRate(found.hourlyRate || 120000);
         setRetentionRate(found.retentionRate || 92);
         setAttendanceRate(found.attendanceRate || 88);
+      }
+      try {
+        const kpi = await payrollApi.getSmartKpi({ teacherId: id });
+        if (kpi?.pillars) {
+          if (kpi.pillars.retention?.rate !== undefined) setRetentionRate(kpi.pillars.retention.rate);
+          if (kpi.pillars.attendance?.rate !== undefined) setAttendanceRate(kpi.pillars.attendance.rate);
+          if (kpi.pillars.discipline?.hoursWorked) {
+            setHoursPerWeek(Math.max(5, Math.round(kpi.pillars.discipline.hoursWorked / 4)));
+          }
+        }
+      } catch {
+        // Fall back to found metrics
       }
     }
   };

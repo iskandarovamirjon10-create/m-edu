@@ -40,6 +40,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { PayrollRun, PayrollPeriodSummary } from '@/lib/types';
+import { SmartKpiScorecardModal } from '@/components/payroll/SmartKpiScorecardModal';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -578,6 +579,8 @@ export function PayrollPage() {
   const [month, setMonth] = useState(CURRENT_PERIOD.month);
 
   const [calculateOpen, setCalculateOpen] = useState(false);
+  const [smartKpiOpen, setSmartKpiOpen] = useState(false);
+  const [selectedKpiTeacher, setSelectedKpiTeacher] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState<CalculateFormState>(EMPTY_FORM);
   const [cancelTarget, setCancelTarget] = useState<PayrollRun | null>(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -684,6 +687,15 @@ export function PayrollPage() {
 
   /* ── Handlers ──────────────────────────────────────────────────────── */
   const handleOpenCalculate = () => setCalculateOpen(true);
+  const handleOpenSmartKpi = (teacherId?: string, teacherName?: string) => {
+    if (teacherId && teacherName) {
+      setSelectedKpiTeacher({ id: teacherId, name: teacherName });
+    } else if (teachers.data?.items?.[0]) {
+      const first = teachers.data.items[0];
+      setSelectedKpiTeacher({ id: first.id, name: `${first.user.firstName} ${first.user.lastName}` });
+    }
+    setSmartKpiOpen(true);
+  };
 
   const handleCloseCalculate = () => {
     if (calculate.isPending) return;
@@ -862,6 +874,17 @@ export function PayrollPage() {
               whileTap={{ scale: 0.97 }}
               transition={SPRING.snappy}
             >
+              <GlassButton
+                type="button"
+                variant="secondary"
+                onClick={() => handleOpenSmartKpi()}
+                className="border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 mr-2"
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <span>💎</span>
+                  Smart KPI
+                </span>
+              </GlassButton>
               <GlassButton type="button" variant="primary" onClick={handleOpenCalculate}>
                 <span className="inline-flex items-center gap-2">
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
@@ -1247,6 +1270,18 @@ export function PayrollPage() {
                   ))}
                 </GlassSelect>
               </div>
+              {form.teacherId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const item = teachers.data?.items.find((t) => t.id === form.teacherId);
+                    handleOpenSmartKpi(form.teacherId, item ? `${item.user.firstName} ${item.user.lastName}` : '');
+                  }}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                >
+                  ⚡ Ushbu o'qituvchining jonli Smart KPI ko'rsatkichlari va avtomatik bonusini ko'rish →
+                </button>
+              )}
             </GlassField>
           </div>
 
@@ -1412,6 +1447,25 @@ export function PayrollPage() {
           </div>
         </form>
       </GlassModal>
+
+      {selectedKpiTeacher && (
+        <SmartKpiScorecardModal
+          open={smartKpiOpen}
+          onClose={() => setSmartKpiOpen(false)}
+          teacherId={selectedKpiTeacher.id}
+          teacherName={selectedKpiTeacher.name}
+          year={year}
+          month={month}
+          onApplied={(bonus, base) => {
+            setForm((prev) => ({
+              ...prev,
+              teacherId: selectedKpiTeacher.id,
+              bonus: String(bonus),
+              baseAmount: String(base),
+            }));
+          }}
+        />
+      )}
 
       {/* ============================================================
           CANCEL MODAL

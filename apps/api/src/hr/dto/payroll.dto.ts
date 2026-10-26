@@ -76,3 +76,47 @@ export class AdjustPayrollRunDto {
   @IsOptional() @IsNumber() @Min(0) otherDeduction?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(10000) taxBasisPoints?: number;
 }
+
+export class SmartKpiQueryDto {
+  @IsUUID()
+  teacherId: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(2000)
+  @Max(2100)
+  year: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(12)
+  month: number;
+}
+
+export class CreateSmartKpiPayrollDto {
+  @IsUUID()
+  teacherId: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(2000)
+  @Max(2100)
+  year: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(12)
+  month: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  customBonus?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
