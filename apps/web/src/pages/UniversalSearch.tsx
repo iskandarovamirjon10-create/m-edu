@@ -1,12 +1,6 @@
 /**
- * M-EDU UniversalSearchPage — Apple Design Award V2 Edition
- *
- * Ultra Premium Spotlight Search Experience:
- *  - Apple SF Pro visual hierarchy with ambient radial substrate
- *  - Tactile Spotlight input bar with live keyboard shortcuts and query badge
- *  - Framer-motion spring physics (smooth staggered rows, hover micro-interactions)
- *  - Squircle liquid-glass categorized search groups
- *  - Preserves 100% of real API contracts, TanStack Query, and i18n
+ * M-EDU Universal Search Page
+ * Global search across students, teachers, groups, courses, lessons, and financial records.
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';

@@ -1,16 +1,6 @@
 /**
- * M-EDU StudentsPage — v28 "Spatial Liquid Glass · Executive Studio"
- *
- * 🎯 v27 → v28 Premium Upgrades:
- *  ✅ Aurora Ambient Canvas — Refined header halo with breathing gradient
- *  ✅ Sparkline Telemetry — Real SVG micro-charts in every stat tile
- *  ✅ Chromatic Glass Rim — Multi-layer specular + subtle optical aberration
- *  ✅ Cinematic Micro-Interactions — Taktil springs on every interactive element
- *  ✅ Timeline Freeze Preview — Visual duration timeline in freeze modal
- *  ✅ Refined Bulk Dock — Selection preview + gradient halo pulse
- *  ✅ Ghost Row Skeletons — Data-shaped loading states (not generic bars)
- *  ✅ Premium Typographic Rhythm — SF-tuned tracking, optical alignment
- *  ✅ Chromatically-Aware Table — Row-level hover halos & status lenses
+ * M-EDU Students Page
+ * Student roster management, profile filters, enrollment actions, and batch operations.
  */
 
 import {
@@ -57,11 +47,12 @@ import { usePrefersReducedMotion } from '@/layouts/core/singletons';
  * ════════════════════════════════════════════════════════════════════════ */
 
 const SPRING = {
-  snappy: { type: 'spring' as const, stiffness: 560, damping: 32, mass: 0.62 },
-  smooth: { type: 'spring' as const, stiffness: 340, damping: 30, mass: 0.85 },
-  soft:   { type: 'spring' as const, stiffness: 240, damping: 28, mass: 1.0 },
-  island: { type: 'spring' as const, stiffness: 500, damping: 30, mass: 0.72 },
-  breathe:{ type: 'spring' as const, stiffness: 180, damping: 22, mass: 1.2 },
+  snappy:  { type: 'spring' as const, stiffness: 520, damping: 34, mass: 0.60 },
+  smooth:  { type: 'spring' as const, stiffness: 320, damping: 32, mass: 0.85 },
+  soft:    { type: 'spring' as const, stiffness: 220, damping: 30, mass: 1.0 },
+  island:  { type: 'spring' as const, stiffness: 480, damping: 32, mass: 0.72 },
+  breathe: { type: 'spring' as const, stiffness: 160, damping: 24, mass: 1.15 },
+  palette: { type: 'spring' as const, stiffness: 400, damping: 34, mass: 0.8 },
 } as const;
 
 const EASE_PREMIUM = [0.22, 1, 0.36, 1] as const;
@@ -70,7 +61,7 @@ const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.04, delayChildren: 0.02 },
+    transition: { staggerChildren: 0.035, delayChildren: 0.015 },
   },
 };
 
@@ -80,7 +71,7 @@ const rowVariants: Variants = {
 };
 
 const tileVariants: Variants = {
-  hidden: { opacity: 0, y: 16, scale: 0.955 },
+  hidden: { opacity: 0, y: 14, scale: 0.965 },
   visible: { opacity: 1, y: 0, scale: 1, transition: SPRING.smooth },
 };
 
@@ -106,15 +97,8 @@ const AuroraCanvas = memo(function AuroraCanvas() {
         <div className="absolute right-1/4 top-1/2 h-[200px] w-[400px] translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400/10 blur-[90px] dark:bg-emerald-500/08" />
         {!reduced && (
           <motion.div
-            animate={{
-              scale: [1, 1.06, 1],
-              opacity: [0.9, 1, 0.9],
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
+            animate={{ scale: [1, 1.06, 1], opacity: [0.9, 1, 0.9] }}
+            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
             className="absolute left-1/2 top-1/2 h-[320px] w-[720px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.06] via-violet-500/[0.04] to-emerald-500/[0.06] blur-[120px] dark:from-sky-500/[0.08] dark:via-violet-500/[0.05] dark:to-emerald-500/[0.06]"
           />
         )}
@@ -145,34 +129,26 @@ const GlassCardSurface = memo(function GlassCardSurface({
         subtle
           ? 'border border-black/[0.05] dark:border-white/[0.06]'
           : 'border border-black/[0.06] dark:border-white/[0.08]',
-        subtle
-          ? 'bg-white/70 dark:bg-surface-900/70'
-          : 'bg-white/80 dark:bg-surface-900/80',
+        subtle ? 'bg-white/70 dark:bg-surface-900/70' : 'bg-white/80 dark:bg-surface-900/80',
         'backdrop-blur-xl',
         'shadow-[0_1px_2px_rgba(15,23,42,0.03),0_16px_40px_-12px_rgba(15,23,42,0.07),0_1px_0_0_rgba(255,255,255,0.85)_inset]',
         'dark:shadow-[0_1px_2px_rgba(0,0,0,0.45),0_20px_48px_-14px_rgba(0,0,0,0.7),0_1px_0_0_rgba(255,255,255,0.09)_inset]',
-        hover
-          ? 'transition-all duration-300 hover:border-slate-300/90 dark:hover:border-white/[0.16]'
-          : '',
+        hover ? 'transition-all duration-300 hover:border-slate-300/90 dark:hover:border-white/[0.16]' : '',
         className,
       ].join(' ')}
     >
-      {/* Primary Top Specular Rim */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/[0.2]"
       />
-      {/* Chromatic Left Rim */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-y-8 left-0 w-px bg-gradient-to-b from-transparent via-blue-400/15 to-transparent dark:via-sky-400/20"
       />
-      {/* Chromatic Right Rim */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-y-8 right-0 w-px bg-gradient-to-b from-transparent via-violet-400/15 to-transparent dark:via-violet-400/20"
       />
-      {/* Sub-Surface Ambient Luminescence */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -top-24 left-1/2 h-32 w-2/3 -translate-x-1/2 rounded-full bg-blue-500/[0.035] blur-3xl dark:bg-sky-400/[0.05]"
@@ -203,6 +179,7 @@ type StatusQuickFilter = 'ALL' | 'ACTIVE' | 'INACTIVE' | 'WITH_GROUPS';
 type SortField = 'name' | 'groups' | 'status';
 type SortDirection = 'asc' | 'desc';
 type ViewMode = 'table' | 'grid';
+type Density = 'compact' | 'cozy' | 'comfy';
 
 function createDefaultFreezeForm(): FreezeFormData {
   const now = new Date();
@@ -210,7 +187,7 @@ function createDefaultFreezeForm(): FreezeFormData {
   return {
     startDate: now.toISOString().split('T')[0],
     endDate: twoWeeksLater.toISOString().split('T')[0],
-    reason: 'Tibbiy sabab / Kasallik ma\'lumotnomasi (Medical leave)',
+    reason: "Tibbiy sabab / Kasallik ma'lumotnomasi (Medical leave)",
   };
 }
 
@@ -229,15 +206,16 @@ function calculateFreezeDays(startDate: string, endDate: string): number {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * ICONS — SF Symbols 7 · Precision Duotone
+ * ICONS — SVG Icons
  * ════════════════════════════════════════════════════════════════════════ */
 
-const ICON_STROKE = 1.85;
+const ICON_STROKE = 1.8;
 
 const I = {
   search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.3-4.3'],
   plus: ['M12 5v14', 'M5 12h14'],
   close: ['M18 6 6 18', 'M6 6l12 12'],
+  x: ['M18 6 6 18', 'M6 6l12 12'],
   userPlus: [
     'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
     'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
@@ -319,6 +297,23 @@ const I = {
   arrowUp: ['M12 19V5', 'M5 12l7-7 7 7'],
   arrowDown: ['M12 5v14', 'M19 12l-7 7-7-7'],
   filter: ['M22 3H2l8 9.46V19l4 2v-8.54L22 3z'],
+  command: ['M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z'],
+  chevronDown: ['M6 9l6 6 6-6'],
+  chevronRight: ['M9 6l6 6-6 6'],
+  more: ['M12 12h.01', 'M19 12h.01', 'M5 12h.01'],
+  columns: [
+    'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z',
+    'M9 3v18',
+    'M15 3v18',
+  ],
+  layoutCompact: ['M3 3h18v6H3z', 'M3 11h18v6H3z', 'M3 19h18v2H3z'],
+  layoutCozy: ['M3 3h18v8H3z', 'M3 13h18v8H3z'],
+  layoutComfy: ['M3 3h18v10H3z', 'M3 15h18v6H3z'],
+  zap: ['M13 2 3 14h9l-1 8 10-12h-9l1-8z'],
+  sun: ['M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z', 'M12 1v2', 'M12 21v2', 'M4.22 4.22l1.42 1.42', 'M18.36 18.36l1.42 1.42', 'M1 12h2', 'M21 12h2', 'M4.22 19.78l1.42-1.42', 'M18.36 5.64l1.42-1.42'],
+  info: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z', 'M12 16v-4', 'M12 8h.01'],
+  externalLink: ['M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6', 'M15 3h6v6', 'M10 14 21 3'],
+  arrowRight: ['M5 12h14', 'M12 5l7 7-7 7'],
 } as const;
 
 const Icon = memo(function Icon({
@@ -354,8 +349,8 @@ const Icon = memo(function Icon({
           key={i}
           d={d}
           fill={duotone && i === 0 ? 'currentColor' : 'none'}
-          fillOpacity={duotone && i === 0 ? 0.14 : 0}
-          strokeOpacity={duotone && i > 1 ? 0.65 : 1}
+          fillOpacity={duotone && i === 0 ? 0.13 : 0}
+          strokeOpacity={duotone && i > 1 ? 0.62 : 1}
         />
       ))}
     </svg>
@@ -363,7 +358,7 @@ const Icon = memo(function Icon({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * PUBLIC HELPERS (100% Preserved Contract)
+ * PUBLIC HELPERS (Contract Preserved)
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function formatStudentName(student: Student): string {
@@ -475,15 +470,17 @@ const CountUp = memo(function CountUp({
   );
 });
 
-/* ── Sparkline — Minimal SVG micro-chart ─────────────────────────── */
+/* ── Sparkline — Refined micro-chart with smooth area ─────────────── */
 const Sparkline = memo(function Sparkline({
   data,
   className = '',
   stroke = 'currentColor',
+  uid = 'sparkline',
 }: {
   data: number[];
   className?: string;
   stroke?: string;
+  uid?: string;
 }) {
   const { path, area } = useMemo(() => {
     if (!data.length) return { path: '', area: '' };
@@ -498,31 +495,34 @@ const Sparkline = memo(function Sparkline({
       const y = h - ((v - min) / range) * (h - 4) - 2;
       return [x, y];
     });
-    const d = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ');
+    // Smooth cubic bezier path
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1];
+      const [x1, y1] = pts[i];
+      const cx = (x0 + x1) / 2;
+      d += ` C${cx},${y0} ${cx},${y1} ${x1},${y1}`;
+    }
     const a = `${d} L${w},${h} L0,${h} Z`;
     return { path: d, area: a };
   }, [data]);
 
+  const gid = `sparkline-fill-${uid}`;
   return (
-    <svg
-      viewBox="0 0 100 28"
-      preserveAspectRatio="none"
-      className={className}
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 100 28" preserveAspectRatio="none" className={className} aria-hidden="true">
       <defs>
-        <linearGradient id="sparkline-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.32" />
           <stop offset="100%" stopColor={stroke} stopOpacity="0" />
         </linearGradient>
       </defs>
-      {area && <path d={area} fill="url(#sparkline-fill)" />}
+      {area && <path d={area} fill={`url(#${gid})`} />}
       {path && (
         <path
           d={path}
           fill="none"
           stroke={stroke}
-          strokeWidth="1.6"
+          strokeWidth="1.7"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -531,19 +531,59 @@ const Sparkline = memo(function Sparkline({
   );
 });
 
-/* ── StudentAvatar — Squircle / Halo Presence Ring ──────────────── */
+/* ── StudentAvatar — Squircle + Progress Ring Presence ──────────── */
 const StudentAvatar = memo(function StudentAvatar({
   name,
   size = 40,
   isActive = true,
+  showRing = false,
+  ringProgress,
 }: {
   name: string;
   size?: number;
   isActive?: boolean;
+  showRing?: boolean;
+  ringProgress?: number;
 }) {
   const style = avatarStyle(name);
+  const ringRadius = size / 2 + 2;
+  const ringSize = (ringRadius + 2) * 2;
+  const circ = 2 * Math.PI * ringRadius;
+
   return (
-    <div className="relative inline-flex shrink-0 select-none">
+    <div className="relative inline-flex shrink-0 select-none" style={{ width: size, height: size }}>
+      {showRing && typeof ringProgress === 'number' && (
+        <svg
+          aria-hidden="true"
+          className="absolute -inset-[3px] transition-opacity duration-300"
+          width={ringSize}
+          height={ringSize}
+          viewBox={`0 0 ${ringSize} ${ringSize}`}
+        >
+          <circle
+            cx={ringSize / 2}
+            cy={ringSize / 2}
+            r={ringRadius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            className="text-slate-200/60 dark:text-white/[0.08]"
+          />
+          <circle
+            cx={ringSize / 2}
+            cy={ringSize / 2}
+            r={ringRadius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeDasharray={circ}
+            strokeDashoffset={circ * (1 - Math.min(1, Math.max(0, ringProgress)))}
+            className="text-[#007AFF] transition-all duration-500 dark:text-[#38BDF8]"
+            style={{ transformOrigin: '50% 50%', transform: 'rotate(-90deg)' }}
+          />
+        </svg>
+      )}
       <div
         className="relative flex items-center justify-center rounded-[13px] font-bold text-white shadow-[0_2px_10px_-2px_rgba(0,0,0,0.3),0_1px_0_0_rgba(255,255,255,0.35)_inset] ring-1 ring-black/10 transition-transform duration-300 group-hover:scale-[1.04] dark:ring-white/15"
         style={{
@@ -706,7 +746,8 @@ const StatTile = memo(function StatTile({
           <Sparkline
             data={c.sparkSeries}
             stroke={c.sparkStroke}
-            className="absolute inset-0 h-full w-full opacity-70 transition-opacity duration-300 group-hover:opacity-100"
+            uid={tone}
+            className="absolute inset-0 h-full w-full opacity-75 transition-opacity duration-300 group-hover:opacity-100"
           />
         </div>
 
@@ -757,20 +798,12 @@ const CopyChip = memo(function CopyChip({
         paths={copied ? I.check : icon}
         size={13}
         strokeWidth={2.0}
-        className={
-          copied
-            ? 'text-emerald-500'
-            : 'opacity-55 transition-opacity group-hover/chip:opacity-90'
-        }
+        className={copied ? 'text-emerald-500' : 'opacity-55 transition-opacity group-hover/chip:opacity-90'}
       />
       <span className="truncate tabular-nums" style={{ maxWidth }}>
         {value}
       </span>
-      <Icon
-        paths={I.copy}
-        size={11}
-        className="opacity-0 transition-opacity group-hover/chip:opacity-50"
-      />
+      <Icon paths={I.copy} size={11} className="opacity-0 transition-opacity group-hover/chip:opacity-50" />
     </button>
   );
 });
@@ -792,7 +825,7 @@ const Shimmer = memo(function Shimmer({
   );
 });
 
-/* ── Ghost Row Skeleton (data-shaped) ──────────────────────────── */
+/* ── Ghost Row Skeleton ────────────────────────────────────────── */
 const GhostRow = memo(function GhostRow({ index = 0 }: { index?: number }) {
   return (
     <div
@@ -907,7 +940,96 @@ const RowAction = memo(function RowAction({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * FREEZE TIMELINE PREVIEW — Visual duration bar
+ * CALENDAR HEATMAP — 30-day freeze visualization
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const CalendarHeatmap = memo(function CalendarHeatmap({
+  startDate,
+  endDate,
+}: {
+  startDate: string;
+  endDate: string;
+}) {
+  const days = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    const todayMidnight = new Date(today);
+    // Show 30 cells: 15 before today, 15 after — but anchored to start date
+    const anchor = new Date(Math.min(start.getTime(), today.getTime()));
+    anchor.setDate(anchor.getDate() - 2);
+    return Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(anchor);
+      d.setDate(d.getDate() + i);
+      const t = d.getTime();
+      const s = start.getTime();
+      const e = end.getTime();
+      const tm = todayMidnight.getTime();
+      const inRange = t >= s && t <= e;
+      const isStart = t === s;
+      const isEnd = t === e;
+      const isToday = t === tm;
+      const isPast = t < tm;
+      return { date: d, inRange, isStart, isEnd, isToday, isPast };
+    });
+  }, [startDate, endDate]);
+
+  const dayLabels = ['D', 'S', 'C', 'P', 'J', 'Sh', 'Y'];
+
+  return (
+    <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.04] via-blue-500/[0.02] to-transparent p-3.5 dark:border-sky-400/15">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Vizual kalendar
+        </span>
+        <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-sm bg-gradient-to-br from-sky-400 to-blue-500" />
+            Muzlatilgan
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-sm border border-slate-300/80 bg-white/60 dark:border-white/20 dark:bg-white/[0.06]" />
+            Ochiq
+          </span>
+        </div>
+      </div>
+      <div className="grid grid-cols-10 gap-1">
+        {days.map(({ date, inRange, isStart, isEnd, isToday }, idx) => (
+          <div
+            key={idx}
+            title={date.toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' })}
+            className={[
+              'relative flex h-6 items-center justify-center rounded-md text-[9.5px] font-bold tabular-nums transition-all duration-200',
+              inRange
+                ? 'bg-gradient-to-br from-sky-400 to-blue-500 text-white shadow-[0_1px_4px_rgba(56,189,248,0.35)]'
+                : 'border border-slate-200/70 bg-white/50 text-slate-400 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-500',
+              isToday && !inRange ? 'ring-1 ring-[#007AFF]/50' : '',
+              isStart || isEnd ? 'ring-1 ring-sky-400/70 shadow-[0_0_8px_rgba(56,189,248,0.45)]' : '',
+            ].join(' ')}
+          >
+            {date.getDate()}
+            {isToday && (
+              <span className="absolute -top-0.5 -right-0.5 h-1 w-1 rounded-full bg-[#007AFF] shadow-[0_0_4px_#007AFF]" />
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center justify-between text-[10px] font-medium text-slate-400 dark:text-slate-500">
+        <span>{dayLabels.map((d) => d).join(' · ')}</span>
+        <span className="tabular-nums">
+          {days[0].date.toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' })} —{' '}
+          {days[29].date.toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' })}
+        </span>
+      </div>
+    </div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * FREEZE TIMELINE PREVIEW
  * ════════════════════════════════════════════════════════════════════════ */
 
 const FreezeTimeline = memo(function FreezeTimeline({
@@ -921,10 +1043,7 @@ const FreezeTimeline = memo(function FreezeTimeline({
 }) {
   const fmt = (iso: string) => {
     try {
-      return new Date(iso).toLocaleDateString('uz-UZ', {
-        day: '2-digit',
-        month: 'short',
-      });
+      return new Date(iso).toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' });
     } catch {
       return iso;
     }
@@ -933,16 +1052,12 @@ const FreezeTimeline = memo(function FreezeTimeline({
   return (
     <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.06] via-blue-500/[0.03] to-transparent p-3.5 dark:border-sky-400/15">
       <div className="mb-2 flex items-center justify-between text-[11px] font-semibold">
-        <span className="text-slate-500 dark:text-slate-400">
-          {fmt(startDate)}
-        </span>
+        <span className="text-slate-500 dark:text-slate-400">{fmt(startDate)}</span>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10.5px] font-extrabold uppercase tracking-wider text-sky-700 tabular-nums dark:text-sky-300">
           <Icon paths={I.calendar} size={10} strokeWidth={2.4} />
           {days} kun
         </span>
-        <span className="text-slate-500 dark:text-slate-400">
-          {fmt(endDate)}
-        </span>
+        <span className="text-slate-500 dark:text-slate-400">{fmt(endDate)}</span>
       </div>
       <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-white/[0.06]">
         <motion.div
@@ -962,6 +1077,394 @@ const FreezeTimeline = memo(function FreezeTimeline({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
+ * DENSITY TOGGLE
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const DensityToggle = memo(function DensityToggle({
+  density,
+  onChange,
+}: {
+  density: Density;
+  onChange: (d: Density) => void;
+}) {
+  const options: { id: Density; icon: readonly string[]; label: string }[] = [
+    { id: 'compact', icon: I.layoutCompact, label: 'Ixcham' },
+    { id: 'cozy', icon: I.layoutCozy, label: 'Qulay' },
+    { id: 'comfy', icon: I.layoutComfy, label: 'Keng' },
+  ];
+  return (
+    <div className="inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-100/75 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
+      {options.map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          onClick={() => onChange(opt.id)}
+          aria-label={opt.label}
+          title={opt.label}
+          className={`rounded-lg p-1.5 transition-all ${
+            density === opt.id
+              ? 'bg-white text-slate-900 shadow-xs dark:bg-white/[0.14] dark:text-white'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+          }`}
+        >
+          <Icon paths={opt.icon} size={14} strokeWidth={2.0} />
+        </button>
+      ))}
+    </div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * FILTER CHIPS — Dismissible active filter indicators
+ * ════════════════════════════════════════════════════════════════════════ */
+
+interface FilterChip {
+  id: string;
+  label: string;
+  onRemove: () => void;
+  tone?: 'blue' | 'amber' | 'emerald' | 'slate';
+}
+
+const FilterChips = memo(function FilterChips({ chips }: { chips: FilterChip[] }) {
+  if (chips.length === 0) return null;
+  const toneMap: Record<NonNullable<FilterChip['tone']>, string> = {
+    blue: 'bg-blue-500/10 text-blue-700 ring-blue-500/25 dark:bg-sky-400/12 dark:text-sky-300 dark:ring-sky-400/25',
+    amber: 'bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:bg-amber-400/12 dark:text-amber-300 dark:ring-amber-400/25',
+    emerald: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-400/12 dark:text-emerald-300 dark:ring-emerald-400/25',
+    slate: 'bg-slate-500/10 text-slate-700 ring-slate-500/20 dark:bg-white/[0.06] dark:text-slate-300 dark:ring-white/10',
+  };
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      className="flex flex-wrap items-center gap-1.5 px-1"
+    >
+      <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+        Filtrlar:
+      </span>
+      {chips.map((chip) => (
+        <motion.button
+          key={chip.id}
+          type="button"
+          layout
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          transition={SPRING.snappy}
+          onClick={chip.onRemove}
+          className={`group inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset transition-all hover:scale-[1.03] ${toneMap[chip.tone ?? 'slate']}`}
+        >
+          <span className="max-w-[140px] truncate">{chip.label}</span>
+          <Icon
+            paths={I.close}
+            size={10}
+            strokeWidth={2.6}
+            className="opacity-55 transition-opacity group-hover:opacity-100"
+          />
+        </motion.button>
+      ))}
+    </motion.div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * SELECTION PREVIEW — Floating island avatars
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const SelectionPreview = memo(function SelectionPreview({
+  students,
+  max = 3,
+}: {
+  students: Student[];
+  max?: number;
+}) {
+  const visible = students.slice(0, max);
+  const remaining = students.length - visible.length;
+  return (
+    <div className="flex items-center">
+      {visible.map((s, i) => {
+        const name = formatStudentName(s);
+        const style = avatarStyle(name);
+        return (
+          <div
+            key={s.id}
+            className="relative -ml-2 first:ml-0 flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-extrabold text-white ring-2 ring-white transition-transform duration-200 hover:z-10 hover:scale-110 dark:ring-surface-900"
+            style={{ background: style.background, zIndex: max - i }}
+            title={name}
+          >
+            {getInitials(name)}
+          </div>
+        );
+      })}
+      {remaining > 0 && (
+        <div className="relative -ml-2 flex h-6 w-6 items-center justify-center rounded-full bg-slate-500/90 text-[9px] font-extrabold text-white ring-2 ring-white dark:bg-slate-600 dark:ring-surface-900">
+          +{remaining}
+        </div>
+      )}
+    </div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * COMMAND PALETTE — ⌘K Spotlight-style
+ * ════════════════════════════════════════════════════════════════════════ */
+
+interface PaletteAction {
+  id: string;
+  label: string;
+  hint?: string;
+  icon: readonly string[];
+  onExecute: () => void;
+  keywords?: string;
+}
+
+const CommandPalette = memo(function CommandPalette({
+  open,
+  onClose,
+  actions,
+  placeholder = 'Buyruq yoki talabani qidirish...',
+}: {
+  open: boolean;
+  onClose: () => void;
+  actions: PaletteAction[];
+  placeholder?: string;
+}) {
+  const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setQuery('');
+      setActiveIndex(0);
+      setTimeout(() => inputRef.current?.focus(), 80);
+    }
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return actions.slice(0, 8);
+    return actions
+      .filter(
+        (a) =>
+          a.label.toLowerCase().includes(q) ||
+          (a.keywords ?? '').toLowerCase().includes(q),
+      )
+      .slice(0, 8);
+  }, [query, actions]);
+
+  useEffect(() => {
+    if (activeIndex >= filtered.length) setActiveIndex(Math.max(0, filtered.length - 1));
+  }, [filtered, activeIndex]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(filtered.length - 1, i + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(0, i - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const chosen = filtered[activeIndex];
+      if (chosen) {
+        chosen.onExecute();
+        onClose();
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-950/35 px-4 pt-[12vh] backdrop-blur-md"
+          onClick={onClose}
+          role="presentation"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: -16, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={SPRING.palette}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xl overflow-hidden rounded-[22px] border border-white/60 bg-white/95 shadow-[0_20px_70px_-20px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-2xl dark:border-white/[0.1] dark:bg-surface-900/95 dark:shadow-[0_20px_70px_-20px_rgba(0,0,0,0.9)]"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Command Palette"
+          >
+            <div className="flex items-center gap-2.5 border-b border-slate-200/70 px-4 py-3 dark:border-white/[0.06]">
+              <Icon paths={I.search} size={17} className="text-slate-400 dark:text-slate-500" />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={placeholder}
+                className="flex-1 bg-transparent text-[14px] font-medium text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-500"
+              />
+              <kbd className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">
+                ESC
+              </kbd>
+            </div>
+            <div className="max-h-[52vh] overflow-y-auto p-1.5">
+              {filtered.length === 0 ? (
+                <div className="p-6 text-center text-[13px] text-slate-500 dark:text-slate-400">
+                  Hech narsa topilmadi
+                </div>
+              ) : (
+                filtered.map((action, idx) => {
+                  const isActive = idx === activeIndex;
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => {
+                        action.onExecute();
+                        onClose();
+                      }}
+                      onMouseEnter={() => setActiveIndex(idx)}
+                      className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors ${
+                        isActive
+                          ? 'bg-[#007AFF]/12 text-[#007AFF] dark:bg-sky-400/15 dark:text-sky-300'
+                          : 'text-slate-700 hover:bg-slate-100/70 dark:text-slate-200 dark:hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      <div
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] ${
+                          isActive
+                            ? 'bg-[#007AFF]/15 text-[#007AFF] dark:bg-sky-400/20 dark:text-sky-300'
+                            : 'bg-slate-100 text-slate-500 dark:bg-white/[0.05] dark:text-slate-400'
+                        }`}
+                      >
+                        <Icon paths={action.icon} size={15} strokeWidth={2.0} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-semibold">{action.label}</div>
+                      </div>
+                      {action.hint && (
+                        <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">
+                          {action.hint}
+                        </kbd>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-200/70 px-3 py-2 text-[10.5px] font-medium text-slate-400 dark:border-white/[0.06] dark:text-slate-500">
+              <div className="flex items-center gap-2">
+                <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-mono dark:border-white/10 dark:bg-white/[0.04]">
+                  ↑↓
+                </kbd>
+                <span>harakatlanish</span>
+                <kbd className="ml-2 rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-mono dark:border-white/10 dark:bg-white/[0.04]">
+                  ⏎
+                </kbd>
+                <span>tanlash</span>
+              </div>
+              <span className="inline-flex items-center gap-1">
+                <Icon paths={I.command} size={11} /> Command Palette
+              </span>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * ROW HOVER PEEK — Desktop-only floating preview
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const RowHoverPeek = memo(function RowHoverPeek({
+  student,
+  anchorRect,
+}: {
+  student: Student;
+  anchorRect: DOMRect;
+}) {
+  const name = formatStudentName(student);
+  const isActive = student.user?.isActive !== false;
+  const activeGroups = (student.groups ?? []).filter((g) => g.isActive);
+  const style = avatarStyle(name);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 4, scale: 0.98 }}
+      transition={SPRING.snappy}
+      style={{
+        position: 'fixed',
+        top: Math.min(anchorRect.bottom + 8, window.innerHeight - 260),
+        left: Math.min(anchorRect.left + 60, window.innerWidth - 340),
+        pointerEvents: 'none',
+      }}
+      className="z-50 w-[300px] overflow-hidden rounded-[18px] border border-white/70 bg-white/95 p-3.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25),0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-2xl dark:border-white/[0.12] dark:bg-surface-900/95 dark:shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)]"
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-11 w-11 items-center justify-center rounded-[13px] text-[13px] font-bold text-white ring-1 ring-black/10 dark:ring-white/15"
+          style={{ background: style.background }}
+        >
+          {getInitials(name)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13.5px] font-bold text-slate-900 dark:text-white">{name}</div>
+          <div className="truncate text-[11.5px] text-slate-500 dark:text-slate-400">
+            {student.user?.email || student.user?.phone || '—'}
+          </div>
+        </div>
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset ${
+            isActive
+              ? 'bg-emerald-500/12 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300'
+              : 'bg-red-500/10 text-red-600 ring-red-500/25 dark:text-red-400'
+          }`}
+        >
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-red-500'}`}
+          />
+          {isActive ? 'Faol' : 'Muzlatilgan'}
+        </span>
+      </div>
+      <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-slate-200/70 pt-2.5 dark:border-white/[0.06]">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            Guruhlar
+          </div>
+          <div className="mt-0.5 truncate text-[11.5px] font-semibold text-slate-800 dark:text-slate-200">
+            {activeGroups.length > 0 ? activeGroups.map((g) => g.group.name).join(', ') : '—'}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            Ota-ona
+          </div>
+          <div className="mt-0.5 truncate text-[11.5px] font-semibold text-slate-800 dark:text-slate-200">
+            {student.parentName || '—'}
+          </div>
+        </div>
+      </div>
+      <div className="mt-2.5 flex items-center gap-1.5 text-[10.5px] font-medium text-slate-400 dark:text-slate-500">
+        <Icon paths={I.info} size={11} />
+        Ochish uchun bosing · Quick-Look uchun Space
+      </div>
+    </motion.div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
  * MAIN STUDENTS PAGE
  * ════════════════════════════════════════════════════════════════════════ */
 
@@ -973,7 +1476,9 @@ export function StudentsPage() {
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const reduced = usePrefersReducedMotion();
 
+  // ── Core state ────────────────────────────────────────────────
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [groupId, setGroupId] = useState('');
@@ -981,23 +1486,31 @@ export function StudentsPage() {
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDirection>('asc');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [density, setDensity] = useState<Density>('cozy');
 
+  // ── Modals / popovers ─────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [freezeTarget, setFreezeTarget] = useState<Student | null>(null);
   const [freezeForm, setFreezeForm] = useState<FreezeFormData>(createDefaultFreezeForm);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [hoveredStudent, setHoveredStudent] = useState<{ student: Student; rect: DOMRect } | null>(null);
+  const hoverTimerRef = useRef<number | null>(null);
 
   const debouncedSearch = useDebounce(search.trim(), 300);
 
+  // ── Keyboard shortcuts ────────────────────────────────────────
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        setPaletteOpen(true);
       } else if (e.key === '/' && !isTyping) {
         e.preventDefault();
         searchInputRef.current?.focus();
+      } else if (e.key === 'Escape' && !isTyping) {
+        setHoveredStudent(null);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -1008,6 +1521,7 @@ export function StudentsPage() {
     setPage(1);
   }, [debouncedSearch, groupId]);
 
+  // ── Data fetching ─────────────────────────────────────────────
   const params = useMemo<StudentFilters>(
     () => ({
       page,
@@ -1041,9 +1555,7 @@ export function StudentsPage() {
   const stats = useMemo(() => {
     const active = rawStudentList.filter((s) => s.user?.isActive !== false).length;
     const inactive = rawStudentList.length - active;
-    const withGroups = rawStudentList.filter((s) =>
-      (s.groups ?? []).some((g) => g.isActive),
-    ).length;
+    const withGroups = rawStudentList.filter((s) => (s.groups ?? []).some((g) => g.isActive)).length;
     return {
       total: data?.total ?? rawStudentList.length,
       pageTotal: rawStudentList.length,
@@ -1082,15 +1594,12 @@ export function StudentsPage() {
     });
   }, [rawStudentList, statusFilter, sortField, sortDir]);
 
+  // ── Mutations ─────────────────────────────────────────────────
   const freezeMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: FreezeFormData }) =>
       studentsApi.freeze(id, payload),
     onSuccess: () => {
-      push(
-        'success',
-        t('students.frozenSuccess') ||
-          'Talaba darslari va to\'lovlari vaqtincha muzlatildi',
-      );
+      push('success', t('students.frozenSuccess') || "Talaba darslari va to'lovlari vaqtincha muzlatildi");
       setFreezeTarget(null);
       void qc.invalidateQueries({ queryKey: queryKeys.students.all() });
     },
@@ -1100,11 +1609,7 @@ export function StudentsPage() {
   const unfreezeMutation = useMutation({
     mutationFn: (id: string) => studentsApi.unfreeze(id),
     onSuccess: () => {
-      push(
-        'success',
-        t('students.unfrozenSuccess') ||
-          'Talaba muzlatish holatidan chiqarildi va faollashtirildi',
-      );
+      push('success', t('students.unfrozenSuccess') || "Talaba muzlatish holatidan chiqarildi va faollashtirildi");
       void qc.invalidateQueries({ queryKey: queryKeys.students.all() });
     },
     onError: (e: unknown) => push('error', getErrorMessage(e as Error)),
@@ -1125,23 +1630,21 @@ export function StudentsPage() {
     },
   });
 
+  // ── Handlers ──────────────────────────────────────────────────
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value),
     [],
   );
-
   const handleGroupFilterChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => setGroupId(e.target.value),
     [],
   );
-
   const handleClearFilters = useCallback(() => {
     setSearch('');
     setGroupId('');
     setStatusFilter('ALL');
     setPage(1);
   }, []);
-
   const handleToggleSort = useCallback((field: SortField) => {
     setSortField((prevField) => {
       if (prevField === field) {
@@ -1173,14 +1676,9 @@ export function StudentsPage() {
           {
             label: 'Guruhlar',
             value: activeGroups.length,
-            subtext:
-              activeGroups.map((g) => g.group.name).join(', ') || 'Biriktirilmagan',
+            subtext: activeGroups.map((g) => g.group.name).join(', ') || 'Biriktirilmagan',
           },
-          {
-            label: 'Holati',
-            value: isActive ? 'Faol' : 'Muzlatilgan',
-            subtext: 'Davomat ochiq',
-          },
+          { label: 'Holati', value: isActive ? 'Faol' : 'Muzlatilgan', subtext: 'Davomat ochiq' },
           {
             label: 'Ota-onasi',
             value: student.parentName || '—',
@@ -1196,7 +1694,7 @@ export function StudentsPage() {
         ],
         tags: activeGroups.map((g) => g.group.name),
         primaryAction: {
-          label: 'To\'liq kartani ochish',
+          label: "To'liq kartani ochish",
           onExecute: () => navigate(`/students/${student.id}`),
         },
         secondaryAction: {
@@ -1231,11 +1729,7 @@ export function StudentsPage() {
             value: activeGroups.length,
             subtext: activeGroups.map((g) => g.group.name).join(', ') || 'Biriktirilmagan',
           },
-          {
-            label: 'Holati',
-            value: isActive ? 'Faol' : 'Muzlatilgan',
-            subtext: 'Davomat ochiq',
-          },
+          { label: 'Holati', value: isActive ? 'Faol' : 'Muzlatilgan', subtext: 'Davomat ochiq' },
           {
             label: 'Ota-onasi',
             value: student.parentName || '—',
@@ -1251,7 +1745,7 @@ export function StudentsPage() {
         ],
         tags: activeGroups.map((g) => g.group.name),
         primaryAction: {
-          label: 'To\'liq kartani ochish',
+          label: "To'liq kartani ochish",
           onExecute: () => navigate(`/students/${student.id}`),
         },
         secondaryAction: {
@@ -1267,6 +1761,13 @@ export function StudentsPage() {
     (studentId: string) => navigate(`/students/${studentId}`),
     [navigate],
   );
+
+  const handleOpenFreeze = useCallback((student: Student) => {
+    setFreezeForm(createDefaultFreezeForm());
+    setFreezeTarget(student);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => setDeleteTarget(id), []);
 
   const {
     focusedIndex,
@@ -1297,30 +1798,16 @@ export function StudentsPage() {
   );
 
   const handleSelectAllOnPage = useCallback(() => {
-    if (isAllSelected) {
-      clearSelection();
-    } else {
-      selectAll();
-    }
+    if (isAllSelected) clearSelection();
+    else selectAll();
   }, [isAllSelected, clearSelection, selectAll]);
 
   const handleExportCsv = useCallback(() => {
     const source =
-      selectedIds.size > 0
-        ? studentList.filter((s) => selectedIds.has(s.id))
-        : studentList;
-
+      selectedIds.size > 0 ? studentList.filter((s) => selectedIds.has(s.id)) : studentList;
     if (source.length === 0) return;
 
-    const headers = [
-      'ID',
-      'Ism Familiya',
-      'Email',
-      'Telefon',
-      'Guruhlar',
-      'Ota-ona',
-      'Holati',
-    ];
+    const headers = ['ID', 'Ism Familiya', 'Email', 'Telefon', 'Guruhlar', 'Ota-ona', 'Holati'];
     const rows = source.map((s) => {
       const name = formatStudentName(s);
       const activeGroups = (s.groups ?? [])
@@ -1352,13 +1839,6 @@ export function StudentsPage() {
     push('success', `${source.length} ta talaba ma'lumoti CSV formatda yuklab olindi`);
   }, [selectedIds, studentList, push]);
 
-  const handleOpenFreeze = useCallback((student: Student) => {
-    setFreezeForm(createDefaultFreezeForm());
-    setFreezeTarget(student);
-  }, []);
-
-  const handleDelete = useCallback((id: string) => setDeleteTarget(id), []);
-
   const confirmDelete = useCallback(() => {
     if (!deleteTarget || removeMutation.isPending) return;
     removeMutation.mutate(deleteTarget);
@@ -1367,8 +1847,136 @@ export function StudentsPage() {
   const { refetch: refetchStudents } = students;
   const handleRetry = useCallback(() => void refetchStudents(), [refetchStudents]);
 
-  const hasActiveFilters = Boolean(
-    search.trim() || groupId || statusFilter !== 'ALL',
+  const hasActiveFilters = Boolean(search.trim() || groupId || statusFilter !== 'ALL');
+
+  // ── Filter chips for display ──────────────────────────────────
+  const filterChips = useMemo<FilterChip[]>(() => {
+    const chips: FilterChip[] = [];
+    if (search.trim()) {
+      chips.push({
+        id: 'search',
+        label: `“${search.trim()}”`,
+        tone: 'blue',
+        onRemove: () => setSearch(''),
+      });
+    }
+    if (groupId) {
+      const g = groupList.find((x) => x.id === groupId);
+      chips.push({
+        id: 'group',
+        label: g ? `Guruh: ${g.name}` : 'Guruh',
+        tone: 'slate',
+        onRemove: () => setGroupId(''),
+      });
+    }
+    if (statusFilter !== 'ALL') {
+      const map: Record<Exclude<StatusQuickFilter, 'ALL'>, { label: string; tone: FilterChip['tone'] }> = {
+        ACTIVE: { label: 'Faol', tone: 'emerald' },
+        INACTIVE: { label: 'Muzlatilgan', tone: 'amber' },
+        WITH_GROUPS: { label: 'Guruhli', tone: 'blue' },
+      };
+      const cfg = map[statusFilter];
+      chips.push({
+        id: 'status',
+        label: cfg.label,
+        tone: cfg.tone,
+        onRemove: () => setStatusFilter('ALL'),
+      });
+    }
+    return chips;
+  }, [search, groupId, statusFilter, groupList]);
+
+  // ── Row hover peek (desktop) ──────────────────────────────────
+  const handleRowMouseEnter = useCallback(
+    (student: Student, e: React.MouseEvent<HTMLTableRowElement>) => {
+      if (reduced) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      if (hoverTimerRef.current) window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = window.setTimeout(() => {
+        setHoveredStudent({ student, rect });
+      }, 420);
+    },
+    [reduced],
+  );
+  const handleRowMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) window.clearTimeout(hoverTimerRef.current);
+    setHoveredStudent(null);
+  }, []);
+
+  // ── Density row padding ──────────────────────────────────────
+  const densityRowPadding =
+    density === 'compact' ? 'py-2' : density === 'cozy' ? 'py-3.5' : 'py-5';
+
+  // ── Selected students objects ────────────────────────────────
+  const selectedStudents = useMemo(
+    () => studentList.filter((s) => selectedIds.has(s.id)),
+    [studentList, selectedIds],
+  );
+
+  // ── Command palette actions ──────────────────────────────────
+  const paletteActions = useMemo<PaletteAction[]>(
+    () => [
+      {
+        id: 'new-student',
+        label: 'Yangi talaba qo‘shish',
+        hint: 'N',
+        icon: I.userPlus,
+        keywords: 'new add student create',
+        onExecute: () => navigate('/students/new'),
+      },
+      {
+        id: 'export',
+        label: 'CSV eksport qilish',
+        hint: 'E',
+        icon: I.download,
+        keywords: 'export csv download',
+        onExecute: handleExportCsv,
+      },
+      {
+        id: 'clear',
+        label: 'Filtrlarni tozalash',
+        hint: '⌫',
+        icon: I.close,
+        keywords: 'clear reset filters',
+        onExecute: handleClearFilters,
+      },
+      {
+        id: 'view-table',
+        label: "Jadval ko‘rinishi",
+        icon: I.list,
+        keywords: 'table list view',
+        onExecute: () => setViewMode('table'),
+      },
+      {
+        id: 'view-grid',
+        label: "Kartochkalar ko‘rinishi",
+        icon: I.grid,
+        keywords: 'grid cards bento view',
+        onExecute: () => setViewMode('grid'),
+      },
+      {
+        id: 'density-compact',
+        label: "Ixcham rejim",
+        icon: I.layoutCompact,
+        keywords: 'compact density',
+        onExecute: () => setDensity('compact'),
+      },
+      {
+        id: 'density-comfy',
+        label: "Keng rejim",
+        icon: I.layoutComfy,
+        keywords: 'comfy comfortable density',
+        onExecute: () => setDensity('comfy'),
+      },
+      ...(groupList.slice(0, 5).map((g) => ({
+        id: `group-${g.id}`,
+        label: `Guruh: ${g.name}`,
+        icon: I.usersRound,
+        keywords: `group ${g.name}`,
+        onExecute: () => setGroupId(g.id),
+      })) as PaletteAction[]),
+    ],
+    [navigate, handleExportCsv, handleClearFilters, groupList],
   );
 
   const HeaderActions = useMemo(
@@ -1377,9 +1985,19 @@ export function StudentsPage() {
         <GlassButton
           type="button"
           variant="secondary"
-          onClick={handleExportCsv}
-          title="CSV formatda eksport qilish"
+          onClick={() => setPaletteOpen(true)}
+          title="Buyruq paneli (⌘K)"
+          className="hidden md:inline-flex"
         >
+          <span className="inline-flex items-center gap-1.5">
+            <Icon paths={I.command} size={13} strokeWidth={2.0} />
+            <kbd className="rounded border border-current/20 px-1 font-mono text-[10px] font-bold opacity-70">
+              ⌘K
+            </kbd>
+          </span>
+        </GlassButton>
+
+        <GlassButton type="button" variant="secondary" onClick={handleExportCsv} title="CSV formatda eksport qilish">
           <span className="inline-flex items-center gap-1.5">
             <Icon paths={I.download} size={15} strokeWidth={2.0} />
             <span className="hidden sm:inline">Eksport CSV</span>
@@ -1399,14 +2017,11 @@ export function StudentsPage() {
     [t, handleExportCsv],
   );
 
+  // ── Early states ─────────────────────────────────────────────
   if (students.isLoading && !data) {
     return (
       <div className="page-container relative z-10 space-y-5">
-        <GlassPageHeader
-          title={t('students.title')}
-          subtitle={t('students.pageSubtitle')}
-          actions={HeaderActions}
-        />
+        <GlassPageHeader title={t('students.title')} subtitle={t('students.pageSubtitle')} actions={HeaderActions} />
         <StudentsSkeleton />
       </div>
     );
@@ -1415,11 +2030,7 @@ export function StudentsPage() {
   if (students.isError && !data) {
     return (
       <div className="page-container relative z-10 space-y-5">
-        <GlassPageHeader
-          title={t('students.title')}
-          subtitle={t('students.pageSubtitle')}
-          actions={HeaderActions}
-        />
+        <GlassPageHeader title={t('students.title')} subtitle={t('students.pageSubtitle')} actions={HeaderActions} />
         <GlassCardSurface className="p-10 sm:p-12">
           <GlassErrorState
             title={t('students.loadFailed')}
@@ -1431,24 +2042,16 @@ export function StudentsPage() {
     );
   }
 
-  const allSelectedOnPage =
-    studentList.length > 0 && studentList.every((s) => selectedIds.has(s.id));
-  const freezeDurationDays = calculateFreezeDays(
-    freezeForm.startDate,
-    freezeForm.endDate,
-  );
+  const allSelectedOnPage = studentList.length > 0 && studentList.every((s) => selectedIds.has(s.id));
+  const freezeDurationDays = calculateFreezeDays(freezeForm.startDate, freezeForm.endDate);
 
   return (
     <div className="page-container relative z-10 space-y-5 pb-24">
       <AuroraCanvas />
 
-      <GlassPageHeader
-        title={t('students.title')}
-        subtitle={t('students.pageSubtitle')}
-        actions={HeaderActions}
-      />
+      <GlassPageHeader title={t('students.title')} subtitle={t('students.pageSubtitle')} actions={HeaderActions} />
 
-      {/* ═══ 1 · INTERACTIVE TELEMETRY STATS BAR ═══ */}
+      {/* ═══ 1 · TELEMETRY STATS ═══ */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -1471,9 +2074,7 @@ export function StudentsPage() {
           icon={I.checkCircle}
           tone="green"
           active={statusFilter === 'ACTIVE'}
-          onClick={() =>
-            setStatusFilter((prev) => (prev === 'ACTIVE' ? 'ALL' : 'ACTIVE'))
-          }
+          onClick={() => setStatusFilter((prev) => (prev === 'ACTIVE' ? 'ALL' : 'ACTIVE'))}
         />
         <StatTile
           label={t('enum.status.INACTIVE')}
@@ -1482,9 +2083,7 @@ export function StudentsPage() {
           icon={I.pause}
           tone="orange"
           active={statusFilter === 'INACTIVE'}
-          onClick={() =>
-            setStatusFilter((prev) => (prev === 'INACTIVE' ? 'ALL' : 'INACTIVE'))
-          }
+          onClick={() => setStatusFilter((prev) => (prev === 'INACTIVE' ? 'ALL' : 'INACTIVE'))}
         />
         <StatTile
           label={t('students.col.groups')}
@@ -1494,156 +2093,154 @@ export function StudentsPage() {
           tone="purple"
           active={statusFilter === 'WITH_GROUPS'}
           onClick={() =>
-            setStatusFilter((prev) =>
-              prev === 'WITH_GROUPS' ? 'ALL' : 'WITH_GROUPS',
-            )
+            setStatusFilter((prev) => (prev === 'WITH_GROUPS' ? 'ALL' : 'WITH_GROUPS'))
           }
         />
       </motion.div>
 
-      {/* ═══ 2 · SPATIAL COMMAND & FILTER BAR ═══ */}
+      {/* ═══ 2 · COMMAND & FILTER BAR ═══ */}
       <GlassCardSurface className="p-3.5 sm:p-4">
-        <div className="relative z-10 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex-1">
-            <div className="relative">
-              <GlassInput
-                data-testid="students-search-input"
-                ref={searchInputRef}
-                placeholder={t('students.searchPlaceholderEmail')}
-                value={search}
-                onChange={handleSearchChange}
-                aria-label={t('students.searchLabel')}
-                type="search"
-                inputPrefix={
-                  <Icon
-                    paths={I.search}
-                    size={16}
-                    className="text-[var(--text-muted)]"
-                  />
-                }
-              />
-              {!search && (
-                <kbd
-                  aria-hidden="true"
-                  className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-md border border-slate-200/80 bg-slate-100/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500 sm:inline-flex dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-400"
-                >
-                  ⌘K
-                </kbd>
-              )}
-            </div>
-
-            <GlassSelect
-              value={groupId}
-              onChange={handleGroupFilterChange}
-              aria-label={t('students.filterGroupLabel')}
-            >
-              <option value="">{t('students.allGroups')}</option>
-              {groupList.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </GlassSelect>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2.5 lg:justify-end">
-            <div
-              role="tablist"
-              aria-label="Talaba holati bo'yicha filtr"
-              className="inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-100/75 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]"
-            >
-              {(
-                [
-                  { id: 'ALL', label: 'Barchasi' },
-                  { id: 'ACTIVE', label: 'Faol' },
-                  { id: 'INACTIVE', label: 'Muzlatilgan' },
-                ] as const
-              ).map((tab) => {
-                const isSelected = statusFilter === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={isSelected}
-                    onClick={() => setStatusFilter(tab.id)}
-                    className={[
-                      'relative shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-[11.5px] font-bold transition-colors duration-150 outline-none',
-                      isSelected
-                        ? 'text-slate-900 dark:text-white'
-                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
-                    ].join(' ')}
+        <div className="relative z-10 flex flex-col gap-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex-1">
+              <div className="relative">
+                <GlassInput
+                  data-testid="students-search-input"
+                  ref={searchInputRef}
+                  placeholder={t('students.searchPlaceholderEmail')}
+                  value={search}
+                  onChange={handleSearchChange}
+                  aria-label={t('students.searchLabel')}
+                  type="search"
+                  inputPrefix={<Icon paths={I.search} size={16} className="text-[var(--text-muted)]" />}
+                />
+                {!search && (
+                  <kbd
+                    aria-hidden="true"
+                    className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-md border border-slate-200/80 bg-slate-100/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500 sm:inline-flex dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-400"
                   >
-                    {isSelected && (
-                      <motion.span
-                        layoutId="students-status-pill"
-                        transition={SPRING.snappy}
-                        className="absolute inset-0 rounded-lg border border-black/5 bg-white shadow-xs dark:border-white/10 dark:bg-white/[0.12]"
-                      />
-                    )}
-                    <span className="relative z-10">{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={handleClearFilters}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-[11.5px] font-bold text-[#007AFF] transition-all hover:bg-blue-500/15 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-[#38BDF8]"
-                >
-                  <Icon paths={I.close} size={12} strokeWidth={2.4} />
-                  <span>{t('common.clear') || 'Tozalash'}</span>
-                </button>
-              )}
-
-              <div className="inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-100/75 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
-                <button
-                  type="button"
-                  data-testid="segment-table"
-                  onClick={() => setViewMode('table')}
-                  aria-label="Jadval ko'rinishi"
-                  title="Jadval ko'rinishi"
-                  className={`rounded-lg p-1.5 transition-all ${
-                    viewMode === 'table'
-                      ? 'bg-white text-slate-900 shadow-xs dark:bg-white/[0.14] dark:text-white'
-                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-                  }`}
-                >
-                  <Icon paths={I.list} size={14} strokeWidth={2.1} />
-                </button>
-                <button
-                  type="button"
-                  data-testid="segment-grid"
-                  onClick={() => setViewMode('grid')}
-                  aria-label="Kartochkalar (Bento) ko'rinishi"
-                  title="Kartochkalar (Bento) ko'rinishi"
-                  className={`rounded-lg p-1.5 transition-all ${
-                    viewMode === 'grid'
-                      ? 'bg-white text-slate-900 shadow-xs dark:bg-white/[0.14] dark:text-white'
-                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-                  }`}
-                >
-                  <Icon paths={I.grid} size={14} strokeWidth={2.1} />
-                </button>
+                    ⌘K
+                  </kbd>
+                )}
               </div>
 
-              <div className="pl-1 text-[12.5px] font-bold text-[var(--text-secondary)] tabular-nums">
-                {stats.total === 1
-                  ? t('students.totalOne')
-                  : t('students.totalMany', { count: stats.total })}
+              <GlassSelect
+                value={groupId}
+                onChange={handleGroupFilterChange}
+                aria-label={t('students.filterGroupLabel')}
+              >
+                <option value="">{t('students.allGroups')}</option>
+                {groupList.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </GlassSelect>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2.5 lg:justify-end">
+              <div
+                role="tablist"
+                aria-label="Talaba holati bo'yicha filtr"
+                className="inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-100/75 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]"
+              >
+                {(
+                  [
+                    { id: 'ALL', label: 'Barchasi' },
+                    { id: 'ACTIVE', label: 'Faol' },
+                    { id: 'INACTIVE', label: 'Muzlatilgan' },
+                  ] as const
+                ).map((tab) => {
+                  const isSelected = statusFilter === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isSelected}
+                      onClick={() => setStatusFilter(tab.id)}
+                      className={[
+                        'relative shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-[11.5px] font-bold transition-colors duration-150 outline-none',
+                        isSelected
+                          ? 'text-slate-900 dark:text-white'
+                          : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
+                      ].join(' ')}
+                    >
+                      {isSelected && (
+                        <motion.span
+                          layoutId="students-status-pill"
+                          transition={SPRING.snappy}
+                          className="absolute inset-0 rounded-lg border border-black/5 bg-white shadow-xs dark:border-white/10 dark:bg-white/[0.12]"
+                        />
+                      )}
+                      <span className="relative z-10">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={handleClearFilters}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-[11.5px] font-bold text-[#007AFF] transition-all hover:bg-blue-500/15 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-[#38BDF8]"
+                  >
+                    <Icon paths={I.close} size={12} strokeWidth={2.4} />
+                    <span>{t('common.clear') || 'Tozalash'}</span>
+                  </button>
+                )}
+
+                <div className="hidden md:inline-flex">
+                  <DensityToggle density={density} onChange={setDensity} />
+                </div>
+
+                <div className="inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-100/75 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
+                  <button
+                    type="button"
+                    data-testid="segment-table"
+                    onClick={() => setViewMode('table')}
+                    aria-label="Jadval ko'rinishi"
+                    title="Jadval ko'rinishi"
+                    className={`rounded-lg p-1.5 transition-all ${
+                      viewMode === 'table'
+                        ? 'bg-white text-slate-900 shadow-xs dark:bg-white/[0.14] dark:text-white'
+                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                    }`}
+                  >
+                    <Icon paths={I.list} size={14} strokeWidth={2.1} />
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="segment-grid"
+                    onClick={() => setViewMode('grid')}
+                    aria-label="Kartochkalar (Bento) ko'rinishi"
+                    title="Kartochkalar (Bento) ko'rinishi"
+                    className={`rounded-lg p-1.5 transition-all ${
+                      viewMode === 'grid'
+                        ? 'bg-white text-slate-900 shadow-xs dark:bg-white/[0.14] dark:text-white'
+                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                    }`}
+                  >
+                    <Icon paths={I.grid} size={14} strokeWidth={2.1} />
+                  </button>
+                </div>
+
+                <div className="pl-1 text-[12.5px] font-bold text-[var(--text-secondary)] tabular-nums">
+                  {stats.total === 1 ? t('students.totalOne') : t('students.totalMany', { count: stats.total })}
+                </div>
               </div>
             </div>
           </div>
+
+          <AnimatePresence mode="popLayout">
+            {filterChips.length > 0 && <FilterChips chips={filterChips} />}
+          </AnimatePresence>
         </div>
       </GlassCardSurface>
 
       {/* ═══ 3 · STUDENTS DATA SURFACE ═══ */}
-      <GlassCardSurface
-        className={students.isPlaceholderData ? 'opacity-75 transition-opacity' : ''}
-      >
+      <GlassCardSurface className={students.isPlaceholderData ? 'opacity-75 transition-opacity' : ''}>
         <AnimatePresence mode="wait">
           {studentList.length === 0 ? (
             <motion.div
@@ -1655,23 +2252,11 @@ export function StudentsPage() {
               className="p-10 sm:p-12"
             >
               <GlassEmptyState
-                title={
-                  hasActiveFilters
-                    ? t('students.emptyFiltered')
-                    : t('students.emptySearch')
-                }
-                message={
-                  hasActiveFilters
-                    ? t('students.emptyFilteredHint')
-                    : t('students.emptyHint')
-                }
+                title={hasActiveFilters ? t('students.emptyFiltered') : t('students.emptySearch')}
+                message={hasActiveFilters ? t('students.emptyFilteredHint') : t('students.emptyHint')}
                 action={
                   hasActiveFilters ? (
-                    <GlassButton
-                      type="button"
-                      variant="secondary"
-                      onClick={handleClearFilters}
-                    >
+                    <GlassButton type="button" variant="secondary" onClick={handleClearFilters}>
                       {t('common.clear') || 'Filtrlarni tozalash'}
                     </GlassButton>
                   ) : (
@@ -1714,13 +2299,10 @@ export function StudentsPage() {
                               {name}
                             </div>
                             <div className="mt-0.5 truncate text-[12px] text-slate-500 dark:text-slate-400">
-                              {student.user?.email ||
-                                student.user?.phone ||
-                                'M-EDU ID: ' + student.id.slice(0, 8)}
+                              {student.user?.email || student.user?.phone || 'M-EDU ID: ' + student.id.slice(0, 8)}
                             </div>
                           </div>
                         </div>
-
                         <span
                           className={[
                             'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ring-1 ring-inset',
@@ -1731,9 +2313,7 @@ export function StudentsPage() {
                         >
                           <span
                             className={`h-1.5 w-1.5 rounded-full ${
-                              statusBadge.color === 'red'
-                                ? 'bg-red-500'
-                                : 'bg-emerald-500'
+                              statusBadge.color === 'red' ? 'bg-red-500' : 'bg-emerald-500'
                             }`}
                           />
                           {t(statusBadge.label)}
@@ -1763,9 +2343,7 @@ export function StudentsPage() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="truncate text-[11.5px] font-medium text-slate-500 dark:text-slate-400">
-                        {student.parentName
-                          ? `Ota-ona: ${student.parentName}`
-                          : 'Ota-ona kiritilmagan'}
+                        {student.parentName ? `Ota-ona: ${student.parentName}` : 'Ota-ona kiritilmagan'}
                       </div>
                       <div className="flex items-center justify-end gap-1.5 shrink-0">
                         {isActive ? (
@@ -1781,10 +2359,7 @@ export function StudentsPage() {
                             label="Faollashtirish (Unfreeze)"
                             tone="edit"
                             onClick={() => unfreezeMutation.mutate(student.id)}
-                            loading={
-                              unfreezeMutation.isPending &&
-                              unfreezeMutation.variables === student.id
-                            }
+                            loading={unfreezeMutation.isPending && unfreezeMutation.variables === student.id}
                           />
                         )}
                         <button
@@ -1821,16 +2396,11 @@ export function StudentsPage() {
               })}
             </motion.div>
           ) : (
-            <motion.div
-              key="table"
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-            >
+            <motion.div key="table" variants={containerVariants} initial="hidden" animate="visible">
               <div className="medu-scroll-x">
                 <table className="w-full border-collapse text-[13.5px]">
-                  <thead>
-                    <tr className="border-b border-slate-200/75 bg-slate-50/55 dark:border-white/[0.08] dark:bg-white/[0.02]">
+                  <thead className="sticky top-0 z-10 backdrop-blur-xl">
+                    <tr className="border-b border-slate-200/75 bg-slate-50/85 dark:border-white/[0.08] dark:bg-surface-900/85">
                       <th
                         scope="col"
                         className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]"
@@ -1858,27 +2428,15 @@ export function StudentsPage() {
                                   : I.sort
                               }
                               size={12}
-                              className={
-                                sortField === 'name'
-                                  ? 'text-[#007AFF] dark:text-[#38BDF8]'
-                                  : 'opacity-60'
-                              }
+                              className={sortField === 'name' ? 'text-[#007AFF] dark:text-[#38BDF8]' : 'opacity-60'}
                             />
                           </button>
                         </div>
                       </th>
-
-                      <th
-                        scope="col"
-                        className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]"
-                      >
+                      <th scope="col" className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
                         {t('common.email')}
                       </th>
-
-                      <th
-                        scope="col"
-                        className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]"
-                      >
+                      <th scope="col" className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
                         <button
                           type="button"
                           onClick={() => handleToggleSort('groups')}
@@ -1894,26 +2452,14 @@ export function StudentsPage() {
                                 : I.sort
                             }
                             size={12}
-                            className={
-                              sortField === 'groups'
-                                ? 'text-[#007AFF] dark:text-[#38BDF8]'
-                                : 'opacity-60'
-                            }
+                            className={sortField === 'groups' ? 'text-[#007AFF] dark:text-[#38BDF8]' : 'opacity-60'}
                           />
                         </button>
                       </th>
-
-                      <th
-                        scope="col"
-                        className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]"
-                      >
+                      <th scope="col" className="hidden lg:table-cell px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
                         {t('students.col.parentName')}
                       </th>
-
-                      <th
-                        scope="col"
-                        className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]"
-                      >
+                      <th scope="col" className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
                         <button
                           type="button"
                           onClick={() => handleToggleSort('status')}
@@ -1929,15 +2475,10 @@ export function StudentsPage() {
                                 : I.sort
                             }
                             size={12}
-                            className={
-                              sortField === 'status'
-                                ? 'text-[#007AFF] dark:text-[#38BDF8]'
-                                : 'opacity-60'
-                            }
+                            className={sortField === 'status' ? 'text-[#007AFF] dark:text-[#38BDF8]' : 'opacity-60'}
                           />
                         </button>
                       </th>
-
                       <th
                         scope="col"
                         className="px-6 py-3.5 text-right text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]"
@@ -1950,13 +2491,12 @@ export function StudentsPage() {
                   <tbody>
                     {studentList.map((student, index) => {
                       const statusBadge = getStudentStatusBadge(student.user?.isActive);
-                      const activeGroups = (student.groups ?? []).filter(
-                        (g) => g.isActive,
-                      );
+                      const activeGroups = (student.groups ?? []).filter((g) => g.isActive);
                       const name = formatStudentName(student);
                       const isActive = student.user?.isActive !== false;
                       const isSelected = selectedIds.has(student.id);
                       const isRowFocused = focusedIndex === index;
+                      const groupRatio = Math.min(1, activeGroups.length / 3);
 
                       return (
                         <motion.tr
@@ -1967,6 +2507,8 @@ export function StudentsPage() {
                             setFocusedIndex(index);
                             handleStudentClick(student.id);
                           }}
+                          onMouseEnter={(e) => handleRowMouseEnter(student, e)}
+                          onMouseLeave={handleRowMouseLeave}
                           tabIndex={0}
                           role="link"
                           aria-label={t('students.viewStudentAria', { name })}
@@ -1989,7 +2531,7 @@ export function StudentsPage() {
                               : '',
                           ].join(' ')}
                         >
-                          <td className="relative px-6 py-3.5">
+                          <td className={`relative px-6 ${densityRowPadding}`}>
                             <span
                               aria-hidden="true"
                               className="pointer-events-none absolute inset-y-2 left-0 w-1 origin-center scale-y-0 rounded-r-full bg-[#007AFF] transition-transform duration-200 group-hover:scale-y-100 dark:bg-[#38BDF8]"
@@ -2003,7 +2545,13 @@ export function StudentsPage() {
                                 aria-label={`${name} tanlash`}
                                 className="h-4 w-4 shrink-0 cursor-pointer rounded border-slate-300 text-[#007AFF] focus:ring-[#007AFF] dark:border-white/20 dark:bg-white/5"
                               />
-                              <StudentAvatar name={name} size={39} isActive={isActive} />
+                              <StudentAvatar
+                                name={name}
+                                size={39}
+                                isActive={isActive}
+                                showRing={activeGroups.length > 0}
+                                ringProgress={groupRatio}
+                              />
                               <div className="min-w-0">
                                 <div className="truncate text-[13.5px] font-bold text-slate-900 transition-colors group-hover:text-[#007AFF] dark:text-white dark:group-hover:text-[#38BDF8]">
                                   {name}
@@ -2011,15 +2559,10 @@ export function StudentsPage() {
                                 <div className="mt-0.5 flex items-center gap-2 text-[11px] font-medium text-slate-500 dark:text-slate-400">
                                   {activeGroups.length > 0 ? (
                                     <span className="inline-flex items-center gap-1">
-                                      <Icon
-                                        paths={I.usersRound}
-                                        size={11}
-                                        strokeWidth={2}
-                                      />
+                                      <Icon paths={I.usersRound} size={11} strokeWidth={2} />
                                       <span>
                                         {activeGroups.length}{' '}
-                                        {t('students.col.groups')?.toLowerCase() ||
-                                          'guruh'}
+                                        {t('students.col.groups')?.toLowerCase() || 'guruh'}
                                       </span>
                                     </span>
                                   ) : (
@@ -2030,19 +2573,17 @@ export function StudentsPage() {
                             </div>
                           </td>
 
-                          <td className="px-6 py-3.5">
+                          <td className={`px-6 ${densityRowPadding}`}>
                             {student.user?.email ? (
                               <CopyChip value={student.user.email} icon={I.mail} />
                             ) : student.user?.phone ? (
                               <CopyChip value={student.user.phone} icon={I.phone} />
                             ) : (
-                              <span className="text-[var(--text-tertiary)] opacity-45">
-                                —
-                              </span>
+                              <span className="text-[var(--text-tertiary)] opacity-45">—</span>
                             )}
                           </td>
 
-                          <td className="px-6 py-3.5">
+                          <td className={`px-6 ${densityRowPadding}`}>
                             <div className="flex flex-wrap gap-1.5">
                               {activeGroups.slice(0, 3).map((enrollment) => (
                                 <GlassBadge key={enrollment.group.id} color="blue">
@@ -2050,31 +2591,20 @@ export function StudentsPage() {
                                 </GlassBadge>
                               ))}
                               {activeGroups.length === 0 && (
-                                <span className="text-[var(--text-tertiary)] opacity-45">
-                                  —
-                                </span>
+                                <span className="text-[var(--text-tertiary)] opacity-45">—</span>
                               )}
                               {activeGroups.length > 3 && (
-                                <GlassBadge color="slate">
-                                  +{activeGroups.length - 3}
-                                </GlassBadge>
+                                <GlassBadge color="slate">+{activeGroups.length - 3}</GlassBadge>
                               )}
                             </div>
                           </td>
 
-                          <td className="px-6 py-3.5">
+                          <td className={`hidden lg:table-cell px-6 ${densityRowPadding}`}>
                             {student.parentName ? (
                               <div className="flex flex-col">
                                 <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--text-primary)]">
-                                  <Icon
-                                    paths={I.parent}
-                                    size={13}
-                                    strokeWidth={1.9}
-                                    className="opacity-55"
-                                  />
-                                  <span className="max-w-[165px] truncate">
-                                    {student.parentName}
-                                  </span>
+                                  <Icon paths={I.parent} size={13} strokeWidth={1.9} className="opacity-55" />
+                                  <span className="max-w-[165px] truncate">{student.parentName}</span>
                                 </span>
                                 {student.parentPhone && (
                                   <span className="mt-0.5 pl-5 text-[11px] font-medium text-slate-500 tabular-nums dark:text-slate-400">
@@ -2083,13 +2613,11 @@ export function StudentsPage() {
                                 )}
                               </div>
                             ) : (
-                              <span className="text-[var(--text-tertiary)] opacity-45">
-                                —
-                              </span>
+                              <span className="text-[var(--text-tertiary)] opacity-45">—</span>
                             )}
                           </td>
 
-                          <td className="px-6 py-3.5">
+                          <td className={`px-6 ${densityRowPadding}`}>
                             <span
                               className={[
                                 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold tracking-tight ring-1 ring-inset',
@@ -2110,7 +2638,7 @@ export function StudentsPage() {
                             </span>
                           </td>
 
-                          <td className="px-6 py-3.5">
+                          <td className={`px-6 ${densityRowPadding}`}>
                             <div
                               className="flex justify-end gap-1.5"
                               onClick={(e) => e.stopPropagation()}
@@ -2177,22 +2705,19 @@ export function StudentsPage() {
               </div>
 
               <div className="border-t border-slate-200/70 px-4 py-3 dark:border-white/[0.08]">
-                <GlassPagination
-                  page={page}
-                  totalPages={data?.totalPages ?? 1}
-                  onPageChange={setPage}
-                />
+                <GlassPagination page={page} totalPages={data?.totalPages ?? 1} onPageChange={setPage} />
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </GlassCardSurface>
 
-      {/* ═══ 4 · DYNAMIC ISLAND FLOATING BULK COMMAND ISLAND ═══ */}
+      {/* ═══ 4 · FLOATING BULK COMMAND ISLAND ═══ */}
       <FloatingActionIsland
         selectedCount={selectedCount}
         onClear={clearSelection}
         itemLabel="talaba"
+        preview={selectedStudents.length > 0 ? <SelectionPreview students={selectedStudents} /> : undefined}
         actions={[
           {
             id: 'export-csv',
@@ -2213,7 +2738,7 @@ export function StudentsPage() {
           },
           {
             id: 'bulk-delete',
-            label: 'O\'chirish',
+            label: "O'chirish",
             icon: <Icon paths={I.trash} size={13} />,
             variant: 'danger',
             shortcut: 'Del',
@@ -2225,7 +2750,7 @@ export function StudentsPage() {
         ]}
       />
 
-      {/* ═══ 5 · DELETE CONFIRMATION DIALOG ═══ */}
+      {/* ═══ 5 · DELETE CONFIRMATION ═══ */}
       <ConfirmDialog
         open={deleteTarget !== null}
         onClose={() => {
@@ -2236,7 +2761,7 @@ export function StudentsPage() {
         loading={removeMutation.isPending}
       />
 
-      {/* ═══ 6 · MEDICAL LEAVE / FREEZE MODAL ═══ */}
+      {/* ═══ 6 · FREEZE MODAL ═══ */}
       <GlassModal
         open={freezeTarget !== null}
         onClose={() => {
@@ -2248,24 +2773,17 @@ export function StudentsPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              freezeMutation.mutate({
-                id: freezeTarget.id,
-                payload: freezeForm,
-              });
+              freezeMutation.mutate({ id: freezeTarget.id, payload: freezeForm });
             }}
             className="space-y-4"
           >
-            {/* Student Summary Banner */}
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-sky-500/25 bg-gradient-to-r from-sky-500/12 via-blue-500/8 to-transparent p-3.5 text-xs text-sky-950 dark:text-sky-100">
               <div className="flex items-center gap-3 min-w-0">
                 <StudentAvatar name={formatStudentName(freezeTarget)} size={38} />
                 <div className="min-w-0">
-                  <p className="truncate font-bold text-[13px]">
-                    {formatStudentName(freezeTarget)}
-                  </p>
+                  <p className="truncate font-bold text-[13px]">{formatStudentName(freezeTarget)}</p>
                   <p className="mt-0.5 text-[11.5px] opacity-80">
-                    Muzlatilgan davrda qarzdorlik hisoblanmaydi va guruhdagi o'rni
-                    saqlanadi.
+                    Muzlatilgan davrda qarzdorlik hisoblanmaydi va guruhdagi o'rni saqlanadi.
                   </p>
                 </div>
               </div>
@@ -2274,14 +2792,14 @@ export function StudentsPage() {
               </span>
             </div>
 
-            {/* Live Duration Timeline */}
             <FreezeTimeline
               startDate={freezeForm.startDate}
               endDate={freezeForm.endDate}
               days={freezeDurationDays}
             />
 
-            {/* Quick Duration Presets */}
+            <CalendarHeatmap startDate={freezeForm.startDate} endDate={freezeForm.endDate} />
+
             <div className="space-y-1.5">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Tezkor muddat tanlash
@@ -2333,10 +2851,7 @@ export function StudentsPage() {
                   min={freezeForm.startDate}
                   value={freezeForm.endDate}
                   onChange={(e) =>
-                    setFreezeForm((prev) => ({
-                      ...prev,
-                      endDate: e.target.value,
-                    }))
+                    setFreezeForm((prev) => ({ ...prev, endDate: e.target.value }))
                   }
                   required
                 />
@@ -2346,9 +2861,7 @@ export function StudentsPage() {
             <GlassField label="Muzlatish sababi (Spravka / Sabab)" required>
               <GlassInput
                 value={freezeForm.reason}
-                onChange={(e) =>
-                  setFreezeForm((prev) => ({ ...prev, reason: e.target.value }))
-                }
+                onChange={(e) => setFreezeForm((prev) => ({ ...prev, reason: e.target.value }))}
                 placeholder="Masalan: Kasallik tufayli shifoxonada, spravka taqdim etildi..."
                 required
               />
@@ -2356,16 +2869,14 @@ export function StudentsPage() {
 
             <div className="flex flex-wrap gap-1.5">
               {[
-                'Tibbiy sabab / Kasallik ma\'lumotnomasi (Medical leave)',
-                'Oilaviy safar / Ta\'til sababli',
-                'Maktab imtihonlari / Olimpiada yig\'ini',
+                "Tibbiy sabab / Kasallik ma'lumotnomasi (Medical leave)",
+                "Oilaviy safar / Ta'til sababli",
+                "Maktab imtihonlari / Olimpiada yig'ini",
               ].map((reasonPreset) => (
                 <button
                   key={reasonPreset}
                   type="button"
-                  onClick={() =>
-                    setFreezeForm((prev) => ({ ...prev, reason: reasonPreset }))
-                  }
+                  onClick={() => setFreezeForm((prev) => ({ ...prev, reason: reasonPreset }))}
                   className="rounded-lg border border-slate-200/70 bg-slate-100/70 px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:bg-slate-200/70 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
                 >
                   {reasonPreset}
@@ -2382,17 +2893,27 @@ export function StudentsPage() {
               >
                 Bekor qilish
               </GlassButton>
-              <GlassButton
-                type="submit"
-                variant="primary"
-                disabled={freezeMutation.isPending}
-              >
+              <GlassButton type="submit" variant="primary" disabled={freezeMutation.isPending}>
                 {freezeMutation.isPending ? 'Muzlatilmoqda...' : 'Muzlatishni tasdiqlash'}
               </GlassButton>
             </div>
           </form>
         )}
       </GlassModal>
+
+      {/* ═══ 7 · COMMAND PALETTE ═══ */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        actions={paletteActions}
+      />
+
+      {/* ═══ 8 · ROW HOVER PEEK (Desktop) ═══ */}
+      <AnimatePresence>
+        {hoveredStudent && (
+          <RowHoverPeek student={hoveredStudent.student} anchorRect={hoveredStudent.rect} />
+        )}
+      </AnimatePresence>
 
       {toastNode}
     </div>

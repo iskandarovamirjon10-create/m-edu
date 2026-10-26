@@ -1,14 +1,6 @@
 /**
- * M-EDU WhatChangedPage — Apple Design Award V2 Liquid Glass Edition
- *
- * Senior Apple Design Caliber:
- *  - visionOS & macOS Sequoia Liquid Glass substrates with specular highlights
- *  - Hero banner with Delta Inspector badge & change event filter
- *  - Tactile quick-stat metrics (Total Events, Creations, Updates, Deletions)
- *  - Apple Segmented filter tabs with spring physics and keyboard shortcuts [1]-[4]
- *  - Full split-view macOS detail sidecars (openSidecar) with JSON delta viewer
- *  - Web Audio tactile feedback via usePremiumSound
- *  - Full preservation of audit feed query, filter logic, and i18n
+ * M-EDU What Changed Page
+ * System audit history, entity modification deltas, timeline inspection, and user activity tracking.
  */
 
 import { useState, useMemo, useEffect, useCallback } from 'react';

@@ -1,7 +1,7 @@
 /**
- * M-EDU ExecutiveDashboardPage — Apple Design Award Edition
+ * M-EDU ExecutiveDashboardPage — 
  *
- * Premium craft:
+ * Module Features:
  *  - Hero header with gradient executive tile + live chips + refresh button
  *  - Ambient gradient orbs (blue + purple drift) — consistent with suite
  *  - Premium KPI tiles with count-up + trend pills
@@ -10,7 +10,7 @@
  *  - Premium alerts list with tone-aware severity badges
  *  - Premium branch comparison table
  *  - Shimmer skeleton (not pulse)
- *  - Custom SVG icons in SF Symbols proportions
+ *  - Custom SVG icons in SVG Icons
  *  - Framer Motion spring physics + staggered blur-in
  *  - Full i18n preserved
  */
@@ -75,7 +75,7 @@ interface ExecutiveSummary {
 }
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;

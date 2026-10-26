@@ -28,6 +28,15 @@ vi.mock('@/lib/ai', async (importOriginal) => {
     aiChat: (messages: AiWireMessage[], options?: { signal?: AbortSignal }) =>
       aiChatMock(messages, options),
     confirmAiAction: (actionId: string) => confirmMock(actionId),
+    aiHealthApi: {
+      check: vi.fn().mockResolvedValue({
+        status: 'ok',
+        provider: 'mock',
+        model: 'gemini-1.5-flash',
+        configured: true,
+        mode: 'live',
+      }),
+    },
   };
 });
 

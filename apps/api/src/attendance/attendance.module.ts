@@ -6,9 +6,10 @@ import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisPubSubModule } from '../common/redis/redis-pubsub.module';
+import { NotificationEventsModule } from '../notifications/events/notification-events.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, RedisPubSubModule, ConfigModule],
+  imports: [PrismaModule, AuthModule, RedisPubSubModule, ConfigModule, NotificationEventsModule],
   controllers: [AttendanceController],
   providers: [AttendanceService, AttendanceGateway],
   exports: [AttendanceService],

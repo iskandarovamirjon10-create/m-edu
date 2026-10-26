@@ -78,6 +78,7 @@ import { PlatformModule } from './platform/platform.module';
 import { CronModule } from './cron/cron.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { PerformanceModule } from './performance/performance.module';
+import { DevicesModule } from './devices/devices.module';
 import { PublicMetricsController } from './observability/public-metrics.controller';
 
 import { RootController } from './common/root.controller';
@@ -217,6 +218,7 @@ const redisEnabled = isRedisEnabled();
     CronModule,
     ObservabilityModule,
     PerformanceModule,
+    DevicesModule,
   ],
   controllers: [RootController],
   providers: [

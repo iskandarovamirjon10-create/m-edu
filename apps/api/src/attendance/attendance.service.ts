@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { toDateToInclusive, startOfDay, getOrganizationDate } from '../common/date-range';
 import { canonicalMembershipWhere } from '../common/student-membership';
@@ -7,6 +7,10 @@ import { DayOfWeek, LessonStatus, Prisma } from '@prisma/client';
 import { MarkAttendanceDto, UpdateAttendanceDto } from '../common/dto';
 import { AttendanceQuery } from '../common/dto/query';
 import type { RequestUser } from '../auth/types';
+import { RedisPubSubService } from '../common/redis/redis-pubsub.service';
+import { ATTENDANCE_CREATED_EVENT } from './attendance.gateway';
+import { NotificationEventService } from '../notifications/events/notification-event.service';
+import type { NotificationEventType } from '../notifications/events/notification.events';
 
 const INDEX_TO_DAY: Record<number, DayOfWeek> = {
   0: DayOfWeek.SUNDAY,
@@ -20,7 +24,11 @@ const INDEX_TO_DAY: Record<number, DayOfWeek> = {
 
 @Injectable()
 export class AttendanceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly redisPubSub?: RedisPubSubService,
+    @Optional() private readonly notificationEvents?: NotificationEventService,
+  ) {}
 
   async markAttendance(organizationId: string, data: MarkAttendanceDto) {
     const group = await this.prisma.group.findFirst({
@@ -33,11 +41,18 @@ export class AttendanceService {
       throw new BadRequestException('Group is inactive and cannot receive attendance');
     }
 
+    if (!data.records || data.records.length === 0) {
+      return { created: 0, updated: 0, total: 0 };
+    }
+
     const org = await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });
     const rawDate =
       typeof data.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.date.trim())
         ? new Date(`${data.date.trim()}T12:00:00.000Z`)
         : new Date(data.date);
+    if (Number.isNaN(rawDate.getTime())) {
+      throw new BadRequestException('Invalid date provided');
+    }
     const date = getOrganizationDate(rawDate, org?.timezone);
 
     // Deduplicate by studentId within the payload — a repeated student would
@@ -320,9 +335,10 @@ export class AttendanceService {
         { maxWait: 5_000, timeout: 10_000 },
       );
 
+    let finalResult: { created: number; updated: number; total: number };
     try {
       const result = await commitAttendance(true);
-      return {
+      finalResult = {
         created: result.created,
         updated: result.updated,
         total: data.records.length,
@@ -335,14 +351,52 @@ export class AttendanceService {
       // reconciled as updates.
       if ((err as { code?: string })?.code === 'P2002') {
         const result = await commitAttendance(false);
-        return {
+        finalResult = {
           created: result.created,
           updated: result.updated,
           total: data.records.length,
         };
+      } else {
+        throw err;
       }
-      throw err;
     }
+
+    if (this.redisPubSub) {
+      for (const record of data.records) {
+        void this.redisPubSub.publish(ATTENDANCE_CREATED_EVENT, {
+          organizationId,
+          studentId: record.studentId,
+          groupId: data.groupId,
+          status: record.status,
+          date: date.toISOString(),
+          source: 'MANUAL',
+          recognizedAt: new Date().toISOString(),
+        }).catch(() => {});
+      }
+    }
+
+    if (this.notificationEvents) {
+      for (const record of data.records) {
+        const type: NotificationEventType =
+          record.status === 'PRESENT'
+            ? 'ATTENDANCE_MARKED_PRESENT'
+            : record.status === 'LATE'
+              ? 'ATTENDANCE_MARKED_LATE'
+              : 'ATTENDANCE_MARKED_ABSENT';
+        void this.notificationEvents.emit({
+          organizationId,
+          type,
+          occurredAt: new Date().toISOString(),
+          entityType: 'Attendance',
+          entityId: `${data.groupId}:${record.studentId}:${date.toISOString().slice(0, 10)}`,
+          data: {
+            studentId: record.studentId,
+          },
+        }).catch(() => {});
+      }
+    }
+
+    return finalResult;
   }
 
   async update(user: RequestUser | { organizationId: string; sub?: string; id?: string; role?: string }, id: string, dto: UpdateAttendanceDto) {
@@ -380,8 +434,10 @@ export class AttendanceService {
     // camera pipeline (MANUAL_PRESERVED) never silently overwrites it.
     data.source = 'MANUAL';
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.attendance.updateMany({ where: { id, organizationId }, data }); if (updated.count === 0) throw new NotFoundException(); const latest = await tx.attendance.findFirst({ where: { id, organizationId } });
+    const updatedResult = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.attendance.updateMany({ where: { id, organizationId }, data });
+      if (updated.count === 0) throw new NotFoundException();
+      const latest = await tx.attendance.findFirst({ where: { id, organizationId } });
       await tx.auditLog.create({
         data: {
           organizationId,
@@ -394,6 +450,21 @@ export class AttendanceService {
       });
       return latest!;
     });
+
+    if (this.redisPubSub) {
+      void this.redisPubSub.publish(ATTENDANCE_CREATED_EVENT, {
+        organizationId,
+        attendanceId: updatedResult.id,
+        studentId: updatedResult.studentId,
+        groupId: updatedResult.groupId,
+        status: updatedResult.status,
+        date: updatedResult.date.toISOString(),
+        source: 'MANUAL',
+        recognizedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
+
+    return updatedResult;
   }
 
   async remove(user: RequestUser | { organizationId: string; sub?: string; id?: string }, id: string) {
@@ -430,8 +501,15 @@ export class AttendanceService {
     // already authorized; the filter itself is tenant-scoped by organizationId
     // above, so a foreign id can never widen the result set.
     if (query.studentId) where.studentId = query.studentId;
-    // Teacher scoping: attendance rows of the groups this teacher owns.
-    if (query.teacherId) where.group = { teacherId: query.teacherId };
+    // Teacher scoping: attendance rows of the groups this teacher owns (by teacherId or teacher.userId).
+    if (query.teacherId) {
+      where.group = {
+        OR: [
+          { teacherId: query.teacherId },
+          { teacher: { userId: query.teacherId } },
+        ],
+      };
+    }
     if (query.status) where.status = query.status as Prisma.AttendanceWhereInput['status'];
     // Pipeline-decision filter: the Attendance row does not carry the
     // pipeline decision directly — it lives on CameraAttendanceEvent (camera
@@ -500,13 +578,22 @@ export class AttendanceService {
   async getAnalytics(organizationId: string, query: AttendanceQuery) {
     const where: Prisma.AttendanceWhereInput = { organizationId };
     if (query.groupId) where.groupId = query.groupId;
+    if (query.status) where.status = query.status as Prisma.AttendanceWhereInput['status'];
+    if (query.teacherId) {
+      where.group = {
+        OR: [
+          { teacherId: query.teacherId },
+          { teacher: { userId: query.teacherId } },
+        ],
+      };
+    }
     if (query.dateFrom || query.dateTo) {
       where.date = {};
       if (query.dateFrom) where.date.gte = startOfDay(query.dateFrom);
       const dateTo = toDateToInclusive(query.dateTo);
       if (dateTo) where.date.lte = dateTo;
     }
-    if (query.date) {
+    if (query.date && !query.dateFrom && !query.dateTo) {
       const day = new Date(query.date);
       if (!Number.isNaN(day.getTime())) {
         const start = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()));
@@ -542,12 +629,23 @@ export class AttendanceService {
     if (query.groupId) {
       conditions.push(Prisma.sql`"groupId" = ${query.groupId}::uuid`);
     }
+    if (query.status) {
+      conditions.push(Prisma.sql`status = ${query.status}::"AttendanceStatus"`);
+    }
     if (query.dateFrom) {
       conditions.push(Prisma.sql`date >= ${startOfDay(query.dateFrom)}`);
     }
     const dateTo = toDateToInclusive(query.dateTo);
     if (dateTo) {
       conditions.push(Prisma.sql`date <= ${dateTo}`);
+    }
+    if (query.date && !query.dateFrom && !query.dateTo) {
+      const day = new Date(query.date);
+      if (!Number.isNaN(day.getTime())) {
+        const start = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()));
+        const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+        conditions.push(Prisma.sql`date >= ${start} AND date < ${end}`);
+      }
     }
 
     const whereClause = Prisma.join(conditions, ' AND ');

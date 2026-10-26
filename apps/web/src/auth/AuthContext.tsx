@@ -768,10 +768,15 @@ export function AuthProvider({
     const cached = userStore.get<User>();
     if (cached) dispatch({ type: 'BOOTED', user: cached });
 
-    void verify().then((u) => {
-      if (!alive) return;
-      if (!cached) dispatch({ type: 'BOOTED', user: u });
-    });
+    void verify()
+      .then((u) => {
+        if (!alive) return;
+        if (!cached) dispatch({ type: 'BOOTED', user: u });
+      })
+      .catch(() => {
+        if (!alive) return;
+        if (!cached) dispatch({ type: 'BOOTED', user: null });
+      });
 
     return () => {
       alive = false;
@@ -861,7 +866,7 @@ export function AuthProvider({
       if (s.status !== 'authenticated') return;
       if (opts?.requireVisible && document.visibilityState === 'hidden') return;
       if (s.verifiedAt && Date.now() - s.verifiedAt < staleTime) return;
-      void verify();
+      void verify().catch(() => {});
     };
 
     const onFocus = () => maybeRevalidate();

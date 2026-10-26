@@ -1,15 +1,6 @@
 /**
- * M-EDU SchedulePage — v20 "Apple Spatial Temporal Canvas · Weekly Atelier"
- *
- * 🎯 Apple visionOS / macOS Sequoia Masterclass Upgrade:
- *  ✅ Liquid Glass Aesthetic: Specular meniscus, depth-layered surfaces, responsive blur
- *  ✅ WCAG 2.2 AA Compliance: All interactive touch targets >= 44x44px (Grid, List, Filters, Modal, Pagination)
- *  ✅ Three Atelier View Modes: Weekly Grid Timetable ⇄ Editorial Numbered List ⇄ Heatmap Utilization
- *  ✅ Real-Time Conflict Detection: Visual warning collision tags for room/time slot overlaps
- *  ✅ Responsive Canvas: 320px mobile to 4K ultra-wide (2xl:max-w-[1600px] 3xl:max-w-[1800px] pb-24 sm:pb-8)
- *  ✅ Complete Trilingual i18n: 100% localization via useSafeI18n (UZ, RU, EN) with zero hardcoded strings
- *  ✅ Split-Pane Architecture: Sticky filter rail on desktop, fluid horizontal chip bar on mobile
- *  ✅ Keyboard Navigation: 'c' to create, Space/Enter to quick-look sidecar, arrows for items
+ * M-EDU Schedule Page
+ * Master timetable management, room conflict detection, lesson planning, and weekly calendar view.
  */
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -248,7 +239,7 @@ function AuroraBackdrop() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * STAT PILL — VisionOS Specular Card
+ * STAT PILL — Glass Specular Card
  * ════════════════════════════════════════════════════════════════════════ */
 
 function StatPill({
@@ -873,7 +864,7 @@ function ScheduleSkeleton() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * MAIN SCHEDULE PAGE (VisionOS 10/10)
+ * MAIN SCHEDULE PAGE (Glass 10/10)
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function SchedulePage() {
@@ -1174,7 +1165,7 @@ export function SchedulePage() {
         animate="visible"
         className="space-y-5"
       >
-        {/* ═══ 1. FLOATING VISIONOS COMMAND BAR ═══ */}
+        {/* ═══ 1. FLOATING COMMAND BAR ═══ */}
         <motion.div variants={cardVariants} className="sticky top-4 z-30 mt-3">
           <div
             className="liquid-glass-surface flex flex-wrap items-center justify-between gap-3.5 rounded-2xl border border-white/60 p-3 shadow-lg backdrop-blur-2xl dark:border-white/[0.08]"

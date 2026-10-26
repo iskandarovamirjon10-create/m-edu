@@ -1,16 +1,16 @@
 /**
- * M-EDU ExpensesPage — Apple Design Award & Liquid Glass Edition (10/10)
+ * M-EDU ExpensesPage —  &  
  *
  * Specular Craft & Architecture:
- *  - Apple visionOS & macOS Sequoia multi-layer frosted glass surfaces with specular highlights
+ *  - Apple Modern Interface multi-layer frosted glass surfaces with specular highlights
  *  - Ambient gradient glow orbs
  *  - WCAG 2.2 AA SC 2.5.8 compliant touch targets (>= 44x44px for all controls, row actions, checkboxes)
  *  - Animated KPI ribbons with CountUp spring physics
  *  - Quick 1-Tap Category Filter Pills (Salary, Rent, Utilities, Marketing, Supplies, etc.)
  *  - Full Multi-Selection Checkbox Engine with FloatingActionIsland for Batch CSV Export
- *  - Superhuman macOS Split-View Detail Sidecar with localized metadata
+ *  - Fast macOS Split-View Detail Sidecar with localized metadata
  *  - Trilingual resilience (useSafeI18n: UZ, RU, EN) with localized currency
- *  - Superhuman keyboard shortcuts ('c' for create, space for QuickLook)
+ *  - Fast keyboard shortcuts ('c' for create, space for QuickLook)
  *  - Full responsiveness with safe-area insets (320px to 4K)
  */
 
@@ -470,7 +470,7 @@ export function ExpensesPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleOpenModal]);
 
-  /* ── Superhuman Keyboard Navigation & Multi-Selection ──────────────── */
+  /* ── Fast Keyboard Navigation & Multi-Selection ──────────────── */
   const {
     focusedIndex,
     selectedIds,

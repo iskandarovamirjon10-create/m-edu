@@ -431,6 +431,13 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraResult {
       generationRef.current += 1;
       stopStream(streamRef.current);
       streamRef.current = null;
+      if (videoRef.current) {
+        try {
+          videoRef.current.srcObject = null;
+        } catch {
+          /* restricted browsers / jsdom */
+        }
+      }
     },
     [],
   );

@@ -12,6 +12,7 @@ import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisPubSubModule } from '../common/redis/redis-pubsub.module';
 import { NotificationEventsModule } from '../notifications/events/notification-events.module';
+import { DevicesModule } from '../devices/devices.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { NotificationEventsModule } from '../notifications/events/notification-e
     PrismaModule,
     RedisPubSubModule,
     NotificationEventsModule,
+    DevicesModule,
   ],
 
   controllers: [

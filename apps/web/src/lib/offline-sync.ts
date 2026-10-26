@@ -87,12 +87,24 @@ async function getDb(): Promise<IDBDatabase | null> {
 
       request.onsuccess = () => {
         dbInstance = request.result;
+        dbInstance.onversionchange = () => {
+          dbInstance?.close();
+          dbInstance = null;
+        };
+        dbInstance.onclose = () => {
+          dbInstance = null;
+        };
         resolve(dbInstance);
       };
 
       request.onerror = () => {
         console.warn('IndexedDB failed to open, using localStorage fallback');
         isDbSupported = false;
+        resolve(null);
+      };
+
+      request.onblocked = () => {
+        console.warn('IndexedDB open blocked, using localStorage fallback');
         resolve(null);
       };
     } catch {
@@ -161,6 +173,16 @@ function saveToLocalStorage(action: QueuedAction) {
     localStorage.setItem(LS_FALLBACK_KEY, JSON.stringify(queue));
   } catch (e) {
     console.error('localStorage offline save error', e);
+    try {
+      // If quota exceeded, retain only pending items and recent records
+      const queue = loadFromLocalStorage().filter((a) => a.status === 'pending' || a.status === 'failed').slice(-20);
+      const idx = queue.findIndex((a) => a.id === action.id);
+      if (idx >= 0) queue[idx] = action;
+      else queue.push(action);
+      localStorage.setItem(LS_FALLBACK_KEY, JSON.stringify(queue));
+    } catch {
+      // Memory state remains intact
+    }
   }
 }
 

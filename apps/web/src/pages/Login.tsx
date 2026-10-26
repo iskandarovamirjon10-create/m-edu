@@ -1,5 +1,5 @@
 /**
- * M-EDU Login — Apple VisionOS / macOS Sequoia Liquid Glass Edition
+ * M-EDU Login — Apple Glass /  
  *
  * Clean, distraction-free authentication experience:
  *  · Focused exclusively on email/password credentials

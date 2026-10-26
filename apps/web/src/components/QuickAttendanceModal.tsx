@@ -6,7 +6,7 @@ import { groupsApi, attendanceApi } from '@/lib/api';
 import { useToast } from '@/components/ui/GlassToast';
 import { toLocalISOString } from '@/lib/format';
 
-type AttendanceStatus = 'PRESENT' | 'LATE' | 'ABSENT';
+type AttendanceStatus = 'PRESENT' | 'LATE' | 'EXCUSED' | 'ABSENT';
 
 interface StudentRecord {
   studentId: string;
@@ -49,24 +49,42 @@ export function QuickAttendanceModal() {
     staleTime: 30000,
   });
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (!open) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, [open]);
+
   // Populate records when groupDetails arrive
   useEffect(() => {
     if (groupDetails?.students || groupDetails?.enrollments) {
       const list = groupDetails.students || groupDetails.enrollments || [];
-      const formatted: StudentRecord[] = list
-        .map((item: any) => {
-          const student = item.student || item;
-          const user = student.user || {};
-          const name = user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (student.name || 'O\'quvchi');
-          return {
-            studentId: student.id,
-            name,
-            phone: user.phone || student.phone,
-            status: 'PRESENT' as AttendanceStatus,
-          };
-        })
-        .filter((r: StudentRecord) => Boolean(r.studentId));
+      if (!Array.isArray(list)) {
+        setRecords([]);
+        return;
+      }
+      const formatted: StudentRecord[] = [];
+      for (const item of list) {
+        if (!item) continue;
+        const student = item.student || item;
+        if (!student || typeof student !== 'object' || !student.id) continue;
+        const user = student.user || {};
+        const name = user.firstName
+          ? `${user.firstName} ${user.lastName || ''}`.trim()
+          : student.name || "O'quvchi";
+        formatted.push({
+          studentId: String(student.id),
+          name,
+          phone: user.phone || student.phone,
+          status: 'PRESENT',
+        });
+      }
 
+      formatted.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'uz'));
       setRecords(formatted);
     } else {
       setRecords([]);
@@ -77,13 +95,19 @@ export function QuickAttendanceModal() {
     setRecords((prev) => prev.map((r) => ({ ...r, status })));
   };
 
-  // Toggle single status
+  // Toggle single status: PRESENT -> LATE -> EXCUSED -> ABSENT -> PRESENT
   const cycleStatus = (studentId: string) => {
     setRecords((prev) =>
       prev.map((r) => {
         if (r.studentId !== studentId) return r;
         const next: AttendanceStatus =
-          r.status === 'PRESENT' ? 'LATE' : r.status === 'LATE' ? 'ABSENT' : 'PRESENT';
+          r.status === 'PRESENT'
+            ? 'LATE'
+            : r.status === 'LATE'
+              ? 'EXCUSED'
+              : r.status === 'EXCUSED'
+                ? 'ABSENT'
+                : 'PRESENT';
         return { ...r, status: next };
       }),
     );
@@ -92,7 +116,7 @@ export function QuickAttendanceModal() {
   const saveAttendance = useMutation({
     mutationFn: async () => {
       if (!selectedGroupId) throw new Error('Iltimos, guruhni tanlang');
-      if (records.length === 0) throw new Error('Bu guruhda faol o\'quvchilar yo\'q');
+      if (records.length === 0) throw new Error("Bu guruhda faol o'quvchilar yo'q");
 
       // Local ISO string prevents UTC-midnight timezone shift in Uzbekistan (UTC+5)
       const todayStr = toLocalISOString();
@@ -108,11 +132,19 @@ export function QuickAttendanceModal() {
     onSuccess: () => {
       const presents = records.filter((r) => r.status === 'PRESENT').length;
       const lates = records.filter((r) => r.status === 'LATE').length;
+      const excuseds = records.filter((r) => r.status === 'EXCUSED').length;
       const absents = records.filter((r) => r.status === 'ABSENT').length;
+
+      const summaryParts = [
+        `${presents} keldi`,
+        lates > 0 ? `${lates} kechikdi` : null,
+        excuseds > 0 ? `${excuseds} sababli` : null,
+        `${absents} kelmadi`,
+      ].filter(Boolean).join(', ');
 
       push(
         'success',
-        `✅ Davomat saqlandi! (${presents} keldi, ${lates} kechikdi, ${absents} kelmadi). Ota-onalarga xabar yuborilmoqda.`,
+        `✅ Davomat saqlandi! (${summaryParts}). Ota-onalarga xabar yuborilmoqda.`,
       );
 
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
@@ -239,20 +271,27 @@ export function QuickAttendanceModal() {
           <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
             Jami: <strong className="text-slate-900 dark:text-white">{records.length}</strong> o'quvchi
           </span>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button
               type="button"
               onClick={() => handleMarkAll('PRESENT')}
               className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30 transition-colors"
             >
-              🟢 Barchasi Keldi
+              🟢 Keldi
+            </button>
+            <button
+              type="button"
+              onClick={() => handleMarkAll('EXCUSED')}
+              className="rounded-xl bg-sky-500/10 border border-sky-500/30 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-500/20 dark:bg-sky-500/20 dark:text-sky-300 dark:hover:bg-sky-500/30 transition-colors"
+            >
+              🔵 Sababli
             </button>
             <button
               type="button"
               onClick={() => handleMarkAll('ABSENT')}
               className="rounded-xl bg-red-500/10 border border-red-500/30 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-500/20 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30 transition-colors"
             >
-              🔴 Barchasi Kelmadi
+              🔴 Kelmadi
             </button>
           </div>
         </div>
@@ -294,11 +333,19 @@ export function QuickAttendanceModal() {
                         ? 'bg-emerald-500/15 text-emerald-700 border border-emerald-500/30 shadow-sm dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40'
                         : r.status === 'LATE'
                         ? 'bg-amber-500/15 text-amber-700 border border-amber-500/30 shadow-sm dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40'
+                        : r.status === 'EXCUSED'
+                        ? 'bg-sky-500/15 text-sky-700 border border-sky-500/30 shadow-sm dark:bg-sky-500/20 dark:text-sky-300 dark:border-sky-500/40'
                         : 'bg-red-500/15 text-red-700 border border-red-500/30 shadow-sm dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/40'
                     }`}
                   >
                     <span>
-                      {r.status === 'PRESENT' ? '🟢 KELDI' : r.status === 'LATE' ? '🟡 KECHIKDI' : '🔴 KELMADI'}
+                      {r.status === 'PRESENT'
+                        ? '🟢 KELDI'
+                        : r.status === 'LATE'
+                        ? '🟡 KECHIKDI'
+                        : r.status === 'EXCUSED'
+                        ? '🔵 SABABLI'
+                        : '🔴 KELMADI'}
                     </span>
                   </span>
                 </div>
@@ -318,7 +365,10 @@ export function QuickAttendanceModal() {
           </button>
           <button
             type="button"
-            onClick={() => saveAttendance.mutate()}
+            onClick={() => {
+              if (saveAttendance.isPending || records.length === 0) return;
+              saveAttendance.mutate();
+            }}
             disabled={saveAttendance.isPending || records.length === 0}
             className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 py-3 font-bold text-white shadow-xl shadow-indigo-500/25 hover:from-indigo-400 hover:to-purple-500 active:scale-[0.98] transition-all disabled:opacity-50"
           >

@@ -1,8 +1,8 @@
 /**
- * M-EDU FaceEnrollmentPage — iOS 27 Spatial Liquid Glass Edition
+ * M-EDU FaceEnrollmentPage —  Spatial 
  *
- * Premium craft:
- *  - Multi-layered ambient volumetric plasma orbs & refractive iOS 27 Liquid Glass surfaces
+ * Module Features:
+ *  - Multi-layered ambient volumetric plasma orbs & refractive  Liquid Glass surfaces
  *  - Specular rim highlights, inner optical lens borders & deep backdrop-saturate-[200%]
  *  - Hero header with 3D squircle biometric scanner emblem + live neural telemetry pill
  *  - Animated KPI statistics bento with radial progress ring & specular edge glow
@@ -44,7 +44,7 @@ import { useVoiceFeedback } from '@/hooks/useVoiceFeedback';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 
 /* ============================================================================
- * MOTION TOKENS — iOS 27 Fluid Spring Physics
+ * MOTION TOKENS —  Fluid Spring Physics
  * ========================================================================== */
 
 const SPRING = {
@@ -68,7 +68,7 @@ const cardVariants: Variants = {
 };
 
 /* ============================================================================
- * iOS 27 LIQUID GLASS DESIGN TOKENS (Tailwind Utility Compositions)
+ *  LIQUID GLASS DESIGN TOKENS (Tailwind Utility Compositions)
  * ========================================================================== */
 
 const LIQUID_PANEL =
@@ -84,7 +84,7 @@ const LIQUID_INSET =
   'dark:shadow-[inset_0_1px_2px_rgba(0,0,0,0.35)]';
 
 /* ============================================================================
- * CUSTOM SF SYMBOLS ICONS
+ * CUSTOM SVG ICONS
  * ========================================================================== */
 
 const ICON_STROKE = 1.85;
@@ -194,7 +194,7 @@ function Icon({
 }
 
 /* ============================================================================
- * iOS 27 VOLUMETRIC AMBIENT PLASMA ORBS & SPECULAR RIM
+ *  VOLUMETRIC AMBIENT PLASMA ORBS & SPECULAR RIM
  * ========================================================================== */
 
 function AmbientOrbs() {
@@ -339,7 +339,7 @@ function truncateEnrollmentId(id: string, maxLength = 8): string {
 }
 
 /* ============================================================================
- * iOS 27 LIQUID GLASS KPI CARD COMPONENT
+ *  LIQUID GLASS KPI CARD COMPONENT
  * ========================================================================== */
 
 function KpiCard({
@@ -725,7 +725,7 @@ export function FaceEnrollmentPage() {
       {toastNode}
 
       {/* ============================================================
-          iOS 27 SPATIAL LIQUID GLASS HERO BANNER
+          HERO BANNER
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div className={`${LIQUID_PANEL} liquid-glass-surface p-6 sm:p-8`}>
@@ -780,7 +780,7 @@ export function FaceEnrollmentPage() {
               </div>
             </div>
 
-            {/* Live Neural Telemetry Pill (iOS 27 Dynamic Island Capsule) */}
+            {/* Live Neural Telemetry Pill (Dynamic Status Capsule) */}
             <div className="flex flex-wrap items-center gap-3 self-stretch sm:self-auto">
               <div className={`${LIQUID_INSET} flex items-center gap-3.5 px-4 py-3`}>
                 <div className="relative flex h-3 w-3 items-center justify-center">
@@ -1222,7 +1222,7 @@ export function FaceEnrollmentPage() {
                 </div>
               </div>
 
-              {/* Search & iOS 27 Animated Segmented Filter Pills */}
+              {/* Search & Segmented Filter Pills */}
               <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
                 <div className="relative flex-1">
                   <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#64748B]">
@@ -1237,7 +1237,7 @@ export function FaceEnrollmentPage() {
                   />
                 </div>
 
-                {/* iOS 27 Sliding Segmented Control */}
+                {/* Segmented Control */}
                 <div className="relative inline-flex items-center rounded-2xl border border-black/[0.06] bg-black/[0.04] p-1 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05]">
                   {(['ALL', 'ACTIVE', 'REVOKED'] as const).map((tab) => {
                     const isSelected = statusFilter === tab;

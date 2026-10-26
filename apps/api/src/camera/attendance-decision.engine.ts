@@ -8,6 +8,7 @@ import { RedisPubSubService } from '../common/redis/redis-pubsub.service';
 import { NotificationEventService } from '../notifications/events/notification-event.service';
 import { ATTENDANCE_CREATED_EVENT } from '../attendance/attendance.gateway';
 import { getErrorMessage } from '../lib/error';
+import { TurnstileRelayService } from '../devices/turnstile-relay.service';
 import {
   canonicalMembershipWhere,
   INELIGIBLE_STUDENT_STATUSES,
@@ -245,6 +246,7 @@ export class AttendanceDecisionEngine {
     private readonly prisma: PrismaService,
     @Optional() private readonly redisPubSub?: RedisPubSubService,
     @Optional() private readonly notificationEvents?: NotificationEventService,
+    @Optional() private readonly turnstileRelay?: TurnstileRelayService,
   ) {}
 
   // =========================================================================
@@ -634,6 +636,21 @@ export class AttendanceDecisionEngine {
           status: statusToRecord,
           recognizedAt,
         });
+
+        if (this.turnstileRelay) {
+          this.turnstileRelay
+            .triggerPulse({
+              organizationId: organization.id,
+              studentId: student.id,
+              direction: 'IN',
+              reason: `Camera [${camera.id}] automatic attendance recorded`,
+            })
+            .catch((err: unknown) => {
+              this.logger.warn('Failed to pulse turnstile relay on recorded attendance', {
+                error: err instanceof Error ? err.message : String(err),
+              });
+            });
+        }
       }
 
       const { isNewRecord: _, ...publicResult } = decisionResult;

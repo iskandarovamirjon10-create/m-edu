@@ -1,12 +1,6 @@
 /**
- * M-EDU SystemHealthPage — Apple Design Award V2 Edition
- *
- * Premium craftsmanship:
- *  - Apple SF Pro visual hierarchy with ambient server telemetry lighting
- *  - Hero banner with Pulse Monitor badge & overall system uptime
- *  - Component status squircle grid with glowing pulse indicators
- *  - Framer-motion spring transitions (staggered cards, telemetry logs)
- *  - Full preservation of API requests, formats, and translation keys
+ * M-EDU System Health Page
+ * System infrastructure monitoring, database connectivity, cache status, and service health checks.
  */
 
 import { useCallback, useEffect } from 'react';

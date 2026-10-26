@@ -250,6 +250,7 @@ export const aiEn = {
   'ai.status.sent': 'Sent',
   'ai.tokens': 'tokens',
   'ai.status.offline': 'Offline',
+  'ai.status.fallback': 'Basic mode',
 
   'common.today': 'Today',
   'common.yesterday': 'Yesterday',
@@ -517,6 +518,7 @@ export const aiUz: typeof aiEn = {
   'ai.status.sent': 'Yuborildi',
   'ai.tokens': 'token',
   'ai.status.offline': 'Oflayn',
+  'ai.status.fallback': 'Bazaviy rejim',
 
   'common.today': 'Bugun',
   'common.yesterday': 'Kecha',
@@ -784,6 +786,7 @@ export const aiRu: typeof aiEn = {
   'ai.status.sent': 'Отправлено',
   'ai.tokens': 'токенов',
   'ai.status.offline': 'Офлайн',
+  'ai.status.fallback': 'Базовый режим',
 
   'common.today': 'Сегодня',
   'common.yesterday': 'Вчера',

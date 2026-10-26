@@ -485,6 +485,7 @@ export const pagesEn = {
   'faceRecognition.submitCapture': 'Submit a capture',
   'faceRecognition.subtitle': 'Live recognition sessions with liveness checks',
   'faceRecognition.viewRaw': 'View raw response',
+  'faceRecognition.waiting': 'Waiting',
   'faceRecognition.copySession': 'Copy session ID',
   'faceRecognition.exportCsv': 'Export CSV',
   'faceRecognition.filterFailed': 'Failed',

@@ -1,14 +1,14 @@
 /**
- * M-EDU PayrollAnalyticsPage — Apple Design Award Edition
+ * M-EDU PayrollAnalyticsPage — 
  *
- * Premium craft:
+ * Module Features:
  *  - Hero header with gradient analytics icon + live chip
  *  - Premium segmented tab control with layoutId indicator
  *  - Animated stat tiles with count-up + tone colors
  *  - Premium SVG charts (gradient area + animated path draw + dots)
  *  - Month-range selector as premium pill control
  *  - Premium tables with squircle leading icons
- *  - Custom SVG icons in SF Symbols proportions
+ *  - Custom SVG icons in SVG Icons
  *  - Shimmer skeletons (not pulse)
  *  - Framer Motion spring physics + staggered blur-in
  *  - Full i18n preserved
@@ -56,7 +56,7 @@ const rowVariants: Variants = {
 };
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;

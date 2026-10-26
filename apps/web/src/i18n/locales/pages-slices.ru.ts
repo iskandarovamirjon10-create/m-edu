@@ -485,6 +485,7 @@ export const pagesRu = {
   'faceRecognition.submitCapture': 'ÐžÑ‚Ð¿Ñ€Ð°Ð²Ð¸Ñ‚ÑŒ ÑÐ½Ð¸Ð¼Ð¾Ðº',
   'faceRecognition.subtitle': 'Ð–Ð¸Ð²Ñ‹Ðµ ÑÐµÑÑÐ¸Ð¸ Ñ€Ð°ÑÐ¿Ð¾Ð·Ð½Ð°Ð²Ð°Ð½Ð¸Ñ Ñ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ¾Ð¹ Ð¶Ð¸Ð²Ð¾ÑÑ‚Ð¸',
   'faceRecognition.viewRaw': 'ÐŸÐ¾ÐºÐ°Ð·Ð°Ñ‚ÑŒ ÑÑ‹Ñ€Ð¾Ð¹ Ð¾Ñ‚Ð²ÐµÑ‚',
+  'faceRecognition.waiting': 'Ожидание...',
   'featureFlags.activeFlags': 'ÐÐºÑ‚Ð¸Ð²Ð½Ñ‹Ðµ Ñ„Ð»Ð°Ð³Ð¸',
   'featureFlags.create': 'Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ñ„Ð»Ð°Ð³',
   'featureFlags.createHint': 'ÐÐ¾Ð²Ñ‹Ðµ Ñ„Ð»Ð°Ð³Ð¸ ÑÐ¾Ð·Ð´Ð°ÑŽÑ‚ÑÑ Ð¾Ñ‚ÐºÐ»ÑŽÑ‡Ñ’Ð½Ð½Ñ‹Ð¼Ð¸ Ð¸ Ð²Ð¸Ð´Ð½Ñ‹ Ð²ÑÐµÐ¼ Ð¾Ñ€Ð³Ð°Ð½Ð¸Ð·Ð°Ñ†Ð¸ÑÐ¼.',

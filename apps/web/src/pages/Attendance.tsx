@@ -1,15 +1,6 @@
 /**
- * M-EDU AttendancePage — Apple Design Award & Liquid Glass Edition (10/10)
- *
- * Architectural & Craft Upgrades:
- *  - 100% Backend API, Query Keys, Socket & Schedule-Error compatibility preserved
- *  - Multi-layer Liquid Glass surfaces with specular top-edge highlights
- *  - Live Telemetry Distribution Bar (iOS Storage style multi-segment spring bar)
- *  - 1-Click Inline Status Cycling on rows with sound feedback & optimistic feel
- *  - Instant Client-Side Search (⌘K / '/') + Quick Date Presets (Today / Yesterday)
- *  - Dual Layout Engine: Seamless Animated List View & Bento Grid View
- *  - Parallelized Bulk Operations (Promise.allSettled) + Select-All Master Toggle
- *  - Pure SF Symbols 6 SVG vector geometry (zero raw unicode hacks, zero `any` types)
+ * M-EDU Attendance Page
+ * Student attendance recording, schedule verification, bulk operations, and status tracking.
  */
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -81,7 +72,7 @@ const rowVariants: Variants = {
 };
 
 /* ============================================================================
- * SF SYMBOLS 6 VECTOR ICON SYSTEM
+ * SVG VECTOR ICON SYSTEM
  * ========================================================================== */
 
 const ICON_STROKE = 1.85;
@@ -429,9 +420,11 @@ function avatarGradient(name: string): string {
 }
 
 function fullStudentName(a: Attendance | null | undefined): string {
-  if (!a?.student?.user) return '—';
-  const { firstName, lastName } = a.student.user;
-  return [firstName, lastName].filter(Boolean).join(' ') || '—';
+  if (!a?.student) return '—';
+  const user = a.student.user;
+  if (!user) return (a.student as any).name || '—';
+  const { firstName, lastName } = user;
+  return [firstName, lastName].filter(Boolean).join(' ') || (a.student as any).name || '—';
 }
 
 function isScheduleError(msg: string): boolean {
@@ -745,7 +738,7 @@ function FieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Tone }) {
   );
 }
 
-/** Tone-aware iOS 18 Status Segmented Control (used in Record & Edit Modals) */
+/** Status Segmented Control (used in Record & Edit Modals) */
 function StatusSegmented({
   value,
   onChange,
@@ -997,6 +990,22 @@ export function AttendancePage() {
     if (Array.isArray(students.data)) return students.data;
     return (students.data as Paginated<Student> | undefined)?.items || [];
   }, [students.data]);
+
+  const selectedGroupDetails = useQuery({
+    queryKey: ['attendance-form-group', form.groupId],
+    queryFn: () => groupsApi.get(form.groupId),
+    enabled: modalOpen && Boolean(form.groupId),
+    staleTime: 30000,
+  });
+
+  const modalStudentList = useMemo(() => {
+    if (!form.groupId) return studentList;
+    const enrollments = (selectedGroupDetails.data as any)?.enrollments || [];
+    if (enrollments.length === 0) return studentList;
+    return enrollments
+      .map((e: any) => e.student)
+      .filter(Boolean) as Student[];
+  }, [form.groupId, selectedGroupDetails.data, studentList]);
 
   /* ── Derived stats ────────────────────────────────────────────────── */
   const statusCounts = useMemo(() => {
@@ -2199,11 +2208,13 @@ export function AttendancePage() {
                   className="pl-11"
                 >
                   <option value="">{t('attendance.studentPlaceholder')}</option>
-                  {studentList.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.user?.firstName} {s.user?.lastName}
-                    </option>
-                  ))}
+                  {modalStudentList
+                    .filter((s): s is Student => Boolean(s && s.id))
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.user?.firstName || (s as any).name || "O'quvchi"} {s.user?.lastName || ''}
+                      </option>
+                    ))}
                 </GlassSelect>
               </div>
             </GlassField>
@@ -2411,8 +2422,10 @@ export function AttendancePage() {
             <p className="text-[12.5px] font-semibold leading-snug text-red-500">
               {t('attendance.voidConfirmBefore')}{' '}
               <strong className="text-[#1D1D1F] dark:text-[#F5F5F7]">
-                {voidTarget?.student?.user
-                  ? `${voidTarget.student.user.firstName} ${voidTarget.student.user.lastName}`
+                {voidTarget?.student
+                  ? (voidTarget.student.user
+                    ? `${voidTarget.student.user.firstName || ''} ${voidTarget.student.user.lastName || ''}`.trim()
+                    : (voidTarget.student as any).name || t('attendance.thisStudent'))
                   : t('attendance.thisStudent')}
               </strong>{' '}
               {t('attendance.voidConfirmAfter', {

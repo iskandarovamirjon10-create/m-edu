@@ -1,5 +1,5 @@
 /**
- * M-EDU ImportExportPage — Apple Design Award V2 Edition
+ * M-EDU ImportExportPage — 
  *
  * Ultra Premium Bulk Data Exchange Substrate:
  *  - Apple SF Pro visual hierarchy with ambient backdrop

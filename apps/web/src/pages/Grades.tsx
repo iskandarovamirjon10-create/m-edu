@@ -1,9 +1,9 @@
 /**
  * ============================================================================
- * M-EDU GradesPage — v20 "Apple Spatial Performance Atelier & Academic Ledger"
+ * M-EDU Grades Page
  * ============================================================================
  *
- * 🎯 Apple visionOS / macOS Sequoia Masterclass Upgrade:
+ * Architecture & Features:
  *  ✅ Liquid Glass Aesthetic: Specular rim highlights, depth layering, blur physics
  *  ✅ WCAG 2.2 AA Compliance: All interactive touch targets >= 44x44px (Table & Mobile Cards)
  *  ✅ Dual Responsive Presentation: Mobile Cards (< 640px) ⇄ Desktop Specular Liquid Glass Table (>= 640px)

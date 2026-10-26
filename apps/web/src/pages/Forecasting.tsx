@@ -1,21 +1,6 @@
 /**
- * ============================================================================
- * M-EDU ForecastingPage — Apple visionOS & macOS Sequoia Specular Liquid Glass
- * ============================================================================
- *
- * Senior craft:
- *  - Apple visionOS specular Liquid Glass materials (.liquid-glass-surface, .liquid-glass-card)
- *  - Ambient AuroraMesh atmospheric canvas with specular hairlines
- *  - macOS Split-View Detail Sidecar (`openSidecar`) for predictive model inspection
- *  - Superhuman keyboard-first navigation (J/K navigation, R to refetch, Enter to inspect)
- *  - Web Audio tactile haptics (playTick, playPop, playSuccess)
- *  - Interactive CountUp KPI bar with instant quick-filter toggles
- *  - Statistical confidence bounds & multi-method trend extrapolation
- *  - Strict WCAG 2.2 AA SC 2.5.8 touch targets (>= 44x44px hitboxes)
- *  - Mobile safe-area padding: pb-[max(6rem,env(safe-area-inset-bottom))]
- *  - Pure exported helpers for unit testability
- *  - 100% API contract & route compatibility preservation
- * ============================================================================
+ * M-EDU Forecasting Page
+ * Predictive enrollment modeling, revenue forecasting, and retention projection.
  */
 
 import {
@@ -36,7 +21,7 @@ import { forecastingApi } from '@/lib/api';
 import { usePrefersReducedMotion, cn } from '@/lib/design';
 
 /* ============================================================================
- * MOTION TOKENS (macOS Sequoia Physics)
+ * MOTION TOKENS ( Physics)
  * ========================================================================== */
 
 const SPRING_PHYSICS = {
@@ -114,7 +99,7 @@ export const METHOD_STYLE: Record<ForecastPoint['method'], { bg: string; text: s
 };
 
 /* ============================================================================
- * SF SYMBOLS STYLE ICONS
+ * SVG ICONS
  * ========================================================================== */
 
 const ICONS = {
@@ -189,7 +174,7 @@ function Icon({
 }
 
 /* ============================================================================
- * AURORA MESH BACKGROUND (visionOS Atmospheric Canvas)
+ * AURORA MESH BACKGROUND (Atmospheric Canvas)
  * ========================================================================== */
 
 function AuroraMesh() {
@@ -447,7 +432,7 @@ export function ForecastingPage() {
         className="mx-auto max-w-7xl space-y-6"
       >
         {/* ====================================================================
-         * 1. visionOS SPECULAR HERO HEADER
+         * 1. HERO HEADER
          * ================================================================== */}
         <motion.div
           variants={itemVariants}

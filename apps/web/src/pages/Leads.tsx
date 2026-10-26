@@ -1,13 +1,13 @@
 /**
- * M-EDU LeadsPage — Apple Design Award & Liquid Glass CRM Edition (10/10)
+ * M-EDU LeadsPage —  & Liquid Glass CRM Edition 
  *
- * Architectural & Craft Upgrades:
+ * Module Features:
  *  - 100% Backend API, Query Keys, URL SearchParams & Trial Funnel compatibility preserved
  *  - Dual View Engine: Seamless Animated List View & 5-Stage Kanban Pipeline Board
  *  - Multi-segment Live CRM Pipeline Telemetry Bar (iOS Storage style)
  *  - Interactive KPI Cards (click any KPI card to filter pipeline stage)
  *  - 1-Click Copy-to-Clipboard for Phone & Email with haptic sound + toast feedback
- *  - Pure SF Symbols 6 SVG vector geometry (zero raw emojis/unicode hacks, zero `any` types)
+ *  - Pure SVG vector geometry (zero raw emojis/unicode hacks, zero `any` types)
  *  - Upgraded Modals: Squircle FieldIcons, Quick Source Preset Chips, iOS Segmented Stage & Attendance Cards
  *  - Parallelized Bulk Operations (Promise.allSettled) + Master Select-All Toggle
  */
@@ -82,7 +82,7 @@ const rowVariants: Variants = {
 };
 
 /* ============================================================================
- * SF SYMBOLS 6 VECTOR ICON SYSTEM
+ * SVG VECTOR ICON SYSTEM
  * ========================================================================== */
 
 const ICON_STROKE = 1.85;
@@ -728,7 +728,7 @@ function PipelineTelemetryBar({
   );
 }
 
-/** Tone-aware iOS 18 Stage Segmented Control (used inside Create/Edit Modal) */
+/** Tone-aware  Stage Segmented Control (used inside Create/Edit Modal) */
 function StageSegmented({
   value,
   onChange,
@@ -1202,7 +1202,7 @@ export function LeadsPage() {
     setConvertTarget(null);
   }, [convertTarget, convert]);
 
-  /* ── Superhuman Keyboard-First Navigation ─────────────────────────── */
+  /* ── Fast Keyboard-First Navigation ─────────────────────────── */
   const {
     focusedIndex,
     selectedIds,
@@ -2189,7 +2189,7 @@ export function LeadsPage() {
         )}
       </section>
 
-      {/* ── Superhuman Floating Action Island ────────────────────────────── */}
+      {/* ── Fast Floating Action Island ────────────────────────────── */}
       <FloatingActionIsland
         selectedCount={selectedCount}
         onClearSelection={clearSelection}
@@ -2333,7 +2333,7 @@ export function LeadsPage() {
             </div>
           </div>
 
-          {/* iOS 18 Segmented Stage Selector */}
+          {/*  Segmented Stage Selector */}
           <div>
             <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
               {t('leads.col.stage') || "Boshlang'ich bosqich"}

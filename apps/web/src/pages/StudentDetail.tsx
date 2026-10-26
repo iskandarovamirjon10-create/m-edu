@@ -1,17 +1,9 @@
 /**
- * M-EDU StudentDetailPage — Apple Design Award / macOS Sequoia & visionOS 10/10 Edition
- *
- * Premium craft & specifications:
- *  - Apple visionOS / macOS Sequoia specular liquid glass aesthetics with meniscus highlights
- *  - WCAG 2.2 AA SC 2.5.8 compliant touch targets (all actions >= 44x44px)
- *  - Safe-area responsive layout from 320px mobile to 4K ultra-wide
- *  - Zero-leak TanStack Query caching with queryKeys factory
- *  - Full trilingual resilience via useSafeI18n (UZ, RU, EN) with zero raw unhandled keys
- *  - Preserved pure helper signatures (formatStudentStatus, formatGroupStatus, getInitials, nameHash, avatarGradient)
- *  - SpatialIdentityCard360 modal + QuickLook sidecar + sound effects (playTick, playPop)
+ * M-EDU Student Detail Page
+ * Comprehensive student 360 profile, academic history, groups, attendance, and financial breakdown.
  */
 
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
@@ -43,24 +35,34 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { SpatialIdentityCard360 } from '@/components/cards/SpatialIdentityCard360';
 import { AiStudentDiagnosticWidget, AiParentMessageModal } from '@/components/ai';
 
-/* ============================================================================
- * MOTION TOKENS (Spring Physics)
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * 120Hz PROMOTION SPRING PHYSICS & CHOREOGRAPHY
+ * ════════════════════════════════════════════════════════════════════════ */
 
 const SPRING = {
-  snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
-  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.9 },
-  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
+  snappy: { type: 'spring' as const, stiffness: 540, damping: 34, mass: 0.65 },
+  smooth: { type: 'spring' as const, stiffness: 320, damping: 28, mass: 0.85 },
+  soft:   { type: 'spring' as const, stiffness: 220, damping: 26, mass: 1.0 },
+  bouncy: { type: 'spring' as const, stiffness: 460, damping: 22, mass: 0.7 },
 } as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.06 } },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.048, delayChildren: 0.03 },
+  },
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: SPRING.smooth },
+  hidden: { opacity: 0, y: 14, scale: 0.985, filter: 'blur(5px)' },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    filter: 'blur(0px)',
+    transition: SPRING.smooth,
+  },
 };
 
 const rowVariants: Variants = {
@@ -68,9 +70,9 @@ const rowVariants: Variants = {
   visible: { opacity: 1, x: 0, transition: SPRING.smooth },
 };
 
-/* ============================================================================
+/* ══════════════════════════════════════════════════════════════════════════
  * TYPES
- * ========================================================================== */
+ * ════════════════════════════════════════════════════════════════════════ */
 
 export interface FaceEnrollmentItem {
   id: string;
@@ -96,11 +98,13 @@ export interface ParentLink {
   canViewAttendance?: boolean;
 }
 
-/* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
- * ========================================================================== */
+type DetailTab = 'all' | 'academic' | 'finance';
 
-const ICON_STROKE = 1.75;
+/* ══════════════════════════════════════════════════════════════════════════
+ * PRECISION SF-PROPORTION VECTOR ICONS
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const ICON_STROKE = 1.85;
 
 const I = {
   userCircle: [
@@ -116,7 +120,8 @@ const I = {
   userPlus: [
     'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
     'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-    'M19 8v6', 'M22 11h-6',
+    'M19 8v6',
+    'M22 11h-6',
   ],
   users: [
     'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2',
@@ -135,11 +140,15 @@ const I = {
     'M22 4 12 14.01l-3-3',
   ],
   calendar: [
-    'M8 2v4', 'M16 2v4', 'M3 10h18',
+    'M8 2v4',
+    'M16 2v4',
+    'M3 10h18',
     'M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z',
   ],
   calendarCheck: [
-    'M8 2v4', 'M16 2v4', 'M3 10h18',
+    'M8 2v4',
+    'M16 2v4',
+    'M3 10h18',
     'M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z',
     'M9 15l2 2 4-4',
   ],
@@ -153,7 +162,8 @@ const I = {
     'M15 3h4a2 2 0 0 1 2 2v4',
     'M21 15v4a2 2 0 0 1-2 2h-4',
     'M9 21H5a2 2 0 0 1-2-2v-4',
-    'M9.5 10v.5', 'M14.5 10v.5',
+    'M9.5 10v.5',
+    'M14.5 10v.5',
     'M9 15a4 4 0 0 0 6 0',
   ],
   phone: [
@@ -171,7 +181,8 @@ const I = {
     'M3 6h18',
     'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6',
     'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
-    'M10 11v6', 'M14 11v6',
+    'M10 11v6',
+    'M14 11v6',
   ],
   link: [
     'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71',
@@ -181,9 +192,7 @@ const I = {
     'M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.71 1.71',
     'M5.17 11.75l-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71',
   ],
-  shield: [
-    'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
-  ],
+  shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
   award: [
     'M12 15a5 5 0 1 0 0-10 5 5 0 0 0 0 10z',
     'M8.2 13.9 7 22l5-3 5 3-1.2-8.1',
@@ -194,8 +203,10 @@ const I = {
   ],
   sparkles: [
     'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
-    'M18.5 3.5v3', 'M20 5h-3',
-    'M5.5 18v2.5', 'M6.75 19.25h-2.5',
+    'M18.5 3.5v3',
+    'M20 5h-3',
+    'M5.5 18v2.5',
+    'M6.75 19.25h-2.5',
   ],
   arrowRight: ['M5 12h14', 'M12 5l7 7-7 7'],
   info: [
@@ -203,12 +214,38 @@ const I = {
     'M12 16v-4',
     'M12 8h.01',
   ],
+  copy: [
+    'M9 9h10v10H9z',
+    'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
+  ],
+  check: ['M20 6 9 17l-5-5'],
+  idCard: [
+    'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z',
+    'M9 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+    'M15 8h2',
+    'M15 12h2',
+    'M7 16h10',
+  ],
+  sidebar: [
+    'M3 3h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z',
+    'M9 3v18',
+  ],
+  messageSquare: [
+    'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  ],
 };
 
-function Icon({
-  paths, size = 18, className = '', strokeWidth = ICON_STROKE, ...rest
+const Icon = memo(function Icon({
+  paths,
+  size = 18,
+  className = '',
+  strokeWidth = ICON_STROKE,
+  ...rest
 }: {
-  paths: string[]; size?: number; className?: string; strokeWidth?: number;
+  paths: readonly string[];
+  size?: number;
+  className?: string;
+  strokeWidth?: number;
 } & React.SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -220,26 +257,34 @@ function Icon({
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={className}
+      className={`shrink-0 ${className}`}
       aria-hidden="true"
       {...rest}
     >
-      {paths.map((d, i) => <path key={i} d={d} />)}
+      {paths.map((d, i) => (
+        <path key={i} d={d} />
+      ))}
     </svg>
   );
-}
+});
 
-/* ============================================================================
+/* ══════════════════════════════════════════════════════════════════════════
  * PURE HELPER FUNCTIONS (Preserved & Exported for Tests)
- * ========================================================================== */
+ * ════════════════════════════════════════════════════════════════════════ */
 
-export function formatStudentStatus(isActive: boolean | undefined): { color: string; label: string } {
+export function formatStudentStatus(isActive: boolean | undefined): {
+  color: string;
+  label: string;
+} {
   return isActive === false
     ? { color: 'red', label: 'enum.status.INACTIVE' }
     : { color: 'green', label: 'enum.status.ACTIVE' };
 }
 
-export function formatGroupStatus(isActive: boolean): { color: string; label: string } {
+export function formatGroupStatus(isActive: boolean): {
+  color: string;
+  label: string;
+} {
   return isActive
     ? { color: 'green', label: 'enum.status.ACTIVE' }
     : { color: 'slate', label: 'enum.status.INACTIVE' };
@@ -248,6 +293,7 @@ export function formatGroupStatus(isActive: boolean): { color: string; label: st
 export function getInitials(name: string): string {
   return (
     name
+      .trim()
       .split(/\s+/)
       .map((p) => p.charAt(0))
       .filter(Boolean)
@@ -264,14 +310,14 @@ export function nameHash(str: string): number {
 }
 
 export const AVATAR_PALETTES = [
-  ['#007AFF', '#5856D6'],
-  ['#AF52DE', '#FF2D55'],
-  ['#34C759', '#32ADE6'],
+  ['#0066FF', '#5856D6'],
+  ['#9333EA', '#EC4899'],
+  ['#16B853', '#00C7BE'],
   ['#FF9500', '#FF2D55'],
-  ['#5856D6', '#AF52DE'],
-  ['#32ADE6', '#007AFF'],
+  ['#4F46E5', '#9333EA'],
+  ['#00C7BE', '#0066FF'],
   ['#FF2D55', '#FF9500'],
-  ['#30D158', '#34C759'],
+  ['#10B981', '#059669'],
 ];
 
 export function avatarGradient(name: string): string {
@@ -279,153 +325,251 @@ export function avatarGradient(name: string): string {
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 }
 
-/* ============================================================================
- * SUB-COMPONENTS
- * ========================================================================== */
+/* ══════════════════════════════════════════════════════════════════════════
+ * CHROMATIC TONE PALETTES
+ * ════════════════════════════════════════════════════════════════════════ */
+
+type ChromaticTone = 'blue' | 'green' | 'orange' | 'red' | 'purple';
+
+const TONE_STYLES: Record<
+  ChromaticTone,
+  { fg: string; bg: string; border: string; glow: string; gradient: string }
+> = {
+  blue: {
+    fg: 'var(--tone-blue-fg, #0066FF)',
+    bg: 'var(--tone-blue-bg, rgba(0, 102, 255, 0.11))',
+    border: 'var(--tone-blue-border, rgba(0, 102, 255, 0.25))',
+    glow: 'var(--tone-blue-glow, rgba(0, 102, 255, 0.28))',
+    gradient: 'linear-gradient(135deg, #0066FF 0%, #3B49DF 100%)',
+  },
+  green: {
+    fg: 'var(--tone-green-fg, #16B853)',
+    bg: 'var(--tone-green-bg, rgba(22, 184, 83, 0.11))',
+    border: 'var(--tone-green-border, rgba(22, 184, 83, 0.25))',
+    glow: 'var(--tone-green-glow, rgba(22, 184, 83, 0.28))',
+    gradient: 'linear-gradient(135deg, #16B853 0%, #0D9488 100%)',
+  },
+  orange: {
+    fg: 'var(--tone-orange-fg, #FF9500)',
+    bg: 'var(--tone-orange-bg, rgba(255, 149, 0, 0.12))',
+    border: 'var(--tone-orange-border, rgba(255, 149, 0, 0.26))',
+    glow: 'var(--tone-orange-glow, rgba(255, 149, 0, 0.28))',
+    gradient: 'linear-gradient(135deg, #FF9500 0%, #F97316 100%)',
+  },
+  red: {
+    fg: 'var(--tone-red-fg, #FF3B30)',
+    bg: 'var(--tone-red-bg, rgba(255, 59, 48, 0.11))',
+    border: 'var(--tone-red-border, rgba(255, 59, 48, 0.25))',
+    glow: 'var(--tone-red-glow, rgba(255, 59, 48, 0.28))',
+    gradient: 'linear-gradient(135deg, #FF3B30 0%, #E11D48 100%)',
+  },
+  purple: {
+    fg: 'var(--tone-purple-fg, #9333EA)',
+    bg: 'var(--tone-purple-bg, rgba(147, 51, 234, 0.11))',
+    border: 'var(--tone-purple-border, rgba(147, 51, 234, 0.25))',
+    glow: 'var(--tone-purple-glow, rgba(147, 51, 234, 0.28))',
+    gradient: 'linear-gradient(135deg, #7C3AED 0%, #9333EA 100%)',
+  },
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * SUB-COMPONENTS (Chromatic Liquid Glass v2)
+ * ════════════════════════════════════════════════════════════════════════ */
 
 function CountUp({
-  value, duration = 1.1, suffix = '', decimals = 0,
-}: { value: number; duration?: number; suffix?: string; decimals?: number }) {
-  const isTest = typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
-  const [n, setN] = useState(isTest ? value : 0);
+  value,
+  duration = 1.0,
+  suffix = '',
+  decimals = 0,
+}: {
+  value: number;
+  duration?: number;
+  suffix?: string;
+  decimals?: number;
+}) {
+  const isTest =
+    typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const [n, setN] = useState(isTest ? safeValue : 0);
   const startRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (isTest) return;
-    let raf: number;
+    let raf = 0;
     startRef.current = null;
     const step = (ts: number) => {
       if (startRef.current === null) startRef.current = ts;
       const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
-      const eased = 1 - Math.pow(1 - p, 4);
-      setN(value * eased);
+      const eased = 1 - Math.pow(1 - p, 5);
+      setN(safeValue * eased);
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [value, duration, isTest]);
+  }, [safeValue, duration, isTest]);
 
-  const valToUse = isTest ? value : n;
-  const shown = decimals > 0 ? valToUse.toFixed(decimals) : Math.round(valToUse).toLocaleString();
-  return <span className="tabular-nums">{shown}{suffix}</span>;
+  const valToUse = isTest ? safeValue : n;
+  const shown =
+    decimals > 0
+      ? valToUse.toFixed(decimals)
+      : Math.round(valToUse).toLocaleString();
+  return (
+    <span className="tabular-nums">
+      {shown}
+      {suffix}
+    </span>
+  );
 }
 
-/** Big hero avatar with visionOS conic specular glow ring */
+/** 3D Spatial Hero Avatar with Rotating Conic Halo & Live Radar Beacon */
 export function HeroAvatar({
-  name, isActive, size = 96,
-}: { name: string; isActive: boolean | undefined; size?: number }) {
+  name,
+  isActive,
+  size = 96,
+}: {
+  name: string;
+  isActive: boolean | undefined;
+  size?: number;
+}) {
+  const active = isActive !== false;
+
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      {/* Conic specular sheen ring */}
+    <div
+      className="group relative shrink-0 select-none"
+      style={{ width: size, height: size }}
+    >
+      {/* Ambient Chromatic Aura */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -inset-2 rounded-full opacity-40 blur-xl transition-opacity duration-500 group-hover:opacity-70"
+        style={{ background: avatarGradient(name) }}
+      />
+
+      {/* Rotating Conic Specular Ring */}
       <motion.div
         className="absolute inset-[-4px] rounded-full p-[3px]"
         animate={{ rotate: 360 }}
-        transition={{ duration: 14, repeat: Infinity, ease: 'linear' }}
+        transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
       >
         <span
-          className="absolute inset-0 rounded-full opacity-70 blur-[1px]"
+          className="absolute inset-0 rounded-full opacity-80 blur-[1px]"
           style={{
-            background: 'conic-gradient(from 0deg, #007AFF, #5856D6, #FF2D55, #FF9500, #34C759, #007AFF)',
+            background:
+              'var(--gradient-conic, conic-gradient(from 0deg, #0066FF, #00C7BE, #5856D6, #AF52DE, #FF2D55, #0066FF))',
           }}
           aria-hidden="true"
         />
       </motion.div>
 
-      {/* Avatar Container */}
+      {/* Inner Specular Glass Orb */}
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={SPRING.smooth}
-        className="relative flex h-full w-full items-center justify-center rounded-full font-bold text-white shadow-2xl ring-2 ring-white/80 dark:ring-black/60"
+        whileHover={{ scale: 1.03 }}
+        transition={SPRING.bouncy}
+        className="relative flex h-full w-full items-center justify-center rounded-full font-extrabold text-white shadow-2xl ring-2 ring-white/90 dark:ring-[#070B14]"
         style={{
           background: avatarGradient(name),
           fontSize: size * 0.32,
-          letterSpacing: '0.02em',
+          letterSpacing: '-0.02em',
           boxShadow:
-            '0 14px 34px -8px rgba(0,0,0,0.35), ' +
-            'inset 0 2px 2px rgba(255,255,255,0.45)',
+            '0 16px 36px -8px rgba(15, 23, 42, 0.38), inset 0 2px 2px rgba(255, 255, 255, 0.55)',
         }}
       >
+        {/* Top Dome Specular Reflection */}
         <span
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 rounded-full"
-          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.45), transparent 55%)' }}
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(255,255,255,0.50) 0%, transparent 55%)',
+          }}
         />
-        <span className="relative select-none">{getInitials(name)}</span>
+        <span className="relative z-10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.22)]">
+          {getInitials(name)}
+        </span>
       </motion.div>
 
-      {/* Status indicator */}
+      {/* Live Status Beacon */}
       <motion.span
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
-        transition={{ ...SPRING.snappy, delay: 0.3 }}
-        className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full ring-4 ring-white dark:ring-[#1c1c1e]"
+        transition={{ ...SPRING.bouncy, delay: 0.2 }}
+        className="absolute bottom-0 right-0 z-20 flex h-7 w-7 items-center justify-center rounded-full ring-[3px] ring-white dark:ring-[#070B14]"
         style={{
-          background: isActive === false ? '#FF3B30' : '#34C759',
-          boxShadow: `0 4px 12px -2px ${isActive === false ? 'rgba(255,59,48,0.6)' : 'rgba(52,199,89,0.6)'}`,
+          background: active
+            ? 'linear-gradient(135deg, #16B853 0%, #059669 100%)'
+            : 'linear-gradient(135deg, #FF3B30 0%, #E11D48 100%)',
+          boxShadow: `0 4px 12px -2px ${
+            active ? 'rgba(22, 184, 83, 0.65)' : 'rgba(255, 59, 48, 0.65)'
+          }`,
         }}
-        aria-label={isActive === false ? 'Inactive' : 'Active'}
+        aria-label={active ? 'Active' : 'Inactive'}
       >
-        <span className="h-2 w-2 rounded-full bg-white" />
+        {active && (
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+        )}
+        <span className="relative h-2 w-2 rounded-full bg-white shadow-2xs" />
       </motion.span>
     </div>
   );
 }
 
-/** Stat tile with specular sheen and fluid typography */
+/** Chromatic Liquid Glass Stat Tile */
 export function StatTile({
-  label, value, icon, tone = 'blue', format = 'number',
+  label,
+  value,
+  icon,
+  tone = 'blue',
+  format = 'number',
 }: {
   label: string;
   value: number | string;
   icon: string[];
-  tone?: 'blue' | 'green' | 'orange' | 'red' | 'purple';
+  tone?: ChromaticTone;
   format?: 'number' | 'percent' | 'string';
 }) {
-  const palette: Record<string, { fg: string; bg: string; glow: string }> = {
-    blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)' },
-    green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)' },
-    orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',  glow: 'rgba(255,149,0,0.28)' },
-    red:    { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  glow: 'rgba(255,59,48,0.28)' },
-    purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)' },
-  };
-  const c = palette[tone] || palette.blue;
+  const c = TONE_STYLES[tone] || TONE_STYLES.blue;
 
   return (
     <motion.div
       variants={rowVariants}
-      whileHover={{ y: -3 }}
-      transition={SPRING.smooth}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 px-4 py-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
+      whileHover={{ y: -3, scale: 1.01 }}
+      transition={SPRING.snappy}
+      className="glass-card glass-card--interactive group relative flex items-center gap-3.5 px-4 py-3.5 select-none"
     >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-2xl"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent)' }}
-      />
+      {/* Corner Chromatic Caustic */}
       <div
-        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full opacity-25 blur-2xl transition-opacity duration-300 group-hover:opacity-55"
+        style={{ background: c.fg }}
+      />
+
+      <div
+        className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105"
         style={{
           background: c.bg,
           color: c.fg,
-          border: `1px solid ${c.fg}22`,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px -6px ${c.glow}`,
+          border: `1px solid ${c.border}`,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.6), 0 6px 16px -6px ${c.glow}`,
         }}
       >
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-xl"
-          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent)' }}
-        />
-        <Icon paths={icon} size={20} strokeWidth={2} className="relative" />
+        <Icon paths={icon} size={20} strokeWidth={2.05} className="relative" />
       </div>
-      <div className="relative min-w-0 flex-1">
-        <div className="text-[22px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
+
+      <div className="relative z-10 min-w-0 flex-1">
+        <div className="text-[22px] font-extrabold leading-none tracking-tight text-[var(--text-primary)] tabular-nums">
           {typeof value === 'number' ? (
-            format === 'percent' ? <CountUp value={value} suffix="%" /> : <CountUp value={value} />
-          ) : value}
+            format === 'percent' ? (
+              <CountUp value={value} suffix="%" />
+            ) : (
+              <CountUp value={value} />
+            )
+          ) : (
+            value
+          )}
         </div>
-        <div className="mt-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#86868B] truncate">
+        <div className="mt-1.5 truncate text-[11px] font-bold uppercase tracking-[0.11em] text-[var(--text-secondary)]">
           {label}
         </div>
       </div>
@@ -433,80 +577,158 @@ export function StatTile({
   );
 }
 
-/** Info row with icon and WCAG high-contrast labels */
+
+/** Info Row with Tone-Aware Specular Tile & Optional Copy Action */
 function InfoRow({
-  icon, label, value, tone = 'blue',
+  icon,
+  label,
+  value,
+  tone = 'blue',
+  copyValue,
 }: {
   icon: string[];
   label: string;
   value: React.ReactNode;
   tone?: 'blue' | 'green' | 'orange' | 'purple';
+  copyValue?: string;
 }) {
-  const palette: Record<string, { fg: string; bg: string }> = {
-    blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)' },
-    green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)' },
-    orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)' },
-    purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)' },
-  };
-  const c = palette[tone] || palette.blue;
+  const c = TONE_STYLES[tone] || TONE_STYLES.blue;
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    if (!copyValue || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(copyValue);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* ignore */
+    }
+  }, [copyValue]);
 
   return (
-    <div className="flex items-start gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
-      <div
-        className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-        style={{ background: c.bg, color: c.fg }}
-      >
-        <Icon paths={icon} size={16} strokeWidth={2} />
+    <div className="group flex items-start justify-between gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-slate-900/[0.03] dark:hover:bg-white/[0.035]">
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <div
+          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105"
+          style={{
+            background: c.bg,
+            color: c.fg,
+            border: `1px solid ${c.border}`,
+          }}
+        >
+          <Icon paths={icon} size={16} strokeWidth={2} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <dt className="text-[10.5px] font-bold uppercase tracking-[0.13em] text-[var(--text-tertiary)]">
+            {label}
+          </dt>
+          <dd className="mt-0.5 break-words text-[14px] font-semibold tracking-tight text-[var(--text-primary)]">
+            {value}
+          </dd>
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <dt className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-          {label}
-        </dt>
-        <dd className="mt-0.5 text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] break-words">
-          {value}
-        </dd>
-      </div>
+
+      {copyValue && (
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label="Copy"
+          className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[var(--text-tertiary)] opacity-0 transition-all hover:bg-slate-500/10 hover:text-[var(--primary)] group-hover:opacity-100 focus:opacity-100"
+        >
+          <Icon paths={copied ? I.check : I.copy} size={13} strokeWidth={2.2} />
+        </button>
+      )}
     </div>
   );
 }
 
-/** Shimmer Skeleton */
-function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
+/** Attendance Heatmap Mini-Strip (Visualizes Recent Sessions at a Glance) */
+const AttendanceHeatmapStrip = memo(function AttendanceHeatmapStrip({
+  records,
+  locale,
+}: {
+  records: any[];
+  locale: string;
+}) {
+  if (!records.length) return null;
+  const recent = records.slice(0, 14).reverse();
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-slate-900/[0.015] px-5 py-2.5 dark:bg-white/[0.015]">
+      <span className="text-[10.5px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+        {locale === 'uz'
+          ? `So'nggi ${recent.length} dars dinamikasi`
+          : locale === 'ru'
+            ? `Динамика (${recent.length} зан.)`
+            : `Last ${recent.length} sessions`}
+      </span>
+      <div className="flex items-center gap-1.5">
+        {recent.map((att, idx) => {
+          const st = String(att.status || '').toUpperCase();
+          const bg =
+            st === 'PRESENT'
+              ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.45)]'
+              : st === 'LATE'
+                ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.45)]'
+                : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.45)]';
+          return (
+            <span
+              key={att.id || idx}
+              title={`${formatDate(att.date)} — ${st}`}
+              className={`h-2.5 w-2.5 rounded-full transition-transform hover:scale-125 ${bg}`}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+/** Anatomical Shimmer Skeleton */
+function Shimmer({
+  className = '',
+  radius = '1.25rem',
+}: {
+  className?: string;
+  radius?: string;
+}) {
   return (
     <div
-      className={`relative overflow-hidden bg-[#E5E5EA]/60 dark:bg-[#2C2C2E]/60 ${className}`}
+      aria-hidden="true"
+      className={`glass-card skeleton-shimmer relative overflow-hidden ${className}`}
       style={{ borderRadius: radius }}
-    >
-      <motion.div
-        className="absolute inset-0"
-        style={{
-          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.65) 50%, transparent 100%)',
-        }}
-        animate={{ x: ['-100%', '100%'] }}
-        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </div>
+    />
   );
 }
 
 function DetailSkeleton() {
   return (
     <div className="space-y-5">
-      <Shimmer className="h-44 w-full" radius="2rem" />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => <Shimmer key={i} className="h-[76px]" radius="1rem" />)}
+      <Shimmer className="h-44 w-full" radius="1.75rem" />
+      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Shimmer key={i} className="h-20" radius="1.25rem" />
+        ))}
       </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <Shimmer className="h-80" radius="1.5rem" />
-        <div className="lg:col-span-2"><Shimmer className="h-80" radius="1.5rem" /></div>
+        <div className="lg:col-span-2">
+          <Shimmer className="h-80" radius="1.5rem" />
+        </div>
       </div>
     </div>
   );
 }
 
-/** Premium checkbox toggle card */
+/** Switch Card for Parent Portal Permissions */
 function PermissionToggle({
-  checked, onChange, icon, label, description, tone = 'blue',
+  checked,
+  onChange,
+  icon,
+  label,
+  description,
+  tone = 'blue',
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
@@ -515,81 +737,109 @@ function PermissionToggle({
   description: string;
   tone?: 'blue' | 'green' | 'purple';
 }) {
-  const palette: Record<string, { fg: string; bg: string; glow: string }> = {
-    blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)', glow: 'rgba(0,122,255,0.28)' },
-    green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',  glow: 'rgba(52,199,89,0.28)' },
-    purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)', glow: 'rgba(175,82,222,0.28)' },
-  };
-  const c = palette[tone] || palette.blue;
+  const c = TONE_STYLES[tone] || TONE_STYLES.blue;
 
   return (
     <motion.button
       type="button"
+      role="switch"
+      aria-checked={checked}
       onClick={() => onChange(!checked)}
-      whileHover={{ scale: 1.01 }}
-      whileTap={{ scale: 0.99 }}
+      whileHover={{ scale: 1.008 }}
+      whileTap={{ scale: 0.988 }}
       transition={SPRING.snappy}
       className={[
-        'flex min-h-[52px] w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-brand-500',
+        'flex min-h-[56px] w-full items-center gap-3.5 rounded-2xl border px-4 py-3 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]',
         checked
           ? 'border-transparent'
-          : 'border-[#00000008] bg-transparent dark:border-[#ffffff08]',
+          : 'border-[var(--border-subtle)] bg-white/50 hover:bg-white/80 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]',
       ].join(' ')}
-      style={checked ? {
-        background: c.bg,
-        borderColor: `${c.fg}33`,
-        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px -6px ${c.glow}`,
-      } : undefined}
+      style={
+        checked
+          ? {
+              background: c.bg,
+              borderColor: c.border,
+              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 6px 16px -6px ${c.glow}`,
+            }
+          : undefined
+      }
     >
       <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all"
         style={{
-          background: checked ? `${c.fg}25` : 'var(--bg-glass)',
-          color: checked ? c.fg : '#86868B',
+          background: checked ? c.gradient : 'var(--bg-glass)',
+          color: checked ? '#FFFFFF' : 'var(--text-tertiary)',
+          boxShadow: checked ? `0 4px 10px -2px ${c.glow}` : undefined,
         }}
       >
-        <Icon paths={icon} size={16} strokeWidth={2} />
+        <Icon paths={icon} size={16} strokeWidth={2.1} />
       </div>
+
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+          <p className="text-[13.5px] font-bold tracking-tight text-[var(--text-primary)]">
             {label}
           </p>
-          <AnimatePresence>
+          <AnimatePresence initial={false}>
             {checked && (
               <motion.span
                 initial={{ scale: 0, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0, opacity: 0 }}
-                transition={SPRING.snappy}
-                className="flex h-4 w-4 items-center justify-center rounded-full"
-                style={{ background: c.fg, color: '#fff' }}
+                transition={SPRING.bouncy}
+                className="flex h-4 w-4 items-center justify-center rounded-full text-white"
+                style={{ background: c.fg }}
               >
-                <Icon paths={['M20 6 9 17l-5-5']} size={10} strokeWidth={3} />
+                <Icon paths={I.check} size={10} strokeWidth={3} />
               </motion.span>
             )}
           </AnimatePresence>
         </div>
-        <p className="mt-0.5 text-[12px] font-medium text-[#86868B]">{description}</p>
+        <p className="mt-0.5 text-[11.5px] font-medium leading-snug text-[var(--text-secondary)]">
+          {description}
+        </p>
+      </div>
+
+      {/* Tactile iOS Switch Track */}
+      <div
+        aria-hidden="true"
+        className="relative flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200"
+        style={{
+          background: checked ? c.gradient : 'rgba(148, 163, 184, 0.28)',
+        }}
+      >
+        <motion.span
+          layout
+          transition={SPRING.bouncy}
+          className="h-5 w-5 rounded-full bg-white shadow-[0_2px_5px_rgba(0,0,0,0.22)]"
+          style={{ marginLeft: checked ? 'auto' : 0 }}
+        />
       </div>
     </motion.button>
   );
 }
 
-/* ============================================================================
+/* ══════════════════════════════════════════════════════════════════════════
  * MAIN STUDENT DETAIL PAGE COMPONENT
- * ========================================================================== */
+ * ════════════════════════════════════════════════════════════════════════ */
 
 export function StudentDetailPage() {
   const { t, locale } = useSafeI18n();
-  usePageTitle(t('students.detailsTitle') || t('studentDetail.detailsSubtitle') || 'Student Profile');
+  usePageTitle(
+    t('students.detailsTitle') ||
+      t('studentDetail.detailsSubtitle') ||
+      'Student Profile',
+  );
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
   const { playTick, playPop } = usePremiumSound();
 
-  // Modal state
+  // Segmented Spatial View Tab
+  const [activeTab, setActiveTab] = useState<DetailTab>('all');
+
+  // Group Assignment Modal State
   const [assignOpen, setAssignOpen] = useState(false);
   const [groupId, setGroupId] = useState('');
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
@@ -616,21 +866,33 @@ export function StudentDetailPage() {
   });
 
   const { user } = useAuth();
-  const canManageParents = ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'].includes(user?.role || '');
+  const canManageParents = ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'].includes(
+    user?.role || '',
+  );
 
-  // 360 Card & Parent management state
+  // 360° Card & Parent Management State
   const [card360Open, setCard360Open] = useState(false);
   const [parentModalOpen, setParentModalOpen] = useState(false);
   const [editLinkModalOpen, setEditLinkModalOpen] = useState(false);
-  const [unlinkParentTarget, setUnlinkParentTarget] = useState<{ id: string; name: string } | null>(null);
+  const [unlinkParentTarget, setUnlinkParentTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
-  // Deep AI Parent Message Modal state
+  // Deep AI Parent Message Modal State
   const [isAiMessageModalOpen, setIsAiMessageModalOpen] = useState(false);
-  const [aiMessageTopic, setAiMessageTopic] = useState<'attendance' | 'debt' | 'praise' | 'exam' | 'custom'>('attendance');
+  const [aiMessageTopic, setAiMessageTopic] = useState<
+    'attendance' | 'debt' | 'praise' | 'exam' | 'custom'
+  >('attendance');
   const [aiMessageDetails, setAiMessageDetails] = useState('');
   const [editingLink, setEditingLink] = useState<{
-    id: string; parentId: string; relationship?: string; isPrimary?: boolean;
-    canViewGrades?: boolean; canViewPayments?: boolean; canViewAttendance?: boolean;
+    id: string;
+    parentId: string;
+    relationship?: string;
+    isPrimary?: boolean;
+    canViewGrades?: boolean;
+    canViewPayments?: boolean;
+    canViewAttendance?: boolean;
   } | null>(null);
 
   const [parentFirstName, setParentFirstName] = useState('');
@@ -656,7 +918,10 @@ export function StudentDetailPage() {
     enabled: !!id,
   });
 
-  const linkedParents = useMemo(() => parentsQuery.data || [], [parentsQuery.data]) as ParentLink[];
+  const linkedParents = useMemo(
+    () => parentsQuery.data || [],
+    [parentsQuery.data],
+  ) as ParentLink[];
 
   const addParentMutation = useMutation({
     mutationFn: async () => {
@@ -675,12 +940,20 @@ export function StudentDetailPage() {
       return studentsApi.addParent(id!, payload);
     },
     onSuccess: () => {
-      push('success', t('student.parents.linkSuccess') || 'Parent account linked successfully');
+      push(
+        'success',
+        t('student.parents.linkSuccess') ||
+          'Parent account linked successfully',
+      );
       setParentModalOpen(false);
-      setParentFirstName(''); setParentLastName(''); setParentEmail('');
-      setParentPhone(''); setParentPassword(''); setIsPrimary(false);
-      qc.invalidateQueries({ queryKey: queryKeys.students.parents(id!) });
-      qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
+      setParentFirstName('');
+      setParentLastName('');
+      setParentEmail('');
+      setParentPhone('');
+      setParentPassword('');
+      setIsPrimary(false);
+      void qc.invalidateQueries({ queryKey: queryKeys.students.parents(id!) });
+      void qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -697,10 +970,14 @@ export function StudentDetailPage() {
       });
     },
     onSuccess: () => {
-      push('success', t('student.parents.updateSuccess') || 'Parent permissions updated successfully');
+      push(
+        'success',
+        t('student.parents.updateSuccess') ||
+          'Parent permissions updated successfully',
+      );
       setEditLinkModalOpen(false);
       setEditingLink(null);
-      qc.invalidateQueries({ queryKey: queryKeys.students.parents(id!) });
+      void qc.invalidateQueries({ queryKey: queryKeys.students.parents(id!) });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -708,18 +985,24 @@ export function StudentDetailPage() {
   const unlinkParentMutation = useMutation({
     mutationFn: (parentId: string) => studentsApi.unlinkParent(id!, parentId),
     onSuccess: () => {
-      push('success', t('student.parents.unlinkSuccess') || 'Parent unlinked successfully');
+      push(
+        'success',
+        t('student.parents.unlinkSuccess') || 'Parent unlinked successfully',
+      );
       setUnlinkParentTarget(null);
-      qc.invalidateQueries({ queryKey: queryKeys.students.parents(id!) });
+      void qc.invalidateQueries({ queryKey: queryKeys.students.parents(id!) });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
   const openEditParentModal = useCallback((link: ParentLink) => {
     setEditingLink({
-      id: link.id, parentId: link.parentId,
-      relationship: link.relationship, isPrimary: link.isPrimary,
-      canViewGrades: link.canViewGrades, canViewPayments: link.canViewPayments,
+      id: link.id,
+      parentId: link.parentId,
+      relationship: link.relationship,
+      isPrimary: link.isPrimary,
+      canViewGrades: link.canViewGrades,
+      canViewPayments: link.canViewPayments,
       canViewAttendance: link.canViewAttendance,
     });
     setEditRelationship(link.relationship || 'parent');
@@ -733,45 +1016,88 @@ export function StudentDetailPage() {
   const studentData = student.data as Student | undefined;
   const allGroups = useMemo(() => {
     if (Array.isArray(groups.data)) return groups.data;
-    if (groups.data && typeof groups.data === 'object' && 'items' in groups.data) {
+    if (
+      groups.data &&
+      typeof groups.data === 'object' &&
+      'items' in groups.data
+    ) {
       return (groups.data as { items: Group[] }).items || [];
     }
     return [];
   }, [groups.data]);
-  const activeGroups = useMemo(() => allGroups.filter((g) => g.isActive !== false), [allGroups]);
+
+  const activeGroups = useMemo(
+    () => allGroups.filter((g) => g.isActive !== false),
+    [allGroups],
+  );
+
   const myEnrollments = useMemo(
-    () => (enrollments.data as unknown as { items?: FaceEnrollmentItem[] })?.items || [],
+    () =>
+      (enrollments.data as unknown as { items?: FaceEnrollmentItem[] })
+        ?.items || [],
     [enrollments.data],
   );
 
   const studentGroups = useMemo(() => studentData?.groups || [], [studentData]);
-  const studentAttendance = useMemo(() => studentData?.attendance || [], [studentData]);
-  const studentPayments = useMemo(() => studentData?.payments || [], [studentData]);
+  const studentAttendance = useMemo(
+    () => studentData?.attendance || [],
+    [studentData],
+  );
+  const studentPayments = useMemo(
+    () => studentData?.payments || [],
+    [studentData],
+  );
 
-  // Derived stats
+  // Set of already-assigned active group IDs so the modal selector can mark them
+  const enrolledGroupIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const ge of studentGroups as any[]) {
+      if (ge?.isActive === false) continue;
+      const gId = ge?.group?.id || ge?.groupId || ge?.id;
+      if (gId) s.add(String(gId));
+    }
+    return s;
+  }, [studentGroups]);
+
+  // Derived Telemetry Stats
   const stats = useMemo(() => {
-    const presentCount = studentAttendance.filter((a) => a.status === 'PRESENT').length;
+    const presentCount = studentAttendance.filter(
+      (a) => a.status === 'PRESENT',
+    ).length;
     const attendanceRate = studentAttendance.length
       ? Math.round((presentCount / studentAttendance.length) * 100)
       : 0;
-    const activeGroupsCount = studentGroups.filter((g: any) => g.isActive !== false).length;
+    const activeGroupsCount = studentGroups.filter(
+      (g: any) => g.isActive !== false,
+    ).length;
     const totalPaid = studentPayments
       .filter((p) => p.status === 'PAID')
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-    return { attendanceRate, activeGroupsCount, totalPaid, faceEnrolled: myEnrollments.length };
+    const pendingAmount = studentPayments
+      .filter((p) => p.status === 'PENDING' || p.status === 'OVERDUE')
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    return {
+      attendanceRate,
+      activeGroupsCount,
+      totalPaid,
+      pendingAmount,
+      faceEnrolled: myEnrollments.length,
+    };
   }, [studentAttendance, studentGroups, studentPayments, myEnrollments]);
 
-  // Assign mutations
+  // Group Mutations
   const assign = useMutation({
     mutationFn: () => studentsApi.assignGroup(id!, groupId),
     onSuccess: () => {
       push('success', t('studentDetail.assigned'));
-      setAssignOpen(false); setGroupId('');
-      qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
-      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
-      qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
-      qc.invalidateQueries({ queryKey: queryKeys.groups.selectors() });
-      qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
+      setAssignOpen(false);
+      setGroupId('');
+      void qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
+      void qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+      void qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      void qc.invalidateQueries({ queryKey: queryKeys.groups.selectors() });
+      void qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -780,30 +1106,39 @@ export function StudentDetailPage() {
     mutationFn: (gId: string) => studentsApi.removeGroup(id!, gId),
     onSuccess: () => {
       push('success', t('studentDetail.removed'));
-      qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
-      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
-      qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
-      qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
+      void qc.invalidateQueries({ queryKey: queryKeys.students.detail(id!) });
+      void qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+      void qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+      void qc.invalidateQueries({ queryKey: queryKeys.groups.details() });
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
 
   const { refetch: refetchStudent } = student;
-  const handleRetry = useCallback(() => { void refetchStudent(); }, [refetchStudent]);
+  const handleRetry = useCallback(() => {
+    void refetchStudent();
+  }, [refetchStudent]);
 
   const handleOpenAssign = useCallback(() => {
-    setGroupId(''); setAssignOpen(true);
+    setGroupId('');
+    setAssignOpen(true);
     void groups.refetch();
   }, [groups]);
 
-  const handleCloseAssign = useCallback(() => { setAssignOpen(false); setGroupId(''); }, []);
+  const handleCloseAssign = useCallback(() => {
+    setAssignOpen(false);
+    setGroupId('');
+  }, []);
 
   const handleAssign = useCallback(() => {
     if (!groupId) return;
     assign.mutate();
   }, [groupId, assign]);
 
-  const handleRemoveFromGroup = useCallback((gId: string) => setRemoveTarget(gId), []);
+  const handleRemoveFromGroup = useCallback(
+    (gId: string) => setRemoveTarget(gId),
+    [],
+  );
 
   const confirmRemoveFromGroup = useCallback(() => {
     if (!removeTarget) return;
@@ -811,10 +1146,19 @@ export function StudentDetailPage() {
     setRemoveTarget(null);
   }, [removeTarget, removeFromGroup]);
 
-  const handleEdit = useCallback(() => navigate(`/students/${id}/edit`), [navigate, id]);
-  const handleEnrollFace = useCallback(() => navigate('/face/enroll'), [navigate]);
+  const handleEdit = useCallback(
+    () => navigate(`/students/${id}/edit`),
+    [navigate, id],
+  );
+  const handleEnrollFace = useCallback(
+    () => navigate('/face/enroll'),
+    [navigate],
+  );
 
-  const studentName = fullName(studentData?.user?.firstName, studentData?.user?.lastName);
+  const studentName = fullName(
+    studentData?.user?.firstName,
+    studentData?.user?.lastName,
+  );
 
   const handleOpenStudentSidecar = useCallback(() => {
     if (!studentData) return;
@@ -823,58 +1167,104 @@ export function StudentDetailPage() {
       type: 'student',
       id: studentData.id,
       title: studentName,
-      subtitle: studentData.user?.email || studentData.user?.phone || (locale === 'uz' ? 'Talaba profili' : locale === 'ru' ? 'Профиль ученика' : 'Student Profile'),
+      subtitle:
+        studentData.user?.email ||
+        studentData.user?.phone ||
+        (locale === 'uz'
+          ? 'Talaba profili'
+          : locale === 'ru'
+            ? 'Профиль ученика'
+            : 'Student Profile'),
       status: {
-        label: studentData.user?.isActive ? (t('common.active') || 'Faol') : (t('common.inactive') || 'Nofaol'),
+        label: studentData.user?.isActive
+          ? t('common.active') || 'Faol'
+          : t('common.inactive') || 'Nofaol',
         tone: studentData.user?.isActive ? 'green' : 'amber',
       },
       metrics: [
-        { label: t('dashboard.attendance') || 'Davomat', value: `${stats.attendanceRate}%` },
-        { label: t('groups.title') || 'Guruhlar', value: String(stats.activeGroupsCount) },
-        { label: t('payments.title') || 'To\'lovlar', value: formatCurrency(stats.totalPaid) },
-        { label: 'Face ID', value: stats.faceEnrolled > 0 ? (t('common.active') || 'Faol') : (locale === 'uz' ? 'Yo\'q' : locale === 'ru' ? 'Нет' : 'None') },
+        {
+          label: t('dashboard.attendance') || 'Davomat',
+          value: `${stats.attendanceRate}%`,
+        },
+        {
+          label: t('groups.title') || 'Guruhlar',
+          value: String(stats.activeGroupsCount),
+        },
+        {
+          label: t('payments.title') || "To'lovlar",
+          value: formatCurrency(stats.totalPaid),
+        },
+        {
+          label: 'Face ID',
+          value:
+            stats.faceEnrolled > 0
+              ? t('common.active') || 'Faol'
+              : locale === 'uz'
+                ? "Yo'q"
+                : locale === 'ru'
+                  ? 'Нет'
+                  : 'None',
+        },
       ],
       details: [
         { label: 'ID', value: studentData.id, copyable: true },
         { label: t('common.name') || 'F.I.SH.', value: studentName },
-        { label: t('common.email') || 'Elektron pochta', value: studentData.user?.email || '—', copyable: Boolean(studentData.user?.email) },
-        { label: t('common.phone') || 'Telefon', value: studentData.user?.phone || '—', copyable: Boolean(studentData.user?.phone) },
-        { label: t('studentForm.dateOfBirth') || 'Tug\'ilgan sana', value: formatDate(studentData.dateOfBirth) },
-        { label: t('studentForm.gender') || 'Jinsi', value: studentData.gender || '—' },
-        { label: t('hr.form.address') || 'Manzil', value: studentData.address || '—' },
-        { label: t('groups.title') || 'Guruhlar soni', value: String(stats.activeGroupsCount) },
-        { label: t('payments.title') || 'Jami to\'langan', value: formatCurrency(stats.totalPaid) },
-        { label: t('studentDetail.recentAttendance') || 'Davomat', value: `${stats.attendanceRate}%` },
-        { label: t('studentDetail.faceEnrollment') || 'Face ID', value: stats.faceEnrolled > 0 ? (locale === 'uz' ? 'Biometrik yozuv mavjud' : locale === 'ru' ? 'Биометрия активна' : 'Biometric active') : (t('studentDetail.notEnrolled') || 'Ro\'yxatdan o\'tmagan') },
-        { label: t('studentForm.parentSection') || 'Ota-onalar', value: linkedParents.length > 0 ? `${linkedParents.length}` : '—' },
+        {
+          label: t('common.email') || 'Elektron pochta',
+          value: studentData.user?.email || '—',
+          copyable: Boolean(studentData.user?.email),
+        },
+        {
+          label: t('common.phone') || 'Telefon',
+          value: studentData.user?.phone || '—',
+          copyable: Boolean(studentData.user?.phone),
+        },
+        {
+          label: t('studentForm.dateOfBirth') || "Tug'ilgan sana",
+          value: formatDate(studentData.dateOfBirth),
+        },
+        {
+          label: t('studentForm.gender') || 'Jinsi',
+          value: studentData.gender || '—',
+        },
+        {
+          label: t('hr.form.address') || 'Manzil',
+          value: studentData.address || '—',
+        },
+        {
+          label: t('groups.title') || 'Guruhlar soni',
+          value: String(stats.activeGroupsCount),
+        },
+        {
+          label: t('payments.title') || "Jami to'langan",
+          value: formatCurrency(stats.totalPaid),
+        },
+        {
+          label: t('studentDetail.recentAttendance') || 'Davomat',
+          value: `${stats.attendanceRate}%`,
+        },
+        {
+          label: t('studentDetail.faceEnrollment') || 'Face ID',
+          value:
+            stats.faceEnrolled > 0
+              ? locale === 'uz'
+                ? 'Biometrik yozuv mavjud'
+                : locale === 'ru'
+                  ? 'Биометрия активна'
+                  : 'Biometric active'
+              : t('studentDetail.notEnrolled') || "Ro'yxatdan o'tmagan",
+        },
+        {
+          label: t('studentForm.parentSection') || 'Ota-onalar',
+          value: linkedParents.length > 0 ? `${linkedParents.length}` : '—',
+        },
       ],
     };
     openSidecar(sidecarData);
   }, [studentData, playPop, studentName, stats, linkedParents, locale, t]);
 
-  // Keyboard navigation shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-        return;
-      }
-      if (e.key === 's') {
-        playTick();
-        handleOpenStudentSidecar();
-      } else if (e.key === 'e') {
-        playTick();
-        handleEdit();
-      } else if (e.key === 'a') {
-        playTick();
-        handleOpenAssign();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleEdit, handleOpenAssign, handleOpenStudentSidecar, playTick]);
-
   const handleAiAnalyze = useCallback(() => {
+    playPop();
     window.dispatchEvent(
       new CustomEvent('open-ai-copilot', {
         detail: {
@@ -882,27 +1272,86 @@ export function StudentDetailPage() {
         },
       }),
     );
-  }, [studentName, stats]);
+  }, [studentName, stats, playPop]);
 
-  /* ---------------------------------------------------------------
-     LOADING
-  --------------------------------------------------------------- */
+  // Pause global keyboard shortcuts when any dialog/modal is active
+  const anyModalOpen =
+    assignOpen ||
+    removeTarget !== null ||
+    parentModalOpen ||
+    editLinkModalOpen ||
+    unlinkParentTarget !== null ||
+    card360Open ||
+    isAiMessageModalOpen;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (anyModalOpen || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const key = e.key.toLowerCase();
+      if (key === 's') {
+        e.preventDefault();
+        playTick();
+        handleOpenStudentSidecar();
+      } else if (key === 'e') {
+        e.preventDefault();
+        playTick();
+        handleEdit();
+      } else if (key === 'a') {
+        e.preventDefault();
+        playTick();
+        handleOpenAssign();
+      } else if (key === 'c') {
+        e.preventDefault();
+        playPop();
+        setCard360Open(true);
+      } else if (key === 'i') {
+        e.preventDefault();
+        handleAiAnalyze();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    anyModalOpen,
+    handleEdit,
+    handleOpenAssign,
+    handleOpenStudentSidecar,
+    handleAiAnalyze,
+    playTick,
+    playPop,
+  ]);
+
+  /* ── LOADING STATE ── */
   if (student.isLoading && !studentData) {
     return (
       <div className="page-container space-y-5 pb-[calc(2rem+env(safe-area-inset-bottom))]">
-        <GlassPageHeader title={t('enum.badge.STUDENT')} subtitle={t('studentDetail.loadingSubtitle')} />
+        <GlassPageHeader
+          title={t('enum.badge.STUDENT')}
+          subtitle={t('studentDetail.loadingSubtitle')}
+        />
         <DetailSkeleton />
       </div>
     );
   }
 
-  /* ---------------------------------------------------------------
-     ERROR
-  --------------------------------------------------------------- */
+  /* ── ERROR STATE ── */
   if (student.isError || !studentData) {
     return (
       <div className="page-container space-y-5 pb-[calc(2rem+env(safe-area-inset-bottom))]">
-        <GlassPageHeader title={t('enum.badge.STUDENT')} subtitle={t('studentDetail.detailsSubtitle')} />
+        <GlassPageHeader
+          title={t('enum.badge.STUDENT')}
+          subtitle={t('studentDetail.detailsSubtitle')}
+        />
         <div className="glass-card p-8">
           <GlassErrorState
             title={t('studentDetail.notFound')}
@@ -916,36 +1365,78 @@ export function StudentDetailPage() {
 
   const studentStatus = formatStudentStatus(studentData.user?.isActive);
 
-  /* ---------------------------------------------------------------
-     MAIN CONTENT
-  --------------------------------------------------------------- */
+  const tabs: { id: DetailTab; label: string; count?: number }[] = [
+    {
+      id: 'all',
+      label:
+        locale === 'uz'
+          ? "To'liq ko'rinish"
+          : locale === 'ru'
+            ? 'Обзор 360°'
+            : 'Full Overview',
+    },
+    {
+      id: 'academic',
+      label:
+        locale === 'uz'
+          ? 'Guruhlar va Davomat'
+          : locale === 'ru'
+            ? 'Группы и Посещаемость'
+            : 'Groups & Attendance',
+      count: stats.activeGroupsCount,
+    },
+    {
+      id: 'finance',
+      label:
+        locale === 'uz'
+          ? "To'lovlar va Face ID"
+          : locale === 'ru'
+            ? 'Оплаты и Face ID'
+            : 'Payments & Face ID',
+      count: studentPayments.length,
+    },
+  ];
+
+  /* ── MAIN CONTENT ── */
   return (
     <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="page-container space-y-5 pb-[calc(2rem+env(safe-area-inset-bottom))]"
+      className="page-container space-y-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))]"
     >
-      {/* ============================================================
-          HERO IDENTITY CARD
-      ============================================================ */}
+      {/* ══════════════════════════════════════════════════════════════════
+          1 · HERO SPATIAL IDENTITY CARD
+      ══════════════════════════════════════════════════════════════════ */}
       <motion.div variants={cardVariants}>
-        <GlassCard className="overflow-hidden p-6 sm:p-7 relative border-white/20 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.08)]" interactive>
-          <span
+        <GlassCard
+          className="relative overflow-hidden p-6 sm:p-7 border-white/40 dark:border-white/10"
+          interactive
+        >
+          {/* Ambient Chromatic Mesh Backdrop */}
+          <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent dark:from-white/5"
+            className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full opacity-25 blur-3xl dark:opacity-35"
+            style={{ background: avatarGradient(studentName) }}
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-[#0066FF]/10 blur-3xl dark:bg-[#2997FF]/15"
           />
 
-          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-            {/* Identity: Avatar + Badges + Name + Email */}
-            <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center min-w-0 flex-1">
-              <div className="shrink-0">
-                <HeroAvatar name={studentName} isActive={studentData.user?.isActive} />
-              </div>
+          <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            {/* Left Identity Cluster: Avatar + Badges + Name + Quick-Copy Pills */}
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-5 sm:flex-row sm:items-center">
+              <HeroAvatar
+                name={studentName}
+                isActive={studentData.user?.isActive}
+              />
 
               <div className="min-w-0 flex-1 text-center sm:text-left">
                 <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                  <GlassBadge color={studentStatus.color}>{t(studentStatus.label)}</GlassBadge>
+                  <GlassBadge color={studentStatus.color}>
+                    {t(studentStatus.label)}
+                  </GlassBadge>
                   {stats.faceEnrolled > 0 && (
                     <GlassBadge color="purple">
                       <span className="inline-flex items-center gap-1">
@@ -958,17 +1449,29 @@ export function StudentDetailPage() {
                     <GlassBadge color="blue">
                       <span className="inline-flex items-center gap-1">
                         <Icon paths={I.usersRound} size={11} strokeWidth={2.5} />
-                        {stats.activeGroupsCount} {stats.activeGroupsCount === 1 ? (locale === 'uz' ? 'ta guruh' : locale === 'ru' ? 'группа' : 'group') : (locale === 'uz' ? 'ta guruh' : locale === 'ru' ? 'групп' : 'groups')}
+                        {stats.activeGroupsCount}{' '}
+                        {stats.activeGroupsCount === 1
+                          ? locale === 'uz'
+                            ? 'ta guruh'
+                            : locale === 'ru'
+                              ? 'группа'
+                              : 'group'
+                          : locale === 'uz'
+                            ? 'ta guruh'
+                            : locale === 'ru'
+                              ? 'групп'
+                              : 'groups'}
                       </span>
                     </GlassBadge>
                   )}
                 </div>
 
-                <h1 className="mt-2 text-2xl font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-3xl lg:text-4xl break-words">
+                <h1 className="mt-2.5 break-words text-2xl font-extrabold tracking-tight text-[var(--text-primary)] sm:text-3xl lg:text-[34px]">
                   {studentName}
                 </h1>
+
                 {studentData.user?.email && (
-                  <p className="mt-1 inline-flex items-center gap-1.5 text-[14px] font-medium text-[#86868B] max-w-full">
+                  <p className="mt-1 inline-flex items-center gap-1.5 text-[14px] font-medium text-[var(--text-secondary)] max-w-full">
                     <Icon paths={I.mail} size={14} strokeWidth={2} className="opacity-70 shrink-0" />
                     <span className="truncate">{studentData.user.email}</span>
                   </p>
@@ -976,74 +1479,92 @@ export function StudentDetailPage() {
               </div>
             </div>
 
-            {/* Actions: Responsive wrap with WCAG >= 44x44px targets */}
-            <div className="flex flex-wrap items-center justify-center sm:justify-start xl:justify-end gap-2.5 shrink-0 pt-4 border-t border-black/[0.05] dark:border-white/[0.06] xl:pt-0 xl:border-t-0">
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            {/* Right Tactile Action Cluster (WCAG >= 44x44px + Keyboard Hints) */}
+            <div className="flex shrink-0 flex-wrap items-center justify-center gap-2.5 border-t border-[var(--border-subtle)] pt-4 sm:justify-start xl:justify-end xl:border-t-0 xl:pt-0">
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                 <GlassButton
                   type="button"
                   variant="secondary"
-                  onClick={() => setCard360Open(true)}
-                  className="min-h-[44px] px-3.5 !border-emerald-500/30 hover:!border-emerald-500/50 shadow-sm"
+                  onClick={() => {
+                    playPop();
+                    setCard360Open(true);
+                  }}
+                  className="min-h-[44px] px-3.5 !border-emerald-500/30 hover:!border-emerald-500/55 shadow-sm"
                 >
-                  <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                    <span>🔄</span>
+                  <span className="inline-flex items-center gap-2 font-semibold text-emerald-600 dark:text-emerald-400">
+                    <Icon paths={I.idCard} size={16} strokeWidth={2.1} />
                     <span>360° Karta</span>
+                    <kbd aria-hidden="true" className="hidden rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.2 font-mono text-[10px] xl:inline-block">
+                      C
+                    </kbd>
                   </span>
                 </GlassButton>
               </motion.div>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                 <GlassButton
                   type="button"
                   variant="secondary"
                   onClick={handleOpenStudentSidecar}
-                  className="min-h-[44px] px-3.5 !border-blue-500/30 hover:!border-blue-500/50 shadow-sm"
+                  className="min-h-[44px] px-3.5 !border-blue-500/30 hover:!border-blue-500/55 shadow-sm"
                 >
-                  <span className="inline-flex items-center gap-2 text-brand-600 dark:text-brand-400 font-medium">
-                    <span>◨</span>
-                    <span>Sidecar [S]</span>
+                  <span className="inline-flex items-center gap-2 font-semibold text-[#0066FF] dark:text-[#52ADFF]">
+                    <Icon paths={I.sidebar} size={15} strokeWidth={2.1} />
+                    <span>Sidecar</span>
+                    <kbd aria-hidden="true" className="hidden rounded border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.2 font-mono text-[10px] xl:inline-block">
+                      S
+                    </kbd>
                   </span>
                 </GlassButton>
               </motion.div>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                 <GlassButton
                   type="button"
                   variant="secondary"
                   onClick={handleAiAnalyze}
-                  className="min-h-[44px] px-3.5 !border-purple-500/30 hover:!border-purple-500/50 shadow-sm"
+                  className="min-h-[44px] px-3.5 !border-purple-500/30 hover:!border-purple-500/55 shadow-sm"
                 >
-                  <span className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium">
+                  <span className="inline-flex items-center gap-2 font-semibold text-purple-600 dark:text-purple-400">
                     <Icon paths={I.sparkles} size={16} strokeWidth={2.2} />
                     <span>AI Tahlil</span>
+                    <kbd aria-hidden="true" className="hidden rounded border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.2 font-mono text-[10px] xl:inline-block">
+                      I
+                    </kbd>
                   </span>
                 </GlassButton>
               </motion.div>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                 <GlassButton
                   type="button"
                   variant="secondary"
                   onClick={handleEdit}
                   className="min-h-[44px] px-3.5 shadow-sm"
                 >
-                  <span className="inline-flex items-center gap-2">
-                    <Icon paths={I.edit} size={16} strokeWidth={2} />
+                  <span className="inline-flex items-center gap-2 font-semibold">
+                    <Icon paths={I.edit} size={15} strokeWidth={2} />
                     <span>{t('common.edit')}</span>
+                    <kbd aria-hidden="true" className="hidden rounded border border-slate-400/30 bg-slate-500/10 px-1.5 py-0.2 font-mono text-[10px] text-[var(--text-tertiary)] xl:inline-block">
+                      E
+                    </kbd>
                   </span>
                 </GlassButton>
               </motion.div>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                 <GlassButton
                   type="button"
                   variant="primary"
                   onClick={handleOpenAssign}
-                  className="min-h-[44px] px-3.5 shadow-sm"
+                  className="min-h-[44px] px-4 shadow-sm"
                 >
-                  <span className="inline-flex items-center gap-2">
+                  <span className="inline-flex items-center gap-2 font-bold">
                     <Icon paths={I.plus} size={16} strokeWidth={2.5} />
                     <span>{t('studentDetail.assignToGroup')}</span>
+                    <kbd aria-hidden="true" className="hidden rounded border border-white/30 bg-white/15 px-1.5 py-0.2 font-mono text-[10px] xl:inline-block">
+                      A
+                    </kbd>
                   </span>
                 </GlassButton>
               </motion.div>
@@ -1052,21 +1573,32 @@ export function StudentDetailPage() {
         </GlassCard>
       </motion.div>
 
-      {/* ============================================================
-          STATS RIBBON
-      ============================================================ */}
+      {/* ══════════════════════════════════════════════════════════════════
+          2 · KPI TELEMETRY RIBBON
+      ══════════════════════════════════════════════════════════════════ */}
       <motion.div
         variants={containerVariants}
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        className="grid grid-cols-2 gap-3.5 sm:grid-cols-4"
       >
         <StatTile
           label={t('dashboard.attendance')}
           value={stats.attendanceRate}
           icon={I.calendarCheck}
-          tone={stats.attendanceRate >= 80 ? 'green' : stats.attendanceRate >= 60 ? 'orange' : 'red'}
+          tone={
+            stats.attendanceRate >= 80
+              ? 'green'
+              : stats.attendanceRate >= 60
+                ? 'orange'
+                : 'red'
+          }
           format="percent"
         />
-        <StatTile label={t('groups.title')} value={stats.activeGroupsCount} icon={I.usersRound} tone="blue" />
+        <StatTile
+          label={t('groups.title')}
+          value={stats.activeGroupsCount}
+          icon={I.usersRound}
+          tone="blue"
+        />
         <StatTile
           label={t('payments.title')}
           value={formatCurrency(stats.totalPaid)}
@@ -1075,658 +1607,990 @@ export function StudentDetailPage() {
         />
         <StatTile
           label={t('studentDetail.faceEnrollment')}
-          value={stats.faceEnrolled > 0 ? (locale === 'uz' ? 'Faol' : locale === 'ru' ? 'Активен' : 'Active') : (t('studentDetail.notEnrolled') || 'Yo\'q')}
+          value={
+            stats.faceEnrolled > 0
+              ? locale === 'uz'
+                ? 'Faol'
+                : locale === 'ru'
+                  ? 'Активен'
+                  : 'Active'
+              : t('studentDetail.notEnrolled') || "Yo'q"
+          }
           icon={I.face}
           tone={stats.faceEnrolled > 0 ? 'purple' : 'orange'}
         />
       </motion.div>
 
-      {/* ============================================================
-          PROFILE + PARENTS ROW
-      ============================================================ */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        {/* Profile & AI Copilot */}
-        <motion.div variants={cardVariants} className="lg:col-span-1 space-y-5">
-          <GlassCard className="overflow-hidden p-0 border-white/20 dark:border-white/10" interactive>
-            <div className="flex items-center gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
-                <Icon paths={I.userCircle} size={17} strokeWidth={2} />
-              </div>
-              <h2 className="text-[14.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                {t('studentDetail.profile')}
-              </h2>
-            </div>
-            <div className="space-y-1 p-3.5">
-              <InfoRow
-                icon={I.calendar}
-                label={t('studentForm.dateOfBirth')}
-                value={formatDate(studentData.dateOfBirth)}
-                tone="blue"
-              />
-              <InfoRow
-                icon={I.userCircle}
-                label={t('studentForm.gender')}
-                value={studentData.gender || '—'}
-                tone="purple"
-              />
-              <InfoRow
-                icon={I.mapPin}
-                label={t('hr.form.address')}
-                value={studentData.address || '—'}
-                tone="orange"
-              />
-              <InfoRow
-                icon={I.phone}
-                label={t('common.phone')}
-                value={studentData.user?.phone || '—'}
-                tone="green"
-              />
-              {studentData.notes && (
-                <div className="mt-2.5 rounded-xl border border-[#00000008] bg-[#00000002] p-3.5 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                    {t('common.notes')}
-                  </p>
-                  <p className="mt-1 text-[13px] leading-relaxed text-[#1D1D1F] dark:text-[#F5F5F7]">
-                    {studentData.notes}
-                  </p>
-                </div>
-              )}
-            </div>
-          </GlassCard>
-
-          {/* Deep AI Student Pedagogical & Behavioral Diagnostic */}
-          <AiStudentDiagnosticWidget
-            studentId={id!}
-            studentName={studentName}
-            onOpenMessageModal={(opts) => {
-              if (typeof opts === 'object' && opts) {
-                if (opts.topic) setAiMessageTopic(opts.topic);
-                if (opts.initialDraft) setAiMessageDetails(opts.initialDraft);
-              } else if (typeof opts === 'string') {
-                setAiMessageDetails(opts);
-              }
-              setIsAiMessageModalOpen(true);
-            }}
-          />
-        </motion.div>
-
-        {/* Parents Management */}
-        <motion.div variants={cardVariants} className="lg:col-span-2">
-          <GlassCard className="overflow-hidden p-0 border-white/20 dark:border-white/10" interactive>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#AF52DE]/10 text-[#AF52DE]">
-                  <Icon paths={I.users} size={17} strokeWidth={2} />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-[14.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                    {t('studentForm.parentSection')}
-                  </h2>
-                  <p className="text-[11.5px] font-medium text-[#86868B] truncate">
-                    {t('student.parents.linkHint') || 'Manage linked parent portal accounts and access permissions'}
-                  </p>
-                </div>
-              </div>
-
-              {canManageParents && (
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                  <GlassButton
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setParentModalOpen(true)}
-                    className="min-h-[44px] px-3.5 shadow-sm"
+      {/* ══════════════════════════════════════════════════════════════════
+          3 · SEGMENTED VIEW DOCK
+      ══════════════════════════════════════════════════════════════════ */}
+      <motion.div
+        variants={cardVariants}
+        className="flex items-center justify-between gap-4 overflow-x-auto no-scrollbar"
+      >
+        <div
+          role="tablist"
+          aria-label="Student profile sections"
+          className="glass-subtle inline-flex items-center gap-1 rounded-2xl p-1.5"
+        >
+          {tabs.map((tab) => {
+            const isSelected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                onClick={() => {
+                  playTick();
+                  setActiveTab(tab.id);
+                }}
+                className={[
+                  'relative inline-flex min-h-[36px] items-center gap-2 rounded-xl px-4 py-1.5 text-[12.5px] font-bold tracking-tight transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]',
+                  isSelected
+                    ? 'text-[var(--text-primary)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+                ].join(' ')}
+              >
+                {isSelected && (
+                  <motion.span
+                    layoutId="student-detail-tab-pill"
+                    transition={SPRING.snappy}
+                    className="absolute inset-0 rounded-xl border border-white/80 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.08)] dark:border-white/15 dark:bg-white/[0.10]"
+                  />
+                )}
+                <span className="relative z-10">{tab.label}</span>
+                {typeof tab.count === 'number' && (
+                  <span
+                    className={[
+                      'relative z-10 rounded-full px-1.5 py-0.2 text-[10px] font-extrabold tabular-nums',
+                      isSelected
+                        ? 'bg-[#0066FF]/15 text-[#0066FF] dark:bg-[#2997FF]/25 dark:text-[#7CC2FF]'
+                        : 'bg-slate-500/10 text-[var(--text-tertiary)]',
+                    ].join(' ')}
                   >
-                    <span className="inline-flex items-center gap-1.5">
-                      <Icon paths={I.userPlus} size={14} strokeWidth={2.5} />
-                      <span>{t('student.parents.addTitle') || 'Add Parent'}</span>
-                    </span>
-                  </GlassButton>
-                </motion.div>
-              )}
-            </div>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
 
-            <div className="p-4">
-              {parentsQuery.isLoading ? (
-                <div className="space-y-2.5">
-                  {[1, 2].map((i) => <Shimmer key={i} className="h-20" radius="1rem" />)}
+      {/* ══════════════════════════════════════════════════════════════════
+          4 · PROFILE + PARENTS ROW (Visible in 'all')
+      ══════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'all' && (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          {/* Personal Profile & AI Diagnostic Widget */}
+          <motion.div variants={cardVariants} className="space-y-5 lg:col-span-1">
+            <GlassCard
+              className="overflow-hidden p-0 border-white/30 dark:border-white/10"
+              interactive
+            >
+              <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] bg-gradient-to-r from-white/50 to-transparent px-5 py-4 dark:from-white/[0.03]">
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-xl"
+                  style={{
+                    background: TONE_STYLES.blue.bg,
+                    color: TONE_STYLES.blue.fg,
+                    border: `1px solid ${TONE_STYLES.blue.border}`,
+                  }}
+                >
+                  <Icon paths={I.userCircle} size={17} strokeWidth={2} />
                 </div>
-              ) : parentsQuery.isError ? (
-                <GlassErrorState
-                  title={t('student.parents.loadError') || 'Failed to load parent accounts'}
-                  message={getErrorMessage(parentsQuery.error)}
-                  onRetry={() => parentsQuery.refetch()}
-                />
-              ) : linkedParents.length > 0 ? (
-                <div className="space-y-2.5">
-                  {linkedParents.map((link, idx) => {
-                    const p = link.parent;
-                    const name = p ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : (locale === 'uz' ? 'Ota-ona foydalanuvchisi' : locale === 'ru' ? 'Родитель' : 'Parent User');
-                    return (
-                      <motion.div
-                        key={link.id}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ ...SPRING.smooth, delay: idx * 0.05 }}
-                        className="group flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-[#00000008] bg-[#00000002] p-3.5 transition-all hover:border-[#AF52DE]/25 hover:bg-[#AF52DE]/[0.04] dark:border-[#ffffff08] dark:bg-[#ffffff04]"
-                      >
-                        {/* Avatar */}
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div
-                            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white/50 dark:ring-black/30"
-                            style={{
-                              background: avatarGradient(name),
-                              fontSize: '13.5px',
-                              boxShadow: '0 4px 12px -4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.35)',
-                            }}
-                          >
-                            <span
-                              aria-hidden="true"
-                              className="pointer-events-none absolute inset-0 rounded-full"
-                              style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%)' }}
-                            />
-                            <span className="relative select-none">{getInitials(name)}</span>
-                          </div>
+                <h2 className="text-[14.5px] font-bold tracking-tight text-[var(--text-primary)]">
+                  {t('studentDetail.profile')}
+                </h2>
+              </div>
 
-                          {/* Info */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="truncate text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                                {name}
-                              </p>
-                              {link.isPrimary && (
-                                <motion.span
-                                  initial={{ scale: 0.85, opacity: 0 }}
-                                  animate={{ scale: 1, opacity: 1 }}
-                                  className="inline-flex items-center gap-1 rounded-full bg-[#FF9500]/15 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-[#FF9500] ring-1 ring-[#FF9500]/30"
-                                >
-                                  <Icon paths={I.award} size={10} strokeWidth={2.5} />
-                                  {t('student.parents.primaryBadge')}
-                                </motion.span>
-                              )}
-                              <span className="text-[11px] font-bold uppercase tracking-wider text-[#86868B]">
-                                {link.relationship ? (t(`student.relationship.${link.relationship.toLowerCase()}`) || link.relationship) : t('student.relationship.parent')}
+              <dl className="space-y-1 p-3.5">
+                <InfoRow
+                  icon={I.calendar}
+                  label={t('studentForm.dateOfBirth')}
+                  value={formatDate(studentData.dateOfBirth)}
+                  tone="blue"
+                />
+                <InfoRow
+                  icon={I.userCircle}
+                  label={t('studentForm.gender')}
+                  value={studentData.gender || '—'}
+                  tone="purple"
+                />
+                <InfoRow
+                  icon={I.mapPin}
+                  label={t('hr.form.address')}
+                  value={studentData.address || '—'}
+                  tone="orange"
+                  copyValue={studentData.address || undefined}
+                />
+                <InfoRow
+                  icon={I.phone}
+                  label={t('common.phone')}
+                  value={studentData.user?.phone || '—'}
+                  tone="green"
+                  copyValue={studentData.user?.phone || undefined}
+                />
+                {studentData.notes && (
+                  <div className="mt-2.5 rounded-2xl border border-[var(--border-subtle)] bg-slate-900/[0.02] p-3.5 dark:bg-white/[0.03]">
+                    <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                      {t('common.notes')}
+                    </p>
+                    <p className="mt-1 text-[13px] font-medium leading-relaxed text-[var(--text-primary)]">
+                      {studentData.notes}
+                    </p>
+                  </div>
+                )}
+              </dl>
+            </GlassCard>
+
+            {/* Deep AI Pedagogical & Behavioral Diagnostic */}
+            <AiStudentDiagnosticWidget
+              studentId={id!}
+              studentName={studentName}
+              onOpenMessageModal={(opts) => {
+                if (typeof opts === 'object' && opts) {
+                  if (opts.topic) setAiMessageTopic(opts.topic);
+                  if (opts.initialDraft) setAiMessageDetails(opts.initialDraft);
+                } else if (typeof opts === 'string') {
+                  setAiMessageDetails(opts);
+                }
+                setIsAiMessageModalOpen(true);
+              }}
+            />
+          </motion.div>
+
+          {/* Parents & Guardians Management */}
+          <motion.div variants={cardVariants} className="lg:col-span-2">
+            <GlassCard
+              className="overflow-hidden p-0 border-white/30 dark:border-white/10"
+              interactive
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-gradient-to-r from-white/50 to-transparent px-5 py-4 dark:from-white/[0.03]">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                    style={{
+                      background: TONE_STYLES.purple.bg,
+                      color: TONE_STYLES.purple.fg,
+                      border: `1px solid ${TONE_STYLES.purple.border}`,
+                    }}
+                  >
+                    <Icon paths={I.users} size={17} strokeWidth={2} />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-[14.5px] font-bold tracking-tight text-[var(--text-primary)]">
+                      {t('studentForm.parentSection')}
+                    </h2>
+                    <p className="truncate text-[11.5px] font-medium text-[var(--text-secondary)]">
+                      {t('student.parents.linkHint') ||
+                        'Manage linked parent portal accounts and access permissions'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Direct AI Parent Drafter Shortcut */}
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                    <GlassButton
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        playPop();
+                        setIsAiMessageModalOpen(true);
+                      }}
+                      className="min-h-[44px] px-3.5 !border-purple-500/30"
+                    >
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-purple-600 dark:text-purple-400">
+                        <Icon paths={I.messageSquare} size={14} strokeWidth={2.2} />
+                        <span>
+                          {locale === 'uz'
+                            ? 'AI Xabar'
+                            : locale === 'ru'
+                              ? 'AI Сообщение'
+                              : 'AI Message'}
+                        </span>
+                      </span>
+                    </GlassButton>
+                  </motion.div>
+
+                  {canManageParents && (
+                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                      <GlassButton
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setParentModalOpen(true)}
+                        className="min-h-[44px] px-3.5 shadow-sm"
+                      >
+                        <span className="inline-flex items-center gap-1.5 font-bold">
+                          <Icon paths={I.userPlus} size={14} strokeWidth={2.5} />
+                          <span>
+                            {t('student.parents.addTitle') || 'Add Parent'}
+                          </span>
+                        </span>
+                      </GlassButton>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-5">
+                {parentsQuery.isLoading ? (
+                  <div className="space-y-2.5">
+                    {[1, 2].map((i) => (
+                      <Shimmer key={i} className="h-20" radius="1rem" />
+                    ))}
+                  </div>
+                ) : parentsQuery.isError ? (
+                  <GlassErrorState
+                    title={
+                      t('student.parents.loadError') ||
+                      'Failed to load parent accounts'
+                    }
+                    message={getErrorMessage(parentsQuery.error)}
+                    onRetry={() => parentsQuery.refetch()}
+                  />
+                ) : linkedParents.length > 0 ? (
+                  <div className="space-y-3">
+                    {linkedParents.map((link, idx) => {
+                      const p = link.parent;
+                      const name = p
+                        ? `${p.firstName || ''} ${p.lastName || ''}`.trim()
+                        : locale === 'uz'
+                          ? 'Ota-ona foydalanuvchisi'
+                          : locale === 'ru'
+                            ? 'Родитель'
+                            : 'Parent User';
+                      return (
+                        <motion.div
+                          key={link.id}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ ...SPRING.smooth, delay: idx * 0.05 }}
+                          className="group flex flex-col gap-3 rounded-2xl border border-[var(--border-subtle)] bg-slate-900/[0.015] p-4 transition-all hover:border-purple-500/30 hover:bg-purple-500/[0.03] sm:flex-row sm:items-center dark:bg-white/[0.025]"
+                        >
+                          {/* Parent Avatar & Details */}
+                          <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                            <div
+                              className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-extrabold text-white ring-2 ring-white/70 dark:ring-white/15"
+                              style={{
+                                background: avatarGradient(name),
+                                fontSize: '14px',
+                                boxShadow:
+                                  '0 6px 14px -4px rgba(15,23,42,0.25), inset 0 1px 0 rgba(255,255,255,0.45)',
+                              }}
+                            >
+                              <span className="relative select-none">
+                                {getInitials(name)}
                               </span>
                             </div>
 
-                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-medium text-[#86868B]">
-                              {p?.email && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Icon paths={I.mail} size={12} strokeWidth={2} className="opacity-60" />
-                                  <span className="truncate">{p.email}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="truncate text-[14.5px] font-bold tracking-tight text-[var(--text-primary)]">
+                                  {name}
+                                </p>
+                                {link.isPrimary && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-[#FF9500]/15 px-2.5 py-0.5 text-[10.5px] font-extrabold uppercase tracking-wider text-[#C93400] ring-1 ring-[#FF9500]/30 dark:text-[#FFB340]">
+                                    <Icon
+                                      paths={I.award}
+                                      size={10}
+                                      strokeWidth={2.5}
+                                    />
+                                    {t('student.parents.primaryBadge')}
+                                  </span>
+                                )}
+                                <span className="rounded-md bg-slate-500/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                                  {link.relationship
+                                    ? t(
+                                        `student.relationship.${link.relationship.toLowerCase()}`,
+                                      ) || link.relationship
+                                    : t('student.relationship.parent')}
                                 </span>
-                              )}
-                              {p?.phone && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Icon paths={I.phone} size={12} strokeWidth={2} className="opacity-60" />
-                                  <span>{p.phone}</span>
-                                </span>
-                              )}
-                            </div>
+                              </div>
 
-                            {/* Permission chips */}
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {link.canViewGrades && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-[#007AFF]/10 px-2 py-0.5 text-[10.5px] font-bold text-[#007AFF]">
-                                  <Icon paths={I.checkCircle} size={10} strokeWidth={3} />
-                                  {t('student.parents.gradesBadge')}
-                                </span>
-                              )}
-                              {link.canViewAttendance && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-[#34C759]/10 px-2 py-0.5 text-[10.5px] font-bold text-[#34C759]">
-                                  <Icon paths={I.checkCircle} size={10} strokeWidth={3} />
-                                  {t('student.parents.attendanceBadge')}
-                                </span>
-                              )}
-                              {link.canViewPayments && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-[#AF52DE]/10 px-2 py-0.5 text-[10.5px] font-bold text-[#AF52DE]">
-                                  <Icon paths={I.checkCircle} size={10} strokeWidth={3} />
-                                  {t('student.parents.paymentsBadge')}
-                                </span>
-                              )}
+                              <div className="mt-1 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12px] font-medium text-[var(--text-secondary)]">
+                                {p?.email && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Icon
+                                      paths={I.mail}
+                                      size={12}
+                                      strokeWidth={2}
+                                      className="opacity-70"
+                                    />
+                                    <span className="truncate">{p.email}</span>
+                                  </span>
+                                )}
+                                {p?.phone && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Icon
+                                      paths={I.phone}
+                                      size={12}
+                                      strokeWidth={2}
+                                      className="opacity-70"
+                                    />
+                                    <span className="tabular-nums">{p.phone}</span>
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Permission Badges */}
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {link.canViewGrades && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-[#0066FF]/10 px-2.5 py-0.5 text-[10.5px] font-bold text-[#0066FF] dark:bg-[#2997FF]/18 dark:text-[#7CC2FF]">
+                                    <Icon
+                                      paths={I.checkCircle}
+                                      size={10}
+                                      strokeWidth={3}
+                                    />
+                                    {t('student.parents.gradesBadge')}
+                                  </span>
+                                )}
+                                {link.canViewAttendance && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-[#16B853]/10 px-2.5 py-0.5 text-[10.5px] font-bold text-[#129E46] dark:bg-[#30D158]/18 dark:text-[#4AE06E]">
+                                    <Icon
+                                      paths={I.checkCircle}
+                                      size={10}
+                                      strokeWidth={3}
+                                    />
+                                    {t('student.parents.attendanceBadge')}
+                                  </span>
+                                )}
+                                {link.canViewPayments && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-[#9333EA]/10 px-2.5 py-0.5 text-[10.5px] font-bold text-[#7E3AF2] dark:bg-[#BF5AF2]/18 dark:text-[#DF9EFF]">
+                                    <Icon
+                                      paths={I.checkCircle}
+                                      size={10}
+                                      strokeWidth={3}
+                                    />
+                                    {t('student.parents.paymentsBadge')}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Status + actions with 44x44px touch targets */}
-                        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0 pt-2 sm:pt-0 border-t border-black/[0.04] sm:border-t-0 dark:border-white/[0.04]">
-                          <GlassBadge color={p?.isActive ? 'green' : 'slate'}>
-                            {p?.isActive ? t('common.active') : t('common.inactive')}
-                          </GlassBadge>
-                          {canManageParents && (
-                            <div className="flex items-center gap-2">
-                              <motion.button
-                                type="button"
-                                onClick={() => openEditParentModal(link)}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                transition={SPRING.snappy}
-                                aria-label={t('common.edit')}
-                                title={t('common.edit')}
-                                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand-500"
-                                style={{
-                                  background: 'rgba(0,122,255,0.10)',
-                                  color: '#007AFF',
-                                  border: '1px solid rgba(0,122,255,0.2)',
-                                }}
-                              >
-                                <Icon paths={I.edit} size={15} strokeWidth={2} />
-                              </motion.button>
+                          {/* Status & Action Controls */}
+                          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-2.5 sm:flex-col sm:items-end sm:justify-center sm:border-t-0 sm:pt-0">
+                            <GlassBadge color={p?.isActive ? 'green' : 'slate'}>
+                              {p?.isActive
+                                ? t('common.active')
+                                : t('common.inactive')}
+                            </GlassBadge>
+                            {canManageParents && (
+                              <div className="flex items-center gap-2">
+                                <motion.button
+                                  type="button"
+                                  onClick={() => openEditParentModal(link)}
+                                  whileHover={{ scale: 1.06 }}
+                                  whileTap={{ scale: 0.94 }}
+                                  transition={SPRING.snappy}
+                                  aria-label={t('common.edit')}
+                                  title={t('common.edit')}
+                                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
+                                  style={{
+                                    background: TONE_STYLES.blue.bg,
+                                    color: TONE_STYLES.blue.fg,
+                                    border: `1px solid ${TONE_STYLES.blue.border}`,
+                                  }}
+                                >
+                                  <Icon
+                                    paths={I.edit}
+                                    size={15}
+                                    strokeWidth={2.1}
+                                  />
+                                </motion.button>
 
-                              <motion.button
-                                type="button"
-                                onClick={() => setUnlinkParentTarget({ id: link.parentId, name })}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                transition={SPRING.snappy}
-                                aria-label={t('student.parents.unlinkAction') || 'Unlink parent'}
-                                title={t('student.parents.unlinkAction') || 'Unlink parent'}
-                                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-red-500"
-                                style={{
-                                  background: 'rgba(255,59,48,0.10)',
-                                  color: '#FF3B30',
-                                  border: '1px solid rgba(255,59,48,0.2)',
-                                }}
-                              >
-                                <Icon paths={I.unlink} size={15} strokeWidth={2} />
-                              </motion.button>
-                            </div>
-                          )}
+                                <motion.button
+                                  type="button"
+                                  onClick={() =>
+                                    setUnlinkParentTarget({
+                                      id: link.parentId,
+                                      name,
+                                    })
+                                  }
+                                  whileHover={{ scale: 1.06 }}
+                                  whileTap={{ scale: 0.94 }}
+                                  transition={SPRING.snappy}
+                                  aria-label={
+                                    t('student.parents.unlinkAction') ||
+                                    'Unlink parent'
+                                  }
+                                  title={
+                                    t('student.parents.unlinkAction') ||
+                                    'Unlink parent'
+                                  }
+                                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-red-500"
+                                  style={{
+                                    background: TONE_STYLES.red.bg,
+                                    color: TONE_STYLES.red.fg,
+                                    border: `1px solid ${TONE_STYLES.red.border}`,
+                                  }}
+                                >
+                                  <Icon
+                                    paths={I.unlink}
+                                    size={15}
+                                    strokeWidth={2.1}
+                                  />
+                                </motion.button>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-[var(--border-medium)] p-7 text-center">
+                    <div
+                      className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl"
+                      style={{
+                        background: TONE_STYLES.purple.bg,
+                        color: TONE_STYLES.purple.fg,
+                      }}
+                    >
+                      <Icon paths={I.users} size={22} strokeWidth={2} />
+                    </div>
+                    <p className="mt-3 text-[14.5px] font-bold text-[var(--text-primary)]">
+                      {locale === 'uz'
+                        ? 'Biriktirilgan ota-ona hisoblari mavjud emas'
+                        : locale === 'ru'
+                          ? 'Нет привязанных родителей'
+                          : 'No parent accounts linked yet'}
+                    </p>
+                    <p className="mx-auto mt-1 max-w-sm text-[12.5px] font-medium text-[var(--text-secondary)]">
+                      {t('student.parents.linkHint') ||
+                        'Link a parent or guardian to grant secure access to attendance, progress, and payments.'}
+                    </p>
+                    {canManageParents && (
+                      <div className="mt-4 flex justify-center">
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.97 }}
+                        >
+                          <GlassButton
+                            type="button"
+                            variant="primary"
+                            size="md"
+                            onClick={() => setParentModalOpen(true)}
+                            className="min-h-[44px] px-4 shadow-sm"
+                          >
+                            <span className="inline-flex items-center gap-1.5 font-bold">
+                              <Icon
+                                paths={I.userPlus}
+                                size={14}
+                                strokeWidth={2.5}
+                              />
+                              <span>
+                                {t('student.parents.addTitle') || 'Add Parent'}
+                              </span>
+                            </span>
+                          </GlassButton>
+                        </motion.div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Emergency Contact on File */}
+                {(studentData.parentName ||
+                  studentData.parentPhone ||
+                  studentData.parentEmail) && (
+                  <div className="mt-4 rounded-2xl border border-[var(--border-subtle)] bg-slate-900/[0.02] p-4 dark:bg-white/[0.03]">
+                    <div className="mb-3 flex items-center gap-2">
+                      <Icon
+                        paths={I.info}
+                        size={14}
+                        strokeWidth={2}
+                        className="text-[var(--text-tertiary)]"
+                      />
+                      <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                        {locale === 'uz'
+                          ? "Favqulodda aloqa ma'lumoti"
+                          : locale === 'ru'
+                            ? 'Экстренный контакт в анкете'
+                            : 'Emergency Contact on File'}
+                      </h3>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+                          {t('common.name')}
                         </div>
+                        <div className="mt-0.5 text-[13.5px] font-semibold text-[var(--text-primary)]">
+                          {studentData.parentName || '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+                          {t('common.phone')}
+                        </div>
+                        <div className="mt-0.5 text-[13.5px] font-semibold tabular-nums text-[var(--text-primary)]">
+                          {studentData.parentPhone || '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+                          {t('common.email')}
+                        </div>
+                        <div className="mt-0.5 truncate text-[13.5px] font-semibold text-[var(--text-primary)]">
+                          {studentData.parentEmail || '—'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </GlassCard>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          5 · GROUPS + ATTENDANCE (Visible in 'all' & 'academic')
+      ══════════════════════════════════════════════════════════════════ */}
+      {(activeTab === 'all' || activeTab === 'academic') && (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {/* Enrolled Groups Card */}
+          <motion.div variants={cardVariants}>
+            <GlassCard
+              className="overflow-hidden p-0 border-white/30 dark:border-white/10"
+              interactive
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-gradient-to-r from-white/50 to-transparent px-5 py-4 dark:from-white/[0.03]">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-9 w-9 items-center justify-center rounded-xl"
+                    style={{
+                      background: TONE_STYLES.blue.bg,
+                      color: TONE_STYLES.blue.fg,
+                      border: `1px solid ${TONE_STYLES.blue.border}`,
+                    }}
+                  >
+                    <Icon paths={I.usersRound} size={17} strokeWidth={2} />
+                  </div>
+                  <h2 className="text-[14.5px] font-bold tracking-tight text-[var(--text-primary)]">
+                    {t('groups.title')}
+                  </h2>
+                </div>
+
+                <motion.button
+                  type="button"
+                  onClick={handleOpenAssign}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={SPRING.snappy}
+                  className="flex min-h-[40px] items-center gap-1.5 rounded-xl px-3.5 text-[12px] font-bold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
+                  style={{
+                    background: TONE_STYLES.blue.bg,
+                    color: TONE_STYLES.blue.fg,
+                    border: `1px solid ${TONE_STYLES.blue.border}`,
+                  }}
+                >
+                  <Icon paths={I.plus} size={14} strokeWidth={2.5} />
+                  <span>{t('studentDetail.assign')}</span>
+                </motion.button>
+              </div>
+
+              {studentGroups.length === 0 ? (
+                <div className="p-8">
+                  <GlassEmptyState
+                    title={t('studentDetail.noGroups')}
+                    message={t('studentDetail.noGroupsHint')}
+                  />
+                </div>
+              ) : (
+                <div className="divide-y divide-[var(--border-subtle)]">
+                  {studentGroups.map((ge: any, idx) => {
+                    const gObj = ge?.group || ge;
+                    const gId = gObj?.id || ge?.groupId || ge?.id;
+                    const gName = gObj?.name || 'Group';
+                    const gRoom = gObj?.room;
+                    const isActive = ge?.isActive !== false;
+                    const gStatus = formatGroupStatus(isActive);
+                    const isRemoving =
+                      removeFromGroup.isPending &&
+                      removeFromGroup.variables === gId;
+
+                    return (
+                      <motion.div
+                        key={gId}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
+                        className="group flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-[#0066FF]/[0.03]"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/groups/${gId}`)}
+                          className="flex min-w-0 flex-1 items-center gap-3.5 text-left outline-none"
+                        >
+                          <div
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-bold text-white transition-transform duration-200 group-hover:scale-105"
+                            style={{
+                              background: avatarGradient(gName),
+                              boxShadow:
+                                '0 6px 14px -4px rgba(15,23,42,0.25), inset 0 1px 0 rgba(255,255,255,0.4)',
+                            }}
+                          >
+                            <Icon paths={I.book} size={18} strokeWidth={2} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[14px] font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors">
+                              {gName}
+                            </p>
+                            {gRoom && (
+                              <p className="text-[12px] font-medium text-[var(--text-secondary)]">
+                                {t('groups.col.room')} {gRoom}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+
+                        <GlassBadge color={gStatus.color}>
+                          {t(gStatus.label)}
+                        </GlassBadge>
+
+                        {isActive && (
+                          <motion.button
+                            type="button"
+                            onClick={() => handleRemoveFromGroup(gId)}
+                            disabled={isRemoving}
+                            whileHover={{ scale: 1.06 }}
+                            whileTap={{ scale: 0.94 }}
+                            transition={SPRING.snappy}
+                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl outline-none transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-red-500"
+                            style={{
+                              background: TONE_STYLES.red.bg,
+                              color: TONE_STYLES.red.fg,
+                              border: `1px solid ${TONE_STYLES.red.border}`,
+                            }}
+                            aria-label={t('common.remove')}
+                            title={t('common.remove')}
+                          >
+                            {isRemoving ? (
+                              <motion.span
+                                className="h-4 w-4 rounded-full border-2 border-current/30 border-t-current"
+                                animate={{ rotate: 360 }}
+                                transition={{
+                                  duration: 0.9,
+                                  repeat: Infinity,
+                                  ease: 'linear',
+                                }}
+                              />
+                            ) : (
+                              <Icon
+                                paths={I.trash}
+                                size={15}
+                                strokeWidth={2.1}
+                              />
+                            )}
+                          </motion.button>
+                        )}
                       </motion.div>
                     );
                   })}
                 </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-[#00000015] p-6 text-center dark:border-[#ffffff15]">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#AF52DE]/10 text-[#AF52DE]">
-                    <Icon paths={I.users} size={22} strokeWidth={2} />
+              )}
+            </GlassCard>
+          </motion.div>
+
+          {/* Attendance Telemetry Card with Heatmap Strip */}
+          <motion.div variants={cardVariants}>
+            <GlassCard
+              className="overflow-hidden p-0 border-white/30 dark:border-white/10"
+              interactive
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-gradient-to-r from-white/50 to-transparent px-5 py-4 dark:from-white/[0.03]">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-9 w-9 items-center justify-center rounded-xl"
+                    style={{
+                      background: TONE_STYLES.green.bg,
+                      color: TONE_STYLES.green.fg,
+                      border: `1px solid ${TONE_STYLES.green.border}`,
+                    }}
+                  >
+                    <Icon paths={I.calendarCheck} size={17} strokeWidth={2} />
                   </div>
-                  <p className="mt-3 text-[14px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                    {locale === 'uz' ? 'Biriktirilgan ota-ona hisoblari mavjud emas' : locale === 'ru' ? 'Нет привязанных родителей' : 'No parent accounts linked yet'}
-                  </p>
-                  <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#86868B]">
-                    {t('student.parents.linkHint') || 'Link a parent or guardian to grant secure access to attendance, progress, and payments.'}
-                  </p>
-                  {canManageParents && (
+                  <h2 className="text-[14.5px] font-bold tracking-tight text-[var(--text-primary)]">
+                    {t('studentDetail.recentAttendance')}
+                  </h2>
+                </div>
+                <GlassBadge
+                  color={
+                    stats.attendanceRate >= 80
+                      ? 'green'
+                      : stats.attendanceRate >= 60
+                        ? 'amber'
+                        : 'red'
+                  }
+                >
+                  <CountUp value={stats.attendanceRate} suffix="%" />
+                </GlassBadge>
+              </div>
+
+              <AttendanceHeatmapStrip
+                records={studentAttendance}
+                locale={locale}
+              />
+
+              {studentAttendance.length === 0 ? (
+                <div className="p-8">
+                  <GlassEmptyState
+                    title={t('attendance.empty')}
+                    message={t('studentDetail.attendanceEmptyHint')}
+                  />
+                </div>
+              ) : (
+                <div className="divide-y divide-[var(--border-subtle)]">
+                  {studentAttendance
+                    .slice(0, activeTab === 'academic' ? 12 : 6)
+                    .map((att: any, idx: number) => (
+                      <motion.div
+                        key={att.id}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
+                        className="flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-emerald-500/[0.03]"
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-900/[0.04] text-[var(--text-secondary)] dark:bg-white/[0.06]">
+                          <Icon paths={I.calendar} size={15} strokeWidth={2} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13.5px] font-bold tracking-tight text-[var(--text-primary)]">
+                            {formatDate(att.date)}
+                          </p>
+                          <p className="text-[11.5px] font-medium text-[var(--text-secondary)]">
+                            {att.source}
+                          </p>
+                        </div>
+                        <GlassBadge color={statusColor(att.status)}>
+                          {t(`attendance.${att.status.toLowerCase()}`)}
+                        </GlassBadge>
+                      </motion.div>
+                    ))}
+                </div>
+              )}
+            </GlassCard>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          6 · PAYMENTS + FACE ENROLLMENT (Visible in 'all' & 'finance')
+      ══════════════════════════════════════════════════════════════════ */}
+      {(activeTab === 'all' || activeTab === 'finance') && (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {/* Payments Card */}
+          <motion.div variants={cardVariants}>
+            <GlassCard
+              className="overflow-hidden p-0 border-white/30 dark:border-white/10"
+              interactive
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-gradient-to-r from-white/50 to-transparent px-5 py-4 dark:from-white/[0.03]">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-9 w-9 items-center justify-center rounded-xl"
+                    style={{
+                      background: TONE_STYLES.green.bg,
+                      color: TONE_STYLES.green.fg,
+                      border: `1px solid ${TONE_STYLES.green.border}`,
+                    }}
+                  >
+                    <Icon paths={I.creditCard} size={17} strokeWidth={2} />
+                  </div>
+                  <h2 className="text-[14.5px] font-bold tracking-tight text-[var(--text-primary)]">
+                    {t('payments.title')}
+                  </h2>
+                </div>
+                <div className="text-right">
+                  <span
+                    className="text-[13.5px] font-extrabold tabular-nums"
+                    style={{ color: TONE_STYLES.green.fg }}
+                  >
+                    {formatCurrency(stats.totalPaid)}
+                  </span>
+                  {stats.pendingAmount > 0 && (
+                    <p className="text-[10.5px] font-bold tabular-nums text-amber-500">
+                      +{formatCurrency(stats.pendingAmount)} kutilmoqda
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {studentPayments.length === 0 ? (
+                <div className="p-8">
+                  <GlassEmptyState
+                    title={t('payments.empty')}
+                    message={t('studentDetail.paymentsEmptyHint')}
+                  />
+                </div>
+              ) : (
+                <div className="divide-y divide-[var(--border-subtle)]">
+                  {studentPayments
+                    .slice(0, activeTab === 'finance' ? 12 : 5)
+                    .map((p: any, idx: number) => (
+                      <motion.div
+                        key={p.id}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
+                        className="flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-emerald-500/[0.03]"
+                      >
+                        <div
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                          style={{
+                            background: TONE_STYLES.green.bg,
+                            color: TONE_STYLES.green.fg,
+                          }}
+                        >
+                          <Icon
+                            paths={I.creditCard}
+                            size={15}
+                            strokeWidth={2}
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13.5px] font-bold tracking-tight text-[var(--text-primary)]">
+                            {formatDate(p.createdAt)}
+                          </p>
+                          <p className="text-[11.5px] font-medium text-[var(--text-secondary)]">
+                            {t(`payments.status.${p.status}`)}
+                          </p>
+                        </div>
+                        <span className="text-[14px] font-extrabold tabular-nums tracking-tight text-[var(--text-primary)]">
+                          {formatCurrency(p.amount)}
+                        </span>
+                      </motion.div>
+                    ))}
+                </div>
+              )}
+            </GlassCard>
+          </motion.div>
+
+          {/* Face Biometric Enrollment Card */}
+          <motion.div variants={cardVariants}>
+            <GlassCard
+              className="overflow-hidden p-0 border-white/30 dark:border-white/10"
+              interactive
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-gradient-to-r from-white/50 to-transparent px-5 py-4 dark:from-white/[0.03]">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-9 w-9 items-center justify-center rounded-xl"
+                    style={{
+                      background: TONE_STYLES.purple.bg,
+                      color: TONE_STYLES.purple.fg,
+                      border: `1px solid ${TONE_STYLES.purple.border}`,
+                    }}
+                  >
+                    <Icon paths={I.face} size={17} strokeWidth={2} />
+                  </div>
+                  <h2 className="text-[14.5px] font-bold tracking-tight text-[var(--text-primary)]">
+                    {t('studentDetail.faceEnrollment')}
+                  </h2>
+                </div>
+                {stats.faceEnrolled > 0 && (
+                  <GlassBadge color="green">
+                    <span className="inline-flex items-center gap-1">
+                      <Icon
+                        paths={I.checkCircle}
+                        size={11}
+                        strokeWidth={2.5}
+                      />
+                      Enrolled
+                    </span>
+                  </GlassBadge>
+                )}
+              </div>
+
+              {myEnrollments.length === 0 ? (
+                <div className="p-6 sm:p-8">
+                  <div className="rounded-2xl border border-dashed border-[var(--border-medium)] p-6 text-center">
+                    <div
+                      className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl"
+                      style={{
+                        background: TONE_STYLES.purple.bg,
+                        color: TONE_STYLES.purple.fg,
+                      }}
+                    >
+                      <Icon paths={I.face} size={22} strokeWidth={2} />
+                    </div>
+                    <p className="mt-3 text-[14.5px] font-bold text-[var(--text-primary)]">
+                      {t('studentDetail.notEnrolled')}
+                    </p>
+                    <p className="mx-auto mt-1 max-w-sm text-[12.5px] font-medium text-[var(--text-secondary)]">
+                      {t('studentDetail.enrollHint')}
+                    </p>
                     <div className="mt-4 flex justify-center">
-                      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                      <motion.div
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.97 }}
+                      >
                         <GlassButton
                           type="button"
                           variant="primary"
                           size="md"
-                          onClick={() => setParentModalOpen(true)}
-                          className="min-h-[44px] px-3.5 shadow-sm"
+                          onClick={handleEnrollFace}
+                          className="min-h-[44px] px-4 shadow-sm"
                         >
-                          <span className="inline-flex items-center gap-1.5">
-                            <Icon paths={I.userPlus} size={14} strokeWidth={2.5} />
-                            <span>{t('student.parents.addTitle') || 'Add Parent'}</span>
+                          <span className="inline-flex items-center gap-2 font-bold">
+                            <Icon paths={I.face} size={16} strokeWidth={2} />
+                            <span>{t('studentDetail.enrollFace')}</span>
                           </span>
                         </GlassButton>
                       </motion.div>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* Legacy emergency contact */}
-              {(studentData.parentName || studentData.parentPhone || studentData.parentEmail) && (
-                <div className="mt-4 rounded-2xl border border-[#00000008] bg-[#00000002] p-4 dark:border-[#ffffff08] dark:bg-[#ffffff04]">
-                  <div className="mb-3 flex items-center gap-2">
-                    <Icon paths={I.info} size={14} strokeWidth={2} className="text-[#86868B]" />
-                    <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-                      {locale === 'uz' ? 'Favqulodda aloqa ma\'lumoti' : locale === 'ru' ? 'Экстренный контакт в анкете' : 'Emergency Contact on File'}
-                    </h3>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
-                        {t('common.name')}
-                      </div>
-                      <div className="mt-0.5 text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {studentData.parentName || '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
-                        {t('common.phone')}
-                      </div>
-                      <div className="mt-0.5 text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-                        {studentData.parentPhone || '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
-                        {t('common.email')}
-                      </div>
-                      <div className="mt-0.5 truncate text-[13.5px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {studentData.parentEmail || '—'}
-                      </div>
-                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-          </GlassCard>
-        </motion.div>
-      </div>
-
-      {/* ============================================================
-          GROUPS + ATTENDANCE
-      ============================================================ */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {/* Groups Card */}
-        <motion.div variants={cardVariants}>
-          <GlassCard className="overflow-hidden p-0 border-white/20 dark:border-white/10" interactive>
-            <div className="flex items-center justify-between gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#007AFF]/10 text-[#007AFF]">
-                  <Icon paths={I.usersRound} size={17} strokeWidth={2} />
-                </div>
-                <h2 className="text-[14.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {t('groups.title')}
-                </h2>
-              </div>
-
-              <motion.button
-                type="button"
-                onClick={handleOpenAssign}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                transition={SPRING.snappy}
-                className="flex min-h-[44px] items-center gap-1.5 rounded-xl bg-[#007AFF]/10 px-3.5 text-[12px] font-bold text-[#007AFF] outline-none hover:bg-[#007AFF]/15 focus-visible:ring-2 focus-visible:ring-brand-500"
-              >
-                <Icon paths={I.plus} size={14} strokeWidth={2.5} />
-                <span>{t('studentDetail.assign')}</span>
-              </motion.button>
-            </div>
-
-            {studentGroups.length === 0 ? (
-              <div className="p-8">
-                <GlassEmptyState
-                  title={t('studentDetail.noGroups')}
-                  message={t('studentDetail.noGroupsHint')}
-                />
-              </div>
-            ) : (
-              <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
-                {studentGroups.map((ge: any, idx) => {
-                  const gObj = ge?.group || ge;
-                  const gId = gObj?.id || ge?.groupId || ge?.id;
-                  const gName = gObj?.name || 'Group';
-                  const gRoom = gObj?.room;
-                  const isActive = ge?.isActive !== false;
-                  const gStatus = formatGroupStatus(isActive);
-                  const isRemoving = removeFromGroup.isPending && removeFromGroup.variables === gId;
-
-                  return (
+              ) : (
+                <div className="divide-y divide-[var(--border-subtle)]">
+                  {myEnrollments.map((e, idx) => (
                     <motion.div
-                      key={gId}
+                      key={e.id}
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
-                      className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#007AFF]/[0.03]"
+                      className="flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-purple-500/[0.03]"
                     >
                       <div
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white font-bold"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
                         style={{
-                          background: avatarGradient(gName),
-                          boxShadow: '0 4px 12px -4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.35)',
+                          background: TONE_STYLES.purple.bg,
+                          color: TONE_STYLES.purple.fg,
                         }}
                       >
-                        <Icon paths={I.book} size={18} strokeWidth={2} />
+                        <Icon paths={I.face} size={15} strokeWidth={2} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                          {gName}
+                        <p className="text-[13.5px] font-bold tracking-tight text-[var(--text-primary)]">
+                          {t('studentDetail.enrollment')}
                         </p>
-                        {gRoom && (
-                          <p className="text-[12px] font-medium text-[#86868B]">
-                            {t('groups.col.room')} {gRoom}
-                          </p>
-                        )}
+                        <p className="text-[11.5px] font-medium text-[var(--text-secondary)]">
+                          {formatDate(e.enrolledAt)}
+                        </p>
                       </div>
-                      <GlassBadge color={gStatus.color}>{t(gStatus.label)}</GlassBadge>
-                      {isActive && (
-                        <motion.button
-                          type="button"
-                          onClick={() => handleRemoveFromGroup(gId)}
-                          disabled={isRemoving}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          transition={SPRING.snappy}
-                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl outline-none disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-red-500"
-                          style={{
-                            background: 'rgba(255,59,48,0.10)',
-                            color: '#FF3B30',
-                            border: '1px solid rgba(255,59,48,0.2)',
-                          }}
-                          aria-label={t('common.remove')}
-                          title={t('common.remove')}
-                        >
-                          {isRemoving ? (
-                            <motion.span
-                              className="h-4 w-4 rounded-full border-2 border-current/30 border-t-current"
-                              animate={{ rotate: 360 }}
-                              transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                            />
-                          ) : (
-                            <Icon paths={I.trash} size={15} strokeWidth={2} />
-                          )}
-                        </motion.button>
-                      )}
+                      <GlassBadge color={statusColor(e.status)}>
+                        {t(`enum.status.${e.status}`)}
+                      </GlassBadge>
                     </motion.div>
-                  );
-                })}
-              </div>
-            )}
-          </GlassCard>
-        </motion.div>
-
-        {/* Attendance Card */}
-        <motion.div variants={cardVariants}>
-          <GlassCard className="overflow-hidden p-0 border-white/20 dark:border-white/10" interactive>
-            <div className="flex items-center justify-between gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#34C759]/10 text-[#34C759]">
-                  <Icon paths={I.calendarCheck} size={17} strokeWidth={2} />
+                  ))}
                 </div>
-                <h2 className="text-[14.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {t('studentDetail.recentAttendance')}
-                </h2>
-              </div>
-              <GlassBadge color={stats.attendanceRate >= 80 ? 'green' : stats.attendanceRate >= 60 ? 'amber' : 'red'}>
-                <CountUp value={stats.attendanceRate} suffix="%" />
-              </GlassBadge>
-            </div>
-
-            {studentAttendance.length === 0 ? (
-              <div className="p-8">
-                <GlassEmptyState
-                  title={t('attendance.empty')}
-                  message={t('studentDetail.attendanceEmptyHint')}
-                />
-              </div>
-            ) : (
-              <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
-                {studentAttendance.slice(0, 6).map((att: any, idx: number) => (
-                  <motion.div
-                    key={att.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
-                    className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#34C759]/[0.03]"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#00000005] text-[#86868B] dark:bg-[#ffffff08]">
-                      <Icon paths={I.calendar} size={15} strokeWidth={2} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {formatDate(att.date)}
-                      </p>
-                      <p className="text-[11.5px] font-medium text-[#86868B]">
-                        {att.source}
-                      </p>
-                    </div>
-                    <GlassBadge color={statusColor(att.status)}>
-                      {t(`attendance.${att.status.toLowerCase()}`)}
-                    </GlassBadge>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </GlassCard>
-        </motion.div>
-      </div>
-
-      {/* ============================================================
-          PAYMENTS + FACE ENROLLMENT
-      ============================================================ */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {/* Payments Card */}
-        <motion.div variants={cardVariants}>
-          <GlassCard className="overflow-hidden p-0 border-white/20 dark:border-white/10" interactive>
-            <div className="flex items-center justify-between gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#34C759]/10 text-[#34C759]">
-                  <Icon paths={I.creditCard} size={17} strokeWidth={2} />
-                </div>
-                <h2 className="text-[14.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {t('payments.title')}
-                </h2>
-              </div>
-              <span className="text-[13px] font-bold tabular-nums text-[#34C759]">
-                {formatCurrency(stats.totalPaid)}
-              </span>
-            </div>
-
-            {studentPayments.length === 0 ? (
-              <div className="p-8">
-                <GlassEmptyState
-                  title={t('payments.empty')}
-                  message={t('studentDetail.paymentsEmptyHint')}
-                />
-              </div>
-            ) : (
-              <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
-                {studentPayments.slice(0, 5).map((p: any, idx: number) => (
-                  <motion.div
-                    key={p.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
-                    className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#34C759]/[0.03]"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#34C759]/10 text-[#34C759]">
-                      <Icon paths={I.creditCard} size={15} strokeWidth={2} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {formatDate(p.createdAt)}
-                      </p>
-                      <p className="text-[11.5px] font-medium text-[#86868B]">
-                        {t(`payments.status.${p.status}`)}
-                      </p>
-                    </div>
-                    <span className="text-[14px] font-bold tabular-nums tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                      {formatCurrency(p.amount)}
-                    </span>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </GlassCard>
-        </motion.div>
-
-        {/* Face Biometric Enrollment Card */}
-        <motion.div variants={cardVariants}>
-          <GlassCard className="overflow-hidden p-0 border-white/20 dark:border-white/10" interactive>
-            <div className="flex items-center justify-between gap-3 border-b border-[#00000008] px-5 py-4 dark:border-[#ffffff08]">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#AF52DE]/10 text-[#AF52DE]">
-                  <Icon paths={I.face} size={17} strokeWidth={2} />
-                </div>
-                <h2 className="text-[14.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {t('studentDetail.faceEnrollment')}
-                </h2>
-              </div>
-              {stats.faceEnrolled > 0 && (
-                <GlassBadge color="green">
-                  <span className="inline-flex items-center gap-1">
-                    <Icon paths={I.checkCircle} size={11} strokeWidth={2.5} />
-                    Enrolled
-                  </span>
-                </GlassBadge>
               )}
-            </div>
+            </GlassCard>
+          </motion.div>
+        </div>
+      )}
 
-            {myEnrollments.length === 0 ? (
-              <div className="p-8">
-                <div className="rounded-2xl border border-dashed border-[#00000015] p-6 text-center dark:border-[#ffffff15]">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#AF52DE]/10 text-[#AF52DE]">
-                    <Icon paths={I.face} size={22} strokeWidth={2} />
-                  </div>
-                  <p className="mt-3 text-[14px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                    {t('studentDetail.notEnrolled')}
-                  </p>
-                  <p className="mx-auto mt-1 max-w-sm text-[12px] font-medium text-[#86868B]">
-                    {t('studentDetail.enrollHint')}
-                  </p>
-                  <div className="mt-4 flex justify-center">
-                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <GlassButton
-                        type="button"
-                        variant="primary"
-                        size="md"
-                        onClick={handleEnrollFace}
-                        className="min-h-[44px] px-4 shadow-sm"
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <Icon paths={I.face} size={16} strokeWidth={2} />
-                          <span>{t('studentDetail.enrollFace')}</span>
-                        </span>
-                      </GlassButton>
-                    </motion.div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
-                {myEnrollments.map((e, idx) => (
-                  <motion.div
-                    key={e.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
-                    className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#AF52DE]/[0.03]"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#AF52DE]/10 text-[#AF52DE]">
-                      <Icon paths={I.face} size={15} strokeWidth={2} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13.5px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {t('studentDetail.enrollment')}
-                      </p>
-                      <p className="text-[11.5px] font-medium text-[#86868B]">
-                        {formatDate(e.enrolledAt)}
-                      </p>
-                    </div>
-                    <GlassBadge color={statusColor(e.status)}>
-                      {t(`enum.status.${e.status}`)}
-                    </GlassBadge>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </GlassCard>
-        </motion.div>
-      </div>
+      {/* ══════════════════════════════════════════════════════════════════
+          7 · MODALS & CONFIRMATION DIALOGS
+      ══════════════════════════════════════════════════════════════════ */}
 
-      {/* ============================================================
-          MODALS & DIALOGS
-      ============================================================ */}
-
-      {/* Assign to Group Modal */}
+      {/* Assign to Group Modal (Smart-filters already enrolled groups) */}
       <GlassModal
         open={assignOpen}
         onClose={handleCloseAssign}
@@ -1740,10 +2604,18 @@ export function StudentDetailPage() {
               aria-label={t('studentDetail.selectGroupAria')}
               className="min-h-[44px]"
             >
-              <option value="">{t('studentDetail.selectGroupPlaceholder')}</option>
-              {activeGroups.map((g) => (
-                <option key={g.id} value={g.id}>{g.name}</option>
-              ))}
+              <option value="">
+                {t('studentDetail.selectGroupPlaceholder')}
+              </option>
+              {activeGroups.map((g) => {
+                const alreadyIn = enrolledGroupIds.has(String(g.id));
+                return (
+                  <option key={g.id} value={g.id} disabled={alreadyIn}>
+                    {g.name}
+                    {alreadyIn ? ' (✓ Biriktirilgan)' : ''}
+                  </option>
+                );
+              })}
             </GlassSelect>
           </GlassField>
           <div className="mt-5 flex justify-end gap-2.5">
@@ -1765,7 +2637,9 @@ export function StudentDetailPage() {
               onClick={handleAssign}
               className="min-h-[44px] px-4"
             >
-              {assign.isPending ? t('studentDetail.assigning') : t('studentDetail.assign')}
+              {assign.isPending
+                ? t('studentDetail.assigning')
+                : t('studentDetail.assign')}
             </GlassButton>
           </div>
         </div>
@@ -1790,12 +2664,23 @@ export function StudentDetailPage() {
         wide
       >
         <div className="space-y-5">
-          {/* Header hint */}
-          <div className="flex items-center gap-3 rounded-2xl border border-[#AF52DE33] bg-[#AF52DE]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#AF52DE]/15 text-[#AF52DE]">
+          <div
+            className="flex items-center gap-3 rounded-2xl px-4 py-3"
+            style={{
+              background: TONE_STYLES.purple.bg,
+              border: `1px solid ${TONE_STYLES.purple.border}`,
+            }}
+          >
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+              style={{
+                background: TONE_STYLES.purple.gradient,
+                color: '#FFFFFF',
+              }}
+            >
               <Icon paths={I.sparkles} size={18} strokeWidth={2} />
             </div>
-            <p className="text-[12.5px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+            <p className="text-[12.5px] font-medium leading-snug text-[var(--text-primary)]">
               {t('student.parents.linkHint')}
             </p>
           </div>
@@ -1804,7 +2689,7 @@ export function StudentDetailPage() {
             <GlassField label={t('common.firstName')} required>
               <GlassInput
                 type="text"
-                placeholder="e.g. John"
+                placeholder="e.g. Rustam"
                 value={parentFirstName}
                 onChange={(e) => setParentFirstName(e.target.value)}
               />
@@ -1812,7 +2697,7 @@ export function StudentDetailPage() {
             <GlassField label={t('common.lastName')} required>
               <GlassInput
                 type="text"
-                placeholder="e.g. Doe"
+                placeholder="e.g. Karimov"
                 value={parentLastName}
                 onChange={(e) => setParentLastName(e.target.value)}
               />
@@ -1843,16 +2728,27 @@ export function StudentDetailPage() {
                 onChange={(e) => setParentRelationship(e.target.value)}
                 className="min-h-[44px]"
               >
-                <option value="parent">{t('student.relationship.parent')}</option>
-                <option value="father">{t('student.relationship.father')}</option>
-                <option value="mother">{t('student.relationship.mother')}</option>
-                <option value="guardian">{t('student.relationship.guardian')}</option>
+                <option value="parent">
+                  {t('student.relationship.parent')}
+                </option>
+                <option value="father">
+                  {t('student.relationship.father')}
+                </option>
+                <option value="mother">
+                  {t('student.relationship.mother')}
+                </option>
+                <option value="guardian">
+                  {t('student.relationship.guardian')}
+                </option>
                 <option value="other">{t('student.relationship.other')}</option>
               </GlassSelect>
             </GlassField>
           </div>
 
-          <GlassField label={t('student.parents.tempPassword')} hint={t('student.parents.tempPasswordHint')}>
+          <GlassField
+            label={t('student.parents.tempPassword')}
+            hint={t('student.parents.tempPasswordHint')}
+          >
             <GlassInput
               type="password"
               placeholder="Minimum 6 characters"
@@ -1861,11 +2757,15 @@ export function StudentDetailPage() {
             />
           </GlassField>
 
-          {/* Permissions */}
-          <div className="space-y-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="space-y-2.5 border-t border-[var(--border-subtle)] pt-4">
             <div className="flex items-center gap-2">
-              <Icon paths={I.shield} size={14} strokeWidth={2} className="text-[#86868B]" />
-              <p className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+              <Icon
+                paths={I.shield}
+                size={14}
+                strokeWidth={2}
+                className="text-[var(--text-tertiary)]"
+              />
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                 {t('student.parents.permissionsTitle')}
               </p>
             </div>
@@ -1905,45 +2805,50 @@ export function StudentDetailPage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2.5 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={() => setParentModalOpen(false)}
-                disabled={addParentMutation.isPending}
-                className="min-h-[44px] px-4"
-              >
-                {t('common.cancel')}
-              </GlassButton>
-            </motion.div>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton
-                type="button"
-                variant="primary"
-                size="md"
-                disabled={!parentFirstName.trim() || !parentLastName.trim() || !parentEmail.trim() || addParentMutation.isPending}
-                onClick={() => addParentMutation.mutate()}
-                className="min-h-[44px] px-4"
-              >
-                {addParentMutation.isPending ? (
-                  <span className="inline-flex items-center gap-2">
-                    <motion.span
-                      className="inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white"
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                    />
-                    <span>{t('common.saving')}</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-2">
-                    <Icon paths={I.link} size={16} strokeWidth={2} />
-                    <span>{t('student.parents.addTitle')}</span>
-                  </span>
-                )}
-              </GlassButton>
-            </motion.div>
+          <div className="flex justify-end gap-2.5 border-t border-[var(--border-subtle)] pt-4">
+            <GlassButton
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setParentModalOpen(false)}
+              disabled={addParentMutation.isPending}
+              className="min-h-[44px] px-4"
+            >
+              {t('common.cancel')}
+            </GlassButton>
+            <GlassButton
+              type="button"
+              variant="primary"
+              size="md"
+              disabled={
+                !parentFirstName.trim() ||
+                !parentLastName.trim() ||
+                !parentEmail.trim() ||
+                addParentMutation.isPending
+              }
+              onClick={() => addParentMutation.mutate()}
+              className="min-h-[44px] px-4"
+            >
+              {addParentMutation.isPending ? (
+                <span className="inline-flex items-center gap-2">
+                  <motion.span
+                    className="inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white"
+                    animate={{ rotate: 360 }}
+                    transition={{
+                      duration: 0.9,
+                      repeat: Infinity,
+                      ease: 'linear',
+                    }}
+                  />
+                  <span>{t('common.saving')}</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-2 font-bold">
+                  <Icon paths={I.link} size={16} strokeWidth={2} />
+                  <span>{t('student.parents.addTitle')}</span>
+                </span>
+              )}
+            </GlassButton>
           </div>
         </div>
       </GlassModal>
@@ -1956,11 +2861,23 @@ export function StudentDetailPage() {
         wide
       >
         <div className="space-y-5">
-          <div className="flex items-center gap-3 rounded-2xl border border-[#007AFF33] bg-[#007AFF]/[0.06] px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#007AFF]/15 text-[#007AFF]">
+          <div
+            className="flex items-center gap-3 rounded-2xl px-4 py-3"
+            style={{
+              background: TONE_STYLES.blue.bg,
+              border: `1px solid ${TONE_STYLES.blue.border}`,
+            }}
+          >
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+              style={{
+                background: TONE_STYLES.blue.gradient,
+                color: '#FFFFFF',
+              }}
+            >
               <Icon paths={I.shield} size={18} strokeWidth={2} />
             </div>
-            <p className="text-[12.5px] font-medium leading-snug text-[#1D1D1F] dark:text-[#F5F5F7]">
+            <p className="text-[12.5px] font-medium leading-snug text-[var(--text-primary)]">
               {t('student.parents.linkHint')}
             </p>
           </div>
@@ -1974,15 +2891,22 @@ export function StudentDetailPage() {
               <option value="parent">{t('student.relationship.parent')}</option>
               <option value="father">{t('student.relationship.father')}</option>
               <option value="mother">{t('student.relationship.mother')}</option>
-              <option value="guardian">{t('student.relationship.guardian')}</option>
+              <option value="guardian">
+                {t('student.relationship.guardian')}
+              </option>
               <option value="other">{t('student.relationship.other')}</option>
             </GlassSelect>
           </GlassField>
 
-          <div className="space-y-2 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
+          <div className="space-y-2.5 border-t border-[var(--border-subtle)] pt-4">
             <div className="flex items-center gap-2">
-              <Icon paths={I.shield} size={14} strokeWidth={2} className="text-[#86868B]" />
-              <p className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+              <Icon
+                paths={I.shield}
+                size={14}
+                strokeWidth={2}
+                className="text-[var(--text-tertiary)]"
+              />
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                 {t('student.parents.permissionsTitle')}
               </p>
             </div>
@@ -2022,31 +2946,29 @@ export function StudentDetailPage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2.5 border-t border-[#00000008] pt-4 dark:border-[#ffffff08]">
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={() => setEditLinkModalOpen(false)}
-                disabled={updateParentLinkMutation.isPending}
-                className="min-h-[44px] px-4"
-              >
-                {t('common.cancel')}
-              </GlassButton>
-            </motion.div>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <GlassButton
-                type="button"
-                variant="primary"
-                size="md"
-                disabled={updateParentLinkMutation.isPending}
-                onClick={() => updateParentLinkMutation.mutate()}
-                className="min-h-[44px] px-4"
-              >
-                {updateParentLinkMutation.isPending ? t('common.saving') : t('common.save')}
-              </GlassButton>
-            </motion.div>
+          <div className="flex justify-end gap-2.5 border-t border-[var(--border-subtle)] pt-4">
+            <GlassButton
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setEditLinkModalOpen(false)}
+              disabled={updateParentLinkMutation.isPending}
+              className="min-h-[44px] px-4"
+            >
+              {t('common.cancel')}
+            </GlassButton>
+            <GlassButton
+              type="button"
+              variant="primary"
+              size="md"
+              disabled={updateParentLinkMutation.isPending}
+              onClick={() => updateParentLinkMutation.mutate()}
+              className="min-h-[44px] px-4"
+            >
+              {updateParentLinkMutation.isPending
+                ? t('common.saving')
+                : t('common.save')}
+            </GlassButton>
           </div>
         </div>
       </GlassModal>
@@ -2061,7 +2983,16 @@ export function StudentDetailPage() {
           }
         }}
         title={t('student.parents.unlinkTitle')}
-        description={`${locale === 'uz' ? 'Haqiqatan ham ushbu ota-onani talabadan uzmoqchimisiz?' : locale === 'ru' ? 'Вы уверены, что хотите отвязать этого родителя?' : 'Are you sure you want to unlink'} ${unlinkParentTarget?.name || (locale === 'uz' ? 'bu ota-ona' : 'this parent')}?`}
+        description={`${
+          locale === 'uz'
+            ? 'Haqiqatan ham ushbu ota-onani talabadan uzmoqchimisiz?'
+            : locale === 'ru'
+              ? 'Вы уверены, что хотите отвязать этого родителя?'
+              : 'Are you sure you want to unlink'
+        } ${
+          unlinkParentTarget?.name ||
+          (locale === 'uz' ? 'bu ota-ona' : 'this parent')
+        }?`}
         confirmLabel={t('student.parents.unlinkAction')}
         loading={unlinkParentMutation.isPending}
       />
@@ -2070,22 +3001,40 @@ export function StudentDetailPage() {
       <GlassModal
         open={card360Open}
         onClose={() => setCard360Open(false)}
-        title={locale === 'uz' ? '360° Shaffof Karta — Talaba Identifikatori' : locale === 'ru' ? '360° Прозрачная ID Карта — Ученик' : '360° Spatial ID Card — Student'}
+        title={
+          locale === 'uz'
+            ? '360° Shaffof Karta — Talaba Identifikatori'
+            : locale === 'ru'
+              ? '360° Прозрачная ID Карта — Ученик'
+              : '360° Spatial ID Card — Student'
+        }
         wide
       >
         {studentData && (
-          <div className="py-3 flex flex-col items-center">
+          <div className="flex flex-col items-center py-3">
             <SpatialIdentityCard360
               data={{
                 id: studentData.id,
                 fullName: studentName,
                 role: 'STUDENT',
-                phone: studentData.user?.phone || studentData.parentPhone || undefined,
+                phone:
+                  studentData.user?.phone ||
+                  studentData.parentPhone ||
+                  undefined,
                 email: studentData.user?.email || undefined,
-                attendanceRate: studentAttendance.length > 0 ? stats.attendanceRate : undefined,
-                groupName: (studentGroups[0] as any)?.group?.name || (studentGroups[0] as any)?.name || activeGroups[0]?.name || undefined,
+                attendanceRate:
+                  studentAttendance.length > 0
+                    ? stats.attendanceRate
+                    : undefined,
+                groupName:
+                  (studentGroups[0] as any)?.group?.name ||
+                  (studentGroups[0] as any)?.name ||
+                  activeGroups[0]?.name ||
+                  undefined,
                 coursesCount: studentGroups.length,
-                status: studentData.user?.isActive ? (t('common.active') || 'Faol') : (t('common.inactive') || 'Nofaol'),
+                status: studentData.user?.isActive
+                  ? t('common.active') || 'Faol'
+                  : t('common.inactive') || 'Nofaol',
                 biometricVerified: stats.faceEnrolled > 0,
                 nfcEnabled: false,
               }}
@@ -2101,7 +3050,11 @@ export function StudentDetailPage() {
         studentName={studentName}
         initialTopic={aiMessageTopic}
         initialDetails={aiMessageDetails}
-        balanceDue={(studentData as any)?.balance ? Math.abs((studentData as any).balance) : undefined}
+        balanceDue={
+          (studentData as any)?.balance
+            ? Math.abs((studentData as any).balance)
+            : undefined
+        }
       />
 
       {toastNode}

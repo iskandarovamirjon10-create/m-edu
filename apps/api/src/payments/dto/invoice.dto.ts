@@ -84,8 +84,9 @@ export class AddInvoiceItemDto {
 }
 
 export class RecordPaymentDto {
+  @IsOptional()
   @IsUUID()
-  invoiceId: string;
+  invoiceId?: string;
 
   @Type(() => Number)
   @IsNumber()

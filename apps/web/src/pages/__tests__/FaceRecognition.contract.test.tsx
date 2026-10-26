@@ -87,4 +87,10 @@ describe('FaceRecognitionPage — start-session response contract', () => {
     // The truncated session id must be rendered (not 'undefined').
     expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
   });
+
+  it('displays offline indicator when navigator.onLine is false', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    renderPage();
+    expect(await screen.findByText(/oflayn rejim/i)).toBeInTheDocument();
+  });
 });

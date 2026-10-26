@@ -189,10 +189,13 @@ export class InvoicesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RecordPaymentDto,
   ) {
-    if (dto.invoiceId !== id) {
+    if (dto.invoiceId && dto.invoiceId !== id) {
       throw new UnauthorizedException('Payment invoiceId must match the URL');
     }
-    return this.invoicesService.recordPayment(user.organizationId, user.id, dto);
+    return this.invoicesService.recordPayment(user.organizationId, user.id, {
+      ...dto,
+      invoiceId: id,
+    });
   }
 
   @Post('refunds')

@@ -1,17 +1,6 @@
 /**
- * M-EDU TelegramPage — Apple Design Award Edition
- *
- * Premium craft:
- *  - Hero header with gradient Telegram tile + live status + account chips
- *  - Animated KPI bar (Status, Account, Admins, Deliveries) with count-up
- *  - Premium tab control with layoutId sliding indicator
- *  - Premium "My Connection" panel with account card + QR-style hero tile
- *  - Premium bot features grid with squircle icon tiles
- *  - Premium admin overview with 3 KPI tiles
- *  - Custom SVG icons in SF Symbols proportions
- *  - Shimmer skeletons (not pulse)
- *  - Framer Motion spring physics + staggered blur-in
- *  - Full i18n + a11y preserved
+ * M-EDU Telegram Page
+ * Telegram bot administration, account linking, automated notifications, and message delivery status.
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
@@ -57,7 +46,7 @@ const rowVariants: Variants = {
 };
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;

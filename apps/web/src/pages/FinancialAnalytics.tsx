@@ -1,7 +1,7 @@
 /**
- * M-EDU FinancialAnalyticsPage — Apple Design Award Edition
+ * M-EDU FinancialAnalyticsPage — 
  *
- * Premium craft:
+ * Module Features:
  *  - Hero header with gradient finance tile + period chip + refresh
  *  - Ambient gradient orbs — suite-consistent
  *  - Premium segmented tabs with layoutId sliding indicator

@@ -1,8 +1,8 @@
 /**
- * M-EDU GroupFormPage — Apple Design Award & visionOS Edition (10/10)
+ * M-EDU GroupFormPage —  & Glass Edition 
  *
- * Premium craft:
- *  - Apple visionOS Liquid Glass aesthetic with specular meniscus sheen
+ * Module Features:
+ *  - Liquid glass styling
  *  - Hierarchical Breadcrumbs navigation + accessible back CTA (WCAG 2.2 AA SC 2.5.8 >= 44x44px)
  *  - Tactile spring physics (Framer Motion) with micro-elevation and sound triggers
  *  - Tone-aware active toggle with >= 44x44px touch targets
@@ -56,7 +56,7 @@ export const cardVariants: Variants = {
 };
 
 /* ============================================================================
- * CUSTOM SVG ICONS (SF Symbols proportions)
+ * CUSTOM SVG ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.8;
@@ -263,11 +263,14 @@ export function validateGroupForm(
       errors.capacity = t('groupForm.capacityRange', "Guruh sig'imi 1 dan 100 gacha bo'lishi kerak");
     }
   }
+  if (form.startDate && form.endDate && new Date(form.startDate) > new Date(form.endDate)) {
+    errors.endDate = t('groups.form.invalidDateRange', "Tugash sanasi boshlanish sanasidan oldin bo'lishi mumkin emas");
+  }
   return errors;
 }
 
 /* ============================================================================
- * SUB-COMPONENTS (Apple visionOS)
+ * SUB-COMPONENTS (Apple Glass)
  * ========================================================================== */
 
 export function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
@@ -528,9 +531,9 @@ export function GroupFormPage() {
       const payload: Record<string, unknown> = {
         name: form.name.trim(),
         courseId: form.courseId,
-        teacherId: form.teacherId || undefined,
+        teacherId: isEdit ? (form.teacherId || '') : (form.teacherId || undefined),
         capacity: form.capacity ? parseInt(form.capacity, 10) : undefined,
-        room: form.room.trim() || undefined,
+        room: isEdit ? (form.room.trim() || '') : (form.room.trim() || undefined),
         startDate: form.startDate || undefined,
         endDate: form.endDate || undefined,
         isActive: form.isActive,

@@ -1,5 +1,5 @@
 /**
- * M-EDU CamerasPage — v18 "Liquid Glass · Apple Studio"
+ * M-EDU Cameras Page
  *
  * 🎯 v2 → v18 Architecture, DOM & Creative Feature Upgrades:
  *  ✅ Fixed Critical Invalid DOM Nesting (`<button>` inside `<button>`) — Camera rows now use
@@ -74,7 +74,7 @@ const rowVariants: Variants = {
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
- * EMBEDDED CUSTOM ICONS (SF Symbols Proportions — Zero External Dep)
+ * EMBEDDED CUSTOM ICONS (SVG Icons — Zero External Dep)
  * ════════════════════════════════════════════════════════════════════════ */
 
 const ICON_STROKE = 1.8;

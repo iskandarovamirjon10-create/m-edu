@@ -1,5 +1,5 @@
 /**
- * M-EDU FollowUpAutomationPage — Apple Design Award V2 Edition
+ * M-EDU FollowUpAutomationPage — 
  *
  * Ultra Premium Apple-Style Automation Dashboard:
  *  - Apple SF Pro visual hierarchy with ambient lighting

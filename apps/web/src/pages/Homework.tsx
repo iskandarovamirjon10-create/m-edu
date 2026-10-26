@@ -1,9 +1,9 @@
 /**
  * ============================================================================
- * M-EDU HomeworkPage — v20 "Apple Spatial Assignment Atelier & Deadline Canvas"
+ * M-EDU Homework Page
  * ============================================================================
  *
- * 🎯 Apple visionOS / macOS Sequoia Masterclass Upgrade:
+ * Architecture & Features:
  *  ✅ Liquid Glass Aesthetic: Specular meniscus, depth layering, blur physics
  *  ✅ WCAG 2.2 AA Compliance: All interactive touch targets >= 44x44px (Rows, Modals, Filters)
  *  ✅ Dual Interactive Filtering: Filter by Group + Segmented Status Tabs (All, Open, Due Soon, Past Due)
@@ -588,7 +588,7 @@ const HomeworkRow = React.forwardRef<
 });
 
 /* ============================================================================
- * MAIN HOMEWORK PAGE COMPONENT (VisionOS 10/10)
+ * MAIN HOMEWORK PAGE COMPONENT (Glass 10/10)
  * ========================================================================== */
 
 export function HomeworkPage() {

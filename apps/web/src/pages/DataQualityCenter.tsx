@@ -1,7 +1,7 @@
 /**
- * M-EDU DataQualityCenter — Apple Design Award V2 Edition
+ * M-EDU DataQualityCenter — 
  *
- * Premium craft:
+ * Module Features:
  *  - Apple SF Pro visual hierarchy with ambient verification lighting
  *  - Hero banner with Data Quality Assurance badge & interactive Run All trigger
  *  - Segmented filter tabs with spring physics

@@ -9,7 +9,7 @@
     "start:prod": "node dist/main",
     "db:migrate:deploy": "prisma migrate deploy",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "node --max-old-space-size=4096 ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
     "test": "vitest run src",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",

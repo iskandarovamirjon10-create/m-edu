@@ -52,6 +52,7 @@ import {
   useMemo,
   memo,
   type PointerEvent as ReactPointerEvent,
+  type RefObject,
 } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
@@ -368,7 +369,6 @@ const TAB_ACTIVE = 'text-[#007AFF] dark:text-[#0A84FF]';
 const AMBIENT_WARM =
   'radial-gradient(90% 65% at 35% 18%, rgba(255,255,255,0.08), transparent 65%)';
 const AMBIENT_COOL =
-  'radial-gradient(90% 65% at 65% 82%, rgba(255,255,255,0.06), transparent 65%)';
   'radial-gradient(90% 65% at 65% 82%, rgba(120,190,255,0.16), transparent 65%)';
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -468,15 +468,44 @@ const TopSpecular = memo(function TopSpecular({
 export const MobileBottomNav = memo(function MobileBottomNav({
   role,
   onOpenMore,
+  scrollContainerRef,
 }: {
   role: string;
   onOpenMore: () => void;
+  /** Scroll host used for the iOS-style recede/reveal behaviour. */
+  scrollContainerRef?: RefObject<HTMLElement | null>;
 }) {
   const { t } = useSafeI18n();
   const normalizedRole = role?.toUpperCase() ?? '';
   const soundRef = useStableSound();
   const reduced = usePrefersReducedMotion();
   const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
+
+  /* ── Recede while reading down, return on scroll up / at either edge ── */
+  const [dockHidden, setDockHidden] = useState(false);
+  const lastScrollRef = useRef(0);
+
+  useEffect(() => {
+    const el = scrollContainerRef?.current;
+    if (!el || reduced) return;
+
+    const onScroll = () => {
+      const y = el.scrollTop;
+      const delta = y - lastScrollRef.current;
+      if (Math.abs(delta) < 8) return;
+      lastScrollRef.current = y;
+
+      const atTop = y <= 72;
+      const atBottom = y + el.clientHeight >= el.scrollHeight - 32;
+      if (atTop || atBottom || delta < 0) setDockHidden(false);
+      else if (y > 180) setDockHidden(true);
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [scrollContainerRef, reduced]);
+
+  const revealDock = useCallback(() => setDockHidden(false), []);
 
   const tabs = useMemo(() => {
     let routes: readonly string[] = STAFF_MOBILE_TAB_ROUTES;
@@ -511,15 +540,27 @@ export const MobileBottomNav = memo(function MobileBottomNav({
   return (
     <nav
       aria-label={t('a11y.primaryNav', 'Primary navigation')}
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 select-none px-3.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:hidden"
+      className={cn(
+        'pointer-events-none fixed inset-x-0 bottom-0 z-40 select-none md:hidden',
+        'pl-[max(0.875rem,env(safe-area-inset-left,0px))] pr-[max(0.875rem,env(safe-area-inset-right,0px))]',
+        'pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]',
+      )}
     >
       <motion.div
         initial={
           reduced ? false : { y: 48, opacity: 0, scale: 0.96 }
         }
-        animate={{ y: 0, opacity: 1, scale: 1 }}
+        animate={{
+          y: dockHidden ? 104 : 0,
+          opacity: dockHidden ? 0 : 1,
+          scale: 1,
+        }}
         transition={reduced ? { duration: 0.15 } : SPRING_MORPH}
-        className="pointer-events-auto relative mx-auto max-w-[27rem]"
+        onFocusCapture={revealDock}
+        className={cn(
+          'relative mx-auto max-w-[27rem]',
+          dockHidden ? 'pointer-events-none' : 'pointer-events-auto',
+        )}
       >
         <div
           className={cn(
@@ -780,7 +821,7 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '-102%', opacity: 0.95 }}
             transition={reduced ? { duration: 0.16 } : DRAWER_SPRING}
-            className="absolute left-0 top-0 ml-3 mt-[calc(0.75rem+env(safe-area-inset-top,0px))] h-[calc(100dvh-1.5rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-[min(332px,88vw)] origin-left transform-gpu will-change-transform"
+            className="absolute left-0 top-0 ml-[max(0.75rem,env(safe-area-inset-left,0px))] mt-[calc(0.75rem+env(safe-area-inset-top,0px))] h-[calc(100dvh-1.5rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-[min(332px,88vw)] origin-left transform-gpu will-change-transform"
           >
             <div
               className={cn(

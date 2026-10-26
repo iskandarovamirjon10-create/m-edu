@@ -570,6 +570,11 @@ export const aiConversationsApi = {
   list: (limit = 50) => request<AiConversationSummary[]>(`/ai/conversations?limit=${limit}`),
   create: () => request<{ id: string }>('/ai/conversations', { method: 'POST' }),
   messages: (id: string) => request<AiWireMessage[]>(`/ai/conversations/${id}/messages`),
+  rename: (id: string, title: string) =>
+    request<AiConversationSummary>(`/ai/conversations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    }),
   remove: (id: string) => request(`/ai/conversations/${id}`, { method: 'DELETE' }),
 };
 
@@ -585,6 +590,19 @@ export const aiSuggestionsApi = {
   list: (context: string) => request<string[]>(`/ai/suggestions?context=${encodeURIComponent(context)}`),
 };
 
+export type AiHealthMode = 'live' | 'fallback' | 'offline';
+
+export interface AiHealthStatus {
+  ok: boolean;
+  model?: string;
+  provider?: string;
+  configured?: boolean;
+  /** `live` = model provider ready, `fallback` = database-backed answers. */
+  mode?: Exclude<AiHealthMode, 'offline'>;
+  uptime?: number;
+  timestamp?: string;
+}
+
 export const aiHealthApi = {
-  check: () => request<{ ok: boolean; model?: string }>('/ai/health'),
+  check: () => request<AiHealthStatus>('/ai/health'),
 };

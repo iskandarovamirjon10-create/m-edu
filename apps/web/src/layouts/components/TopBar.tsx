@@ -1394,7 +1394,6 @@ export interface TopBarProps {
   userRole: string;
   orgName: string;
   headerY: MotionValue<number>;
-  headerScale: MotionValue<number>;
   onCommandPalette: () => void;
   onOpenShortcuts: () => void;
   onLogout: () => void;
@@ -1414,7 +1413,6 @@ export const TopBar = memo(function TopBar({
   userRole,
   orgName,
   headerY,
-  headerScale,
   onCommandPalette,
   onOpenShortcuts,
   onLogout,
@@ -1494,7 +1492,6 @@ export const TopBar = memo(function TopBar({
     <motion.header
       style={{
         y: reduced ? 0 : headerY,
-        scale: reduced ? 1 : (headerScale ?? 1),
         transformOrigin: 'top center',
         willChange: 'transform',
       }}
@@ -1841,7 +1838,7 @@ export const MobileTopBar = memo(function MobileTopBar({
   const ambient = useTopBarAmbient(!reduced && !reducedTransparency);
 
   return (
-    <header className="pointer-events-none fixed inset-x-0 top-0 z-40 px-3 pt-[calc(0.5rem+env(safe-area-inset-top,0px))] select-none md:hidden">
+    <header className="pointer-events-none fixed inset-x-0 top-0 z-40 pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] pt-[calc(0.5rem+env(safe-area-inset-top,0px))] select-none md:hidden">
       <motion.div
         initial={reduced ? false : { y: -16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -1885,7 +1882,7 @@ export const MobileTopBar = memo(function MobileTopBar({
             onClick={onOpenSearch}
             aria-label={t('nav.searchPlaceholder', 'Search')}
             className={cn(
-              'hidden sm:inline-flex max-w-[130px] items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold min-h-[36px]',
+              'hidden min-[430px]:inline-flex max-w-[112px] items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold min-h-[36px]',
               LIQUID_PILL,
               FOCUS,
             )}
@@ -1913,14 +1910,16 @@ export const MobileTopBar = memo(function MobileTopBar({
             <SearchGlyph size={16} />
           </ActionButton>
 
-          <ActionButton
-            size="sm"
-            active={isCalculatorOpen}
-            onClick={() => setCalculatorOpen(!isCalculatorOpen)}
-            ariaLabel={t('nav.calculator', 'Calculator')}
-          >
-            <StaticIcon paths={I.calculator} size={16} />
-          </ActionButton>
+          <div className="hidden min-[380px]:block">
+            <ActionButton
+              size="sm"
+              active={isCalculatorOpen}
+              onClick={() => setCalculatorOpen(!isCalculatorOpen)}
+              ariaLabel={t('nav.calculator', 'Calculator')}
+            >
+              <StaticIcon paths={I.calculator} size={16} />
+            </ActionButton>
+          </div>
 
           <ThemeToggle size="sm" />
           <NotificationsMenu />

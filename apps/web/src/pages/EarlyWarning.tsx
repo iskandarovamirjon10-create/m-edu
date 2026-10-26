@@ -1,22 +1,6 @@
 /**
- * ============================================================================
- * M-EDU EarlyWarningPage — Apple visionOS & macOS Sequoia Specular Liquid Glass
- * ============================================================================
- *
- * Senior craft:
- *  - Apple visionOS specular Liquid Glass materials (.liquid-glass-surface, .liquid-glass-card)
- *  - Ambient AuroraMesh atmospheric canvas with specular hairlines
- *  - macOS Split-View Detail Sidecar (`openSidecar`) with root-cause telemetry & instant resolution
- *  - Superhuman keyboard-first navigation (J/K navigation, S to scan, Enter to inspect)
- *  - Web Audio tactile haptics (playTick, playPop, playSuccess, playWarningTone)
- *  - Interactive CountUp KPI bar with instant quick-filter toggles
- *  - Algorithmic early warning rule matrix with specular indicators
- *  - Dual display: desktop specular table + mobile tactile squircle cards
- *  - Strict WCAG 2.2 AA SC 2.5.8 touch targets (>= 44x44px hitboxes)
- *  - Mobile safe-area padding: pb-[max(6rem,env(safe-area-inset-bottom))]
- *  - Pure exported helpers for unit testability
- *  - 100% API contract & route compatibility preservation
- * ============================================================================
+ * M-EDU Early Warning Page
+ * Automated early warning rules, student risk alerts, and preventive interventions.
  */
 
 import {
@@ -39,7 +23,7 @@ import { usePrefersReducedMotion, cn } from '@/lib/design';
 import { openSidecar } from '@/stores/ui.store';
 
 /* ============================================================================
- * MOTION TOKENS (macOS Sequoia Physics)
+ * MOTION TOKENS ( Physics)
  * ========================================================================== */
 
 const SPRING_PHYSICS = {
@@ -149,7 +133,7 @@ export function formatWarningDate(d: string | null | undefined): string {
 }
 
 /* ============================================================================
- * SF SYMBOLS STYLE ICONS
+ * SVG ICONS
  * ========================================================================== */
 
 const ICONS = {
@@ -227,7 +211,7 @@ function Icon({
 }
 
 /* ============================================================================
- * AURORA MESH BACKGROUND (visionOS Atmospheric Canvas)
+ * AURORA MESH BACKGROUND (Atmospheric Canvas)
  * ========================================================================== */
 
 function AuroraMesh() {
@@ -532,7 +516,7 @@ export function EarlyWarningPage() {
         className="mx-auto max-w-7xl space-y-6"
       >
         {/* ====================================================================
-         * 1. visionOS SPECULAR HERO HEADER
+         * 1. HERO HEADER
          * ================================================================== */}
         <motion.div
           variants={itemVariants}

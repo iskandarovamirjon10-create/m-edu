@@ -108,56 +108,61 @@ export class DashboardService {
       }).catch(() => 0) ?? Promise.resolve(0),
     ]);
 
-    const totalPaid = Number(allTimePayments._sum.amount || 0) - Number(allTimeRefunds._sum.amount || 0);
+    const totalPaid = Math.max(
+      0,
+      Number(allTimePayments?._sum?.amount || 0) - Number(allTimeRefunds?._sum?.amount || 0),
+    );
 
-    const totalOverdue = debt.overdueDebt;
-    const totalPending = Math.max(0, debt.totalReceivables - debt.overdueDebt);
+    const totalOverdue = Math.max(0, Number(debt?.overdueDebt || 0));
+    const totalPending = Math.max(0, Number(debt?.totalReceivables || 0) - totalOverdue);
 
-    const todayRevenue = Number(todayPaymentsAggregate?._sum?.amount || 0);
-    const todayPaymentsCount = Number(todayPaymentsAggregate?._count?.id || 0);
+    const todayRevenue = Math.max(0, Number(todayPaymentsAggregate?._sum?.amount || 0));
+    const todayPaymentsCount = Math.max(0, Number(todayPaymentsAggregate?._count?.id || 0));
 
-    const totalLeads = (leadStats as any[]).reduce((sum: number, s: any) => sum + Number(s?._count?.stage || 0), 0);
-    const wonLeads = (leadStats as any[]).find((s: any) => s.stage === 'WON')?._count?.stage || 0;
+    const rawLeads = Array.isArray(leadStats) ? leadStats : [];
+    const totalLeads = rawLeads.reduce((sum: number, s: any) => sum + Number(s?._count?.stage || 0), 0);
+    const wonLeads = Number(rawLeads.find((s: any) => s?.stage === 'WON')?._count?.stage || 0);
 
     const conversionRate = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0;
 
-    const attendanceRate = computeAttendanceRate(attendanceStats as any) ?? 0;
+    const rawAttendance = Array.isArray(attendanceStats) ? attendanceStats : [];
+    const attendanceRate = computeAttendanceRate(rawAttendance as any) ?? 0;
 
     return {
-      totalStudents,
-      activeStudents,
-      totalTeachers,
-      activeGroups,
-      totalCourses,
+      totalStudents: Number(totalStudents || 0),
+      activeStudents: Number(activeStudents || 0),
+      totalTeachers: Number(totalTeachers || 0),
+      activeGroups: Number(activeGroups || 0),
+      totalCourses: Number(totalCourses || 0),
       totalPaid,
       totalPending,
       totalOverdue,
       todayRevenue,
       todayPaymentsCount,
-      todayLessonsCount: todayLessonsCount ?? 0,
+      todayLessonsCount: Number(todayLessonsCount || 0),
       totalRevenue: totalPaid,
       pendingPayments: totalPending,
       overduePayments: totalOverdue,
       totalLeads,
       wonLeads,
-      newLeadsThisMonth,
+      newLeadsThisMonth: Number(newLeadsThisMonth || 0),
       conversionRate,
       attendanceRate,
-      monthlyRevenue,
-      recentPayments,
-      leadByStage: leadStats.map((s) => ({
+      monthlyRevenue: Array.isArray(monthlyRevenue) ? monthlyRevenue : [],
+      recentPayments: Array.isArray(recentPayments) ? recentPayments : [],
+      leadByStage: rawLeads.map((s) => ({
         stage: s.stage,
-        count: s._count.stage,
+        count: Number(s?._count?.stage || 0),
       })),
-      attendanceStats: attendanceStats.map((s) => ({
+      attendanceStats: rawAttendance.map((s) => ({
         status: s.status,
-        count: s._count.status,
+        count: Number(s?._count?.status || 0),
       })),
-      todayAttendanceStats: (todayAttendanceGroup as any[]).map((s) => ({
+      todayAttendanceStats: (Array.isArray(todayAttendanceGroup) ? todayAttendanceGroup : []).map((s) => ({
         status: s.status,
-        count: s._count.status,
+        count: Number(s?._count?.status || 0),
       })),
-      upcomingFollowUps,
+      upcomingFollowUps: Array.isArray(upcomingFollowUps) ? upcomingFollowUps : [],
     };
   }
 

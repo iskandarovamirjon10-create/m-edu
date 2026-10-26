@@ -1,22 +1,6 @@
 /**
- * M-EDU AI Copilot — V2.0 "Liquid Glass Studio — Ultra Edition".
- * ============================================================================
- * Layout contract
- *   Desktop  (≥1024px): [History | Conversation | Context] + Command Palette
- *   Tablet   (768–1023px): [History | Conversation] + Slide-over Glass Sheet
- *   Mobile   (<768px): Single Canvas + History Drawer + Context Bottom Sheet
- *                      + Thumb-reachable Spatial Quick Dock
- *
- * V2 Ultra Upgrades
- *   • Full Hotkey Engine: ⌘K (Command), ⌘B (History), ⌘I (Context), ⌘. (Focus),
- *     ⌘⇧O (New Chat), ⌘⇧E (Export PDF), ⌘⇧M (Export Markdown), Esc (Stop AI)
- *   • Spatial DragControls: Mobile bottom sheet only drags via grab handle,
- *     preventing scroll conflicts inside the context list
- *   • Interactive Cursor Spotlight: Tracks pointer on desktop to illuminate
- *     `.cp-glass--interactive` surfaces via `--cp-spot-x` / `--cp-spot-y`
- *   • Drag-and-Drop Canvas Overlay: Drop text/prompt files directly into chat
- *   • Floating Focus Mode Pill & Offline Connection Banner
- * ============================================================================
+ * M-EDU AI Copilot Workspace
+ * Chat interface, history drawer, context inspector, and intelligent assistant tools.
  */
 import {
   useCallback,
@@ -62,6 +46,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useAiContextSuggestions } from '@/hooks/useAiContextSuggestions';
 import { useConversations } from '@/hooks/useConversations';
+import { useAiHealth } from '@/hooks/useAiHealth';
 import {
   useCopilotPreferences,
   copilotComfortClass,
@@ -77,7 +62,7 @@ import type { AiUiMessage } from '@/types/ai';
 import { cn } from '@/lib/design';
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Constants & Spring Physics (iOS 27 Fluid Motion)
+ * Constants & Spring Physics (Fluid Motion)
  * ─────────────────────────────────────────────────────────────────────── */
 
 const SPRING_PANEL = {
@@ -311,25 +296,62 @@ export function AiCopilot() {
     model: selectedModel.id,
   });
 
-  const { createNew, deleteConversation, loadMessages } = useConversations();
+  const { createNew, renameConversation, deleteConversation, loadMessages } = useConversations();
+  const { mode: aiMode } = useAiHealth();
 
   const isStreaming = status === 'streaming';
   const isThinking = busy && !isStreaming;
 
-  /* ── V2 Interactive Spotlight Tracker (Desktop Fine Pointer) ──── */
+  /* ── V2 Interactive Spotlight Tracker (Desktop Fine Pointer) ────
+   * The spotlight follows the cursor, so it fires dozens of times per
+   * second. Reading `getBoundingClientRect()` inside the handler would force
+   * a layout on every pointer event; instead the rect is cached on enter /
+   * resize and writes are coalesced into one rAF frame. */
+  const spotRectRef = useRef<DOMRect | null>(null);
+  const spotPointRef = useRef<{ x: number; y: number } | null>(null);
+  const spotFrameRef = useRef(0);
+
+  const flushSpotlight = useCallback(() => {
+    spotFrameRef.current = 0;
+    const el = shellRef.current;
+    const point = spotPointRef.current;
+    const rect = spotRectRef.current;
+    if (!el || !point || !rect || rect.width === 0 || rect.height === 0) return;
+    const x = ((point.x - rect.left) / rect.width) * 100;
+    const y = ((point.y - rect.top) / rect.height) * 100;
+    el.style.setProperty('--cp-spot-x', `${x.toFixed(1)}%`);
+    el.style.setProperty('--cp-spot-y', `${y.toFixed(1)}%`);
+  }, []);
+
+  const handleShellPointerEnter = useCallback(() => {
+    spotRectRef.current = shellRef.current?.getBoundingClientRect() ?? null;
+  }, []);
+
   const handleShellPointerMove = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (!isDesktop || preferences.reduceMotion) return;
-      const el = shellRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / rect.width) * 100;
-      const y = ((event.clientY - rect.top) / rect.height) * 100;
-      el.style.setProperty('--cp-spot-x', `${x.toFixed(1)}%`);
-      el.style.setProperty('--cp-spot-y', `${y.toFixed(1)}%`);
+      spotPointRef.current = { x: event.clientX, y: event.clientY };
+      if (!spotRectRef.current) {
+        spotRectRef.current = shellRef.current?.getBoundingClientRect() ?? null;
+      }
+      if (spotFrameRef.current) return;
+      spotFrameRef.current = requestAnimationFrame(flushSpotlight);
     },
-    [isDesktop, preferences.reduceMotion],
+    [isDesktop, preferences.reduceMotion, flushSpotlight],
   );
+
+  useEffect(() => {
+    const invalidate = () => {
+      spotRectRef.current = null;
+    };
+    window.addEventListener('resize', invalidate, { passive: true });
+    window.addEventListener('scroll', invalidate, { passive: true });
+    return () => {
+      window.removeEventListener('resize', invalidate);
+      window.removeEventListener('scroll', invalidate);
+      if (spotFrameRef.current) cancelAnimationFrame(spotFrameRef.current);
+    };
+  }, []);
 
   /* ── Data & Conversation Handlers ─────────────────────────────── */
   const handleSelectConversation = useCallback(
@@ -366,6 +388,13 @@ export function AiCopilot() {
       /* Offline resilience: operates cleanly in local session mode */
     }
   }, [clear, createNew, setConversationId]);
+
+  const handleRenameConversation = useCallback(
+    async (id: string, title: string) => {
+      await renameConversation({ id, title });
+    },
+    [renameConversation],
+  );
 
   const handleDeleteConversation = useCallback(
     (id: string) => {
@@ -652,6 +681,7 @@ export function AiCopilot() {
   return (
     <div
       ref={shellRef}
+      onPointerEnter={handleShellPointerEnter}
       onPointerMove={handleShellPointerMove}
       onDragEnter={handleDragEnter}
       onDragOver={(e) => e.preventDefault()}
@@ -714,6 +744,7 @@ export function AiCopilot() {
               activeId={conversationId ?? null}
               onSelect={handleSelectConversation}
               onNew={handleNewChat}
+              onRename={handleRenameConversation}
               onDelete={handleDeleteConversation}
               className="h-full"
             />
@@ -729,6 +760,7 @@ export function AiCopilot() {
       >
         <AiCopilotHeader
           online={online}
+          mode={aiMode}
           busy={busy}
           selectedModel={selectedModel}
           onSelectModel={setSelectedModel}
@@ -911,6 +943,7 @@ export function AiCopilot() {
                 activeId={conversationId ?? null}
                 onSelect={handleSelectConversation}
                 onNew={handleNewChat}
+                onRename={handleRenameConversation}
                 onDelete={handleDeleteConversation}
                 className="h-full w-full border-r-0 bg-transparent"
               />

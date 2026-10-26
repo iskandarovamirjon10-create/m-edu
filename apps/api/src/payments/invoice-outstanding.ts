@@ -26,7 +26,7 @@ export interface InvoiceOutstanding {
  * Statuses that never represent a collectable obligation.
  * Must stay in sync with the invoice lifecycle in InvoicesService.
  */
-export const NON_BILLABLE_INVOICE_STATUSES = ['DRAFT', 'CANCELLED'] as const;
+export const NON_BILLABLE_INVOICE_STATUSES = ['DRAFT', 'CANCELLED', 'REFUNDED'] as const;
 
 /**
  * remaining = total - paid + refunded

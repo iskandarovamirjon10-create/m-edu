@@ -1,14 +1,14 @@
 /**
- * M-EDU ExamsPage — Apple visionOS & macOS Sequoia Specular Edition (v10.0)
+ * M-EDU ExamsPage — Apple Modern Interface Specular Edition (v10.0)
  *
- * 🎯 Apple Design Award Tier Polish:
+ * 🎯  Tier Polish:
  *  ✅ Aurora Mesh Backdrop: Living breathing ambient mesh gradients in indigo, violet & emerald
  *  ✅ Specular Liquid Glass: Meniscus rim highlights, double-layer specular borders & backdrop blur
  *  ✅ Interactive Animated KPI Bar: CountUp tiles with click-to-filter toggles (Published / Drafts / All)
  *  ✅ Dual High-Density Layout: Desktop Specular Rows + Mobile tactile squircle cards (< 768px)
  *  ✅ Passing-Marks Micro-Gauge: High-precision animated progress ratio with Apple spring physics
  *  ✅ macOS Sidecar Integration: Instant Split-View inspection with QuickLookData metrics & details
- *  ✅ Superhuman Keyboard Orchestration: J/K (Navigate), Enter/Space (Sidecar), C (Create), R (Refresh)
+ *  ✅ Fast Keyboard Orchestration: J/K (Navigate), Enter/Space (Sidecar), C (Create), R (Refresh)
  *  ✅ WCAG 2.2 AA SC 2.5.8: Guaranteed ≥ 44×44px touch targets on all interactive controls & buttons
  *  ✅ Trilingual Resilience: useSafeI18n with UZ, RU, EN fallbacks
  *  ✅ Pure Helper Exports: validateExamForm, calculateExamStats, getExamTypeTone, getExamGradient
@@ -41,7 +41,7 @@ import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 
 /* ============================================================================
- * MOTION TOKENS (visionOS High-Fidelity Physics)
+ * MOTION TOKENS (Glass High-Fidelity Physics)
  * ========================================================================== */
 
 export const SPRING = {
@@ -72,7 +72,7 @@ export const rowVariants: Variants = {
 };
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;

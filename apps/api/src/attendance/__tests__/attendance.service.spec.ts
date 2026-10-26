@@ -739,5 +739,69 @@ describe('ATT-002: Multi-Lesson Attendance Integrity', () => {
     expect(result.updated).toBe(1);
     expect(prisma.attendance.update).toHaveBeenCalled();
   });
+
+  it('rejects invalid date format with BadRequestException', async () => {
+    prisma.group.findFirst.mockResolvedValue({ id: 'g1', organizationId: 'org-1' });
+    prisma.studentGroup.findMany.mockResolvedValue([{ studentId: 's1' }]);
+
+    await expect(
+      svc.markAttendance('org-1', {
+        groupId: 'g1',
+        date: 'not-a-valid-date',
+        records: [{ studentId: 's1', status: 'PRESENT' }],
+      }),
+    ).rejects.toThrow('Invalid date provided');
+  });
+
+  it('filters by teacherId matching both teacherId and teacher.userId in findAll', async () => {
+    prisma.attendance.findMany.mockResolvedValue([]);
+    prisma.attendance.count.mockResolvedValue(0);
+
+    await svc.findAll('org-1', { teacherId: 't-uuid-1' });
+
+    expect(prisma.attendance.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: 'org-1',
+          group: {
+            OR: [
+              { teacherId: 't-uuid-1' },
+              { teacher: { userId: 't-uuid-1' } },
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('applies date and status filters in getDailyStats and getAnalytics', async () => {
+    prisma.attendance.groupBy.mockResolvedValue([]);
+    prisma.$queryRaw.mockResolvedValue([]);
+
+    await svc.getAnalytics('org-1', {
+      date: '2026-09-04',
+      status: 'ABSENT',
+      teacherId: 't-uuid-1',
+    });
+
+    // Check groupBy received status and teacher filter
+    expect(prisma.attendance.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: 'org-1',
+          status: 'ABSENT',
+          group: {
+            OR: [
+              { teacherId: 't-uuid-1' },
+              { teacher: { userId: 't-uuid-1' } },
+            ],
+          },
+        }),
+      }),
+    );
+
+    // Check $queryRaw was called for getDailyStats
+    expect(prisma.$queryRaw).toHaveBeenCalled();
+  });
 });
 

@@ -9,8 +9,9 @@
  *     (including a special prismatic holographic glow for `AI Copilot`).
  *   • Dynamic Scroll Edge Masking: Smooth top/bottom fade masks appear
  *     automatically when the navigation tree overflows.
- *   • Quick-Jump Filter (`Enter` key): Press `/` to filter, then press `Enter`
- *     to immediately navigate to the top matching module.
+ *   • Quick-Jump Filter (`Enter` key): Press `Alt + /` to filter, then press
+ *     `Enter` to immediately navigate to the top matching module. (Plain `/`
+ *     stays reserved for the global command-bar search.)
  *   • Right-Edge Interactive Resize/Toggle Strip: Double-click or click the
  *     specular right border to effortlessly toggle rail collapse.
  *
@@ -138,6 +139,7 @@ export interface NavItem {
 
 export const MANAGEMENT_NAV: readonly NavItem[] = [
   { to: '/', labelKey: 'nav.dashboard', label: 'Dashboard', iconPath: I.dashboard, end: true, accent: 'blue' },
+  { to: '/ai-copilot', labelKey: 'nav.aiCopilot', label: 'AI Copilot', iconPath: I.ai, accent: 'rainbow' },
   { to: '/reports', labelKey: 'nav.reports', label: 'Reports', iconPath: I.reports, accent: 'blue' },
   { to: '/early-warning', labelKey: 'nav.earlyWarning', label: 'At-Risk Students', iconPath: I.earlyWarning, accent: 'pink' },
 ];
@@ -166,7 +168,6 @@ export const COMMUNICATION_NAV: readonly NavItem[] = [
   { to: '/telegram', labelKey: 'nav.telegram', label: 'Telegram Integration', iconPath: I.telegram, accent: 'blue' },
   { to: '/chat', labelKey: 'nav.chat', label: 'Chat', iconPath: I.chat, accent: 'blue' },
   { to: '/notifications', labelKey: 'nav.notifications', label: 'Notifications', iconPath: I.notifications, accent: 'orange' },
-  { to: '/ai-copilot', labelKey: 'nav.aiCopilot', label: 'AI Copilot', iconPath: I.ai, accent: 'rainbow' },
 ];
 
 export const ADMINISTRATION_NAV: readonly NavItem[] = [
@@ -908,11 +909,13 @@ export const Sidebar = memo(function Sidebar({
     );
   }, [navFilter, isStudent, t]);
 
-  /* ── Press `/` anywhere outside text fields/modals to focus filter ── */
+  /* ── Press `Alt + /` outside text fields/modals to focus the nav filter ──
+   * Plain `/` is owned by the global command-bar search in AppLayout, so the
+   * sidebar uses a modifier to avoid two competing focus handlers. */
   useEffect(() => {
     if (collapsed) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== '/' || !e.altKey || e.metaKey || e.ctrlKey) return;
       const el = e.target as HTMLElement | null;
       if (
         el?.tagName === 'INPUT' ||
@@ -1017,7 +1020,7 @@ export const Sidebar = memo(function Sidebar({
               sound.playPop();
               setCollapsed((prev) => !prev);
             }}
-            className=" absolute inset-y-0 right-0 z-30 w-1 cursor-ew-resize transition-colors duration-200 hover:bg-brand-500/35 active:bg-brand-500/60"
+            className="absolute inset-y-0 right-0 z-30 w-1 cursor-ew-resize transition-colors duration-200 hover:bg-brand-500/35 active:bg-brand-500/60"
           />
         )}
 
@@ -1037,7 +1040,8 @@ export const Sidebar = memo(function Sidebar({
                 setCollapsed(true);
               }}
               aria-label={t('nav.collapse', 'Collapse sidebar')}
-              title={t('nav.collapse', 'Collapse sidebar')}
+              aria-keyshortcuts="Meta+B Control+B"
+              title={`${t('nav.collapse', 'Collapse sidebar')} (⌘B)`}
               className={cn(
                 'flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-[var(--text-secondary)]',
                 'transition-all duration-200 active:scale-[0.92]',
@@ -1061,7 +1065,8 @@ export const Sidebar = memo(function Sidebar({
                 setCollapsed(false);
               }}
               aria-label={t('nav.expand', 'Expand sidebar')}
-              title={t('nav.expand', 'Expand sidebar')}
+              aria-keyshortcuts="Meta+B Control+B"
+              title={`${t('nav.expand', 'Expand sidebar')} (⌘B)`}
               className={cn(
                 'flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black/[0.06] bg-white/45 py-2 text-[var(--text-secondary)]',
                 'shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-md',
@@ -1144,7 +1149,7 @@ export const Sidebar = memo(function Sidebar({
                     aria-hidden="true"
                     className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md border border-black/[0.07] bg-white/65 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[var(--text-tertiary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.1] dark:bg-white/[0.07] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
                   >
-                    /
+                    ⌥/
                   </kbd>
                 )}
               </div>

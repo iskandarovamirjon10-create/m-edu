@@ -296,6 +296,8 @@ export const legacyUz: LegacySlices = {
   'groups.form.capacity': 'Sig\'im',
   'groups.form.capacityMin': 'Sig\'im kamida 1 bo\'lishi kerak',
   'groups.form.startDate': 'Boshlanish sanasi',
+  'groups.form.endDate': 'Tugash sanasi',
+  'groups.form.invalidDateRange': 'Tugash sanasi boshlanish sanasidan oldin bo\'lishi mumkin emas',
 
   // ── courses ────────────────────────────────────────────────────────
   'courses.title': 'Kurslar',

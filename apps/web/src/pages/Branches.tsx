@@ -1,8 +1,8 @@
 /**
- * M-EDU BranchesPage — Apple visionOS & macOS Sequoia 10/10 Edition
+ * M-EDU Branches Page
  *
- * Premium craft:
- *  - Apple visionOS specular liquid glass styling with meniscus rim highlights.
+ * Module Features:
+ *  - Liquid glass styling with rim highlights.
  *  - Dynamic Aurora mesh backdrop with ambient lighting.
  *  - Animated KPI metrics strip (Total branches, Active branches, Total students, Managers).
  *  - WCAG 2.2 AA SC 2.5.8 compliant touch targets (>= 44x44px for all controls).

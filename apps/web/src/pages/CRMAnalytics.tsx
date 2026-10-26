@@ -1,14 +1,14 @@
 /**
- * M-EDU CRMAnalyticsPage — Apple Design Award Edition
+ * M-EDU CRMAnalyticsPage — 
  *
- * Premium craft:
+ * Module Features:
  *  - Hero header with gradient CRM tile + live chips (total/conversion/active)
  *  - Ambient gradient orbs — suite-consistent
  *  - Premium segmented tabs with layoutId sliding indicator
  *  - KpiTile with CountUp + tone-aware orbs
  *  - Funnel bars with animated width + gradient fills + tone dots
  *  - Premium tables with squircle icons + tone-aware chips
- *  - Custom SVG icons in SF Symbols proportions
+ *  - Custom SVG icons in SVG Icons
  *  - Shimmer skeletons (not pulse)
  *  - Framer Motion spring physics + staggered blur-in
  *  - 100% logic preserved (queries, tabs, i18n, data shapes)

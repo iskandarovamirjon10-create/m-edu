@@ -1,5 +1,5 @@
 /**
- * M-EDU PerformanceMonitorPage — Apple Design Award Edition
+ * M-EDU PerformanceMonitorPage — 
  *
  * Real-time Backend Engine Performance, N+1 Query Audit & Endpoint Latency Analyzer.
  */

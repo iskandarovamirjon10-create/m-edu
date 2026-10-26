@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- *  M-EDU Telegram WebApp — Liquid Glass Premium Edition (v5.0)
+ *  M-EDU Telegram WebApp (v5.0)
  *  Ota-ona / O'qituvchi / O'quvchi / AI Copilot / Digital Pass
  *
  *  v5.0 o'zgarishlari (qisqacha):
@@ -11,7 +11,7 @@
  *   • AI: rolga mos tayyor savollar (ota-ona/o'quvchiga "qarzdorlik tahlili" chiqmaydi)
  *   • Digital Pass: taymer va QR bir xil vaqt oynasiga bog'landi
  *   • Light mavzu: qattiq oq/slate ranglar CSS o'zgaruvchilarga almashtirildi
- *   • Yangi premium Liquid Glass qatlami (PREMIUM_GLASS_CSS)
+ *   • Premium Glass qatlami (PREMIUM_GLASS_CSS)
  * ============================================================================
  */
 

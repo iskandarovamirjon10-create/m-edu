@@ -7,7 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 const STUDENT_HEADERS = [
   'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender',
-  'address', 'parentName', 'parentPhone', 'enrollmentDate', 'isActive',
+  'address', 'parentName', 'parentPhone', 'enrollmentDate', 'balance', 'groupName', 'isActive',
 ];
 
 const MOCK_STUDENT = {
@@ -100,6 +100,7 @@ describe('ImportExportService', () => {
   let prisma: {
     student: { findMany: ReturnType<typeof import('vitest').vi.fn>; create: ReturnType<typeof import('vitest').vi.fn> };
     teacher: { create: ReturnType<typeof import('vitest').vi.fn> };
+    group: { findFirst: ReturnType<typeof import('vitest').vi.fn> };
   };
 
   beforeEach(async () => {
@@ -107,6 +108,7 @@ describe('ImportExportService', () => {
     prisma = {
       student: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({ id: 's1' }) },
       teacher: { create: vi.fn().mockResolvedValue({ id: 't1' }) },
+      group: { findFirst: vi.fn().mockResolvedValue({ id: 'g1', name: 'English B1' }) },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -346,6 +348,112 @@ describe('ImportExportService', () => {
       await expect(
         service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file),
       ).rejects.toThrow('CSV file exceeds maximum limit of 50 columns');
+    });
+
+    it('performs dry-run preview without writing to database', async () => {
+      const csvData = 'Ism,Familiya,Telefon,Balans,Guruh\nOtabek,Zokirov,+998901112233,450000,IELTS-Morning';
+      const file = {
+        buffer: Buffer.from(csvData, 'utf-8'),
+        originalname: 'modme_export.csv',
+        mimetype: 'text/csv',
+      };
+
+      const result: any = await service.startImport(
+        'org1',
+        { entityType: 'STUDENT', mode: 'CREATE', dryRun: true },
+        file,
+      );
+
+      expect(result.dryRun).toBe(true);
+      expect(result.totalRows).toBe(1);
+      expect(result.validCount).toBe(1);
+      expect(result.preview).toHaveLength(1);
+      expect(result.preview[0]).toMatchObject({
+        firstName: 'Otabek',
+        lastName: 'Zokirov',
+        balance: 450000,
+        groupName: 'IELTS-Morning',
+      });
+      expect(prisma.student.create).not.toHaveBeenCalled();
+    });
+
+    it('maps Modme Uzbek column aliases, attaches balance and connects group', async () => {
+      const csvData = 'Ism,Familiya,Telefon,Balans,Guruh\nOtabek,Zokirov,+998901112233,450000,English B1';
+      const file = {
+        buffer: Buffer.from(csvData, 'utf-8'),
+        originalname: 'modme_export.csv',
+        mimetype: 'text/csv',
+      };
+
+      const result = await service.startImport(
+        'org1',
+        { entityType: 'STUDENT', mode: 'CREATE', dryRun: false },
+        file,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.importedCount).toBe(1);
+      expect(prisma.group.findFirst).toHaveBeenCalledWith({
+        where: {
+          organizationId: 'org1',
+          name: { equals: 'English B1', mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      expect(prisma.student.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            balance: 450000,
+            groups: {
+              create: {
+                organization: { connect: { id: 'org1' } },
+                group: { connect: { id: 'g1' } },
+              },
+            },
+          }),
+        }),
+      );
+    });
+
+    it('rejects corrupted Excel (.xlsx) file with clean BadRequestException', async () => {
+      const file = {
+        buffer: Buffer.from('Not a valid zip or excel archive'),
+        originalname: 'corrupt.xlsx',
+        mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+
+      await expect(
+        service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file),
+      ).rejects.toThrow('Corrupted or invalid Excel file');
+    });
+
+    it('correctly parses multi-line quoted CSV values without breaking rows', async () => {
+      const csvData = 'firstName,lastName,address\n"Ali","Valiyev","Line 1\nLine 2"\n"Hasan","Husanov","Single Line"';
+      const file = {
+        buffer: Buffer.from(csvData, 'utf-8'),
+        originalname: 'multiline.csv',
+        mimetype: 'text/csv',
+      };
+
+      const result = await service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file);
+      expect(result.success).toBe(true);
+      expect(result.totalRows).toBe(2);
+      expect(result.importedCount).toBe(2);
+    });
+
+    it('supports UTF-16LE encoded CSV files with byte-order mark', async () => {
+      const text = 'firstName,lastName,email\nAlisher,Navoiy,alisher@example.com';
+      const bom = Buffer.from([0xff, 0xfe]);
+      const body = Buffer.from(text, 'utf16le');
+      const file = {
+        buffer: Buffer.concat([bom, body]),
+        originalname: 'utf16.csv',
+        mimetype: 'text/csv',
+      };
+
+      const result = await service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file);
+      expect(result.success).toBe(true);
+      expect(result.importedCount).toBe(1);
     });
   });
 });

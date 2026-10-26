@@ -1,15 +1,6 @@
 /**
- * M-EDU TeacherWorkloadPage — Apple Design Award & visionOS Edition (10/10)
- *
- * Premium craft:
- *  - Apple visionOS Liquid Glass aesthetic with hairline specular reflections
- *  - Ambient Aurora mesh backdrop (blue, purple, emerald drift)
- *  - Radial utilization gauges (Apple Watch ring mini) with status glow
- *  - Interactive Smart Payroll & KPI Simulator with live transparent breakdown
- *  - WCAG 2.2 AA SC 2.5.8 compliant touch targets (>= 44x44px)
- *  - Exported pure domain helpers (calculateTeacherSalary, getWorkloadStatus, etc.)
- *  - Full trilingual safe i18n resilience (UZ, RU, EN)
- *  - Keyboard navigation (Arrow keys, Enter/Space sidecar split-view)
+ * M-EDU Teacher Workload Page
+ * Teacher workload tracking, lesson hour allocations, payroll simulations, and capacity metrics.
  */
 
 import React, { useMemo, useRef, useEffect, useState, useCallback, useId } from 'react';
@@ -229,7 +220,7 @@ export function calculateTeacherSalary({
 }
 
 /* ============================================================================
- * SVG ICONS (SF Symbols Proportions)
+ * SVG ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 2.0;
@@ -329,7 +320,7 @@ function Icon({
 }
 
 /* ============================================================================
- * AMBIENT AURORA BACKDROP (Apple visionOS Specular Depth)
+ * AMBIENT AURORA BACKDROP (Specular Depth)
  * ========================================================================== */
 
 function AuroraBackdrop() {

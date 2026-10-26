@@ -56,6 +56,8 @@ import {
   Pencil,
   MoreHorizontal,
   X,
+  Check,
+  AlertTriangle,
 } from 'lucide-react';
 import { CopilotButton, CopilotIconButton } from './CopilotControls';
 import {
@@ -184,7 +186,7 @@ export interface CopilotHistoryRailProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string, title?: string) => void | Promise<void>;
-  onRename?: (id: string, currentTitle: string) => void;
+  onRename?: (id: string, title: string) => void | Promise<void>;
   /** Override for tests / SSR. */
   conversationsOverride?: ConversationLike[];
   loadingOverride?: boolean;
@@ -214,13 +216,18 @@ export function CopilotHistoryRail({
   const { t } = useSafeI18n();
   const reduced = useMediaQuery('(prefers-reduced-motion: reduce)');
   const contrast = useMediaQuery('(prefers-contrast: more)');
-  const { isOnline } = useAiHealth();
+  const { mode: healthMode, isOnline } = useAiHealth();
+  // Hosts/tests may render the rail with a health stub that only knows
+  // `isOnline`; fall back to that signal instead of showing "Offline".
+  const mode = healthMode ?? (isOnline ? 'live' : 'offline');
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounced(search, 200);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [editingRename, setEditingRename] = useState<{ id: string; value: string } | null>(null);
+  const [savingRename, setSavingRename] = useState(false);
 
   const hook = useConversations() as {
     conversations?: ConversationLike[];
@@ -298,6 +305,43 @@ export function CopilotHistoryRail({
     return () => document.removeEventListener('pointerdown', onPointer);
   }, [menuFor]);
 
+  /* ── Rename flow ───────────────────────────────────────────── */
+  const startRename = useCallback((id: string, title: string) => {
+    setMenuFor(null);
+    setEditingRename({ id, value: title });
+  }, []);
+
+  const cancelRename = useCallback(() => setEditingRename(null), []);
+
+  const commitRename = useCallback(async () => {
+    if (!editingRename || savingRename || !onRename) return;
+    const next = editingRename.value.replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (!next) {
+      setEditingRename(null);
+      return;
+    }
+
+    setSavingRename(true);
+    try {
+      await onRename(editingRename.id, next);
+      setAnnouncement(
+        `${t('ai.history.renamed') || "Suhbat nomi o'zgartirildi"}: ${next}`,
+      );
+      setEditingRename(null);
+    } catch {
+      setAnnouncement(
+        t('ai.history.renameFailed') || "Suhbat nomini o'zgartirib bo'lmadi",
+      );
+    } finally {
+      setSavingRename(false);
+    }
+  }, [editingRename, savingRename, onRename, t]);
+
+  // Leaving the conversation (or deleting it) cancels a floating editor.
+  useEffect(() => {
+    setEditingRename(null);
+  }, [activeId]);
+
   /* ── Delete flow ───────────────────────────────────────────── */
   const askDelete = useCallback(
     (conv: ConversationLike) => {
@@ -309,6 +353,7 @@ export function CopilotHistoryRail({
 
   const confirmDelete = useCallback(async () => {
     if (!pendingDelete) return;
+    setEditingRename((current) => (current?.id === pendingDelete.id ? null : current));
     try {
       await onDelete(pendingDelete.id, pendingDelete.title);
       setAnnouncement(`${t('ai.history.deleted') || "O'chirildi"}: ${pendingDelete.title}`);
@@ -369,6 +414,22 @@ export function CopilotHistoryRail({
     week: t('ai.history.thisWeek') || "Bu hafta",
     earlier: t('ai.history.earlier') || 'Avvalroq',
   };
+
+  const statusMeta =
+    mode === 'live'
+      ? { label: t('ai.history.modeLive') || 'Jonli', color: '#34C759', Icon: Wifi }
+      : mode === 'fallback'
+        ? {
+            label: t('ai.history.modeFallback') || 'Bazaviy rejim',
+            color: '#FF9F0A',
+            Icon: AlertTriangle,
+          }
+        : {
+            label: t('ai.history.modeOffline') || 'Oflayn',
+            color: '#FF3B30',
+            Icon: WifiOff,
+          };
+  const StatusIcon = statusMeta.Icon;
 
   if (!AI_FLAGS.conversations) return null;
 
@@ -622,34 +683,84 @@ export function CopilotHistoryRail({
                                 className="absolute bottom-2.5 left-1 top-2.5 w-1 rounded-full bg-[#007AFF] shadow-sm"
                               />
                             )}
-                            <button
-                              type="button"
-                              role="option"
-                              aria-selected={isActive}
-                              onClick={() => onSelect(conv.id)}
-                              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md pl-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/50"
-                            >
-                              <MessageSquare
-                                className={cn(
-                                  'h-4 w-4 shrink-0',
-                                  isActive ? 'text-[#007AFF]' : 'text-[var(--text-muted)]',
-                                )}
-                                aria-hidden="true"
-                              />
-                              <span className="flex min-w-0 flex-1 flex-col text-left">
-                                <span className="truncate">
-                                  <HighlightMatch text={title} query={debouncedSearch} />
-                                </span>
-                                {preview && (
-                                  <span className="truncate text-[10px] text-[var(--text-muted)]">
-                                    <HighlightMatch text={preview} query={debouncedSearch} />
+                            {editingRename?.id === conv.id ? (
+                              <form
+                                onSubmit={(event) => {
+                                  event.preventDefault();
+                                  void commitRename();
+                                }}
+                                aria-busy={savingRename || undefined}
+                                className="flex min-w-0 flex-1 items-center gap-1 pl-1"
+                              >
+                                <input
+                                  autoFocus
+                                  value={editingRename.value}
+                                  onChange={(event) =>
+                                    setEditingRename({
+                                      id: editingRename.id,
+                                      value: event.target.value,
+                                    })
+                                  }
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Escape') {
+                                      event.stopPropagation();
+                                      cancelRename();
+                                    }
+                                  }}
+                                  maxLength={120}
+                                  aria-label={
+                                    t('ai.history.renamePlaceholder') || 'Suhbat nomi'
+                                  }
+                                  className="h-7 min-w-0 flex-1 rounded-md border border-[#007AFF]/45 bg-white px-2 text-[11.5px] text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-[#007AFF]/40 dark:bg-[#2C2C2E]"
+                                />
+                                <button
+                                  type="submit"
+                                  disabled={savingRename || !editingRename.value.trim()}
+                                  aria-label={t('common.save') || 'Saqlash'}
+                                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#007AFF]/12 text-[#007AFF] outline-none hover:bg-[#007AFF]/20 focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 disabled:opacity-40"
+                                >
+                                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelRename}
+                                  aria-label={t('common.cancel') || 'Bekor qilish'}
+                                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] outline-none hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:hover:bg-white/[0.08]"
+                                >
+                                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                                </button>
+                              </form>
+                            ) : (
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={isActive}
+                                onClick={() => onSelect(conv.id)}
+                                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md pl-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/50"
+                              >
+                                <MessageSquare
+                                  className={cn(
+                                    'h-4 w-4 shrink-0',
+                                    isActive ? 'text-[#007AFF]' : 'text-[var(--text-muted)]',
+                                  )}
+                                  aria-hidden="true"
+                                />
+                                <span className="flex min-w-0 flex-1 flex-col text-left">
+                                  <span className="truncate">
+                                    <HighlightMatch text={title} query={debouncedSearch} />
                                   </span>
-                                )}
-                              </span>
-                            </button>
+                                  {preview && (
+                                    <span className="truncate text-[10px] text-[var(--text-muted)]">
+                                      <HighlightMatch text={preview} query={debouncedSearch} />
+                                    </span>
+                                  )}
+                                </span>
+                              </button>
+                            )}
 
                             {/* Actions */}
-                            <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+                            {editingRename?.id !== conv.id && (
+                              <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
                               <button
                                 type="button"
                                 data-history-menu
@@ -673,10 +784,7 @@ export function CopilotHistoryRail({
                                     <button
                                       type="button"
                                       role="menuitem"
-                                      onClick={() => {
-                                        setMenuFor(null);
-                                        onRename(conv.id, title);
-                                      }}
+                                      onClick={() => startRename(conv.id, title)}
                                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11.5px] outline-none hover:bg-black/[0.04] focus-visible:bg-black/[0.04] dark:hover:bg-white/[0.06]"
                                     >
                                       <Pencil className="h-3 w-3" aria-hidden="true" />
@@ -694,7 +802,8 @@ export function CopilotHistoryRail({
                                   </button>
                                 </div>
                               )}
-                            </div>
+                              </div>
+                            )}
                           </div>
                         </li>
                       );
@@ -713,22 +822,25 @@ export function CopilotHistoryRail({
           <IconCopilotMark size={13} className="text-[color:var(--cp-accent)]" />
           <span>M-EDU AI Core</span>
         </div>
-        <div className="flex items-center gap-1" aria-live="polite">
-          {isOnline ? (
-            <>
-              <Wifi className="h-3 w-3 text-[#34C759]" aria-hidden="true" />
-              <span className="font-medium text-[#34C759]">
-                {t('common.online') || 'Onlayn'}
-              </span>
-            </>
-          ) : (
-            <>
-              <WifiOff className="h-3 w-3 text-[#FF3B30]" aria-hidden="true" />
-              <span className="font-medium text-[#FF3B30]">
-                {t('common.offline') || 'Oflayn'}
-              </span>
-            </>
-          )}
+        <div
+          className="flex items-center gap-1"
+          aria-live="polite"
+          title={
+            mode === 'fallback'
+              ? t('ai.history.fallbackHint') || undefined
+              : mode === 'offline'
+                ? t('common.offline') || undefined
+                : undefined
+          }
+        >
+          <StatusIcon
+            className="h-3 w-3"
+            style={{ color: statusMeta.color }}
+            aria-hidden="true"
+          />
+          <span className="font-medium" style={{ color: statusMeta.color }}>
+            {statusMeta.label}
+          </span>
         </div>
       </div>
 

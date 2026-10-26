@@ -1,7 +1,7 @@
 /**
- * M-EDU DocumentsPage — Apple Design Award Edition
+ * M-EDU DocumentsPage — 
  *
- * Premium craft:
+ * Module Features:
  *  - Hero header with gradient documents tile + live chips (total/categories)
  *  - Ambient gradient orbs — suite-consistent
  *  - Animated KPI bar (Total, Categories, Storage, Recent)

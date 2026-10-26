@@ -296,6 +296,8 @@ export const legacyRu: LegacySlices = {
   'groups.form.capacity': 'Вместимость',
   'groups.form.capacityMin': 'Вместимость должна быть не меньше 1',
   'groups.form.startDate': 'Дата начала',
+  'groups.form.endDate': 'Дата окончания',
+  'groups.form.invalidDateRange': 'Дата окончания не может быть раньше даты начала',
 
   // ── courses ────────────────────────────────────────────────────────
   'courses.title': 'Курсы',

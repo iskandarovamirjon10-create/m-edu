@@ -485,6 +485,7 @@ export const pagesUz = {
   'faceRecognition.submitCapture': 'Rasm yuborish',
   'faceRecognition.subtitle': 'Jonlilik tekshiruvi bilan jonli tanib olish sessiyalari',
   'faceRecognition.viewRaw': 'Xom javobni ko\'rish',
+  'faceRecognition.waiting': 'Kutmoqda',
   'faceRecognition.copySession': 'Seans ID nusxalash',
   'faceRecognition.exportCsv': 'CSV yuklab olish',
   'faceRecognition.filterFailed': 'Xatolar',

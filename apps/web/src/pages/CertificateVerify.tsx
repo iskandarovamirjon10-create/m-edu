@@ -1,5 +1,5 @@
 /**
- * M-EDU Certificate Verification Portal — Apple visionOS & macOS Sequoia 10/10 Edition
+ * M-EDU Certificate Verification Portal
  *
  * Publicly verifiable credential page:
  *  - URL route: /verify/:code and /verify
@@ -7,7 +7,7 @@
  *  - Official verification badge & accredited status
  *  - Anonymous public access — zero login required
  *  - Print & copy verification link actions
- *  - Apple visionOS Liquid Glass aesthetic with Aurora mesh backdrop
+ *  - Apple Glass Liquid Glass aesthetic with Aurora mesh backdrop
  *  - WCAG 2.2 AA SC 2.5.8 touch targets (>= 44x44px for all controls)
  *  - Accessible live status announcements (aria-live="polite")
  *  - Trilingual resilience (UZ, RU, EN) with safe fallbacks

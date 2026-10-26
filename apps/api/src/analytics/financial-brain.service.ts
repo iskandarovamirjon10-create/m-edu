@@ -41,14 +41,14 @@ export class FinancialBrainService {
         const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
         const rows = await this.prisma.$queryRaw<any[]>`
           WITH payments AS (
-            SELECT DATE_TRUNC('day', "paidAt") AS bucket, COALESCE(SUM(amount), 0) AS total, COUNT(*)::int AS count
+            SELECT DATE_TRUNC('day', COALESCE("paidAt", "createdAt")) AS bucket, COALESCE(SUM(amount), 0) AS total, COUNT(*)::int AS count
             FROM "Payment"
-            WHERE "organizationId" = ${organizationId}::uuid AND status = 'PAID' AND "paidAt" >= ${startDate}
+            WHERE "organizationId" = ${organizationId}::uuid AND status = 'PAID' AND COALESCE("paidAt", "createdAt") >= ${startDate}
             GROUP BY 1
           ), refunds AS (
-            SELECT DATE_TRUNC('day', "processedAt") AS bucket, COALESCE(SUM(amount), 0) AS total
+            SELECT DATE_TRUNC('day', COALESCE("processedAt", "createdAt")) AS bucket, COALESCE(SUM(amount), 0) AS total
             FROM "Refund"
-            WHERE "organizationId" = ${organizationId}::uuid AND status = 'PROCESSED' AND "processedAt" >= ${startDate}
+            WHERE "organizationId" = ${organizationId}::uuid AND status = 'PROCESSED' AND COALESCE("processedAt", "createdAt") >= ${startDate}
             GROUP BY 1
           ), days AS (
             SELECT bucket FROM payments UNION SELECT bucket FROM refunds
@@ -73,14 +73,14 @@ export class FinancialBrainService {
       const limit = period === '90D' ? 3 : 12;
       const rows = await this.prisma.$queryRaw<any[]>`
         WITH payments AS (
-          SELECT DATE_TRUNC('month', "paidAt") AS bucket, COALESCE(SUM(amount), 0) AS total, COUNT(*)::int AS count
+          SELECT DATE_TRUNC('month', COALESCE("paidAt", "createdAt")) AS bucket, COALESCE(SUM(amount), 0) AS total, COUNT(*)::int AS count
           FROM "Payment"
-          WHERE "organizationId" = ${organizationId}::uuid AND status = 'PAID' AND "paidAt" IS NOT NULL
+          WHERE "organizationId" = ${organizationId}::uuid AND status = 'PAID'
           GROUP BY 1
         ), refunds AS (
-          SELECT DATE_TRUNC('month', "processedAt") AS bucket, COALESCE(SUM(amount), 0) AS total
+          SELECT DATE_TRUNC('month', COALESCE("processedAt", "createdAt")) AS bucket, COALESCE(SUM(amount), 0) AS total
           FROM "Refund"
-          WHERE "organizationId" = ${organizationId}::uuid AND status = 'PROCESSED' AND "processedAt" IS NOT NULL
+          WHERE "organizationId" = ${organizationId}::uuid AND status = 'PROCESSED'
           GROUP BY 1
         ), months AS (
           SELECT bucket FROM payments UNION SELECT bucket FROM refunds

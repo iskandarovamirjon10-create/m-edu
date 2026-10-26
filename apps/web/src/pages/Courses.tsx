@@ -1,7 +1,7 @@
 /**
- * M-EDU CoursesPage — Apple visionOS & macOS Sequoia Specular Edition
+ * M-EDU CoursesPage — Apple Modern Interface Specular Edition
  *
- * Premium craft:
+ * Module Features:
  *  - Unified Hero atelier with specular meniscus highlights & inline KPI stats
  *  - Stat ribbon (Total, Active, Avg Tuition, Levels) with CountUp ease-out
  *  - Dual View Atelier: Apple Gallery Mode (Cards) <-> High-Density Specular Table Mode
@@ -42,7 +42,7 @@ import { useSafeI18n } from '@/i18n/I18nProvider';
 import { queryKeys } from '@/lib/query-keys.factory';
 
 /* ============================================================================
- * MOTION TOKENS (Apple Spatial Spring Physics)
+ * MOTION TOKENS (Spring Physics)
  * ========================================================================== */
 
 const SPRING = {
@@ -92,7 +92,7 @@ const INITIAL_FORM: CourseFormState = {
 };
 
 /* ============================================================================
- * ICONS (SF Symbols proportions)
+ * ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.85;
@@ -1160,7 +1160,7 @@ export function CoursesPage() {
         animate="visible"
         className="page-container space-y-5 pb-[max(2rem,env(safe-area-inset-bottom))]"
       >
-        {/* APPLE VISIONOS HERO ATELIER (Unified Header + Stats + Action) */}
+        {/* HERO HEADER (Unified Header + Stats + Action) */}
         <motion.div variants={cardVariants}>
           <div className="relative overflow-hidden rounded-3xl border border-black/[0.08] bg-white/80 p-5 sm:p-6 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
             {/* Subtle specular sheen */}

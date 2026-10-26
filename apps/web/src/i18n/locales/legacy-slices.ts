@@ -307,6 +307,8 @@ export const legacyEn = {
   'groups.form.capacity': 'Capacity',
   'groups.form.capacityMin': 'Capacity must be at least 1',
   'groups.form.startDate': 'Start date',
+  'groups.form.endDate': 'End date',
+  'groups.form.invalidDateRange': 'End date cannot be earlier than start date',
 
   // ── courses ────────────────────────────────────────────────────────
   'courses.title': 'Courses',

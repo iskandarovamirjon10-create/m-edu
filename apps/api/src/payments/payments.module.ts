@@ -11,8 +11,20 @@ import { NotificationEventsModule } from '../notifications/events/notification-e
 
 @Module({
   imports: [PrismaModule, AuditModule, NotificationEventsModule],
-  controllers: [PaymentsController, InvoicesController],
-  providers: [PaymentsService, InvoicesService, FinancialCronService, FinancialPeriodService],
-  exports: [PaymentsService, InvoicesService, FinancialCronService],
+  controllers: [
+    PaymentsController,
+    InvoicesController,
+  ],
+  providers: [
+    PaymentsService,
+    InvoicesService,
+    FinancialCronService,
+    FinancialPeriodService,
+  ],
+  exports: [
+    PaymentsService,
+    InvoicesService,
+    FinancialCronService,
+  ],
 })
 export class PaymentsModule {}

@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { InvoicesService } from '../src/payments/invoices.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ConflictException } from '@nestjs/common';
@@ -39,9 +39,9 @@ describe('Financial Race Conditions Validation (Integration)', () => {
       providers: [
         InvoicesService,
         PrismaService,
-        { provide: AuditService, useValue: { record: jest.fn() } },
-        { provide: NotificationEventService, useValue: { emit: jest.fn() } },
-        { provide: FinancialPeriodService, useValue: { ensureNotClosedTx: jest.fn() } },
+        { provide: AuditService, useValue: { record: vi.fn() } },
+        { provide: NotificationEventService, useValue: { emit: vi.fn() } },
+        { provide: FinancialPeriodService, useValue: { ensureNotClosedTx: vi.fn() } },
       ],
     }).compile();
 

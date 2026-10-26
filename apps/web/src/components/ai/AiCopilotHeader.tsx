@@ -306,6 +306,11 @@ function ModelMenu({
 export interface AiCopilotHeaderProps {
   online: boolean;
   busy: boolean;
+  /**
+   * Provider readiness: `fallback` means the answers come from the
+   * deterministic database engine, not the language model.
+   */
+  mode?: 'live' | 'fallback' | 'offline';
   suggestionsActive?: boolean;
   onNewChat?: () => void;
   onToggleSuggestions?: () => void;
@@ -342,6 +347,7 @@ export interface AiCopilotHeaderProps {
 export function AiCopilotHeader({
   online,
   busy,
+  mode,
   suggestionsActive,
   onNewChat,
   onToggleSuggestions,
@@ -414,12 +420,21 @@ export function AiCopilotHeader({
   }, [onNewChat, onOpenSearch]);
 
   const contextActive = isContextOpen || suggestionsActive;
-  const statusText = !online
+  const reachable = online && mode !== 'offline';
+  const statusText = !reachable
     ? tr(t, 'ai.status.offline', 'Oflayn')
     : busy
       ? tr(t, 'ai.status.busy', 'Javob tayyorlanmoqda…')
-      : 'AI yordamchi';
-  const statusAria = !online ? 'Oflayn' : busy ? 'AI ishlamoqda' : 'AI onlayn';
+      : mode === 'fallback'
+        ? tr(t, 'ai.status.fallback', 'Bazaviy rejim')
+        : 'AI yordamchi';
+  const statusAria = !reachable
+    ? 'Oflayn'
+    : busy
+      ? 'AI ishlamoqda'
+      : mode === 'fallback'
+        ? 'Bazaviy rejim: model kaliti sozlanmagan'
+        : 'AI onlayn';
   const metaLabel =
     messageCount !== undefined && tokens !== undefined
       ? `${messageCount} xabar, ${tokens} token`
@@ -508,7 +523,7 @@ export function AiCopilotHeader({
                 {assistantName || 'M-EDU AI Copilot'}
               </span>
               <span className="flex items-center gap-1.5 text-[10.5px] font-medium text-[color:var(--cp-text-tertiary)]">
-                <CopilotStatusDot online={online} label={statusAria} />
+                <CopilotStatusDot online={reachable} label={statusAria} />
                 <span className="truncate">{statusText}</span>
               </span>
             </div>

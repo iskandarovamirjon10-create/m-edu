@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { CopilotHistoryRail } from '../CopilotHistoryRail';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { AI_FLAGS } from '@/lib/ai/flags';
@@ -22,7 +23,10 @@ describe('CopilotHistoryRail', () => {
 
     vi.mocked(useAiHealthHook.useAiHealth).mockReturnValue({
       isOnline: true,
+      mode: 'live',
+      configured: true,
       isLoading: false,
+      refetch: vi.fn(),
     } as any);
   });
 
@@ -54,5 +58,51 @@ describe('CopilotHistoryRail', () => {
       />
     );
     expect(screen.getByText('Test')).toBeInTheDocument();
+  });
+
+  it('renames a conversation from the row menu without selecting it', async () => {
+    (AI_FLAGS as any).conversations = true;
+    const user = userEvent.setup();
+    const onRename = vi.fn().mockResolvedValue(undefined);
+    const onSelect = vi.fn();
+
+    render(
+      <CopilotHistoryRail
+        collapsed={false}
+        onToggleCollapse={() => {}}
+        activeId={null}
+        onSelect={onSelect}
+        onNew={() => {}}
+        onRename={onRename}
+        onDelete={() => {}}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /ko'proq|more/i }));
+    await user.click(screen.getByRole('menuitem', { name: /nomini|rename/i }));
+
+    const input = screen.getByRole('textbox', { name: /suhbat nomi|conversation title/i });
+    expect(input).toHaveValue('Test');
+
+    await user.clear(input);
+    await user.type(input, 'Yangi nom{enter}');
+
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith('1', 'Yangi nom'));
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('shows the provider mode in the footer', () => {
+    (AI_FLAGS as any).conversations = true;
+    render(
+      <CopilotHistoryRail
+        collapsed={false}
+        onToggleCollapse={() => {}}
+        activeId={null}
+        onSelect={() => {}}
+        onNew={() => {}}
+        onDelete={() => {}}
+      />
+    );
+    expect(screen.getByText(/jonli|live/i)).toBeInTheDocument();
   });
 });

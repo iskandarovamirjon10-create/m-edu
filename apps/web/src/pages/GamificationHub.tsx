@@ -1,5 +1,5 @@
 /**
- * M-EDU GamificationHub — Apple Design Award Edition
+ * M-EDU GamificationHub — 
  *
  * Dizayn tamoyillari:
  *  · Liquid Glass 3-qatlam (chromatic fringe + specular + tint)

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HttpException } from '@nestjs/common';
-import { AiService } from '../ai.service';
+import { AiService, deriveConversationTitle } from '../ai.service';
 
 interface MockPrisma {
   $transaction?: any;
@@ -8,6 +8,8 @@ interface MockPrisma {
     findFirst: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
   };
   aiMessage: { create: ReturnType<typeof vi.fn> };
   student: { count: ReturnType<typeof vi.fn> };
@@ -33,6 +35,8 @@ function createPrisma(): MockPrisma {
         updatedAt: new Date(),
       })),
       update: vi.fn(async () => ({})),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+      findMany: vi.fn(async () => []),
     },
     aiMessage: {
       create: vi.fn(async (args: any) => ({
@@ -122,9 +126,105 @@ describe('AiService', () => {
 
       expect(prisma.aiConversation.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'conv-owned', organizationId: ORG, createdBy: USER },
+          where: {
+            id: 'conv-owned',
+            organizationId: ORG,
+            createdBy: USER,
+            archivedAt: null,
+          },
         }),
       );
+    });
+
+    it('replaces the placeholder title with one derived from the first prompt', async () => {
+      prisma.aiConversation.findFirst.mockResolvedValue({
+        id: 'conv-fresh',
+        title: 'Yangi suhbat',
+        messageCount: 0,
+      });
+
+      await service.chat(ORG, USER, 'Guruhdagi o‘quvchilar soni qancha?', [], 'conv-fresh');
+
+      expect(prisma.aiConversation.update).toHaveBeenCalledWith({
+        where: { id: 'conv-fresh' },
+        data: { title: 'Guruhdagi o‘quvchilar soni qancha?' },
+      });
+    });
+
+    it('never overwrites a title the user set themselves', async () => {
+      prisma.aiConversation.findFirst.mockResolvedValue({
+        id: 'conv-renamed',
+        title: 'Mening hisoboti',
+        messageCount: 0,
+      });
+
+      await service.chat(ORG, USER, 'Yana nima bor?', [], 'conv-renamed');
+
+      // persistTurn() still bumps preview/counters — only a title write matters.
+      const titleWrites = prisma.aiConversation.update.mock.calls.filter(
+        ([args]: any[]) => args?.data && 'title' in args.data,
+      );
+      expect(titleWrites).toHaveLength(0);
+    });
+  });
+
+  describe('conversation title derivation', () => {
+    it('strips greetings, markdown and decorative noise', () => {
+      expect(deriveConversationTitle('**Salom!** ```js\nconst a=1\n``` Dars jadvalini ko‘rsat')).toBe(
+        'Dars jadvalini ko‘rsat',
+      );
+    });
+
+    it('clips long prompts and falls back for empty input', () => {
+      expect(deriveConversationTitle('a'.repeat(200), 20)).toHaveLength(20);
+      expect(deriveConversationTitle('Salom!')).toBe('Yangi suhbat');
+      expect(deriveConversationTitle('')).toBe('Yangi suhbat');
+    });
+  });
+
+  describe('renameConversation', () => {
+    it('normalizes the title, scopes it to the owner and is idempotent', async () => {
+      prisma.aiConversation.findFirst.mockResolvedValue({
+        id: 'conv-1',
+        title: 'Yangi nom',
+        preview: '',
+        updatedAt: new Date(),
+        messageCount: 4,
+      });
+
+      const result = await service.renameConversation(
+        ORG,
+        USER,
+        'conv-1',
+        '  Yangi   nom  ',
+      );
+
+      expect(prisma.aiConversation.updateMany).toHaveBeenCalledWith({
+        where: { id: 'conv-1', organizationId: ORG, createdBy: USER, archivedAt: null },
+        data: { title: 'Yangi nom' },
+      });
+      expect(result?.title).toBe('Yangi nom');
+    });
+
+    it('rejects a blank title', async () => {
+      const err = await service
+        .renameConversation(ORG, USER, 'conv-1', '   ')
+        .catch((e) => e);
+
+      expect(err).toBeInstanceOf(HttpException);
+      expect(err.getStatus()).toBe(400);
+      expect(prisma.aiConversation.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 when the conversation is not owned by the caller', async () => {
+      prisma.aiConversation.updateMany.mockResolvedValue({ count: 0 });
+
+      const err = await service
+        .renameConversation(ORG, USER, 'foreign', 'Nom')
+        .catch((e) => e);
+
+      expect(err).toBeInstanceOf(HttpException);
+      expect(err.getStatus()).toBe(404);
     });
   });
 

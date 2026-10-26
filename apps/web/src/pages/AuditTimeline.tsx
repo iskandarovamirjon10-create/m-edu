@@ -1,15 +1,6 @@
 /**
- * M-EDU AuditTimelinePage — Apple Design Award V2 Edition (Liquid Glass Optics)
- *
- * Premium craftsmanship:
- *  - Apple SF Pro visual hierarchy with ambient journal glow
- *  - Hero banner with Stream Timeline badge & event metrics
- *  - Staggered spring rows for historical change logging
- *  - Liquid glass surfaces (.liquid-glass-surface) with squircle inputs and selects
- *  - Split-view macOS detail sidecar integration (openSidecar)
- *  - Tactile sound effects via Web Audio (usePremiumSound)
- *  - Superhuman keyboard shortcuts ('1'..'5' quick filters, 'r' refetch)
- *  - Full preservation of query parameters, debounce, and i18n
+ * M-EDU Audit Timeline Page
+ * Chronological visualization of organization changes, audit stream, and historical actions.
  */
 
 import { useState, useMemo, useCallback, useEffect } from 'react';

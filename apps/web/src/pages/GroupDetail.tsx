@@ -1,8 +1,8 @@
 /**
- * M-EDU GroupDetailPage — Apple Design Award & visionOS Edition (10/10)
+ * M-EDU GroupDetailPage —  & Glass Edition 
  *
- * Premium craft:
- *  - Apple visionOS Liquid Glass aesthetic with specular meniscus sheen
+ * Module Features:
+ *  - Liquid glass styling
  *  - Hierarchical Breadcrumbs navigation + accessible back CTA (WCAG 2.2 AA SC 2.5.8 >= 44x44px)
  *  - Tactile spring physics (Framer Motion) with micro-elevation and sound triggers
  *  - Animated KPI tiles (Members, Capacity, Schedules, Duration) with instant test bypass
@@ -59,7 +59,7 @@ export const rowVariants: Variants = {
 };
 
 /* ============================================================================
- * CUSTOM SVG ICONS (SF Symbols proportions)
+ * CUSTOM SVG ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.8;
@@ -289,7 +289,7 @@ export function durationDays(start: string | null | undefined, end: string | nul
 }
 
 /* ============================================================================
- * SUB-COMPONENTS (Apple visionOS Specular Glass)
+ * SUB-COMPONENTS (Apple Glass Surface)
  * ========================================================================== */
 
 export function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
@@ -372,7 +372,7 @@ export function CountUp({
   );
 }
 
-/** Apple visionOS Pro KPI Tile */
+/** Apple Glass Pro KPI Tile */
 export function KpiTile({
   label,
   value,
@@ -852,7 +852,7 @@ export function GroupDetailPage() {
       </motion.nav>
 
       {/* ============================================================
-          HERO HEADER (Apple visionOS Liquid Glass Surface)
+          HERO HEADER (Apple Glass Liquid Glass Surface)
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div className="relative overflow-hidden rounded-3xl border border-black/[0.08] dark:border-white/[0.12] bg-white/75 dark:bg-surface-900/75 p-5 sm:p-7 backdrop-blur-2xl shadow-xl dark:shadow-[0_12px_40px_rgba(0,0,0,0.4)]">

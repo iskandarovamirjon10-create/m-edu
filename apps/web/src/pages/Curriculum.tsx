@@ -1,12 +1,12 @@
 /**
- * M-EDU CurriculumPage — Apple Design Award & visionOS Edition (10/10)
+ * M-EDU Curriculum Page
  *
- * Senior craft:
- *  - Apple visionOS Liquid Glass aesthetic with specular rim reflections
+ * Architecture & Features:
+ *  - Apple Glass Liquid Glass aesthetic with specular rim reflections
  *  - Ambient Aurora mesh backdrop (indigo, purple, emerald drift)
  *  - macOS Split-View Detail Sidecar (`openSidecar` with modules & syllabus metrics)
  *  - WCAG 2.2 AA SC 2.5.8 touch targets (>= 44x44px for all interactive elements)
- *  - Superhuman keyboard-first navigation (j/k, x, Enter, c to create)
+ *  - Keyboard navigation (j/k, x, Enter, c to create)
  *  - Web Audio tactile haptics (playTick, playPop, playSuccess)
  *  - Exported pure domain helpers (computeCurriculumStats, statusTone, etc.)
  *  - Complete trilingual i18n resilience (useSafeI18n with UZ, RU, EN fallbacks)
@@ -139,7 +139,7 @@ export function computeCurriculumStats(list: Curriculum[]): CurriculumStats {
 }
 
 /* ============================================================================
- * CUSTOM SVG ICONS (SF Symbols Proportions)
+ * CUSTOM SVG ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 2.0;
@@ -226,7 +226,7 @@ function Icon({
 }
 
 /* ============================================================================
- * AMBIENT AURORA BACKDROP (Apple visionOS Depth)
+ * AMBIENT AURORA BACKDROP (Apple Glass Depth)
  * ========================================================================== */
 
 function AuroraBackdrop() {

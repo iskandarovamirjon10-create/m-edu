@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { DashboardPage } from '../Dashboard';
@@ -50,6 +50,10 @@ const mockStatsApi = vi.fn().mockResolvedValue(mockStatsData);
 vi.mock('@/lib/api', () => ({
   dashboardApi: {
     stats: () => mockStatsApi(),
+    revenue: () => Promise.resolve([]),
+  },
+  aiApi: {
+    getExecutiveBriefing: () => Promise.resolve(null),
   },
 }));
 
@@ -97,5 +101,69 @@ describe('DashboardPage', () => {
     });
     // Query must be gated and not called
     expect(mockStatsApi).not.toHaveBeenCalled();
+  });
+
+  it('redirects TEACHER role to attendance and STUDENT to schedule', async () => {
+    mockUser = { id: 'u3', role: 'TEACHER' };
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/attendance', { replace: true });
+    });
+
+    mockUser = { id: 'u4', role: 'STUDENT' };
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/schedule', { replace: true });
+    });
+  });
+
+  it('renders the daily pulse ribbon and quick action rail', async () => {
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: /Dashboard/i })).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('heading', { name: /Today's pulse/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Quick actions/i })).toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: /New student/i })).toHaveAttribute(
+      'href',
+      '/students/new',
+    );
+    expect(screen.getByRole('link', { name: /Take attendance/i })).toHaveAttribute(
+      'href',
+      '/attendance',
+    );
+  });
+
+  it('allows manual refresh via keyboard shortcut R', async () => {
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: /Dashboard/i })).toBeInTheDocument();
+    });
+
+    const initialCallCount = mockStatsApi.mock.calls.length;
+
+    fireEvent.keyDown(window, { key: 'r' });
+
+    await waitFor(() => {
+      expect(mockStatsApi.mock.calls.length).toBeGreaterThan(initialCallCount);
+    });
+  });
+
+  it('navigates to /students/new on keyboard shortcut N', async () => {
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: /Dashboard/i })).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(window, { key: 'n' });
+
+    expect(mockNavigate).toHaveBeenCalledWith('/students/new');
   });
 });

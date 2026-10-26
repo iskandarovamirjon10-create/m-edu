@@ -48,8 +48,13 @@ describe('4-Pillar Navigation Structure Contracts', () => {
     const sectionIds = CORE_SECTIONS.map((s) => s.id);
     expect(sectionIds).toEqual(['management', 'academics', 'finance', 'communication']);
 
-    // 1. Management: Dashboard, Reports, At-Risk Students
-    expect(MANAGEMENT_NAV.map((i) => i.to)).toEqual(['/', '/reports', '/early-warning']);
+    // 1. Management: Dashboard, AI Copilot, Reports, At-Risk Students
+    expect(MANAGEMENT_NAV.map((i) => i.to)).toEqual([
+      '/',
+      '/ai-copilot',
+      '/reports',
+      '/early-warning',
+    ]);
 
     // 2. Academics: Students, Teachers, Groups, Courses, Schedule, Attendance, Face ID, Homework, Grades
     expect(ACADEMIC_NAV.map((i) => i.to)).toEqual([
@@ -67,13 +72,12 @@ describe('4-Pillar Navigation Structure Contracts', () => {
     // 3. Finance: Payments, Invoices, Expenses, Payroll
     expect(FINANCE_NAV.map((i) => i.to)).toEqual(['/payments', '/invoices', '/expenses', '/payroll']);
 
-    // 4. Communication: Leads, Telegram, Chat, Notifications, AI Copilot
+    // 4. Communication: Leads, Telegram, Chat, Notifications
     expect(COMMUNICATION_NAV.map((i) => i.to)).toEqual([
       '/leads',
       '/telegram',
       '/chat',
       '/notifications',
-      '/ai-copilot',
     ]);
 
     // Secondary Administration

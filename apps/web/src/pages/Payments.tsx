@@ -1,15 +1,6 @@
 /**
- * M-EDU PaymentsPage — iOS 27 Liquid Glass Edition (Solarium Architecture)
- *
- * Premium Craft & Optical Physics:
- *  - True Liquid Glass surfaces: multi-layered specular rims, inner meniscus highlights & caustic glow
- *  - Bespoke Jewel & Iridescent Titanium color palette (zero legacy iOS 14 flat neon hexes)
- *  - 3D Liquid Orb hero tile + floating optical pill indicators
- *  - Refractive KPI lenses with tabular count-up and ambient bottom caustics
- *  - Fluid payment rows with liquid squircle avatars, jewel method chips & tactile status capsules
- *  - Tone-aware Liquid Pill segmented status controller
- *  - Bespoke M-EDU Official Receipt with holographic verification bar & Executive PDF Studio
- *  - Full i18n, keyboard navigation, and React Query mutations preserved 1:1
+ * M-EDU Payments Page
+ * Financial transaction tracking, student tuition payments, and receipt generation.
  */
 
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
@@ -46,7 +37,7 @@ import { useSafeI18n } from '@/i18n/I18nProvider';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
 
 /* ============================================================================
- * iOS 27 FLUID MOTION TOKENS
+ *  FLUID MOTION TOKENS
  * ========================================================================== */
 
 const SPRING = {
@@ -74,7 +65,7 @@ const rowVariants: Variants = {
 };
 
 /* ============================================================================
- * iOS 27 LIQUID GLASS OPTICAL SURFACES & JEWEL PALETTE
+ *  LIQUID GLASS OPTICAL SURFACES & JEWEL PALETTE
  * ========================================================================== */
 
 const LIQUID_PANEL =
@@ -193,7 +184,7 @@ const LIQUID_TONES: Record<
 };
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols Proportions)
+ * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.8;
@@ -413,6 +404,13 @@ const INITIAL_FORM: PaymentFormState = {
  * HELPERS & BESPOKE AVATAR PALETTES
  * ========================================================================== */
 
+export function parseSafeAmount(raw: string): number {
+  if (!raw) return NaN;
+  const normalized = raw.trim().replace(/,/g, '.').replace(/\s+/g, '');
+  const val = parseFloat(normalized);
+  return Number.isFinite(val) ? Math.round(val * 100) / 100 : NaN;
+}
+
 export function formatStudentName(student: Student | undefined): string {
   if (!student?.user) return '—';
   const { firstName, lastName } = student.user;
@@ -451,7 +449,7 @@ function nameHash(str: string): number {
   return Math.abs(h);
 }
 
-/** Curated iOS 27 Jewel & Aurora Avatar Gradients */
+/** Curated  Jewel & Aurora Avatar Gradients */
 const LIQUID_AVATAR_PALETTES = [
   ['#2563EB', '#7C3AED'], // Sapphire -> Amethyst
   ['#059669', '#0284C7'], // Jade -> Celeste
@@ -469,7 +467,7 @@ function avatarGradient(name: string): string {
 }
 
 /* ============================================================================
- * iOS 27 LIQUID GLASS SUB-COMPONENTS
+ *  LIQUID GLASS SUB-COMPONENTS
  * ========================================================================== */
 
 /** Top specular meniscus reflection inside any Liquid Glass container */
@@ -547,7 +545,7 @@ function CountUp({
   return <span className="tabular-nums">{Math.round(n).toLocaleString('uz-UZ')}</span>;
 }
 
-/** Refractive iOS 27 KPI Lens Tile */
+/** Refractive  KPI Lens Tile */
 function KpiTile({
   label,
   value,
@@ -676,7 +674,7 @@ function FieldIcon({ icon, tone = 'sapphire' }: { icon: string[]; tone?: Tone })
   );
 }
 
-/** iOS 27 Recessed Liquid Pill Status Controller */
+/**  Recessed Liquid Pill Status Controller */
 function InlineStatusSelector({
   value,
   onChange,
@@ -837,7 +835,7 @@ export function PaymentsPage() {
     openSidecar(data);
   }, []);
 
-  /* ── Superhuman Keyboard-First Navigation ─────────────────────────── */
+  /* ── Fast Keyboard-First Navigation ─────────────────────────── */
   const {
     focusedIndex,
     selectedIds,
@@ -895,14 +893,16 @@ export function PaymentsPage() {
 
   /* ── Create mutation ──────────────────────────────────────────────── */
   const create = useMutation({
-    mutationFn: () =>
-      paymentsApi.create({
+    mutationFn: () => {
+      const parsedAmount = parseSafeAmount(form.amount);
+      return paymentsApi.create({
         studentId: form.studentId,
-        amount: parseFloat(form.amount) || 0,
+        amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
         description: form.description.trim() || undefined,
         dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
         method: form.method,
-      }),
+      });
+    },
     onSuccess: () => {
       push('success', t('payments.created'));
       setModalOpen(false);
@@ -942,7 +942,8 @@ export function PaymentsPage() {
     if (!form.studentId) {
       errors.studentId = 'payments.validation.studentRequired';
     }
-    if (!form.amount || parseFloat(form.amount) <= 0) {
+    const parsedAmount = parseSafeAmount(form.amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       errors.amount = 'payments.validation.amountPositive';
     }
     setFormErrors(errors);
@@ -977,6 +978,7 @@ export function PaymentsPage() {
 
   const handleUpdateStatus = useCallback(
     (paymentId: string, newStatus: PaymentStatus) => {
+      if (updateStatus.isPending) return;
       updateStatus.mutate({ id: paymentId, status: newStatus });
     },
     [updateStatus],
@@ -985,6 +987,7 @@ export function PaymentsPage() {
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
+      if (create.isPending) return;
       if (!validateForm()) return;
       create.mutate();
     },
@@ -1048,7 +1051,7 @@ export function PaymentsPage() {
       {toastNode}
 
       {/* ============================================================
-          iOS 27 LIQUID GLASS HERO HEADER
+          HERO HEADER
       ============================================================ */}
       <motion.div variants={cardVariants}>
         <div className={`${LIQUID_PANEL} p-6 sm:p-7`}>
@@ -1502,7 +1505,7 @@ export function PaymentsPage() {
         )}
       </motion.div>
 
-      {/* Superhuman Floating Action Island */}
+      {/* Fast Floating Action Island */}
       <FloatingActionIsland
         selectedCount={selectedCount}
         onClearSelection={clearSelection}
@@ -1697,7 +1700,7 @@ export function PaymentsPage() {
       </GlassModal>
 
       {/* ============================================================
-          iOS 27 LIQUID GLASS RECEIPT MODAL
+          RECEIPT MODAL
       ============================================================ */}
       <GlassModal
         open={receiptTarget !== null}

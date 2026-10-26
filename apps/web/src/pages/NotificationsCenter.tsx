@@ -1,12 +1,12 @@
 /**
- * M-EDU NotificationsCenterPage — Apple Design Award Edition
+ * M-EDU NotificationsCenterPage — 
  *
- * Premium craft:
+ * Module Features:
  *  - Hero header with animated unread indicator + conic ring
  *  - Stats bar (Total, Unread, Sources)
  *  - Segmented filter (All / Unread / by kind)
  *  - Premium notification rows with tone-aware icons
- *  - Custom SVG icons in SF Symbols proportions
+ *  - Custom SVG icons in SVG Icons
  *  - Shimmer skeleton (not pulse)
  *  - Framer Motion spring physics + stagger
  *  - Tone-aware colors throughout
@@ -118,7 +118,7 @@ function mapNotification(raw: RawNotification): AppNotification {
 type FilterKey = 'ALL' | 'UNREAD' | AppNotification['kind'];
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;

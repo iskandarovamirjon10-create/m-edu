@@ -1,12 +1,12 @@
 /**
- * M-EDU ReportsPage — Apple Design Award & Liquid Glass Edition (10/10)
+ * M-EDU ReportsPage —  &  
  *
  * Specular Craft & Architecture:
- *  - Apple visionOS & macOS Sequoia multi-layer frosted glass surfaces with specular highlights
+ *  - Apple Modern Interface multi-layer frosted glass surfaces with specular highlights
  *  - Ambient gradient glow orbs
  *  - WCAG 2.2 AA SC 2.5.8 compliant touch targets (>= 44x44px for all controls, buttons, presets)
  *  - Animated KPI ribbons with CountUp spring physics
- *  - Superhuman 1-Click Quick Date Presets ("Bugun", "Bu hafta", "Bu oy", "Oxirgi 30 kun", "Chorak", "Yil")
+ *  - Fast 1-Click Quick Date Presets ("Bugun", "Bu hafta", "Bu oy", "Oxirgi 30 kun", "Chorak", "Yil")
  *  - In-Table Real-time Row Search + Interactive Column Sorting (Asc/Desc)
  *  - Format Selector with spring layout animations (CSV / XLSX / PDF)
  *  - Full trilingual resilience (useSafeI18n: UZ, RU, EN)
@@ -59,7 +59,7 @@ const rowVariants: Variants = {
 };
 
 /* ============================================================================
- * CUSTOM SVG ICONS (SF Symbols proportions)
+ * CUSTOM SVG ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.85;
@@ -567,7 +567,7 @@ export function ReportsPage() {
   const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
   const [isExporting, setIsExporting] = useState(false);
 
-  /* Superhuman In-table search & column sorting */
+  /* Fast In-table search & column sorting */
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
@@ -648,7 +648,7 @@ export function ReportsPage() {
     setPage(1);
   }, [sound]);
 
-  /* ── Superhuman Keyboard Shortcuts ('r', 'e', '1', '2', '3') ──────── */
+  /* ── Fast Keyboard Shortcuts ('r', 'e', '1', '2', '3') ──────── */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (

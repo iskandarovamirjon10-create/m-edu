@@ -17,28 +17,34 @@ export class DashboardController {
 
   constructor(private readonly dashboardService: DashboardService) {}
 
-  @Roles('ORG_ADMIN', 'MANAGER', 'SUPER_ADMIN')
+  @Roles('PLATFORM_OWNER', 'SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
   @Get('stats')
   @ApiOperation({ summary: 'Get dashboard statistics' })
-  getStats(@CurrentUser('organizationId') orgId: string) {
-    if (!orgId) {
+  getStats(
+    @CurrentUser('organizationId') orgId: string,
+    @Query('organizationId') queryOrgId?: string,
+  ) {
+    const effectiveOrgId = orgId || queryOrgId;
+    if (!effectiveOrgId) {
       throw new BadRequestException('Organization context is required');
     }
-    this.orgLimiter.assert(orgId, 'dashboard-stats', 60, 60_000);
-    return this.dashboardService.getStats(orgId);
+    this.orgLimiter.assert(effectiveOrgId, 'dashboard-stats', 60, 60_000);
+    return this.dashboardService.getStats(effectiveOrgId);
   }
 
-  @Roles('ORG_ADMIN', 'MANAGER', 'SUPER_ADMIN')
+  @Roles('PLATFORM_OWNER', 'SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
   @Get('revenue')
   @ApiOperation({ summary: 'Get dashboard monthly revenue series' })
   getRevenue(
     @CurrentUser('organizationId') orgId: string,
     @Query('period') period?: string,
+    @Query('organizationId') queryOrgId?: string,
   ) {
-    if (!orgId) {
+    const effectiveOrgId = orgId || queryOrgId;
+    if (!effectiveOrgId) {
       throw new BadRequestException('Organization context is required');
     }
-    this.orgLimiter.assert(orgId, 'dashboard-revenue', 60, 60_000);
-    return this.dashboardService.getMonthlyRevenue(orgId, period);
+    this.orgLimiter.assert(effectiveOrgId, 'dashboard-revenue', 60, 60_000);
+    return this.dashboardService.getMonthlyRevenue(effectiveOrgId, period);
   }
 }

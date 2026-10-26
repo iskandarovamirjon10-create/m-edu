@@ -222,6 +222,47 @@ const MODEL_ALIAS_MAP: Readonly<Record<string, 'primary' | 'pro'>> = {
   'medu-reason': 'pro',
 };
 
+const GREETING_PREFIX_RE =
+  /^(assalomu\s+alaykum|salom|привет|здравствуйте|добрый\s+день|hello|hi|hey)[\s,!.:-]+/i;
+
+/**
+ * Turn the first user message into a human conversation title.
+ *
+ * Strips code fences, markdown image/link syntax and decorative characters,
+ * collapses whitespace, drops a leading greeting and clips to a readable
+ * length — so the history rail never shows raw markdown or a lone "Salom".
+ */
+export function deriveConversationTitle(message: string, maxLength = 60): string {
+  const cleaned = String(message ?? '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[#*_>`~|]+/g, ' ')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(GREETING_PREFIX_RE, '')
+    .trim();
+
+  if (!cleaned) return 'Yangi suhbat';
+
+  const clipped = cleaned.slice(0, Math.max(12, maxLength)).trim();
+  return clipped.charAt(0).toUpperCase() + clipped.slice(1);
+}
+
+/** Titles that mean "no meaningful title yet" and may be replaced. */
+const PLACEHOLDER_TITLES = new Set([
+  'yangi suhbat',
+  'new chat',
+  'новый чат',
+  'untitled',
+  '',
+]);
+
+function isPlaceholderConversationTitle(title: unknown): boolean {
+  return PLACEHOLDER_TITLES.has(String(title ?? '').trim().toLowerCase());
+}
+
 const DAY_NAMES = [
   'SUNDAY',
   'MONDAY',
@@ -355,14 +396,25 @@ export class AiService {
     }
   }
 
+  /**
+   * Resolve a requested model to the models this deployment can actually serve.
+   * Unknown names are ignored (never forwarded to the provider) so a client
+   * cannot select an arbitrary, unrelated — or more expensive — model.
+   */
   private resolveModelsQueue(requestedModel?: string): string[] {
-    const alias = requestedModel ? MODEL_ALIAS_MAP[requestedModel] : undefined;
+    const normalized = requestedModel?.trim();
+    const alias = normalized ? MODEL_ALIAS_MAP[normalized] : undefined;
+    const configured = new Set(
+      [this.primaryModel, this.proModel, ...this.fallbackModels].filter(Boolean),
+    );
+    const explicit = normalized && configured.has(normalized) ? normalized : undefined;
+
     const targetModel =
       alias === 'pro'
         ? this.proModel
         : alias === 'primary'
           ? this.primaryModel
-          : requestedModel || this.primaryModel;
+          : explicit || this.primaryModel;
 
     return Array.from(
       new Set([targetModel, this.primaryModel, ...this.fallbackModels].filter(Boolean)),
@@ -434,7 +486,7 @@ export class AiService {
   async getConversations(organizationId: string, userId: string, limit = 30) {
     const safeLimit = Math.min(Math.max(1, Number(limit) || 30), 100);
     return this.prisma.aiConversation.findMany({
-      where: { organizationId, createdBy: userId },
+      where: { organizationId, createdBy: userId, archivedAt: null },
       orderBy: { updatedAt: 'desc' },
       take: safeLimit,
       select: {
@@ -491,6 +543,47 @@ export class AiService {
     });
   }
 
+  async renameConversation(
+    organizationId: string,
+    userId: string,
+    conversationId: string,
+    title: string,
+  ) {
+    const cleanTitle = String(title ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120);
+
+    if (!cleanTitle) {
+      throw new HttpException('Conversation title is required', HttpStatus.BAD_REQUEST);
+    }
+
+    const updated = await this.prisma.aiConversation.updateMany({
+      where: {
+        id: conversationId,
+        organizationId,
+        createdBy: userId,
+        archivedAt: null,
+      },
+      data: { title: cleanTitle },
+    });
+
+    if (updated.count === 0) {
+      throw new HttpException('Conversation not found', HttpStatus.NOT_FOUND);
+    }
+
+    return this.prisma.aiConversation.findFirst({
+      where: { id: conversationId, organizationId, createdBy: userId },
+      select: {
+        id: true,
+        title: true,
+        preview: true,
+        updatedAt: true,
+        messageCount: true,
+      },
+    });
+  }
+
   async deleteConversation(
     organizationId: string,
     userId: string,
@@ -522,13 +615,34 @@ export class AiService {
     }
 
     const conv = await this.prisma.aiConversation.findFirst({
-      where: { id: conversationId, organizationId, createdBy: userId },
-      select: { id: true },
+      where: { id: conversationId, organizationId, createdBy: userId, archivedAt: null },
+      select: { id: true, title: true, messageCount: true },
     });
 
     if (!conv) {
       throw new HttpException('Not found or no permission', HttpStatus.FORBIDDEN);
     }
+
+    // A conversation opened from "New chat" starts as "Yangi suhbat". Give it
+    // a real title from the first prompt so the history rail is readable —
+    // but never overwrite a title the user renamed themselves.
+    if (
+      conv.messageCount === 0 &&
+      fallbackTitle &&
+      isPlaceholderConversationTitle(conv.title)
+    ) {
+      const derived = fallbackTitle.replace(/\s+/g, ' ').trim().slice(0, 120);
+      if (derived && !isPlaceholderConversationTitle(derived)) {
+        await this.prisma.aiConversation
+          .update({ where: { id: conv.id }, data: { title: derived } })
+          .catch((error: unknown) => {
+            this.logger.warn(
+              `Could not derive conversation title: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          });
+      }
+    }
+
     return conv.id;
   }
 
@@ -1995,7 +2109,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
         organizationId,
         userId,
         conversationId,
-        message.trim().slice(0, 40) || 'Yangi suhbat',
+        deriveConversationTitle(message),
       );
 
       await this.prisma.aiMessage.create({
@@ -2512,7 +2626,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
       organizationId,
       userId,
       conversationId,
-      message.trim().slice(0, 40) || 'Yangi suhbat',
+      deriveConversationTitle(message),
     );
 
     await this.prisma.aiMessage.create({

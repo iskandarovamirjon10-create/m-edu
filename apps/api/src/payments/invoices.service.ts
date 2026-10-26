@@ -784,7 +784,11 @@ export class InvoicesService {
           if (netPaidMinor < totalMinor) {
             newStatus = (fresh.dueDate && fresh.dueDate < new Date()) ? 'OVERDUE' : 'PARTIALLY_PAID';
             if (netPaidMinor <= 0) {
-              newStatus = (fresh.dueDate && fresh.dueDate < new Date()) ? 'OVERDUE' : 'ISSUED';
+              if (toMinor(fresh.paidAmount) > 0 && toMinor(fresh.refundedAmount ?? 0) >= toMinor(fresh.paidAmount)) {
+                newStatus = 'REFUNDED';
+              } else {
+                newStatus = (fresh.dueDate && fresh.dueDate < new Date()) ? 'OVERDUE' : 'ISSUED';
+              }
             }
           }
 

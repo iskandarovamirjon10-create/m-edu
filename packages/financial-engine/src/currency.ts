@@ -59,6 +59,13 @@ export function toMinor(value: DecimalLike): number {
   if (typeof value === 'string' && PLAIN_DECIMAL.test(value.trim())) {
     return decimalStringToMinor(value.trim());
   }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const str = String(value);
+    if (PLAIN_DECIMAL.test(str)) {
+      return decimalStringToMinor(str);
+    }
+  }
   const scaled = asNumber(value) * MINOR_UNITS_PER_UNIT;
   // Round-half-up on the magnitude, then restore sign — avoids
   // Math.round's "round half towards +Infinity" asymmetry.

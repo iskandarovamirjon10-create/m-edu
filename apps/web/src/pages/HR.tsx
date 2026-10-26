@@ -1,7 +1,7 @@
 /**
- * M-EDU HRPage — Apple visionOS & macOS Sequoia Specular Edition (v10.0)
+ * M-EDU HRPage — Apple Modern Interface Specular Edition (v10.0)
  *
- * 🎯 Apple Design Award Tier Polish:
+ * 🎯  Tier Polish:
  *  ✅ Aurora Mesh Backdrop: Living breathing ambient mesh gradients in blue, purple & emerald
  *  ✅ Specular Liquid Glass: Meniscus rim highlights, double-layer specular borders & backdrop blur
  *  ✅ Interactive Animated KPI Bar: CountUp tiles with click-to-filter toggles (Active / Terminated / All)
@@ -45,7 +45,7 @@ import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 /* ============================================================================
- * MOTION TOKENS (visionOS High-Fidelity Physics)
+ * MOTION TOKENS (Glass High-Fidelity Physics)
  * ========================================================================== */
 
 export const SPRING = {
@@ -68,7 +68,7 @@ export const cardVariants: Variants = {
 };
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;

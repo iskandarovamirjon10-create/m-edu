@@ -45,6 +45,7 @@ export function useDeviceSyncSocket() {
   logoutRef.current = logout;
 
   const socketRef = useRef<Socket | null>(null);
+  const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
@@ -98,7 +99,8 @@ export function useDeviceSyncSocket() {
               'Sizning sessiyangiz boshqa qurilma orqali yakunlandi. Iltimos qayta kiring.',
             ),
           });
-          setTimeout(() => {
+          if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+          logoutTimerRef.current = setTimeout(() => {
             logoutRef.current({ redirect: true });
           }, 1200);
         }
@@ -113,6 +115,10 @@ export function useDeviceSyncSocket() {
     });
 
     return () => {
+      if (logoutTimerRef.current) {
+        clearTimeout(logoutTimerRef.current);
+        logoutTimerRef.current = null;
+      }
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;

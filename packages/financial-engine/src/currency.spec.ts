@@ -8,6 +8,8 @@ describe('toMinor — exact decimal quantization (regression F1)', () => {
     expect(toMinor('2.675')).toBe(268);
     expect(toMinor('10.005')).toBe(1001);
     expect(toMinor('1234.56')).toBe(123456);
+    expect(toMinor(1.005)).toBe(101);
+    expect(toMinor(8.165)).toBe(817);
   });
 
   it('correctly rounds Prisma Decimal-like objects without IEEE 754 precision loss (M-EDU-FIN-006)', () => {

@@ -311,6 +311,9 @@ describe('TeacherCockpitPage (Apple 10/10 visionOS Edition)', () => {
     it('assigns homework via quick form', async () => {
       renderComponent();
 
+      // Wait for student to ensure lesson detail is fetched
+      expect(await screen.findByText('Jasur Aliyev')).toBeInTheDocument();
+
       // Open homework drawer
       const openHwBtn = await screen.findByRole('button', { name: /\+ Yangi biriktirish/i });
       fireEvent.click(openHwBtn);

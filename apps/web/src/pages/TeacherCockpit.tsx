@@ -1,16 +1,6 @@
 /**
- * M-EDU TeacherCockpitPage — Apple Design Award & visionOS Edition (10/10)
- *
- * 🎯 Apple Spatial Pro Architecture:
- *  ✅ Vertical Time Stream — Time as hero with visionOS specular highlight meniscus.
- *  ✅ Inline Dynamic Expansion — Smooth spring layout physics for lesson inspection.
- *  ✅ Interactive Attendance Dial — SVG radial progress ring with ambient specular glow.
- *  ✅ Token Attendance Grid — Tap-to-cycle avatars with instant 1-touch K / Q override.
- *  ✅ WCAG 2.2 AA SC 2.5.8 Compliant — Touch targets >= 44x44px across all controls.
- *  ✅ Resilient Trilingual Localization — Powered by `useSafeI18n` with safe fallbacks.
- *  ✅ Pure Exported Domain Helpers — Fully tested in isolated unit test harnesses.
- *  ✅ Sidecar Drawer & 360° Identity Card — Spatial split-view inspection.
- *  ✅ Zero-leak TanStack Query — Cache invalidation and optimistic updates.
+ * M-EDU Teacher Cockpit Page
+ * Daily schedule timeline, real-time classroom attendance taking, and lesson stream for teachers.
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';

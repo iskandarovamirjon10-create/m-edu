@@ -1,16 +1,6 @@
 /**
- * M-EDU TeachersPage — Apple VisionOS & HIG Liquid Glass Edition
- *
- * Architecture & Features:
- *  • Unified Apple Command Center: GlassPageHeader + VisionOS interactive metric pills with dynamic SVG rings
- *  • Multimodal Sensory System: Apple-grade audio (usePremiumSound) & tactile haptics (useHaptics)
- *  • VisionOS Glass Skeleton loading state with liquid shimmer
- *  • Responsive HIG Action Console: 44px touch targets, quick look, sidecar, 360° spatial identity card, edit, delete
- *  • 100% i18n localization (EN / UZ / RU) with zero hardcoded user-facing strings
- *  • Strictly typed form states (salaryType: 'MONTHLY' | 'HOURLY' | 'PER_LESSON') with zero `as any` bypasses
- *  • Formula-safe Excel-ready CSV export with UTF-8 BOM
- *  • 360° Spatial Identity Card integration (SpatialIdentityCard360)
- *  • Deep link resolution for /teachers/:id
+ * M-EDU Teachers Page
+ * Faculty roster management, salary configurations, workload monitoring, and teacher performance.
  */
 
 import {
@@ -84,7 +74,7 @@ const tileVariants: Variants = {
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
- * SVG GLYPH ICONS (Two-tone Apple VisionOS Duotone System)
+ * SVG GLYPH ICONS (Two-tone Duotone System)
  * ════════════════════════════════════════════════════════════════════════ */
 
 interface GlyphDef {
@@ -494,7 +484,7 @@ const MetricPill = memo(function MetricPill({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * SKELETON LOADER (VisionOS Glass Shimmer)
+ * SKELETON LOADER (Glass Shimmer)
  * ════════════════════════════════════════════════════════════════════════ */
 
 const TeachersSkeleton = memo(function TeachersSkeleton({ viewMode }: { viewMode: 'list' | 'grid' }) {

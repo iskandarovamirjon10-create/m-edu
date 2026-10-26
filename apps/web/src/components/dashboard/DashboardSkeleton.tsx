@@ -106,12 +106,42 @@ export function DashboardSkeleton() {
         </div>
       </SkeletonCard>
 
+      {/* ══ Daily pulse ribbon — mirrors DailyPulseStrip ═════════ */}
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <SkeletonCard
+            key={i}
+            delay={60 + i * 40}
+            className="flex min-h-[104px] flex-col justify-between p-3.5"
+          >
+            <Shimmer className="h-9 w-9" rounded="13px" />
+            <div className="space-y-2">
+              <Shimmer className="h-2.5 w-20" rounded="4px" />
+              <Shimmer className="h-6 w-24" rounded="6px" />
+            </div>
+          </SkeletonCard>
+        ))}
+      </div>
+
+      {/* ══ Quick actions rail — mirrors QuickActionsRail ════════ */}
+      <SkeletonCard delay={250} className="p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <Shimmer className="h-4 w-28" rounded="6px" />
+          <Shimmer className="hidden h-4 w-24 sm:block" rounded="9999px" />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Shimmer key={i} className="h-16 w-full" rounded="16px" />
+          ))}
+        </div>
+      </SkeletonCard>
+
       {/* ══ KPI grid — mirrors KPICard v2.0 ═══════════════════════ */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <SkeletonCard
             key={i}
-            delay={80 + i * 55}
+            delay={300 + i * 50}
             className="flex h-full flex-col justify-between gap-3 p-3.5 sm:p-4 lg:p-5"
           >
             {/* Title + icon tile */}
@@ -137,7 +167,7 @@ export function DashboardSkeleton() {
         <div key={row} className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-12">
           {/* Wide chart */}
           <SkeletonCard
-            delay={320 + row * 80}
+            delay={460 + row * 80}
             className="p-5 lg:col-span-8 lg:h-[320px]"
           >
             <div className="flex items-center justify-between">
@@ -152,7 +182,7 @@ export function DashboardSkeleton() {
 
           {/* Side list */}
           <SkeletonCard
-            delay={360 + row * 80}
+            delay={500 + row * 80}
             className="p-5 lg:col-span-4 lg:h-[320px]"
           >
             <Shimmer className="h-5 w-28 sm:w-36" rounded="6px" />
@@ -168,7 +198,7 @@ export function DashboardSkeleton() {
       {/* ══ Bottom 3 cards ═══════════════════════════════════════ */}
       <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2].map((i) => (
-          <SkeletonCard key={i} delay={560 + i * 60} className="p-5">
+          <SkeletonCard key={i} delay={660 + i * 60} className="p-5">
             <div className="flex items-center justify-between">
               <Shimmer className="h-5 w-28 sm:w-32" rounded="6px" />
               <Shimmer className="h-6 w-14" rounded="9999px" />

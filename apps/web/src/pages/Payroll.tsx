@@ -1,7 +1,7 @@
 /**
- * M-EDU PayrollPage — Apple Design Award Edition
+ * M-EDU PayrollPage — 
  *
- * Premium craft:
+ * Module Features:
  *  - Hero header with gradient payroll tile + period chip + primary CTA
  *  - Premium period selector (glass toolbar with squircle selects)
  *  - Animated KPI tiles with count-up + currency formatting
@@ -9,7 +9,7 @@
  *  - macOS-style workflow (Review → Approve → Pay) with tone-aware buttons
  *  - Premium Calculate modal with earnings/deductions split panels
  *  - Premium Cancel modal with warning banner
- *  - Custom SVG icons in SF Symbols proportions
+ *  - Custom SVG icons in SVG Icons
  *  - Shimmer skeletons (not pulse)
  *  - Framer Motion spring physics + staggered blur-in
  *  - Full i18n preserved
@@ -67,7 +67,7 @@ const rowVariants: Variants = {
 };
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;

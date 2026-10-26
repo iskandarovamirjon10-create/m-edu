@@ -82,6 +82,14 @@ export class GroupsService {
       }
     }
 
+    if (data.startDate && data.endDate) {
+      const start = new Date(data.startDate);
+      const end = new Date(data.endDate);
+      if (start > end) {
+        throw new BadRequestException("Tugash sanasi boshlanish sanasidan oldin bo'lishi mumkin emas (START_DATE_AFTER_END_DATE)");
+      }
+    }
+
     return this.prisma.group.create({
       data: {
         organizationId,
@@ -109,6 +117,12 @@ export class GroupsService {
       if (!teacher) {
         throw new NotFoundException('Teacher not found');
       }
+    }
+
+    const effectiveStart = data.startDate !== undefined ? new Date(data.startDate) : group.startDate;
+    const effectiveEnd = data.endDate !== undefined ? new Date(data.endDate) : group.endDate;
+    if (effectiveStart && effectiveEnd && effectiveStart > effectiveEnd) {
+      throw new BadRequestException("Tugash sanasi boshlanish sanasidan oldin bo'lishi mumkin emas (START_DATE_AFTER_END_DATE)");
     }
 
     const updateData: Prisma.GroupUncheckedUpdateInput = {};
@@ -140,7 +154,19 @@ export class GroupsService {
 
   async remove(organizationId: string, id: string) {
     await this.findOne(organizationId, id);
-    return this.prisma.group.update({ where: { id, organizationId }, data: { isActive: false } });
+    return this.prisma.$transaction(async (tx) => {
+      // Deactivate active student enrollments in this group
+      await tx.studentGroup.updateMany({
+        where: { groupId: id, organizationId, isActive: true },
+        data: { isActive: false, leftAt: new Date() },
+      });
+      // Cancel future planned lessons for this group
+      await tx.lesson.updateMany({
+        where: { groupId: id, organizationId, status: 'PLANNED', date: { gte: new Date() } },
+        data: { status: 'CANCELLED' },
+      });
+      return tx.group.update({ where: { id, organizationId }, data: { isActive: false } });
+    });
   }
 
   // ------------------------------------------------------------------
@@ -193,10 +219,32 @@ export class GroupsService {
     let targetGroupId = data.targetGroupId;
 
     return this.prisma.$transaction(async (tx) => {
-      // If no targetGroupId provided, create the new group automatically
-      if (!targetGroupId) {
+      let targetGroup: { id: string; capacity: number | null; isActive: boolean } | null = null;
+
+      if (targetGroupId) {
+        // Enforce tenant boundary on target group
+        targetGroup = await tx.group.findFirst({
+          where: { id: targetGroupId, organizationId },
+          select: { id: true, capacity: true, isActive: true },
+        });
+        if (!targetGroup) {
+          throw new NotFoundException('Target group not found in organization');
+        }
+        if (targetGroup.isActive === false) {
+          throw new BadRequestException('Target group is inactive and cannot receive students');
+        }
+      } else {
+        // Create new group inside organization
         if (!data.targetCourseId || !data.targetGroupName) {
           throw new BadRequestException("Yangi guruh yaratish uchun targetCourseId va targetGroupName talab qilinadi");
+        }
+
+        const targetCourse = await tx.course.findFirst({
+          where: { id: data.targetCourseId, organizationId },
+          select: { id: true },
+        });
+        if (!targetCourse) {
+          throw new NotFoundException('Target course not found in organization');
         }
 
         const newGroup = await tx.group.create({
@@ -212,6 +260,37 @@ export class GroupsService {
           },
         });
         targetGroupId = newGroup.id;
+        targetGroup = newGroup;
+      }
+
+      // Enforce tenant boundary on studentIds: must belong to organization and be active members in source group
+      const activeSourceMemberships = await tx.studentGroup.findMany({
+        where: {
+          groupId: id,
+          organizationId,
+          studentId: { in: data.studentIds },
+          isActive: true,
+        },
+        select: { studentId: true },
+      });
+      const activeSet = new Set(activeSourceMemberships.map((m) => m.studentId));
+      for (const sId of data.studentIds) {
+        if (!activeSet.has(sId)) {
+          throw new BadRequestException(`Student ${sId} is not an active member of the source group`);
+        }
+      }
+
+      // Enforce capacity of target group
+      const targetCapacity = targetGroup.capacity ?? sourceGroup.capacity;
+      if (targetCapacity !== null && targetCapacity !== undefined) {
+        const currentTargetCount = await tx.studentGroup.count({
+          where: { groupId: targetGroupId!, isActive: true },
+        });
+        if (currentTargetCount + data.studentIds.length > targetCapacity) {
+          throw new BadRequestException(
+            `Target group capacity reached (${currentTargetCount}/${targetCapacity}). Cannot promote ${data.studentIds.length} students.`,
+          );
+        }
       }
 
       const now = new Date();
@@ -220,6 +299,7 @@ export class GroupsService {
       await tx.studentGroup.updateMany({
         where: {
           groupId: id,
+          organizationId,
           studentId: { in: data.studentIds },
         },
         data: {
@@ -240,6 +320,7 @@ export class GroupsService {
           update: {
             isActive: true,
             leftAt: null,
+            organizationId,
           },
           create: {
             organizationId,
@@ -253,7 +334,7 @@ export class GroupsService {
 
       if (data.archiveOldGroup) {
         await tx.group.update({
-          where: { id },
+          where: { id, organizationId },
           data: { isActive: false, endDate: now },
         });
       }

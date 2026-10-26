@@ -1,13 +1,6 @@
 /**
- * M-EDU SecurityCenter — Apple Design Award V2 Edition
- *
- * Premium craft:
- *  - Apple SF Pro visual hierarchy with ambient security lighting
- *  - Hero banner with Sentinel Shield badge & real-time risk score
- *  - Framer-motion spring transitions & segmented filter pills
- *  - Staggered security event cards with severity glow badges
- *  - Liquid glass surfaces with subtle inner borders and squircle geometry
- *  - Full preservation of queries, mutations, RBAC, and i18n
+ * M-EDU Security Center Page
+ * Security audit events, threat monitoring, active sessions, and access control overview.
  */
 
 import { useState, useCallback, useEffect } from 'react';

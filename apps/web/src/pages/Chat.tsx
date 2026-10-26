@@ -1,7 +1,7 @@
 /**
- * M-EDU ChatPage — Apple Design Award Edition
+ * M-EDU ChatPage — 
  *
- * Premium craft:
+ * Module Features:
  *  - Hero header with gradient chat tile + live chips (unread, active, online)
  *  - Ambient gradient orbs (blue + purple drift) — suite-consistent
  *  - Premium conversation rows: gradient avatar + unread pulse + preview
@@ -9,7 +9,7 @@
  *  - Premium typing indicator (3-dot wave, Apple Messages style)
  *  - Premium composer (auto-grow textarea + circular send button)
  *  - Shimmer skeletons (not pulse)
- *  - Custom SVG icons in SF Symbols proportions
+ *  - Custom SVG icons in SVG Icons
  *  - Framer Motion spring physics + staggered blur-in
  *  - 100% logic preserved (socket, queries, mutations, i18n, aria)
  */
@@ -61,7 +61,7 @@ const bubbleVariants: Variants = {
 };
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;

@@ -1,5 +1,5 @@
 /**
- * M-EDU ResetPasswordPage — Apple Premium Liquid Glass Edition
+ * M-EDU ResetPasswordPage — Apple Premium 
  */
 
 import { useEffect, useState, type FormEvent, useCallback } from 'react';

@@ -1,21 +1,6 @@
 /**
- * ============================================================================
- * M-EDU AcademicRiskPage — Apple visionOS & macOS Sequoia Specular Liquid Glass
- * ============================================================================
- *
- * Senior craft:
- *  - Apple visionOS specular Liquid Glass materials (.liquid-glass-surface, .liquid-glass-card)
- *  - Ambient AuroraMesh atmospheric canvas with specular hairlines
- *  - macOS Split-View Detail Sidecar (`openSidecar`) with factor breakdown & intervention intelligence
- *  - Superhuman keyboard-first navigation (J/K navigation, 1-4 filter pills, Enter to inspect)
- *  - Web Audio tactile haptics (playTick, playPop, playWarningTone)
- *  - Interactive CountUp KPI bar with instant quick-filter toggles
- *  - Risk radar gauge visualization with deterministic color gradients
- *  - Strict WCAG 2.2 AA SC 2.5.8 touch targets (>= 44x44px hitboxes)
- *  - Mobile safe-area padding: pb-[max(6rem,env(safe-area-inset-bottom))]
- *  - Pure exported helpers for unit testability
- *  - 100% API contract & route compatibility preservation
- * ============================================================================
+ * M-EDU Academic Risk Page
+ * Student academic performance monitoring, risk factor evaluation, and early interventions.
  */
 
 import {
@@ -37,7 +22,7 @@ import { usePrefersReducedMotion, cn } from '@/lib/design';
 import { openSidecar } from '@/stores/ui.store';
 
 /* ============================================================================
- * MOTION TOKENS (macOS Sequoia Physics)
+ * MOTION TOKENS ( Physics)
  * ========================================================================== */
 
 const SPRING_PHYSICS = {
@@ -140,7 +125,7 @@ export function calculateTotalAtRisk(high = 0, medium = 0): number {
 }
 
 /* ============================================================================
- * SF SYMBOLS STYLE ICONS
+ * SVG ICONS
  * ========================================================================== */
 
 const ICONS = {
@@ -241,7 +226,7 @@ function Icon({
 }
 
 /* ============================================================================
- * AURORA MESH BACKGROUND (visionOS Atmospheric Canvas)
+ * AURORA MESH BACKGROUND (Atmospheric Canvas)
  * ========================================================================== */
 
 function AuroraMesh() {
@@ -547,7 +532,7 @@ export function AcademicRiskPage() {
         className="mx-auto max-w-7xl space-y-6"
       >
         {/* ====================================================================
-         * 1. visionOS SPECULAR HERO HEADER
+         * 1. HERO HEADER
          * ================================================================== */}
         <motion.div
           variants={itemVariants}

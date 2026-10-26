@@ -1,5 +1,5 @@
 /**
- * M-EDU DataGovernancePage — Apple Design Award Edition
+ * M-EDU DataGovernancePage — 
  *
  * Enterprise Data Lifecycle, Retention Automation & Security Audit Logging.
  */

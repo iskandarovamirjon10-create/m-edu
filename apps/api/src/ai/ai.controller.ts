@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -14,6 +15,7 @@ import {
   Res,
   Headers,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { Type, Transform } from 'class-transformer';
@@ -36,6 +38,7 @@ import { STAFF_ROLES, isAdminRole } from '../auth/authorization.policy';
 import { AllowPublic } from '../auth/public.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { DraftParentMessageDto, GenerateQuizDto } from './dto/deep-ai.dto';
+import { RenameConversationDto } from './dto/conversation.dto';
 
 // ============================================================================
 // Validated Data Transfer Objects (DTOs)
@@ -198,6 +201,49 @@ export class AiController {
     return isAdminRole(role) || role.toUpperCase() === 'ACCOUNTANT';
   }
 
+  /**
+   * Guard the inline-attachment channel before any provider call.
+   *
+   * The DTO already limits each part's MIME type and length; this caps the
+   * aggregate payload so a single request cannot allocate hundreds of MB of
+   * base64 in memory or exceed the provider's inline-data limit.
+   */
+  private assertAttachmentBudget(attachments?: ChatAttachmentDto[]): void {
+    if (!attachments || attachments.length === 0) return;
+
+    const MAX_FILES = 4;
+    const MAX_TOTAL_BASE64_CHARS = 12_000_000; // ~9 MB decoded
+    const MAX_FILE_BASE64_CHARS = 8_000_000; // ~6 MB decoded
+
+    if (attachments.length > MAX_FILES) {
+      throw new HttpException(
+        `At most ${MAX_FILES} attachments can be sent at once`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    let total = 0;
+    for (const attachment of attachments) {
+      if (!attachment?.base64) {
+        throw new HttpException('Attachment payload is empty', HttpStatus.BAD_REQUEST);
+      }
+      if (attachment.base64.length > MAX_FILE_BASE64_CHARS) {
+        throw new HttpException(
+          'Attachment is too large (max ~6 MB per file)',
+          HttpStatus.PAYLOAD_TOO_LARGE,
+        );
+      }
+      total += attachment.base64.length;
+    }
+
+    if (total > MAX_TOTAL_BASE64_CHARS) {
+      throw new HttpException(
+        'Attachments are too large in total (max ~9 MB)',
+        HttpStatus.PAYLOAD_TOO_LARGE,
+      );
+    }
+  }
+
   // --------------------------------------------------------------------------
   // Endpoints
   // --------------------------------------------------------------------------
@@ -213,11 +259,16 @@ export class AiController {
       this.configService.get<string>('GEMINI_API_KEY') ||
       process.env.GEMINI_API_KEY;
 
+    const configured = Boolean(apiKey);
+
     return {
       ok: true,
       model,
       provider: 'gemini',
-      configured: Boolean(apiKey),
+      configured,
+      // `fallback` means the endpoint is reachable but replies come from the
+      // deterministic database-backed engine until a provider key is set.
+      mode: configured ? 'live' : 'fallback',
       uptime: Math.floor(process.uptime()),
       timestamp: new Date().toISOString(),
     };
@@ -269,6 +320,27 @@ export class AiController {
       organizationId,
       userId,
       conversationId.trim(),
+    );
+  }
+
+  @Roles(...STAFF_ROLES)
+  @Patch('conversations/:id')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  async renameConversation(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Param('id') conversationId: string,
+    @Body() body: RenameConversationDto,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    if (!conversationId?.trim()) {
+      throw new HttpException('Conversation ID required', HttpStatus.BAD_REQUEST);
+    }
+    return this.aiService.renameConversation(
+      organizationId,
+      userId,
+      conversationId.trim(),
+      body.title,
     );
   }
 
@@ -337,7 +409,6 @@ export class AiController {
   }
 
   @Roles(...STAFF_ROLES)
-  @Roles(...STAFF_ROLES)
   @Get('executive-briefing')
   async getExecutiveBriefing(
     @CurrentUser('organizationId') organizationId: string,
@@ -384,6 +455,7 @@ export class AiController {
   }
 
   @Post('chat')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async chat(
     @CurrentUser('organizationId') organizationId: string,
     @CurrentUser('sub') userId: string,
@@ -392,6 +464,7 @@ export class AiController {
     @Body() body: ChatBodyDto,
   ) {
     this.assertTenantContext(organizationId, userId);
+    this.assertAttachmentBudget(body.attachments);
 
     try {
       return await this.aiService.chat(
@@ -416,6 +489,7 @@ export class AiController {
 
   @Roles(...STAFF_ROLES)
   @Post('chat/stream')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async chatStream(
     @CurrentUser('organizationId') organizationId: string,
     @CurrentUser('sub') userId: string,
@@ -425,6 +499,7 @@ export class AiController {
     @Res() res: Response,
   ): Promise<void> {
     this.assertTenantContext(organizationId, userId);
+    this.assertAttachmentBudget(body.attachments);
 
     const safePageContext = this.sanitizePageContext(
       body.route,

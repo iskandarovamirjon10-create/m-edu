@@ -1,8 +1,8 @@
 /**
- * M-EDU SubjectsPage — Apple Design Award & visionOS Edition (10/10)
+ * M-EDU Subjects Page
  *
- * Premium craft:
- *  - Apple visionOS Liquid Glass aesthetic with specular meniscus sheen
+ * Module Features:
+ *  - Liquid glass styling
  *  - Split-Pane Layout with Sticky Filter Rail (280px) and Editorial Canvas
  *  - Floating Command Bar with ambient Aurora Backdrop & quick action CTAs
  *  - Full WCAG 2.2 AA SC 2.5.8 touch target compliance (all action buttons >= 44x44px)
@@ -1669,7 +1669,7 @@ export function SubjectsPage() {
           className="space-y-6"
         >
           {/* ============================================================
-              FLOATING COMMAND BAR (Apple visionOS Specular Surface)
+              FLOATING COMMAND BAR (Specular Surface)
           ============================================================ */}
           <motion.div variants={cardVariants} className="sticky top-4 z-30">
             <div className="liquid-glass-surface relative flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-black/[0.08] dark:border-white/[0.12] bg-white/80 dark:bg-surface-900/80 p-3 sm:p-4 backdrop-blur-2xl shadow-xl dark:shadow-[0_12px_40px_rgba(0,0,0,0.4)]">

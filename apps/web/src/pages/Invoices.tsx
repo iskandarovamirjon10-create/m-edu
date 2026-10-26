@@ -1,7 +1,7 @@
 /**
- * M-EDU InvoicesPage — Apple Design Award Edition
+ * M-EDU InvoicesPage — 
  *
- * Premium craft:
+ * Module Features:
  *  - Hero header with gradient invoice tile + live chips
  *  - Ambient gradient orbs
  *  - Animated KPI bar (Total, Paid, Outstanding, Overdue)
@@ -697,7 +697,7 @@ export function InvoicesPage() {
     openSidecar(data);
   }, [sound, openExecutiveInvoiceStudio, t]);
 
-  /* ── Superhuman Keyboard Navigation ───────────────────────────────── */
+  /* ── Fast Keyboard Navigation ───────────────────────────────── */
   const {
     focusedIndex,
     selectedIds,
@@ -1222,9 +1222,10 @@ export function InvoicesPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!payTarget) return;
-            const amount = Number(paymentForm.amount);
-            if (!amount || amount <= 0) {
+            if (!payTarget || recordPayment.isPending) return;
+            const cleanStr = paymentForm.amount.trim().replace(/,/g, '.').replace(/\s+/g, '');
+            const amount = parseFloat(cleanStr);
+            if (!Number.isFinite(amount) || amount <= 0) {
               push('error', t('invoices.amountPositive'));
               return;
             }
@@ -1232,7 +1233,10 @@ export function InvoicesPage() {
               push('error', t('invoices.amountExceeds'));
               return;
             }
-            recordPayment.mutate({ invoiceId: payTarget.id, data: paymentForm });
+            recordPayment.mutate({
+              invoiceId: payTarget.id,
+              data: { ...paymentForm, amount: cleanStr },
+            });
           }}
           className="space-y-5"
           noValidate
@@ -1676,9 +1680,13 @@ export function InvoicesPage() {
                     Number(refundForm.amount) <= 0 ||
                     requestRefund.isPending
                   }
-                  onClick={() =>
-                    requestRefund.mutate({ ...refundForm, amount: Number(refundForm.amount) })
-                  }
+                  onClick={() => {
+                    if (requestRefund.isPending) return;
+                    const cleanRefund = refundForm.amount.trim().replace(/,/g, '.').replace(/\s+/g, '');
+                    const amountNum = parseFloat(cleanRefund);
+                    if (!Number.isFinite(amountNum) || amountNum <= 0) return;
+                    requestRefund.mutate({ ...refundForm, amount: amountNum });
+                  }}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e: any) => {
@@ -1825,10 +1833,17 @@ export function InvoicesPage() {
             }
             setCreateErrors(newCreateErrors);
             if (Object.keys(newCreateErrors).length === 0) {
+              if (createInvoice.isPending) return;
               const { description, unitPrice, ...rest } = createForm;
+              const cleanUnitPrice = unitPrice.trim().replace(/,/g, '.').replace(/\s+/g, '');
+              const parsedUnitPrice = parseFloat(cleanUnitPrice);
               createInvoice.mutate({
                 ...rest,
-                items: [{ description, unitPrice: Number(unitPrice), quantity: 1 }],
+                items: [{
+                  description,
+                  unitPrice: Number.isFinite(parsedUnitPrice) ? Math.round(parsedUnitPrice * 100) / 100 : 0,
+                  quantity: 1,
+                }],
               });
             }
           }}

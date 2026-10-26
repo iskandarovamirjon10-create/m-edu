@@ -314,6 +314,8 @@ export function WebcamCapture({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autoScanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const captureTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shutterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userGestureRef = useRef(false);
   const permissionDialogRef = useRef<HTMLDivElement>(null);
 
@@ -343,6 +345,14 @@ export function WebcamCapture({
   /* ── Focus trap for permission dialog ──────────────────────── */
   useFocusTrap(permissionDialogRef, status === 'needs-permission');
 
+  /* ── Clean up capture cooldown timeouts on unmount ─────────── */
+  useEffect(() => {
+    return () => {
+      if (captureTimeoutRef.current) clearTimeout(captureTimeoutRef.current);
+      if (shutterTimeoutRef.current) clearTimeout(shutterTimeoutRef.current);
+    };
+  }, []);
+
   /* ── Stop hardware when switching to upload ────────────────── */
   useEffect(() => {
     if (!cameraOn) stop();
@@ -370,7 +380,8 @@ export function WebcamCapture({
 
     if (!frame) {
       setCaptureFailure(t('face.cameraNotReady', 'Camera is still starting. Please try again.'));
-      window.setTimeout(() => setCaptureFailure(''), 2500);
+      if (captureTimeoutRef.current) clearTimeout(captureTimeoutRef.current);
+      captureTimeoutRef.current = setTimeout(() => setCaptureFailure(''), 2500);
       return;
     }
 
@@ -380,7 +391,8 @@ export function WebcamCapture({
     haptics.light();
     onCapture(frame.base64);
 
-    window.setTimeout(() => setIsCapturing(false), SHUTTER_COOLDOWN_MS);
+    if (shutterTimeoutRef.current) clearTimeout(shutterTimeoutRef.current);
+    shutterTimeoutRef.current = setTimeout(() => setIsCapturing(false), SHUTTER_COOLDOWN_MS);
   }, [
     busy, isCapturing, status, captureFrame, isMirrored,
     haptics, onCapture, t,

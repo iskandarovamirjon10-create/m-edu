@@ -51,6 +51,20 @@ export function AppLayout() {
   );
 }
 
+/**
+ * Space / Home / End belong to the focused control. The layout-level scroll
+ * shortcuts must never fire while a link, button, field or menu item holds
+ * focus — otherwise Space can no longer activate buttons on the page.
+ */
+function isInteractiveFocusTarget(target: EventTarget | null): boolean {
+  if (typeof Element === 'undefined' || !(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      'a, button, input, textarea, select, summary, label, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="switch"], [contenteditable="true"]',
+    ),
+  );
+}
+
 function AppLayoutInner() {
   const { user, logout, loading: authLoading } = useAuth();
   const { t } = useSafeI18n();
@@ -83,7 +97,6 @@ function AppLayoutInner() {
 
   const { scrollY } = useScroll({ container: mainRef });
   const headerY = useTransform(scrollY, [0, 80], [0, -3]);
-  const headerScale = useTransform(scrollY, [0, 80], [1, 1]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -232,8 +245,15 @@ function AppLayoutInner() {
         return;
       }
 
-      // Keyboard-driven smooth page scrolling when not in an input
-      if (!inInput && !anyDialogOpen && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // Keyboard-driven smooth page scrolling when not in an input or control
+      if (
+        !inInput &&
+        !anyDialogOpen &&
+        !isInteractiveFocusTarget(e.target) &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey
+      ) {
         const main = mainRef.current;
         if (main) {
           if (e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey)) {
@@ -434,7 +454,6 @@ function AppLayoutInner() {
             userRole={userRole}
             orgName={orgName}
             headerY={headerY}
-            headerScale={headerScale}
             onCommandPalette={handleCommandPalette}
             onOpenShortcuts={() => setShortcutsOpen(true)}
             onLogout={handleLogout}
@@ -444,7 +463,11 @@ function AppLayoutInner() {
         )}
 
         {isPhone && !isSearchFocused && !isAiCopilot && (
-          <MobileBottomNav role={userRole} onOpenMore={() => setMobileMenuOpen(true)} />
+          <MobileBottomNav
+            role={userRole}
+            onOpenMore={() => setMobileMenuOpen(true)}
+            scrollContainerRef={mainRef}
+          />
         )}
 
         <main
@@ -458,7 +481,7 @@ function AppLayoutInner() {
             'relative min-h-0 min-w-0 flex-1 outline-none overscroll-y-contain touch-pan-y',
             isAiCopilot
               ? 'flex flex-col min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-0 pt-[env(safe-area-inset-top,0px)] pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] scrollbar-thin md:px-6 md:pt-3 md:pb-8'
-              : 'overflow-y-auto overflow-x-hidden px-4 pt-[calc(5.25rem+env(safe-area-inset-top,0px))] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] scrollbar-thin sm:px-6 md:px-6 md:pt-3 md:pb-8 xl:px-8 xl:pb-10 xl:pt-3',
+              : 'overflow-y-auto overflow-x-hidden pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-[calc(5.25rem+env(safe-area-inset-top,0px))] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] scrollbar-thin sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))] md:pt-3 md:pb-8 xl:pl-[max(2rem,env(safe-area-inset-left,0px))] xl:pr-[max(2rem,env(safe-area-inset-right,0px))] xl:pb-10 xl:pt-3',
           )}
           style={{
             WebkitOverflowScrolling: 'touch',

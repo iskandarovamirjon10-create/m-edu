@@ -1,7 +1,7 @@
 /**
- * M-EDU InventoryPage — Apple visionOS & macOS Sequoia Specular Edition (v10.0)
+ * M-EDU InventoryPage — Apple Modern Interface Specular Edition (v10.0)
  *
- * 🎯 Apple Design Award Tier Polish:
+ * 🎯  Tier Polish:
  *  ✅ Aurora Mesh Backdrop: Living breathing ambient mesh gradients in indigo, cyan & emerald
  *  ✅ Specular Liquid Glass: Meniscus rim highlights, double-layer specular borders & backdrop blur
  *  ✅ Animated KPI Bar: Interactive CountUp tiles with instant filter-toggle (Low Stock / In Stock)
@@ -46,7 +46,7 @@ import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 /* ============================================================================
- * MOTION TOKENS (visionOS High-Fidelity Physics)
+ * MOTION TOKENS (Glass High-Fidelity Physics)
  * ========================================================================== */
 
 export const SPRING = {
@@ -74,7 +74,7 @@ export const rowVariants: Variants = {
 };
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;

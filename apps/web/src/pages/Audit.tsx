@@ -1,16 +1,6 @@
 /**
- * M-EDU AuditPage — Apple Design Award V2 Edition (Liquid Glass Optics)
- *
- * Premium craftsmanship:
- *  - Apple SF Pro visual hierarchy with ambient journal glow
- *  - Hero banner with Immutable Audit Ledger badge & total event count
- *  - Apple KPI stats strip for instant event classification
- *  - Framer-motion spring transitions (staggered audit logs, smooth pagination)
- *  - Liquid glass surfaces (.liquid-glass-surface) with squircle inputs and selects
- *  - Split-view macOS detail sidecar integration (openSidecar)
- *  - Tactile sound effects via Web Audio (usePremiumSound)
- *  - Superhuman keyboard shortcuts ('1'..'5' quick filters, 'r' refetch)
- *  - Full preservation of query parameters, debounce, and i18n
+ * M-EDU Audit Page
+ * Organization audit logs, security event tracking, user action timestamps, and compliance records.
  */
 
 import { useMemo, useState, useCallback, useEffect } from 'react';

@@ -1,13 +1,6 @@
 /**
- * M-EDU Dashboard Workspace — v20 "Apple Spatial Pro · Studio Canvas"
- *
- * 🎯 World-Class Enhancements:
- *  ✅ Zero-Waste Query Gating: Disables stats fetching for non-admin roles (`PARENT`, `TEACHER`, `STUDENT`) before redirect
- *  ✅ Safe i18n Layer: Resilient localization via `useSafeI18n()` with fallback handling
- *  ✅ Liquid Fluidity Grid (320px -> 4K Ultra-Wide): Expands up to `3xl:max-w-[1800px]` with safe-area spacing
- *  ✅ Apple visionOS Staggered Reveal: Silky smooth spring physics across cards, charts, and feed components
- *  ✅ Tactile Keyboard Shortcuts: `R` for instant stats refresh with haptics, `N` for new student entry
- *  ✅ High-Contrast Specular Error State: Refined glass retry presentation card
+ * M-EDU Dashboard Workspace
+ * Main administration overview: daily metrics, quick actions, schedule pulse, and recent activity.
  */
 
 import { useMemo, useEffect, useCallback } from 'react';
@@ -31,6 +24,8 @@ import { AttendanceSection } from '@/components/dashboard/AttendanceSection';
 import { RecentPayments } from '@/components/dashboard/RecentPayments';
 import { FollowUpsSection } from '@/components/dashboard/FollowUpsSection';
 import { FinancialSummaryCard } from '@/components/dashboard/FinancialSummaryCard';
+import { DailyPulseStrip } from '@/components/dashboard/DailyPulseStrip';
+import { QuickActionsRail } from '@/components/dashboard/QuickActionsRail';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { AiExecutiveBriefingCard } from '@/components/ai';
 
@@ -94,7 +89,7 @@ export function DashboardPage() {
   }, [role, navigate]);
 
   // Query gated so redirected roles do not generate 403 API noise
-  const { data, isLoading, isError, error, refetch } = useQuery({
+  const { data, dataUpdatedAt, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['dashboard', 'stats'],
     queryFn: dashboardApi.stats,
     enabled: !isDedicatedRole,
@@ -188,12 +183,25 @@ export function DashboardPage() {
         <DashboardHeader
           userName={user?.firstName}
           orgName={user?.organization?.name}
+          stats={stats}
+          onRefresh={handleManualRefresh}
+          isRefreshing={isFetching}
         />
       </motion.div>
 
       {/* 1.5. AI Executive Morning Briefing — Proactive Daily Pulse */}
       <motion.div variants={SECTION_VARIANTS}>
         <AiExecutiveBriefingCard />
+      </motion.div>
+
+      {/* 1.6. Daily Pulse — today's operations at a glance (new) */}
+      <motion.div variants={SECTION_VARIANTS}>
+        <DailyPulseStrip stats={stats} updatedAt={dataUpdatedAt} />
+      </motion.div>
+
+      {/* 1.7. Quick Actions — one-tap access to frequent workflows (new) */}
+      <motion.div variants={SECTION_VARIANTS}>
+        <QuickActionsRail />
       </motion.div>
 
       {/* 2. Key Performance Indicators Grid (Active Students, Attendance, Revenue, Conversion) */}

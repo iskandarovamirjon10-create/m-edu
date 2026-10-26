@@ -1,8 +1,8 @@
 /**
- * M-EDU CertificatesPage — Apple visionOS & macOS Sequoia 10/10 Edition
+ * M-EDU Certificates Page
  *
- * Premium craft:
- *  - Apple visionOS specular liquid glass styling with meniscus rim highlights.
+ * Module Features:
+ *  - Liquid glass styling with rim highlights.
  *  - Dynamic Aurora mesh backdrop with ambient glow and soft refraction.
  *  - Animated KPI statistics (Certificates, Templates, Default template, This month).
  *  - WCAG 2.2 AA SC 2.5.8 compliant touch targets (>= 44x44px for all controls).
@@ -81,7 +81,7 @@ export const rowVariants: Variants = {
 };
 
 /* ============================================================================
- * ICONS (SF Symbols proportions)
+ * ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;

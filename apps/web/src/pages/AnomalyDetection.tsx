@@ -1,5 +1,5 @@
 /**
- * M-EDU AnomalyDetectionPage — Liquid Glass Edition
+ * M-EDU AnomalyDetectionPage — 
  *
  * Apple-grade anomaly dashboard.
  *  - Multi-layer liquid glass surfaces (specular edge + chromatic hint)

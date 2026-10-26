@@ -35,6 +35,7 @@ export interface FloatingActionIslandProps {
   actions: FloatingActionItem[];
   itemLabel?: string; // e.g. "talaba", "to'lov", "yozuv"
   entityName?: string;
+  preview?: React.ReactNode;
 }
 
 export const FloatingActionIsland = memo(function FloatingActionIsland({
@@ -44,6 +45,7 @@ export const FloatingActionIsland = memo(function FloatingActionIsland({
   actions,
   itemLabel,
   entityName,
+  preview,
 }: FloatingActionIslandProps) {
   const { playPop } = usePremiumSound();
   const handleClear = onClear ?? onClearSelection ?? (() => {});
@@ -92,6 +94,13 @@ export const FloatingActionIsland = memo(function FloatingActionIsland({
                 </svg>
               </button>
             </div>
+
+            {/* Preview Strip (if provided) */}
+            {preview && (
+              <div className="hidden sm:flex shrink-0 items-center border-r border-slate-200/80 px-2 py-0.5 dark:border-white/10">
+                {preview}
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex shrink-0 items-center gap-1.5 pl-1">

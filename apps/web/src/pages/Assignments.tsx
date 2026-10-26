@@ -1,17 +1,6 @@
 /**
- * ============================================================================
- * M-EDU AssignmentsPage — Apple Design Award Edition (macOS Sequoia & Liquid Glass)
- * ============================================================================
- *
- * Senior craft:
- *  - Apple Liquid Glass materials (.liquid-glass-surface, .liquid-glass-card)
- *  - Real-time tunable optics (--liquid-glass-opacity, --liquid-glass-blur)
- *  - macOS Split-View Detail Sidecar (`openSidecar` with submission progress & deadlines)
- *  - Superhuman keyboard-first navigation (j/k, x, Enter, c to create)
- *  - Web Audio tactile haptics (playTick, playPop, playSuccess)
- *  - Due-date urgency tones with subtle optical glow
- *  - Shimmer skeletons with specular hairline reflections
- * ============================================================================
+ * M-EDU Assignments Page
+ * Homework assignments, student submissions, grading status, and deadline management.
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
@@ -162,7 +151,7 @@ function getDueInfo(dueDateStr: string, t: TranslateFn): DueInfo {
 }
 
 /* ============================================================================
- * CUSTOM ICONS (SF Symbols proportions)
+ * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
 const ICON_STROKE = 1.75;

@@ -85,13 +85,14 @@ export class StudentsService {
   }
 
   async create(organizationId: string, data: CreateStudentDto) {
-    if (data.email) {
-      const existing = await this.prisma.user.findFirst({ where: { email: data.email, organizationId } });
+    const normalizedEmail = data.email ? data.email.toLowerCase().trim() : null;
+    if (normalizedEmail) {
+      const existing = await this.prisma.user.findFirst({ where: { email: normalizedEmail, organizationId } });
       if (existing) throw new BadRequestException('Email already registered');
     }
 
     const passwordHash = data.password ? await hashPassword(data.password) : null;
-    const email = data.email || `student-${randomUUID()}@placeholder.local`;
+    const email = normalizedEmail || `student-${randomUUID()}@placeholder.local`;
 
     try {
       return await this.prisma.student.create({
@@ -526,7 +527,7 @@ export class StudentsService {
     const updatedNotes = ((student.notes ?? '') + freezeLog).trim();
 
     return this.prisma.student.update({
-      where: { id: studentId },
+      where: { id: studentId, organizationId },
       data: {
         status: 'PAUSED',
         notes: updatedNotes,
@@ -543,7 +544,7 @@ export class StudentsService {
     const updatedNotes = ((student.notes ?? '') + unfreezeLog).trim();
 
     return this.prisma.student.update({
-      where: { id: studentId },
+      where: { id: studentId, organizationId },
       data: {
         status: 'ACTIVE',
         notes: updatedNotes,
