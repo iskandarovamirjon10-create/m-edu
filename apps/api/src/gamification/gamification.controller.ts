@@ -76,6 +76,30 @@ export class GamificationController {
   }
 
   /**
+   * GET /api/gamification/leagues
+   *
+   * League tiers overview, season countdown, and daily quests.
+   */
+  @AllowAnyRole()
+  @Get('leagues')
+  @Roles(
+    Role.SUPER_ADMIN,
+    Role.ORG_ADMIN,
+    Role.MANAGER,
+    Role.TEACHER,
+    Role.ASSISTANT,
+    Role.STUDENT,
+  )
+  @ApiOperation({ summary: 'League tiers overview, monthly season and daily quests' })
+  async getLeagueOverview(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+  ) {
+    const studentId = await this.resolveStudentId(organizationId, userId);
+    return this.gamification.getLeagueOverview(organizationId, studentId ?? undefined);
+  }
+
+  /**
    * GET /api/gamification/me
    *
    * The authenticated student's own balance: XP, coins, level, progress to

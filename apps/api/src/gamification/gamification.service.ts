@@ -10,6 +10,71 @@ export const XP_RULES = {
 
 export type GamificationEventType = keyof typeof XP_RULES;
 
+export type LeagueTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND';
+export type LeagueZone = 'PROMOTION' | 'SAFE' | 'RELEGATION';
+
+export const LEAGUE_CONFIG: Record<
+  LeagueTier,
+  { name: string; icon: string; minXp: number; color: string; badgeBg: string; perk: string }
+> = {
+  BRONZE: {
+    name: 'Bronza Ligasi',
+    icon: '🥉',
+    minXp: 0,
+    color: '#CD7F32',
+    badgeBg: 'rgba(205,127,50,0.15)',
+    perk: 'Boshlang‘ich daraja, har bir dars uchun standart XP',
+  },
+  SILVER: {
+    name: 'Kumush Ligasi',
+    icon: '🥈',
+    minXp: 300,
+    color: '#94A3B8',
+    badgeBg: 'rgba(148,163,184,0.15)',
+    perk: '+5% qo‘shimcha coinlar bonus va kumush nishon',
+  },
+  GOLD: {
+    name: 'Oltin Ligasi',
+    icon: '🥇',
+    minXp: 700,
+    color: '#F59E0B',
+    badgeBg: 'rgba(245,158,11,0.15)',
+    perk: '+10% coinlar va do‘konda eksklyuziv chegirmalar',
+  },
+  PLATINUM: {
+    name: 'Platina Ligasi',
+    icon: '💠',
+    minXp: 1500,
+    color: '#06B6D4',
+    badgeBg: 'rgba(6,182,212,0.15)',
+    perk: '+15% coinlar, mentor bilan VIP chat sessiyasi',
+  },
+  DIAMOND: {
+    name: 'Olmos Ligasi',
+    icon: '💎',
+    minXp: 3000,
+    color: '#8B5CF6',
+    badgeBg: 'rgba(139,92,246,0.15)',
+    perk: '+25% coinlar, premium chempionlik avatar ramkasi',
+  },
+};
+
+export function leagueForXp(xp: number): LeagueTier {
+  if (xp >= 3000) return 'DIAMOND';
+  if (xp >= 1500) return 'PLATINUM';
+  if (xp >= 700) return 'GOLD';
+  if (xp >= 300) return 'SILVER';
+  return 'BRONZE';
+}
+
+export function computeZone(rank: number, total: number): LeagueZone {
+  if (total <= 1) return 'SAFE';
+  if (rank <= Math.max(3, Math.ceil(total * 0.2))) return 'PROMOTION';
+  if (total > 5 && rank > Math.floor(total * 0.85)) return 'RELEGATION';
+  return 'SAFE';
+}
+
+
 export type GamificationAwardResult = {
   awarded: boolean;
   reason?: 'duplicate';
@@ -29,6 +94,8 @@ export interface LeaderboardEntry {
   xp: number;
   coins: number;
   level: number;
+  league: LeagueTier;
+  zone: LeagueZone;
 }
 
 
@@ -305,17 +372,23 @@ export class GamificationService {
         ORDER BY ranked.rank ASC
       `;
 
-      return rows.map((row) => ({
-        rank: Number(row.rank),
-        studentId: row.studentId,
-        studentName: [row.first_name, row.last_name].filter(Boolean).join(' '),
-        avatar: row.avatar,
-        groupId: row.group_id,
-        groupName: row.group_name,
-        xp: row.xp,
-        coins: row.coins,
-        level: row.level,
-      }));
+      const totalCount = rows.length;
+      return rows.map((row) => {
+        const rank = Number(row.rank);
+        return {
+          rank,
+          studentId: row.studentId,
+          studentName: [row.first_name, row.last_name].filter(Boolean).join(' '),
+          avatar: row.avatar,
+          groupId: row.group_id,
+          groupName: row.group_name,
+          xp: row.xp,
+          coins: row.coins,
+          level: row.level,
+          league: leagueForXp(row.xp),
+          zone: computeZone(rank, totalCount),
+        };
+      });
     }
 
     // Organization-wide ranking (default).
@@ -354,17 +427,23 @@ export class GamificationService {
       ORDER BY ranked.rank ASC
     `;
 
-    return rows.map((row) => ({
-      rank: Number(row.rank),
-      studentId: row.studentId,
-      studentName: [row.first_name, row.last_name].filter(Boolean).join(' '),
-      avatar: row.avatar,
-      groupId: row.group_id,
-      groupName: row.group_name,
-      xp: row.xp,
-      coins: row.coins,
-      level: row.level,
-    }));
+    const totalCount = rows.length;
+    return rows.map((row) => {
+      const rank = Number(row.rank);
+      return {
+        rank,
+        studentId: row.studentId,
+        studentName: [row.first_name, row.last_name].filter(Boolean).join(' '),
+        avatar: row.avatar,
+        groupId: row.group_id,
+        groupName: row.group_name,
+        xp: row.xp,
+        coins: row.coins,
+        level: row.level,
+        league: leagueForXp(row.xp),
+        zone: computeZone(rank, totalCount),
+      };
+    });
   }
 
   /** Recent XP events for a student (activity feed on the profile card). */
@@ -460,4 +539,100 @@ export class GamificationService {
       message: `Tabriklaymiz! "${reward.title}" xarid qilindi. Administrator sizga yetkazib beradi.`,
     };
   }
+
+  /**
+   * League tiers overview, current monthly season, and daily study quests.
+   */
+  async getLeagueOverview(organizationId: string, studentId?: string) {
+    const now = new Date();
+    const monthNames = [
+      'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
+      'Iyul', 'Avgust', 'Sentabr', 'Oktyabr', 'Noyabr', 'Dekabr',
+    ];
+    const seasonTitle = `${now.getUTCFullYear()}-yil ${monthNames[now.getUTCMonth()]} Mavsumi`;
+    const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+    const daysRemaining = Math.max(1, daysInMonth - now.getUTCDate());
+
+    // Aggregate student counts across leagues
+    const allStudents = await this.prisma.studentGamification.findMany({
+      where: { organizationId },
+      select: { xp: true },
+    });
+
+    const leagueCounts: Record<LeagueTier, number> = {
+      BRONZE: 0,
+      SILVER: 0,
+      GOLD: 0,
+      PLATINUM: 0,
+      DIAMOND: 0,
+    };
+
+    for (const s of allStudents) {
+      leagueCounts[leagueForXp(s.xp)]++;
+    }
+
+    const leagues = (['DIAMOND', 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE'] as LeagueTier[]).map((tier) => ({
+      tier,
+      ...LEAGUE_CONFIG[tier],
+      studentsCount: leagueCounts[tier],
+    }));
+
+    const dailyQuests = [
+      {
+        id: 'quest-attendance',
+        title: "Darsga o'z vaqtida kelish",
+        description: "Turniket yoki QR orqali darsga o'z vaqtida qayd etilish",
+        xp: XP_RULES.ATTENDANCE_ON_TIME.xp,
+        coins: XP_RULES.ATTENDANCE_ON_TIME.coins,
+        icon: '📍',
+      },
+      {
+        id: 'quest-homework',
+        title: "Uy vazifasini a'lo bahoga topshirish",
+        description: "Vazifani o'z vaqtida topshirib, 80 balldan yuqori natija olish",
+        xp: XP_RULES.HOMEWORK_ON_TIME_GOOD_GRADE.xp,
+        coins: XP_RULES.HOMEWORK_ON_TIME_GOOD_GRADE.coins,
+        icon: '📚',
+      },
+      {
+        id: 'quest-exam',
+        title: "Oraliq sinovda 90%+ ko'rsatkich",
+        description: "Nazorat testida eng yuqori natijalardan birini qayd etish",
+        xp: XP_RULES.EXAM_HIGH_SCORE.xp,
+        coins: XP_RULES.EXAM_HIGH_SCORE.coins,
+        icon: '🎯',
+      },
+    ];
+
+    let myLeague: { tier: LeagueTier; xp: number; coins: number; level: number } | null = null;
+    if (studentId) {
+      const me = await this.prisma.studentGamification.findUnique({
+        where: { studentId },
+        select: { xp: true, coins: true, level: true },
+      });
+      if (me) {
+        myLeague = {
+          tier: leagueForXp(me.xp),
+          xp: me.xp,
+          coins: me.coins,
+          level: me.level,
+        };
+      }
+    }
+
+    return {
+      season: {
+        id: `season-${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`,
+        title: seasonTitle,
+        daysRemaining,
+        totalDays: daysInMonth,
+        promotionZonePct: 20,
+        relegationZonePct: 15,
+      },
+      leagues,
+      dailyQuests,
+      myLeague,
+    };
+  }
+
 }

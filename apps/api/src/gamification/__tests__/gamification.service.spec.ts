@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   GamificationService,
   levelForXp,
+  leagueForXp,
+  computeZone,
   XP_RULES,
 } from '../gamification.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -29,6 +31,7 @@ function createMockPrisma() {
       count: vi.fn(),
       aggregate: vi.fn(),
       groupBy: vi.fn(),
+      findMany: vi.fn(),
     },
     tx,
   };
@@ -250,6 +253,8 @@ describe('GamificationService', () => {
           xp: 500,
           coins: 200,
           level: 6,
+          league: 'SILVER',
+          zone: 'SAFE',
         },
       ]);
     });
@@ -327,4 +332,57 @@ describe('GamificationService', () => {
       });
     });
   });
+
+  describe('leagueForXp and computeZone helpers', () => {
+    it('correctly categorizes students into leagues based on XP', () => {
+      expect(leagueForXp(0)).toBe('BRONZE');
+      expect(leagueForXp(299)).toBe('BRONZE');
+      expect(leagueForXp(300)).toBe('SILVER');
+      expect(leagueForXp(699)).toBe('SILVER');
+      expect(leagueForXp(700)).toBe('GOLD');
+      expect(leagueForXp(1499)).toBe('GOLD');
+      expect(leagueForXp(1500)).toBe('PLATINUM');
+      expect(leagueForXp(2999)).toBe('PLATINUM');
+      expect(leagueForXp(3000)).toBe('DIAMOND');
+      expect(leagueForXp(10000)).toBe('DIAMOND');
+    });
+
+    it('determines promotion, safe, and relegation zones accurately', () => {
+      expect(computeZone(1, 10)).toBe('PROMOTION');
+      expect(computeZone(2, 10)).toBe('PROMOTION');
+      expect(computeZone(5, 10)).toBe('SAFE');
+      expect(computeZone(10, 10)).toBe('RELEGATION');
+      expect(computeZone(1, 1)).toBe('SAFE');
+    });
+  });
+
+  describe('getLeagueOverview', () => {
+    it('returns monthly season details, league counts, and daily quests', async () => {
+      mockPrisma.studentGamification.findMany.mockResolvedValue([
+        { xp: 50 },
+        { xp: 350 },
+        { xp: 750 },
+        { xp: 1600 },
+        { xp: 3200 },
+      ]);
+
+      mockPrisma.studentGamification.findUnique.mockResolvedValue({
+        xp: 1600,
+        coins: 80,
+        level: 17,
+      });
+
+      const res = await service.getLeagueOverview('org-1', 'student-1');
+
+      expect(res.season).toBeDefined();
+      expect(res.season.daysRemaining).toBeGreaterThanOrEqual(1);
+      expect(res.leagues).toHaveLength(5);
+      expect(res.dailyQuests).toHaveLength(3);
+      expect(res.myLeague?.tier).toBe('PLATINUM');
+
+      const diamond = res.leagues.find((l) => l.tier === 'DIAMOND');
+      expect(diamond?.studentsCount).toBe(1);
+    });
+  });
+
 });

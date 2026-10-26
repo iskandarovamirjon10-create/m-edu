@@ -26,6 +26,95 @@ import request from '@/lib/api';
  * 1. TYPES
  * ══════════════════════════════════════════════════════════════════ */
 
+export type LeagueTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND';
+export type LeagueZone = 'PROMOTION' | 'SAFE' | 'RELEGATION';
+
+export const LEAGUE_CONFIG: Record<
+  LeagueTier,
+  { name: string; icon: string; minXp: number; color: string; badgeBg: string; perk: string }
+> = {
+  BRONZE: {
+    name: 'Bronza Ligasi',
+    icon: '🥉',
+    minXp: 0,
+    color: '#CD7F32',
+    badgeBg: 'rgba(205,127,50,0.15)',
+    perk: 'Boshlang‘ich daraja, har bir dars uchun standart XP',
+  },
+  SILVER: {
+    name: 'Kumush Ligasi',
+    icon: '🥈',
+    minXp: 300,
+    color: '#94A3B8',
+    badgeBg: 'rgba(148,163,184,0.15)',
+    perk: '+5% qo‘shimcha coinlar bonus va kumush nishon',
+  },
+  GOLD: {
+    name: 'Oltin Ligasi',
+    icon: '🥇',
+    minXp: 700,
+    color: '#F59E0B',
+    badgeBg: 'rgba(245,158,11,0.15)',
+    perk: '+10% coinlar va do‘konda eksklyuziv chegirmalar',
+  },
+  PLATINUM: {
+    name: 'Platina Ligasi',
+    icon: '💠',
+    minXp: 1500,
+    color: '#06B6D4',
+    badgeBg: 'rgba(6,182,212,0.15)',
+    perk: '+15% coinlar, mentor bilan VIP chat sessiyasi',
+  },
+  DIAMOND: {
+    name: 'Olmos Ligasi',
+    icon: '💎',
+    minXp: 3000,
+    color: '#8B5CF6',
+    badgeBg: 'rgba(139,92,246,0.15)',
+    perk: '+25% coinlar, premium chempionlik avatar ramkasi',
+  },
+};
+
+export interface LeagueItem {
+  tier: LeagueTier;
+  name: string;
+  icon: string;
+  minXp: number;
+  color: string;
+  badgeBg: string;
+  perk: string;
+  studentsCount: number;
+}
+
+export interface DailyQuest {
+  id: string;
+  title: string;
+  description: string;
+  xp: number;
+  coins: number;
+  icon: string;
+}
+
+export interface LeagueOverviewResponse {
+  season: {
+    id: string;
+    title: string;
+    daysRemaining: number;
+    totalDays: number;
+    promotionZonePct: number;
+    relegationZonePct: number;
+  };
+  leagues: LeagueItem[];
+  dailyQuests: DailyQuest[];
+  myLeague?: {
+    tier: LeagueTier;
+    xp: number;
+    coins: number;
+    level: number;
+  } | null;
+}
+
+
 interface StudentStats {
   xp: number;
   coins: number;
@@ -35,6 +124,9 @@ interface StudentStats {
   rankTotal: number;
   streak?: number;
   lastCheckIn?: string;
+  league?: LeagueTier;
+  zone?: LeagueZone;
+  seasonDaysRemaining?: number;
 }
 
 interface LeaderboardEntry {
@@ -47,6 +139,8 @@ interface LeaderboardEntry {
   xp: number;
   coins: number;
   level: number;
+  league?: LeagueTier;
+  zone?: LeagueZone;
 }
 
 interface RewardItem {
@@ -675,7 +769,8 @@ export function GamificationHubPage() {
   const { push } = useToast();
   const queryClient = useQueryClient();
   const { playTick, playPop, playSuccess, playError } = usePremiumSound();
-  const [activeTab, setActiveTab] = useState<'leaderboard' | 'store'>('leaderboard');
+  const [activeTab, setActiveTab] = useState<'leaderboard' | 'leagues' | 'store'>('leaderboard');
+  const [selectedLeagueFilter, setSelectedLeagueFilter] = useState<LeagueTier | 'ALL'>('ALL');
   const [xpParticleTrigger, setXpParticleTrigger] = useState(0);
   const [confettiTrigger, setConfettiTrigger] = useState(0);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -692,13 +787,22 @@ export function GamificationHubPage() {
     queryFn: () => request('/gamification/leaderboard?limit=25'),
   });
 
+  const { data: leagueOverview } = useQuery<LeagueOverviewResponse>({
+    queryKey: ['gamification-leagues'],
+    queryFn: () => request('/gamification/leagues'),
+  });
+
   const { data: rewardsData, refetch: refetchRewards } = useQuery<{ items: RewardItem[] }>({
     queryKey: ['gamification-rewards'],
     queryFn: () => request('/gamification/rewards'),
   });
 
   const rewards = rewardsData?.items || [];
-  const leaderboard = leaderboardData?.items || [];
+  const rawLeaderboard = leaderboardData?.items || [];
+  const leaderboard = useMemo(() => {
+    if (selectedLeagueFilter === 'ALL') return rawLeaderboard;
+    return rawLeaderboard.filter((e) => e.league === selectedLeagueFilter);
+  }, [rawLeaderboard, selectedLeagueFilter]);
   const top3 = leaderboard.slice(0, 3);
   const rest = leaderboard.slice(3);
 
@@ -970,12 +1074,26 @@ export function GamificationHubPage() {
       <div className="flex items-center justify-center gap-2">
         <TabButton
           active={activeTab === 'leaderboard'}
-          onClick={() => setActiveTab('leaderboard')}
+          onClick={() => {
+            playTick();
+            setActiveTab('leaderboard');
+          }}
           icon="🏆"
           label="Reyting" />
         <TabButton
+          active={activeTab === 'leagues'}
+          onClick={() => {
+            playTick();
+            setActiveTab('leagues');
+          }}
+          icon="🛡️"
+          label="Ligalar & Mavsum" />
+        <TabButton
           active={activeTab === 'store'}
-          onClick={() => setActiveTab('store')}
+          onClick={() => {
+            playTick();
+            setActiveTab('store');
+          }}
           icon="🛍️"
           label="M-Coins Do'koni" />
       </div>
@@ -991,6 +1109,76 @@ export function GamificationHubPage() {
             transition={SPRING.smooth}
             className="space-y-6"
           >
+            {/* Season Status Bar */}
+            {leagueOverview?.season && (
+              <LiquidGlass radius="1.25rem" className="p-4 border border-indigo-500/20 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-lg shadow-md shadow-amber-500/20">
+                      🏆
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                          {leagueOverview.season.title}
+                        </span>
+                        <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-[10px] font-black text-indigo-600 dark:text-indigo-400">
+                          {leagueOverview.season.daysRemaining} kun qoldi
+                        </span>
+                      </div>
+                      <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+                        Top {leagueOverview.season.promotionZonePct}% yuqori ligaga ko‘tariladi • Pastki {leagueOverview.season.relegationZonePct}% tushish xavfida
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                    <span>Mavsum yakuni: oy oxiri</span>
+                  </div>
+                </div>
+              </LiquidGlass>
+            )}
+
+            {/* League Filter Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  playTick();
+                  setSelectedLeagueFilter('ALL');
+                }}
+                className={`min-h-[36px] rounded-xl px-3 py-1.5 font-bold transition-all ${
+                  selectedLeagueFilter === 'ALL'
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                    : 'bg-black/[0.04] dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 hover:bg-black/[0.08]'
+                }`}
+              >
+                Barchasi ({rawLeaderboard.length})
+              </button>
+              {(['DIAMOND', 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE'] as LeagueTier[]).map((tier) => {
+                const conf = LEAGUE_CONFIG[tier];
+                const count = rawLeaderboard.filter((e) => e.league === tier).length;
+                return (
+                  <button
+                    key={tier}
+                    type="button"
+                    onClick={() => {
+                      playTick();
+                      setSelectedLeagueFilter(tier);
+                    }}
+                    className={`min-h-[36px] inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-bold transition-all ${
+                      selectedLeagueFilter === tier
+                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                        : 'bg-black/[0.04] dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 hover:bg-black/[0.08]'
+                    }`}
+                  >
+                    <span>{conf.icon}</span>
+                    <span>{conf.name.split(' ')[0]}</span>
+                    <span className="text-[10px] opacity-60">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
             {/* Podium */}
             {top3.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 pb-2 items-end">
@@ -1033,6 +1221,139 @@ export function GamificationHubPage() {
                 )}
               </div>
             </LiquidGlass>
+          </motion.div>
+        )}
+
+
+        {/* ═══════════ TAB: LEAGUES & QUESTS ═══════════ */}
+        {activeTab === 'leagues' && (
+          <motion.div
+            key="leagues"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={SPRING.smooth}
+            className="space-y-6"
+          >
+            {/* Season Progression Header */}
+            <LiquidGlass radius="1.5rem" className="p-6 border border-indigo-500/20 bg-gradient-to-br from-indigo-950/20 via-surface-900/40 to-purple-950/20">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400">
+                    Oylik Liga Tizimi
+                  </span>
+                  <h3 className="mt-1 text-2xl font-black text-slate-900 dark:text-white">
+                    {leagueOverview?.season.title || "2026-yil Mavsumi"}
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                    Har bir to‘plangan XP sizni yuqori ligaga va nufuzli mukofotlarga yaqinlashtiradi.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-center">
+                  <div className="text-2xl font-black text-indigo-600 dark:text-indigo-300 tabular-nums">
+                    {leagueOverview?.season.daysRemaining || 5} kun
+                  </div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Mavsum tugashiga
+                  </div>
+                </div>
+              </div>
+            </LiquidGlass>
+
+            {/* League Tiers Ladder */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 px-1">
+                Ligalarning 5 Bosqichi
+              </h4>
+              <div className="grid grid-cols-1 gap-3">
+                {leagueOverview?.leagues.map((lg) => {
+                  const isCurrent = myStats?.league === lg.tier;
+                  return (
+                    <LiquidGlass
+                      key={lg.tier}
+                      radius="1.25rem"
+                      className={`p-4 border transition-all ${
+                        isCurrent
+                          ? 'border-indigo-500 shadow-lg shadow-indigo-500/10 ring-2 ring-indigo-500/30'
+                          : 'border-slate-200/80 dark:border-white/[0.08]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3.5">
+                          <div
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-sm"
+                            style={{ backgroundColor: lg.badgeBg }}
+                          >
+                            {lg.icon}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-base font-black text-slate-900 dark:text-white">
+                                {lg.name}
+                              </span>
+                              {isCurrent && (
+                                <span className="rounded-full bg-indigo-600 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
+                                  Sizning Ligangiz
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                              {lg.perk}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <div className="text-sm font-black text-slate-900 dark:text-white tabular-nums">
+                            {lg.minXp === 0 ? '0+' : `${lg.minXp}+ XP`}
+                          </div>
+                          <div className="text-[10px] font-bold text-slate-400">
+                            {lg.studentsCount} nafar talaba
+                          </div>
+                        </div>
+                      </div>
+                    </LiquidGlass>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Daily Quests Section */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 px-1">
+                Kunlik O‘quv Missiyalari (Quests)
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {leagueOverview?.dailyQuests.map((q) => (
+                  <LiquidGlass key={q.id} radius="1.25rem" className="p-4 border border-slate-200/80 dark:border-white/[0.08] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-2xl">{q.icon}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="rounded-lg bg-indigo-500/15 px-2 py-0.5 text-[10px] font-black text-indigo-600 dark:text-indigo-400">
+                            +{q.xp} XP
+                          </span>
+                          <span className="rounded-lg bg-amber-500/15 px-2 py-0.5 text-[10px] font-black text-amber-600 dark:text-amber-400">
+                            +{q.coins} 🪙
+                          </span>
+                        </div>
+                      </div>
+                      <h5 className="text-xs font-bold text-slate-900 dark:text-white">
+                        {q.title}
+                      </h5>
+                      <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                        {q.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-black/[0.05] dark:border-white/[0.06] flex items-center justify-between text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                      <span>✓ Avtomatik qayd etiladi</span>
+                    </div>
+                  </LiquidGlass>
+                ))}
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -1204,6 +1525,27 @@ function LeaderRow({ entry, rank, index, onOpenSidecar }: { entry: LeaderboardEn
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {entry.league && (
+          <span
+            className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider"
+            style={{
+              backgroundColor: LEAGUE_CONFIG[entry.league]?.badgeBg || 'rgba(0,0,0,0.05)',
+              color: LEAGUE_CONFIG[entry.league]?.color || '#6366F1',
+            }}
+          >
+            <span>{LEAGUE_CONFIG[entry.league]?.icon}</span>
+            <span className="hidden sm:inline">{LEAGUE_CONFIG[entry.league]?.name.split(' ')[0]}</span>
+          </span>
+        )}
+        {entry.zone === 'PROMOTION' ? (
+          <span className="hidden sm:inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-black text-emerald-600 dark:text-emerald-400" title="Ko‘tarilish zonasi">
+            <span>⬆️</span>
+          </span>
+        ) : entry.zone === 'RELEGATION' ? (
+          <span className="hidden sm:inline-flex items-center gap-1 rounded-md bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-black text-rose-600 dark:text-rose-400" title="Tushish xavfi">
+            <span>⚠️</span>
+          </span>
+        ) : null}
         <span className="text-[12px] font-bold tabular-nums text-[#1D1D1F] dark:text-white">
           {entry.xp} XP
         </span>

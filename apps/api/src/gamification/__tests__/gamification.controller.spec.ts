@@ -11,6 +11,7 @@ describe('GamificationController', () => {
     getMyStats: ReturnType<typeof vi.fn>;
     getRecentEvents: ReturnType<typeof vi.fn>;
     getOrgStats: ReturnType<typeof vi.fn>;
+    getLeagueOverview: ReturnType<typeof vi.fn>;
   };
   let prisma: {
     student: {
@@ -24,6 +25,7 @@ describe('GamificationController', () => {
       getMyStats: vi.fn(),
       getRecentEvents: vi.fn(),
       getOrgStats: vi.fn(),
+      getLeagueOverview: vi.fn(),
     };
     prisma = {
       student: {
@@ -136,4 +138,25 @@ describe('GamificationController', () => {
       expect(result).toEqual(mockOrgStats);
     });
   });
+
+  describe('getLeagueOverview', () => {
+    it('resolves student and delegates to service.getLeagueOverview', async () => {
+      prisma.student.findFirst.mockResolvedValue({ id: 's1' });
+      const mockOverview = {
+        season: { title: '2026-yil Oktyabr Mavsumi' },
+        leagues: [],
+      };
+      service.getLeagueOverview.mockResolvedValue(mockOverview);
+
+      const result = await controller.getLeagueOverview('org-1', 'user-1');
+
+      expect(prisma.student.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'user-1', organizationId: 'org-1' },
+        select: { id: true },
+      });
+      expect(service.getLeagueOverview).toHaveBeenCalledWith('org-1', 's1');
+      expect(result).toEqual(mockOverview);
+    });
+  });
+
 });
