@@ -18,6 +18,7 @@ import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { faceApi, groupsApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
 import { useToasts, GlassSelect } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { WebcamCapture } from '@/components/WebcamCapture';
 import { formatDateTime } from '@/lib/format';
 import { friendlyFaceError } from '@/lib/faceErrors';
@@ -842,6 +843,7 @@ export function FaceRecognitionPage() {
       animate="visible"
       className="page-container relative isolate space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
+      <AuroraMesh variant="security" opacity={0.7} />
       {toastNode}
 
       {/* ══════════════════════════════════════════════════════════════════

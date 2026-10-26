@@ -811,6 +811,9 @@ const en = {
   'templates.editHint': 'Edit certificate template',
   'templates.previewTitle': 'Template preview',
   'templates.variables': 'Available variables',
+  'payroll.smartKpiApplied': 'Smart KPI salary and bonus applied successfully',
+  'payroll.loadingKpi': 'Analyzing live teacher attendance, retention and assessment metrics...',
+  'payroll.kpiError': 'Failed to load KPI metrics',
 };
 
 import { legacyEn } from './legacy-slices';

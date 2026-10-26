@@ -30,6 +30,7 @@ import {
   ConfirmDialog,
   FloatingActionIsland,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
@@ -1154,6 +1155,7 @@ export function CoursesPage() {
   ─────────────────────────────────────────────────────────────── */
   return (
     <div style={{ display: 'contents' }}>
+      <AuroraMesh variant="corporate" opacity={0.65} />
       <motion.div
         variants={containerVariants}
         initial="hidden"

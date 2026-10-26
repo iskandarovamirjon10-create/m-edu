@@ -781,7 +781,9 @@ const uz = {
   'templates.editHint': 'Sertifikat shablonini tahrirlash',
   'templates.previewTitle': 'Shablon koʻrinishi',
   'templates.variables': 'Mavjud oʻzgaruvchilar',
-
+  'payroll.smartKpiApplied': 'Smart KPI maoshi va bonusi muvaffaqiyatli hisoblandi',
+  'payroll.loadingKpi': "O'qituvchining jonli davomat, retention va test ko'rsatkichlari tahlil qilinmoqda...",
+  'payroll.kpiError': "KPI ma'lumotlarini yuklashda xatolik yuz berdi",
 };
 
 import { legacyUz } from './legacy-slices.uz';

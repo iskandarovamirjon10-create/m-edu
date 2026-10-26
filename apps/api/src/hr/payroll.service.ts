@@ -761,7 +761,9 @@ export class PayrollService {
 
     // 5. Base Salary Resolution for Bonus Scaling
     const salaryType = (teacher.salaryType || 'MONTHLY') as 'MONTHLY' | 'HOURLY' | 'PER_LESSON';
-    let estimatedBase = 4_000_000;
+    let estimatedBase = (teacher as { baseSalary?: unknown }).baseSalary
+      ? Number((teacher as { baseSalary?: unknown }).baseSalary)
+      : 4_000_000;
     if (salaryType === 'HOURLY' && teacher.hourlyRate) {
       estimatedBase = Number(teacher.hourlyRate) * (hoursWorked || 20);
     } else if (salaryType === 'PER_LESSON' && teacher.lessonRate) {

@@ -23,6 +23,7 @@ import {
   GlassInput,
   GlassCard,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { useAuth } from '@/auth/AuthContext';
 import { fullName, formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -1405,6 +1406,7 @@ export function StudentDetailPage() {
       animate="visible"
       className="page-container space-y-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))]"
     >
+      <AuroraMesh variant="corporate" opacity={0.65} />
       {/* ══════════════════════════════════════════════════════════════════
           1 · HERO SPATIAL IDENTITY CARD
       ══════════════════════════════════════════════════════════════════ */}

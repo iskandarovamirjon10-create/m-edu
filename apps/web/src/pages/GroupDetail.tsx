@@ -22,6 +22,7 @@ import {
   GlassErrorState,
   GlassButton,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { fullName, formatDate, formatTime } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Group, GroupSchedule } from '@/lib/types';
@@ -809,6 +810,7 @@ export function GroupDetailPage() {
       animate="visible"
       className="page-container space-y-6 pb-[max(2rem,env(safe-area-inset-bottom))]"
     >
+      <AuroraMesh variant="corporate" opacity={0.65} />
       {/* ============================================================
           BREADCRUMBS & TOP NAV (WCAG 2.2 AA SC 2.5.8 >= 44x44px)
       ============================================================ */}

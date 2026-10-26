@@ -34,6 +34,7 @@ import {
   useToasts,
   ConfirmDialog,
 } from '@/components/ui';
+import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { fullName } from '@/lib/format';
@@ -1138,6 +1139,7 @@ export function GroupsPage() {
       animate="visible"
       className="page-container space-y-5"
     >
+      <AuroraMesh variant="corporate" opacity={0.65} />
       {toastNode}
 
       {/* ============================================================
