@@ -1191,6 +1191,18 @@ const PwaUpdateNotification = memo(function PwaUpdateNotification() {
 
 function RoutedAuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleNavigate = (e: Event) => {
+      const path = (e as CustomEvent<{ path: string }>)?.detail?.path;
+      if (path && typeof path === 'string') {
+        navigate(path);
+      }
+    };
+    window.addEventListener('medu:navigate', handleNavigate);
+    return () => window.removeEventListener('medu:navigate', handleNavigate);
+  }, [navigate]);
+
   return <AuthProvider navigate={navigate}>{children}</AuthProvider>;
 }
 

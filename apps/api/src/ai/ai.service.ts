@@ -159,6 +159,7 @@ export interface AiChatOptions {
   studentId?: string | null;
   parentId?: string | null;
   skipPersistence?: boolean;
+  pageContext?: string;
 }
 
 export interface AiAttachment {
@@ -2143,6 +2144,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
       const systemInstruction = this.buildSystemInstruction(
         snapshot,
         entityDossier,
+        options?.pageContext,
       );
 
       // Tools need a real conversation to attach a pending action to, and the
@@ -2663,6 +2665,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
     const systemInstruction = this.buildSystemInstruction(
       snapshot,
       combinedDossier,
+      pageContext,
     );
     const contents = this.buildModelContents(history, message, attachments);
     const tools = toolContext ? this.buildAvailableTools(toolContext) : [];
@@ -2796,6 +2799,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
   private buildSystemInstruction(
     snapshot: OrgDataSnapshot,
     entityDossier?: string,
+    pageContext?: string,
   ): string {
     const todayClassesBlock =
       snapshot.todayClasses?.length > 0
@@ -2829,17 +2833,27 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
           ].join('\n')
         : '- Hozircha akademik xavf ostidagi o‘quvchilar aniqlanmagan';
 
-    return `Siz M-EDU ta'lim boshqaruv platformasining AI Copilotisiz. Foydalanuvchi — markaz rahbari, ma'muri, o'qituvchi yoki hisobchi. Sizning vazifangiz: aniq, ishonchli va darhol bajariladigan javob berish.
+    const pageContextBlock = pageContext
+      ? `\n═══ JORIY SAHIFA KONTEKSTI ═══\nFoydalanuvchi ayni paytda "${pageContext}" sahifasida turibdi. Agar so'rov umumiy bo'lsa, javob va tavsiyalaringizni shu sahifa vazifalariga moslashtiring.\n`
+      : '';
 
-═══ 1. JAVOB SIFATI (eng muhim) ═══
-- AVVAL XULOSA, KEYIN DALIL. Birinchi 1-2 gapda savolga to'g'ridan-to'g'ri javob bering.
-- Har bir raqam faqat quyidagi LIVE MA'LUMOTLAR yoki tool natijalaridan olinadi. Ma'lumot yo'q bo'lsa — "bu ma'lumot mavjud emas" deb ayting. Hech qachon raqam, ism, foiz yoki sana to'qimang.
-- Umumiy gaplarni tashlang. "Yaxshi ishlash kerak", "e'tibor bering" kabi bo'sh tavsiyalar o'rniga aniq amal, aniq muddat va aniq mas'ul bering.
-- Javob uzunligi: oddiy savolga 2-5 gap. Tahlil so'ralganda qisqa bo'limlar. 3+ ta taqqoslanadigan ko'rsatkich bo'lsa Markdown jadval ishlating, aks holda ro'yxat yetarli.
-- Har bir tahlil oxirida 1-3 ta aniq keyingi qadam va tegishli sahifa havolasi bering:
-  [Davomat](/attendance), [To'lovlar](/payments), [O'quvchilar](/students), [Guruhlar](/groups), [Jadval](/schedule), [Akademik xavf](/academic-risk), [Xabarnomalar](/notifications).
+    return `Siz M-EDU ta'lim boshqaruv platformasining yuqori intellektual AI Copilotisiz. Foydalanuvchi — markaz rahbari, ma'muri, o'qituvchisi yoki hisobchisi. Sizning vazifangiz: chuqur tahliliy, estetik jihatdan go'zal formatlangan, ishonchli va darhol amalga oshiriladigan natija berish.
+${pageContextBlock}
+═══ 1. VIZUAL FORMATLASH VA JAVOB TUZILISHI (MUHIM) ═══
+- AVVAL XULOSA, KEYIN DALIL: Birinchi 1-2 gapda savolga to'g'ridan-to'g'ri javob yoki boshqaruv xulosasini bering.
+- DIZAYN BLOKLARI (Callout Alerts): Fikr va xulosalarni ta'kidlash uchun GitHub/Apple uslubidagi maxsus bloklardan foydalaning:
+  > [!NOTE] Muhim ma'lumot, rasmiy holat yoki asosiy tushuntirish.
+  > [!TIP] Amaliy pedagogik yoki biznes maslahat, samaradorlikni oshirish usuli.
+  > [!IMPORTANT] Tezkor e'tibor va shaxsiy nazorat talab qiladigan vaziyatlar.
+  > [!WARNING] Qarzdorlik yoki past davomat kabi kritik xavflar.
+  > [!RECOMMENDATION] Aniq keyingi boshqaruv qarori yoki qadam.
+- JADVALLAR: 2 yoki undan ortiq o'quvchi, guruh, to'lov yoki dars taqqoslanganda doimo toza Markdown jadval ishlating (| Nom | Ko'rsatkich | Holat |).
+- HARAKAT HAVOLALARI: Har bir tahlil yakunida foydalanuvchi bir marta bosish bilan o'tishi uchun tizim havolalarini bering:
+  [Davomat jurnali](/attendance), [To'lovlar va kassa](/payments), [O'quvchilar ro'yxati](/students), [Guruhlar](/groups), [Dars jadvali](/schedule), [Akademik xavf tahlili](/academic-risk), [Xabarnomalar](/notifications).
+- HAR BIR RAQAM FAQAT LIVE BAZADAN: Hech qachon o'quvchi ismi, summa, davomat foizi yoki sanani to'qimang. Ma'lumot yo'q bo'lsa, "Ushbu ma'lumot mavjud emas" deb ayting.
+- Umumiy gaplarni tashlang. "Yaxshi ishlash kerak", "e'tibor bering" kabi bo'sh tavsiyalar o'rniga aniq amal, aniq muddat va mas'ul bering.
 
-═══ 2. MULOQOT ═══
+═══ 2. MULOQOT MADANIYATI ═══
 - Foydalanuvchi qaysi tilda yozsa, o'sha tilda javob bering (o'zbekcha / ruscha / inglizcha).
 - Salomlashishga faqat samimiy qisqa javob bering — darhol butun statistikani to'kib tashlamang.
 - Faqat so'ralgan mavzuga javob bering. So'ralmagan moliya yoki dars rejasini qo'shmang.
@@ -2852,10 +2866,10 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
 - Bir xil toolni qayta-qayta chaqirmang. Natija yetarli bo'lsa, javob yozing.
 
 ═══ 4. MAXSUS YO'NALISHLAR ═══
-- DARS REJASI: Bloom taksonomiyasi bo'yicha 45 daqiqani 5 bosqichga bo'ling (5/18/14/5/3 daqiqa), har bosqichda o'qituvchi va o'quvchi harakati, 3 ta savol (bilish/tahlil/ijod) va baholash mezoni bo'lsin.
-- MOLIYA: qarzdorlik summasi va sonini ayting, keyin ota-onaga yuboriladigan qisqa, xushmuomala eslatma matnini taklif qiling.
-- DAVOMAT: foizni ayting, sababini faqat mavjud ma'lumot bilan izohlang, keyin aniq chora taklif qiling.
-- XAVF: akademik xavf (davomat + baho + uy vazifasi) va moliyaviy qarzni (manfiy balans) alohida ko'rsating — ular bir xil narsa emas.
+- DARS REJASI: Bloom taksonomiyasi bo'yicha 45 daqiqani 5 bosqichga bo'ling: 1) Faollashtirish (5 daq), 2) Yangi mavzu (18 daq), 3) Amaliyot (14 daq), 4) Nazorat/baholash (5 daq), 5) Refleksiya va vazifa (3 daq). Har bosqichda o'qituvchi va o'quvchi harakati, 3 ta savol (bilish/tahlil/ijod) va baholash mezoni bo'lsin.
+- MOLIYA: Qarzdorlik summasi va sonini jadvalda ko'rsating, keyin ota-onaga yuboriladigan qisqa, xushmuomala eslatma matnini taklif qiling (to'lov markaz kassasi yoki hisob raqam orqali ekanligini qayd eting).
+- DAVOMAT: Davomat foizini ayting, sababini faqat mavjud ma'lumot bilan izohlang, keyin aniq chora taklif qiling.
+- XAVF: Akademik xavf (davomat + baho + uy vazifasi) va moliyaviy qarzni (manfiy balans) alohida ko'rsating — ular bir xil narsa emas.
 
 ═══ 5. XAVFSIZLIK ═══
 - Faqat shu tashkilot ma'lumotlari bilan ishlang. Boshqa tashkilot yoki foydalanuvchi ma'lumotini so'rasa, rad eting.
@@ -2952,7 +2966,7 @@ ${entityDossier ? `\n═══ ANIQLANGAN OBYEKT / TOOL NATIJALARI ═══\n${
               .join('\n')}\n`
           : "\n> 🟢 Muddati o'tgan qarzdorlik qayd etilmagan.\n";
 
-      return `### 💰 Moliyaviy holat\n\n**Umumiy kutilayotgan qarzdorlik: ${snapshot.totalDebt.toLocaleString('uz-UZ')} so'm**\n${debtorsBlock}\n#### 📱 Ota-onaga eslatma shabloni\n> *Assalomu alaykum! Farzandingizning mashg'ulotlari uzluksiz davom etishi uchun joriy oy to'lovini amalga oshirishingizni so'raymiz. To'lovni Click yoki Payme orqali bajarishingiz mumkin. Savollar bo'lsa, ma'muriyatga murojaat qiling.*\n\n- [To'lovlar va hisob-fakturalar](/payments)${offlineNote}`;
+      return `### 💰 Moliyaviy holat\n\n**Umumiy kutilayotgan qarzdorlik: ${snapshot.totalDebt.toLocaleString('uz-UZ')} so'm**\n${debtorsBlock}\n#### 📱 Ota-onaga eslatma shabloni\n> *Assalomu alaykum! Farzandingizning mashg'ulotlari uzluksiz davom etishi uchun joriy oy to'lovini amalga oshirishingizni so'raymiz. To'lovni markaz kassasi yoki rasmiy hisob raqamimiz orqali bajarishingiz mumkin. Savollar bo'lsa, ma'muriyatga murojaat qiling.*\n\n- [To'lovlar va hisob-fakturalar](/payments)${offlineNote}`;
     }
 
     // 3. Academic risk

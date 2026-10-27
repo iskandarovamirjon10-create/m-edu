@@ -8,7 +8,18 @@
  *   - Mobile touch-friendly selection with accessibility (`role="listbox"`).
  */
 import { useEffect, useRef } from 'react';
-import { BarChart3, CreditCard, Calendar, Users, FileText } from 'lucide-react';
+import {
+  BarChart3,
+  CreditCard,
+  Calendar,
+  Users,
+  FileText,
+  AlertTriangle,
+  BookOpen,
+  MessageSquare,
+  HelpCircle,
+  TrendingUp,
+} from 'lucide-react';
 import { cn } from '@/lib/design';
 
 export interface SlashCommand {
@@ -56,10 +67,53 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     hasArg: true,
   },
   {
+    id: 'risk',
+    command: '/xavf',
+    title: 'Akademik Xavf Tahlili',
+    description: 'Orqada qolayotgan va xavf guruhidagi talabalar roʻyxati',
+    icon: AlertTriangle,
+    prompt: 'Akademik xavf ostidagi oʻquvchilar tahlilini koʻrsat',
+  },
+  {
+    id: 'lesson-plan',
+    command: '/dars-rejasi',
+    title: 'Dars Rejasi (Bloom)',
+    description: 'Bloom taksonomiyasi boʻyicha 5 bosqichli 45 daqiqalik dars konspekti',
+    icon: BookOpen,
+    prompt: 'Quyidagi mavzu boʻyicha 45 daqiqalik dars rejasi tuzib ber: ',
+    hasArg: true,
+  },
+  {
+    id: 'parent-message',
+    command: '/ota-ona',
+    title: 'Ota-onaga Xabar',
+    description: 'Ota-ona uchun muloyim va rasmiy SMS/xabar loyihasi',
+    icon: MessageSquare,
+    prompt: 'Ota-onaga yuborish uchun muloyim va rasmiy xabar qoralamasini tayyorla: ',
+    hasArg: true,
+  },
+  {
+    id: 'quiz',
+    command: '/test',
+    title: 'Test / Mini-Viktorina',
+    description: 'Mavzu boʻyicha 5 ta test savoli, javoblar va baholash mezonlari',
+    icon: HelpCircle,
+    prompt: 'Quyidagi mavzu boʻyicha toʻgʻri javoblari va baholash mezonlari bilan 5 ta test savoli tuz: ',
+    hasArg: true,
+  },
+  {
+    id: 'finance',
+    command: '/moliya',
+    title: 'Moliyaviy Koʻrsatkichlar',
+    description: 'Oylik tushum, kutilayotgan toʻlovlar va kassa holati',
+    icon: TrendingUp,
+    prompt: 'Markazning joriy moliyaviy koʻrsatkichlari va tushumlar dinamikasini koʻrsat',
+  },
+  {
     id: 'summary',
     command: '/xulosa',
     title: 'Muloqot Xulosasi',
-    description: 'Ushbu suhbat boʻyicha rasmiy boshqaruv xulosasi',
+    description: 'Ushbu suhbat boʻyicha rasmiy boshqaruv xulosasi va topshiriqlar',
     icon: FileText,
     prompt: 'Ushbu suhbat boʻyicha asosiy xulosa va ijro topshiriqlarini tayyorla',
   },

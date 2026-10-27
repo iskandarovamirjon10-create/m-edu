@@ -1,28 +1,34 @@
 /**
- * MarkdownContent — Premium Edition
+ * MarkdownContent — Premium Edition v2 (Spatial Glass & Callouts)
  *
  * Safe, HTML-free markdown renderer for AI replies.
  *
  * Craft:
  *  - Suite-consistent tokens (--ai-*) throughout
+ *  - Callout alerts: [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION], [!RECOMMENDATION], [!SUCCESS]
  *  - Refined typography scale (15px base, 1.7 line-height, tracking-tight)
  *  - Premium code blocks: subtle inset highlight + monospace + copy-friendly
  *  - Premium inline code: soft chip with hairline border
  *  - Premium tables: hairline borders, alternating rows, uppercase header
  *  - Premium lists: custom bullets, tight nesting, generous spacing
- *  - Premium blockquotes: thick left accent, italic, muted
- *  - Links: primary color, subtle underline offset, animated on hover
+ *  - Internal Links: instant SPA routing via 'medu:navigate' event (no full-page reloads)
  *
  * Everything is rendered as React elements: no `dangerouslySetInnerHTML`,
- * no HTML strings, therefore no script/style injection is possible. Link
- * targets are restricted to http(s)/mailto/relative URLs so `javascript:`
- * and friends never reach an `href`.
- *
- * ✅ ALL parsing logic preserved — only presentation changed.
+ * no HTML strings, therefore no script/style injection is possible.
  */
 
 import { useMemo, useState, useCallback, type ReactNode } from 'react';
-import { Check, Copy, Terminal } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  Terminal,
+  Info,
+  Lightbulb,
+  AlertTriangle,
+  AlertOctagon,
+  Sparkles,
+  CheckCircle2,
+} from 'lucide-react';
 
 /* ----------------------------- inline ----------------------------- */
 
@@ -55,16 +61,17 @@ export const ALLOWED_INTERNAL_PREFIXES = [
   '/inventory',
   '/tasks',
   '/homework',
+  '/academic-risk',
+  '/notifications',
+  '/teacher-cockpit',
+  '/ai-copilot',
 ] as const;
 
 export function isSafeInternalRoute(path: string): boolean {
   const trimmed = path.trim();
   if (!trimmed.startsWith('/')) return false;
-  // Disallow protocol relative // or backslashes
   if (trimmed.startsWith('//') || trimmed.includes('\\')) return false;
-  // Disallow directory traversal
   if (trimmed.includes('..')) return false;
-  // Disallow javascript/data pseudos inside path
   if (trimmed.toLowerCase().includes('javascript:') || trimmed.toLowerCase().includes('data:')) return false;
 
   return ALLOWED_INTERNAL_PREFIXES.some(
@@ -112,7 +119,6 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
     const [raw, code, bold, italicStar, italicUnderscore, link, strike] = match;
 
     if (code) {
-      /* ── Inline code: soft chip, hairline, subtle inset ── */
       nodes.push(
         <code
           key={key}
@@ -131,7 +137,7 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
       nodes.push(
         <strong
           key={key}
-          className="font-semibold tracking-[-0.005em]"
+          className="font-bold tracking-[-0.005em]"
           style={{ color: 'var(--ai-text-primary, #1D1D1F)' }}
         >
           {renderInline(bold.slice(2, -2), `${key}b`)}
@@ -158,20 +164,26 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
           <a
             key={key}
             href={href}
+            onClick={
+              isInternal
+                ? (e) => {
+                    if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.button === 0) {
+                      e.preventDefault();
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(
+                          new CustomEvent('medu:navigate', { detail: { path: href } })
+                        );
+                      }
+                    }
+                  }
+                : undefined
+            }
             target={isInternal ? undefined : '_blank'}
             rel={isInternal ? undefined : 'noopener noreferrer nofollow'}
-            className="font-medium underline underline-offset-[3px] decoration-[1px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]/40 rounded-sm"
+            className="inline-flex items-center gap-0.5 font-semibold underline underline-offset-[3px] decoration-[1.5px] transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]/40 rounded-sm hover:opacity-90"
             style={{
               color: 'var(--ai-primary, #007AFF)',
-              textDecorationColor: 'color-mix(in srgb, var(--ai-primary, #007AFF) 35%, transparent)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.textDecorationColor =
-                'var(--ai-primary, #007AFF)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.textDecorationColor =
-                'color-mix(in srgb, var(--ai-primary, #007AFF) 35%, transparent)';
+              textDecorationColor: 'color-mix(in srgb, var(--ai-primary, #007AFF) 40%, transparent)',
             }}
           >
             {renderInline(label, `${key}a`)}
@@ -201,11 +213,21 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
 
 /* ------------------------------ blocks ---------------------------- */
 
+export type CalloutType =
+  | 'NOTE'
+  | 'TIP'
+  | 'IMPORTANT'
+  | 'WARNING'
+  | 'CAUTION'
+  | 'RECOMMENDATION'
+  | 'SUCCESS';
+
 type Block =
   | { kind: 'heading'; level: number; text: string }
   | { kind: 'paragraph'; text: string }
   | { kind: 'code'; code: string; lang?: string }
   | { kind: 'quote'; text: string }
+  | { kind: 'callout'; alertType: CalloutType; text: string }
   | { kind: 'hr' }
   | { kind: 'list'; ordered: boolean; items: ListItem[] }
   | { kind: 'table'; header: string[]; rows: string[][] };
@@ -302,7 +324,30 @@ function parseBlocks(source: string): Block[] {
         quote.push(lines[index].replace(/^\s*>\s?/, ''));
         index += 1;
       }
-      blocks.push({ kind: 'quote', text: quote.join('\n').trim() });
+      const rawText = quote.join('\n').trim();
+      const calloutMatch = rawText.match(
+        /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|RECOMMENDATION|SUCCESS|MUHIM|MASLAHAT|OGOHLANTIRISH|ESLATMA)\](?:\s*([^\n\r]*))?(?:\r?\n)?([\s\S]*)$/i
+      );
+
+      if (calloutMatch) {
+        const rawAlert = calloutMatch[1].toUpperCase();
+        let alertType: CalloutType = 'NOTE';
+        if (rawAlert === 'TIP' || rawAlert === 'MASLAHAT') alertType = 'TIP';
+        else if (rawAlert === 'RECOMMENDATION') alertType = 'RECOMMENDATION';
+        else if (rawAlert === 'IMPORTANT' || rawAlert === 'MUHIM') alertType = 'IMPORTANT';
+        else if (rawAlert === 'WARNING' || rawAlert === 'OGOHLANTIRISH') alertType = 'WARNING';
+        else if (rawAlert === 'CAUTION') alertType = 'CAUTION';
+        else if (rawAlert === 'SUCCESS') alertType = 'SUCCESS';
+        else alertType = 'NOTE';
+
+        const titleExtra = calloutMatch[2]?.trim();
+        const bodyText = calloutMatch[3]?.trim() || '';
+        const combinedText = titleExtra ? (bodyText ? `${titleExtra}\n${bodyText}` : titleExtra) : bodyText;
+
+        blocks.push({ kind: 'callout', alertType, text: combinedText });
+      } else {
+        blocks.push({ kind: 'quote', text: rawText });
+      }
       continue;
     }
 
@@ -532,6 +577,108 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   );
 }
 
+/* ----------------------------- Callout Block ---------------------- */
+
+const CALLOUT_CONFIG: Record<
+  CalloutType,
+  {
+    title: string;
+    fg: string;
+    bg: string;
+    border: string;
+    glow: string;
+    icon: (className?: string) => ReactNode;
+  }
+> = {
+  NOTE: {
+    title: 'Eslatma',
+    fg: '#007AFF',
+    bg: 'rgba(0, 122, 255, 0.08)',
+    border: 'rgba(0, 122, 255, 0.25)',
+    glow: 'rgba(0, 122, 255, 0.20)',
+    icon: (c = 'h-4 w-4') => <Info className={c} strokeWidth={2.2} />,
+  },
+  TIP: {
+    title: 'Maslahat va Tavsiya',
+    fg: '#D97706',
+    bg: 'rgba(217, 119, 6, 0.08)',
+    border: 'rgba(217, 119, 6, 0.25)',
+    glow: 'rgba(217, 119, 6, 0.20)',
+    icon: (c = 'h-4 w-4') => <Lightbulb className={c} strokeWidth={2.2} />,
+  },
+  RECOMMENDATION: {
+    title: 'Boshqaruv Qarori',
+    fg: '#6366F1',
+    bg: 'rgba(99, 102, 241, 0.08)',
+    border: 'rgba(99, 102, 241, 0.25)',
+    glow: 'rgba(99, 102, 241, 0.20)',
+    icon: (c = 'h-4 w-4') => <Sparkles className={c} strokeWidth={2.2} />,
+  },
+  IMPORTANT: {
+    title: "Muhim E'tibor",
+    fg: '#8B5CF6',
+    bg: 'rgba(139, 92, 246, 0.08)',
+    border: 'rgba(139, 92, 246, 0.25)',
+    glow: 'rgba(139, 92, 246, 0.20)',
+    icon: (c = 'h-4 w-4') => <Sparkles className={c} strokeWidth={2.2} />,
+  },
+  WARNING: {
+    title: 'Ogohlantirish',
+    fg: '#EA580C',
+    bg: 'rgba(234, 88, 12, 0.08)',
+    border: 'rgba(234, 88, 12, 0.25)',
+    glow: 'rgba(234, 88, 12, 0.20)',
+    icon: (c = 'h-4 w-4') => <AlertTriangle className={c} strokeWidth={2.2} />,
+  },
+  CAUTION: {
+    title: 'Kritik Xavf',
+    fg: '#EF4444',
+    bg: 'rgba(239, 68, 68, 0.08)',
+    border: 'rgba(239, 68, 68, 0.25)',
+    glow: 'rgba(239, 68, 68, 0.20)',
+    icon: (c = 'h-4 w-4') => <AlertOctagon className={c} strokeWidth={2.2} />,
+  },
+  SUCCESS: {
+    title: 'Muvaffaqiyatli',
+    fg: '#10B981',
+    bg: 'rgba(16, 185, 129, 0.08)',
+    border: 'rgba(16, 185, 129, 0.25)',
+    glow: 'rgba(16, 185, 129, 0.20)',
+    icon: (c = 'h-4 w-4') => <CheckCircle2 className={c} strokeWidth={2.2} />,
+  },
+};
+
+function CalloutBlock({ alertType, text }: { alertType: CalloutType; text: string }) {
+  const cfg = CALLOUT_CONFIG[alertType] ?? CALLOUT_CONFIG.NOTE;
+
+  return (
+    <div
+      className="relative my-3.5 overflow-hidden rounded-2xl border p-3.5 sm:p-4 text-[13.5px] leading-relaxed shadow-sm transition-all"
+      style={{
+        background: cfg.bg,
+        borderColor: cfg.border,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 6px 20px -8px ${cfg.glow}`,
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+      }}
+    >
+      <div
+        className="flex items-center gap-2 mb-1.5 text-[11px] font-bold uppercase tracking-wider"
+        style={{ color: cfg.fg }}
+      >
+        <span className="shrink-0">{cfg.icon('h-4 w-4')}</span>
+        <span>{cfg.title}</span>
+      </div>
+      <div
+        className="text-[var(--ai-text-primary,#1D1D1F)] leading-[1.65]"
+        style={{ overflowWrap: 'anywhere' }}
+      >
+        {renderInline(text, `callout-${alertType}`)}
+      </div>
+    </div>
+  );
+}
+
 function renderBlock(block: Block, index: number): ReactNode {
   const key = `b${index}`;
 
@@ -573,6 +720,9 @@ function renderBlock(block: Block, index: number): ReactNode {
     case 'code':
       return <CodeBlock key={key} code={block.code} lang={block.lang} />;
 
+    case 'callout':
+      return <CalloutBlock key={key} alertType={block.alertType} text={block.text} />;
+
     case 'quote':
       return (
         <blockquote
@@ -580,7 +730,7 @@ function renderBlock(block: Block, index: number): ReactNode {
           className="my-3 rounded-r-lg py-1 pl-4 pr-3 text-[0.92rem] italic leading-[1.65]"
           style={{
             borderLeft: '3px solid var(--ai-primary, #007AFF)',
-            background: 'color-mix(in srgb, var(--ai-primary, #007AFF) 5%, transparent)',
+            background: 'color-mix(in srgb, var(--ai-primary, #007AFF) 6%, transparent)',
             color: 'var(--ai-text-muted, #86868B)',
           }}
         >
@@ -614,55 +764,33 @@ function renderBlock(block: Block, index: number): ReactNode {
       return (
         <div
           key={key}
-          className="my-3 overflow-x-auto rounded-xl"
-          style={{
-            border: '1px solid var(--ai-border, rgba(0,0,0,0.08))',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          }}
+          className="my-3.5 overflow-x-auto rounded-2xl border border-[var(--ai-border,rgba(0,0,0,0.08))] bg-[var(--ai-bg-glass,rgba(255,255,255,0.7))] shadow-sm backdrop-blur-md"
         >
           <table className="w-full border-collapse text-[0.875rem]">
             <thead>
-              <tr
-                style={{
-                  background: 'var(--ai-bg-hover, rgba(0,0,0,0.03))',
-                }}
-              >
+              <tr className="border-b border-[var(--ai-border,rgba(0,0,0,0.08))] bg-black/[0.03] dark:bg-white/[0.04]">
                 {block.header.map((cell, position) => (
                   <th
                     key={`${key}-h-${position}`}
-                    className="px-3.5 py-2.5 text-left text-[10.5px] font-bold uppercase tracking-[0.08em]"
-                    style={{
-                      borderBottom: '1px solid var(--ai-border, rgba(0,0,0,0.08))',
-                      color: 'var(--ai-text-muted, #86868B)',
-                    }}
+                    className="px-3.5 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-[var(--ai-text-muted,#86868B)]"
                   >
                     {renderInline(cell, `${key}-h-${position}`)}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[var(--ai-border,rgba(0,0,0,0.05))]">
               {block.rows.map((row, rowIndex) => (
                 <tr
                   key={`${key}-r-${rowIndex}`}
-                  style={{
-                    borderBottom:
-                      rowIndex < block.rows.length - 1
-                        ? '1px solid var(--ai-border-subtle, rgba(0,0,0,0.05))'
-                        : 'none',
-                    background:
-                      rowIndex % 2 === 1
-                        ? 'color-mix(in srgb, var(--ai-text-primary, #000) 2%, transparent)'
-                        : 'transparent',
-                  }}
+                  className="transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.03]"
                 >
-                  {row.map((cell, cellIndex) => (
+                  {row.map((cell, position) => (
                     <td
-                      key={`${key}-r-${rowIndex}-c-${cellIndex}`}
-                      className="px-3.5 py-2 align-top leading-[1.55] tracking-[-0.005em]"
-                      style={{ color: 'var(--ai-text-primary, #1D1D1F)' }}
+                      key={`${key}-c-${rowIndex}-${position}`}
+                      className="px-3.5 py-2.5 text-[13px] leading-relaxed text-[var(--ai-text-primary,#1D1D1F)]"
                     >
-                      {renderInline(cell, `${key}-r-${rowIndex}-c-${cellIndex}`)}
+                      {renderInline(cell, `${key}-c-${rowIndex}-${position}`)}
                     </td>
                   ))}
                 </tr>

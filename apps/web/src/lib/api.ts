@@ -588,10 +588,11 @@ export const telegramApi = {
 };
 
 export const aiApi = {
-  chat: (body: { message: string; history?: unknown[]; conversationId?: string; attachments?: unknown[]; model?: string }, options: RequestOptions = {}) =>
+  chat: (body: { message: string; history?: unknown[]; conversationId?: string; attachments?: unknown[]; model?: string; route?: string }, options: RequestOptions = {}) =>
     request<{ content: string; conversationId?: string; role?: string }>('/ai/chat', {
       method: 'POST',
       body: JSON.stringify(body),
+      headers: body.route ? { 'X-Page-Context': body.route.slice(0, 200) } : undefined,
       ...options,
     }),
   getExecutiveBriefing: (options: RequestOptions = {}) =>

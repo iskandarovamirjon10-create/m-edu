@@ -374,6 +374,7 @@ export async function aiChat(
       conversationId: options.conversationId as string | undefined,
       attachments,
       model: options.model,
+      route: options.route,
     },
     { signal: options.signal }
   );

@@ -85,6 +85,20 @@ describe('MarkdownContent rendering', () => {
     expect(stdLink).not.toHaveAttribute('target');
   });
 
+  it('renders callout alerts [!TIP], [!NOTE], [!WARNING] with styled callout cards', () => {
+    render(
+      <MarkdownContent
+        content={
+          "> [!TIP]\n> O'quvchilarga to'lov muddati bo'yicha bildirishnoma yuborish tavsiya etiladi.\n\n> [!NOTE]\n> Bugungi davomat to'liq qayd etildi."
+        }
+      />
+    );
+    expect(screen.getByText(/Maslahat va Tavsiya/i)).toBeInTheDocument();
+    expect(screen.getByText(/O'quvchilarga to'lov muddati bo'yicha bildirishnoma yuborish tavsiya etiladi/i)).toBeInTheDocument();
+    expect(screen.getByText('Eslatma')).toBeInTheDocument();
+    expect(screen.getByText(/Bugungi davomat to'liq qayd etildi/i)).toBeInTheDocument();
+  });
+
   it('rejects disallowed internal routes and traversal attempts', () => {
     const { container } = render(
       <MarkdownContent content="[Secret](/secret/admin) va [Traverse](/students/../../etc/passwd)" />

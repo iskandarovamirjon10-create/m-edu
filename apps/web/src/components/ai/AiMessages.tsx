@@ -997,6 +997,51 @@ export interface AiAssistantMessageProps {
   onStar?: (next: boolean) => void;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * ACTION CHIP EXTRACTION FOR DEEP SYSTEM INTEGRATION
+ * ─────────────────────────────────────────────────────────────────────── */
+
+interface ActionChip {
+  label: string;
+  path: string;
+  icon: string;
+}
+
+function getActionChipIcon(path: string): string {
+  if (path.startsWith('/attendance')) return '📋';
+  if (path.startsWith('/payments') || path.startsWith('/finance') || path.startsWith('/invoices')) return '💳';
+  if (path.startsWith('/students')) return '👥';
+  if (path.startsWith('/schedule')) return '📅';
+  if (path.startsWith('/academic-risk')) return '🚨';
+  if (path.startsWith('/groups')) return '🏫';
+  if (path.startsWith('/teachers')) return '👨‍🏫';
+  if (path.startsWith('/courses')) return '📚';
+  if (path.startsWith('/notifications')) return '📢';
+  if (path.startsWith('/analytics') || path.startsWith('/reports')) return '📊';
+  return '🔗';
+}
+
+function extractActionChips(content: string): ActionChip[] {
+  if (!content) return [];
+  const chips: ActionChip[] = [];
+  const linkRegex = /\[([^\]]+)\]\((\/[a-zA-Z0-9_\-/]+)\)/g;
+  let match: RegExpExecArray | null;
+  const seenPaths = new Set<string>();
+
+  while ((match = linkRegex.exec(content)) !== null) {
+    const [, label, path] = match;
+    if (!seenPaths.has(path)) {
+      seenPaths.add(path);
+      chips.push({
+        label,
+        path,
+        icon: getActionChipIcon(path),
+      });
+    }
+  }
+  return chips.slice(0, 4);
+}
+
 function AiAssistantMessageComponent({
   message, confirming, onConfirm, onReject, onDismissActionError,
   onRegenerate, streaming, compact, onQuote, starred, onStar,
@@ -1015,6 +1060,11 @@ function AiAssistantMessageComponent({
   const canShowActions = (hasContent || hasActivities) && !streaming;
   const tokenCount = useMemo(
     () => (hasContent ? estimateTokens(message.content) : 0),
+    [hasContent, message.content],
+  );
+
+  const actionChips = useMemo(
+    () => (hasContent ? extractActionChips(message.content) : []),
     [hasContent, message.content],
   );
 
@@ -1168,6 +1218,32 @@ function AiAssistantMessageComponent({
             <CollapsibleContent content={message.content}>
               <MarkdownContent content={message.content} className="mt-0.5" />
             </CollapsibleContent>
+
+            {actionChips.length > 0 && !streaming && (
+              <div className="mt-3 pt-2.5 border-t border-[var(--ai-border,rgba(0,0,0,0.06))] flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--ai-text-muted)] mr-1">
+                  Tezkor amallar:
+                </span>
+                {actionChips.map((chip) => (
+                  <button
+                    key={chip.path}
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(
+                          new CustomEvent('medu:navigate', { detail: { path: chip.path } })
+                        );
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11.5px] font-semibold transition-all border border-[var(--ai-border,rgba(0,0,0,0.08))] bg-white/70 dark:bg-white/10 hover:bg-white dark:hover:bg-white/20 hover:scale-[1.02] active:scale-[0.98] text-[var(--ai-primary)] shadow-sm"
+                  >
+                    <span className="text-[12px]">{chip.icon}</span>
+                    <span>{chip.label}</span>
+                    <span className="opacity-50 text-[10px]">→</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {streaming && (
               <span className="ml-1 inline-block align-baseline">

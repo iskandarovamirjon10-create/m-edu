@@ -478,6 +478,7 @@ export class AiController {
         {
           userRole: role,
           principalType: 'USER',
+          pageContext: this.sanitizePageContext(body.route, rawPageContext),
         },
       );
     } catch (e: unknown) {
