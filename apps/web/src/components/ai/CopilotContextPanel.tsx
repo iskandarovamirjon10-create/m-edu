@@ -10,8 +10,8 @@
  * Day/night: fully token driven. Mobile: rendered inside a bottom sheet.
  * ============================================================================
  */
-import type { ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, type ReactNode } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   IconAttendance,
@@ -248,8 +248,10 @@ export function CopilotContextPanel({
   className,
 }: CopilotContextPanelProps) {
   const { t } = useSafeI18n();
+  const queryClient = useQueryClient();
   const reduced = Boolean(useReducedMotion());
   const quickActions = useQuickActions(t);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
   const insightsQuery = useQuery({
     queryKey: ['ai', 'insights', routeContext],
@@ -257,6 +259,16 @@ export function CopilotContextPanel({
     enabled: AI_FLAGS.insights,
     staleTime: 60_000,
     retry: false,
+  });
+
+  const dismissMutation = useMutation({
+    mutationFn: (id: string) => aiInsightsApi.dismiss(id),
+    onMutate: (id: string) => {
+      setDismissedIds((prev) => new Set(prev).add(id));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai', 'insights'] });
+    },
   });
 
   const suggestionsQuery = useQuery({
@@ -268,7 +280,8 @@ export function CopilotContextPanel({
   });
 
   const routeModule = getActiveRouteModule(routeContext);
-  const insights = insightsQuery.data ?? [];
+  const rawInsights = insightsQuery.data ?? [];
+  const insights = rawInsights.filter((i) => !dismissedIds.has(i.id));
   const suggestions = suggestionsQuery.data ?? [];
 
   return (
@@ -402,7 +415,7 @@ export function CopilotContextPanel({
                 {insights.map((insight) => (
                   <li
                     key={insight.id}
-                    className="rounded-xl border border-[color:var(--cp-hairline)] bg-[color:var(--cp-surface-sunken)] p-2.5"
+                    className="rounded-xl border border-[color:var(--cp-hairline)] bg-[color:var(--cp-surface-sunken)] p-2.5 relative group"
                   >
                     <div className="flex items-start gap-2">
                       <span
@@ -416,15 +429,50 @@ export function CopilotContextPanel({
                           <p className="text-[11.5px] font-semibold text-[color:var(--cp-text)]">
                             {insight.title}
                           </p>
-                          {insight.metric ? (
-                            <span className="shrink-0 rounded-full bg-[color:var(--cp-surface-raised)] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[color:var(--cp-text-secondary)]">
-                              {insight.metric}
-                            </span>
-                          ) : null}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {insight.metric ? (
+                              <span className="rounded-full bg-[color:var(--cp-surface-raised)] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[color:var(--cp-text-secondary)]">
+                                {insight.metric}
+                              </span>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => dismissMutation.mutate(insight.id)}
+                              aria-label="Yashirish"
+                              title="Yashirish"
+                              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 rounded p-0.5 text-[color:var(--cp-text-quaternary)] hover:text-[color:var(--cp-text-secondary)] transition-opacity"
+                            >
+                              <IconClose size={11} />
+                            </button>
+                          </div>
                         </div>
                         <p className="mt-0.5 text-[10.5px] leading-relaxed text-[color:var(--cp-text-tertiary)]">
                           {insight.body}
                         </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          {insight.timeRange && (
+                            <span className="rounded bg-[color:var(--cp-surface-raised)] px-1.5 py-0.5 text-[9px] font-medium text-[color:var(--cp-text-tertiary)]">
+                              ⏱ {insight.timeRange}
+                            </span>
+                          )}
+                          {insight.calculationRule && (
+                            <span
+                              title={`Hisoblash qoidasi: ${insight.calculationRule}`}
+                              className="rounded bg-[color:var(--cp-surface-raised)] px-1.5 py-0.5 text-[9px] font-medium text-[color:var(--cp-text-quaternary)]"
+                            >
+                              ℹ️ Qoida: {insight.calculationRule}
+                            </span>
+                          )}
+                          {insight.actionRoute && (
+                            <button
+                              type="button"
+                              onClick={() => onActionClick(`Sahifani ochish: ${insight.actionRoute}`)}
+                              className="rounded bg-[color:var(--cp-accent-soft)] px-1.5 py-0.5 text-[9.5px] font-semibold text-[color:var(--cp-accent)] hover:opacity-80 transition-opacity"
+                            >
+                              Ko'rish →
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </li>

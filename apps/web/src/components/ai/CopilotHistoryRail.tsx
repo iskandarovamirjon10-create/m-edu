@@ -58,6 +58,7 @@ import {
   X,
   Check,
   AlertTriangle,
+  Download,
 } from 'lucide-react';
 import { CopilotButton, CopilotIconButton } from './CopilotControls';
 import {
@@ -69,6 +70,7 @@ import {
 import { useConversations } from '@/hooks/useConversations';
 import { useAiHealth } from '@/hooks/useAiHealth';
 import { AI_FLAGS } from '@/lib/ai/flags';
+import { aiConversationsApi } from '@/lib/ai';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { cn } from '@/lib/design';
 
@@ -363,6 +365,12 @@ export function CopilotHistoryRail({
       setPendingDelete(null);
     }
   }, [pendingDelete, onDelete, t]);
+
+  const handleExport = useCallback((convId: string, format: 'markdown' | 'json' = 'markdown') => {
+    setMenuFor(null);
+    const url = aiConversationsApi.exportUrl(convId, format);
+    window.open(url, '_blank');
+  }, []);
 
   /* ── Keyboard navigation ───────────────────────────────────── */
   const handleListKeyDown = (event: ReactKeyboardEvent<HTMLUListElement>) => {
@@ -791,6 +799,15 @@ export function CopilotHistoryRail({
                                       {t('common.rename') || 'Nomini o‘zgartirish'}
                                     </button>
                                   )}
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => handleExport(conv.id, 'markdown')}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11.5px] outline-none hover:bg-black/[0.04] focus-visible:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                                  >
+                                    <Download className="h-3 w-3" aria-hidden="true" />
+                                    {t('ai.history.export') || 'Eksport (MD)'}
+                                  </button>
                                   <button
                                     type="button"
                                     role="menuitem"
