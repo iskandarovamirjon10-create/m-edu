@@ -1880,12 +1880,12 @@ Ushbu hisobot uchun tahliliy tushuntirish va 2 ta tavsiyani quyidagi JSON format
 
     return {
       reportType: dto.reportType,
-      title: aiResult.title || fallback.title,
+      title: aiResult?.title || fallback.title,
       generatedAt: new Date().toISOString(),
-      summary: aiResult.summary || fallback.summary,
+      summary: aiResult?.summary || fallback.summary,
       table: { headers, rows },
-      insights: aiResult.insights || fallback.insights,
-      recommendations: aiResult.recommendations || fallback.recommendations,
+      insights: Array.isArray(aiResult?.insights) && aiResult.insights.length > 0 ? aiResult.insights : fallback.insights,
+      recommendations: Array.isArray(aiResult?.recommendations) && aiResult.recommendations.length > 0 ? aiResult.recommendations : fallback.recommendations,
     };
   }
 
