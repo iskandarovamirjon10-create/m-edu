@@ -28,6 +28,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import request, { downloadFile } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useSafeI18n } from '@/i18n/I18nProvider';
+import { cn } from '@/lib/design';
 
 function AuroraMesh() {
   return (
@@ -86,6 +87,8 @@ export function ImportExportPage() {
   const { playTick, playPop, playSuccess, playError } = usePremiumSound();
   const fileInput = useRef<HTMLInputElement>(null);
   const [entity, setEntity] = useState('STUDENT');
+  const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv' | 'pdf'>('xlsx');
+  const [isDragging, setIsDragging] = useState(false);
 
   const jobsQuery = useQuery({
     queryKey: ['import-jobs'],
@@ -170,12 +173,13 @@ export function ImportExportPage() {
     }
   };
 
-  const exportData = async (e: string) => {
+  const exportData = async (e: string, format = exportFormat) => {
     playTick();
     push('info', t('importExport.preparing', { entity: e.toLowerCase() }));
     try {
-      await downloadFile(`/export?entityType=${encodeURIComponent(e)}&format=csv`, {
-        defaultFilename: `${e.toLowerCase()}-export.csv`,
+      const ext = format === 'xlsx' ? 'xlsx' : format === 'pdf' ? 'pdf' : 'csv';
+      await downloadFile(`/export?entityType=${encodeURIComponent(e)}&format=${format}`, {
+        defaultFilename: `${e.toLowerCase()}-export.${ext}`,
       });
       playSuccess();
       push('success', t('importExport.exportDownloaded'));
@@ -295,7 +299,23 @@ export function ImportExportPage() {
         {/* ── Upload & Action Card ────────────────────────────────────────── */}
         <motion.div
           variants={itemVariants}
-          className="liquid-glass-card liquid-glass-surface relative overflow-hidden rounded-3xl p-6 sm:p-7 border border-slate-200/80 dark:border-slate-800/80 shadow-sm"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) uploadMutation.mutate(f);
+          }}
+          className={cn(
+            'liquid-glass-card liquid-glass-surface relative overflow-hidden rounded-3xl p-6 sm:p-7 border shadow-sm transition-all duration-200',
+            isDragging
+              ? 'border-blue-500 bg-blue-50/20 dark:border-blue-400 dark:bg-blue-950/20 scale-[1.005]'
+              : 'border-slate-200/80 dark:border-slate-800/80',
+          )}
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
 
@@ -308,7 +328,7 @@ export function ImportExportPage() {
                 {t('importExport.uploadCsv')}
               </h3>
               <p className="text-xs text-[var(--text-muted)]">
-                {t('importExport.csvHint')}
+                {isDragging ? 'Faylni yuklash uchun shu yerga tashlang (.csv, .xlsx)' : t('importExport.csvHint')}
               </p>
             </div>
 
@@ -322,9 +342,9 @@ export function ImportExportPage() {
                 aria-label={t('importExport.uploadCsv')}
                 className="w-auto"
               >
-                {['STUDENT', 'TEACHER'].map((e) => (
+                {['STUDENT', 'TEACHER', 'GROUP', 'COURSE', 'PAYMENT'].map((e) => (
                   <option key={e} value={e}>
-                    {t(`enum.badge.${e}`)}
+                    {t(`enum.badge.${e}`) || e}
                   </option>
                 ))}
               </GlassSelect>
@@ -332,7 +352,7 @@ export function ImportExportPage() {
               <input
                 ref={fileInput}
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) uploadMutation.mutate(f);
@@ -357,8 +377,30 @@ export function ImportExportPage() {
                 {t('importExport.downloadTemplate')}
               </GlassButton>
 
-              <GlassButton variant="ghost" onClick={() => exportData(entity)}>
-                {t('importExport.exportEntity', { entity: t(`enum.badge.${entity}`) })}
+              {/* Format Switcher */}
+              <div className="flex rounded-xl bg-slate-100 p-0.5 dark:bg-white/[0.06] border border-black/5 dark:border-white/5">
+                {(['xlsx', 'csv', 'pdf'] as const).map((fmt) => (
+                  <button
+                    key={fmt}
+                    type="button"
+                    onClick={() => {
+                      playTick();
+                      setExportFormat(fmt);
+                    }}
+                    className={cn(
+                      'rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase transition-all',
+                      exportFormat === fmt
+                        ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white',
+                    )}
+                  >
+                    {fmt === 'xlsx' ? 'Excel' : fmt.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+
+              <GlassButton variant="ghost" onClick={() => exportData(entity, exportFormat)}>
+                {t('importExport.exportEntity', { entity: t(`enum.badge.${entity}`) || entity })}
               </GlassButton>
             </div>
           </div>

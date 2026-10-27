@@ -2400,6 +2400,7 @@ export function InvoicesPage() {
                   <img
                     src={paymentLinksQuery.data.qrCodeUrl}
                     alt="To'lov QR Kodi"
+                    decoding="async"
                     className="h-44 w-44 rounded-xl border border-black/[0.08] p-2 dark:border-white/[0.08]"
                   />
                   <p className="mt-3 text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">

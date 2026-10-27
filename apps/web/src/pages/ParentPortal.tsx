@@ -380,7 +380,7 @@ function ChromaticAvatar({
         }}
       >
         {imageUrl ? (
-          <img src={imageUrl} alt={name} className="h-full w-full object-cover" />
+          <img src={imageUrl} alt={name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
         ) : (
           <span className="relative z-10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">{initials}</span>
         )}

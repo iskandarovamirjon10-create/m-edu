@@ -1,7 +1,7 @@
 /**
  * English dictionary (default + fallback locale).
  *
- * Key convention: `<domain>.<element>[.<variant>]` â€” flat keys keep lookups
+ * Key convention: `<domain>.<element>[.<variant>]` — flat keys keep lookups
  * O(1) and grep-friendly. Every key here MUST exist in uz.ts and ru.ts;
  * the i18n core warns in dev when a key falls through to English.
  */
@@ -10,11 +10,11 @@ const en = {
   'common.cancel': 'Cancel',
   'common.save': 'Save',
   'common.create': 'Create',
-  // Face capture â€” safe, actionable camera failure messages (no raw errors)
+  // Face capture — safe, actionable camera failure messages (no raw errors)
   'face.cameraPermissionDenied': 'Camera access was denied. Please allow camera permission in your browser settings.',
   'face.cameraNotFound': 'No camera was found on this device.',
   'face.cameraInUse': 'The camera is already in use by another application.',
-  // Face capture â€” permission lifecycle (camera platform layer)
+  // Face capture — permission lifecycle (camera platform layer)
   'face.cameraUnsupported': 'This browser does not support camera access. Please use a recent version of Chrome, Safari or Firefox.',
   'face.cameraInsecureContext': 'Camera access requires a secure connection (HTTPS). Ask your administrator to open M-EDU over https://.',
   'face.cameraInsecureHelp': 'On a phone the camera only works over HTTPS. Opening the app by IP address over http:// will always fail.',

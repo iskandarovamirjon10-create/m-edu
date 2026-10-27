@@ -37,8 +37,9 @@ export const MeduLogo = forwardRef<HTMLImageElement, MeduLogoProps>(function Med
       ref={ref}
       src={LOGO_SRC}
       alt={alt}
-      width={1254}
-      height={1254}
+      width={256}
+      height={256}
+      decoding="async"
       draggable={false}
       className={[
         'block shrink-0 object-contain bg-white ring-1 ring-black/5',

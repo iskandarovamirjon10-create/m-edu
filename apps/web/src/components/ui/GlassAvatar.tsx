@@ -68,6 +68,8 @@ export const GlassAvatar = memo(function GlassAvatar({
         <img
           src={src || ''}
           alt={name || 'Avatar'}
+          loading="lazy"
+          decoding="async"
           onError={() => setImgError(true)}
           className="relative z-10 h-full w-full object-cover rounded-full"
         />

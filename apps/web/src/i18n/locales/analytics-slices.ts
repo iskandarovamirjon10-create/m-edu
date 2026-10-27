@@ -1,7 +1,7 @@
 ﻿/**
  * Analytics / admin page keys referenced via t() but missing from base+legacy.
  * Merged last so these keys always resolve (English fallback for gaps in uz/ru
- * is handled by translate() â€” but parity tests require all three locales).
+ * is handled by translate() — but parity tests require all three locales).
  */
 export type AnalyticsSlices = { readonly [K in keyof typeof analyticsEn]: string };
 

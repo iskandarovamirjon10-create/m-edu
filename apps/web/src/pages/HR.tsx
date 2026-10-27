@@ -445,6 +445,8 @@ function EmployeeAvatar({ name, avatarUrl, size = 44 }: { name: string; avatarUr
       <img
         src={avatarUrl}
         alt={name}
+        loading="lazy"
+        decoding="async"
         className="rounded-full object-cover ring-2 ring-white/50 dark:ring-white/10 shadow-sm"
         style={{ width: size, height: size }}
       />
