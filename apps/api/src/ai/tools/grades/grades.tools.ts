@@ -34,7 +34,9 @@ export function createGradesTools(prisma: PrismaService): AiToolDefinition[] {
         const exams = await prisma.exam.findMany({
           where: {
             organizationId: context.organizationId,
-            ...(input.groupId ? { groupId: input.groupId } : {}),
+            ...(input.groupId
+              ? { groupId: input.groupId, group: { organizationId: context.organizationId } }
+              : {}),
           },
           include: {
             results: true,

@@ -6,3 +6,23 @@ export class RejectActionDto {
   @MaxLength(500)
   reason?: string;
 }
+
+export class ListActionsQueryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  toolName?: string;
+
+  @IsOptional()
+  @IsString()
+  limit?: string;
+
+  @IsOptional()
+  @IsString()
+  page?: string;
+}

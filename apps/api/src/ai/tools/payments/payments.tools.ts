@@ -10,6 +10,10 @@ const debtorsSchema = z.object({
   limit: z.number().int().min(1).max(20).optional(),
 });
 
+const summarySchema = z.object({
+  status: z.string().optional(),
+});
+
 export function createPaymentsTools(invoices: InvoicesService): AiToolDefinition[] {
   return [
     {
@@ -34,6 +38,24 @@ export function createPaymentsTools(invoices: InvoicesService): AiToolDefinition
             status: invoice.status,
             dueDate: invoice.dueDate,
           })),
+        };
+      },
+    },
+    {
+      name: 'finance.summary',
+      description:
+        'Organization-wide financial summary: total billed, total paid, and total outstanding debt.',
+      inputSchema: summarySchema,
+      riskLevel: AiToolRiskLevel.LOW,
+      requiresConfirmation: false,
+      permission: AiPermission.PAYMENTS_READ,
+      execute: async (_input: z.infer<typeof summarySchema>, context) => {
+        const result = await invoices.findAll(context.organizationId, { limit: 1 });
+        return {
+          billed: result.totals?.invoiced ?? 0,
+          paid: result.totals?.paid ?? 0,
+          outstanding: result.totals?.outstanding ?? 0,
+          totalInvoices: result.total,
         };
       },
     },

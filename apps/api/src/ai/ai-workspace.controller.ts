@@ -28,7 +28,7 @@ import {
   RenameConversationDto,
 } from './dto/conversation.dto';
 import { SendMessageDto } from './dto/chat.dto';
-import { RejectActionDto } from './dto/action.dto';
+import { RejectActionDto, ListActionsQueryDto } from './dto/action.dto';
 import type { AiAuthenticatedUser } from './domain/ai.types';
 
 /**
@@ -123,6 +123,16 @@ export class AiWorkspaceController {
   }
 
   /* ── Actions ───────────────────────────────────────────────────────── */
+
+  @Get('actions')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  listActions(
+    @CurrentUser() user: AiAuthenticatedUser,
+    @Query() query: ListActionsQueryDto,
+  ) {
+    return this.actions.list(this.context(user), query);
+  }
+
 
   @Get('actions/:id')
   getAction(

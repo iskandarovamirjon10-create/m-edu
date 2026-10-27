@@ -149,4 +149,21 @@ describe('AiActionService', () => {
     prisma.aiAction.findFirst.mockResolvedValue(null);
     await expect(service.confirm(context, 'action-1')).rejects.toBeInstanceOf(AiException);
   });
+
+  it('lists paginated actions filtered by organization and status', async () => {
+    prisma.aiAction.count = vi.fn().mockResolvedValue(1);
+    prisma.aiAction.findMany = vi.fn().mockResolvedValue([actionRow()]);
+
+    const result = await service.list(context, { status: AiActionStatus.PENDING_CONFIRMATION });
+    expect(prisma.aiAction.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: 'org-1',
+          status: AiActionStatus.PENDING_CONFIRMATION,
+        }),
+      }),
+    );
+    expect(result.total).toBe(1);
+    expect(result.items).toHaveLength(1);
+  });
 });

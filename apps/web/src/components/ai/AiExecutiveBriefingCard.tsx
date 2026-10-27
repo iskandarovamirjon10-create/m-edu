@@ -205,6 +205,23 @@ export function AiExecutiveBriefingCard() {
               </div>
             </div>
 
+            {/* Pending actions notification banner */}
+            {briefing.metrics.pendingActionsCount !== undefined && briefing.metrics.pendingActionsCount > 0 && (
+              <div className="flex items-center justify-between rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                  <span><strong>{briefing.metrics.pendingActionsCount} ta AI amali</strong> rahbar tasdig'ini kutmoqda</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleActionClick("Tasdiqlash kutilayotgan barcha AI amallarini ko'rsat")}
+                  className="font-semibold text-amber-600 dark:text-amber-400 hover:underline"
+                >
+                  Ko'rib chiqish →
+                </button>
+              </div>
+            )}
+
             {/* Priority action pills */}
             {briefing.priorityActions && briefing.priorityActions.length > 0 && (
               <div className="space-y-1.5 pt-1">

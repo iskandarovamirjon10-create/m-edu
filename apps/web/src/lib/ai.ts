@@ -34,6 +34,7 @@ interface ToolMeta {
 const TOOL_META: Record<string, ToolMeta> = {
   'attendance.summary': { subject: "Davomat ma'lumotlari" },
   'attendance.today': { subject: "Davomat ma'lumotlari" },
+  'attendance.groups': { subject: "Guruhlar davomati taqqoslovi" },
   'schedule.list': { subject: 'Dars jadvali' },
   'schedule.today': { subject: 'Dars jadvali' },
   'students.search': { subject: "O'quvchilar ro'yxati" },
@@ -76,6 +77,7 @@ const TOOL_META: Record<string, ToolMeta> = {
 const TOOL_SUCCESS: Record<string, string> = {
   'attendance.summary': "Davomat ma'lumotlari olindi",
   'attendance.today': "Davomat ma'lumotlari olindi",
+  'attendance.groups': "Guruhlar davomati taqqoslovi olindi",
   'schedule.list': 'Dars jadvali olindi',
   'schedule.today': 'Dars jadvali olindi',
   'students.search': "O'quvchilar ro'yxati olindi",
@@ -565,6 +567,10 @@ export interface AiInsight {
   body: string;
   metric?: string;
   trend?: 'up' | 'down' | 'flat';
+  actionRoute?: string;
+  actionLabel?: string;
+  calculationRule?: string;
+  timeRange?: string;
 }
 
 export const aiConversationsApi = {
@@ -585,6 +591,98 @@ export const aiInsightsApi = {
     request<AiInsight[]>('/ai/insights?scope=page', {
       headers: route ? { 'X-Page-Context': route } : undefined,
     }),
+  dismiss: (id: string) =>
+    request<{ ok: boolean; dismissedId: string }>(`/ai/insights/${encodeURIComponent(id)}/dismiss`, {
+      method: 'POST',
+    }),
+};
+
+export interface AiBriefingPriorityAction {
+  id: string;
+  category: string;
+  title: string;
+  actionLabel: string;
+  prompt: string;
+}
+
+export interface AiExecutiveBriefing {
+  summary: string;
+  sentiment: 'positive' | 'attention' | 'critical';
+  priorityActions: AiBriefingPriorityAction[];
+  metrics: {
+    studentsCount: number;
+    groupsCount: number;
+    teachersCount: number;
+    attendanceRate: number;
+    presentToday: number;
+    absentToday: number;
+    lateToday: number;
+    debtorsCount: number;
+    overdueAmount: number;
+    highRiskStudents: number;
+    monthlyRevenue: number;
+    pendingActionsCount: number;
+    newEnrollmentsCount: number;
+  };
+  generatedAt: string;
+}
+
+export const aiBriefingApi = {
+  get: () => request<AiExecutiveBriefing>('/ai/executive-briefing'),
+};
+
+export const aiActionsApi = {
+  list: (query?: { status?: string; page?: number; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (query?.status) params.set('status', query.status);
+    if (query?.page) params.set('page', String(query.page));
+    if (query?.limit) params.set('limit', String(query.limit));
+    const qs = params.toString();
+    return request<any>(`/workspace/ai/actions${qs ? `?${qs}` : ''}`);
+  },
+  confirm: (actionId: string) => confirmAiAction(actionId),
+  reject: (actionId: string, reason?: string) => rejectAiAction(actionId, reason),
+};
+
+export const aiStudioApi = {
+  diagnoseStudent: (studentId: string) =>
+    request<any>(`/ai/diagnose/student/${encodeURIComponent(studentId)}`),
+  draftParentMessage: (body: {
+    studentId?: string;
+    studentName: string;
+    tone?: 'friendly' | 'formal' | 'urgent';
+    topic?: 'attendance' | 'debt' | 'praise' | 'exam' | 'custom';
+    details?: string;
+    balanceDue?: number;
+  }) => request<any>('/ai/draft-parent-message', { method: 'POST', body: JSON.stringify(body) }),
+  generateQuiz: (body: {
+    topic: string;
+    subject?: string;
+    level?: string;
+    questionCount?: number;
+    bloomsTaxonomyLevel?: string;
+    difficulty?: string;
+  }) => request<any>('/ai/generate-quiz', { method: 'POST', body: JSON.stringify(body) }),
+  generateLessonPlan: (body: {
+    topic: string;
+    subject?: string;
+    level?: string;
+    durationMinutes?: number;
+    learningObjectives?: string[];
+    bloomsTaxonomyLevel?: string;
+  }) => request<any>('/ai/generate-lesson-plan', { method: 'POST', body: JSON.stringify(body) }),
+  generateReport: (body: {
+    reportType: 'ATTENDANCE_WEEKLY' | 'ENROLLMENT_TRENDS' | 'TEACHER_WORKLOAD' | 'FINANCIAL_SUMMARY' | 'CUSTOM';
+    timeRange?: '7d' | '30d' | '90d' | 'all';
+    query?: string;
+  }) => request<any>('/ai/reports', { method: 'POST', body: JSON.stringify(body) }),
+  analyzeDocument: (body: {
+    base64: string;
+    mimeType: string;
+    fileName?: string;
+    instruction?: string;
+    analysisType?: 'curriculum' | 'policy' | 'quiz_extraction' | 'summary';
+  }) => request<any>('/ai/analyze-document', { method: 'POST', body: JSON.stringify(body) }),
 };
 
 export const aiSuggestionsApi = {

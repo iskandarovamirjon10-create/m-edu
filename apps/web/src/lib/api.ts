@@ -611,6 +611,24 @@ export const aiApi = {
       body: JSON.stringify(body),
       ...options,
     }),
+  generateLessonPlan: (body: { topic: string; subject?: string; level?: string; durationMinutes?: number; learningObjectives?: string[]; bloomsTaxonomyLevel?: string }, options: RequestOptions = {}) =>
+    request<any>('/ai/generate-lesson-plan', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
+  generateReport: (body: { reportType: string; timeRange?: string; query?: string }, options: RequestOptions = {}) =>
+    request<any>('/ai/reports', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
+  analyzeDocument: (body: { base64: string; mimeType: string; fileName?: string; instruction?: string; analysisType?: string }, options: RequestOptions = {}) =>
+    request<any>('/ai/analyze-document', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
 };
 export interface AiExecutiveBriefing {
   summary: string;
@@ -627,10 +645,12 @@ export interface AiExecutiveBriefing {
     overdueAmount: number;
     highRiskStudents: number;
     monthlyRevenue: number;
+    pendingActionsCount?: number;
+    newEnrollmentsCount?: number;
   };
   priorityActions: Array<{
     id: string;
-    category: 'attendance' | 'finance' | 'risk' | 'academics';
+    category: 'attendance' | 'finance' | 'risk' | 'academics' | 'governance' | string;
     title: string;
     actionLabel: string;
     prompt: string;
@@ -651,6 +671,15 @@ export interface AiStudentDiagnostic {
   strengths: string[];
   riskFactors: string[];
   recommendations: string[];
+  interventions?: string[];
+  meetingPrep?: {
+    teacherBrief: string;
+    parentAgenda: string[];
+  };
+  factualBasis?: {
+    recentAttendance: Array<{ date: string; status: string }>;
+    recentGrades: Array<{ grade: number; date: string; comment: string | null }>;
+  };
   suggestedParentMessage: string;
 }
 

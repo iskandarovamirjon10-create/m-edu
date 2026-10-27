@@ -228,6 +228,44 @@ export function AiStudentDiagnosticWidget({
               </div>
             )}
 
+            {/* Interventions & Meeting Prep */}
+            {data && (data.interventions || data.meetingPrep) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {data.interventions && data.interventions.length > 0 && (
+                  <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/[0.03] p-3 space-y-1.5">
+                    <div className="text-xs font-semibold text-indigo-700 dark:text-indigo-400">
+                      🎯 Pedagogik aralashuvlar:
+                    </div>
+                    <ul className="space-y-1">
+                      {data.interventions.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-1.5 text-[11px] text-zinc-700 dark:text-zinc-300">
+                          <span className="text-indigo-500 font-bold">•</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {data.meetingPrep && (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.03] p-3 space-y-1.5">
+                    <div className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                      📋 Uchrashuv rejasi:
+                    </div>
+                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400 italic">
+                      {data.meetingPrep.teacherBrief}
+                    </p>
+                    <ul className="space-y-0.5 pt-1">
+                      {data.meetingPrep.parentAgenda.map((ag, idx) => (
+                        <li key={idx} className="text-[10px] text-zinc-700 dark:text-zinc-300">
+                          <span className="text-amber-500 font-bold">{idx + 1}.</span> {ag}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Suggested Parent Message Box */}
             {data?.suggestedParentMessage && (
               <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/70 border border-black/8 dark:border-white/10 p-3 space-y-2">

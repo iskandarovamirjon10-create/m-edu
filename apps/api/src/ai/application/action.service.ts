@@ -78,6 +78,44 @@ export class AiActionService {
     return toAiAction(row);
   }
 
+  async list(
+    context: AiContext,
+    query: { status?: string; toolName?: string; limit?: string; page?: string },
+  ): Promise<{ items: AiAction[]; total: number; page: number; limit: number; totalPages: number }> {
+    const page = Math.max(1, Number.parseInt(query.page ?? '1', 10) || 1);
+    const limit = Math.min(50, Math.max(1, Number.parseInt(query.limit ?? '20', 10) || 20));
+    const skip = (page - 1) * limit;
+
+    const isAdmin = ['SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN'].includes(
+      (context.role || '').toUpperCase(),
+    );
+
+    const where: Prisma.AiActionWhereInput = {
+      organizationId: context.organizationId,
+      ...(isAdmin ? {} : { createdBy: context.userId }),
+      ...(query.status ? { status: query.status as AiActionStatus } : {}),
+      ...(query.toolName ? { toolName: query.toolName } : {}),
+    };
+
+    const [total, rows] = await Promise.all([
+      this.prisma.aiAction.count({ where }),
+      this.prisma.aiAction.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      items: rows.map(toAiAction),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
+  }
+
   async confirm(context: AiContext, id: string): Promise<AiAction> {
     const row = await this.findOwned(context, id);
     const now = new Date();
@@ -184,11 +222,14 @@ export class AiActionService {
   }
 
   private async findOwned(context: AiContext, id: string) {
+    const isAdmin = ['SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN'].includes(
+      (context.role || '').toUpperCase(),
+    );
     const row = await this.prisma.aiAction.findFirst({
       where: {
         id,
         organizationId: context.organizationId,
-        createdBy: context.userId,
+        ...(isAdmin ? {} : { createdBy: context.userId }),
       },
     });
     if (!row) {

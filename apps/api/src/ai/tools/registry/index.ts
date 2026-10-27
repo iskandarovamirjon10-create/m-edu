@@ -33,7 +33,7 @@ export function createAiToolDefinitions(deps: AiToolDependencies): AiToolDefinit
   return [
     ...createStudentsTools(deps.students),
     ...createTeachersTools(deps.teachers, deps.prisma),
-    ...createAttendanceTools(deps.attendance),
+    ...createAttendanceTools(deps.attendance, deps.prisma),
     ...createPaymentsTools(deps.invoices),
     ...createScheduleTools(deps.schedule),
     ...createGroupsTools(deps.groups),

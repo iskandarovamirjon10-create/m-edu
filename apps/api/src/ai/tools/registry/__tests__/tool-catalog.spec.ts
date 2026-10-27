@@ -25,10 +25,12 @@ describe('AI tool catalog', () => {
 
     expect(names).toEqual(
       [
+        'attendance.groups',
         'attendance.summary',
         'courses.create',
         'courses.list',
         'finance.debtors',
+        'finance.summary',
         'grades.analytics',
         'groups.create',
         'groups.list',

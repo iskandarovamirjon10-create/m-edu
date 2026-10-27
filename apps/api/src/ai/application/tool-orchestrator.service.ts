@@ -10,6 +10,9 @@ import { AiException } from '../domain/ai.errors';
 import { ToolRegistryService } from '../tools/registry/tool-registry.service';
 import { AiPolicyService } from './ai-policy.service';
 
+const TOOL_TIMEOUT_MS = 15_000;
+const MAX_OUTPUT_CHARS = 50_000;
+
 /**
  * Validates, authorizes and executes READ tools. Write tools are never executed
  * here — the gateway diverts them into the durable action lifecycle.
@@ -58,6 +61,7 @@ export class ToolOrchestratorService {
   }
 
   async executeReadTool(context: AiContext, call: AiToolCall): Promise<AiToolResult> {
+    const start = Date.now();
     const tool = this.registry.get(call.name);
     if (!tool) {
       return this.failure(call, {
@@ -79,15 +83,61 @@ export class ToolOrchestratorService {
     if (!validated.ok) return this.failure(call, validated.error);
 
     try {
-      const data = await tool.execute(validated.value, context);
-      return { toolCallId: call.id, toolName: call.name, ok: true, data };
+      const dataPromise = tool.execute(validated.value, context);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Tool execution timed out after ${TOOL_TIMEOUT_MS}ms`)),
+          TOOL_TIMEOUT_MS,
+        ),
+      );
+
+      const rawData = await Promise.race([dataPromise, timeoutPromise]);
+      const durationMs = Date.now() - start;
+
+      // Bound output payload to prevent provider context overflows
+      let boundedData = rawData;
+      const jsonStr = JSON.stringify(rawData ?? null);
+      if (jsonStr.length > MAX_OUTPUT_CHARS) {
+        this.logger.warn(
+          `Tool ${call.name} output exceeded ${MAX_OUTPUT_CHARS} chars (${jsonStr.length}). Truncating safely.`,
+        );
+        boundedData = {
+          _truncated: true,
+          originalSize: jsonStr.length,
+          preview: jsonStr.slice(0, MAX_OUTPUT_CHARS),
+        };
+      }
+
+      this.logger.log(
+        JSON.stringify({
+          event: 'ai_tool_executed',
+          toolName: call.name,
+          durationMs,
+          status: 'success',
+          organizationId: context.organizationId,
+          userId: context.userId,
+        }),
+      );
+
+      return { toolCallId: call.id, toolName: call.name, ok: true, data: boundedData };
     } catch (error) {
+      const durationMs = Date.now() - start;
+      const isTimeout = error instanceof Error && error.message.includes('timed out');
       this.logger.error(
-        `Tool ${call.name} failed: ${error instanceof Error ? error.message : 'unknown'}`,
+        JSON.stringify({
+          event: 'ai_tool_executed',
+          toolName: call.name,
+          durationMs,
+          status: 'error',
+          error: error instanceof Error ? error.message : 'unknown',
+          organizationId: context.organizationId,
+        }),
       );
       return this.failure(call, {
-        code: AiErrorCode.AI_INTERNAL,
-        message: 'The tool could not complete the request',
+        code: isTimeout ? AiErrorCode.AI_PROVIDER_TIMEOUT : AiErrorCode.AI_INTERNAL,
+        message: isTimeout
+          ? 'Asbob so‘rovi vaqti tugadi (timeout)'
+          : 'The tool could not complete the request',
         retryable: true,
       });
     }

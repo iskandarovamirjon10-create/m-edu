@@ -37,7 +37,13 @@ import { Roles } from '../auth/roles.decorator';
 import { STAFF_ROLES, isAdminRole } from '../auth/authorization.policy';
 import { AllowPublic } from '../auth/public.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
-import { DraftParentMessageDto, GenerateQuizDto } from './dto/deep-ai.dto';
+import {
+  DraftParentMessageDto,
+  GenerateQuizDto,
+  GenerateLessonPlanDto,
+  GenerateReportDto,
+  AnalyzeDocumentDto,
+} from './dto/deep-ai.dto';
 import { RenameConversationDto } from './dto/conversation.dto';
 
 // ============================================================================
@@ -388,6 +394,22 @@ export class AiController {
   }
 
   @Roles(...STAFF_ROLES)
+  @Post('insights/:id/dismiss')
+  @HttpCode(HttpStatus.OK)
+  async dismissInsight(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Param('id') insightId: string,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    if (!insightId?.trim()) {
+      throw new HttpException('Insight ID required', HttpStatus.BAD_REQUEST);
+    }
+    this.aiService.dismissInsight(userId, insightId.trim());
+    return { ok: true, dismissedId: insightId.trim() };
+  }
+
+  @Roles(...STAFF_ROLES)
   @Get('suggestions')
   async getSuggestions(
     @CurrentUser('organizationId') organizationId: string,
@@ -452,6 +474,40 @@ export class AiController {
   ) {
     this.assertTenantContext(organizationId, userId);
     return this.aiService.generateQuiz(organizationId, body);
+  }
+
+  @Roles(...STAFF_ROLES)
+  @Post('generate-lesson-plan')
+  async generateLessonPlan(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: GenerateLessonPlanDto,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    return this.aiService.generateLessonPlan(organizationId, body);
+  }
+
+  @Roles(...STAFF_ROLES)
+  @Post('reports')
+  async generateReport(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: GenerateReportDto,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    return this.aiService.generateReport(organizationId, body);
+  }
+
+  @Roles(...STAFF_ROLES)
+  @Post('analyze-document')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async analyzeDocument(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: AnalyzeDocumentDto,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    return this.aiService.analyzeDocument(organizationId, body);
   }
 
   @Post('chat')
