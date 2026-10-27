@@ -283,6 +283,8 @@ const uz = {
   'settings.themeHint': 'Mavzuni tanlang — tanlov shu qurilmada saqlanadi.',
   'settings.themeLight': 'Yorug\'',
   'settings.themeDark': 'Tungi',
+  'settings.themeOled': 'OLED Qora',
+  'settings.themeSepia': 'Sepiya (Kitob)',
   'settings.organization': 'Tashkilot',
   'settings.organizationHint': 'Markazingiz brendi va aloqa ma\'lumotlari',
   'settings.orgName': 'Tashkilot nomi',

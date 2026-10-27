@@ -37,13 +37,35 @@
   </head>
   <body>
     <script>
-      try {
-        var t = localStorage.getItem('medu-theme');
-        if (t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme:dark)').matches)) {
-          document.documentElement.classList.add('dark');
-          document.documentElement.setAttribute('data-theme', 'dark');
-        }
-      } catch (e) {}
+      (function() {
+        try {
+          var t = localStorage.getItem('medu-theme') || 'system';
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved = t;
+          if (t === 'system') {
+            resolved = prefersDark ? 'dark' : 'light';
+          }
+          var root = document.documentElement;
+          root.classList.remove('dark', 'oled', 'sepia', 'light');
+          if (resolved === 'dark') {
+            root.classList.add('dark');
+            root.setAttribute('data-theme', 'dark');
+            root.style.colorScheme = 'dark';
+          } else if (resolved === 'oled') {
+            root.classList.add('dark', 'oled');
+            root.setAttribute('data-theme', 'oled');
+            root.style.colorScheme = 'dark';
+          } else if (resolved === 'sepia') {
+            root.classList.add('sepia');
+            root.setAttribute('data-theme', 'sepia');
+            root.style.colorScheme = 'light';
+          } else {
+            root.classList.add('light');
+            root.setAttribute('data-theme', 'light');
+            root.style.colorScheme = 'light';
+          }
+        } catch (e) {}
+      })();
     </script>
     <div id="root"></div>
     <noscript>

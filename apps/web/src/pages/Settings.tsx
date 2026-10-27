@@ -81,6 +81,8 @@ const I: Record<string, string[]> = {
     'M4.22 19.78l1.42-1.42', 'M18.36 5.64l1.42-1.42',
   ],
   moon: ['M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'],
+  oled: ['M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z', 'M12 2v20'],
+  sepia: ['M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5z', 'M6 6h10', 'M6 10h10'],
   monitor: [
     'M20 3H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z',
     'M8 21h8', 'M12 17v4',
@@ -224,7 +226,7 @@ function getDeviceIcon(deviceType?: string, os?: string) {
  * TONE PALETTE
  * ════════════════════════════════════════════════════════════════════════ */
 
-type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple';
+type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'slate' | 'amber';
 
 const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
   blue:   { fg: '#2563EB', bg: 'rgba(37,99,235,0.10)',  glow: 'rgba(37,99,235,0.28)',  border: 'rgba(37,99,235,0.20)'  },
@@ -232,6 +234,8 @@ const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string
   orange: { fg: '#F59E0B', bg: 'rgba(245,158,11,0.10)', glow: 'rgba(245,158,11,0.28)', border: 'rgba(245,158,11,0.20)' },
   red:    { fg: '#EF4444', bg: 'rgba(239,68,68,0.10)',  glow: 'rgba(239,68,68,0.28)',  border: 'rgba(239,68,68,0.20)'  },
   purple: { fg: '#6366F1', bg: 'rgba(99,102,241,0.10)', glow: 'rgba(99,102,241,0.28)', border: 'rgba(99,102,241,0.20)' },
+  slate:  { fg: '#0F172A', bg: 'rgba(15,23,42,0.10)',  glow: 'rgba(15,23,42,0.32)',  border: 'rgba(15,23,42,0.25)'  },
+  amber:  { fg: '#B45309', bg: 'rgba(180,83,9,0.10)',  glow: 'rgba(180,83,9,0.28)',  border: 'rgba(180,83,9,0.22)'  },
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -590,18 +594,20 @@ function ThemeSwitcher() {
     [setTheme, persist],
   );
 
-  const options: { value: Theme; label: string; icon: string[]; tone: Tone }[] = useMemo(
+  const options: { value: Theme; label: string; desc: string; icon: string[]; tone: Tone }[] = useMemo(
     () => [
-      { value: 'light', label: t('settings.themeLight'), icon: I.sun, tone: 'orange' },
-      { value: 'dark', label: t('settings.themeDark'), icon: I.moon, tone: 'purple' },
-      { value: 'system', label: t('common.system'), icon: I.monitor, tone: 'blue' },
+      { value: 'light', label: t('settings.themeLight'), desc: 'Alabaster', icon: I.sun, tone: 'orange' },
+      { value: 'dark', label: t('settings.themeDark'), desc: 'Sapphire', icon: I.moon, tone: 'purple' },
+      { value: 'oled', label: t('settings.themeOled'), desc: 'Pure 0% Black', icon: I.oled, tone: 'slate' },
+      { value: 'sepia', label: t('settings.themeSepia'), desc: 'Parchment', icon: I.sepia, tone: 'amber' },
+      { value: 'system', label: t('common.system'), desc: 'Auto OS Sync', icon: I.monitor, tone: 'blue' },
     ],
     [t],
   );
 
   return (
     <div
-      className="grid grid-cols-3 gap-2.5"
+      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5"
       role="radiogroup"
       aria-label={t('a11y.themeSelection')}
     >
@@ -618,9 +624,9 @@ function ThemeSwitcher() {
             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.97 }}
             transition={SPRING.snappy}
-            className="relative flex flex-col items-center gap-2 overflow-hidden rounded-2xl border px-3 py-4 outline-none transition-colors"
+            className="relative flex flex-col items-center gap-1.5 overflow-hidden rounded-2xl border px-3 py-3.5 outline-none transition-all"
             style={{
-              borderColor: active ? c.border : 'rgba(15,23,42,0.06)',
+              borderColor: active ? c.border : 'rgba(15,23,42,0.08)',
               background: active ? c.bg : 'rgba(255,255,255,0.45)',
               boxShadow: active
                 ? `inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 20px -10px ${c.glow}`
@@ -628,19 +634,25 @@ function ThemeSwitcher() {
             }}
           >
             <span
-              className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-xl transition-colors"
               style={{
-                background: active ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.04)',
+                background: active ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.04)',
                 color: active ? c.fg : '#64748B',
               }}
             >
               <Icon paths={opt.icon} size={18} strokeWidth={2} />
             </span>
             <span
-              className="text-[12px] font-bold tracking-tight"
+              className="text-[12px] font-bold tracking-tight text-center"
               style={{ color: active ? c.fg : '#64748B' }}
             >
               {opt.label}
+            </span>
+            <span
+              className="text-[10px] font-medium opacity-70 tracking-tight text-center"
+              style={{ color: active ? c.fg : '#94A3B8' }}
+            >
+              {opt.desc}
             </span>
             <AnimatePresence>
               {active && (
@@ -649,8 +661,9 @@ function ThemeSwitcher() {
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0, opacity: 0 }}
                   transition={SPRING.snappy}
-                  className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full"
-                  style={{ background: c.fg, color: '#fff' }}
+                  className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full text-white"
+                  style={{ background: c.fg }}
+                  aria-hidden="true"
                 >
                   <Icon paths={I.check} size={10} strokeWidth={3} />
                 </motion.span>

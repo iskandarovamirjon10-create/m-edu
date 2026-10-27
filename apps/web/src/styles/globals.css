@@ -162,6 +162,21 @@
     --glass-caustic-1:   rgba(41, 151, 255, 0.05);
     --glass-caustic-2:   rgba(88, 86, 214, 0.04);
   }
+
+  /* Sepia Mode — Apple Books Warm Parchment */
+  [data-theme="sepia"] {
+    --_apple-blue: #B45309;
+    --liquid-glass-opacity: 0.82;
+    --liquid-glass-specular: 0.65;
+    --liquid-glass-saturate: 185%;
+    --glass-inner-rim: rgba(255, 255, 255, 0.85);
+
+    --glass-tint-top:    rgba(255, 251, 242, 0.90);
+    --glass-tint-mid:    rgba(250, 242, 223, 0.82);
+    --glass-tint-bottom: rgba(239, 228, 202, 0.74);
+    --glass-caustic-1:   rgba(180, 83, 9, 0.04);
+    --glass-caustic-2:   rgba(161, 98, 7, 0.035);
+  }
 }
 
 

@@ -281,6 +281,8 @@ const en = {
   'settings.themeHint': 'Pick a theme â€” your selection is saved on this device.',
   'settings.themeLight': 'Light',
   'settings.themeDark': 'Dark',
+  'settings.themeOled': 'OLED Black',
+  'settings.themeSepia': 'Sepia Parchment',
   'settings.organization': 'Organization',
   'settings.organizationHint': 'Branding and contact details for your center',
   'settings.orgName': 'Organization name',

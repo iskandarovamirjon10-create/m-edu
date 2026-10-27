@@ -69,7 +69,7 @@ const META_THEME_COLORS: Readonly<Record<ResolvedTheme, string>> = {
   light: '#f8fafc', // Apple Alabaster / Slate-50
   dark: '#090d16',  // M-EDU Deep Space Dark
   oled: '#000000',  // Pure AMOLED Black
-  sepia: '#f4ecd8', // Apple Books Warm Sepia
+  sepia: '#F5EEDB', // Apple Books Warm Sepia
 };
 
 const useIsomorphicLayoutEffect =
@@ -221,8 +221,10 @@ function applyThemeToDOM(resolved: ResolvedTheme, animate = false): void {
   const darkActive = resolved === 'dark' || resolved === 'oled';
 
   const mutateDOM = () => {
-    // 1. Tailwind `.dark` selector
+    // 1. Tailwind & Theme classes
     root.classList.toggle('dark', darkActive);
+    root.classList.toggle('oled', resolved === 'oled');
+    root.classList.toggle('sepia', resolved === 'sepia');
 
     // 2. Design Tokens `[data-theme="..."]`
     if (root.getAttribute('data-theme') !== resolved) {

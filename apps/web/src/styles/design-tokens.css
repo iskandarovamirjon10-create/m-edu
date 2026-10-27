@@ -774,6 +774,73 @@
     --shadow-floating: 0 22px 60px rgba(0, 0, 0, 0.98);
   }
 
+  /* ── Apple Books Warm Sepia Mode (Parchment Eye Comfort) ────────── */
+  [data-theme="sepia"] {
+    color-scheme: light;
+
+    --primary: #B45309;
+    --primary-hover: #92400E;
+    --primary-active: #78350F;
+    --primary-soft: rgba(180, 83, 9, 0.12);
+    --primary-border: rgba(180, 83, 9, 0.28);
+    --primary-ring: rgba(180, 83, 9, 0.32);
+
+    --bg-base: #F5EEDB;
+    --bg-app: #F5EEDB;
+    --bg-page: #F5EEDB;
+    --bg-surface: #FDF8EE;
+    --bg-surface-secondary: #EFE4CA;
+    --bg-card: #FAF2DF;
+    --bg-card-elevated: #FFFBF2;
+    --bg-card-hover: #FFF9ED;
+    --bg-elevated: #FFFBF2;
+    --bg-input: #FCF7EB;
+    --bg-input-hover: #FFFFFF;
+    --bg-input-focus: #FFFFFF;
+    --bg-input-disabled: #ECE0C6;
+    --bg-overlay: rgba(56, 47, 45, 0.45);
+    --bg-muted: #ECE0C6;
+    --surface-soft: #EFE5CC;
+
+    --skeleton-bg: rgba(56, 47, 45, 0.06);
+    --skeleton-shine: rgba(255, 255, 255, 0.7);
+
+    --bg-glass: rgba(250, 242, 223, 0.82);
+    --bg-glass-hover: rgba(253, 248, 238, 0.92);
+    --glass-bg: rgba(250, 242, 223, 0.82);
+    --glass-surface-bg: rgba(250, 242, 223, 0.82);
+    --glass-tier-subtle-bg: rgba(245, 238, 219, 0.78);
+    --glass-tier-card-bg: rgba(250, 242, 223, 0.85);
+    --glass-tier-floating-bg: rgba(253, 248, 238, 0.94);
+
+    --glass-tint-top: rgba(255, 251, 242, 0.92);
+    --glass-tint-mid: rgba(250, 242, 223, 0.82);
+    --glass-tint-bottom: rgba(239, 228, 202, 0.76);
+    --glass-caustic-1: rgba(180, 83, 9, 0.04);
+    --glass-caustic-2: rgba(161, 98, 7, 0.035);
+
+    --text-primary: #382F2D;
+    --text-secondary: #6B5E59;
+    --text-tertiary: #8C7B74;
+    --text-muted: #8C7B74;
+    --text-disabled: #B8A9A2;
+    --text-placeholder: #A69790;
+
+    --border: rgba(85, 60, 40, 0.12);
+    --border-subtle: rgba(85, 60, 40, 0.08);
+    --border-medium: rgba(85, 60, 40, 0.18);
+    --border-strong: rgba(85, 60, 40, 0.28);
+    --border-glass: rgba(255, 255, 255, 0.65);
+    --divider-color: rgba(85, 60, 40, 0.10);
+    --glass-border: rgba(85, 60, 40, 0.09);
+    --glass-inner-rim: rgba(255, 255, 255, 0.85);
+
+    --shadow-md: 0 4px 16px rgba(56, 47, 45, 0.06);
+    --shadow-lg: 0 10px 28px rgba(56, 47, 45, 0.08);
+    --shadow-xl: 0 18px 42px rgba(56, 47, 45, 0.10);
+    --shadow-floating: 0 18px 40px rgba(56, 47, 45, 0.12);
+  }
+
   /* ── Accessibility 1: Reduced Transparency (macOS/iOS) ─────────── */
   @media (prefers-reduced-transparency: reduce) {
     :root {
@@ -809,6 +876,16 @@
       --glass-tier-subtle-bg: #000000;
       --glass-tier-card-bg: #0C0C10;
       --glass-tier-floating-bg: #14141A;
+      --liquid-glass-opacity: 1;
+    }
+    [data-theme="sepia"] {
+      --bg-glass: #F5EEDB;
+      --bg-glass-hover: #FAF2DF;
+      --glass-bg: #F5EEDB;
+      --glass-surface-bg: #F5EEDB;
+      --glass-tier-subtle-bg: #F5EEDB;
+      --glass-tier-card-bg: #FAF2DF;
+      --glass-tier-floating-bg: #FDF8EE;
       --liquid-glass-opacity: 1;
     }
   }
@@ -850,6 +927,13 @@
       --border: rgba(255, 255, 255, 0.38);
       --border-subtle: rgba(255, 255, 255, 0.28);
       --divider-color: rgba(255, 255, 255, 0.34);
+    }
+    [data-theme="sepia"] {
+      --text-secondary: #382F2D;
+      --text-tertiary: #524440;
+      --border: rgba(85, 60, 40, 0.36);
+      --border-subtle: rgba(85, 60, 40, 0.24);
+      --divider-color: rgba(85, 60, 40, 0.30);
     }
   }
 }

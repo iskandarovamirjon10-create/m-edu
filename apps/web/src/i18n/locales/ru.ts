@@ -3256,6 +3256,8 @@ const ru: Record<string, string> = {
   "settings.telegram.testSent": "Тестовое уведомление отправлено",
   "settings.telegram.title": "Интеграция с Telegram",
   "settings.themeDark": "Тёмная",
+  "settings.themeOled": "OLED Черная",
+  "settings.themeSepia": "Сепия (Книга)",
   "settings.themeHint": "Выберите тему — выбор сохраняется на этом устройстве.",
   "settings.themeLight": "Светлая",
   "settings.timezone": "Часовой пояс",
