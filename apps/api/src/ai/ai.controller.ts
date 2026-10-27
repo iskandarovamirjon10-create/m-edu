@@ -312,6 +312,24 @@ export class AiController {
   }
 
   @Roles(...STAFF_ROLES)
+  @Get('conversations/search')
+  async searchConversations(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Query('q') query: string,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    if (!query?.trim()) {
+      return [];
+    }
+    return this.aiService.searchConversations(
+      organizationId,
+      userId,
+      query.trim().slice(0, 100),
+    );
+  }
+
+  @Roles(...STAFF_ROLES)
   @Get('conversations/:id/messages')
   async getMessages(
     @CurrentUser('organizationId') organizationId: string,
@@ -367,6 +385,71 @@ export class AiController {
       userId,
       conversationId.trim(),
     );
+  }
+
+  @Roles(...STAFF_ROLES)
+  @Get('conversations/:id/export')
+  async exportConversation(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Param('id') conversationId: string,
+    @Query('format') format: string | undefined,
+    @Res() res: Response,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    if (!conversationId?.trim()) {
+      throw new HttpException('Conversation ID required', HttpStatus.BAD_REQUEST);
+    }
+    const safeFormat = format === 'json' ? 'json' : 'markdown';
+    const result = await this.aiService.exportConversation(
+      organizationId,
+      userId,
+      conversationId.trim(),
+      safeFormat,
+    );
+
+    if (safeFormat === 'json') {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="conversation-${conversationId.trim()}.json"`,
+      );
+      res.send(JSON.stringify(result.data, null, 2));
+    } else {
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="conversation-${conversationId.trim()}.md"`,
+      );
+      res.send(result.markdown);
+    }
+  }
+
+  @Roles(...STAFF_ROLES)
+  @Patch('conversations/:id/archive')
+  async toggleArchiveConversation(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Param('id') conversationId: string,
+    @Body('archived') archived?: boolean,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    if (!conversationId?.trim()) {
+      throw new HttpException('Conversation ID required', HttpStatus.BAD_REQUEST);
+    }
+    return this.aiService.archiveConversation(
+      organizationId,
+      userId,
+      conversationId.trim(),
+      archived !== false,
+    );
+  }
+
+  @Roles(...STAFF_ROLES)
+  @Get('usage')
+  getUsage(@CurrentUser('organizationId') organizationId: string) {
+    this.assertTenantContext(organizationId, 'system');
+    return this.aiService.getOrgUsage(organizationId);
   }
 
   @Roles(...STAFF_ROLES)

@@ -300,3 +300,56 @@ describe('CopilotCommand — language handling', () => {
     }
   });
 });
+
+describe('CopilotCommand — role-based financial permissions parity', () => {
+  it('allows financial access for ORG_ADMIN', async () => {
+    const { command, ai } = makeCommand();
+    const ctx = makeContext({ role: 'ORG_ADMIN', isAdmin: true, isStaff: true });
+    await command.handle(makeRequest({ ctx, args: 'Qarzdorlar qancha?' }));
+
+    expect(ai.chat).toHaveBeenCalledWith(
+      'org-1',
+      'user-1',
+      'Qarzdorlar qancha?',
+      [],
+      undefined,
+      true,
+      undefined,
+      expect.objectContaining({ userRole: 'ORG_ADMIN' }),
+    );
+  });
+
+  it('allows financial access for ACCOUNTANT', async () => {
+    const { command, ai } = makeCommand();
+    const ctx = makeContext({ role: 'ACCOUNTANT', isAdmin: false, isStaff: true });
+    await command.handle(makeRequest({ ctx, args: 'Tushumlar qancha?' }));
+
+    expect(ai.chat).toHaveBeenCalledWith(
+      'org-1',
+      'user-1',
+      'Tushumlar qancha?',
+      [],
+      undefined,
+      true,
+      undefined,
+      expect.objectContaining({ userRole: 'ACCOUNTANT' }),
+    );
+  });
+
+  it('blocks financial access for TEACHER', async () => {
+    const { command, ai } = makeCommand();
+    const ctx = makeContext({ role: 'TEACHER', isTeaching: true, isStaff: true });
+    await command.handle(makeRequest({ ctx, args: 'Darslar qachon?' }));
+
+    expect(ai.chat).toHaveBeenCalledWith(
+      'org-1',
+      'user-1',
+      'Darslar qachon?',
+      [],
+      undefined,
+      false,
+      undefined,
+      expect.objectContaining({ userRole: 'TEACHER' }),
+    );
+  });
+});

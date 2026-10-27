@@ -345,6 +345,42 @@ export class AiService {
     return list.filter((i) => !userDismissed.has(i.id));
   }
 
+  private static readonly DEFAULT_DAILY_ORG_LIMIT = 500;
+  private readonly orgDailyUsage = new Map<string, { count: number; dateStr: string }>();
+
+  checkAndIncrementOrgUsage(organizationId: string): { allowed: boolean; current: number; limit: number } {
+    const rawLimit = this.configService?.get<string>('AI_DAILY_ORG_LIMIT') || process.env.AI_DAILY_ORG_LIMIT;
+    const limit = rawLimit !== undefined && !isNaN(Number(rawLimit)) ? Number(rawLimit) : AiService.DEFAULT_DAILY_ORG_LIMIT;
+    if (limit === 0) {
+      return { allowed: true, current: 0, limit: 0 };
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const record = this.orgDailyUsage.get(organizationId);
+    if (!record || record.dateStr !== todayStr) {
+      this.orgDailyUsage.set(organizationId, { count: 1, dateStr: todayStr });
+      return { allowed: true, current: 1, limit };
+    }
+
+    if (record.count >= limit) {
+      return { allowed: false, current: record.count, limit };
+    }
+
+    record.count += 1;
+    return { allowed: true, current: record.count, limit };
+  }
+
+  getOrgUsage(organizationId: string): { current: number; limit: number; dateStr: string } {
+    const rawLimit = this.configService?.get<string>('AI_DAILY_ORG_LIMIT') || process.env.AI_DAILY_ORG_LIMIT;
+    const limit = rawLimit !== undefined && !isNaN(Number(rawLimit)) ? Number(rawLimit) : AiService.DEFAULT_DAILY_ORG_LIMIT;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const record = this.orgDailyUsage.get(organizationId);
+    if (!record || record.dateStr !== todayStr) {
+      return { current: 0, limit, dateStr: todayStr };
+    }
+    return { current: record.count, limit, dateStr: todayStr };
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly configService?: ConfigService,
@@ -622,6 +658,125 @@ export class AiService {
       throw new HttpException('Not found or no permission', HttpStatus.FORBIDDEN);
     }
     return { success: true };
+  }
+
+  async exportConversation(
+    organizationId: string,
+    userId: string,
+    conversationId: string,
+    format: 'markdown' | 'json' = 'markdown',
+  ) {
+    const conv = await this.prisma.aiConversation.findFirst({
+      where: { id: conversationId, organizationId, createdBy: userId },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            role: true,
+            content: true,
+            createdAt: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!conv) {
+      throw new HttpException('Conversation not found or access denied', HttpStatus.NOT_FOUND);
+    }
+
+    if (format === 'json') {
+      return {
+        format: 'json',
+        data: {
+          id: conv.id,
+          title: conv.title,
+          createdAt: conv.createdAt,
+          updatedAt: conv.updatedAt,
+          messageCount: conv.messages.length,
+          messages: conv.messages,
+        },
+      };
+    }
+
+    const title = conv.title || 'M-EDU AI Suhbat';
+    const dateStr = conv.createdAt instanceof Date ? conv.createdAt.toISOString().slice(0, 10) : '';
+    let md = `# ${title}\n\n`;
+    md += `*Sana: ${dateStr} | Xabarlar soni: ${conv.messages.length}*\n\n---\n\n`;
+
+    for (const msg of conv.messages) {
+      const time = msg.createdAt instanceof Date ? msg.createdAt.toISOString().slice(11, 16) : '';
+      if (msg.role === 'user') {
+        md += `### 👤 Siz (${time})\n\n${msg.content}\n\n`;
+      } else if (msg.role === 'assistant' || msg.role === 'model') {
+        md += `### 🤖 M-EDU AI Copilot (${time})\n\n${msg.content}\n\n`;
+      } else {
+        md += `### ℹ️ ${msg.role.toUpperCase()} (${time})\n\n${msg.content}\n\n`;
+      }
+      md += `---\n\n`;
+    }
+
+    return {
+      format: 'markdown',
+      markdown: md,
+    };
+  }
+
+  async searchConversations(organizationId: string, userId: string, query: string) {
+    if (!query?.trim()) return [];
+    const cleanQuery = query.trim().slice(0, 100);
+
+    const matches = await this.prisma.aiMessage.findMany({
+      where: {
+        organizationId,
+        content: { contains: cleanQuery, mode: 'insensitive' },
+        conversation: { createdBy: userId, archivedAt: null },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      include: {
+        conversation: {
+          select: { id: true, title: true, updatedAt: true },
+        },
+      },
+    });
+
+    return matches.map((m: any) => {
+      const lower = m.content.toLowerCase();
+      const idx = lower.indexOf(cleanQuery.toLowerCase());
+      const start = Math.max(0, idx - 40);
+      const end = Math.min(m.content.length, idx + cleanQuery.length + 60);
+      const snippet =
+        (start > 0 ? '…' : '') +
+        m.content.slice(start, end).replace(/\s+/g, ' ') +
+        (end < m.content.length ? '…' : '');
+
+      return {
+        messageId: m.id,
+        conversationId: m.conversationId,
+        conversationTitle: m.conversation?.title || 'Suhbat',
+        role: m.role,
+        snippet,
+        createdAt: m.createdAt,
+      };
+    });
+  }
+
+  async archiveConversation(
+    organizationId: string,
+    userId: string,
+    conversationId: string,
+    archived: boolean,
+  ) {
+    const updated = await this.prisma.aiConversation.updateMany({
+      where: { id: conversationId, organizationId, createdBy: userId },
+      data: { archivedAt: archived ? new Date() : null },
+    });
+    if (updated.count === 0) {
+      throw new HttpException('Conversation not found or access denied', HttpStatus.NOT_FOUND);
+    }
+    return { ok: true, conversationId, archived };
   }
 
   private async resolveOwnedConversationId(
@@ -2598,6 +2753,14 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
     requestedModel?: string,
     options?: AiChatOptions,
   ): Promise<AiChatResponse> {
+    const usage = this.checkAndIncrementOrgUsage(organizationId);
+    if (!usage.allowed) {
+      throw new HttpException(
+        `Tashkilotingiz uchun kunlik AI so'rovlar limiti (${usage.limit} ta) to'ldi. Limit ertaga yangilanadi.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const isParentAccount = options?.principalType === 'PARENT_ACCOUNT';
     const skipPersistence = options?.skipPersistence ?? isParentAccount;
     const effectiveRole = options?.userRole || (isParentAccount ? 'PARENT' : 'ADMIN');
@@ -3111,6 +3274,14 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
     requestedModel?: string,
     attachments?: AiAttachment[],
   ): Promise<void> {
+    const usage = this.checkAndIncrementOrgUsage(organizationId);
+    if (!usage.allowed) {
+      throw new HttpException(
+        `Tashkilotingiz uchun kunlik AI so'rovlar limiti (${usage.limit} ta) to'ldi. Limit ertaga yangilanadi.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     if (!res.headersSent) {
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');

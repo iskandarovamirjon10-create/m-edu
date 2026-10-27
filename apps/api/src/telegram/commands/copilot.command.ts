@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiService } from '../../ai/ai.service';
+import { isAdminRole } from '../../auth/authorization.policy';
 import { TelegramAttemptLimiter } from '../telegram-attempt-limiter.service';
 import { TelegramCommandHandler, TelegramRequestContext } from './command.interface';
 import { TelegramReply } from '../ui/telegram-ui.types';
@@ -72,6 +73,10 @@ export class CopilotCommand implements TelegramCommandHandler {
     }
     await this.limiter.hit(scope, TELEGRAM_COPILOT_WINDOW_SECONDS);
 
+    const canIncludeFinancials = Boolean(
+      ctx.role && (isAdminRole(ctx.role) || ctx.role.toUpperCase() === 'ACCOUNTANT'),
+    );
+
     try {
       const answer = await this.ai.chat(
         ctx.organizationId,
@@ -79,7 +84,7 @@ export class CopilotCommand implements TelegramCommandHandler {
         question.slice(0, TELEGRAM_COPILOT_MAX_QUESTION_LENGTH),
         [],
         undefined,
-        false,
+        canIncludeFinancials,
         undefined,
         {
           userRole: ctx.role,

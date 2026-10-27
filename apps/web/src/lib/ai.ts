@@ -583,6 +583,28 @@ export const aiConversationsApi = {
       body: JSON.stringify({ title }),
     }),
   remove: (id: string) => request(`/ai/conversations/${id}`, { method: 'DELETE' }),
+  archive: (id: string, archived = true) =>
+    request<{ ok: boolean; conversationId: string; archived: boolean }>(`/ai/conversations/${id}/archive`, {
+      method: 'PATCH',
+      body: JSON.stringify({ archived }),
+    }),
+  search: (query: string) =>
+    request<
+      Array<{
+        messageId: string;
+        conversationId: string;
+        conversationTitle: string;
+        role: string;
+        snippet: string;
+        createdAt: string;
+      }>
+    >(`/ai/conversations/search?q=${encodeURIComponent(query)}`),
+  exportUrl: (id: string, format: 'markdown' | 'json' = 'markdown') =>
+    apiUrl(`/ai/conversations/${encodeURIComponent(id)}/export?format=${format}`),
+};
+
+export const aiUsageApi = {
+  get: () => request<{ current: number; limit: number; dateStr: string }>('/ai/usage'),
 };
 
 export const aiInsightsApi = {

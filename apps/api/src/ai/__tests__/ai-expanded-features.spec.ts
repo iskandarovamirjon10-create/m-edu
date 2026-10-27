@@ -65,12 +65,46 @@ function createMockPrisma() {
       count: vi.fn(async () => 3),
     },
     aiConversation: {
-      findFirst: vi.fn(async () => null),
+      findFirst: vi.fn(async (args: any) => ({
+        id: args?.where?.id || 'conv-1',
+        organizationId: 'org-test',
+        createdBy: 'user-test-1',
+        title: 'M-EDU Test Suhbat',
+        createdAt: new Date('2026-10-25T10:00:00.000Z'),
+        updatedAt: new Date('2026-10-25T10:30:00.000Z'),
+        messages: [
+          {
+            id: 'm-1',
+            role: 'user',
+            content: 'Salom, bugungi darslar qachon?',
+            createdAt: new Date('2026-10-25T10:01:00.000Z'),
+            status: 'completed',
+          },
+          {
+            id: 'm-2',
+            role: 'assistant',
+            content: "Bugun 3 ta guruhda dars mashg'ulotlari rejalashtirilgan.",
+            createdAt: new Date('2026-10-25T10:01:05.000Z'),
+            status: 'completed',
+          },
+        ],
+      })),
       create: vi.fn(async (args: any) => ({ id: 'conv-1', ...args.data })),
+      updateMany: vi.fn(async () => ({ count: 1 })),
       findMany: vi.fn(async () => []),
     },
     aiMessage: {
       create: vi.fn(async (args: any) => ({ id: 'msg-1', ...args.data })),
+      findMany: vi.fn(async () => [
+        {
+          id: 'm-1',
+          conversationId: 'conv-1',
+          role: 'user',
+          content: "Fotosintez jarayoni haqida ma'lumot bering",
+          createdAt: new Date('2026-10-25T10:00:00.000Z'),
+          conversation: { id: 'conv-1', title: 'Biologiya darsi', updatedAt: new Date() },
+        },
+      ]),
     },
   };
   return p;
@@ -267,6 +301,62 @@ describe('AI Expanded Features Suite', () => {
 
       const updated = await service.getInsights('org-test', userId, 'global', '/');
       expect(updated.some((i) => i.id === targetId)).toBe(false);
+    });
+  });
+
+  describe('Feature 10: Conversation Workspace, Pinning, Search & Export', () => {
+    it('exports conversation to markdown with participants and timestamps', async () => {
+      const result = await service.exportConversation('org-test', 'user-test-1', 'conv-1', 'markdown');
+
+      expect(result.format).toBe('markdown');
+      expect(result.markdown).toContain('# M-EDU Test Suhbat');
+      expect(result.markdown).toContain('👤 Siz');
+      expect(result.markdown).toContain('Salom, bugungi darslar qachon?');
+      expect(result.markdown).toContain('🤖 M-EDU AI Copilot');
+    });
+
+    it('exports conversation to structured json', async () => {
+      const result = await service.exportConversation('org-test', 'user-test-1', 'conv-1', 'json');
+
+      expect(result.format).toBe('json');
+      expect(result.data).toBeDefined();
+      expect(result.data.id).toBe('conv-1');
+      expect(result.data.title).toBe('M-EDU Test Suhbat');
+      expect(result.data.messages.length).toBe(2);
+    });
+
+    it('searches messages inside conversations and returns snippets', async () => {
+      const results = await service.searchConversations('org-test', 'user-test-1', 'Fotosintez');
+
+      expect(results.length).toBe(1);
+      expect(results[0].conversationId).toBe('conv-1');
+      expect(results[0].conversationTitle).toBe('Biologiya darsi');
+      expect(results[0].snippet).toContain('Fotosintez');
+    });
+
+    it('archives conversation and updates archivedAt state', async () => {
+      const result = await service.archiveConversation('org-test', 'user-test-1', 'conv-1', true);
+
+      expect(result.ok).toBe(true);
+      expect(result.conversationId).toBe('conv-1');
+      expect(result.archived).toBe(true);
+    });
+  });
+
+  describe('Feature 11 & 12: Usage Governance & Quota Budgets', () => {
+    it('tracks organization daily AI quota and blocks when limit exceeded', async () => {
+      const testOrg = 'org-quota-test';
+
+      // 1st request
+      const first = service.checkAndIncrementOrgUsage(testOrg);
+      expect(first.allowed).toBe(true);
+      expect(first.current).toBe(1);
+
+      // Usage status query
+      const status = service.getOrgUsage(testOrg);
+      expect(status.current).toBe(1);
+      expect(status.limit).toBe(500);
+      expect(status.dateStr).toBe(new Date().toISOString().slice(0, 10));
     });
   });
 });
