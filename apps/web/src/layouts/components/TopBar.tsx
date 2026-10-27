@@ -601,7 +601,7 @@ const TelemetryChip = memo(function TelemetryChip() {
         ) : pendingCount > 0 ? (
           <span className="hidden items-center gap-1 text-amber-500 font-semibold xl:inline-flex text-[11px]">
             <span>☁</span>
-            <span>${pendingCount} navbatda</span>
+            <span>{pendingCount} navbatda</span>
           </span>
         ) : (
           <span className="hidden items-center gap-1.5 tabular-nums text-[var(--text-secondary)] xl:inline-flex">
@@ -618,7 +618,7 @@ const TelemetryChip = memo(function TelemetryChip() {
                   )}
                   aria-hidden="true"
                 />
-                <span>${latency}ms</span>
+                <span>{latency}ms</span>
               </>
             ) : (
               t('common.offline', 'Offline')
@@ -1086,6 +1086,8 @@ export const QuickActionHub = memo(function QuickActionHub({
             exit={{ opacity: 0, y: -6, scale: 0.96 }}
             transition={reduced ? { duration: 0 } : POPOVER_SPRING}
             style={{ transformOrigin: 'top right' }}
+            role="menu"
+            aria-label="Tezkor yaratish markazi"
             className={cn(
               'absolute right-0 top-[calc(100%+0.55rem)] z-50 w-72 rounded-2xl isolate overflow-hidden',
               LIQUID_POPOVER,
@@ -1109,6 +1111,7 @@ export const QuickActionHub = memo(function QuickActionHub({
                   <motion.button
                     key={act.id}
                     type="button"
+                    role="menuitem"
                     onClick={() => handleSelect(act.to)}
                     onMouseEnter={() => setHoveredIdx(idx)}
                     whileHover={reduced ? undefined : { x: 2 }}
@@ -1223,6 +1226,8 @@ const BranchSelectorMenu = memo(function BranchSelectorMenu({
             exit={{ opacity: 0, y: -6, scale: 0.96 }}
             transition={reduced ? { duration: 0 } : POPOVER_SPRING}
             style={{ transformOrigin: 'top right' }}
+            role="menu"
+            aria-label="Tashkilot va Filiallar"
             className={cn(
               'absolute right-0 top-[calc(100%+0.55rem)] z-50 w-72 rounded-2xl isolate overflow-hidden',
               LIQUID_POPOVER,
@@ -1263,6 +1268,7 @@ const BranchSelectorMenu = memo(function BranchSelectorMenu({
               <div className="mt-3 pt-2 border-t border-black/[0.06] dark:border-white/[0.08]">
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setOpen(false);
                     navigate('/branches');
