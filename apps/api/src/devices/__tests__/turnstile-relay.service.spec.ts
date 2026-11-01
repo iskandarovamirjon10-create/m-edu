@@ -349,4 +349,65 @@ describe('TurnstileRelayService', () => {
     const notFound = await service.testDevice('non-existent', 'org-diag');
     expect(notFound.online).toBe(false);
   });
+
+  describe('SSRF Defense & URL Validation', () => {
+    it('blocks cloud metadata IP (AWS/GCP/Azure) and domains', () => {
+      const metadataUrls = [
+        'http://169.254.169.254/latest/meta-data/',
+        'http://169.254.170.2/v2/credentials',
+        'http://metadata.google.internal/computeMetadata/v1/',
+        'http://sub.metadata.google.internal/test',
+        'http://169.254.1.1/relay',
+      ];
+
+      for (const url of metadataUrls) {
+        expect(() => {
+          service.registerDevice({
+            id: 'malicious-device',
+            name: 'Rogue Relay',
+            organizationId: 'org-test',
+            protocol: 'HTTP_PULSE',
+            endpointUrl: url,
+            enabled: true,
+          });
+        }).toThrow(/cloud metadata|link-local/i);
+      }
+    });
+
+    it('blocks non-HTTP protocols (file, gopher, ftp)', () => {
+      const dangerousProtocols = [
+        'file:///etc/passwd',
+        'gopher://127.0.0.1:70/',
+        'ftp://192.168.1.50/firmware',
+      ];
+
+      for (const url of dangerousProtocols) {
+        expect(() => {
+          service.registerDevice({
+            id: 'bad-proto',
+            name: 'Bad Proto Relay',
+            organizationId: 'org-test',
+            protocol: 'HTTP_PULSE',
+            endpointUrl: url,
+            enabled: true,
+          });
+        }).toThrow(/Prohibited protocol/i);
+      }
+    });
+
+    it('permits valid intranet IoT relay controllers', () => {
+      expect(() => {
+        service.registerDevice({
+          id: 'valid-relay',
+          name: 'Front Gate Shelly Relay',
+          organizationId: 'org-valid',
+          protocol: 'HTTP_PULSE',
+          endpointUrl: 'http://192.168.1.105:8080/relay/0',
+          enabled: true,
+        });
+      }).not.toThrow();
+
+      expect(service.getDevice('valid-relay')).toBeDefined();
+    });
+  });
 });

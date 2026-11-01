@@ -182,6 +182,16 @@ describe('CertificatesService', () => {
       expect(rendered).toContain('&lt;script&gt;');
     });
 
+    it('safely handles template keys with special regex characters without ReDoS or syntax error', () => {
+      const html = '<h1>Hello {{user[name]}} and {{student+grade}} and {{score*100}}</h1>';
+      const rendered = service.renderTemplate(html, {
+        'user[name]': 'Alice',
+        'student+grade': 'Grade A+',
+        'score*100': '98%',
+      });
+      expect(rendered).toBe('<h1>Hello Alice and Grade A+ and 98%</h1>');
+    });
+
     it('generates PDF buffer and updates certificate with download url', async () => {
       const cert = {
         id: 'c1',

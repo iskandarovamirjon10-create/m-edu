@@ -38,6 +38,12 @@ export const DEFAULT_CSRF_EXEMPT_PATHS: readonly string[] = [
   // change), body-validated and throttled — CSRF adds nothing here and a
   // crash reporter cannot fetch tokens before posting.
   '/api/client-errors',
+  // Machine-to-machine payment gateway callbacks (Click MD5 payload signature, Payme Basic Auth/RPC).
+  // Click server callbacks do not carry Authorization headers and have no browser cookies;
+  // exempting them prevents 403 Forbidden rejection of legitimate payment notifications.
+  '/api/billing/click',
+  '/api/billing/payme',
+  '/api/payments/webhook/',
 ];
 
 export function csrfExemptPaths(env: NodeJS.ProcessEnv = process.env): string[] {

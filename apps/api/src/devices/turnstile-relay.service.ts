@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as net from 'net';
 import {
@@ -9,6 +9,70 @@ import {
   TurnstileDeviceConfig,
   TurnstileEmergencyMode,
 } from './turnstile-relay.interface';
+
+const FORBIDDEN_METADATA_HOSTS = new Set([
+  '169.254.169.254',
+  '169.254.170.2',
+  'fd00:ec2::254',
+  'metadata.google.internal',
+  'instance-data',
+]);
+
+/**
+ * Validates that an IoT / turnstile endpoint URL is well-formed, uses http/https,
+ * and does NOT target cloud instance metadata services or forbidden internal ranges (SSRF defense).
+ */
+export function assertSafeEndpointUrl(
+  rawUrl: string,
+  isProduction: boolean = process.env.NODE_ENV === 'production',
+): URL {
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    throw new BadRequestException('Turnstile endpointUrl is required.');
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new BadRequestException(`Malformed turnstile endpointUrl: "${rawUrl}"`);
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new BadRequestException(
+      `Prohibited protocol "${parsed.protocol}". Turnstile relays only support http: and https:`,
+    );
+  }
+
+  const hostname = parsed.hostname.toLowerCase().trim();
+
+  // Cloud metadata defense (AWS, GCP, Azure, OpenStack)
+  if (
+    FORBIDDEN_METADATA_HOSTS.has(hostname) ||
+    hostname.endsWith('.metadata.google.internal') ||
+    hostname.startsWith('169.254.')
+  ) {
+    throw new BadRequestException(
+      'Security violation: requests to cloud metadata endpoints are strictly forbidden (SSRF defense).',
+    );
+  }
+
+  // Production loopback restriction
+  if (isProduction) {
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname === '::1' ||
+      hostname.startsWith('127.')
+    ) {
+      throw new BadRequestException(
+        'Security violation: loopback addresses cannot be configured as external relay endpoints in production.',
+      );
+    }
+  }
+
+  return parsed;
+}
 
 @Injectable()
 export class TurnstileRelayService {
@@ -26,6 +90,9 @@ export class TurnstileRelayService {
    * Register or update a turnstile relay hardware configuration.
    */
   registerDevice(device: TurnstileDeviceConfig): void {
+    if (device.protocol === 'HTTP_PULSE' && device.endpointUrl) {
+      assertSafeEndpointUrl(device.endpointUrl);
+    }
     this.deviceRegistry.set(device.id, { ...device });
     this.logger.log(`Turnstile relay registered: [${device.id}] "${device.name}" (${device.protocol})`);
   }
@@ -249,17 +316,12 @@ export class TurnstileRelayService {
       throw new Error(`Device [${device.id}] has no endpointUrl configured.`);
     }
 
+    const url = assertSafeEndpointUrl(device.endpointUrl);
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
 
     try {
-      let url: URL;
-      try {
-        url = new URL(device.endpointUrl);
-      } catch (e) {
-        throw new Error(`Device [${device.id}] has invalid endpointUrl: ${device.endpointUrl}`);
-      }
-
       // Support common Shelly / IoT query params if specified
       if (!url.searchParams.has('timer')) {
         url.searchParams.set('timer', String(Math.round(pulseMs / 1000)));
@@ -539,10 +601,11 @@ export class TurnstileRelayService {
 
       if (dev.protocol === 'HTTP_PULSE') {
         if (!dev.endpointUrl) throw new Error('No endpointUrl configured');
+        const safeUrl = assertSafeEndpointUrl(dev.endpointUrl);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 2000);
         try {
-          const res = await fetch(dev.endpointUrl, {
+          const res = await fetch(safeUrl.toString(), {
             method: 'HEAD',
             signal: controller.signal,
           });

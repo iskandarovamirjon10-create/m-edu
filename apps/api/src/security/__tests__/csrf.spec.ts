@@ -48,6 +48,37 @@ describe('CSRF policy (pure)', () => {
     ).toBe(false);
   });
 
+  it('exempts machine payment callbacks without Authorization header (Click / Payme)', () => {
+    expect(
+      requiresCsrfValidation({
+        method: 'POST',
+        path: '/api/billing/click',
+        headers: {},
+      }),
+    ).toBe(false);
+    expect(
+      requiresCsrfValidation({
+        method: 'POST',
+        path: '/api/billing/payme',
+        headers: {},
+      }),
+    ).toBe(false);
+    expect(
+      requiresCsrfValidation({
+        method: 'POST',
+        path: '/api/payments/webhook/click/org_12345',
+        headers: {},
+      }),
+    ).toBe(false);
+    expect(
+      requiresCsrfValidation({
+        method: 'POST',
+        path: '/api/payments/webhook/payme/org_12345',
+        headers: {},
+      }),
+    ).toBe(false);
+  });
+
   it('exempts the client-error telemetry sink (log-only, machine)', () => {
     expect(
       requiresCsrfValidation({

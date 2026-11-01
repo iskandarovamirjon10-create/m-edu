@@ -392,7 +392,8 @@ export class CertificatesService {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
-      result = result.replace(new RegExp(`{{${key}}}`, 'g'), safe);
+      // Using replaceAll avoids dynamic regex compilation and immune to ReDoS or special regex chars in key
+      result = result.replaceAll(`{{${key}}}`, safe);
     });
     return result;
   }

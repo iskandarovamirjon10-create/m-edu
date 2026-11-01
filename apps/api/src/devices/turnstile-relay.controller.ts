@@ -17,31 +17,14 @@ import {
   PulseRelayOptions,
   PulseRelayResult,
   TurnstileDeviceConfig,
-  TurnstileEmergencyMode,
 } from './turnstile-relay.interface';
+import {
+  EmergencyModeDto,
+  ManualOpenDto,
+  RegisterDeviceDto,
+} from './dto/turnstile-relay.dto';
 
-export class ManualOpenDto {
-  deviceId?: string;
-  durationMs?: number;
-  direction?: 'IN' | 'OUT';
-  reason?: string;
-}
-
-export class EmergencyModeDto {
-  mode!: TurnstileEmergencyMode;
-  reason?: string;
-}
-
-export class RegisterDeviceDto {
-  id!: string;
-  name!: string;
-  protocol!: 'HTTP_PULSE' | 'TCP_SOCKET' | 'IPC_SOCKET' | 'MQTT' | 'MOCK';
-  ipcPath?: string;
-  endpointUrl?: string;
-  authToken?: string;
-  defaultPulseMs?: number;
-  enabled?: boolean;
-}
+export { EmergencyModeDto, ManualOpenDto, RegisterDeviceDto };
 
 @Controller('devices/turnstile')
 @UseGuards(JwtAuthGuard, RolesGuard)
