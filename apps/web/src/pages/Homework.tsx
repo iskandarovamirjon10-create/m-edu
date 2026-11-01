@@ -16,6 +16,7 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { homeworkApi, groupsApi } from '@/lib/api';
@@ -605,9 +606,37 @@ export function HomeworkPage() {
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
   const [isFeedbackStudioOpen, setIsFeedbackStudioOpen] = useState(false);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialGroupId = searchParams.get('groupId') || '';
+
   // Filters
-  const [groupFilter, setGroupFilter] = useState('');
+  const [groupFilter, setGroupFilter] = useState(initialGroupId);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'DUE_SOON' | 'PAST_DUE'>('ALL');
+
+  useEffect(() => {
+    const urlGroupId = searchParams.get('groupId') || '';
+    if (urlGroupId !== groupFilter) setGroupFilter(urlGroupId);
+  }, [searchParams]);
+
+  const handleGroupFilterChange = useCallback((newGroup: string) => {
+    setGroupFilter(newGroup);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newGroup) next.set('groupId', newGroup);
+      else next.delete('groupId');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const handleClearFilters = useCallback(() => {
+    setGroupFilter('');
+    setStatusFilter('ALL');
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('groupId');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const [form, setForm] = useState<HomeworkFormState>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<
@@ -1125,7 +1154,7 @@ export function HomeworkPage() {
                 value={groupFilter}
                 onChange={(e) => {
                   playTick();
-                  setGroupFilter(e.target.value);
+                  handleGroupFilterChange(e.target.value);
                 }}
                 options={[
                   { value: '', label: t('homework.allGroups') },
@@ -1138,10 +1167,7 @@ export function HomeworkPage() {
             {(groupFilter || statusFilter !== 'ALL') && (
               <button
                 type="button"
-                onClick={() => {
-                  setGroupFilter('');
-                  setStatusFilter('ALL');
-                }}
+                onClick={handleClearFilters}
                 className="flex min-h-[44px] items-center gap-1.5 rounded-xl border border-blue-500/25 bg-blue-500/[0.08] px-3.5 py-2 text-xs font-bold text-[#2563EB] transition-all hover:bg-blue-500/[0.15] active:scale-95 dark:text-[#38BDF8]"
               >
                 <Icon paths={I.filterX} size={14} strokeWidth={2.4} />

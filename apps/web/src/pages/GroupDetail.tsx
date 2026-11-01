@@ -911,6 +911,39 @@ export function GroupDetailPage() {
             {/* Quick Actions with >= 44x44px touch targets */}
             <div className="flex flex-wrap items-center gap-2.5 shrink-0 pt-4 border-t border-black/[0.06] dark:border-white/[0.08] lg:pt-0 lg:border-t-0">
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <GlassButton asChild variant="secondary" className="min-h-[44px] px-4 !border-sky-500/30 hover:!border-sky-500/50">
+                  <Link to={`/attendance?groupId=${groupData.id}`}>
+                    <span className="inline-flex items-center gap-2 text-sky-600 dark:text-sky-400 font-semibold text-xs">
+                      <Icon paths={I.checkCircle} size={15} strokeWidth={2.2} />
+                      <span>{t('nav.attendance', 'Davomat')}</span>
+                    </span>
+                  </Link>
+                </GlassButton>
+              </motion.div>
+
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <GlassButton asChild variant="secondary" className="min-h-[44px] px-4 !border-indigo-500/30 hover:!border-indigo-500/50">
+                  <Link to={`/grades?groupId=${groupData.id}`}>
+                    <span className="inline-flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-semibold text-xs">
+                      <Icon paths={I.book} size={15} strokeWidth={2.2} />
+                      <span>{t('nav.grades', 'Baholar')}</span>
+                    </span>
+                  </Link>
+                </GlassButton>
+              </motion.div>
+
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <GlassButton asChild variant="secondary" className="min-h-[44px] px-4 !border-amber-500/30 hover:!border-amber-500/50">
+                  <Link to={`/homework?groupId=${groupData.id}`}>
+                    <span className="inline-flex items-center gap-2 text-amber-600 dark:text-amber-400 font-semibold text-xs">
+                      <Icon paths={I.layers} size={15} strokeWidth={2.2} />
+                      <span>{t('nav.homework', 'Vazifalar')}</span>
+                    </span>
+                  </Link>
+                </GlassButton>
+              </motion.div>
+
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <GlassButton
                   type="button"
                   variant="secondary"

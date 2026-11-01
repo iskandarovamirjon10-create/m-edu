@@ -16,6 +16,7 @@
  */
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
 import { gradesApi, studentsApi, groupsApi } from '@/lib/api';
@@ -288,9 +289,55 @@ export function GradesPage() {
   const qc = useQueryClient();
   const { playPop, playTick, playSuccess } = usePremiumSound();
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialGroupId = searchParams.get('groupId') || '';
+  const initialStudentId = searchParams.get('studentId') || '';
+
   const [page, setPage] = useState(1);
-  const [studentFilter, setStudentFilter] = useState('');
-  const [groupFilter, setGroupFilter] = useState('');
+  const [studentFilter, setStudentFilter] = useState(initialStudentId);
+  const [groupFilter, setGroupFilter] = useState(initialGroupId);
+
+  // Synchronize state if URL changes externally (e.g. Back/Forward)
+  useEffect(() => {
+    const urlGroupId = searchParams.get('groupId') || '';
+    const urlStudentId = searchParams.get('studentId') || '';
+    if (urlGroupId !== groupFilter) setGroupFilter(urlGroupId);
+    if (urlStudentId !== studentFilter) setStudentFilter(urlStudentId);
+  }, [searchParams]);
+
+  const handleGroupFilterChange = useCallback((newGroup: string) => {
+    setGroupFilter(newGroup);
+    setPage(1);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newGroup) next.set('groupId', newGroup);
+      else next.delete('groupId');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const handleStudentFilterChange = useCallback((newStudent: string) => {
+    setStudentFilter(newStudent);
+    setPage(1);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newStudent) next.set('studentId', newStudent);
+      else next.delete('studentId');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const handleClearAllFilters = useCallback(() => {
+    setGroupFilter('');
+    setStudentFilter('');
+    setPage(1);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('groupId');
+      next.delete('studentId');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editGrade, setEditGrade] = useState<Grade | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -729,8 +776,7 @@ export function GradesPage() {
                 value={groupFilter}
                 onChange={(e) => {
                   playTick();
-                  setGroupFilter(e.target.value);
-                  setPage(1);
+                  handleGroupFilterChange(e.target.value);
                 }}
                 options={[{ value: '', label: t('grades.allGroups') }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
                 placeholder={t('grades.allGroups')}
@@ -741,8 +787,7 @@ export function GradesPage() {
                 value={studentFilter}
                 onChange={(e) => {
                   playTick();
-                  setStudentFilter(e.target.value);
-                  setPage(1);
+                  handleStudentFilterChange(e.target.value);
                 }}
                 options={[{ value: '', label: t('grades.allStudents') }, ...students.map((s) => ({ value: s.id, label: formatStudentName(s) }))]}
                 placeholder={t('grades.allStudents')}
@@ -752,11 +797,7 @@ export function GradesPage() {
             {(groupFilter || studentFilter) && (
               <button
                 type="button"
-                onClick={() => {
-                  setGroupFilter('');
-                  setStudentFilter('');
-                  setPage(1);
-                }}
+                onClick={handleClearAllFilters}
                 className="flex min-h-[44px] items-center gap-1.5 rounded-xl border border-blue-500/25 bg-blue-500/[0.08] px-3.5 py-2 text-xs font-bold text-[#2563EB] transition-all hover:bg-blue-500/[0.15] active:scale-95 dark:text-[#38BDF8]"
               >
                 <Icon paths={I.filterX} size={14} strokeWidth={2.4} />
