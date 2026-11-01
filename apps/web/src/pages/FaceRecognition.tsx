@@ -15,7 +15,7 @@ import {
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
-import { faceApi, groupsApi } from '@/lib/api';
+import { faceApi, groupsApi, studentsApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
 import { useToasts, GlassSelect } from '@/components/ui';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
@@ -31,12 +31,15 @@ import type {
   RecognitionAttempt,
   Group,
   FaceEngineStatus,
+  Student,
 } from '@/lib/types';
 import { useAttendanceSocket } from '@/hooks/useAttendanceSocket';
 import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useOfflineFaceQueue } from '@/hooks/useOfflineFaceQueue';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { turnstileHardware } from '@/lib/hardware/turnstileHardware';
+import { useHardwareCardScanner } from '@/hooks/useHardwareCardScanner';
 import { TurnstileEmergencyLockdown } from '@/components/turnstile/TurnstileEmergencyLockdown';
 import { MultiCameraAttendanceDirector } from '@/components/camera/MultiCameraAttendanceDirector';
 import { LivenessSpoofShieldHUD } from '@/components/camera/LivenessSpoofShieldHUD';
@@ -421,7 +424,7 @@ export function FaceRecognitionPage() {
   const reduced = usePrefersReducedMotion();
   const { push, toastNode } = useToasts();
   const queryClient = useQueryClient();
-  const { playTick, playSuccess, playError } = usePremiumSound();
+  const { playTick, playSuccess, playError, playPayment } = usePremiumSound();
   const haptics = useHaptics();
   useAttendanceSocket();
   const { queueCount, isOnline, isSyncing, enqueue, syncQueue } = useOfflineFaceQueue();
@@ -463,17 +466,20 @@ export function FaceRecognitionPage() {
     }
   }, []);
 
-  const triggerTurnstileRelay = useCallback(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        const relayUrl = localStorage.getItem('m_edu_turnstile_relay_url');
-        if (relayUrl && /^https?:\/\//i.test(relayUrl)) {
-          fetch(relayUrl, { method: 'POST', mode: 'no-cors' }).catch(() => {});
+  const triggerTurnstileRelay = useCallback((studentId?: string, studentName?: string) => {
+    turnstileHardware
+      .triggerGateRelease({
+        studentId,
+        reason: studentName ? `Biometrik tasdiq: ${studentName}` : 'Biometrik yuz tanish',
+        direction: 'IN',
+        durationMs: 1200,
+      })
+      .then((res) => {
+        if (!res.success && res.error) {
+          console.warn('[FaceRecognition] Turnstile pulse notification:', res.error);
         }
-      }
-    } catch {
-      // Relay network fallback silent
-    }
+      })
+      .catch(() => {});
   }, []);
 
   /* ── Auto-dismiss Banner ── */
@@ -641,7 +647,7 @@ export function FaceRecognitionPage() {
 
       if (kind === 'success' && studentName && studentName !== '—') {
         speakGreeting(studentName);
-        triggerTurnstileRelay();
+        triggerTurnstileRelay(studentId, studentName);
       }
 
       // Append to live session stream
@@ -775,6 +781,73 @@ export function FaceRecognitionPage() {
     },
     [form.sessionId, submit, isOnline, enqueue, queueCount, playTick, haptics, push],
   );
+
+  const handleCardScan = useCallback(
+    async (code: string) => {
+      try {
+        const res = (await studentsApi.list({ search: code, limit: 1 })) as Paginated<Student>;
+        const student = res?.items?.[0];
+
+        if (!student) {
+          playError();
+          haptics.error();
+          push('error', `Karta topilmadi: "${code}" raqamli o'quvchi bazada yo'q`);
+          return;
+        }
+
+        const studentName = formatStudentName(student);
+        const groupName = student.groups?.[0]?.group?.name || 'Biriktirilgan';
+        const photoUrl = (student as any).photoUrl || (student as any).user?.avatarUrl;
+
+        playPayment();
+        haptics.heavy();
+        speakGreeting(studentName);
+        triggerTurnstileRelay(student.id, studentName);
+
+        // Display Result Banner
+        bannerSeq.current += 1;
+        setLiveBanner({
+          id: bannerSeq.current,
+          kind: 'success',
+          studentName,
+          studentId: student.id,
+          groupName,
+          photoUrl,
+          title: `${studentName} — Karta orqali tasdiqlandi`,
+          subtitle: `RFID / Barcode: ${code} · Guruh: ${groupName}`,
+          confidence: 1.0,
+          timestamp: new Date().toLocaleTimeString('uz-UZ'),
+        });
+
+        // Append to live feed
+        setLiveFeed((prev) => [
+          {
+            id: `feed_card_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
+            name: `${studentName} (RFID)`,
+            group: groupName,
+            confidence: '100% (Card)',
+            kind: 'success',
+            studentId: student.id,
+            studentRef: student,
+          },
+          ...prev.slice(0, 24),
+        ]);
+
+        push('success', `💳 ${studentName}: Turniket ochildi`);
+        queryClient.invalidateQueries({ queryKey: queryKeys.attendance.all() });
+      } catch (err: unknown) {
+        playError();
+        push('error', `Karta skanerlashda xatolik: ${getErrorMessage(err)}`);
+      }
+    },
+    [playError, playPayment, haptics, speakGreeting, triggerTurnstileRelay, push, queryClient],
+  );
+
+  const { isNfcActive } = useHardwareCardScanner({
+    enabled: true,
+    onScan: handleCardScan,
+  });
 
   const handleStartSession = useCallback(() => {
     playTick();
@@ -1057,6 +1130,12 @@ export function FaceRecognitionPage() {
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-500/30">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                             Turniket Live
+                          </span>
+                        )}
+                        {isNfcActive && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-300 ring-1 ring-cyan-500/30">
+                            <span className="h-1 w-1 rounded-full bg-cyan-400" />
+                            NFC Faol
                           </span>
                         )}
                       </div>

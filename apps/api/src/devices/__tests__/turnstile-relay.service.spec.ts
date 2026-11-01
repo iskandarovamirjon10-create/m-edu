@@ -265,4 +265,88 @@ describe('TurnstileRelayService', () => {
     expect(result2.status).toBe('FAILED');
     expect(result2.status).not.toBe('RATE_LIMITED');
   });
+
+  it('manages emergency modes: blocks pulses in LOCKDOWN mode', async () => {
+    service.registerDevice({
+      id: 'gate-lockdown',
+      name: 'Security Gate',
+      organizationId: 'org-lock',
+      protocol: 'MOCK',
+      enabled: true,
+    });
+
+    expect(service.getEmergencyMode('org-lock').mode).toBe('NORMAL');
+
+    await service.setEmergencyMode('org-lock', 'LOCKDOWN', 'Code Red Intruder Alert', 'user-admin-1');
+    expect(service.getEmergencyMode('org-lock').mode).toBe('LOCKDOWN');
+    expect(service.getEmergencyMode('org-lock').reason).toBe('Code Red Intruder Alert');
+
+    const result = await service.triggerPulse({
+      organizationId: 'org-lock',
+      deviceId: 'gate-lockdown',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('EMERGENCY_LOCKDOWN');
+    expect(result.error).toContain('Physical gate locked: security lockdown');
+
+    // Reverting to NORMAL re-enables pulses
+    await service.setEmergencyMode('org-lock', 'NORMAL', 'Threat Cleared', 'user-admin-1');
+    expect(service.getEmergencyMode('org-lock').mode).toBe('NORMAL');
+
+    const normalResult = await service.triggerPulse({
+      organizationId: 'org-lock',
+      deviceId: 'gate-lockdown',
+    });
+    expect(normalResult.success).toBe(true);
+    expect(normalResult.status).toBe('PULSED');
+  });
+
+  it('triggers evacuation pulse to all devices during EVACUATION', async () => {
+    const pulseSpy = vi.spyOn(service, 'triggerPulse');
+
+    service.registerDevice({
+      id: 'gate-evac-1',
+      name: 'Exit Gate 1',
+      organizationId: 'org-evac',
+      protocol: 'MOCK',
+      enabled: true,
+    });
+    service.registerDevice({
+      id: 'gate-evac-2',
+      name: 'Exit Gate 2',
+      organizationId: 'org-evac',
+      protocol: 'MOCK',
+      enabled: true,
+    });
+
+    await service.setEmergencyMode('org-evac', 'EVACUATION', 'Fire alarm triggered');
+
+    expect(service.getEmergencyMode('org-evac').mode).toBe('EVACUATION');
+    expect(pulseSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: 'org-evac',
+        direction: 'OUT',
+        pulseMs: 15000,
+      }),
+    );
+  });
+
+  it('diagnoses and tests hardware relay connection', async () => {
+    service.registerDevice({
+      id: 'test-mock-gate',
+      name: 'Diagnose Gate',
+      organizationId: 'org-diag',
+      protocol: 'MOCK',
+      enabled: true,
+    });
+
+    const result = await service.testDevice('test-mock-gate', 'org-diag');
+    expect(result.online).toBe(true);
+    expect(result.protocol).toBe('MOCK');
+    expect(result.message).toContain('Mock relay controller ready');
+
+    const notFound = await service.testDevice('non-existent', 'org-diag');
+    expect(notFound.online).toBe(false);
+  });
 });

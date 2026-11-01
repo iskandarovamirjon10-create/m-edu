@@ -18,13 +18,16 @@ export class StudentsService {
     const where: Prisma.StudentWhereInput = { organizationId };
 
     if (query.search) {
+      const trimmedSearch = query.search.trim();
+      const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(trimmedSearch);
       where.OR = [
-        { user: { firstName: { contains: query.search, mode: 'insensitive' } } },
-        { user: { lastName: { contains: query.search, mode: 'insensitive' } } },
-        { user: { email: { contains: query.search, mode: 'insensitive' } } },
-        { user: { phone: { contains: query.search, mode: 'insensitive' } } },
-        { parentName: { contains: query.search, mode: 'insensitive' } },
-        { parentPhone: { contains: query.search, mode: 'insensitive' } },
+        ...(isUuid ? [{ id: trimmedSearch }] : []),
+        { user: { firstName: { contains: trimmedSearch, mode: 'insensitive' } } },
+        { user: { lastName: { contains: trimmedSearch, mode: 'insensitive' } } },
+        { user: { email: { contains: trimmedSearch, mode: 'insensitive' } } },
+        { user: { phone: { contains: trimmedSearch, mode: 'insensitive' } } },
+        { parentName: { contains: trimmedSearch, mode: 'insensitive' } },
+        { parentPhone: { contains: trimmedSearch, mode: 'insensitive' } },
       ];
     }
     if (query.groupId || query.teacherId) {

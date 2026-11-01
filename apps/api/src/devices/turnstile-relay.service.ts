@@ -2,9 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as net from 'net';
 import {
+  DeviceTestResult,
+  EmergencyModeState,
   PulseRelayOptions,
   PulseRelayResult,
   TurnstileDeviceConfig,
+  TurnstileEmergencyMode,
 } from './turnstile-relay.interface';
 
 @Injectable()
@@ -12,6 +15,7 @@ export class TurnstileRelayService {
   private readonly logger = new Logger(TurnstileRelayService.name);
   private readonly deviceRegistry = new Map<string, TurnstileDeviceConfig>();
   private readonly lastPulseTimestamps = new Map<string, number>();
+  private readonly emergencyModes = new Map<string, EmergencyModeState>();
 
   /** Anti-burnout lockout window in milliseconds between physical coil pulses */
   private readonly MIN_PULSE_INTERVAL_MS = 1500;
@@ -66,6 +70,18 @@ export class TurnstileRelayService {
   async triggerPulse(options: PulseRelayOptions): Promise<PulseRelayResult> {
     const startTime = Date.now();
     const executedAt = new Date();
+
+    const emergency = this.getEmergencyMode(options.organizationId);
+    if (emergency.mode === 'LOCKDOWN') {
+      this.logger.warn(`Turnstile gate pulse BLOCKED due to active LOCKDOWN mode`);
+      return {
+        success: false,
+        durationMs: 0,
+        executedAt,
+        status: 'EMERGENCY_LOCKDOWN',
+        error: `Physical gate locked: security lockdown in effect (${emergency.reason || 'manual override'}).`,
+      };
+    }
 
     let targetDevice: TurnstileDeviceConfig | undefined;
 
@@ -436,5 +452,178 @@ export class TurnstileRelayService {
         socket.connect(resolvedPort, host, onConnect);
       }
     });
+  }
+
+  /**
+   * Get the current emergency mode state for an organization.
+   */
+  getEmergencyMode(organizationId: string): EmergencyModeState {
+    return (
+      this.emergencyModes.get(organizationId) ?? {
+        mode: 'NORMAL',
+        updatedAt: new Date(),
+      }
+    );
+  }
+
+  /**
+   * Sets the turnstile security mode for an organization (NORMAL, EVACUATION, or LOCKDOWN).
+   * In EVACUATION mode: dispatches permanent/extended open pulse to all gates so occupants can exit safely.
+   * In LOCKDOWN mode: disallows any open pulses and immediately secures all gates.
+   */
+  async setEmergencyMode(
+    organizationId: string,
+    mode: TurnstileEmergencyMode,
+    reason?: string,
+    userId?: string,
+  ): Promise<EmergencyModeState> {
+    const state: EmergencyModeState = {
+      mode,
+      reason,
+      updatedAt: new Date(),
+      updatedBy: userId,
+    };
+    this.emergencyModes.set(organizationId, state);
+
+    this.logger.warn(
+      `🚨 [EMERGENCY_OVERRIDE] Organization [${organizationId}] turnstiles set to ${mode} mode ` +
+      `(by=${userId ?? 'system'}, reason="${reason || 'none'}")`,
+    );
+
+    if (mode === 'EVACUATION') {
+      const devices = this.listDevices(organizationId);
+      for (const dev of devices) {
+        if (dev.enabled) {
+          this.triggerPulse({
+            organizationId,
+            deviceId: dev.id,
+            direction: 'OUT',
+            pulseMs: 15000,
+            reason: `EVACUATION ORDER by ${userId ?? 'system'}`,
+          }).catch((err: unknown) => {
+            this.logger.error(`Evacuation pulse failed for device ${dev.id}: ${err instanceof Error ? err.message : String(err)}`);
+          });
+        }
+      }
+    }
+
+    return state;
+  }
+
+  /**
+   * Pings physical turnstile relay controller to verify hardware connectivity, latency, and status.
+   */
+  async testDevice(deviceId: string, organizationId: string): Promise<DeviceTestResult> {
+    const dev = this.getDevice(deviceId, organizationId);
+    if (!dev) {
+      return {
+        deviceId,
+        online: false,
+        latencyMs: 0,
+        protocol: 'MOCK',
+        message: 'Device not found or does not belong to this organization',
+      };
+    }
+
+    const start = Date.now();
+    try {
+      if (dev.protocol === 'MOCK') {
+        return {
+          deviceId,
+          online: true,
+          latencyMs: 1,
+          protocol: dev.protocol,
+          message: 'Mock relay controller ready and responding',
+        };
+      }
+
+      if (dev.protocol === 'HTTP_PULSE') {
+        if (!dev.endpointUrl) throw new Error('No endpointUrl configured');
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2000);
+        try {
+          const res = await fetch(dev.endpointUrl, {
+            method: 'HEAD',
+            signal: controller.signal,
+          });
+          return {
+            deviceId,
+            online: res.status < 500,
+            latencyMs: Date.now() - start,
+            protocol: dev.protocol,
+            message: `HTTP endpoint online (HTTP ${res.status})`,
+          };
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+
+      if (dev.protocol === 'TCP_SOCKET') {
+        return new Promise<DeviceTestResult>((resolve) => {
+          const socket = new net.Socket();
+          const timer = setTimeout(() => {
+            socket.destroy();
+            resolve({
+              deviceId,
+              online: false,
+              latencyMs: Date.now() - start,
+              protocol: dev.protocol,
+              message: 'TCP socket ping timed out (2000ms)',
+            });
+          }, 2000);
+
+          socket.on('connect', () => {
+            clearTimeout(timer);
+            socket.end();
+            resolve({
+              deviceId,
+              online: true,
+              latencyMs: Date.now() - start,
+              protocol: dev.protocol,
+              message: 'TCP hardware controller socket verified',
+            });
+          });
+
+          socket.on('error', (err) => {
+            clearTimeout(timer);
+            socket.destroy();
+            resolve({
+              deviceId,
+              online: false,
+              latencyMs: Date.now() - start,
+              protocol: dev.protocol,
+              message: err.message,
+            });
+          });
+
+          const port = dev.port || 5000;
+          let host = dev.host;
+          if (!host && dev.endpointUrl) {
+            try {
+              host = new URL(dev.endpointUrl).hostname;
+            } catch {
+              host = '127.0.0.1';
+            }
+          }
+          socket.connect(port, host || '127.0.0.1');
+        });
+      }
+
+      return {
+        deviceId,
+        online: true,
+        latencyMs: Date.now() - start,
+        protocol: dev.protocol,
+        message: 'Protocol diagnostics completed',
+      };
+    } catch (err: unknown) {
+      return {
+        deviceId,
+        online: false,
+        latencyMs: Date.now() - start,
+        protocol: dev.protocol,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 }

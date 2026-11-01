@@ -1,16 +1,17 @@
 /**
  * M-EDU V2 — Hardware Turnstile Emergency & Lockdown Control (`TurnstileEmergencyLockdown.tsx`)
  * Physical access override: Panic Evacuation (doors open) vs Security Lockdown (doors secured).
- * Protected by multi-factor PIN verification, emergency sirens, and immutable audit logs.
+ * Protected by multi-factor PIN verification, hardware relay trigger, and immutable backend sync.
  */
 
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, useEffect, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useToasts } from '@/components/ui';
 import { cn } from '@/lib/design';
+import { turnstileHardware, type TurnstileSecurityMode } from '@/lib/hardware/turnstileHardware';
 
-export type TurnstileSecurityMode = 'NORMAL' | 'EVACUATION' | 'LOCKDOWN';
+export type { TurnstileSecurityMode };
 
 interface TurnstileEmergencyLockdownProps {
   currentMode?: TurnstileSecurityMode;
@@ -18,23 +19,39 @@ interface TurnstileEmergencyLockdownProps {
 }
 
 export const TurnstileEmergencyLockdown = memo(function TurnstileEmergencyLockdown({
-  currentMode = 'NORMAL',
+  currentMode,
   onModeChange,
 }: TurnstileEmergencyLockdownProps) {
   const { push } = useToasts();
   const { playTick, playSuccess, playError, playLaserScan } = usePremiumSound();
 
-  const [activeMode, setActiveMode] = useState<TurnstileSecurityMode>(currentMode);
+  const [activeMode, setActiveMode] = useState<TurnstileSecurityMode>(currentMode || 'NORMAL');
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [targetMode, setTargetMode] = useState<TurnstileSecurityMode>('NORMAL');
   const [pinInput, setPinInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOpeningManual, setIsOpeningManual] = useState(false);
+  const [isUsbConnected, setIsUsbConnected] = useState(turnstileHardware.isUsbRelayConnected());
+
+  // Sync initial state from backend
+  useEffect(() => {
+    let isMounted = true;
+    turnstileHardware.getEmergencyMode().then((mode) => {
+      if (isMounted) {
+        setActiveMode(mode);
+        onModeChange?.(mode);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [onModeChange]);
 
   const initiateModeSwitch = useCallback((mode: TurnstileSecurityMode) => {
     playTick();
     if (mode === activeMode) return;
 
     if (mode === 'NORMAL') {
-      // Reverting to normal doesn't require emergency panic, but still check PIN
       setTargetMode('NORMAL');
       setIsPinModalOpen(true);
       setPinInput('');
@@ -46,31 +63,90 @@ export const TurnstileEmergencyLockdown = memo(function TurnstileEmergencyLockdo
     }
   }, [activeMode, playTick, playLaserScan]);
 
-  const handlePinSubmit = useCallback(() => {
+  const handlePinSubmit = useCallback(async () => {
     const configuredPin = typeof window !== 'undefined'
       ? localStorage.getItem('m_edu_kiosk_pin') || '1234'
       : '1234';
 
-    if (pinInput === configuredPin) {
-      playSuccess();
-      setActiveMode(targetMode);
-      onModeChange?.(targetMode);
-      setIsPinModalOpen(false);
-      setPinInput('');
-
-      if (targetMode === 'EVACUATION') {
-        push('info', "🚨 DIQQAT: Turniketlar FAVQULODDA EVAKUATSIYA rejimiga o'tkazildi! Barcha yo'laklar ochiq.");
-      } else if (targetMode === 'LOCKDOWN') {
-        push('error', "🛑 XAVFSIZLIK BLOKIROVKASI: Barcha turniketlar to'liq yopildi va qulflanildi.");
-      } else {
-        push('success', "Turniketlar standart Face ID rejimiga qaytarildi.");
-      }
-    } else {
+    if (pinInput !== configuredPin) {
       playError();
       push('error', "Noto'g'ri PIN-kod kiritildi!");
       setPinInput('');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await turnstileHardware.setEmergencyMode(
+        targetMode,
+        targetMode === 'EVACUATION'
+          ? 'Favqulodda evakuatsiya buyrug‘i'
+          : targetMode === 'LOCKDOWN'
+            ? 'Xavfsizlik blokirovkasi buyrug‘i'
+            : 'Standart rejim tiklandi',
+      );
+
+      if (res.success) {
+        playSuccess();
+        setActiveMode(targetMode);
+        onModeChange?.(targetMode);
+        setIsPinModalOpen(false);
+        setPinInput('');
+
+        if (targetMode === 'EVACUATION') {
+          push('info', "🚨 DIQQAT: Turniketlar FAVQULODDA EVAKUATSIYA rejimiga o'tkazildi! Barcha yo'laklar ochiq.");
+        } else if (targetMode === 'LOCKDOWN') {
+          push('error', "🛑 XAVFSIZLIK BLOKIROVKASI: Barcha turniketlar to'liq yopildi va qulflanildi.");
+        } else {
+          push('success', "Turniketlar standart Face ID rejimiga qaytarildi.");
+        }
+      } else {
+        playError();
+        push('error', res.error || 'Xatolik yuz berdi');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   }, [pinInput, targetMode, onModeChange, playSuccess, playError, push]);
+
+  // One-time manual dry-contact gate pulse
+  const handleManualOpen = useCallback(async () => {
+    if (isOpeningManual) return;
+    setIsOpeningManual(true);
+    playTick();
+
+    try {
+      const res = await turnstileHardware.triggerGateRelease({
+        reason: "Qo'riqchi tomonidan qo'lda ochildi",
+        direction: 'IN',
+        durationMs: 1200,
+      });
+
+      if (res.success) {
+        playSuccess();
+        push('success', "Turniket 1 martalik o'tish uchun ochildi");
+      } else {
+        playError();
+        push('error', res.error || "Turniketni ochish imkoni bo'lmadi");
+      }
+    } finally {
+      setIsOpeningManual(false);
+    }
+  }, [isOpeningManual, playTick, playSuccess, playError, push]);
+
+  // Pair physical USB relay module
+  const handleConnectUsb = useCallback(async () => {
+    playTick();
+    const res = await turnstileHardware.requestUsbRelayConnection();
+    if (res.connected) {
+      playSuccess();
+      setIsUsbConnected(true);
+      push('success', res.info || 'USB Rele muvaffaqiyatli ulandi');
+    } else if (res.error) {
+      playError();
+      push('error', res.error);
+    }
+  }, [playTick, playSuccess, playError, push]);
 
   return (
     <>
@@ -103,17 +179,47 @@ export const TurnstileEmergencyLockdown = memo(function TurnstileEmergencyLockdo
               >
                 {activeMode}
               </span>
+
+              {isUsbConnected && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/15 px-2 py-0.5 text-[9.5px] font-bold text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
+                  USB Hardware Active
+                </span>
+              )}
             </div>
-            <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-              {activeMode === 'NORMAL' && "Standart biometrik kirish-chiqish nazorati faol"}
-              {activeMode === 'EVACUATION' && "Favqulodda evakuatsiya: eshiklar doimiy ochiq holatda"}
-              {activeMode === 'LOCKDOWN' && "Xavfsizlik blokirovkasi: barcha o'tishlar to'xtatilgan"}
+            <p className="text-[11px] text-[var(--text-muted)]">
+              {activeMode === 'NORMAL' && "Barcha yo'laklar standart avtomatik biometrik tekshiruv ostida."}
+              {activeMode === 'EVACUATION' && "Barcha turniketlar ochiq holatda qulflangan (Favqulodda evakuatsiya)."}
+              {activeMode === 'LOCKDOWN' && "Barcha yo'laklar to'liq bloklangan. Hech kim o'tkazilmaydi."}
             </p>
           </div>
         </div>
 
-        {/* Buttons */}
+        {/* Action Controls */}
         <div className="flex items-center gap-2">
+          {/* Manual 1-time Gate Pulse */}
+          <button
+            type="button"
+            onClick={handleManualOpen}
+            disabled={isOpeningManual || activeMode === 'LOCKDOWN'}
+            title="Mehmon yoki xodim uchun qulfni 1 martaga ochish"
+            className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 active:scale-95 disabled:opacity-40 transition-all"
+          >
+            {isOpeningManual ? "Ochilmoqda…" : "🔓 Qo'lda ochish"}
+          </button>
+
+          {/* Connect USB Relay button if WebSerial is available */}
+          {turnstileHardware.isWebSerialSupported() && !isUsbConnected && (
+            <button
+              type="button"
+              onClick={handleConnectUsb}
+              title="Kompuyterga ulangan USB rele modulini ulash"
+              className="rounded-xl border border-slate-400/30 bg-slate-500/10 px-2.5 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:bg-slate-500/20 transition-all"
+            >
+              🔌 USB Rele
+            </button>
+          )}
+
           {activeMode !== 'NORMAL' ? (
             <button
               type="button"
@@ -149,7 +255,7 @@ export const TurnstileEmergencyLockdown = memo(function TurnstileEmergencyLockdo
         {isPinModalOpen && (
           <div
             className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
-            onClick={() => setIsPinModalOpen(false)}
+            onClick={() => !isSubmitting && setIsPinModalOpen(false)}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.94 }}
@@ -175,33 +281,31 @@ export const TurnstileEmergencyLockdown = memo(function TurnstileEmergencyLockdo
                   type="password"
                   maxLength={6}
                   autoFocus
+                  disabled={isSubmitting}
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handlePinSubmit()}
                   placeholder="••••"
-                  className="w-36 text-center text-2xl tracking-[0.5em] font-mono py-2 rounded-2xl bg-white/10 border border-white/20 text-white outline-none focus:border-brand-400"
+                  className="w-36 text-center text-2xl tracking-[0.4em] font-mono py-2 rounded-xl bg-white/10 border border-white/20 focus:border-white focus:outline-none"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex gap-2 justify-center">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setIsPinModalOpen(false)}
-                  className="flex-1 rounded-2xl border border-white/15 bg-white/5 py-2.5 text-xs font-semibold text-neutral-300 hover:bg-white/10"
+                  className="rounded-xl px-4 py-2 text-xs font-semibold text-neutral-400 hover:text-white transition"
                 >
                   Bekor qilish
                 </button>
                 <button
                   type="button"
+                  disabled={isSubmitting || pinInput.length < 4}
                   onClick={handlePinSubmit}
-                  className={cn(
-                    'flex-1 rounded-2xl py-2.5 text-xs font-bold transition-all',
-                    targetMode === 'LOCKDOWN' && 'bg-rose-600 hover:bg-rose-500 text-white',
-                    targetMode === 'EVACUATION' && 'bg-amber-600 hover:bg-amber-500 text-white',
-                    targetMode === 'NORMAL' && 'bg-emerald-600 hover:bg-emerald-500 text-white',
-                  )}
+                  className="rounded-xl bg-white text-black px-5 py-2 text-xs font-bold hover:bg-neutral-200 transition disabled:opacity-40"
                 >
-                  Tasdiqlash
+                  {isSubmitting ? "Bajarilmoqda…" : "Tasdiqlash"}
                 </button>
               </div>
             </motion.div>

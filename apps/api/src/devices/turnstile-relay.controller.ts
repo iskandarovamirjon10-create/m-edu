@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -11,15 +12,23 @@ import { RolesGuard } from '../auth/roles.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TurnstileRelayService } from './turnstile-relay.service';
 import {
+  DeviceTestResult,
+  EmergencyModeState,
   PulseRelayOptions,
   PulseRelayResult,
   TurnstileDeviceConfig,
+  TurnstileEmergencyMode,
 } from './turnstile-relay.interface';
 
 export class ManualOpenDto {
   deviceId?: string;
   durationMs?: number;
   direction?: 'IN' | 'OUT';
+  reason?: string;
+}
+
+export class EmergencyModeDto {
+  mode!: TurnstileEmergencyMode;
   reason?: string;
 }
 
@@ -40,13 +49,38 @@ export class TurnstileRelayController {
   constructor(private readonly relayService: TurnstileRelayService) {}
 
   @Get()
-  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'STAFF')
   listDevices(@CurrentUser('organizationId') orgId: string): TurnstileDeviceConfig[] {
     return this.relayService.listDevices(orgId);
   }
 
-  @Post('open')
+  @Get('emergency')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'STAFF', 'TEACHER')
+  getEmergencyMode(@CurrentUser('organizationId') orgId: string): EmergencyModeState {
+    return this.relayService.getEmergencyMode(orgId);
+  }
+
+  @Post('emergency')
   @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
+  async setEmergencyMode(
+    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: EmergencyModeDto,
+  ): Promise<EmergencyModeState> {
+    return this.relayService.setEmergencyMode(orgId, dto.mode, dto.reason, userId);
+  }
+
+  @Post(':id/test')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
+  async testDevice(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') id: string,
+  ): Promise<DeviceTestResult> {
+    return this.relayService.testDevice(id, orgId);
+  }
+
+  @Post('open')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'STAFF')
   async openGate(
     @CurrentUser('organizationId') orgId: string,
     @CurrentUser('id') userId: string,

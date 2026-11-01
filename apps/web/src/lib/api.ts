@@ -1218,6 +1218,18 @@ export const camerasApi = {
   stopWorker: (id: string) => request(`/cameras/${id}/stop-worker`, { method: 'POST' }),
   restartWorker: (id: string) => request(`/cameras/${id}/restart-worker`, { method: 'POST' }),
 };
+export const turnstileApi = {
+  listDevices: () => request('/devices/turnstile'),
+  registerDevice: (data: unknown) =>
+    request('/devices/turnstile/register', { method: 'POST', body: JSON.stringify(data) }),
+  openGate: (data?: { deviceId?: string; durationMs?: number; direction?: 'IN' | 'OUT'; reason?: string }) =>
+    request('/devices/turnstile/open', { method: 'POST', body: JSON.stringify(data ?? {}) }),
+  getEmergencyMode: () => request('/devices/turnstile/emergency'),
+  setEmergencyMode: (data: { mode: 'NORMAL' | 'EVACUATION' | 'LOCKDOWN'; reason?: string }) =>
+    request('/devices/turnstile/emergency', { method: 'POST', body: JSON.stringify(data) }),
+  testDevice: (id: string) =>
+    request(`/devices/turnstile/${encodeURIComponent(id)}/test`, { method: 'POST' }),
+};
 export const auditApi = {
   list: (params?: object) => request(`/audit${buildQuery(params)}`),
   get: (id: string) => request(`/audit/${id}`),
