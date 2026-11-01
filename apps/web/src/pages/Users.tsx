@@ -183,10 +183,14 @@ export function UsersPage() {
   });
 
   const data = users.data as Paginated<User> | undefined;
-  const rawUserList = useMemo(() => data?.items || [], [data]);
+  const rawUserList = useMemo(() => {
+    if (Array.isArray(users.data)) return users.data as User[];
+    return data?.items || [];
+  }, [users.data, data]);
 
   const userList = useMemo(() => {
     return rawUserList.filter((u) => {
+      if (!u) return false;
       if (roleFilter === 'ACTIVE' && !u.isActive) return false;
       if (roleFilter === 'ADMIN' && u.role !== 'SUPER_ADMIN' && u.role !== 'ORG_ADMIN') return false;
       if (roleFilter === 'TEACHER' && u.role !== 'TEACHER') return false;
@@ -453,7 +457,7 @@ export function UsersPage() {
           >
             <p className="text-xs font-medium text-[var(--text-secondary)]">{t('users.status.ACTIVE') || 'Faol'}</p>
             <p className="mt-1 text-2xl font-bold tracking-tight text-[#34C759] dark:text-[#30D158] tabular-nums">
-              {rawUserList.filter(u => u.isActive).length}
+              {rawUserList.filter(u => u?.isActive).length}
             </p>
           </button>
           <button
@@ -468,7 +472,7 @@ export function UsersPage() {
           >
             <p className="text-xs font-medium text-[var(--text-secondary)]">{t('users.role.ORG_ADMIN') || 'Adminlar'}</p>
             <p className="mt-1 text-2xl font-bold tracking-tight text-[#AF52DE] tabular-nums">
-              {rawUserList.filter(u => u.role === 'SUPER_ADMIN' || u.role === 'ORG_ADMIN').length}
+              {rawUserList.filter(u => u?.role === 'SUPER_ADMIN' || u?.role === 'ORG_ADMIN').length}
             </p>
           </button>
           <button
@@ -483,7 +487,7 @@ export function UsersPage() {
           >
             <p className="text-xs font-medium text-[var(--text-secondary)]">{t('users.role.TEACHER') || 'O\'qituvchilar'}</p>
             <p className="mt-1 text-2xl font-bold tracking-tight text-[#007AFF] tabular-nums">
-              {rawUserList.filter(u => u.role === 'TEACHER').length}
+              {rawUserList.filter(u => u?.role === 'TEACHER').length}
             </p>
           </button>
         </div>

@@ -603,13 +603,21 @@ function InfoRow({
 }) {
   const c = TONE_STYLES[tone] || TONE_STYLES.blue;
   const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   const handleCopy = useCallback(async () => {
     if (!copyValue || typeof navigator === 'undefined' || !navigator.clipboard) return;
     try {
       await navigator.clipboard.writeText(copyValue);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 1800);
     } catch {
       /* ignore */
     }
@@ -1489,7 +1497,7 @@ export function StudentDetailPage() {
                 {studentData.user?.email && (
                   <p className="mt-1 inline-flex items-center gap-1.5 text-[14px] font-medium text-[var(--text-secondary)] max-w-full">
                     <Icon paths={I.mail} size={14} strokeWidth={2} className="opacity-70 shrink-0" />
-                    <span className="truncate">{studentData.user.email}</span>
+                    <span className="truncate">{studentData.user?.email}</span>
                   </p>
                 )}
               </div>

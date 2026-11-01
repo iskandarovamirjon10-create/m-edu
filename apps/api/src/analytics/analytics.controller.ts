@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -36,6 +36,7 @@ export class AnalyticsController {
   @Get('overview')
   @ApiOperation({ summary: 'Get analytics overview' })
   getOverview(@CurrentUser('organizationId') orgId: string) {
+    if (!orgId) throw new ForbiddenException('Organization context is required');
     this.orgLimiter.assert(orgId, 'analytics-overview', 30, 60_000);
     return this.analyticsService.getOverview(orgId);
   }
@@ -44,10 +45,11 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Get group profitability and contribution' })
   getGroupProfitability(
     @CurrentUser('organizationId') orgId: string,
-    @Param('id') groupId: string,
+    @Param('id', ParseUUIDPipe) groupId: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
+    if (!orgId) throw new ForbiddenException('Organization context is required');
     this.orgLimiter.assert(orgId, 'analytics-profitability', 60, 60_000);
     const start = (() => { const d = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1); return Number.isNaN(d.getTime()) ? new Date(new Date().getFullYear(), 0, 1) : d; })();
     const end = endDate ? new Date(endDate) : new Date();

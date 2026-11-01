@@ -784,7 +784,7 @@ export class InvoicesService {
         if (invoice) {
           await tx.invoice.update({
             where: { id: invoice.id },
-            data: { refundedAmount: { increment: existing.amount } },
+            data: { refundedAmount: { increment: fromMinor(toMinor(existing.amount)) } },
           });
 
           const fresh = await tx.invoice.findUniqueOrThrow({ where: { id: invoice.id } });

@@ -1045,6 +1045,41 @@ export class PaymentsService {
             } catch {
               // Ignore or fallback if invoice relation is absent in mock environments
             }
+          } else if (existing.invoiceId && wasPaid && !willBePaid) {
+            try {
+              const inv = await tx.invoice.findUnique({
+                where: { id: existing.invoiceId },
+                select: { id: true, total: true, paidAmount: true, refundedAmount: true, dueDate: true, paidAt: true },
+              });
+              if (inv) {
+                const currentPaidMinor = toMinor(inv.paidAmount);
+                const refundedMinor = toMinor(inv.refundedAmount ?? 0);
+                const totalMinor = toMinor(inv.total);
+                const newPaidMinor = Math.max(0, currentPaidMinor - oldAmountMinor);
+                const netPaidMinor = Math.max(0, newPaidMinor - refundedMinor);
+
+                let newInvStatus: 'DRAFT' | 'ISSUED' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'CANCELLED' = 'ISSUED';
+                if (netPaidMinor >= totalMinor && totalMinor > 0) {
+                  newInvStatus = 'PAID';
+                } else if (netPaidMinor > 0) {
+                  newInvStatus = 'PARTIALLY_PAID';
+                } else {
+                  const isOverdue = inv.dueDate && new Date(inv.dueDate) < new Date();
+                  newInvStatus = isOverdue ? 'OVERDUE' : 'ISSUED';
+                }
+
+                await tx.invoice.update({
+                  where: { id: inv.id },
+                  data: {
+                    paidAmount: fromMinor(newPaidMinor),
+                    status: newInvStatus,
+                    paidAt: ['PAID', 'PARTIALLY_PAID'].includes(newInvStatus) ? (inv as any).paidAt : null,
+                  },
+                });
+              }
+            } catch {
+              // Ignore or fallback if invoice relation is absent in mock environments
+            }
           }
 
           const updated = await tx.payment.findUnique({

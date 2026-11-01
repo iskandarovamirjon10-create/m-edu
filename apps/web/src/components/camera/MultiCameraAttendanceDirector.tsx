@@ -303,6 +303,10 @@ export function MultiCameraAttendanceDirector({
             );
           })}
         </div>
+      ) : !selectedCamera ? (
+        <div className="py-12 text-center text-sm text-muted-foreground border border-white/10 rounded-3xl bg-black/40">
+          Faol yoki sozlangan kameralar hozircha mavjud emas.
+        </div>
       ) : (
         /* Focus / Cinema Mode */
         <div className="flex flex-col gap-4">
@@ -314,16 +318,16 @@ export function MultiCameraAttendanceDirector({
               <div className="flex items-center gap-2">
                 <span className="px-3 py-1 rounded-full bg-black/80 backdrop-blur-md text-emerald-400 font-mono text-xs border border-emerald-500/40 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  JONLI OQIM: {selectedCamera.name}
+                  JONLI OQIM: {selectedCamera?.name ?? '—'}
                 </span>
-                <GlassBadge variant="cyan" size="sm">{selectedCamera.protocol}</GlassBadge>
+                <GlassBadge variant="cyan" size="sm">{selectedCamera?.protocol ?? 'RTSP'}</GlassBadge>
               </div>
 
               <GlassButton
                 size="sm"
                 variant="ghost"
                 loading={isRefreshing}
-                onClick={() => handleRestartWorker(selectedCamera.id)}
+                onClick={() => selectedCamera?.id && handleRestartWorker(selectedCamera.id)}
                 className="text-xs"
               >
                 Oqimni yangilash
@@ -342,7 +346,7 @@ export function MultiCameraAttendanceDirector({
 
             {/* Bottom Stream IP */}
             <div className="absolute bottom-4 left-4 text-xs font-mono text-white/50 bg-black/60 px-3 py-1 rounded-xl">
-              RTSP URL: {selectedCamera.ipAddress} • {selectedCamera.fps} FPS • {selectedCamera.latencyMs}ms
+              RTSP URL: {selectedCamera?.ipAddress ?? '—'} • {selectedCamera?.fps ?? 0} FPS • {selectedCamera?.latencyMs ?? 0}ms
             </div>
           </div>
 

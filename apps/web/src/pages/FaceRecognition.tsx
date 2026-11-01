@@ -650,6 +650,11 @@ export function FaceRecognitionPage() {
         triggerTurnstileRelay(studentId, studentName);
       }
 
+      // Debounce camera captures for 3 seconds so the recognized student has time to pass through the turnstile
+      if (kind === 'success' || kind === 'duplicate') {
+        lastCaptureTimeRef.current = Date.now() + 3000;
+      }
+
       // Append to live session stream
       if (studentName && studentName !== '—') {
         setLiveFeed((prev) => [

@@ -1022,7 +1022,7 @@ export function AttendancePage() {
     const byStatus = analyticsQuery.data?.byStatus ?? [];
     const map: Record<string, number> = {};
     byStatus.forEach((s) => {
-      map[s.status] = s.count;
+      map[s.status] = (s as any).count ?? (s as any)._count?.status ?? 0;
     });
     return {
       present: map['PRESENT'] ?? 0,

@@ -61,6 +61,15 @@ describe('findOne', () => {
       expect(result).toEqual(mockPay);
       expect(service.create).toHaveBeenCalledWith(orgId, dto);
     });
+
+    it('delegates to service.create with idempotency key when provided', async () => {
+      const dto = { studentId: 's-1', amount: 50 } as never;
+      const mockPay = { id: 'p-2', amount: 50 };
+      service.create = vi.fn().mockResolvedValue(mockPay);
+      const result = await controller.create(orgId, dto, 'idemp-key-12345');
+      expect(result).toEqual(mockPay);
+      expect(service.create).toHaveBeenCalledWith(orgId, dto, 'idemp-key-12345');
+    });
   });
 
   describe('update', () => {

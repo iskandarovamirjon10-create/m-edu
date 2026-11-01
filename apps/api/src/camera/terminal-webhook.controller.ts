@@ -90,6 +90,7 @@ const UUID_PATTERN =
 @Controller('webhooks/terminal')
 export class TerminalWebhookController {
   private readonly logger = new SecureLogger('info');
+  private readonly recentScans = new Map<string, number>();
 
   constructor(
     private readonly attendanceEngine: AttendanceDecisionEngine,
@@ -157,7 +158,19 @@ export class TerminalWebhookController {
       throw new BadRequestException('Invalid timestamp');
     }
 
-    // 3. Process Attendance using our Core Engine (same as Video Stream Engine)
+    // 3. In-memory debounce: hardware terminals often send 5-10 duplicate frames in quick succession
+    const scanKey = `${camera.organizationId}:${payload.userId}`;
+    const now = Date.now();
+    const lastScan = this.recentScans.get(scanKey);
+    if (lastScan && now - lastScan < 10_000) {
+      this.logger.info('Debounced duplicate terminal recognition event', {
+        cameraId: camera.id,
+        studentId: payload.userId,
+      });
+      return { success: true, debounced: true };
+    }
+
+    // 4. Process Attendance using our Core Engine (same as Video Stream Engine)
     // This perfectly unifies both architectures!
     try {
       await this.attendanceEngine.processRecognition({
@@ -167,6 +180,14 @@ export class TerminalWebhookController {
         recognizedAt,
         confidence: payload.confidence ?? 0.99, // Terminals usually only send "sure" matches
       });
+
+      this.recentScans.set(scanKey, now);
+      if (this.recentScans.size > 10_000) {
+        const threshold = now - 60_000;
+        for (const [k, v] of this.recentScans.entries()) {
+          if (v < threshold) this.recentScans.delete(k);
+        }
+      }
 
       this.logger.info('Hardware terminal event processed successfully', {
         cameraId: camera.id,

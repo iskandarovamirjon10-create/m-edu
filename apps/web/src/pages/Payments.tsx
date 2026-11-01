@@ -809,9 +809,12 @@ export function PaymentsPage() {
     const paid = paymentList.filter((p) => p.status === 'PAID').length;
     const pending = paymentList.filter((p) => p.status === 'PENDING').length;
     const overdue = paymentList.filter((p) => p.status === 'OVERDUE').length;
-    const totalAmount = paymentList
-      .filter((p) => p.status === 'PAID')
-      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const totalAmount =
+      Math.round(
+        paymentList
+          .filter((p) => p.status === 'PAID')
+          .reduce((sum, p) => sum + Math.round((Number(p.amount) || 0) * 100), 0),
+      ) / 100;
     return { total, paid, pending, overdue, totalAmount };
   }, [paymentList]);
 

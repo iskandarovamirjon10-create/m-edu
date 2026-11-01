@@ -11,6 +11,9 @@ export class CoursesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(organizationId: string, query: CourseQuery) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
     const { page, limit, skip } = parsePagination(query);
     const where: Prisma.CourseWhereInput = { organizationId };
 
@@ -49,6 +52,12 @@ export class CoursesService {
   }
 
   async findOne(organizationId: string, id: string) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Course ID is required');
+    }
     const course = await this.prisma.course.findFirst({
       where: { id, organizationId },
       include: {
@@ -66,6 +75,18 @@ export class CoursesService {
   }
 
   async create(organizationId: string, data: CreateCourseDto) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
+    if (this.prisma.organization?.findUnique) {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { id: true },
+      });
+      if (!org) {
+        throw new NotFoundException('Organization not found');
+      }
+    }
     if (data.price < 0) throw new BadRequestException('Price cannot be negative');
     if (data.duration <= 0) throw new BadRequestException('Duration must be positive');
 
@@ -82,6 +103,9 @@ export class CoursesService {
   }
 
   async update(organizationId: string, id: string, data: UpdateCourseDto) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
     await this.findOne(organizationId, id);
 
     const updateData: Prisma.CourseUpdateInput = {};
@@ -104,6 +128,9 @@ export class CoursesService {
   }
 
   async remove(organizationId: string, id: string) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
     await this.findOne(organizationId, id);
     return this.prisma.course.update({ where: { id, organizationId }, data: { isActive: false } });
   }
@@ -113,6 +140,9 @@ export class CoursesService {
   // ------------------------------------------------------------------
 
   async getStats(organizationId: string) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
     const courses = await this.prisma.course.findMany({
       where: { organizationId },
       include: {
@@ -187,34 +217,43 @@ export class CoursesService {
   // ------------------------------------------------------------------
 
   async bulkStatus(organizationId: string, dto: BulkCourseStatusDto) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
     if (!dto.courseIds || dto.courseIds.length === 0) {
       throw new BadRequestException("Kurslar ro'yxati (courseIds) bo'sh bo'lishi mumkin emas");
     }
 
     const uniqueIds = Array.from(new Set(dto.courseIds));
-    const existingCourses = await this.prisma.course.findMany({
-      where: { id: { in: uniqueIds }, organizationId },
-      select: { id: true },
+
+    return this.prisma.$transaction(async (tx) => {
+      const existingCourses = await tx.course.findMany({
+        where: { id: { in: uniqueIds }, organizationId },
+        select: { id: true },
+      });
+
+      if (existingCourses.length !== uniqueIds.length) {
+        throw new NotFoundException("Barcha tanlangan kurslar ushbu tashkilotga tegishli emas");
+      }
+
+      const result = await tx.course.updateMany({
+        where: { id: { in: uniqueIds }, organizationId },
+        data: { isActive: dto.isActive },
+      });
+
+      return {
+        success: true,
+        count: result.count,
+        isActive: dto.isActive,
+        message: `${result.count} ta kurs holati muvaffaqiyatli ${dto.isActive ? 'faollashtirildi' : 'nofaol qilindi'}`,
+      };
     });
-
-    if (existingCourses.length !== uniqueIds.length) {
-      throw new NotFoundException("Barcha tanlangan kurslar ushbu tashkilotga tegishli emas");
-    }
-
-    const result = await this.prisma.course.updateMany({
-      where: { id: { in: uniqueIds }, organizationId },
-      data: { isActive: dto.isActive },
-    });
-
-    return {
-      success: true,
-      count: result.count,
-      isActive: dto.isActive,
-      message: `${result.count} ta kurs holati muvaffaqiyatli ${dto.isActive ? 'faollashtirildi' : 'nofaol qilindi'}`,
-    };
   }
 
   async bulkPrice(organizationId: string, dto: BulkCoursePriceDto) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
     if (!dto.courseIds || dto.courseIds.length === 0) {
       throw new BadRequestException("Kurslar ro'yxati (courseIds) bo'sh bo'lishi mumkin emas");
     }
@@ -224,16 +263,17 @@ export class CoursesService {
     }
 
     const uniqueIds = Array.from(new Set(dto.courseIds));
-    const courses = await this.prisma.course.findMany({
-      where: { id: { in: uniqueIds }, organizationId },
-      select: { id: true, price: true },
-    });
-
-    if (courses.length !== uniqueIds.length) {
-      throw new NotFoundException("Barcha tanlangan kurslar ushbu tashkilotga tegishli emas");
-    }
 
     return this.prisma.$transaction(async (tx) => {
+      const courses = await tx.course.findMany({
+        where: { id: { in: uniqueIds }, organizationId },
+        select: { id: true, price: true },
+      });
+
+      if (courses.length !== uniqueIds.length) {
+        throw new NotFoundException("Barcha tanlangan kurslar ushbu tashkilotga tegishli emas");
+      }
+
       let updatedCount = 0;
       for (const course of courses) {
         let newPrice = Number(course.price);

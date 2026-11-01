@@ -592,11 +592,12 @@ export function InvoicesPage() {
   });
 
   const remaining = (inv: Invoice) => {
+    if (['DRAFT', 'CANCELLED', 'REFUNDED'].includes(inv.status)) return 0;
     if (typeof (inv as any).remaining === 'number') return (inv as any).remaining;
-    const total = Number(inv.total) || 0;
-    const paid = Number((inv as any).paidAmount) || 0;
-    const refunded = Number((inv as any).refundedAmount) || 0;
-    return Math.max(0, total - paid + refunded);
+    const totalMinor = Math.round((Number(inv.total) || 0) * 100);
+    const paidMinor = Math.round((Number((inv as any).paidAmount) || 0) * 100);
+    const refundedMinor = Math.round((Number((inv as any).refundedAmount) || 0) * 100);
+    return Math.max(0, Math.round(totalMinor - paidMinor + refundedMinor)) / 100;
   };
 
   const recordPayment = useMutation({
@@ -618,11 +619,17 @@ export function InvoicesPage() {
   const items: any[] = (invoices.data as any)?.items ?? [];
 
   const stats = useMemo(() => {
-    const total = items.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
-    const paid = items.reduce((sum, inv) => sum + (Number(inv.paidAmount) || 0), 0);
-    const outstanding = items.reduce((sum, inv) => sum + remaining(inv as any), 0);
+    const totalMinor = items.reduce((sum, inv) => sum + Math.round((Number(inv.total) || 0) * 100), 0);
+    const paidMinor = items.reduce((sum, inv) => sum + Math.round((Number(inv.paidAmount) || 0) * 100), 0);
+    const outstandingMinor = items.reduce((sum, inv) => sum + Math.round(remaining(inv as any) * 100), 0);
     const overdue = items.filter((inv) => inv.status === 'OVERDUE').length;
-    return { total, paid, outstanding, overdue, count: items.length };
+    return {
+      total: Math.round(totalMinor) / 100,
+      paid: Math.round(paidMinor) / 100,
+      outstanding: Math.round(outstandingMinor) / 100,
+      overdue,
+      count: items.length,
+    };
   }, [items]);
 
 

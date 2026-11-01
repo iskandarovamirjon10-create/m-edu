@@ -1460,7 +1460,7 @@ const RowHoverPeek = memo(function RowHoverPeek({
             Guruhlar
           </div>
           <div className="mt-0.5 truncate text-[11.5px] font-semibold text-slate-800 dark:text-slate-200">
-            {activeGroups.length > 0 ? activeGroups.map((g) => g.group.name).join(', ') : '—'}
+            {activeGroups.length > 0 ? activeGroups.map((g) => g.group?.name ?? '—').join(', ') : '—'}
           </div>
         </div>
         <div>
@@ -1518,6 +1518,15 @@ export function StudentsPage() {
   const [hoveredStudent, setHoveredStudent] = useState<{ student: Student; rect: DOMRect } | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
 
+  // Unmount cleanup for hover peek timeout to prevent memory leak
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) {
+        window.clearTimeout(hoverTimerRef.current);
+      }
+    };
+  }, []);
+
   const debouncedSearch = useDebounce(search.trim(), 300);
 
   // ── Keyboard shortcuts ────────────────────────────────────────
@@ -1541,7 +1550,7 @@ export function StudentsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, groupId]);
+  }, [debouncedSearch, groupId, statusFilter]);
 
   // ── Data fetching ─────────────────────────────────────────────
   const params = useMemo<StudentFilters>(
@@ -1698,7 +1707,7 @@ export function StudentsPage() {
           {
             label: 'Guruhlar',
             value: activeGroups.length,
-            subtext: activeGroups.map((g) => g.group.name).join(', ') || 'Biriktirilmagan',
+            subtext: activeGroups.map((g) => g.group?.name ?? '—').join(', ') || 'Biriktirilmagan',
           },
           { label: 'Holati', value: isActive ? 'Faol' : 'Muzlatilgan', subtext: 'Davomat ochiq' },
           {
@@ -1714,7 +1723,7 @@ export function StudentsPage() {
           { label: 'Ota-ona telefoni', value: student.parentPhone || '—' },
           { label: 'Talaba ID raqami', value: student.id },
         ],
-        tags: activeGroups.map((g) => g.group.name),
+        tags: activeGroups.map((g) => g.group?.name ?? '').filter(Boolean),
         primaryAction: {
           label: "To'liq kartani ochish",
           onExecute: () => navigate(`/students/${student.id}`),
@@ -1749,7 +1758,7 @@ export function StudentsPage() {
           {
             label: 'Guruhlar',
             value: activeGroups.length,
-            subtext: activeGroups.map((g) => g.group.name).join(', ') || 'Biriktirilmagan',
+            subtext: activeGroups.map((g) => g.group?.name ?? '—').join(', ') || 'Biriktirilmagan',
           },
           { label: 'Holati', value: isActive ? 'Faol' : 'Muzlatilgan', subtext: 'Davomat ochiq' },
           {
@@ -1765,7 +1774,7 @@ export function StudentsPage() {
           { label: 'Ota-ona telefoni', value: student.parentPhone || '—', copyable: true },
           { label: 'Talaba ID raqami', value: student.id, copyable: true },
         ],
-        tags: activeGroups.map((g) => g.group.name),
+        tags: activeGroups.map((g) => g.group?.name ?? '').filter(Boolean),
         primaryAction: {
           label: "To'liq kartani ochish",
           onExecute: () => navigate(`/students/${student.id}`),
@@ -1833,7 +1842,7 @@ export function StudentsPage() {
     const rows = source.map((s) => {
       const name = formatStudentName(s);
       const activeGroups = (s.groups ?? []).filter((g) => g.isActive && g.group)
-        .map((g) => g.group.name)
+        .map((g) => g.group?.name ?? '—')
         .join('; ');
       const status = s.user?.isActive !== false ? 'Faol' : 'Muzlatilgan';
       return [
@@ -2423,8 +2432,8 @@ export function StudentsPage() {
 
                       <div className="mt-4 flex flex-wrap gap-1.5">
                         {activeGroups.length > 0 ? (
-                          activeGroups.slice(0, 3).map((enrollment) => (
-                            <GlassBadge key={enrollment.group.id} color="blue">{enrollment.group.name}</GlassBadge>
+                          activeGroups.slice(0, 3).map((enrollment, idx) => (
+                            <GlassBadge key={enrollment.group?.id ?? `group-${idx}`} color="blue">{enrollment.group?.name ?? '—'}</GlassBadge>
                           ))
                         ) : (
                           <span className="text-[11.5px] italic text-slate-400">
@@ -2684,9 +2693,9 @@ export function StudentsPage() {
 
                           <td className={`px-6 ${densityRowPadding}`}>
                             {student.user?.email ? (
-                              <CopyChip value={student.user.email} icon={I.mail} />
+                              <CopyChip value={student.user?.email || ''} icon={I.mail} />
                             ) : student.user?.phone ? (
-                              <CopyChip value={student.user.phone} icon={I.phone} />
+                              <CopyChip value={student.user?.phone || ''} icon={I.phone} />
                             ) : (
                               <span className="text-[var(--text-tertiary)] opacity-45">—</span>
                             )}
@@ -2694,8 +2703,8 @@ export function StudentsPage() {
 
                           <td className={`px-6 ${densityRowPadding}`}>
                             <div className="flex flex-wrap gap-1.5">
-                              {activeGroups.slice(0, 3).map((enrollment) => (
-                                <GlassBadge key={enrollment.group.id} color="blue">{enrollment.group.name}</GlassBadge>
+                              {activeGroups.slice(0, 3).map((enrollment, idx) => (
+                                <GlassBadge key={enrollment.group?.id ?? `group-${idx}`} color="blue">{enrollment.group?.name ?? '—'}</GlassBadge>
                               ))}
                               {activeGroups.length === 0 && (
                                 <span className="text-[var(--text-tertiary)] opacity-45">—</span>

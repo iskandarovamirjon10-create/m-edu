@@ -410,12 +410,12 @@ function OverviewTab({ data, t }: { data: CashFlowData | undefined; t: (key: str
   const reduced = useReducedMotion();
   if (!data) return null;
 
-  const inflow = data.inflows?.netCashInflow ?? 0;
-  const outflow = data.outflows?.totalOutflow ?? 0;
+  const inflow = Number(data.inflows?.netCashInflow) || 0;
+  const outflow = Number(data.outflows?.totalOutflow) || 0;
   const margin = inflow > 0 ? ((inflow - outflow) / inflow) * 100 : 0;
   const maxVal = Math.max(inflow, outflow, 1);
-  const inflowWidth = (inflow / maxVal) * 100;
-  const outflowWidth = (outflow / maxVal) * 100;
+  const inflowWidth = maxVal > 0 ? Math.min(100, Math.max(0, (inflow / maxVal) * 100)) : 0;
+  const outflowWidth = maxVal > 0 ? Math.min(100, Math.max(0, (outflow / maxVal) * 100)) : 0;
 
   return (
     <motion.div
@@ -867,19 +867,25 @@ function WhatIfTab({
                 </span>
               </div>
               <div className="relative">
-                <input
-                  type="range"
-                  min={s.min}
-                  max={s.max}
-                  step={1}
-                  value={s.value}
-                  onChange={(e) => s.onChange(Number(e.target.value))}
-                  aria-label={s.label}
-                  className="w-full appearance-none cursor-pointer h-1.5 rounded-lg outline-none"
-                  style={{
-                    background: `linear-gradient(to right, ${c.fg} 0%, ${c.fg} ${((s.value - s.min) / (s.max - s.min)) * 100}%, rgba(0,0,0,0.08) ${((s.value - s.min) / (s.max - s.min)) * 100}%, rgba(0,0,0,0.08) 100%)`,
-                  }}
-                />
+                {(() => {
+                  const span = s.max - s.min;
+                  const pct = span > 0 ? Math.min(100, Math.max(0, ((s.value - s.min) / span) * 100)) : 0;
+                  return (
+                    <input
+                      type="range"
+                      min={s.min}
+                      max={s.max}
+                      step={1}
+                      value={s.value}
+                      onChange={(e) => s.onChange(Number(e.target.value))}
+                      aria-label={s.label}
+                      className="w-full appearance-none cursor-pointer h-1.5 rounded-lg outline-none"
+                      style={{
+                        background: `linear-gradient(to right, ${c.fg} 0%, ${c.fg} ${pct}%, rgba(0,0,0,0.08) ${pct}%, rgba(0,0,0,0.08) 100%)`,
+                      }}
+                    />
+                  );
+                })()}
               </div>
             </div>
           );
@@ -1375,7 +1381,7 @@ export function FinancialAnalyticsPage() {
                   <Icon paths={I.calendar} size={11} strokeWidth={2.5} />
                   {periodLabel}
                 </span>
-                {inflow > 0 && (
+                {inflow > 0 && Number.isFinite(margin) && (
                   <span
                     className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em]"
                     style={{

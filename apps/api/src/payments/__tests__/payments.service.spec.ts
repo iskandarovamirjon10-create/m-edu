@@ -7,6 +7,7 @@ import { FinancialPeriodService } from '../../analytics/financial-period.service
 function createMockPrisma() {
   const mock: any = {
     student: { findFirst: vi.fn(), update: vi.fn() },
+    invoice: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
     payment: {
       create: vi.fn(),
       findFirst: vi.fn(),
@@ -230,6 +231,56 @@ describe('findAll', () => {
       expect(prisma.student.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: { balance: { increment: -100 } },
+        }),
+      );
+    });
+
+    it('rolls back invoice paidAmount and recomputes status when paid payment linked to invoice is cancelled', async () => {
+      const existing = {
+        id: 'p-inv-1',
+        organizationId: 'org-1',
+        studentId: 's1',
+        invoiceId: 'inv-123',
+        status: 'PAID',
+        amount: 500000,
+        paidAt: new Date(),
+        dueDate: null,
+        createdAt: new Date(),
+        reference: null,
+      };
+      prisma.payment.findFirst.mockResolvedValue(existing);
+      prisma.$queryRaw.mockResolvedValue([
+        { id: 'p-inv-1', status: 'PAID', amount: 500000, studentId: 's1' },
+      ]);
+      prisma.refund.aggregate.mockResolvedValue({ _sum: { amount: 0 } });
+      prisma.payment.updateMany.mockResolvedValue({ count: 1 });
+      prisma.student.update.mockResolvedValue({});
+      prisma.invoice.findUnique.mockResolvedValue({
+        id: 'inv-123',
+        total: 500000,
+        paidAmount: 500000,
+        refundedAmount: 0,
+        dueDate: new Date(Date.now() + 86400000), // tomorrow -> ISSUED
+        paidAt: new Date(),
+      });
+      prisma.invoice.update.mockResolvedValue({});
+      prisma.payment.findUnique.mockResolvedValue({ ...existing, status: 'CANCELLED', paidAt: null });
+
+      await svc.update('org-1', 'p-inv-1', { status: 'CANCELLED' }, { userId: 'GATEWAY_SETTLEMENT' });
+
+      expect(prisma.invoice.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'inv-123' },
+          data: expect.objectContaining({
+            paidAmount: 0,
+            status: 'ISSUED',
+            paidAt: null,
+          }),
+        }),
+      );
+      expect(prisma.student.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { balance: { increment: -500000 } },
         }),
       );
     });

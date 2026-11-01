@@ -1,13 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class ReconciliationService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getReconciliationReport(organizationId: string, year: number, month: number) {
-    const periodStart = new Date(Date.UTC(year, month - 1, 1));
-    const periodEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Valid organization ID is required');
+    }
+    const safeYear = Number(year) || new Date().getFullYear();
+    const safeMonth = Math.min(12, Math.max(1, Number(month) || 1));
+    const periodStart = new Date(Date.UTC(safeYear, safeMonth - 1, 1));
+    const periodEnd = new Date(Date.UTC(safeYear, safeMonth, 0, 23, 59, 59, 999));
 
     const [invoices, payments, refunds, expenses, payroll, studentBalances] = await Promise.all([
       this.prisma.invoice.aggregate({
@@ -134,8 +141,13 @@ export class ReconciliationService {
   }
 
   async detectDiscrepancies(organizationId: string, year: number, month: number) {
-    const periodStart = new Date(Date.UTC(year, month - 1, 1));
-    const periodEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Valid organization ID is required');
+    }
+    const safeYear = Number(year) || new Date().getFullYear();
+    const safeMonth = Math.min(12, Math.max(1, Number(month) || 1));
+    const periodStart = new Date(Date.UTC(safeYear, safeMonth - 1, 1));
+    const periodEnd = new Date(Date.UTC(safeYear, safeMonth, 0, 23, 59, 59, 999));
 
     const discrepancies: Array<{
       type: string;
@@ -239,7 +251,9 @@ export class ReconciliationService {
 
     const seenDuplicateKeys = new Set<string>();
     for (const dp of duplicatePayments) {
-      const key = `${dp.studentId}-${dp.amount}-${new Date(dp.paidAt).toISOString().slice(0, 13)}`;
+      const paidDate = dp.paidAt instanceof Date ? dp.paidAt : new Date(dp.paidAt);
+      const dateSlice = !Number.isNaN(paidDate.getTime()) ? paidDate.toISOString().slice(0, 13) : 'unknown';
+      const key = `${dp.studentId}-${dp.amount}-${dateSlice}`;
       if (!seenDuplicateKeys.has(key)) {
         seenDuplicateKeys.add(key);
         discrepancies.push({
@@ -270,6 +284,9 @@ export class ReconciliationService {
   }
 
   async getStudentBalanceReport(organizationId: string) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Valid organization ID is required');
+    }
     const rows = await this.prisma.$queryRaw`
       SELECT 
         s.id as "studentId",
@@ -341,6 +358,9 @@ export class ReconciliationService {
   }
 
   async getReconciliationHistory(organizationId: string) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Valid organization ID is required');
+    }
     const periods = await this.prisma.financialPeriod.findMany({
       where: { organizationId },
       orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],

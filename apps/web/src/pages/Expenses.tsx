@@ -106,7 +106,11 @@ const INITIAL_FORM: ExpenseFormState = {
 };
 
 export function calculateTotal(expenses: Expense[]): number {
-  return expenses.reduce((sum, expense) => sum + (parseFinancialAmount(expense.amount) || 0), 0);
+  const totalMinor = expenses.reduce((sum, expense) => {
+    const amt = parseFinancialAmount(expense.amount);
+    return sum + (Number.isFinite(amt) ? Math.round(amt * 100) : 0);
+  }, 0);
+  return Math.round(totalMinor) / 100;
 }
 
 /* ============================================================================
@@ -290,7 +294,10 @@ export function ExpensesPage() {
     () => (expenseList.length > 0 ? calculateTotal(expenseList) : 0),
     [expenseList],
   );
-  const averageAmount = expenseList.length > 0 ? totalAmount / expenseList.length : 0;
+  const averageAmount =
+    expenseList.length > 0
+      ? Math.round((totalAmount / expenseList.length) * 100) / 100
+      : 0;
   const totalExpenses = data?.total || 0;
 
   const save = useMutation({

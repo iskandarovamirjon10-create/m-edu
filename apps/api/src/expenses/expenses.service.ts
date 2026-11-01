@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { toMajor2 } from '@medu/financial-engine';
 import { FinancialPeriodService } from '../analytics/financial-period.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { toDateToInclusive, startOfDay } from '../common/date-range';
@@ -61,7 +62,7 @@ export class ExpensesService {
       data: {
         organizationId,
         category: data.category,
-        amount: data.amount,
+        amount: toMajor2(data.amount),
         description: data.description,
         date: new Date(data.date),
         receipt: data.receipt,
@@ -80,7 +81,7 @@ export class ExpensesService {
     if (data.category !== undefined) updateData.category = data.category;
     if (data.amount !== undefined) {
       if (data.amount <= 0) throw new BadRequestException('Expense amount must be greater than zero');
-      updateData.amount = data.amount;
+      updateData.amount = toMajor2(data.amount);
     }
     if (data.description !== undefined) updateData.description = data.description;
     if (data.date !== undefined) updateData.date = new Date(data.date);

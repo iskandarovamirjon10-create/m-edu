@@ -858,7 +858,9 @@ export class PayrollService {
       }
     }
 
-    const totalRecommendedBonus = attendanceBonus + retentionBonus + academicBonus;
+    const totalRecommendedBonus = fromMinor(
+      toMinor(attendanceBonus) + toMinor(retentionBonus) + toMinor(academicBonus),
+    );
 
     // 7. Composite KPI Score (0-100) & Tier
     const compositeScore = Math.min(

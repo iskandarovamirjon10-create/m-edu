@@ -168,20 +168,27 @@ export function decodeValidatedImage(
     );
   }
 
-  if (imageBase64.length === 0) {
+  // Support standard Data-URI formatted images from browser/canvas captures
+  let normalized = imageBase64;
+  const dataUriMatch = /^data:image\/[a-zA-Z0-9+.-]+;base64,/i.exec(imageBase64);
+  if (dataUriMatch) {
+    normalized = imageBase64.slice(dataUriMatch[0].length);
+  }
+
+  if (normalized.length === 0) {
     throw new BadRequestException(
       'Image data is empty',
     );
   }
 
-  if (imageBase64.length > MAX_BASE64_LENGTH) {
+  if (normalized.length > MAX_BASE64_LENGTH) {
     throw new PayloadTooLargeException(
       `Image exceeds maximum allowed size of ` +
         `${Math.floor(MAX_IMAGE_BYTES / 1024 / 1024)}MB`,
     );
   }
 
-  if (!isValidBase64(imageBase64)) {
+  if (!isValidBase64(normalized)) {
     throw new BadRequestException(
       'Image data must be valid Base64',
     );
@@ -191,7 +198,7 @@ export function decodeValidatedImage(
 
   try {
     buffer = Buffer.from(
-      imageBase64,
+      normalized,
       'base64',
     );
   } catch {

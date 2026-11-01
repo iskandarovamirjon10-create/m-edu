@@ -154,6 +154,15 @@ describe('decodeValidatedImage', () => {
     expect(result.equals(source)).toBe(true);
   });
 
+  it('decodes a valid payload with data-URI prefix', () => {
+    const source = jpegBytes();
+    const base64 = `data:image/jpeg;base64,${source.toString('base64')}`;
+
+    const result = decodeValidatedImage(base64);
+
+    expect(result.equals(source)).toBe(true);
+  });
+
   it('rejects an empty payload', () => {
     expect(() => decodeValidatedImage('')).toThrow(
       BadRequestException,

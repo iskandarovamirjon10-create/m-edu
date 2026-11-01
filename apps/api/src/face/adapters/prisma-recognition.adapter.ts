@@ -94,6 +94,15 @@ export interface ScheduleGate {
 
 @Injectable()
 export class PrismaRecognitionAdapter implements RecognitionRepository {
+  /**
+   * In-memory cooldown cache keyed by `${organizationId}:${studentId}:${groupId}`
+   * to eliminate duplicate biometric scans within rapid seconds without DB roundtrips.
+   */
+  private readonly recentAttendanceCooldown = new Map<
+    string,
+    { timestamp: number; entity: AttendanceRecordEntity }
+  >();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly scheduleGate?: ScheduleGate,
@@ -457,7 +466,21 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
     decision: AttendanceDecision;
     metadata?: Record<string, unknown>;
   }): Promise<AttendanceRecordEntity> {
+    const cooldownKey = `${data.organizationId}:${data.studentId}:${data.groupId}`;
+    const now = Date.now();
+    const cached = this.recentAttendanceCooldown.get(cooldownKey);
+
+    // Fast-path in-memory cooldown: if this student was recorded/prevented in the last 60s,
+    // return duplicate prevention immediately without triggering DB operations.
+    if (cached && now - cached.timestamp < 60_000) {
+      return {
+        ...cached.entity,
+        decision: 'DUPLICATE_PREVENTED',
+      };
+    }
+
     const attendanceDate = await this.getOrganizationLocalDate(data.organizationId);
+    const dayEnd = new Date(attendanceDate.getTime() + 24 * 60 * 60 * 1000);
     const status = await this.resolveAttendanceStatus(
       data.organizationId,
       data.studentId,
@@ -486,7 +509,6 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
       });
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'P2002') {
-        const dayEnd = new Date(attendanceDate.getTime() + 24 * 60 * 60 * 1000);
         const existing = await this.prisma.attendance.findFirst({
           where: {
             organizationId: data.organizationId,
@@ -499,7 +521,7 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
           },
         });
         if (existing) {
-          return this.mapAttendanceEntity({
+          const preventedEntity = this.mapAttendanceEntity({
             id: existing.id,
             organizationId: existing.organizationId,
             studentId: existing.studentId,
@@ -511,11 +533,14 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
             metadata: data.metadata,
             recordedAt: existing.createdAt,
           });
+          this.recentAttendanceCooldown.set(cooldownKey, { timestamp: now, entity: preventedEntity });
+          return preventedEntity;
         }
       }
       throw error;
     }
-    return this.mapAttendanceEntity({
+
+    const recordedEntity = this.mapAttendanceEntity({
       id: row.id,
       organizationId: row.organizationId,
       studentId: row.studentId,
@@ -527,6 +552,18 @@ export class PrismaRecognitionAdapter implements RecognitionRepository {
       metadata: data.metadata,
       recordedAt: row.createdAt,
     });
+    this.recentAttendanceCooldown.set(cooldownKey, { timestamp: now, entity: recordedEntity });
+
+    if (this.recentAttendanceCooldown.size > 10_000) {
+      const threshold = now - 120_000;
+      for (const [k, v] of this.recentAttendanceCooldown.entries()) {
+        if (v.timestamp < threshold) {
+          this.recentAttendanceCooldown.delete(k);
+        }
+      }
+    }
+
+    return recordedEntity;
   }
 
   async findExistingAttendance(

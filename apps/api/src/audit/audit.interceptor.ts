@@ -17,15 +17,25 @@ export class AuditInterceptor implements NestInterceptor {
   constructor(private readonly auditService: AuditService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    if (typeof context.getType === 'function' && context.getType() !== 'http') {
+      return next.handle();
+    }
+
     const request = context.switchToHttp().getRequest<Request>();
+    if (!request) {
+      return next.handle();
+    }
 
     return next.handle().pipe(
       tap({
         next: (data) => {
-          this.logEvent(context, request, data, context.switchToHttp().getResponse().statusCode);
+          const res = context.switchToHttp().getResponse();
+          const statusCode = res?.statusCode ?? 200;
+          this.logEvent(context, request, data, statusCode);
         },
         error: (error) => {
-          this.logEvent(context, request, null, error.status || 500);
+          const status = error?.getStatus?.() || error?.status || error?.statusCode || 500;
+          this.logEvent(context, request, null, status);
         },
       }),
     );
@@ -37,8 +47,12 @@ export class AuditInterceptor implements NestInterceptor {
     _responseData: unknown,
     statusCode: number,
   ) {
-    const { method, path, ip, user, headers } = request;
-    const userAgent = headers['user-agent'];
+    const method = request.method || 'GET';
+    const path = request.path || (request as any).url || '';
+    const ip = request.ip || (request as any).socket?.remoteAddress;
+    const user = request.user;
+    const headers = request.headers || {};
+    const userAgent = typeof headers['user-agent'] === 'string' ? headers['user-agent'] : undefined;
 
     // SECURITY: the tenant MUST come from the authenticated principal.
     // Honoring a client-supplied x-organization-id header would let any
@@ -69,10 +83,17 @@ export class AuditInterceptor implements NestInterceptor {
     };
     const action = actionMap[method] || method;
 
+    const actorId = user?.id || user?.sub || null;
+    const validActorId = typeof actorId === 'string' && actorId.trim() ? actorId : null;
+
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      return;
+    }
+
     this.auditService
       .record({
         organizationId,
-        userId: user?.id || user?.sub || null,
+        userId: validActorId,
         action,
         resource,
         resourceId,

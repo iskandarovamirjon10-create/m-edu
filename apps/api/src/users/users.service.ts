@@ -25,6 +25,9 @@ export class UsersService {
    * List all users within an organization with pagination and filters.
    */
   async findAll(organizationId: string, query: UserQuery) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
     const { page, limit, skip } = parsePagination(query);
     const where: Prisma.UserWhereInput = { organizationId };
 
@@ -66,6 +69,12 @@ export class UsersService {
    * Retrieves a single user profile including basic settings.
    */
   async findOne(organizationId: string, id: string) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('User ID is required');
+    }
     const user = await this.prisma.user.findFirst({
       where: { id, organizationId },
       select: {
@@ -95,6 +104,10 @@ export class UsersService {
    * Creates a new user with proper RBAC permission checks.
    */
   async create(organizationId: string, data: CreateUserDto, actorRole?: string) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
+
     // Only a platform SUPER_ADMIN may mint another SUPER_ADMIN
     if (data.role === Role.SUPER_ADMIN && actorRole !== Role.SUPER_ADMIN) {
       this.logger.error(`Attempt to mint SUPER_ADMIN by role ${actorRole}`);
@@ -107,7 +120,17 @@ export class UsersService {
       throw new ForbiddenException('Only a SUPER_ADMIN can grant the ORG_ADMIN role');
     }
 
-    const existing = await this.prisma.user.findFirst({ where: { email: data.email, organizationId } });
+    if (this.prisma.organization?.findUnique) {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { id: true },
+      });
+      if (!org) {
+        throw new NotFoundException('Organization not found');
+      }
+    }
+
+    const existing = await this.prisma.user.findFirst({ where: { email: data.email } });
     if (existing) throw new BadRequestException('Email already registered');
 
     const passwordHash = data.password ? await hashPassword(data.password) : null;
@@ -233,6 +256,9 @@ export class UsersService {
     newPassword: string,
     currentSessionId?: string | null,
   ) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
     const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId } });
     if (!user) throw new NotFoundException('User not found');
     if (!user.passwordHash) {
@@ -257,6 +283,18 @@ export class UsersService {
         },
         data: { revokedAt: new Date(), revokedReason: 'password_changed' },
       });
+      if ((tx as any).auditLog?.create) {
+        await (tx as any).auditLog.create({
+          data: {
+            organizationId,
+            userId,
+            action: 'UPDATE',
+            resource: 'User',
+            resourceId: userId,
+            changes: { password: { old: '***', new: '***' } },
+          },
+        });
+      }
     });
     this.logger.log(`Password changed for user ${userId}`);
     this.syncGateway?.emitSessionRevoked(userId, null, 'password_changed', currentSessionId || undefined);
@@ -343,6 +381,9 @@ export class UsersService {
       this.logger.log(`User ${id} deleted by ${actorUserId}`);
       return { message: 'User deleted successfully' };
     } catch (e: unknown) {
+      if (e instanceof BadRequestException || e instanceof ForbiddenException || e instanceof NotFoundException) {
+        throw e;
+      }
       this.logger.error(`Failed to delete user ${id}`, e instanceof Error ? e.stack : String(e));
       throw new BadRequestException('Cannot delete user due to system constraints.');
     }

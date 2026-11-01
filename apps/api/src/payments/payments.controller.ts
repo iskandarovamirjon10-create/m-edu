@@ -89,8 +89,16 @@ export class PaymentsController {
   @Idempotent({ ttlSeconds: 86400 })
   @Roles(...ADMIN_ROLES)
   @ApiOperation({ summary: 'Record a payment' })
-  create(@CurrentUser('organizationId') orgId: string, @Body() dto: CreatePaymentDto) {
-    return this.paymentsService.create(orgId, dto);
+  create(
+    @CurrentUser('organizationId') orgId: string,
+    @Body() dto: CreatePaymentDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+    @Headers('x-idempotency-key') xIdempotencyKey?: string,
+  ) {
+    const key = idempotencyKey || xIdempotencyKey;
+    return key
+      ? this.paymentsService.create(orgId, dto, key)
+      : this.paymentsService.create(orgId, dto);
   }
 
   @Patch(':id')

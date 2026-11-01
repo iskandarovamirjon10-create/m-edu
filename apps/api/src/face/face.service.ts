@@ -48,7 +48,7 @@ import { InferenceConcurrencyLimiter } from './inference-limiter';
 
 import type { RecognitionHistoryQueryDto } from './dto/recognition.dto';
 import type { FaceAuditQueryDto } from './dto/audit.dto';
-import type { Prisma } from '@prisma/client';
+import { DayOfWeek, type Prisma } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
 // ARCHITECTURAL CONSTANTS & CALIBRATION BOUNDARIES
@@ -2047,9 +2047,39 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     expectedRoom: string | null;
     attendanceRecordId: string | null;
   }> {
-    const dayOfWeek = DAY_NAMES[params.capturedAt.getDay()];
-    const currentMinutes =
-      params.capturedAt.getHours() * 60 + params.capturedAt.getMinutes();
+    const org = await this.prisma.organization.findUnique({
+      where: { id: params.organizationId },
+      select: { timezone: true },
+    });
+    const tz = org?.timezone?.trim() || process.env.DEFAULT_TIMEZONE || 'Asia/Tashkent';
+
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      weekday: 'long',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(params.capturedAt);
+
+    const getPart = (type: string) => parts.find((p) => p.type === type)?.value;
+    const weekdayStr = (getPart('weekday') || '').toUpperCase();
+    const dayOfWeek = ((DAY_NAMES as readonly string[]).includes(weekdayStr)
+      ? weekdayStr
+      : DAY_NAMES[params.capturedAt.getDay()]) as DayOfWeek;
+
+    const hourVal = parseInt(getPart('hour') || '0', 10);
+    const minuteVal = parseInt(getPart('minute') || '0', 10);
+    const currentMinutes = hourVal * 60 + minuteVal;
+
+    const yearVal = parseInt(getPart('year') || '1970', 10);
+    const monthVal = parseInt(getPart('month') || '1', 10);
+    const dayVal = parseInt(getPart('day') || '1', 10);
+    const canonicalDate = new Date(Date.UTC(yearVal, monthVal - 1, dayVal));
+    const dayStart = canonicalDate;
+    const dayEnd = new Date(canonicalDate.getTime() + 24 * 60 * 60 * 1000);
 
     const enrollments = await this.prisma.studentGroup.findMany({
       where: {
@@ -2147,12 +2177,10 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     const isLate =
       currentMinutes >
       activeScheduleMatch.startMinutes + params.lateGraceMinutes;
+    const lateMinutes = isLate
+      ? Math.max(0, currentMinutes - activeScheduleMatch.startMinutes)
+      : 0;
     const statusToRecord = isLate ? 'LATE' : 'PRESENT';
-
-    const dayStart = new Date(params.capturedAt);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
 
     const recordId = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.attendance.findFirst({
@@ -2176,12 +2204,15 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
           groupId: activeScheduleMatch.groupId,
           status: statusToRecord,
           source: 'FACE',
-          date: params.capturedAt,
+          date: canonicalDate,
           markedAt: params.capturedAt,
           note: JSON.stringify({
             source: 'CAMERA_STREAM',
             room: params.cameraRoom,
             classification: statusToRecord,
+            lateMinutes,
+            checkInMinutes: currentMinutes,
+            lessonStartMinutes: activeScheduleMatch.startMinutes,
           }),
         },
         select: { id: true },

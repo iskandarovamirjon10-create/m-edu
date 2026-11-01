@@ -36,7 +36,19 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     // as ForbiddenException). Writing again would throw an uncaught
     // ERR_HTTP_HEADERS_SENT and surface as a spurious 500 in logs/monitors.
     // A handled response must never be overwritten by the error path.
-    if (response.headersSent || response.writableEnded) {
+    if (!response || response.headersSent || response.writableEnded) {
+      return;
+    }
+
+    if (exception instanceof OAuthRedirectException) {
+      // Controlled OAuth redirect (single write path — see the class docs).
+      if (typeof response.redirect === 'function') {
+        response.redirect(exception.statusCode, exception.url);
+      }
+      return;
+    }
+
+    if (typeof response.status !== 'function') {
       return;
     }
 
@@ -45,11 +57,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let code: string | undefined;
     let details: Record<string, unknown> | undefined;
 
-    if (exception instanceof OAuthRedirectException) {
-      // Controlled OAuth redirect (single write path — see the class docs).
-      response.redirect(exception.statusCode, exception.url);
-      return;
-    } else if (exception instanceof HttpException) {
+    if (exception instanceof HttpException) {
       status = exception.getStatus();
       const body = exception.getResponse();
       if (typeof body === 'string') {
@@ -69,7 +77,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       // express/body-parser payload limit exceeded → 413, not 500
       status = HttpStatus.PAYLOAD_TOO_LARGE;
       message = 'Request payload too large';
-      this.logger.warn(`Payload too large on ${request.method} ${request.url}`);
+      this.logger.warn(`Payload too large on ${request?.method ?? 'UNKNOWN'} ${request?.url ?? ''}`);
     } else if (exception instanceof FacePlatformError) {
       // Domain errors carry a stable error code + intended HTTP status.
       // Only the client-safe payload is exposed — never internal details.
@@ -93,20 +101,51 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         P1002: [HttpStatus.GATEWAY_TIMEOUT, 'Database server timed out'],
         P1008: [HttpStatus.GATEWAY_TIMEOUT, 'Database operation timed out'],
         P2024: [HttpStatus.SERVICE_UNAVAILABLE, 'Database connection pool timed out'],
+        P2001: [HttpStatus.NOT_FOUND, 'Record not found'],
         P2002: [HttpStatus.CONFLICT, 'A record with this value already exists'],
         P2025: [HttpStatus.NOT_FOUND, 'Record not found'],
         P2003: [HttpStatus.BAD_REQUEST, 'Related record not found'],
+        P2011: [HttpStatus.BAD_REQUEST, 'Null constraint violation on required field'],
+        P2012: [HttpStatus.BAD_REQUEST, 'Missing a required value'],
+        P2013: [HttpStatus.BAD_REQUEST, 'Missing a required argument'],
         P2014: [HttpStatus.BAD_REQUEST, 'Invalid relation data'],
+        P2015: [HttpStatus.NOT_FOUND, 'Related record not found'],
+        P2016: [HttpStatus.BAD_REQUEST, 'Query interpretation error'],
+        P2017: [HttpStatus.BAD_REQUEST, 'Related records are not connected'],
+        P2018: [HttpStatus.NOT_FOUND, 'Required connected records not found'],
         P2023: [HttpStatus.BAD_REQUEST, 'Invalid identifier format'],
         P2000: [HttpStatus.BAD_REQUEST, 'The provided value is too long'],
         P2006: [HttpStatus.BAD_REQUEST, 'The provided value is invalid'],
+        P2034: [HttpStatus.CONFLICT, 'Transaction conflict or deadlock, please retry'],
       };
       const mapping = prismaMap[prismaCode];
       if (mapping) {
         [status, message] = mapping;
       }
       this.logger.warn(
-        `Prisma error ${prismaCode} on ${request.method} ${request.url}: ${exception.message}`,
+        `Prisma error ${prismaCode} on ${request?.method ?? 'UNKNOWN'} ${request?.url ?? ''}: ${exception.message}`,
+      );
+    } else if (
+      exception instanceof Error &&
+      'code' in exception &&
+      typeof (exception as any).code === 'string' &&
+      /^(22P02|23505|23503|40P01|40001)$/.test((exception as any).code)
+    ) {
+      // Postgres raw driver errors (e.g. from $queryRaw)
+      const pgCode = (exception as any).code as string;
+      const pgMap: Record<string, [number, string]> = {
+        '22P02': [HttpStatus.BAD_REQUEST, 'Invalid input syntax (malformed identifier or type)'],
+        '23505': [HttpStatus.CONFLICT, 'A record with this value already exists'],
+        '23503': [HttpStatus.BAD_REQUEST, 'Related record not found'],
+        '40P01': [HttpStatus.CONFLICT, 'Database deadlock detected, please retry'],
+        '40001': [HttpStatus.CONFLICT, 'Transaction serialization conflict, please retry'],
+      };
+      const mapping = pgMap[pgCode];
+      if (mapping) {
+        [status, message] = mapping;
+      }
+      this.logger.warn(
+        `Postgres error ${pgCode} on ${request?.method ?? 'UNKNOWN'} ${request?.url ?? ''}: ${exception.message}`,
       );
     } else if (exception instanceof Error) {
       // 500 for unexpected errors — log internally, never expose details.
@@ -116,7 +155,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message = exception.message;
       }
       this.logger.error(
-        `Unhandled exception on ${request.method} ${request.url}: ${exception.message}`,
+        `Unhandled exception on ${request?.method ?? 'UNKNOWN'} ${request?.url ?? ''}: ${exception.message}`,
         exception.stack,
       );
     }
@@ -126,8 +165,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       code,
       message,
       ...(details ? { details } : {}),
-      path: request.url,
-      requestId: request.id,
+      path: request?.url ?? '',
+      requestId: request?.id,
       timestamp: new Date().toISOString(),
     });
   }

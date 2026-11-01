@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { toMinor, fromMinor } from '@medu/financial-engine';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -154,9 +155,11 @@ export class TeacherKpiPayrollService {
           select: { amount: true },
         });
 
-        groupRevenueCollected = groupPayments.reduce(
-          (sum, p) => sum + Number(p.amount),
-          0,
+        groupRevenueCollected = fromMinor(
+          groupPayments.reduce(
+            (sum, p) => sum + toMinor(p.amount),
+            0,
+          ),
         );
       }
 
@@ -293,8 +296,8 @@ export class TeacherKpiPayrollService {
       }
     });
 
-    const totalGross = dto.proposals.reduce((sum, p) => sum + p.grossAmount, 0);
-    const totalNet = dto.proposals.reduce((sum, p) => sum + p.netAmount, 0);
+    const totalGross = fromMinor(dto.proposals.reduce((sum, p) => sum + toMinor(p.grossAmount), 0));
+    const totalNet = fromMinor(dto.proposals.reduce((sum, p) => sum + toMinor(p.netAmount), 0));
 
     // Audit Log for executive accountability
     await this.audit.record({

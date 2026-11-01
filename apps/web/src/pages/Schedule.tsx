@@ -702,12 +702,12 @@ function HeatmapView({
             {t('schedule.heatmap.overallUtilization')}
           </div>
           <p className="mt-2 text-[34px] font-black leading-none tabular-nums text-emerald-600 dark:text-emerald-400">
-            {data.utilizationPercentage}%
+            {data.utilizationPercentage ?? 0}%
           </p>
           <p className="mt-1 text-[11.5px] font-medium text-[var(--text-muted)] tabular-nums">
             {t('schedule.heatmap.occupiedSlots', {
-              occupied: data.occupiedSlots,
-              total: data.totalAvailableSlots,
+              occupied: data.occupiedSlots ?? 0,
+              total: data.totalAvailableSlots ?? 0,
             })}
           </p>
         </div>
@@ -718,17 +718,17 @@ function HeatmapView({
             {t('schedule.heatmap.deadHours')}
           </div>
           <p className="mt-2 text-[34px] font-black leading-none tabular-nums text-red-600 dark:text-red-400">
-            {data.deadHoursCount}
+            {data.deadHoursCount ?? 0}
           </p>
           <p className="mt-1 text-[11.5px] font-medium text-[var(--text-muted)]">
-            {t('schedule.heatmap.riskRooms', { count: data.deadHoursCount })}
+            {t('schedule.heatmap.riskRooms', { count: data.deadHoursCount ?? 0 })}
           </p>
         </div>
       </div>
 
       {/* Room Utilization Cards */}
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-        {data.rooms.map((r, i) => (
+        {(data.rooms ?? []).map((r, i) => (
           <div
             key={i}
             className="liquid-glass-card rounded-2xl border border-slate-200/80 bg-white/70 p-4.5 backdrop-blur-md dark:border-white/[0.08] dark:bg-white/[0.03]"
@@ -884,6 +884,10 @@ export function SchedulePage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isOptimizerOpen, setIsOptimizerOpen] = useState(false);
   const { playPop, playTick } = usePremiumSound();
+
+  useEffect(() => {
+    setPage(1);
+  }, [groupFilter, dayFilter, viewMode]);
 
   const utilizationQ = useQuery({
     queryKey: ['schedule-room-utilization'],

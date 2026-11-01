@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { toMinor, fromMinor } from '@medu/financial-engine';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationEventService } from '../notifications/events/notification-event.service';
@@ -63,10 +64,11 @@ export class FinancialCronService {
       // and concurrently rather than N serial round-trips.
       await Promise.allSettled(
         dueInvoices.map(invoice => {
-          const remaining =
-            Number(invoice.total) -
-            Number(invoice.paidAmount ?? 0) +
-            Number(invoice.refundedAmount ?? 0);
+          const remainingMinor =
+            toMinor(invoice.total as any) -
+            toMinor((invoice.paidAmount ?? 0) as any) +
+            toMinor((invoice.refundedAmount ?? 0) as any);
+          const remaining = fromMinor(Math.max(0, remainingMinor));
           return this.notificationEvents.emit({
             organizationId: invoice.organizationId,
             type: 'PAYMENT_OVERDUE',
@@ -130,10 +132,11 @@ export class FinancialCronService {
 
       await Promise.allSettled(
         upcomingInvoices.map(invoice => {
-          const remaining =
-            Number(invoice.total) -
-            Number(invoice.paidAmount ?? 0) +
-            Number(invoice.refundedAmount ?? 0);
+          const remainingMinor =
+            toMinor(invoice.total as any) -
+            toMinor((invoice.paidAmount ?? 0) as any) +
+            toMinor((invoice.refundedAmount ?? 0) as any);
+          const remaining = fromMinor(Math.max(0, remainingMinor));
           return this.notificationEvents.emit({
             organizationId: invoice.organizationId,
             type: 'PAYMENT_REMINDER',

@@ -13,6 +13,8 @@ import {
   ShieldAlert,
   ArrowUpRight,
   Zap,
+  Smartphone,
+  Globe,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import type { Payment } from '@/lib/types';
@@ -30,11 +32,11 @@ export function PaymentsAnalyticsTab({
 }: PaymentsAnalyticsTabProps) {
   // Method distribution
   const analytics = useMemo(() => {
-    let totalPaidSum = 0;
-    let totalPendingSum = 0;
-    let totalOverdueSum = 0;
+    let totalPaidMinor = 0;
+    let totalPendingMinor = 0;
+    let totalOverdueMinor = 0;
 
-    const methodSums: Record<string, number> = {
+    const methodSumsMinor: Record<string, number> = {
       CASH: 0,
       CARD: 0,
       BANK_TRANSFER: 0,
@@ -48,34 +50,44 @@ export function PaymentsAnalyticsTab({
     let overdueCount = 0;
 
     for (const p of payments) {
-      const amt = Number(p.amount) || 0;
+      const amtMinor = Math.round((Number(p.amount) || 0) * 100);
       if (p.status === 'PAID') {
-        totalPaidSum += amt;
+        totalPaidMinor += amtMinor;
         paidCount++;
         const methodKey = p.method ? String(p.method).toUpperCase() : 'CASH';
-        if (methodKey in methodSums) {
-          methodSums[methodKey] += amt;
+        if (methodKey in methodSumsMinor) {
+          methodSumsMinor[methodKey] += amtMinor;
         } else {
-          methodSums.OTHER += amt;
+          methodSumsMinor.OTHER += amtMinor;
         }
       } else if (p.status === 'PENDING') {
-        totalPendingSum += amt;
+        totalPendingMinor += amtMinor;
         pendingCount++;
       } else if (p.status === 'OVERDUE') {
-        totalOverdueSum += amt;
+        totalOverdueMinor += amtMinor;
         overdueCount++;
       }
     }
 
-    const collectionDisciplineRate = Math.round(
-      (paidCount / (paidCount + overdueCount + pendingCount || 1)) * 100,
-    );
-    const avgCheck = paidCount > 0 ? Math.round(totalPaidSum / paidCount) : 0;
+    const totalBills = paidCount + overdueCount + pendingCount;
+    const collectionDisciplineRate =
+      totalBills > 0 ? Math.round((paidCount / totalBills) * 100) : 100;
+    const avgCheck =
+      paidCount > 0 ? Math.round(totalPaidMinor / paidCount) / 100 : 0;
+
+    const methodSums: Record<string, number> = {
+      CASH: methodSumsMinor.CASH / 100,
+      CARD: methodSumsMinor.CARD / 100,
+      BANK_TRANSFER: methodSumsMinor.BANK_TRANSFER / 100,
+      PAYME: methodSumsMinor.PAYME / 100,
+      CLICK: methodSumsMinor.CLICK / 100,
+      OTHER: methodSumsMinor.OTHER / 100,
+    };
 
     return {
-      totalPaidSum,
-      totalPendingSum,
-      totalOverdueSum,
+      totalPaidSum: totalPaidMinor / 100,
+      totalPendingSum: totalPendingMinor / 100,
+      totalOverdueSum: totalOverdueMinor / 100,
       methodSums,
       paidCount,
       pendingCount,
@@ -90,12 +102,17 @@ export function PaymentsAnalyticsTab({
       { key: 'CASH', label: 'Naqd pul', sum: analytics.methodSums.CASH, icon: Banknote, color: 'emerald' },
       { key: 'CARD', label: 'Bank kartasi', sum: analytics.methodSums.CARD, icon: CreditCard, color: 'blue' },
       { key: 'BANK_TRANSFER', label: "Bank o'tkazmasi", sum: analytics.methodSums.BANK_TRANSFER, icon: Building, color: 'indigo' },
+      { key: 'PAYME', label: 'Payme', sum: analytics.methodSums.PAYME, icon: Smartphone, color: 'cyan' },
+      { key: 'CLICK', label: 'Click', sum: analytics.methodSums.CLICK, icon: Smartphone, color: 'sky' },
+      { key: 'OTHER', label: 'Boshqa', sum: analytics.methodSums.OTHER, icon: Globe, color: 'slate' },
     ];
-    const total = analytics.totalPaidSum || 1;
-    return list.map((item) => ({
-      ...item,
-      pct: Math.round((item.sum / total) * 100),
-    }));
+    const total = analytics.totalPaidSum;
+    return list
+      .filter((item) => item.sum > 0 || ['CASH', 'CARD', 'BANK_TRANSFER'].includes(item.key))
+      .map((item) => ({
+        ...item,
+        pct: total > 0 ? Math.round((item.sum / total) * 100) : 0,
+      }));
   }, [analytics]);
 
   return (
@@ -197,6 +214,10 @@ export function PaymentsAnalyticsTab({
                           ? 'bg-emerald-500'
                           : item.key === 'CARD'
                           ? 'bg-blue-500'
+                          : item.key === 'PAYME'
+                          ? 'bg-cyan-500'
+                          : item.key === 'CLICK'
+                          ? 'bg-sky-500'
                           : 'bg-indigo-500'
                       }`}
                       style={{ width: `${Math.max(item.pct, 3)}%` }}

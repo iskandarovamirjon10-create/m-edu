@@ -31,9 +31,17 @@ export class IdempotencyInterceptor implements NestInterceptor {
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    if (typeof context.getType === 'function' && context.getType() !== 'http') {
+      return next.handle();
+    }
+
     const http = context.switchToHttp();
     const req = http.getRequest<Request & { user?: { organizationId?: string; id?: string } }>();
     const res = http.getResponse<Response>();
+
+    if (!req) {
+      return next.handle();
+    }
 
     const options: IdempotentOptions =
       this.reflector.getAllAndOverride<IdempotentOptions>(IDEMPOTENT_OPTIONS_KEY, [

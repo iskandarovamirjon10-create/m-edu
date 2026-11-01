@@ -238,7 +238,12 @@ export function useOfflineFaceQueue() {
           }
         }
       } finally {
-        setQueue(remaining);
+        setQueue((currentQueue) => {
+          // Identify any items that were enqueued while sync was in flight
+          const processedIds = new Set(queue.map((i) => i.id));
+          const newlyAdded = currentQueue.filter((i) => !processedIds.has(i.id));
+          return [...remaining, ...newlyAdded].slice(-MAX_QUEUE_SIZE);
+        });
         isSyncingRef.current = false;
         setIsSyncing(false);
       }

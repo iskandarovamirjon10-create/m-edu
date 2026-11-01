@@ -136,11 +136,12 @@ export function validateBranchForm(form: BranchFormState): { name?: string } {
   return errors;
 }
 
-export function computeBranchStats(branches: Branch[]) {
-  const total = branches.length;
-  const active = branches.filter((b) => b.isActive).length;
-  const totalStudents = branches.reduce((acc, b) => acc + (b._count?.students ?? 0), 0);
-  const withManager = branches.filter((b) => Boolean(b.manager)).length;
+export function computeBranchStats(branches: Branch[] = []) {
+  const list = Array.isArray(branches) ? branches : [];
+  const total = list.length;
+  const active = list.filter((b) => b?.isActive).length;
+  const totalStudents = list.reduce((acc, b) => acc + (b?._count?.students ?? 0), 0);
+  const withManager = list.filter((b) => Boolean(b?.manager)).length;
   return { total, active, totalStudents, withManager };
 }
 
@@ -354,10 +355,15 @@ export function BranchesPage() {
   const [statsModal, setStatsModal] = useState<Branch | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<Branch | null>(null);
 
-  const { data: branches = [], isLoading, error } = useQuery({
+  const { data: rawBranches = [], isLoading, error } = useQuery({
     queryKey: ['branches'],
     queryFn: () => branchesApi.list() as Promise<Branch[]>,
   });
+
+  const branches = useMemo<Branch[]>(() => {
+    if (Array.isArray(rawBranches)) return rawBranches;
+    return (rawBranches as any)?.items || [];
+  }, [rawBranches]);
 
   const { data: users = [] } = useQuery({
     queryKey: ['users-list-for-manager'],
@@ -707,7 +713,7 @@ export function BranchesPage() {
                               lastName={b.manager.lastName}
                             />
                             <span className="truncate text-xs font-semibold text-slate-900 dark:text-white">
-                              {b.manager.firstName} {b.manager.lastName}
+                              {`${b.manager.firstName || ''} ${b.manager.lastName || ''}`.trim() || '—'}
                             </span>
                           </div>
                         ) : (
@@ -1103,9 +1109,9 @@ export function BranchesPage() {
               className="min-h-[44px]"
               options={[
                 { value: '', label: '—' },
-                ...((users as any)?.items || []).map((u: any) => ({
+                ...(Array.isArray(users) ? users : ((users as any)?.items || [])).map((u: any) => ({
                   value: u.id,
-                  label: `${u.firstName} ${u.lastName}`,
+                  label: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || '—',
                 })),
               ]}
             />

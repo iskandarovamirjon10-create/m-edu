@@ -37,9 +37,10 @@ export function useAttendanceSocket() {
       sharedSocket = io(`${getSocketBaseUrl()}/attendance`, {
         withCredentials: true,
         transports: ['websocket', 'polling'],
-        reconnectionAttempts: 5,
-        reconnectionDelay: 3000,
-        reconnectionDelayMax: 15000,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 10000,
       });
     }
 
@@ -51,6 +52,9 @@ export function useAttendanceSocket() {
       setIsConnected(true);
       queryClient.invalidateQueries({ queryKey: queryKeys.face.history() });
       queryClient.invalidateQueries({ queryKey: queryKeys.face.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attendance.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attendance.analyticsAll() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
     };
 
     const onConnectError = () => {
@@ -60,6 +64,16 @@ export function useAttendanceSocket() {
     const onDisconnect = () => {
       setIsConnected(false);
     };
+
+    const handleOnline = () => {
+      if (!currentSocket.connected) {
+        currentSocket.connect();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', handleOnline);
+    }
 
     const onAttendanceCreated = (payload: AttendanceEventPayload) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.face.history() });
@@ -95,6 +109,9 @@ export function useAttendanceSocket() {
     currentSocket.on('attendance.created', onAttendanceCreated);
 
     return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', handleOnline);
+      }
       currentSocket.off('connect', onConnect);
       currentSocket.off('connect_error', onConnectError);
       currentSocket.off('disconnect', onDisconnect);

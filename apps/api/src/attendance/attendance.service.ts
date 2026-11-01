@@ -379,6 +379,10 @@ export class AttendanceService {
 
     if (this.notificationEvents) {
       for (const record of data.records) {
+        if (record.status === 'EXCUSED') {
+          // Do not send an unexcused absence alert to parents for justified absences
+          continue;
+        }
         const type: NotificationEventType =
           record.status === 'PRESENT'
             ? 'ATTENDANCE_MARKED_PRESENT'
@@ -613,13 +617,19 @@ export class AttendanceService {
     const total = statusCounts.reduce((sum, s) => sum + s._count.status, 0);
     const presentCount = statusCounts.find((s) => s.status === 'PRESENT')?._count.status || 0;
 
+    const mappedStatusCounts = statusCounts.map((s) => ({
+      status: s.status,
+      count: s._count.status,
+      _count: s._count,
+    }));
+
     return {
       overall: {
         total,
         present: presentCount,
         rate: total > 0 ? Math.round((presentCount / total) * 100) : 0,
       },
-      byStatus: statusCounts,
+      byStatus: mappedStatusCounts,
       byGroup: groupStats,
       daily: dailyStats,
     };

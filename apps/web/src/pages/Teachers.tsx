@@ -593,6 +593,10 @@ export function TeachersPage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE' | 'HIGH_WORKLOAD' | 'AVAILABLE'>('ALL');
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter]);
   const [profileDrawerTeacher, setProfileDrawerTeacher] = useState<Teacher | null>(null);
   const [aiPlannerTeacher, setAiPlannerTeacher] = useState<Teacher | null>(null);
   const [assignGroupTeacher, setAssignGroupTeacher] = useState<Teacher | null>(null);
@@ -635,7 +639,7 @@ export function TeachersPage() {
 
   /* ── Derived Filtering & Stats ─────────────────────────────────────── */
   const filteredTeachers = useMemo(() => {
-    let list = teacherList;
+    let list = teacherList.filter(Boolean);
     if (statusFilter === 'ACTIVE') list = list.filter((t) => t.user?.isActive !== false);
     else if (statusFilter === 'INACTIVE') list = list.filter((t) => t.user?.isActive === false);
     else if (statusFilter === 'HIGH_WORKLOAD') {
@@ -666,12 +670,13 @@ export function TeachersPage() {
   }, [teacherList, statusFilter, search]);
 
   const stats = useMemo(() => {
-    const active = teacherList.filter((t) => t.user?.isActive !== false).length;
-    const inactive = teacherList.length - active;
-    const rates = teacherList.map((t) => Number(t.hourlyRate) || 0).filter((n) => n > 0);
+    const list = teacherList.filter(Boolean);
+    const active = list.filter((t) => t.user?.isActive !== false).length;
+    const inactive = list.length - active;
+    const rates = list.map((t) => Number(t.hourlyRate) || 0).filter((n) => n > 0);
     const avgRate = rates.length ? rates.reduce((a, b) => a + b, 0) / rates.length : 0;
     return {
-      total: data?.total ?? teacherList.length,
+      total: data?.total ?? list.length,
       active,
       inactive,
       avgRate,
@@ -1149,6 +1154,7 @@ export function TeachersPage() {
           onClick={() => {
             sound.playTick?.();
             haptics.light();
+            setPage(1);
             setStatusFilter((p) => (p === 'ACTIVE' ? 'ALL' : 'ACTIVE'));
           }}
         />
@@ -1163,6 +1169,7 @@ export function TeachersPage() {
           onClick={() => {
             sound.playTick?.();
             haptics.light();
+            setPage(1);
             setStatusFilter((p) => (p === 'INACTIVE' ? 'ALL' : 'INACTIVE'));
           }}
         />
@@ -1234,6 +1241,7 @@ export function TeachersPage() {
                       if (!sel) {
                         sound.playTick?.();
                         haptics.light();
+                        setPage(1);
                         setStatusFilter(opt.id);
                       }
                     }}
@@ -1263,6 +1271,7 @@ export function TeachersPage() {
                     haptics.light();
                     setSearch('');
                     setStatusFilter('ALL');
+                    setPage(1);
                   }}
                   className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/12 px-3 py-1.5 text-[12px] font-semibold text-blue-600 dark:text-blue-400 outline-none transition-colors hover:bg-blue-500/20 focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
@@ -1472,7 +1481,7 @@ export function TeachersPage() {
                           {teacher.user?.phone && (
                             <span className="inline-flex items-center gap-1.5 text-[11.5px] text-slate-500 dark:text-white/50 tabular-nums">
                               <Glyph name="phone" size={12} className="opacity-60" />
-                              {teacher.user.phone}
+                              {teacher.user?.phone}
                             </span>
                           )}
                         </div>
@@ -1664,7 +1673,7 @@ export function TeachersPage() {
                             </h3>
                             {teacher.user?.email && (
                               <span className="truncate text-[11.5px] text-slate-400 dark:text-white/40 block">
-                                {displayEmail(teacher.user.email)}
+                                {displayEmail(teacher.user?.email)}
                               </span>
                             )}
                           </div>

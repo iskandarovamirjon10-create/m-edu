@@ -126,11 +126,19 @@ export function RushHourBatchAttendanceProcessor({
             { id: `b-${Date.now()}-2`, studentName: 'Jonli Talaba 2', group: 'Frontend Architecture', confidencePct: 96.5, matchedAt: timeStr, status: 'success' as const, gateId: 'Turniket #2' },
           ];
 
-      if (studentItems[0]?.id) {
+      const firstStudent = studentItems[0];
+      const targetGroupId = firstStudent?.groups?.[0]?.groupId || firstStudent?.groups?.[0]?.group?.id;
+      if (firstStudent?.id && targetGroupId) {
         await attendanceApi.create({
-          studentId: studentItems[0].id,
-          status: 'present',
-          method: 'FACE_ID_BATCH',
+          groupId: targetGroupId,
+          date: new Date().toISOString().slice(0, 10),
+          records: [
+            {
+              studentId: firstStudent.id,
+              status: 'PRESENT',
+              note: 'FACE_ID_BATCH',
+            },
+          ],
         }).catch(() => null);
       }
 

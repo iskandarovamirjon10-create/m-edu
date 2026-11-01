@@ -250,8 +250,8 @@ export function getCourseStatusBadge(isActive: boolean): { variant: 'success' | 
     : { variant: 'muted', label: 'Inactive' };
 }
 
-function getInitials(name: string): string {
-  return (name
+function getInitials(name?: string): string {
+  return ((name || '')
     .split(/\s+/)
     .map((p) => p.charAt(0))
     .filter(Boolean)
@@ -260,9 +260,10 @@ function getInitials(name: string): string {
     .toUpperCase() || '—');
 }
 
-function nameHash(str: string): number {
+function nameHash(str?: string): number {
+  const s = str || '';
   let h = 0;
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
   return Math.abs(h);
 }
 
@@ -277,7 +278,7 @@ const COURSE_PALETTES = [
   ['#30D158', '#34C759'],
 ];
 
-function courseGradient(name: string): string {
+function courseGradient(name?: string): string {
   const [a, b] = COURSE_PALETTES[nameHash(name) % COURSE_PALETTES.length];
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 }
@@ -291,6 +292,7 @@ function CountUp({
 }: {
   value: number; duration?: number; suffix?: string; prefix?: string; decimals?: number;
 }) {
+  const safeValue = Number.isFinite(value) ? value : 0;
   const [n, setN] = useState(0);
   const startRef = useRef<number | null>(null);
 
@@ -301,14 +303,15 @@ function CountUp({
       if (startRef.current === null) startRef.current = ts;
       const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(value * eased);
+      setN(safeValue * eased);
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [value, duration]);
+  }, [safeValue, duration]);
 
-  const shown = decimals > 0 ? n.toFixed(decimals) : Math.round(n).toLocaleString();
+  const valToUse = Number.isFinite(n) ? n : 0;
+  const shown = decimals > 0 ? valToUse.toFixed(decimals) : Math.round(valToUse).toLocaleString();
   return <span className="tabular-nums">{prefix}{shown}{suffix}</span>;
 }
 
@@ -954,7 +957,7 @@ export function CoursesPage() {
     if (q) {
       list = list.filter(
         (c) =>
-          c.name.toLowerCase().includes(q) ||
+          (c.name || '').toLowerCase().includes(q) ||
           (c.description || '').toLowerCase().includes(q),
       );
     }
@@ -1148,7 +1151,7 @@ export function CoursesPage() {
         .concat(
           selectedRows.map(
             (c) =>
-              `"${c.id}","${c.name}","${c.price}","${c.duration}","${c.level || ''}","${c.isActive ? 'Active' : 'Inactive'}"`
+              `"${c.id}","${(c.name || '').replace(/"/g, '""')}","${c.price}","${c.duration}","${c.level || ''}","${c.isActive ? 'Active' : 'Inactive'}"`
           )
         )
         .join('\n');

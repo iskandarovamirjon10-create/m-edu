@@ -1,5 +1,4 @@
-import { Request } from 'express';
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { ChangePasswordDto, CreateUserDto, UpdateUserDto, UpdateUserSettingsDto } from '../common/dto';
@@ -24,13 +23,15 @@ export class UsersController {
   @Roles('SUPER_ADMIN', 'ORG_ADMIN')
   @ApiOperation({ summary: 'List users' })
   findAll(@CurrentUser('organizationId') orgId: string, @Query() query: UserQuery) {
+    if (!orgId) throw new ForbiddenException('Organization context is required');
     return this.usersService.findAll(orgId, query);
   }
 
   @Get(':id')
   @Roles('SUPER_ADMIN', 'ORG_ADMIN')
   @ApiOperation({ summary: 'Get user details' })
-  findOne(@CurrentUser('organizationId') orgId: string, @Param('id') id: string) {
+  findOne(@CurrentUser('organizationId') orgId: string, @Param('id', ParseUUIDPipe) id: string) {
+    if (!orgId) throw new ForbiddenException('Organization context is required');
     return this.usersService.findOne(orgId, id);
   }
 
@@ -42,6 +43,7 @@ export class UsersController {
     @CurrentUser('role') role: string,
     @Body() dto: CreateUserDto,
   ) {
+    if (!orgId) throw new ForbiddenException('Organization context is required');
     return this.usersService.create(orgId, dto, role);
   }
 
@@ -52,9 +54,10 @@ export class UsersController {
     @CurrentUser('organizationId') orgId: string,
     @CurrentUser('role') role: string,
     @CurrentUser('sub') userId: string,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserDto,
   ) {
+    if (!orgId) throw new ForbiddenException('Organization context is required');
     return this.usersService.update(orgId, id, dto, role, userId);
   }
 
@@ -65,21 +68,29 @@ export class UsersController {
     @CurrentUser('organizationId') orgId: string,
     @CurrentUser('sub') userId: string,
     @CurrentUser('role') role: string,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
+    if (!orgId) throw new ForbiddenException('Organization context is required');
     return this.usersService.remove(orgId, id, userId, role);
   }
 
   @Post('change-password')
   @AllowSelfService()
   @ApiOperation({ summary: 'Change own password' })
-  changePassword(@Req() req: Request & { user: RequestUser }, @Body() dto: ChangePasswordDto) {
+  changePassword(
+    @Req() req: { user?: RequestUser },
+    @Body() dto: ChangePasswordDto,
+  ) {
+    const user = req?.user;
+    if (!user?.organizationId || !user?.sub) {
+      throw new UnauthorizedException('Authentication context is missing');
+    }
     return this.usersService.changePassword(
-      req.user.organizationId,
-      req.user.sub,
+      user.organizationId,
+      user.sub,
       dto.currentPassword,
       dto.newPassword,
-      req.user.sid ?? null,
+      user.sid ?? null,
     );
   }
 
@@ -90,9 +101,10 @@ export class UsersController {
     @CurrentUser('organizationId') orgId: string,
     @CurrentUser('sub') userId: string,
     @CurrentUser('role') role: string,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserSettingsDto,
   ) {
+    if (!orgId) throw new ForbiddenException('Organization context is required');
     return this.usersService.updateSettings(orgId, id, dto, userId, role);
   }
 }

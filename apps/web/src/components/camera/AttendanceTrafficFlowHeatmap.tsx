@@ -257,8 +257,12 @@ export function AttendanceTrafficFlowHeatmap({
           <div className="text-xs text-muted-foreground uppercase font-semibold">
             Kuzatuv Kameralari
           </div>
-          <div className="text-2xl font-black text-foreground mt-1">9 ta RTSP</div>
-          <div className="text-[11px] text-emerald-400 mt-0.5">100% Onlayn & Sinxron</div>
+          <div className="text-2xl font-black text-foreground mt-1">
+            {gates.reduce((acc, g) => acc + (g.cameraCount || 0), 0)} ta RTSP
+          </div>
+          <div className="text-[11px] text-emerald-400 mt-0.5">
+            {gates.length > 0 ? '100% Onlayn & Sinxron' : 'Kamera ulanmagan'}
+          </div>
         </div>
       </div>
 
@@ -326,7 +330,7 @@ export function AttendanceTrafficFlowHeatmap({
                     </td>
 
                     {/* Heatmap cells */}
-                    {g.hourlyLoads.map((load, idx) => {
+                    {(g.hourlyLoads || []).map((load, idx) => {
                       let cellBg = 'bg-emerald-500/20 text-emerald-400';
                       if (load >= 80) {
                         cellBg = 'bg-rose-500/40 text-rose-300 font-bold';

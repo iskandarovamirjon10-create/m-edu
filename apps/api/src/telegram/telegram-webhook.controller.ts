@@ -69,7 +69,7 @@ export class TelegramWebhookController {
     this.assertWebhookSecret(secretToken);
     this.assertBodySize(contentLength);
 
-    const updateId = this.parseUpdateId(body.update_id);
+    const updateId = this.parseUpdateId(body?.update_id);
     if (updateId === null) {
       throw new BadRequestException('Malformed Telegram update');
     }

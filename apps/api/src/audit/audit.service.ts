@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
 import { AuditQuery, SystemAuditEventDto, AuditAction, AuditEntityType } from './audit.types';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class AuditService {
@@ -13,6 +15,9 @@ export class AuditService {
    * Maps the existing `AuditLog` model to a richer `SystemAuditEventDto` shape.
    */
   async findAll(organizationId: string, query: AuditQuery) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
     const { page, limit, skip } = parsePagination(query, { limit: 20, maxLimit: 100 });
 
     const where: Prisma.AuditLogWhereInput = { organizationId };
@@ -102,6 +107,12 @@ export class AuditService {
   }
 
   async findOne(organizationId: string, id: string): Promise<SystemAuditEventDto> {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Audit event ID is required');
+    }
     const row = await this.prisma.auditLog.findFirst({
       where: { id, organizationId },
     });
@@ -142,6 +153,12 @@ export class AuditService {
    * Get change history for a specific entity — used for "What changed?" views.
    */
   async getEntityHistory(organizationId: string, entityType: string, entityId: string) {
+    if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
+      throw new BadRequestException('Organization context is required');
+    }
+    if (!entityType || !entityId) {
+      throw new BadRequestException('entityType and entityId are required');
+    }
     const rows = await this.prisma.auditLog.findMany({
       where: {
         organizationId,
@@ -177,10 +194,16 @@ export class AuditService {
     path?: string;
     statusCode?: number;
   }) {
+    if (!params.organizationId || typeof params.organizationId !== 'string' || !params.organizationId.trim()) {
+      return null;
+    }
+
+    const validUserId = typeof params.userId === 'string' && params.userId.trim() ? params.userId : null;
+
     return this.prisma.auditLog.create({
       data: {
         organizationId: params.organizationId,
-        userId: params.userId ?? null,
+        userId: validUserId,
         action: params.action,
         resource: params.resource,
         resourceId: params.resourceId ?? null,
