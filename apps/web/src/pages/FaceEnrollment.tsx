@@ -442,7 +442,7 @@ export function FaceEnrollmentPage() {
   usePageTitle(t('faceEnrollment.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
-  const { playSuccess, playTick, playError } = usePremiumSound();
+  const { playTick, playError, playCelebration, playDelete } = usePremiumSound();
   const voice = useVoiceFeedback();
   const haptics = useHaptics();
 
@@ -552,7 +552,7 @@ export function FaceEnrollmentPage() {
   const capture = useMutation({
     mutationFn: (b64: string) => faceApi.capture(form.enrollmentId, b64),
     onSuccess: () => {
-      playSuccess();
+      playCelebration();
       haptics.heavy();
       voice.speakEnrollmentSuccess();
       setCaptureSucceeded(true);
@@ -574,7 +574,7 @@ export function FaceEnrollmentPage() {
   const revoke = useMutation({
     mutationFn: (id: string) => faceApi.revoke(id, 'operator_revoked'),
     onSuccess: () => {
-      playSuccess();
+      playDelete();
       haptics.medium();
       push('success', t('faceEnrollment.revokedToast'));
       invalidateFaceQueries();

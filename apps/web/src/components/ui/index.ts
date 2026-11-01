@@ -53,3 +53,4 @@ export {
 // from via `@/components/ui`. We only add the ones that are missing.
 
 export { AuroraMesh, type AuroraMeshProps, type AuroraVariant } from './AuroraMesh';
+export { AcousticSoundStudio } from './AcousticSoundStudio';

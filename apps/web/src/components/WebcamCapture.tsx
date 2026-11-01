@@ -307,7 +307,7 @@ export function WebcamCapture({
   isKiosk = false,
 }: WebcamCaptureProps) {
   const { t } = useSafeI18n();
-  const { playTick } = usePremiumSound();
+  const { playTick, playShutter } = usePremiumSound();
   const haptics = useHaptics();
   const reduced = usePrefersReducedMotion();
   const docVisible = useDocumentVisibility();
@@ -387,7 +387,7 @@ export function WebcamCapture({
 
     setCaptureFailure('');
     setIsCapturing(true);
-    // Silent capture — no repetitive camera shutter sound during scanning
+    if (!autoScan) playShutter();
     haptics.light();
     onCapture(frame.base64);
 
@@ -395,7 +395,7 @@ export function WebcamCapture({
     shutterTimeoutRef.current = setTimeout(() => setIsCapturing(false), SHUTTER_COOLDOWN_MS);
   }, [
     busy, isCapturing, status, captureFrame, isMirrored,
-    haptics, onCapture, t,
+    haptics, onCapture, t, autoScan, playShutter,
   ]);
 
   /* ── Auto-scan loop ────────────────────────────────────────── */

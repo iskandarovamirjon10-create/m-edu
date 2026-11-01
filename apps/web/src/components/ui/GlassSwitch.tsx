@@ -1,5 +1,6 @@
 import { forwardRef, useId, type ChangeEvent, type InputHTMLAttributes } from 'react';
 import { cn } from '@/lib/design';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 export type SwitchSize = 'sm' | 'md' | 'lg';
 
@@ -9,6 +10,8 @@ export interface GlassSwitchProps
   error?: string;
   hint?: string;
   size?: SwitchSize;
+  /** Whether to play acoustic ceramic snap sound on toggle (default true). */
+  enableSound?: boolean;
   /** Called with the new checked value. */
   onChange?: (checked: boolean) => void;
   /** @deprecated accepted for compatibility; not used */
@@ -42,11 +45,12 @@ const THUMB_OFFSET: Record<SwitchSize, string> = {
  * `onChange` receives the boolean checked value (legacy contract).
  */
 export const GlassSwitch = forwardRef<HTMLInputElement, GlassSwitchProps>(function GlassSwitch(
-  { label, error, hint, size = 'md', className, onChange, id: idProp, disabled, ...rest },
+  { label, error, hint, size = 'md', className, onChange, id: idProp, disabled, enableSound = true, ...rest },
   ref,
 ) {
   const autoId = useId();
   const id = idProp ?? autoId;
+  const { playSwitch } = usePremiumSound();
 
   return (
     <div className="flex w-full items-start gap-3">
@@ -63,7 +67,10 @@ export const GlassSwitch = forwardRef<HTMLInputElement, GlassSwitchProps>(functi
           type="checkbox"
           role="switch"
           disabled={disabled}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => onChange?.(e.target.checked)}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+            if (enableSound) playSwitch();
+            onChange?.(e.target.checked);
+          }}
           className="peer sr-only"
           {...rest}
         />

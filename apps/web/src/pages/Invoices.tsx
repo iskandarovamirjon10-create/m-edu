@@ -470,6 +470,8 @@ export function InvoicesPage() {
   usePageTitle(t('nav.invoices'));
   const { push } = useToast();
   const queryClient = useQueryClient();
+  const sound = usePremiumSound();
+
 
   const [statusFilter, setStatusFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -577,6 +579,7 @@ export function InvoicesPage() {
   const issue = useMutation({
     mutationFn: (id: string) => invoicesApi.issue(id),
     onSuccess: () => {
+      sound.playSent();
       push('success', t('invoices.issueSuccess') || 'Invoice issued');
       setIssueTarget(null);
       invalidateAll();
@@ -600,6 +603,7 @@ export function InvoicesPage() {
     mutationFn: ({ invoiceId, data }: { invoiceId: string; data: PaymentFormState }) =>
       invoicesApi.recordPayment(invoiceId, data),
     onSuccess: () => {
+      sound.playPayment();
       push('success', t('invoices.paymentSuccess'));
       setPayTarget(null);
       setPaymentForm(EMPTY_PAYMENT);
@@ -621,7 +625,7 @@ export function InvoicesPage() {
     return { total, paid, outstanding, overdue, count: items.length };
   }, [items]);
 
-  const sound = usePremiumSound();
+
   const [studioDocData, setStudioDocData] = useState<PDFStudioDocData | null>(null);
 
   /* ── Executive PDF Studio ─────────────────────────────────────────── */

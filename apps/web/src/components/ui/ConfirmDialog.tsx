@@ -175,7 +175,7 @@ export const ConfirmDialog = memo(function ConfirmDialog({
   /* ── Close is blocked while a confirm is in flight ──── */
   const handleSafeClose = useCallback(() => {
     if (isBusy || inFlightRef.current) return;
-    sound.playTick?.();
+    sound.playPop?.();
     onClose();
   }, [isBusy, onClose, sound]);
 
@@ -189,7 +189,11 @@ export const ConfirmDialog = memo(function ConfirmDialog({
       return;
     }
 
-    sound.playTick?.();
+    if (tone === 'danger') {
+      sound.playDelete?.();
+    } else {
+      sound.playTick?.();
+    }
     setError(null);
 
     try {
@@ -203,12 +207,13 @@ export const ConfirmDialog = memo(function ConfirmDialog({
       // Caught here so a rejected promise never escapes as an unhandled rejection.
       // eslint-disable-next-line no-console
       console.error('[ConfirmDialog] onConfirm failed', err);
+      sound.playError?.();
       setError(tr('confirm.failed', FAILURE_MESSAGE));
     } finally {
       inFlightRef.current = false;
       setInternalLoading(false);
     }
-  }, [isBusy, isMatch, onConfirm, sound, tr]);
+  }, [isBusy, isMatch, onConfirm, sound, tr, tone]);
 
   /* ── Power-user shortcut: ⌘/Ctrl + Enter ───────────── */
   useEffect(() => {

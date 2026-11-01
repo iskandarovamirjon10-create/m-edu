@@ -36,6 +36,7 @@ import type {
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 /* ============================================================================
  *  FLUID MOTION TOKENS
@@ -739,6 +740,7 @@ export function PaymentsPage() {
   usePageTitle(t('payments.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
+  const { playPayment, playError } = usePremiumSound();
 
   /* ── Filter state ─────────────────────────────────────────────────── */
   const [page, setPage] = useState(1);
@@ -907,6 +909,7 @@ export function PaymentsPage() {
       });
     },
     onSuccess: () => {
+      playPayment();
       push('success', t('payments.created'));
       setModalOpen(false);
       setForm(INITIAL_FORM);
@@ -920,6 +923,7 @@ export function PaymentsPage() {
       qc.invalidateQueries({ queryKey: queryKeys.students.all() });
     },
     onError: (e: Error) => {
+      playError();
       push('error', getErrorMessage(e));
     },
   });
@@ -929,12 +933,14 @@ export function PaymentsPage() {
     mutationFn: ({ id, status }: { id: string; status: PaymentStatus }) =>
       paymentsApi.update(id, { status }),
     onSuccess: () => {
+      playPayment();
       push('success', t('payments.updated'));
       qc.invalidateQueries({ queryKey: queryKeys.payments.all() });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
       qc.invalidateQueries({ queryKey: queryKeys.invoices.all() });
     },
     onError: (e: Error) => {
+      playError();
       push('error', getErrorMessage(e));
     },
   });

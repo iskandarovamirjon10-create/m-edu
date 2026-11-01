@@ -771,7 +771,7 @@ export function GamificationHubPage() {
   usePageTitle('M-Coins & Gamifikatsiya');
   const { push } = useToast();
   const queryClient = useQueryClient();
-  const { playTick, playPop, playSuccess, playError } = usePremiumSound();
+  const { playTick, playPop, playError, playCelebration } = usePremiumSound();
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'leagues' | 'store' | 'skillTree'>('leaderboard');
   const [selectedLeagueFilter, setSelectedLeagueFilter] = useState<LeagueTier | 'ALL'>('ALL');
   const [xpParticleTrigger, setXpParticleTrigger] = useState(0);
@@ -882,7 +882,7 @@ export function GamificationHubPage() {
     mutationFn: (rewardId: string) =>
       request(`/gamification/rewards/${rewardId}/claim`, { method: 'POST' }),
     onSuccess: (res: any) => {
-      playSuccess();
+      playCelebration();
       push('success', res?.message || '🎉 Sovrin muvaffaqiyatli xarid qilindi!');
       setConfettiTrigger(Date.now());
       // Haptic feedback (mobile)

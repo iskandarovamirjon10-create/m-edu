@@ -266,7 +266,7 @@ interface NotificationResponse {
 export function NotificationsMenu({ size = 'md' }: { size?: 'sm' | 'md' } = {}) {
   const { t } = useSafeI18n();
   const queryClient = useQueryClient();
-  const { playPop, playTick, playSuccess } = usePremiumSound();
+  const { playPop, playTick, playSuccess, playNotification } = usePremiumSound();
 
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
@@ -381,6 +381,14 @@ export function NotificationsMenu({ size = 'md' }: { size?: 'sm' | 'md' } = {}) 
   const data = notifications.data as NotificationResponse | undefined;
   const allItems = data?.items ?? [];
   const unreadCount = data?.unread ?? 0;
+  const previousUnreadRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (previousUnreadRef.current !== null && unreadCount > previousUnreadRef.current) {
+      playNotification();
+    }
+    previousUnreadRef.current = unreadCount;
+  }, [unreadCount, playNotification]);
 
   const displayedItems = useMemo(() => {
     if (filter === 'unread') {

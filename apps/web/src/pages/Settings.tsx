@@ -28,6 +28,7 @@ import {
   GlassButton,
   GlassSwitch,
   ConfirmDialog,
+  AcousticSoundStudio,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { isPlatformRole } from '@/lib/roles';
@@ -69,6 +70,11 @@ const cardVariants: Variants = {
 const ICON_STROKE = 1.75;
 
 const I: Record<string, string[]> = {
+  volume: [
+    'M11 5L6 9H2v6h4l5 4V5z',
+    'M15.54 8.46a5 5 0 0 1 0 7.07',
+    'M19.07 4.93a10 10 0 0 1 0 14.14',
+  ],
   settings: [
     'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
     'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
@@ -1111,14 +1117,15 @@ export function SettingsPage() {
   const navItems = useMemo<NavItem[]>(() => {
     const items: NavItem[] = [
       { id: 'section-appearance', number: '01', label: t('settings.appearance'), icon: I.palette, tone: 'purple' },
-      { id: 'section-account',    number: '02', label: t('settings.account'),    icon: I.user,    tone: 'green'  },
-      { id: 'section-security',   number: '03', label: t('settings.changePassword'), icon: I.lock, tone: 'red'   },
-      { id: 'section-devices',    number: '04', label: t('settings.devices.title', 'Qurilmalar'), icon: I.laptop, tone: 'blue' },
-      { id: 'section-telegram',   number: '05', label: t('settings.telegram.title'), icon: I.telegram, tone: 'blue' },
+      { id: 'section-sound',      number: '02', label: 'Ovoz va Akustika',       icon: I.volume,  tone: 'purple' },
+      { id: 'section-account',    number: '03', label: t('settings.account'),    icon: I.user,    tone: 'green'  },
+      { id: 'section-security',   number: '04', label: t('settings.changePassword'), icon: I.lock, tone: 'red'   },
+      { id: 'section-devices',    number: '05', label: t('settings.devices.title', 'Qurilmalar'), icon: I.laptop, tone: 'blue' },
+      { id: 'section-telegram',   number: '06', label: t('settings.telegram.title'), icon: I.telegram, tone: 'blue' },
     ];
     if (isAdmin) {
-      items.push({ id: 'section-organization', number: '06', label: t('settings.organization'), icon: I.building, tone: 'orange' });
-      items.push({ id: 'section-access',       number: '07', label: t('settings.accessControl.title'), icon: I.shield, tone: 'blue' });
+      items.push({ id: 'section-organization', number: '07', label: t('settings.organization'), icon: I.building, tone: 'orange' });
+      items.push({ id: 'section-access',       number: '08', label: t('settings.accessControl.title'), icon: I.shield, tone: 'blue' });
     }
     return items;
   }, [t, isAdmin]);
@@ -1294,10 +1301,22 @@ export function SettingsPage() {
               </div>
             </SettingsSection>
 
-            {/* 02 · Account */}
+            {/* 02 · Sound & Acoustics */}
+            <SettingsSection
+              id="section-sound"
+              number="02"
+              title="Ovoz va Akustika"
+              subtitle="Apple VisionOS va Taptic standartidagi fazoviy mikro-tovushlar va haptik effektlar"
+              icon={I.volume}
+              tone="purple"
+            >
+              <AcousticSoundStudio />
+            </SettingsSection>
+
+            {/* 03 · Account */}
             <SettingsSection
               id="section-account"
-              number="02"
+              number="03"
               title={t('settings.account')}
               subtitle={t('settings.accountHint')}
               icon={I.user}
@@ -1360,10 +1379,10 @@ export function SettingsPage() {
               </form>
             </SettingsSection>
 
-            {/* 03 · Security */}
+            {/* 04 · Security */}
             <SettingsSection
               id="section-security"
-              number="03"
+              number="04"
               title={t('settings.changePassword')}
               subtitle={t('settings.changePasswordHint')}
               icon={I.lock}
@@ -1476,10 +1495,10 @@ export function SettingsPage() {
               </form>
             </SettingsSection>
 
-            {/* 04 · Devices */}
+            {/* 05 · Devices */}
             <SettingsSection
               id="section-devices"
-              number="04"
+              number="05"
               title={t('settings.devices.title', 'Faol qurilmalar')}
               subtitle={t('settings.devices.subtitle', 'Bitta hisob ostida ulangan barcha qurilmalar')}
               icon={I.laptop}
@@ -1587,10 +1606,10 @@ export function SettingsPage() {
               </div>
             </SettingsSection>
 
-            {/* 05 · Telegram */}
+            {/* 06 · Telegram */}
             <SettingsSection
               id="section-telegram"
-              number="05"
+              number="06"
               title={t('settings.telegram.title')}
               subtitle={t('settings.telegram.subtitle')}
               icon={I.telegram}
@@ -1599,11 +1618,11 @@ export function SettingsPage() {
               <TelegramIntegration />
             </SettingsSection>
 
-            {/* 06 · Organization (admin) */}
+            {/* 07 · Organization (admin) */}
             {isAdmin && (
               <SettingsSection
                 id="section-organization"
-                number="06"
+                number="07"
                 title={t('settings.organization')}
                 subtitle={t('settings.organizationHint')}
                 icon={I.building}
@@ -1680,11 +1699,11 @@ export function SettingsPage() {
               </SettingsSection>
             )}
 
-            {/* 07 · Access Control (admin) */}
+            {/* 08 · Access Control (admin) */}
             {isAdmin && (
               <SettingsSection
                 id="section-access"
-                number="07"
+                number="08"
                 title={t('settings.accessControl.title')}
                 subtitle={t('settings.accessControl.subtitle')}
                 icon={I.shield}
