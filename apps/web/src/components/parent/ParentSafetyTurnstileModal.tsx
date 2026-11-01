@@ -15,6 +15,7 @@ import {
 import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { parentSafetyGuardApi, studentsApi } from '@/lib/api';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 interface ParentSafetyTurnstileModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export const ParentSafetyTurnstileModal: React.FC<ParentSafetyTurnstileModalProp
   onClose,
   branchId,
 }) => {
+  const { t } = useSafeI18n();
   const [activeTab, setActiveTab] = useState<'PRESENCE' | 'DISPATCH' | 'EMERGENCY'>('PRESENCE');
 
   // Manual Dispatch State
@@ -150,12 +152,12 @@ export const ParentSafetyTurnstileModal: React.FC<ParentSafetyTurnstileModalProp
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold tracking-tight text-foreground">
-                  Parent Safety Guard & Jonli Turniket Xavfsizlik Monitori
+                  {t('parentSafety.title', 'Parent Safety Guard & Jonli Turniket Xavfsizlik Monitori')}
                 </h2>
                 <GlassBadge variant="primary" size="sm">LIVE DISPATCH</GlassBadge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Markaz ichidagi talabalar soni, ota-onalarga real-vaqtda bildirishnoma va favqulodda xabar tarqatish tizimi
+                {t('parentSafety.subtitle', "Markaz ichidagi talabalar soni, ota-onalarga real-vaqtda bildirishnoma va favqulodda xabar tarqatish tizimi")}
               </p>
             </div>
           </div>
@@ -175,7 +177,7 @@ export const ParentSafetyTurnstileModal: React.FC<ParentSafetyTurnstileModalProp
                 : 'bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
             }`}
           >
-            🏢 Markazda Hozir ({insideCount} ta)
+            🏢 {t('parentSafety.tabPresence', 'Markazda Hozir')} ({insideCount} ta)
           </button>
 
           <button
@@ -190,7 +192,7 @@ export const ParentSafetyTurnstileModal: React.FC<ParentSafetyTurnstileModalProp
                 : 'bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
             }`}
           >
-            ⚡ Turniket Kirish/Chiqish Test
+            ⚡ {t('parentSafety.tabDispatch', 'Turniket Kirish/Chiqish Test')}
           </button>
 
           <button
@@ -205,7 +207,7 @@ export const ParentSafetyTurnstileModal: React.FC<ParentSafetyTurnstileModalProp
                 : 'bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
             }`}
           >
-            🚨 Favqulodda Xabar Tarqatish
+            🚨 {t('parentSafety.tabEmergency', 'Favqulodda Xabar Tarqatish')}
           </button>
         </div>
 

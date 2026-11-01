@@ -17,6 +17,7 @@ import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { teacherKpiPayrollApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 interface TeacherKpiBatchPayrollModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export const TeacherKpiBatchPayrollModal: React.FC<TeacherKpiBatchPayrollModalPr
   onClose,
   branchId,
 }) => {
+  const { t } = useSafeI18n();
   const currentDate = new Date();
   const [periodYear, setPeriodYear] = useState<number>(currentDate.getFullYear());
   const [periodMonth, setPeriodMonth] = useState<number>(currentDate.getMonth() + 1);
@@ -105,12 +107,12 @@ export const TeacherKpiBatchPayrollModal: React.FC<TeacherKpiBatchPayrollModalPr
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold tracking-tight text-foreground">
-                  Smart O'qituvchi KPI & Avtomatlashtirilgan Oylik Hisob-Kitob
+                  {t('teacherKpiPayroll.title', "Smart O'qituvchi KPI & Avtomatlashtirilgan Oylik Hisob-Kitob")}
                 </h2>
                 <GlassBadge variant="primary" size="sm">AUTO PAYROLL</GlassBadge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Real o'tilgan dars soatlari, talaba saqlab qolish KPI, punktuallik va tushum foizi asosida shaffof hisoblash
+                {t('teacherKpiPayroll.subtitle', "Real o'tilgan dars soatlari, talaba saqlab qolish KPI, punktuallik va tushum foizi asosida shaffof hisoblash")}
               </p>
             </div>
           </div>

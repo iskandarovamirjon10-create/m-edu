@@ -16,6 +16,7 @@ import {
 import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { scheduleOptimizerApi } from '@/lib/api';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 interface ScheduleOptimizerModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
   onClose,
   branchId,
 }) => {
+  const { t } = useSafeI18n();
   const [selectedDay, setSelectedDay] = useState<string>('ALL');
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [activeSuggestions, setActiveSuggestions] = useState<any | null>(null);
@@ -50,7 +52,7 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
     onSuccess: (res: any) => {
       playSuccess();
       setActiveSuggestions(res);
-      toast.success("AI algoritmi to'qnashuvsiz optimal slotlarni hisoblab chiqdi!");
+      toast.success(t('scheduleOptimizer.solveSuccess', "AI algoritmi to'qnashuvsiz optimal slotlarni hisoblab chiqdi!"));
     },
     onError: (err: any) => {
       playError();
@@ -101,13 +103,13 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
   const getConflictBadge = (type: string) => {
     switch (type) {
       case 'TEACHER_COLLISION':
-        return <GlassBadge variant="danger" size="sm">O'QITUVCHI BANDLIGI</GlassBadge>;
+        return <GlassBadge variant="danger" size="sm">{t('scheduleOptimizer.teacherCollisions', "O'QITUVCHI BANDLIGI")}</GlassBadge>;
       case 'ROOM_COLLISION':
-        return <GlassBadge variant="danger" size="sm">XONA TO'QNASHOVI</GlassBadge>;
+        return <GlassBadge variant="danger" size="sm">{t('scheduleOptimizer.roomCollisions', "XONA TO'QNASHOVI")}</GlassBadge>;
       case 'CAPACITY_OVERFLOW':
         return <GlassBadge variant="warning" size="sm">XONA SIG'IMI YETARSIZ</GlassBadge>;
       case 'STUDENT_COLLISION':
-        return <GlassBadge variant="amber" size="sm">TALABA DUBLLIK DARS</GlassBadge>;
+        return <GlassBadge variant="amber" size="sm">{t('scheduleOptimizer.studentCollisions', "TALABA DUBLLIK DARS")}</GlassBadge>;
       default:
         return <GlassBadge variant="neutral" size="sm">{type}</GlassBadge>;
     }
@@ -131,12 +133,12 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold tracking-tight text-foreground">
-                  AI Jadval Optimizatori & Ziddiyatlar Audit Engine
+                  {t('scheduleOptimizer.title', 'AI Jadval Optimizatori & Ziddiyatlar Audit Engine')}
                 </h2>
                 <GlassBadge variant="primary" size="sm">AI SOLVER</GlassBadge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Dars to'qnashuvlari, o'qituvchi va xonalar bandligini matritsa orqali skanerlash va 1-klikda qayta taqsimlash
+                {t('scheduleOptimizer.subtitle', "Dars to'qnashuvlari, o'qituvchi va xonalar bandligini matritsa orqali skanerlash va 1-klikda qayta taqsimlash")}
               </p>
             </div>
           </div>
@@ -155,17 +157,17 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
           <div className={`rounded-xl border backdrop-blur-md p-3.5 ${
             conflicts.length > 0 ? 'border-rose-500/30 bg-rose-500/5' : 'border-emerald-500/30 bg-emerald-500/5'
           }`}>
-            <span className="text-xs font-medium text-muted-foreground">Aniqlangan Ziddiyatlar</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('scheduleOptimizer.totalConflicts', 'Aniqlangan Ziddiyatlar')}</span>
             <div className={`text-lg font-bold mt-1 ${conflicts.length > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
               {conflicts.length} ta
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
-              {conflicts.length > 0 ? 'Darhol yechim talab etiladi' : 'To\'qnashuvlar topilmadi'}
+              {conflicts.length > 0 ? 'Darhol yechim talab etiladi' : t('scheduleOptimizer.noConflicts', "To'qnashuvlar topilmadi")}
             </div>
           </div>
 
           <div className="rounded-xl border border-border/40 bg-card/40 backdrop-blur-md p-3.5">
-            <span className="text-xs text-muted-foreground font-medium">O'qituvchi To'qnashuvi</span>
+            <span className="text-xs text-muted-foreground font-medium">{t('scheduleOptimizer.teacherCollisions', "O'qituvchi To'qnashuvi")}</span>
             <div className="text-lg font-bold text-amber-500 mt-1">
               {conflicts.filter((c: any) => c.type === 'TEACHER_COLLISION').length} ta
             </div>
@@ -173,7 +175,7 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
           </div>
 
           <div className="rounded-xl border border-border/40 bg-card/40 backdrop-blur-md p-3.5">
-            <span className="text-xs text-muted-foreground font-medium">Xona Bandligi</span>
+            <span className="text-xs text-muted-foreground font-medium">{t('scheduleOptimizer.roomCollisions', 'Xona Bandligi')}</span>
             <div className="text-lg font-bold text-rose-500 mt-1">
               {conflicts.filter((c: any) => c.type === 'ROOM_COLLISION').length} ta
             </div>

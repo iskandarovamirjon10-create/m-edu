@@ -1,13 +1,17 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, render, screen, fireEvent } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { I18nProvider, useI18n, useSafeI18n, LOCALES, isLocale, type I18nContextValue } from '../I18nProvider';
-import { translate } from '../index';
+import { translate, loadLocale } from '../index';
 
 afterEach(cleanup);
+
+beforeAll(async () => {
+  await Promise.all([loadLocale('uz'), loadLocale('ru')]);
+});
 
 function Probe({ onReady }: { onReady: (t: (k: string) => string, locale: string) => void }) {
   const { t, locale } = useI18n();
@@ -90,7 +94,7 @@ describe('I18nProvider', () => {
     expect(t?.('certificates.title')).toBe('Certificates');
   });
 
-  it('switching locale changes translations (ru)', () => {
+  it('switching locale changes translations (ru)', async () => {
     function Switcher() {
       const { t, setLocale, locale } = useI18n();
       return (
@@ -111,7 +115,9 @@ describe('I18nProvider', () => {
 
     expect(screen.getByText('Settings')).toBeTruthy();
     fireEvent.click(screen.getByTestId('switch'));
-    expect(screen.getByText('Настройки')).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText('Настройки')).toBeTruthy();
+    });
     expect(localStorage.getItem('medu-lang')).toBe('ru');
     expect(document.documentElement.lang).toBe('ru');
   });

@@ -16,6 +16,7 @@ import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { smartDiscountApi, studentsApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 interface SmartDiscountClusterModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export const SmartDiscountClusterModal: React.FC<SmartDiscountClusterModalProps>
   onClose,
   initialStudentId,
 }) => {
+  const { t } = useSafeI18n();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(initialStudentId || null);
   const [sampleTuition, setSampleTuition] = useState<number>(600_000);
@@ -107,12 +109,12 @@ export const SmartDiscountClusterModal: React.FC<SmartDiscountClusterModalProps>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold tracking-tight text-foreground">
-                  Smart Oila Klasteri & Dinamik Chegirmalar Engine
+                  {t('smartDiscounts.title', 'Smart Oila Klasteri & Dinamik Chegirmalar Engine')}
                 </h2>
                 <GlassBadge variant="primary" size="sm">M-DISCOUNT</GlassBadge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Aka-uka/opa-singillar tarmog'ini avto-aniqlash, ko'p bolalik, a'lochi (merit) va sadoqat chegirmalari
+                {t('smartDiscounts.subtitle', "Aka-uka/opa-singillar tarmog'ini avto-aniqlash, ko'p bolalik, a'lochi (merit) va sadoqat chegirmalari")}
               </p>
             </div>
           </div>

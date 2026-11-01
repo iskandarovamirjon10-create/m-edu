@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { groupsApi, attendanceApi } from '@/lib/api';
 import { useToast } from '@/components/ui/GlassToast';
 import { toLocalISOString } from '@/lib/format';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 type AttendanceStatus = 'PRESENT' | 'LATE' | 'EXCUSED' | 'ABSENT';
 
@@ -16,6 +17,7 @@ interface StudentRecord {
 }
 
 export function QuickAttendanceModal() {
+  const { t } = useSafeI18n();
   const queryClient = useQueryClient();
   const { push } = useToast();
 
@@ -232,13 +234,13 @@ export function QuickAttendanceModal() {
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                Tezkor Davomat (Express Mode)
+                {t('quickAttendance.title', 'Tezkor Davomat (Express Mode)')}
                 <span className="rounded-full bg-indigo-500/15 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
                   Fast Tap
                 </span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                1 daqiqada butun guruh davomatini olish va ota-onaga bildirish
+                {t('quickAttendance.subtitle', '1 daqiqada butun guruh davomatini olish va ota-onaga bildirish')}
               </p>
             </div>
           </div>
@@ -254,7 +256,7 @@ export function QuickAttendanceModal() {
         {/* Group Selector */}
         <div className="mb-4 shrink-0">
           <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-            Guruhni tanlang
+            {t('quickAttendance.selectGroup', 'Guruhni tanlang')}
           </label>
           <select
             value={selectedGroupId}
@@ -272,7 +274,7 @@ export function QuickAttendanceModal() {
         {/* Batch Actions Bar */}
         <div className="flex items-center justify-between bg-black/[0.03] border border-black/10 rounded-2xl p-2.5 mb-3 shrink-0 dark:bg-white/5 dark:border-white/10">
           <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-            Jami: <strong className="text-slate-900 dark:text-white">{records.length}</strong> o'quvchi
+            {t('quickAttendance.totalStudents', `Jami: ${records.length} o'quvchi`).replace('{count}', String(records.length))}
           </span>
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
@@ -280,21 +282,21 @@ export function QuickAttendanceModal() {
               onClick={() => handleMarkAll('PRESENT')}
               className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 min-h-[36px] text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30 transition-colors flex items-center gap-1"
             >
-              🟢 Keldi
+              🟢 {t('quickAttendance.markPresent', 'Keldi')}
             </button>
             <button
               type="button"
               onClick={() => handleMarkAll('EXCUSED')}
               className="rounded-xl bg-sky-500/10 border border-sky-500/30 px-3 py-1.5 min-h-[36px] text-xs font-semibold text-sky-700 hover:bg-sky-500/20 dark:bg-sky-500/20 dark:text-sky-300 dark:hover:bg-sky-500/30 transition-colors flex items-center gap-1"
             >
-              🔵 Sababli
+              🔵 {t('quickAttendance.markExcused', 'Sababli')}
             </button>
             <button
               type="button"
               onClick={() => handleMarkAll('ABSENT')}
               className="rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-1.5 min-h-[36px] text-xs font-semibold text-red-700 hover:bg-red-500/20 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30 transition-colors flex items-center gap-1"
             >
-              🔴 Kelmadi
+              🔴 {t('quickAttendance.markAbsent', 'Kelmadi')}
             </button>
           </div>
         </div>
@@ -304,11 +306,11 @@ export function QuickAttendanceModal() {
           {loadingStudents ? (
             <div className="flex items-center justify-center py-12 text-slate-500 dark:text-slate-400 text-sm">
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent mr-2" />
-              O'quvchilar yuklanmoqda...
+              {t('quickAttendance.loadingStudents', "O'quvchilar yuklanmoqda...")}
             </div>
           ) : records.length === 0 ? (
             <div className="text-center py-12 text-slate-500 dark:text-slate-400 text-sm">
-              Bu guruhda o'quvchilar topilmadi
+              {t('quickAttendance.noStudents', "Bu guruhda o'quvchilar topilmadi")}
             </div>
           ) : (
             records.map((r, i) => (
@@ -328,7 +330,7 @@ export function QuickAttendanceModal() {
                 {/* Status Toggle Badge */}
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-slate-400 hidden sm:inline">
-                    (bosing o'zgartirish uchun)
+                    {t('quickAttendance.tapToToggle', "(bosing o'zgartirish uchun)")}
                   </span>
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
@@ -343,12 +345,12 @@ export function QuickAttendanceModal() {
                   >
                     <span>
                       {r.status === 'PRESENT'
-                        ? '🟢 KELDI'
+                        ? `🟢 ${t('quickAttendance.markPresent', 'KELDI')}`
                         : r.status === 'LATE'
-                        ? '🟡 KECHIKDI'
+                        ? `🟡 ${t('quickAttendance.markLate', 'KECHIKDI')}`
                         : r.status === 'EXCUSED'
-                        ? '🔵 SABABLI'
-                        : '🔴 KELMADI'}
+                        ? `🔵 ${t('quickAttendance.markExcused', 'SABABLI')}`
+                        : `🔴 ${t('quickAttendance.markAbsent', 'KELMADI')}`}
                     </span>
                   </span>
                 </div>
@@ -364,7 +366,7 @@ export function QuickAttendanceModal() {
             onClick={() => setOpen(false)}
             className="rounded-2xl border border-black/10 px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-black/5 hover:text-slate-900 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
           >
-            Bekor qilish
+            {t('common.cancel', 'Bekor qilish')}
           </button>
           <button
             type="button"
@@ -379,7 +381,7 @@ export function QuickAttendanceModal() {
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
             ) : (
               <>
-                <span>Davomatni Tasdiqlash</span>
+                <span>{t('quickAttendance.saveAttendance', 'Davomatni Tasdiqlash')}</span>
                 <span className="rounded-lg bg-black/20 px-2 py-0.5 text-xs font-mono">
                   ↵ Enter
                 </span>

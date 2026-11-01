@@ -7,6 +7,7 @@ import { queryKeys } from '@/lib/query-keys.factory';
 import { useToast } from '@/components/ui/GlassToast';
 import { useVoiceFeedback } from '@/hooks/useVoiceFeedback';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 const PRESET_AMOUNTS = [
   { label: '100 ming', value: 100000 },
@@ -27,6 +28,7 @@ const METHODS = [
 ];
 
 export function QuickPaymentModal() {
+  const { t } = useSafeI18n();
   const queryClient = useQueryClient();
   const { push } = useToast();
   const voice = useVoiceFeedback();
@@ -201,13 +203,13 @@ export function QuickPaymentModal() {
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                Tezkor To'lov (3 soniya)
+                {t('quickPayment.title', "Tezkor To'lov (3 soniya)")}
                 <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
                   Instant
                 </span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                O'quvchidan to'lovni qabul qilish va avtomat chek yuborish
+                {t('quickPayment.subtitle', "O'quvchidan to'lovni qabul qilish va avtomat chek yuborish")}
               </p>
             </div>
           </div>
@@ -224,7 +226,7 @@ export function QuickPaymentModal() {
           {/* Step 1: Student Selection */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-              1. O'quvchi
+              1. {t('payments.form.student', "O'quvchi")}
             </label>
 
             {selectedStudent ? (
@@ -267,7 +269,7 @@ export function QuickPaymentModal() {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Ism, familiya yoki telefon raqami bilan qidiring..."
+                  placeholder={t('quickPayment.searchStudent', 'Ism, familiya yoki telefon raqami bilan qidiring...')}
                   className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-base sm:text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-slate-500"
                 />
 
@@ -310,7 +312,7 @@ export function QuickPaymentModal() {
           {/* Step 2: Amount with Quick Presets */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-              2. To'lov Summasi (UZS)
+              2. {t('quickPayment.amount', "To'lov Summasi (UZS)")}
             </label>
             <div className="relative">
               <input
@@ -347,7 +349,7 @@ export function QuickPaymentModal() {
           {/* Step 3: Payment Method */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-              3. To'lov turi
+              3. {t('quickPayment.method', "To'lov turi")}
             </label>
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
               {METHODS.map((m) => {
@@ -377,7 +379,7 @@ export function QuickPaymentModal() {
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Izoh (masalan: Oktyabr oyi ingliz tili kursi uchun)"
+              placeholder={t('quickPayment.description', 'Izoh (masalan: Oktyabr oyi ingliz tili kursi uchun)')}
               className="w-full rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2 text-base sm:text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-slate-500"
             />
           </div>
@@ -393,7 +395,7 @@ export function QuickPaymentModal() {
                 <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
               ) : (
                 <>
-                  <span>To'lovni qabul qilish</span>
+                  <span>{t('quickPayment.savePayment', "To'lovni qabul qilish")}</span>
                   <span className="rounded-lg bg-black/20 px-2 py-0.5 text-xs font-mono">
                     ↵ Enter
                   </span>

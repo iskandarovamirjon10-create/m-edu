@@ -10,8 +10,8 @@
  *  ✅ Seamless Server & Local Persistence: Syncs with `usePersistSettings` and cross-tab `I18nProvider`
  */
 
-import { useSafeI18n, LOCALES, LOCALE_META, type Locale } from '@/i18n/I18nProvider';
-import { usePersistSettings } from '@/hooks/usePersistSettings';
+import { useSafeI18n, LOCALES, LOCALE_META, type Locale } from './I18nProvider';
+import { usePersistSettings } from '../hooks/usePersistSettings';
 import { motion } from 'framer-motion';
 import { useRef, useId, memo } from 'react';
 

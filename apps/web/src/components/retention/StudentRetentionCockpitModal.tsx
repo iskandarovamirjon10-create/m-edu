@@ -17,6 +17,7 @@ import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { retentionApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 interface StudentRetentionCockpitModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
   isOpen,
   onClose,
 }) => {
+  const { t } = useSafeI18n();
   const [selectedTier, setSelectedTier] = useState<RiskTier>('ALL');
   const [activeInterventionStudent, setActiveInterventionStudent] = useState<any | null>(null);
   const [interventionType, setInterventionType] = useState<string>('DIRECTOR_CALL');
@@ -57,14 +59,14 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
       }),
     onSuccess: () => {
       playSuccess();
-      toast.success("Intervensiya muvaffaqiyatli saqlandi va vazifa rejalashtirildi!");
+      toast.success(t('retention.interveneSuccess', 'Intervensiya muvaffaqiyatli saqlandi va vazifa rejalashtirildi!'));
       setActiveInterventionStudent(null);
       setInterventionNote('');
       queryClient.invalidateQueries({ queryKey: ['retention-cockpit'] });
     },
     onError: (err: any) => {
       playError();
-      toast.error(err?.message || "Intervensiyani qayd etishda xatolik yuz berdi");
+      toast.error(err?.message || t('retention.interveneError', 'Intervensiyani qayd etishda xatolik yuz berdi'));
     },
   });
 
@@ -96,13 +98,13 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
   const getTierBadge = (tier: string) => {
     switch (tier) {
       case 'CRITICAL':
-        return <GlassBadge variant="danger" size="sm">KRITIK XAVF</GlassBadge>;
+        return <GlassBadge variant="danger" size="sm">{t('retention.tierCritical', 'KRITIK XAVF')}</GlassBadge>;
       case 'HIGH':
-        return <GlassBadge variant="warning" size="sm">YUQORI XAVF</GlassBadge>;
+        return <GlassBadge variant="warning" size="sm">{t('retention.tierHigh', 'YUQORI XAVF')}</GlassBadge>;
       case 'MEDIUM':
-        return <GlassBadge variant="amber" size="sm">O'RTA XAVF</GlassBadge>;
+        return <GlassBadge variant="amber" size="sm">{t('retention.tierMedium', "O'RTA XAVF")}</GlassBadge>;
       default:
-        return <GlassBadge variant="success" size="sm">BARQAROR</GlassBadge>;
+        return <GlassBadge variant="success" size="sm">{t('retention.tierLow', 'BARQAROR')}</GlassBadge>;
     }
   };
 
@@ -139,12 +141,12 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold tracking-tight text-foreground">
-                  AI Student Retention & Churn Prediction Cockpit
+                  {t('retention.cockpitTitle', 'AI Student Retention & Churn Prediction Cockpit')}
                 </h2>
                 <GlassBadge variant="primary" size="sm">M-EDU PRO</GlassBadge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Talabalar o'qishni tark etishidan oldin aniqlash, risk ballarini hisoblash va 1-klik intervensiya
+                {t('retention.cockpitSubtitle', "Talabalar o'qishni tark etishidan oldin aniqlash, risk ballarini hisoblash va 1-klik intervensiya")}
               </p>
             </div>
           </div>
@@ -153,7 +155,7 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
         {/* Executive KPI Bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="rounded-xl border border-border/40 bg-card/40 backdrop-blur-md p-3.5">
-            <span className="text-xs text-muted-foreground font-medium">Xavf Ostidagi Tushum (LTV)</span>
+            <span className="text-xs text-muted-foreground font-medium">{t('retention.revenueAtRisk', 'Xavf Ostidagi Tushum (LTV)')}</span>
             <div className="text-lg font-bold text-rose-500 mt-1">
               {formatCurrency(summary.totalAtRiskTuition || 0)}
             </div>
@@ -163,7 +165,7 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
           </div>
 
           <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 backdrop-blur-md p-3.5">
-            <span className="text-xs text-rose-400 font-medium">Kritik Xavf (75-100)</span>
+            <span className="text-xs text-rose-400 font-medium">{t('retention.criticalCount', 'Kritik Xavf (75-100)')}</span>
             <div className="text-lg font-bold text-rose-500 mt-1">
               {summary.criticalCount} ta talaba
             </div>
@@ -171,7 +173,7 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
           </div>
 
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-md p-3.5">
-            <span className="text-xs text-amber-400 font-medium">Yuqori Xavf (50-74)</span>
+            <span className="text-xs text-amber-400 font-medium">{t('retention.highRiskCount', 'Yuqori Xavf (50-74)')}</span>
             <div className="text-lg font-bold text-amber-500 mt-1">
               {summary.highCount} ta talaba
             </div>
