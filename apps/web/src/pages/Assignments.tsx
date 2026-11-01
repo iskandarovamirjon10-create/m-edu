@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { assignmentsApi, groupsApi } from '@/lib/api';
@@ -203,6 +204,14 @@ const I = {
     'M12 3.5 13.9 9.1 19.5 11 13.9 12.9 12 18.5 10.1 12.9 4.5 11 10.1 9.1z',
     'M18.5 3.5v3', 'M20 5h-3',
     'M5.5 18v2.5', 'M6.75 19.25h-2.5',
+  ],
+  search: [
+    'M21 21l-4.35-4.35',
+    'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z',
+  ],
+  x: [
+    'M18 6L6 18',
+    'M6 6l12 12',
   ],
 };
 
@@ -556,6 +565,11 @@ export default function AssignmentsPage() {
   const queryClient = useQueryClient();
   const { playPop, playTick, playSuccess } = usePremiumSound();
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedGroupId, setSelectedGroupId] = useState(searchParams.get('groupId') || '');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'OVERDUE'>('ALL');
+
   const [title, setTitle] = useState('');
   const [groupId, setGroupId] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -564,6 +578,24 @@ export default function AssignmentsPage() {
   const [formErrors, setFormErrors] = useState<{
     title?: string; groupId?: string; dueDate?: string;
   }>({});
+
+  useEffect(() => {
+    const gid = searchParams.get('groupId') || '';
+    if (gid !== selectedGroupId) {
+      setSelectedGroupId(gid);
+    }
+  }, [searchParams, selectedGroupId]);
+
+  const handleGroupFilterChange = useCallback((gid: string) => {
+    playTick();
+    setSelectedGroupId(gid);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (gid) next.set('groupId', gid);
+      else next.delete('groupId');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams, playTick]);
 
   /* ---------------- Data ---------------- */
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -587,6 +619,25 @@ export default function AssignmentsPage() {
     () => (Array.isArray(groupsData) ? groupsData : (groupsData as any)?.items ?? []),
     [groupsData],
   );
+
+  const filteredAssignments = useMemo(() => {
+    return assignments.filter((a) => {
+      if (selectedGroupId && a.group?.id !== selectedGroupId) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        if (!a.title.toLowerCase().includes(q) && !(a.group?.name || '').toLowerCase().includes(q)) {
+          return false;
+        }
+      }
+      if (statusFilter === 'OVERDUE') {
+        if (!getDueInfo(a.dueDate, t).isOverdue) return false;
+      } else if (statusFilter === 'ACTIVE') {
+        const s = a.status?.toUpperCase();
+        if (s !== 'ACTIVE' && s !== 'OPEN') return false;
+      }
+      return true;
+    });
+  }, [assignments, selectedGroupId, searchQuery, statusFilter, t]);
 
   /* ---------------- Derived stats ---------------- */
   const stats = useMemo(() => {
@@ -646,7 +697,7 @@ export default function AssignmentsPage() {
     isSelected,
     toggleSelection,
   } = useListKeyboardNavigation<Assignment>({
-    items: assignments,
+    items: filteredAssignments,
     getItemId: (a) => a.id,
     rowIdPrefix: 'assignment-row-',
     onSelect: (a) => handleOpenAssignmentSidecar(a),
@@ -878,7 +929,8 @@ export default function AssignmentsPage() {
       {/* ASSIGNMENTS LIST */}
       <motion.div variants={cardVariants}>
         <div className="liquid-glass-card p-4 sm:p-5">
-          <div className="flex items-center justify-between pb-3.5 mb-3 border-b border-black/5 dark:border-white/10">
+          {/* Header & Filter Toolbar */}
+          <div className="flex flex-col gap-3 pb-3.5 mb-3 border-b border-black/5 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
                 <Icon paths={I.pencil} size={16} strokeWidth={2} />
@@ -888,9 +940,102 @@ export default function AssignmentsPage() {
                   {t('assignments.listTitle')}
                 </h2>
                 <p className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
-                  {t(assignments.length === 1 ? 'assignments.countOne' : 'assignments.countMany', { count: assignments.length })}
+                  {t(filteredAssignments.length === 1 ? 'assignments.countOne' : 'assignments.countMany', { count: filteredAssignments.length })}
                 </p>
               </div>
+            </div>
+
+            {/* Status Segmented Tabs */}
+            <div className="flex flex-wrap items-center gap-1.5" role="tablist">
+              <button
+                type="button"
+                onClick={() => {
+                  playTick();
+                  setStatusFilter('ALL');
+                }}
+                className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  statusFilter === 'ALL'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-neutral-600 hover:bg-black/5 dark:text-neutral-400 dark:hover:bg-white/5'
+                }`}
+              >
+                {t('common.all', 'Barchasi')} ({assignments.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  playTick();
+                  setStatusFilter('ACTIVE');
+                }}
+                className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  statusFilter === 'ACTIVE'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-neutral-600 hover:bg-black/5 dark:text-neutral-400 dark:hover:bg-white/5'
+                }`}
+              >
+                {t('assignments.badge.active', { count: stats.active })}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  playTick();
+                  setStatusFilter('OVERDUE');
+                }}
+                className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  statusFilter === 'OVERDUE'
+                    ? 'bg-red-600 text-white shadow-xs'
+                    : 'text-neutral-600 hover:bg-black/5 dark:text-neutral-400 dark:hover:bg-white/5'
+                }`}
+              >
+                {t('assignments.badge.overdue', { count: stats.overdue })}
+              </button>
+            </div>
+          </div>
+
+          {/* Search and Group Selector Filters */}
+          <div className="mb-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {/* Search Input */}
+            <div className="relative min-w-[200px]">
+              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-400">
+                <Icon paths={I.search} size={14} strokeWidth={2.2} />
+              </span>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('common.search', 'Topshiriq yoki guruh bo‘yicha qidirish...')}
+                className="min-h-[40px] w-full rounded-xl border border-black/10 bg-black/[0.02] pl-8 pr-8 text-xs font-medium text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:outline-none dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-100"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playTick();
+                    setSearchQuery('');
+                  }}
+                  className="min-h-[40px] min-w-[32px] absolute inset-y-0 right-0 flex items-center justify-center text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                  aria-label={t('common.clear', 'Tozalash')}
+                >
+                  <Icon paths={I.x} size={13} strokeWidth={2.4} />
+                </button>
+              )}
+            </div>
+
+            {/* Group Selector Dropdown */}
+            <div className="relative">
+              <select
+                value={selectedGroupId}
+                onChange={(e) => handleGroupFilterChange(e.target.value)}
+                className="min-h-[40px] w-full rounded-xl border border-black/10 bg-black/[0.02] px-3 text-xs font-semibold text-neutral-800 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-200 cursor-pointer"
+                aria-label={t('nav.groups', 'Guruh bo‘yicha filtr')}
+              >
+                <option value="">{t('groups.allGroups', 'Barcha guruhlar')}</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id} className="dark:bg-surface-900">
+                    {g.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -918,10 +1063,35 @@ export default function AssignmentsPage() {
                   {t('assignments.create')}
                 </button>
               </div>
+            ) : filteredAssignments.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-500/10 text-neutral-500">
+                  <Icon paths={I.search} size={22} strokeWidth={2} />
+                </div>
+                <p className="text-sm font-bold text-neutral-900 dark:text-white">
+                  {t('common.noResults', 'Natija topilmadi')}
+                </p>
+                <p className="max-w-xs text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                  Tanlangan guruh yoki qidiruv bo‘yicha topshiriqlar mavjud emas.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playTick();
+                    setSelectedGroupId('');
+                    setSearchQuery('');
+                    setStatusFilter('ALL');
+                    setSearchParams({});
+                  }}
+                  className="mt-1 inline-flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/5 px-3 py-1.5 text-xs font-bold text-neutral-700 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-neutral-300 dark:hover:bg-white/10 transition-colors"
+                >
+                  {t('common.resetFilters', 'Filtrlarni tozalash')}
+                </button>
+              </div>
             ) : (
               <motion.div layout className="space-y-3">
                 <AnimatePresence initial={false} mode="popLayout">
-                  {assignments.map((a, idx) => (
+                  {filteredAssignments.map((a, idx) => (
                     <AssignmentCard
                       key={a.id}
                       assignment={a}
