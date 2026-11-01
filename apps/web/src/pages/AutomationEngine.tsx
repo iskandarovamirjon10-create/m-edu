@@ -1495,7 +1495,19 @@ function RuleCard({ rule, onEdit, onDelete, onToggle, onOpenSidecar, toggling, t
         />
 
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 cursor-pointer" onClick={onOpenSidecar}>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={onOpenSidecar}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpenSidecar?.();
+              }
+            }}
+            aria-label={rule.name}
+            className="min-w-0 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
             <h3 className="truncate text-[0.98rem] font-bold tracking-tight text-[var(--text-primary)] hover:text-brand-500 transition-colors">
               {rule.name}
             </h3>
@@ -1612,7 +1624,15 @@ function ExecutionsTable({ rows, t, reduced, onOpenSidecar }: ExecutionsTablePro
             return (
               <tr
                 key={exec.id}
+                tabIndex={0}
+                role="button"
                 onClick={() => onOpenSidecar?.(exec)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpenSidecar?.(exec);
+                  }
+                }}
                 style={
                   reduced
                     ? undefined
@@ -1621,7 +1641,7 @@ function ExecutionsTable({ rows, t, reduced, onOpenSidecar }: ExecutionsTablePro
                         animationDelay: `${Math.min(i * 30, 450)}ms`,
                       }
                 }
-                className="border-b border-white/30 transition-colors duration-300 last:border-0 hover:bg-white/40 dark:border-white/[0.04] dark:hover:bg-white/[0.03] cursor-pointer"
+                className="border-b border-white/30 transition-colors duration-300 last:border-0 hover:bg-white/40 dark:border-white/[0.04] dark:hover:bg-white/[0.03] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
                 <td className="px-6 py-4 font-semibold text-[var(--text-primary)]">
                   {exec.rule?.name ?? '—'}

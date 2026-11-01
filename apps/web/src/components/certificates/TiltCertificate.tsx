@@ -70,11 +70,13 @@ export function TiltCertificate({ data }: TiltCertificateProps) {
     <div style={{ perspective: 1400 }} className="w-full flex justify-center py-2 select-none">
       <motion.div
         ref={cardRef}
+        data-printable="certificate"
+        id="medu-certificate-sheet"
         onMouseMove={onMouseMove}
         onMouseLeave={onMouseLeave}
         animate={{ rotateX, rotateY }}
         transition={SPRING.snappy}
-        className="relative w-full max-w-3xl rounded-[28px] p-[2.5px] transition-shadow duration-500"
+        className="printable-certificate relative w-full max-w-3xl rounded-[28px] p-[2.5px] transition-shadow duration-500 print:max-w-none print:w-full print:rounded-none print:shadow-none print:p-0 print:transform-none"
         style={{
           background:
             'linear-gradient(135deg, #D4AF37 0%, #FFF5C0 25%, #AA7A1E 50%, #FAF0BE 75%, #8C6516 100%)',
@@ -85,7 +87,7 @@ export function TiltCertificate({ data }: TiltCertificateProps) {
         {/* Dynamic Holographic Glare Sheen */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[28px] transition-opacity duration-300 z-20"
+          className="pointer-events-none absolute inset-0 rounded-[28px] transition-opacity duration-300 z-20 print:hidden"
           style={{
             background: `radial-gradient(circle at ${glarePosition.x}% ${glarePosition.y}%, rgba(255,255,255,0.75) 0%, transparent 60%)`,
             opacity: glarePosition.opacity,
@@ -94,7 +96,7 @@ export function TiltCertificate({ data }: TiltCertificateProps) {
         />
 
         {/* Outer White / Dark Container */}
-        <div className="relative rounded-[25px] bg-[#FAF8F5] p-6 sm:p-10 text-center dark:bg-[#0A0D14] overflow-hidden">
+        <div className="relative rounded-[25px] bg-[#FAF8F5] p-6 sm:p-10 text-center dark:bg-[#0A0D14] print:!bg-[#FAF8F5] print:p-8 overflow-hidden print:rounded-none">
           {/* Subtle Guilloche Watermark Pattern */}
           <div
             aria-hidden
@@ -134,40 +136,40 @@ export function TiltCertificate({ data }: TiltCertificateProps) {
             <p className="mt-3 font-serif text-[11px] font-bold uppercase tracking-[0.28em] text-[#A67C2E] dark:text-[#E2C37C]">
               {orgName}
             </p>
-            <h2 className="mt-1 font-serif text-2xl font-bold tracking-tight text-[#0A192F] dark:text-[#F8FAFC] sm:text-3xl">
+            <h2 className="mt-1 font-serif text-lg font-bold tracking-tight text-[#0A192F] dark:text-[#F8FAFC] sm:text-2xl md:text-3xl">
               MALAKA VA NATIJALAR SERTIFIKATI
             </h2>
-            <p className="mt-1 text-[11px] font-semibold uppercase tracking-widest text-[#64748B] dark:text-[#94A3B8]">
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-[#64748B] dark:text-[#94A3B8] sm:text-[11px]">
               CERTIFICATE OF EXCELLENCE & COMPLETION
             </p>
           </div>
 
           {/* Student Name Hero */}
-          <div className="my-6 relative">
-            <p className="text-[12px] font-medium text-[#64748B] dark:text-[#94A3B8] mb-1">
+          <div className="my-5 sm:my-6 relative">
+            <p className="text-[11.5px] font-medium text-[#64748B] dark:text-[#94A3B8] mb-1 sm:text-[12px]">
               Mazkur rasmiy sertifikat faxr bilan taqdim etiladi:
             </p>
-            <h3 className="font-serif text-3xl font-extrabold tracking-tight text-[#0A192F] dark:text-[#FFFFFF] sm:text-4xl">
+            <h3 className="font-serif text-2xl font-extrabold tracking-tight text-[#0A192F] dark:text-[#FFFFFF] sm:text-4xl">
               {studentName}
             </h3>
-            <div className="mx-auto mt-2.5 h-0.5 w-44 bg-gradient-to-r from-transparent via-[#C5A059] to-transparent" />
+            <div className="mx-auto mt-2 h-0.5 w-36 sm:w-44 bg-gradient-to-r from-transparent via-[#C5A059] to-transparent" />
           </div>
 
           {/* Course & Achievement Text */}
-          <p className="text-[13px] font-medium text-[#64748B] dark:text-[#94A3B8]">
+          <p className="text-[12px] font-medium text-[#64748B] dark:text-[#94A3B8] sm:text-[13px]">
             Quyidagi o'quv dasturi va amaliy loyihalarni to'liq hamda muvaffaqiyatli yakunlagani tasdiqlanadi:
           </p>
           <div className="mt-1.5 inline-flex items-center gap-2">
-            <p className="text-xl font-bold tracking-tight text-[#2563EB] dark:text-[#60A5FA] sm:text-2xl">
+            <p className="text-base font-bold tracking-tight text-[#2563EB] dark:text-[#60A5FA] sm:text-2xl">
               {courseName}
             </p>
           </div>
 
           {/* Dual Signatures & Seal */}
-          <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 items-end gap-4 border-t border-[#0000000e] pt-6 dark:border-[#ffffff0e]">
+          <div className="mt-6 sm:mt-8 flex flex-col sm:grid sm:grid-cols-3 items-center sm:items-end gap-5 sm:gap-4 border-t border-[#0000000e] pt-5 sm:pt-6 dark:border-[#ffffff0e]">
             {/* Signature 1 */}
-            <div className="text-center sm:text-left">
-              <div className="font-serif italic text-lg text-[#0A192F] dark:text-[#F8FAFC] opacity-90">
+            <div className="text-center sm:text-left order-2 sm:order-1">
+              <div className="font-serif italic text-base sm:text-lg text-[#0A192F] dark:text-[#F8FAFC] opacity-90">
                 {data.directorName || 'Akademiya Rahbariyati'}
               </div>
               <div className="mt-1 h-[1px] w-28 mx-auto sm:mx-0 bg-[#C5A059]/60" />
@@ -177,7 +179,7 @@ export function TiltCertificate({ data }: TiltCertificateProps) {
             </div>
 
             {/* Security Crest & Verification Status (Center) */}
-            <div className="hidden sm:flex flex-col items-center gap-1">
+            <div className="flex flex-col items-center gap-1 order-1 sm:order-2">
               <div className="rounded-xl p-1 bg-white shadow-sm border border-[#C5A059]/30 transition-transform duration-300 hover:scale-105">
                 <RealQrCode
                   value={verifyUrl}
@@ -188,21 +190,21 @@ export function TiltCertificate({ data }: TiltCertificateProps) {
                   title="Rasmiy tekshiruv QR kodi"
                 />
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-3 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                 <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   <path d="m9 12 2 2 4-4" />
                 </svg>
                 RASMIY TASDIQLANGAN
               </span>
-              <p className="mt-1 text-[9.5px] font-mono text-[#64748B] dark:text-[#94A3B8]">
+              <p className="mt-0.5 text-[9.5px] font-mono text-[#64748B] dark:text-[#94A3B8]">
                 ID: {data.certificateNumber}
               </p>
             </div>
 
             {/* Signature 2 */}
-            <div className="text-center sm:text-right">
-              <div className="font-serif italic text-lg text-[#0A192F] dark:text-[#F8FAFC] opacity-90">
+            <div className="text-center sm:text-right order-3 sm:order-3">
+              <div className="font-serif italic text-base sm:text-lg text-[#0A192F] dark:text-[#F8FAFC] opacity-90">
                 {data.instructorName || 'Kafedra Bosh O\'qituvchisi'}
               </div>
               <div className="mt-1 h-[1px] w-28 mx-auto sm:ml-auto sm:mr-0 bg-[#C5A059]/60" />

@@ -196,7 +196,7 @@ const BASE_CLASSES = [
   
   'font-sans font-medium',
   'leading-tight',
-  'whitespace-nowrap select-none',
+  'whitespace-nowrap select-none min-w-0 max-w-full box-border',
 
   
   'cursor-pointer',
@@ -317,7 +317,7 @@ function buildContent(parts: ContentParts): ReactElement {
       {}
       <span
         className={[
-          'flex items-center justify-center',
+          'flex items-center justify-center min-w-0 max-w-full',
           isBusy ? 'opacity-0' : 'opacity-100',
           'transition-opacity duration-[var(--duration-fast,120ms)]',
         ].join(' ')}
@@ -334,7 +334,7 @@ function buildContent(parts: ContentParts): ReactElement {
         )}
 
         {childrenNode != null && childrenNode !== false && (
-          <span data-btn-label className="leading-tight">
+          <span data-btn-label className="leading-tight truncate min-w-0">
             {childrenNode}
           </span>
         )}

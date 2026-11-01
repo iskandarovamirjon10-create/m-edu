@@ -226,4 +226,19 @@ describe('GamificationHubPage', () => {
       expect(screen.getByText('Paxtali premium sifatli futbolka')).toBeInTheDocument();
     });
   });
+
+  it('switches to Mahorat Shajarasi (Skill Tree) tab and renders constellation studio', async () => {
+    renderWithClient(<GamificationHubPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Mahorat Shajarasi/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Mahorat Shajarasi/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/RPG Mahorat Shajarasi · Spatial Skill Constellation/i)).toBeInTheDocument();
+      expect(screen.getByText(/Full-Stack Dasturlash & Bulut Tizimlari/i)).toBeInTheDocument();
+    });
+  });
 });

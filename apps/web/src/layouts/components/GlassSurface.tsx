@@ -237,8 +237,8 @@ export const GlassSurface = memo(function GlassSurface({
   const isLowPower = Boolean(profile.lowPowerMode);
 
   const canParallax = parallax && !reduced && !isLowPower && profile.hoverCapable;
-  const canSpotlight = spotlight && !isLowPower;
-  const canEdgeLight = edgeLight && !isLowPower;
+  const canSpotlight = spotlight && !isLowPower && profile.hoverCapable;
+  const canEdgeLight = edgeLight && !isLowPower && profile.hoverCapable;
   const isInteractive = canSpotlight || canEdgeLight || canParallax;
 
   /** Zero-rerender 120fps pointer tracking via direct CSS custom properties */
@@ -324,8 +324,20 @@ export const GlassSurface = memo(function GlassSurface({
     '--glass-ambient': cfg.ambient,
     '--glass-sheen-alpha': cfg.sheen,
     '--glass-light-angle': LIGHT_GRADIENT_ANGLE[light],
-    backdropFilter: `blur(${cfg.blur}px) saturate(${cfg.sat}%) brightness(${cfg.brightness}%)`,
-    WebkitBackdropFilter: `blur(${cfg.blur}px) saturate(${cfg.sat}%) brightness(${cfg.brightness}%)`,
+    ...(() => {
+      const effectiveBlur = profile.isMobile || profile.glassTier === 'balanced'
+        ? Math.min(cfg.blur, 10)
+        : profile.glassTier === 'minimal'
+          ? 0
+          : cfg.blur;
+      const filterVal = effectiveBlur > 0
+        ? `blur(${effectiveBlur}px) saturate(${cfg.sat}%) brightness(${cfg.brightness}%)`
+        : 'none';
+      return {
+        backdropFilter: filterVal,
+        WebkitBackdropFilter: filterVal,
+      };
+    })(),
     ...(canParallax
       ? {
           transform:

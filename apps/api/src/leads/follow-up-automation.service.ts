@@ -112,7 +112,7 @@ export class FollowUpAutomationService {
           },
           select: { leadId: true },
         });
-        const existingLeadIds = new Set(existingFollowUps.map((f) => f.leadId));
+        const existingLeadIds = new Set((existingFollowUps ?? []).map((f) => f.leadId));
 
         const leadsToProcess = (triggeredLeads ?? []).filter(lead => !existingLeadIds.has(lead.id));
 

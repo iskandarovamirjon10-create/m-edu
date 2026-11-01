@@ -183,6 +183,66 @@ export function useCalculator() {
     setWaitingForNewValue(true);
   }, [currentValue]);
 
+  const calculateSquare = useCallback(() => {
+    const val = parseFloat(currentValue);
+    if (isNaN(val)) return;
+    const result = formatNumber(val * val);
+    setHistory(prev => [{
+      id: Date.now().toString(),
+      expression: `sqr(${val})`,
+      result
+    }, ...prev]);
+    setCurrentValue(result);
+    setWaitingForNewValue(true);
+  }, [currentValue]);
+
+  const calculateSquareRoot = useCallback(() => {
+    const val = parseFloat(currentValue);
+    if (isNaN(val) || val < 0) {
+      setCurrentValue('Error');
+      return;
+    }
+    const result = formatNumber(Math.sqrt(val));
+    setHistory(prev => [{
+      id: Date.now().toString(),
+      expression: `√(${val})`,
+      result
+    }, ...prev]);
+    setCurrentValue(result);
+    setWaitingForNewValue(true);
+  }, [currentValue]);
+
+  const calculateReciprocal = useCallback(() => {
+    const val = parseFloat(currentValue);
+    if (isNaN(val) || val === 0) {
+      setCurrentValue('Error');
+      return;
+    }
+    const result = formatNumber(1 / val);
+    setHistory(prev => [{
+      id: Date.now().toString(),
+      expression: `1/(${val})`,
+      result
+    }, ...prev]);
+    setCurrentValue(result);
+    setWaitingForNewValue(true);
+  }, [currentValue]);
+
+  const convertCurrency = useCallback((toUsd: boolean, rate = 12850) => {
+    const val = parseFloat(currentValue);
+    if (isNaN(val) || val < 0) return;
+    const result = toUsd
+      ? formatNumber(Math.round((val / rate) * 100) / 100)
+      : formatNumber(Math.round(val * rate));
+    setHistory(prev => [{
+      id: Date.now().toString(),
+      expression: toUsd ? `${val} UZS ➔ USD` : `${val} USD ➔ UZS`,
+      result
+    }, ...prev]);
+    setCurrentValue(result);
+    setWaitingForNewValue(true);
+  }, [currentValue]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept if user is typing in an input field somewhere else
@@ -240,6 +300,10 @@ export function useCalculator() {
     calculateDiscount,
     calculateMarkup,
     calculateInstallment,
-    calculateSplit
+    calculateSplit,
+    calculateSquare,
+    calculateSquareRoot,
+    calculateReciprocal,
+    convertCurrency,
   };
 }

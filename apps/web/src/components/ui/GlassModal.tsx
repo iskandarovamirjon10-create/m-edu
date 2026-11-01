@@ -21,6 +21,7 @@ export interface GlassModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
+  titleTestId?: string;
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
@@ -54,6 +55,7 @@ export function GlassModal({
   open,
   onClose,
   title,
+  titleTestId,
   description,
   children,
   footer,
@@ -144,10 +146,10 @@ export function GlassModal({
   return createPortal(
     <div
       className={cn(
-        'fixed inset-0 flex items-end justify-center p-3',
+        'fixed inset-0 flex items-end justify-center p-0 sm:p-4',
         'pt-[max(0.75rem,env(safe-area-inset-top,0px))]',
-        'pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]',
-        'sm:items-center sm:p-4',
+        'pb-[max(0rem,env(safe-area-inset-bottom,0px))] sm:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]',
+        'sm:items-center',
         'z-[var(--z-modal,1000)]',
       )}
       role="dialog"
@@ -170,20 +172,24 @@ export function GlassModal({
       <div
         ref={dialogRef}
         className={cn(
-          'relative z-10 flex max-h-[min(88dvh,100%)] w-full min-w-0 flex-col overflow-hidden',
-          'rounded-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white/85 dark:bg-surface-900/85 backdrop-blur-2xl backdrop-saturate-150 shadow-modal shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
+          'relative z-10 flex max-h-[min(90dvh,100%)] sm:max-h-[min(88dvh,100%)] w-full min-w-0 flex-col overflow-hidden',
+          'rounded-t-[28px] rounded-b-none sm:rounded-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white/90 dark:bg-surface-900/90 backdrop-blur-2xl backdrop-saturate-150 shadow-modal shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
           'text-primary outline-none transform-gpu will-change-[transform,opacity]',
           !reduced && 'animate-modal-in',
           SIZE_CLASSES[size],
           className,
         )}
       >
+        {/* Mobile Pull Handle */}
+        <div className="w-10 h-1.5 rounded-full bg-slate-300/80 dark:bg-white/20 mx-auto mt-2.5 mb-1 shrink-0 sm:hidden" aria-hidden="true" />
+
         {/* Header */}
         {title && (
-          <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-black/[0.06] dark:border-white/[0.08] px-5 pt-5 pb-4 sm:px-6">
+          <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-black/[0.06] dark:border-white/[0.08] px-5 pt-3 sm:pt-5 pb-4 sm:px-6">
             <div className="min-w-0">
               <h2
                 id={titleId}
+                data-testid={titleTestId}
                 className="text-base font-semibold leading-snug tracking-tight text-primary"
               >
                 {title}
@@ -234,7 +240,7 @@ export function GlassModal({
 
         {/* Footer */}
         {footer && (
-          <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-black/[0.06] dark:border-white/[0.08] px-5 py-4 sm:gap-3 sm:px-6">
+          <div className="flex flex-shrink-0 flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 border-t border-black/[0.06] dark:border-white/[0.08] px-5 py-4 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:pb-4">
             {footer}
           </div>
         )}

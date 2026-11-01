@@ -193,7 +193,12 @@ export class EnrollmentService {
     // explicitly here as well.
     const effectiveQualityThreshold = this.config.qualityThreshold ?? 0.4;
     if (!quality.passesThreshold || quality.overallScore < effectiveQualityThreshold) {
-      throw new FaceQualityTooLowError(quality.overallScore, effectiveQualityThreshold);
+      throw new FaceQualityTooLowError(
+        quality.overallScore,
+        effectiveQualityThreshold,
+        quality.rejectionReason,
+        quality.issues,
+      );
     }
 
     // 6. Liveness Check — FAIL-CLOSED.

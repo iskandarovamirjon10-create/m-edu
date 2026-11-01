@@ -21,7 +21,9 @@ import { queryKeys } from '@/lib/query-keys.factory';
 import {
   GlassErrorState,
   GlassButton,
+  GlassModal,
 } from '@/components/ui';
+import { SmartClassroomSeatingStudio } from '@/components/groups/SmartClassroomSeatingStudio';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { fullName, formatDate, formatTime } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -668,6 +670,7 @@ export function GroupDetailPage() {
   }, [refetchGroup]);
 
   const { playTick, playPop } = usePremiumSound();
+  const [seatingModalOpen, setSeatingModalOpen] = useState(false);
 
   const teacherName = groupData?.teacher
     ? fullName(
@@ -907,6 +910,24 @@ export function GroupDetailPage() {
 
             {/* Quick Actions with >= 44x44px touch targets */}
             <div className="flex flex-wrap items-center gap-2.5 shrink-0 pt-4 border-t border-black/[0.06] dark:border-white/[0.08] lg:pt-0 lg:border-t-0">
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    playPop();
+                    setSeatingModalOpen(true);
+                  }}
+                  className="min-h-[44px] px-4 !border-emerald-500/30 hover:!border-emerald-500/50"
+                  aria-label="Partalar Xaritasi"
+                >
+                  <span className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
+                    <span>🪑</span>
+                    <span>Partalar Xaritasi</span>
+                  </span>
+                </GlassButton>
+              </motion.div>
+
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <GlassButton
                   type="button"
@@ -1215,8 +1236,8 @@ export function GroupDetailPage() {
                           {name}
                         </Link>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                          {member.student.user?.email && (
-                            <EmailChip email={member.student.user.email} />
+                          {member.student?.user?.email && (
+                            <EmailChip email={member.student?.user?.email || ""} />
                           )}
                           {member.joinedAt && (
                             <span className="inline-flex items-center gap-1 text-[11px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
@@ -1290,6 +1311,19 @@ export function GroupDetailPage() {
           </SectionPanel>
         </motion.div>
       )}
+      {/* Smart Classroom Seating Studio Modal */}
+      <GlassModal
+        open={seatingModalOpen}
+        onClose={() => setSeatingModalOpen(false)}
+        size="xl"
+        title={`Partalar Xaritasi & Sinf Xoreografi · ${groupData.name}`}
+      >
+        <SmartClassroomSeatingStudio
+          group={groupData}
+          onClose={() => setSeatingModalOpen(false)}
+        />
+      </GlassModal>
+
     </motion.div>
   );
 }

@@ -250,7 +250,7 @@ function HistoryTab() {
  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
  
  {/* Toolbar */}
- <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-[1.5rem] glass-card">
+ <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 rounded-[1.5rem] glass-card">
  <div className="flex flex-wrap gap-3 w-full sm:max-w-xl">
  <GlassSelect
  value={channelFilter}

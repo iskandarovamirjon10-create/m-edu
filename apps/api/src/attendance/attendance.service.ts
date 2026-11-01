@@ -260,6 +260,7 @@ export class AttendanceService {
           // Multiple lessons on the same day in the same group must remain independent.
           const existingRecords = await tx.attendance.findMany({
             where: {
+              organizationId,
               lessonId: lesson!.id,
               studentId: { in: data.records.map((r) => r.studentId) },
             },
@@ -301,6 +302,7 @@ export class AttendanceService {
                   })
                 : tx.attendance.findFirst({
                     where: {
+                      organizationId,
                       studentId: record.studentId,
                       lessonId: lesson!.id,
                     },
@@ -572,7 +574,7 @@ export class AttendanceService {
       this.prisma.attendance.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async getAnalytics(organizationId: string, query: AttendanceQuery) {

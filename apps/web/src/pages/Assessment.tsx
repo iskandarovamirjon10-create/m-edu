@@ -897,7 +897,7 @@ export default function AssessmentPage() {
         >
           {/* Liquid Glass Pill Tabs */}
           <div
-            className="flex items-center rounded-2xl bg-neutral-200/50 p-1 dark:bg-white/[0.05]"
+            className="flex items-center rounded-2xl bg-neutral-200/50 p-1 dark:bg-white/[0.05] overflow-x-auto max-w-full no-scrollbar"
             role="tablist"
           >
             <button
@@ -966,7 +966,7 @@ export default function AssessmentPage() {
           </div>
 
           {/* Search Input Box */}
-          <div className="relative min-w-[240px] flex-1 sm:max-w-xs">
+          <div className="relative w-full sm:w-auto sm:min-w-[240px] flex-1 sm:max-w-xs">
             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-neutral-400">
               <Icon paths={ICONS.search} size={16} />
             </span>

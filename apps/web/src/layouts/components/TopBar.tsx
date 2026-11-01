@@ -30,6 +30,7 @@ import {
   type RefObject,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   motion,
@@ -178,7 +179,7 @@ const GrainOverlay = memo(function GrainOverlay({ opacity = 0.032 }: { opacity?:
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-[15] mix-blend-overlay dark:mix-blend-soft-light"
+      className="pointer-events-none absolute inset-0 z-[15] hidden sm:block mix-blend-overlay dark:mix-blend-soft-light"
       style={{
         opacity,
         backgroundImage: `url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")`,
@@ -328,6 +329,9 @@ function useVoiceDictation(onTranscript: (text: string) => void, locale = 'uz') 
 
     recognitionRef.current = rec;
     return () => {
+      rec.onresult = null as unknown as SpeechRecognitionLike['onresult'];
+      rec.onerror = null as unknown as SpeechRecognitionLike['onerror'];
+      rec.onend = null as unknown as () => void;
       try {
         rec.stop();
       } catch {
@@ -965,18 +969,40 @@ export const QuickActionHub = memo(function QuickActionHub({
   const [open, setOpen] = useState(false);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const openTimeRef = useRef<number>(0);
+
+  const toggleOpen = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setOpen((prev) => {
+      if (!prev) openTimeRef.current = Date.now();
+      return !prev;
+    });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+    openTimeRef.current = Date.now();
     const onPointerDown = (e: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      if (Date.now() - openTimeRef.current < 350) return;
+      const target = e.target as Node;
+      if (
+        rootRef.current &&
+        !rootRef.current.contains(target) &&
+        (!menuRef.current || !menuRef.current.contains(target))
+      ) {
+        setOpen(false);
+      }
     };
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKey);
+    const timer = setTimeout(() => {
+      document.addEventListener('pointerdown', onPointerDown);
+      document.addEventListener('keydown', onKey);
+    }, 50);
     return () => {
+      clearTimeout(timer);
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKey);
     };
@@ -1050,7 +1076,7 @@ export const QuickActionHub = memo(function QuickActionHub({
     <div ref={rootRef} className="relative">
       <motion.button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         whileHover={reduced ? undefined : { scale: 1.03 }}
         whileTap={reduced ? undefined : { scale: 0.95 }}
         transition={LIQUID_SPRING}
@@ -1080,19 +1106,34 @@ export const QuickActionHub = memo(function QuickActionHub({
 
       <AnimatePresence>
         {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.96 }}
-            transition={reduced ? { duration: 0 } : POPOVER_SPRING}
-            style={{ transformOrigin: 'top right' }}
-            role="menu"
-            aria-label="Tezkor yaratish markazi"
-            className={cn(
-              'absolute right-0 top-[calc(100%+0.55rem)] z-50 w-72 rounded-2xl isolate overflow-hidden',
-              LIQUID_POPOVER,
-            )}
-          >
+          isSm && typeof document !== 'undefined' ? (
+            createPortal(
+              <>
+                <div
+                  className="fixed inset-0 z-[9998] bg-black/40 backdrop-blur-sm pointer-events-auto"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (Date.now() - openTimeRef.current >= 350) {
+                      setOpen(false);
+                    }
+                  }}
+                />
+                <motion.div
+                  ref={menuRef}
+                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                  transition={reduced ? { duration: 0 } : POPOVER_SPRING}
+                  style={{ transformOrigin: 'top right' }}
+                  role="menu"
+                  aria-label="Tezkor yaratish markazi"
+                  onClick={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  className={cn(
+                    'fixed inset-x-3 top-[calc(4.5rem+env(safe-area-inset-top,0px))] z-[9999] max-w-sm mx-auto rounded-2xl isolate overflow-hidden pointer-events-auto shadow-2xl',
+                    LIQUID_POPOVER,
+                  )}
+                >
             <TopSpecular inset="inset-x-6" animated={!reduced} />
             <BottomChromatic inset="inset-x-8" />
             <GrainOverlay opacity={0.03} />
@@ -1141,6 +1182,79 @@ export const QuickActionHub = memo(function QuickActionHub({
               </div>
             </div>
           </motion.div>
+              </>,
+              document.body,
+            )
+          ) : (
+            <motion.div
+              ref={menuRef}
+              initial={{ opacity: 0, y: -8, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.96 }}
+              transition={reduced ? { duration: 0 } : POPOVER_SPRING}
+              style={{ transformOrigin: 'top right' }}
+              role="menu"
+              aria-label="Tezkor yaratish markazi"
+              className={cn(
+                'absolute right-0 top-[calc(100%+0.55rem)] z-50 w-72 rounded-2xl isolate overflow-hidden shadow-2xl',
+                LIQUID_POPOVER,
+              )}
+            >
+              <TopSpecular inset="inset-x-6" animated={!reduced} />
+              <BottomChromatic inset="inset-x-8" />
+              <GrainOverlay opacity={0.03} />
+              <div className="relative z-20 p-2">
+                <div className="px-3 py-2 border-b border-black/[0.06] dark:border-white/[0.08]">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+                    Tezkor Yaratish Markazi
+                  </p>
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    Tez-tez bajariladigan operatsiyalar
+                  </p>
+                </div>
+
+                <div className="mt-1 space-y-0.5">
+                  {actions.map((act, idx) => (
+                    <motion.button
+                      key={act.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => handleSelect(act.to)}
+                      onMouseEnter={() => setHoveredIdx(idx)}
+                      whileHover={reduced ? undefined : { x: 2 }}
+                      className={cn(
+                        'w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors',
+                        hoveredIdx === idx
+                          ? 'bg-black/[0.04] dark:bg-white/[0.06]'
+                          : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]',
+                        FOCUS,
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-bold shadow-sm',
+                          act.tone,
+                        )}
+                      >
+                        <StaticIcon paths={act.icon} size={18} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-semibold text-[var(--text-primary)]">
+                          {act.title}
+                        </p>
+                        <p className="truncate text-[11px] text-[var(--text-tertiary)]">
+                          {act.desc}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-bold text-[var(--text-tertiary)] opacity-60">
+                        {act.badge}
+                      </span>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )
         )}
       </AnimatePresence>
     </div>
@@ -1812,8 +1926,8 @@ export const UserMenu = memo(function UserMenu({
   const menuId = useId();
   const triggerId = `${menuId}-trigger`;
 
-  const roleLabel = useMemo(() => role.replace(/_/g, ' '), [role]);
-  const isStaff = useMemo(() => isStaffRole(role), [role]);
+  const roleLabel = useMemo(() => (role || '').replace(/_/g, ' '), [role]);
+  const isStaff = useMemo(() => isStaffRole(role || ''), [role]);
   const modKey = isApple ? '⌘' : 'Ctrl+';
   const gradient = useMemo(() => avatarGradient(name || role || 'M-EDU'), [name, role]);
 
@@ -2505,7 +2619,7 @@ export const MobileTopBar = memo(function MobileTopBar({
         animate={{ y: 0, opacity: 1 }}
         transition={LIQUID_SPRING}
         className={cn(
-          'pointer-events-auto relative flex h-14 w-full items-center justify-between gap-2 rounded-[22px] px-3 isolate overflow-hidden',
+          'pointer-events-auto relative flex h-14 w-full items-center justify-between gap-2 rounded-[22px] px-3 isolate',
           'border border-white/45 dark:border-white/[0.12]',
           reducedTransparency
             ? 'bg-[var(--bg-card)] shadow-card'
@@ -2516,23 +2630,23 @@ export const MobileTopBar = memo(function MobileTopBar({
               ),
         )}
       >
-        {/* v2: ambient + chromatic rims + grain */}
+        {/* v2: ambient + chromatic rims + grain (clipped inside decor wrapper) */}
         {!reducedTransparency && (
-          <>
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[22px]">
             <motion.div
               aria-hidden="true"
               style={{ background: ambient.warm, opacity: 0.7 } as MotionStyle}
-              className="pointer-events-none absolute inset-0 z-0 mix-blend-soft-light dark:mix-blend-screen"
+              className="absolute inset-0 z-0 mix-blend-soft-light dark:mix-blend-screen"
             />
             <motion.div
               aria-hidden="true"
               style={{ background: ambient.cool, opacity: 0.7 } as MotionStyle}
-              className="pointer-events-none absolute inset-0 z-0 mix-blend-soft-light dark:mix-blend-screen"
+              className="absolute inset-0 z-0 mix-blend-soft-light dark:mix-blend-screen"
             />
             <TopSpecular inset="inset-x-4" />
             <BottomChromatic inset="inset-x-6" />
             <GrainOverlay opacity={0.03} />
-          </>
+          </div>
         )}
 
         {/* Left: Brand + Active Route Dynamic Pill */}
@@ -2584,8 +2698,10 @@ export const MobileTopBar = memo(function MobileTopBar({
             </ActionButton>
           </div>
 
-          <ThemeToggle size="sm" />
-          <NotificationsMenu />
+          <div className="hidden min-[360px]:block">
+            <ThemeToggle size="sm" />
+          </div>
+          <NotificationsMenu size="sm" />
 
           <ActionButton
             size="sm"

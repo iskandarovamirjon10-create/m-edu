@@ -321,15 +321,16 @@ function CountUp({ value, duration = 1.1, suffix = '', currency = false }: { val
       if (startRef.current === null) startRef.current = ts;
       const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(value * eased);
+      const safeVal = Number.isFinite(value) ? value : 0;
+      setN(safeVal * eased);
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
 
-  if (currency) return <span className="tabular-nums">{formatCurrency(n)}</span>;
-  return <span className="tabular-nums">{Math.round(n).toLocaleString('uz-UZ')}{suffix}</span>;
+  if (currency) return <span className="tabular-nums">{formatCurrency(Number.isFinite(n) ? n : 0)}</span>;
+  return <span className="tabular-nums">{Math.round(Number.isFinite(n) ? n : 0).toLocaleString('uz-UZ')}{suffix}</span>;
 }
 
 function KpiTile({
@@ -627,19 +628,19 @@ export function InvoicesPage() {
   const openExecutiveInvoiceStudio = useCallback((inv: any) => {
     sound.playPop();
     const studentName = inv.student?.user
-      ? `${inv.student.user.firstName} ${inv.student.user.lastName}`
+      ? [inv.student?.user?.firstName, inv.student?.user?.lastName].filter(Boolean).join(' ') || inv.student?.user?.email || '—'
       : inv.studentId?.slice(0, 8) ?? t('invoices.col.student');
     setStudioDocData({
-      id: inv.number || `INV-${inv.id.slice(0, 8)}`,
+      id: inv.number || inv.id ? `INV-${inv.id?.slice(0, 8) || "—"}` : "INV-UNKNOWN",
       docType: 'receipt',
-      title: t('invoices.sidecar.officialReceipt', { number: inv.number || inv.id.slice(0, 6) }),
+      title: t('invoices.sidecar.officialReceipt', { number: inv.number || inv.id?.slice(0, 6) || "" }),
       recipientName: studentName,
       recipientId: inv.studentId ? `STD-${inv.studentId.slice(0, 8)}` : undefined,
       amount: formatCurrency(inv.total),
       courseName: inv.items?.[0]?.description || t('invoices.sidecar.curriculumService'),
       dateStr: formatDate(inv.createdAt),
       items: [
-        { label: t('invoices.numberLabel'), value: inv.number || inv.id.slice(0, 8) },
+        { label: t('invoices.numberLabel'), value: inv.number || inv.id?.slice(0, 8) || "—" },
         { label: t('invoices.total'), value: formatCurrency(inv.total) },
         { label: t('invoices.col.totalPaid'), value: formatCurrency(inv.paidAmount || 0) },
         { label: t('invoices.col.balanceDue'), value: formatCurrency(remaining(inv)) },
@@ -653,7 +654,7 @@ export function InvoicesPage() {
   const handleOpenInvoiceSidecar = useCallback((inv: any) => {
     sound.playTick();
     const studentName = inv.student?.user
-      ? `${inv.student.user.firstName} ${inv.student.user.lastName}`
+      ? [inv.student?.user?.firstName, inv.student?.user?.lastName].filter(Boolean).join(' ') || inv.student?.user?.email || '—'
       : inv.studentId?.slice(0, 8) ?? t('invoices.col.student');
     const bal = remaining(inv);
     const data: QuickLookData = {
@@ -729,7 +730,7 @@ export function InvoicesPage() {
     const rows = selectedList.map((inv) => [
       inv.id,
       inv.number || '',
-      inv.student?.user ? `${inv.student.user.firstName} ${inv.student.user.lastName}` : inv.studentId || '',
+      inv.student?.user ? [inv.student?.user?.firstName, inv.student?.user?.lastName].filter(Boolean).join(' ') || inv.student?.user?.email || '—' : inv.studentId || '',
       inv.total,
       inv.paidAmount || 0,
       inv.status,
@@ -1002,7 +1003,7 @@ export function InvoicesPage() {
               const bal = remaining(inv);
               const seed = inv.number || inv.id || 'invoice';
               const studentName = inv.student?.user
-                ? `${inv.student.user.firstName} ${inv.student.user.lastName}`
+                ? [inv.student?.user?.firstName, inv.student?.user?.lastName].filter(Boolean).join(' ') || inv.student?.user?.email || '—'
                 : inv.studentId?.slice(0, 8) ?? '—';
               const isRowSelected = isSelected(inv.id);
               const isRowFocused = focusedIndex === idx;
@@ -1038,7 +1039,7 @@ export function InvoicesPage() {
                             ? 'border-primary bg-primary text-white shadow-sm'
                             : 'border-zinc-300 bg-white/50 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800/50'
                         }`}
-                        aria-label={t('invoices.selectAria', { number: inv.number || inv.id.slice(0, 8) })}
+                        aria-label={t('invoices.selectAria', { number: inv.number || inv.id?.slice(0, 8) || "—" })}
                       >
                         {isRowSelected && (
                           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -1053,7 +1054,7 @@ export function InvoicesPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate font-mono text-[13.5px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                          {inv.number || inv.id.slice(0, 8)}
+                          {inv.number || inv.id?.slice(0, 8) || "—"}
                         </p>
                         <StatusPill status={inv.status} label={t(invoiceStatusKey(inv.status))} />
                       </div>
@@ -2025,7 +2026,7 @@ export function InvoicesPage() {
                     {t('invoices.preview.invoice')}
                   </h1>
                   <p className="mt-1 font-mono text-[12.5px] font-semibold text-[#64748B]">
-                    #{previewTarget.number || previewTarget.id.slice(0, 8)}
+                    #{previewTarget.number || previewTarget.id?.slice(0, 8) || "—"}
                   </p>
                   <div className="mt-2 flex justify-end">
                     <StatusPill status={previewTarget.status} label={t(invoiceStatusKey(previewTarget.status))} />
@@ -2041,11 +2042,11 @@ export function InvoicesPage() {
                   </p>
                   <p className="mt-1 text-[13px] font-bold">
                     {previewTarget.student?.user
-                      ? `${previewTarget.student.user.firstName} ${previewTarget.student.user.lastName}`
+                      ? [previewTarget.student?.user?.firstName, previewTarget.student?.user?.lastName].filter(Boolean).join(' ') || previewTarget.student?.user?.email || '—'
                       : previewTarget.studentId || '—'}
                   </p>
                   {previewTarget.student?.user?.email && (
-                    <p className="text-[11px] text-[#64748B]">{previewTarget.student.user.email}</p>
+                    <p className="text-[11px] text-[#64748B]">{previewTarget.student?.user?.email}</p>
                   )}
                 </div>
                 <div>
@@ -2132,7 +2133,7 @@ export function InvoicesPage() {
                   </p>
                   <p>
                     {t('invoices.preview.instructionDetails', {
-                      number: previewTarget.number || previewTarget.id.slice(0, 8),
+                      number: previewTarget.number || previewTarget.id?.slice(0, 8) || "—",
                     })}
                   </p>
                 </div>
@@ -2321,7 +2322,7 @@ export function InvoicesPage() {
               <div className="flex items-center justify-between text-xs text-[#64748B]">
                 <span>{t('invoices.numberLabel')}:</span>
                 <span className="font-mono font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {paymentLinksTarget.number || paymentLinksTarget.id.slice(0, 8)}
+                  {paymentLinksTarget.number || paymentLinksTarget.id?.slice(0, 8) || "—"}
                 </span>
               </div>
               <div className="mt-1.5 flex items-center justify-between text-xs text-[#64748B]">
@@ -2357,8 +2358,12 @@ export function InvoicesPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText(paymentLinksQuery.data.paymeUrl);
-                        push('success', t('invoices.payLinks.copied'));
+                        if (navigator?.clipboard?.writeText) {
+                          navigator.clipboard
+                            .writeText(paymentLinksQuery.data.paymeUrl)
+                            .then(() => push('success', t('invoices.payLinks.copied')))
+                            .catch(() => push('error', 'Clipboard ruxsati berilmadi'));
+                        }
                       }}
                       className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-cyan-700 dark:text-cyan-300 hover:underline min-h-[36px]"
                     >
@@ -2385,8 +2390,12 @@ export function InvoicesPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText(paymentLinksQuery.data.clickUrl);
-                        push('success', t('invoices.payLinks.copied'));
+                        if (navigator?.clipboard?.writeText) {
+                          navigator.clipboard
+                            .writeText(paymentLinksQuery.data.clickUrl)
+                            .then(() => push('success', t('invoices.payLinks.copied')))
+                            .catch(() => push('error', 'Clipboard ruxsati berilmadi'));
+                        }
                       }}
                       className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300 hover:underline min-h-[36px]"
                     >

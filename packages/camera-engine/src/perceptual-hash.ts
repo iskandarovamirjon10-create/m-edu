@@ -112,7 +112,9 @@ export function hammingDistance(
   a: PerceptualHash,
   b: PerceptualHash,
 ): number {
-  let xor = a ^ b;
+  const bigA = typeof a === 'bigint' ? a : BigInt(a);
+  const bigB = typeof b === 'bigint' ? b : BigInt(b);
+  let xor = bigA ^ bigB;
   let count = 0;
   while (xor !== 0n) {
     count += Number(xor & 1n);

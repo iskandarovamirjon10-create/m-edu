@@ -35,10 +35,55 @@ export const LOCALE_META: Record<Locale, LocaleMeta> = {
 };
 
 import en from './locales/en';
-import uz from './locales/uz';
-import ru from './locales/ru';
 
-const DICTIONARIES: Record<Locale, Record<string, string>> = { en, uz, ru };
+/**
+ * Only English ships in the initial bundle: it is the fallback locale and the
+ * default UI language. Uzbek and Russian are ~200 KB and ~480 KB of source
+ * respectively, so they are loaded on demand — see `loadLocale()`.
+ */
+const DICTIONARIES: Partial<Record<Locale, Record<string, string>>> = { en };
+
+const LOCALE_LOADERS: Record<Locale, () => Promise<{ default: Record<string, string> }>> = {
+  en: () => Promise.resolve({ default: en as Record<string, string> }),
+  uz: () => import('./locales/uz'),
+  ru: () => import('./locales/ru'),
+};
+
+const LOADING = new Map<Locale, Promise<void>>();
+
+/** Whether the dictionary for `locale` is ready for synchronous translation. */
+export function isLocaleLoaded(locale: Locale): boolean {
+  return DICTIONARIES[locale] !== undefined;
+}
+
+/**
+ * Lazily fetch a locale dictionary. Safe to call repeatedly: the in-flight
+ * promise is shared and a loaded dictionary is cached for the session.
+ *
+ * Callers awaiting this get a guarantee that `translate(locale, …)` will hit
+ * the real dictionary instead of falling back to English.
+ */
+export function loadLocale(locale: Locale): Promise<void> {
+  if (DICTIONARIES[locale]) return Promise.resolve();
+
+  const inFlight = LOADING.get(locale);
+  if (inFlight) return inFlight;
+
+  const promise = LOCALE_LOADERS[locale]()
+    .then((mod) => {
+      DICTIONARIES[locale] = (mod.default ?? mod) as Record<string, string>;
+    })
+    .catch((error: unknown) => {
+      // Keep the UI usable in English rather than rejecting every translation.
+      LOADING.delete(locale);
+      if (import.meta.env.DEV) {
+        console.warn(`[i18n] failed to load locale "${locale}"`, error);
+      }
+    });
+
+  LOADING.set(locale, promise);
+  return promise;
+}
 
 /** Flat key → translated string with {placeholder} and optional fallback support. */
 export type TranslateFn = (

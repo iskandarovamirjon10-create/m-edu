@@ -283,7 +283,7 @@ export function ActivityRings({ stats, overallRate }: ActivityRingsProps) {
               {excusedCount}
             </span>
             <span className="w-9 shrink-0 text-right tabular-nums text-[12.5px] font-semibold text-[var(--text-primary,#1D1D1F)] dark:text-[var(--text-primary,#F5F5F7)]">
-              {Math.round((excusedCount / totalRecords) * 100)}%
+              {totalRecords > 0 ? Math.round((excusedCount / totalRecords) * 100) : 0}%
             </span>
           </div>
         )}

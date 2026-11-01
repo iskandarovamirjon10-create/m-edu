@@ -41,6 +41,9 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { queryKeys } from '@/lib/query-keys.factory';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
+import { LeadPipelineKanbanStudio } from '@/components/leads/LeadPipelineKanbanStudio';
+import { LeadCourseAdvisorModal } from '@/components/leads/LeadCourseAdvisorModal';
+import { SmartOmnichannelFollowup } from '@/components/leads/SmartOmnichannelFollowup';
 
 /* ============================================================================
  * APPLE SPRING PHYSICS & MOTION TOKENS
@@ -246,7 +249,7 @@ function Icon({
       aria-hidden="true"
       {...rest}
     >
-      {paths.map((d, i) => (
+      {(paths || []).map((d, i) => (
         <path key={i} d={d} />
       ))}
     </svg>
@@ -408,9 +411,11 @@ function formatLeadName(lead: Lead): string {
   return [lead.firstName, lead.lastName].filter(Boolean).join(' ') || '—';
 }
 
-function getInitials(name: string): string {
+function getInitials(name?: string | null): string {
+  if (!name || typeof name !== 'string') return '—';
   return (
     name
+      .trim()
       .split(/\s+/)
       .map((w) => w.charAt(0))
       .filter(Boolean)
@@ -742,7 +747,7 @@ function StageSegmented({
     <div
       role="radiogroup"
       aria-label={t('leads.col.stage') || 'Bosqich'}
-      className="grid grid-cols-2 gap-2 sm:grid-cols-5"
+      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2"
     >
       {LEAD_STAGES.map((st) => {
         const active = value === st;
@@ -804,7 +809,8 @@ export function LeadsPage() {
   const [search, setSearch] = useState(
     () => searchParams.get('search') || searchParams.get('q') || '',
   );
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'studio' | 'nurturing'>('list');
+  const [isCourseAdvisorOpen, setIsCourseAdvisorOpen] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -829,6 +835,8 @@ export function LeadsPage() {
   /* ── Modal States ─────────────────────────────────────────────────── */
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<LeadStage | null>(null);
   const [convertTarget, setConvertTarget] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [trialTarget, setTrialTarget] = useState<Lead | null>(null);
@@ -1026,9 +1034,17 @@ export function LeadsPage() {
   const handleCopyText = useCallback(
     (text: string, label: string) => {
       if (!text) return;
-      void navigator.clipboard?.writeText(text);
-      sound.playTick();
-      push('success', `${label} nusxalandi: ${text}`);
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard
+          .writeText(text)
+          .then(() => {
+            sound.playTick();
+            push('success', `${label} nusxalandi: ${text}`);
+          })
+          .catch(() => {
+            push('error', 'Clipboard ruxsati berilmadi');
+          });
+      }
     },
     [sound, push],
   );
@@ -1625,43 +1641,62 @@ export function LeadsPage() {
                 : t('leads.foundCount', { count: totalLeads })}
             </span>
 
-            {/* Segmented View Switcher: List vs Kanban Board */}
-            <LayoutGroup id="leads-view-switcher">
-              <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-0.5 dark:bg-white/[0.06]">
-                {(['list', 'kanban'] as const).map((mode) => {
-                  const active = viewMode === mode;
-                  return (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setViewMode(mode)}
-                      className={`relative inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
-                        active
-                          ? 'text-slate-900 dark:text-white'
-                          : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
-                      }`}
-                    >
-                      {active && (
-                        <motion.span
-                          layoutId="leadsViewPill"
-                          transition={SPRING.snappy}
-                          className="absolute inset-0 rounded-lg bg-white shadow-xs dark:bg-surface-800"
+            {/* Segmented View Switcher: List vs Kanban Board vs Studio vs Nurturing */}
+            <div className="flex items-center gap-2">
+              <GlassButton
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  sound.playPop?.();
+                  setIsCourseAdvisorOpen(true);
+                }}
+                title="Lead Course Advisor & Karyera ROI Taklifnomasi"
+                className="border-blue-500/30 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
+              >
+                <span className="inline-flex items-center gap-1.5 font-semibold text-xs">
+                  <span>💼</span>
+                  <span className="hidden sm:inline">Taklifnoma (ROI)</span>
+                </span>
+              </GlassButton>
+
+              <LayoutGroup id="leads-view-switcher">
+                <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-0.5 dark:bg-white/[0.06]">
+                  {(['list', 'kanban', 'studio', 'nurturing'] as const).map((mode) => {
+                    const active = viewMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setViewMode(mode)}
+                        className={`relative inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                          active
+                            ? 'text-slate-900 dark:text-white'
+                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                        }`}
+                      >
+                        {active && (
+                          <motion.span
+                            layoutId="leadsViewPill"
+                            transition={SPRING.snappy}
+                            className="absolute inset-0 rounded-lg bg-white shadow-xs dark:bg-surface-800"
+                          />
+                        )}
+                        <Icon
+                          paths={mode === 'list' ? I.list : mode === 'kanban' ? I.kanban : I.sparkles}
+                          size={13}
+                          strokeWidth={2.2}
+                          className="relative z-10"
                         />
-                      )}
-                      <Icon
-                        paths={mode === 'list' ? I.list : I.kanban}
-                        size={13}
-                        strokeWidth={2.2}
-                        className="relative z-10"
-                      />
-                      <span className="relative z-10 uppercase tracking-wider">
-                        {mode === 'list' ? 'List' : 'Kanban'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </LayoutGroup>
+                        <span className="relative z-10 uppercase tracking-wider">
+                          {mode === 'list' ? 'List' : mode === 'kanban' ? 'Kanban' : mode === 'studio' ? '⚡ Studio' : '🤖 Avto-Lid'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </LayoutGroup>
+            </div>
           </div>
         </div>
 
@@ -2038,9 +2073,9 @@ export function LeadsPage() {
               );
             })}
           </motion.div>
-        ) : (
+        ) : viewMode === 'kanban' ? (
           /* ── APPLE KANBAN PIPELINE BOARD VIEW ───────────────────── */
-          <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3 lg:grid-cols-5">
+          <div className="flex md:grid overflow-x-auto md:overflow-x-visible pb-4 md:pb-0 gap-3.5 md:grid-cols-3 lg:grid-cols-5 no-scrollbar snap-x snap-mandatory">
             {LEAD_STAGES.map((colStage) => {
               const colLeads = leadList.filter((l) => l.stage === colStage);
               const cfg = STAGE_CONFIG[colStage];
@@ -2049,7 +2084,35 @@ export function LeadsPage() {
               return (
                 <div
                   key={colStage}
-                  className="flex flex-col rounded-2xl border border-black/[0.06] bg-white/60 p-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/60 min-h-[340px]"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dragOverStage !== colStage) setDragOverStage(colStage);
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setDragOverStage((curr) => (curr === colStage ? null : curr));
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverStage(null);
+                    const droppedId = e.dataTransfer.getData('text/plain') || draggedLeadId;
+                    if (droppedId) {
+                      const targetLead = leadList.find((l) => l.id === droppedId);
+                      if (targetLead && targetLead.stage === colStage) {
+                        setDraggedLeadId(null);
+                        return;
+                      }
+                      handleUpdateStage(droppedId, colStage);
+                      setDraggedLeadId(null);
+                    }
+                  }}
+                  className={`flex flex-col rounded-2xl border transition-all duration-200 ${
+                    dragOverStage === colStage
+                      ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30'
+                      : 'border-black/[0.06] bg-white/60 dark:border-white/[0.08] dark:bg-surface-900/60'
+                  } p-3 backdrop-blur-xl min-h-[340px] min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink snap-center`}
                 >
                   {/* Column Header */}
                   <div className="flex items-center justify-between gap-2 pb-3 mb-2.5 border-b border-black/[0.05] dark:border-white/[0.06]">
@@ -2080,16 +2143,29 @@ export function LeadsPage() {
                           stageIndex < LEAD_STAGES.length - 1 ? LEAD_STAGES[stageIndex + 1] : null;
 
                         return (
-                          <motion.div
+                          <div
                             key={lead.id}
-                            layout
-                            initial={{ opacity: 0, scale: 0.96 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            whileHover={{ y: -2 }}
-                            transition={SPRING.snappy}
-                            onClick={() => handleOpenLeadSidecar(lead)}
-                            className="group cursor-pointer rounded-xl border border-black/[0.06] bg-white/95 p-3 shadow-xs hover:shadow-md dark:border-white/[0.08] dark:bg-surface-800/90 transition-all"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', lead.id);
+                              e.dataTransfer.effectAllowed = 'move';
+                              setDraggedLeadId(lead.id);
+                            }}
+                            onDragEnd={() => {
+                              setDraggedLeadId(null);
+                              setDragOverStage(null);
+                            }}
+                            className={draggedLeadId === lead.id ? 'opacity-40 scale-95 transition-all' : 'transition-all'}
                           >
+                            <motion.div
+                              layout
+                              initial={{ opacity: 0, scale: 0.96 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              whileHover={{ y: -2 }}
+                              transition={SPRING.snappy}
+                              onClick={() => handleOpenLeadSidecar(lead)}
+                              className="group cursor-grab active:cursor-grabbing rounded-xl border border-black/[0.06] bg-white/95 p-3 shadow-xs hover:shadow-md dark:border-white/[0.08] dark:bg-surface-800/90 transition-all"
+                            >
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex items-center gap-2 min-w-0">
                                 <div
@@ -2167,6 +2243,7 @@ export function LeadsPage() {
                               </div>
                             </div>
                           </motion.div>
+                        </div>
                         );
                       })
                     )}
@@ -2175,6 +2252,34 @@ export function LeadsPage() {
               );
             })}
           </div>
+        ) : viewMode === 'nurturing' ? (
+          /* ── OMNICHANNEL CADENCE NURTURING STUDIO ── */
+          <motion.div
+            key="lead-nurturing-studio"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={SPRING.smooth}
+            className="pt-2"
+          >
+            <SmartOmnichannelFollowup />
+          </motion.div>
+        ) : (
+          /* ── 5-STAGE CRM ADMISSION KANBAN STUDIO ── */
+          <motion.div
+            key="lead-kanban-studio"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={SPRING.smooth}
+            className="pt-2"
+          >
+            <LeadPipelineKanbanStudio
+              onLeadEnrolled={() => {
+                void qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
+              }}
+            />
+          </motion.div>
         )}
 
         {/* Pagination */}
@@ -2358,33 +2463,40 @@ export function LeadsPage() {
           </GlassField>
 
           <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200/80 dark:border-white/[0.08]">
-            <GlassButton
-              type="button"
-              variant="secondary"
-              onClick={handleCloseModal}
-              disabled={create.isPending}
-            >
-              {t('common.cancel') || 'Bekor qilish'}
-            </GlassButton>
-            <GlassButton type="submit" variant="primary" disabled={create.isPending}>
-              <span className="inline-flex items-center gap-2">
-                {create.isPending ? (
-                  <>
-                    <motion.span
-                      className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                    />
-                    {t('common.saving') || 'Saqlanmoqda...'}
-                  </>
-                ) : (
-                  <>
-                    <Icon paths={I.check} size={14} strokeWidth={2.5} />
-                    {editingId ? t('common.save') || 'Saqlash' : t('leads.add') || "Qo'shish"}
-                  </>
-                )}
-              </span>
-            </GlassButton>
+            {(() => {
+              const isSubmitting = create.isPending;
+              return (
+                <>
+                  <GlassButton
+                    type="button"
+                    variant="secondary"
+                    onClick={handleCloseModal}
+                    disabled={isSubmitting}
+                  >
+                    {t('common.cancel') || 'Bekor qilish'}
+                  </GlassButton>
+                  <GlassButton type="submit" variant="primary" disabled={isSubmitting}>
+                    <span className="inline-flex items-center gap-2">
+                      {isSubmitting ? (
+                        <>
+                          <motion.span
+                            className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                          />
+                          {t('common.saving') || 'Saqlanmoqda...'}
+                        </>
+                      ) : (
+                        <>
+                          <Icon paths={I.check} size={14} strokeWidth={2.5} />
+                          {editingId ? t('common.save') || 'Saqlash' : t('leads.add') || "Qo'shish"}
+                        </>
+                      )}
+                    </span>
+                  </GlassButton>
+                </>
+              );
+            })()}
           </div>
         </form>
       </GlassModal>
@@ -2658,6 +2770,11 @@ export function LeadsPage() {
           </form>
         )}
       </GlassModal>
+
+      <LeadCourseAdvisorModal
+        isOpen={isCourseAdvisorOpen}
+        onClose={() => setIsCourseAdvisorOpen(false)}
+      />
 
       {toastNode}
     </motion.main>

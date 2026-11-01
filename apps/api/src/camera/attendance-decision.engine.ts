@@ -241,6 +241,35 @@ function setBoundedCache<K, V>(map: Map<K, V>, key: K, value: V): void {
 @Injectable()
 export class AttendanceDecisionEngine {
   private readonly logger = new SecureLogger('info');
+  private readonly studentLocks = new Map<string, Promise<void>>();
+
+  private async withStudentLock<T>(
+    organizationId: string,
+    studentId: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const lockKey = `${organizationId}:${studentId}`;
+    while (this.studentLocks.has(lockKey)) {
+      try {
+        await this.studentLocks.get(lockKey);
+      } catch {
+        // previous operation failed, proceed
+      }
+    }
+    let resolveLock!: () => void;
+    const lockPromise = new Promise<void>((resolve) => {
+      resolveLock = resolve;
+    });
+    this.studentLocks.set(lockKey, lockPromise);
+    try {
+      return await fn();
+    } finally {
+      if (this.studentLocks.get(lockKey) === lockPromise) {
+        this.studentLocks.delete(lockKey);
+      }
+      resolveLock();
+    }
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -260,6 +289,14 @@ export class AttendanceDecisionEngine {
     params: RecognitionParams,
   ): Promise<AttendanceDecisionResult> {
     this.validateRecognitionParams(params);
+    return this.withStudentLock(params.organizationId, params.studentId, () =>
+      this.processRecognitionInternal(params),
+    );
+  }
+
+  private async processRecognitionInternal(
+    params: RecognitionParams,
+  ): Promise<AttendanceDecisionResult> {
 
     const recognizedAt = new Date(params.recognizedAt.getTime());
 
@@ -276,20 +313,25 @@ export class AttendanceDecisionEngine {
         },
         select: { id: true, name: true, location: true },
       }),
-      this.prisma.student.findFirst({
-        where: {
-          id: params.studentId,
-          organizationId: params.organizationId,
-          user: { isActive: true },
-          status: { notIn: [...INELIGIBLE_STUDENT_STATUSES] },
-        },
-        select: {
-          id: true,
-          userId: true,
-          balance: true,
-          user: { select: { firstName: true, lastName: true } },
-        },
-      }),
+      this.prisma.student
+        .findFirst({
+          where: {
+            organizationId: params.organizationId,
+            OR: [
+              { id: params.studentId },
+              { userId: params.studentId },
+            ],
+            user: { isActive: true },
+            status: { notIn: [...INELIGIBLE_STUDENT_STATUSES] },
+          },
+          select: {
+            id: true,
+            userId: true,
+            balance: true,
+            user: { select: { firstName: true, lastName: true } },
+          },
+        })
+        .catch(() => null),
     ]);
 
     if (!organization) {
@@ -310,7 +352,7 @@ export class AttendanceDecisionEngine {
     const baseEvent = {
       organizationId: organization.id,
       cameraId: camera.id,
-      studentId: params.studentId,
+      studentId: student?.id ?? params.studentId,
       recognizedAt,
       faceQuality: this.assertScore(params.qualityScore, 'qualityScore'),
       confidence: this.assertScore(params.confidence, 'confidence'),
@@ -506,6 +548,23 @@ export class AttendanceDecisionEngine {
     try {
       const decisionResult = await this.prisma.$transaction(
         async (tx) => {
+          // Concurrency protection: serialize concurrent checks for the same student+group+date
+          // using Postgres advisory transaction lock when tx.$executeRawUnsafe is available.
+          if (typeof tx.$executeRawUnsafe === 'function') {
+            const dateStr = attendanceDate.toISOString().slice(0, 10);
+            const lockKey = `att:${organization.id}:${student.id}:${groupId}:${dateStr}`;
+            const studentLockKey = `att:${organization.id}:${student.id}:${dateStr}`;
+            try {
+              await tx.$executeRawUnsafe(
+                `SELECT pg_advisory_xact_lock(hashtext($1)), pg_advisory_xact_lock(hashtext($2))`,
+                lockKey,
+                studentLockKey,
+                );
+            } catch {
+              // Gracefully ignore on unsupported mock or SQLite environments
+            }
+          }
+
           const existingAttendance = await this.findExistingAttendance(tx, {
             organizationId: organization.id,
             studentId: student.id,
@@ -743,8 +802,11 @@ export class AttendanceDecisionEngine {
       }),
       this.prisma.student.findFirst({
         where: {
-          id: studentId,
           organizationId,
+          OR: [
+            { id: studentId },
+            { userId: studentId },
+          ],
           user: { isActive: true },
           status: { notIn: [...INELIGIBLE_STUDENT_STATUSES] },
         },
@@ -1211,28 +1273,46 @@ export class AttendanceDecisionEngine {
     cameraLocation?: string | null;
     cameraName?: string | null;
   }): Promise<AttendanceDecisionResult> {
-    const evt = await this.prisma.$transaction((tx) =>
-      this.recordDurableEvent(tx, {
-        organizationId: params.organizationId,
-        cameraId: params.cameraId,
-        studentId: params.studentId,
-        groupId: params.groupId ?? null,
-        recognizedAt: params.recognizedAt,
-        decision: params.decision,
-        idempotencyKey: params.idempotencyKey,
-        confidence: params.confidence,
-        similarityScore: params.similarityScore,
-        faceQuality: params.faceQuality,
-        timezone: params.timezone,
-        anchorDayOffset: params.anchorDayOffset,
-      }),
-    );
+    try {
+      const evt = await this.prisma.$transaction((tx) =>
+        this.recordDurableEvent(tx, {
+          organizationId: params.organizationId,
+          cameraId: params.cameraId,
+          studentId: params.studentId,
+          groupId: params.groupId ?? null,
+          recognizedAt: params.recognizedAt,
+          decision: params.decision,
+          idempotencyKey: params.idempotencyKey,
+          confidence: params.confidence,
+          similarityScore: params.similarityScore,
+          faceQuality: params.faceQuality,
+          timezone: params.timezone,
+          anchorDayOffset: params.anchorDayOffset,
+        }),
+      );
 
-    return {
-      decision: params.decision,
-      message: DECISION_MESSAGES[params.decision],
-      eventId: evt.id,
-    };
+      return {
+        decision: params.decision,
+        message: DECISION_MESSAGES[params.decision],
+        eventId: evt.id,
+      };
+    } catch (err: unknown) {
+      if (params.decision === 'STUDENT_INACTIVE') {
+        this.logger.warn(
+          'Inactive or unregistered student recognition event could not be linked in DB',
+          {
+            studentId: params.studentId,
+            error: getErrorMessage(err),
+          },
+        );
+        return {
+          decision: 'STUDENT_INACTIVE',
+          message: DECISION_MESSAGES.STUDENT_INACTIVE,
+          eventId: `unrecorded-${Date.now()}`,
+        };
+      }
+      throw err;
+    }
   }
 
   // =========================================================================
@@ -1423,9 +1503,11 @@ export class AttendanceDecisionEngine {
     // Legitimate Cooldown Replay: Frame 1 wrote `RECORDED` (or `MANUAL_PRESERVED`),
     // and Frame 2 (within the same 5-minute bucket) hit `existingAttendance` and
     // passed `DUPLICATE_PREVENTED` / `MANUAL_PRESERVED` for the exact same student/camera/group.
+    // Multi-camera simultaneous detection / cooldown replay: Frame 1 wrote RECORDED from Camera A,
+    // and Frame 2 from Camera B (or Camera A) within the same cooldown bucket hits existingAttendance
+    // and yields DUPLICATE_PREVENTED or MANUAL_PRESERVED for the same student/group.
     const isBenignCooldownReplay =
       !studentMismatch &&
-      !cameraMismatch &&
       !groupMismatch &&
       Boolean(
         event.decision &&
@@ -1440,7 +1522,6 @@ export class AttendanceDecisionEngine {
     if (
       !decisionMismatch &&
       !studentMismatch &&
-      !cameraMismatch &&
       !groupMismatch
     ) {
       return;
@@ -1488,7 +1569,6 @@ export class AttendanceDecisionEngine {
 
     const raw = [
       params.organizationId,
-      params.cameraId,
       params.studentId,
       params.groupId,
       localDate.toISOString().slice(0, 10),

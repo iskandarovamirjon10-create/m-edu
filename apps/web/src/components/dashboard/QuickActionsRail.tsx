@@ -25,6 +25,7 @@ interface RailAction {
   accent: string;
   label: string;
   shortcut?: string;
+  customEvent?: string;
 }
 
 export function QuickActionsRail() {
@@ -46,6 +47,8 @@ export function QuickActionsRail() {
       icon: 'checkCircle',
       accent: '#34C759',
       label: t('dashboard.actionAttendance', 'Davomat olish'),
+      customEvent: 'open-quick-attendance',
+      shortcut: 'Alt+A',
     },
     {
       key: 'payment',
@@ -53,6 +56,8 @@ export function QuickActionsRail() {
       icon: 'creditCard',
       accent: '#BF5AF2',
       label: t('dashboard.actionPayment', "To'lov qabul qilish"),
+      customEvent: 'open-quick-payment',
+      shortcut: 'Alt+P',
     },
     {
       key: 'group',
@@ -60,6 +65,7 @@ export function QuickActionsRail() {
       icon: 'folder',
       accent: '#FF9F0A',
       label: t('dashboard.actionNewGroup', 'Yangi guruh'),
+      shortcut: 'G',
     },
     {
       key: 'reports',
@@ -81,11 +87,9 @@ export function QuickActionsRail() {
     <section
       aria-labelledby="dashboard-quick-actions"
       className={cn(
-        'relative isolate overflow-hidden rounded-[2rem] p-4 sm:p-5',
-        'border border-white/60 bg-white/75 backdrop-blur-3xl backdrop-saturate-[200%]',
-        'shadow-[0_20px_50px_-16px_rgba(0,0,0,0.08),inset_0_1.5px_1.5px_rgba(255,255,255,0.9)]',
-        'dark:border-white/[0.12] dark:bg-[#161618]/75',
-        'dark:shadow-[0_20px_50px_-16px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.18)]',
+        'vision-card relative isolate overflow-hidden rounded-[2rem] p-4 sm:p-5 backdrop-blur-3xl',
+        'border border-white/60 bg-white/75 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.08),inset_0_1.5px_1.5px_rgba(255,255,255,0.9)]',
+        'dark:border-white/[0.12] dark:bg-[#161618]/75 dark:shadow-[0_20px_50px_-16px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.18)]',
       )}
     >
       {/* Ambient caustic */}
@@ -116,25 +120,38 @@ export function QuickActionsRail() {
               {t('dashboard.quickActions', 'Tezkor amallar')}
             </h2>
             <p className="truncate text-[11px] font-medium text-[var(--text-muted,#8E8E93)]">
-              {t('dashboard.quickActionsSubtitle', "Eng ko'p ishlatiladigan bo'limlar")}
+              {t('dashboard.quickActionsSubtitle', "Bir bosishda ommabop amallarni bajarish")}
             </p>
           </div>
         </div>
 
-        <p className="hidden shrink-0 items-center gap-1.5 text-[10.5px] font-semibold text-[var(--text-muted,#8E8E93)] sm:flex">
-          <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-black/[0.08] bg-white/80 px-1 font-mono text-[10px] font-bold text-[var(--text-secondary,#515154)] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:border-white/[0.12] dark:bg-white/[0.07] dark:text-[var(--text-secondary,#A1A1A6)]">
-            N
-          </kbd>
-          {t('dashboard.actionNewStudent', "Yangi o'quvchi")}
-        </p>
+        <div className="hidden shrink-0 items-center gap-2 text-[10.5px] font-semibold text-[var(--text-muted,#8E8E93)] sm:flex">
+          <span className="jewel-pill jewel-blue py-0.5 px-2 text-[10px] font-bold">
+            <kbd className="font-mono">N</kbd> Yangi o'quvchi
+          </span>
+          <span className="jewel-pill jewel-emerald py-0.5 px-2 text-[10px] font-bold">
+            <kbd className="font-mono">Alt+A</kbd> Davomat
+          </span>
+          <span className="jewel-pill jewel-purple py-0.5 px-2 text-[10px] font-bold">
+            <kbd className="font-mono">Alt+P</kbd> To'lov
+          </span>
+        </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="mt-3.5 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {actions.map((action, index) => (
           <Link
             key={action.key}
             to={action.to}
-            onClick={() => sound.playTick()}
+            onClick={(e) => {
+              if (action.customEvent && !e.metaKey && !e.ctrlKey) {
+                e.preventDefault();
+                sound.playPop();
+                window.dispatchEvent(new CustomEvent(action.customEvent));
+              } else {
+                sound.playTick();
+              }
+            }}
             style={{ animationDelay: `${60 + index * 45}ms` }}
             className={cn(
               'group relative flex min-h-[64px] items-center gap-2.5 overflow-hidden rounded-[16px] p-2.5',
@@ -176,7 +193,7 @@ export function QuickActionsRail() {
             </span>
 
             {action.shortcut && (
-              <kbd className="absolute right-1.5 top-1.5 hidden h-4 min-w-4 items-center justify-center rounded border border-black/[0.07] bg-white/85 px-0.5 font-mono text-[9px] font-bold text-[var(--text-muted,#8E8E93)] dark:border-white/[0.12] dark:bg-white/[0.08] xl:inline-flex">
+              <kbd className="absolute right-1.5 top-1.5 hidden h-4 min-w-4 items-center justify-center rounded border border-black/[0.07] bg-white/85 px-1 font-mono text-[9px] font-bold text-[var(--text-muted,#8E8E93)] dark:border-white/[0.12] dark:bg-white/[0.08] xl:inline-flex">
                 {action.shortcut}
               </kbd>
             )}

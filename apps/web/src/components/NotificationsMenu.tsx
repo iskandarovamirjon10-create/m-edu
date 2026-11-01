@@ -39,6 +39,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 
 import { notificationsApi } from '@/lib/api';
 import { timeAgo } from '@/lib/format';
@@ -262,7 +263,7 @@ interface NotificationResponse {
   total: number;
 }
 
-export function NotificationsMenu() {
+export function NotificationsMenu({ size = 'md' }: { size?: 'sm' | 'md' } = {}) {
   const { t } = useSafeI18n();
   const queryClient = useQueryClient();
   const { playPop, playTick, playSuccess } = usePremiumSound();
@@ -274,6 +275,19 @@ export function NotificationsMenu() {
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false,
+  );
+  const openTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const notifications = useQuery({
     queryKey: ['notifications'],
@@ -331,6 +345,7 @@ export function NotificationsMenu() {
   // Click outside and Escape key handler
   useEffect(() => {
     if (!open) return;
+    openTimeRef.current = Date.now();
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -339,18 +354,27 @@ export function NotificationsMenu() {
       }
     };
 
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+    const handleOutsideClick = (event: MouseEvent | PointerEvent) => {
+      if (Date.now() - openTimeRef.current < 350) return;
+      const target = event.target as Node;
+      if (
+        rootRef.current &&
+        !rootRef.current.contains(target) &&
+        (!dialogRef.current || !dialogRef.current.contains(target))
+      ) {
         close();
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousedown', handleOutsideClick);
+    const timer = setTimeout(() => {
+      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('pointerdown', handleOutsideClick);
+    }, 50);
 
     return () => {
+      clearTimeout(timer);
       document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('pointerdown', handleOutsideClick);
     };
   }, [close, open]);
 
@@ -365,10 +389,14 @@ export function NotificationsMenu() {
     return allItems;
   }, [allItems, filter]);
 
-  const toggle = () => {
+  const toggle = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setError(null);
     playPop();
-    setOpen((prev) => !prev);
+    setOpen((prev) => {
+      if (!prev) openTimeRef.current = Date.now();
+      return !prev;
+    });
   };
 
   // Keyboard navigation within the notification list
@@ -413,7 +441,9 @@ export function NotificationsMenu() {
         aria-haspopup="dialog"
         aria-expanded={open}
         className={[
-          'relative flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-all duration-200 outline-none select-none',
+          size === 'sm'
+            ? 'relative flex h-8.5 w-8.5 min-h-[34px] min-w-[34px] after:absolute after:inset-[-5px] after:content-[""] items-center justify-center rounded-xl transition-all duration-200 outline-none select-none'
+            : 'relative flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-all duration-200 outline-none select-none',
           open
             ? 'bg-[#007AFF]/15 text-[#007AFF] dark:bg-[#0A84FF]/20 dark:text-[#0A84FF]'
             : 'text-slate-600 dark:text-slate-300 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] hover:text-slate-900 dark:hover:text-white',
@@ -435,17 +465,26 @@ export function NotificationsMenu() {
       {/* Popover Card */}
       <AnimatePresence>
         {open && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: -8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -8 }}
-            transition={SPRING_APPLE}
-            style={{ transformOrigin: 'top right' }}
-            className="fixed inset-x-2 sm:absolute sm:inset-x-auto sm:right-0 z-50 mt-2 sm:w-[390px] max-w-[calc(100vw-1rem)]"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('nav.notifications') || 'Notifications'}
-          >
+          (() => {
+            const cardNode = (
+              <motion.div
+                ref={dialogRef}
+                initial={{ opacity: 0, scale: 0.95, y: -8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -8 }}
+                transition={SPRING_APPLE}
+                style={{ transformOrigin: 'top right' }}
+                className={
+                  isMobile
+                    ? 'fixed inset-x-3 top-[calc(4.5rem+env(safe-area-inset-top,0px))] z-[9999] max-w-md mx-auto pointer-events-auto shadow-2xl'
+                    : 'absolute right-0 top-full mt-2 z-50 sm:w-[390px] max-w-[calc(100vw-1rem)]'
+                }
+                role="dialog"
+                aria-modal="true"
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                aria-label={t('nav.notifications') || 'Notifications'}
+              >
             <div
               className={[
                 'relative overflow-hidden rounded-[1.5rem] border',
@@ -609,6 +648,27 @@ export function NotificationsMenu() {
               </div>
             </div>
           </motion.div>
+            );
+
+            if (isMobile && typeof document !== 'undefined') {
+              return createPortal(
+                <>
+                  <div
+                    className="fixed inset-0 z-[9998] bg-black/40 backdrop-blur-sm pointer-events-auto"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (Date.now() - openTimeRef.current >= 350) {
+                        close();
+                      }
+                    }}
+                  />
+                  {cardNode}
+                </>,
+                document.body,
+              );
+            }
+            return cardNode;
+          })()
         )}
       </AnimatePresence>
     </div>

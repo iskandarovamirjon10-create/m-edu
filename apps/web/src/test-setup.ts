@@ -1,4 +1,13 @@
 import '@testing-library/jest-dom/vitest';
+import { beforeAll } from 'vitest';
+import { loadLocale } from './i18n';
+
+// Locale dictionaries are lazily imported in production. Tests render screens
+// synchronously and expect translated strings immediately, so warm uz/ru once
+// per test file before any component mounts.
+beforeAll(async () => {
+  await Promise.all([loadLocale('uz'), loadLocale('ru')]);
+});
 
 /**
  * jsdom does not implement matchMedia, which useTheme reads to resolve the

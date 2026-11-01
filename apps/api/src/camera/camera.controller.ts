@@ -29,6 +29,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequestUser } from '../auth/types';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { QuotaGuard, RequireQuota } from '../subscriptions/guards/quota.guard';
+import { EntitlementGuard, RequireEntitlement } from '../subscriptions/guards/entitlement.guard';
 
 import { CameraEventQuery } from '../common/dto/query';
 
@@ -115,6 +117,8 @@ export class CameraController {
   // ============================================================
 
   @Post()
+  @UseGuards(QuotaGuard)
+  @RequireQuota('cameras')
   @RequirePermissions(Permissions.CAMERA_MANAGE)
   @ApiOperation({
     summary: 'Create a new camera',
@@ -475,6 +479,8 @@ export class CameraController {
   // ============================================================
 
   @Post(':id/start-worker')
+  @UseGuards(EntitlementGuard)
+  @RequireEntitlement('hasFaceId')
   @RequirePermissions(Permissions.CAMERA_MANAGE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

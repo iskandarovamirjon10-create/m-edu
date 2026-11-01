@@ -38,7 +38,7 @@ export class LeadsService {
       this.prisma.lead.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async findOne(organizationId: string, id: string) {
@@ -106,45 +106,116 @@ export class LeadsService {
     const lead = await this.findOne(organizationId, id);
     if (lead.stage === 'WON') throw new BadRequestException('Lead is already converted');
 
-    const email = data.email || lead.email;
+    const email = (data.email || lead.email)?.trim().toLowerCase();
     if (!email) throw new BadRequestException('Email is required for conversion');
 
     const lastName = data.lastName || lead.lastName;
     if (!lastName) throw new BadRequestException('Last name is required for conversion');
 
-    const existing = await this.prisma.user.findFirst({ where: { email, organizationId } });
-    if (existing) throw new BadRequestException('Email already registered');
-
     const passwordHash = data.password ? await hashPassword(data.password) : null;
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        // 1. Check if user already exists (avoid creating duplicate user accounts or failing valid conversions)
+        const existingInOrg = await tx.user.findFirst({
+          where: { email, organizationId },
+          include: { student: true },
+        });
+
+        let targetUserId: string;
+
+        if (existingInOrg) {
+          if (existingInOrg.student) {
+            throw new BadRequestException('Student profile already exists for this email');
+          }
+          // Reuse existing user account and update role to STUDENT
+          await tx.user.update({
+            where: { id: existingInOrg.id },
+            data: {
+              role: 'STUDENT',
+              ...(lead.phone && !existingInOrg.phone ? { phone: lead.phone } : {}),
+              ...(passwordHash && !existingInOrg.passwordHash ? { passwordHash } : {}),
+            },
+          });
+          targetUserId = existingInOrg.id;
+        } else {
+          // Check if email belongs to another organization (global uniqueness in User table)
+          if (typeof tx.user.findUnique === 'function') {
+            const globalUser = await tx.user.findUnique({ where: { email } });
+            if (globalUser && globalUser.organizationId !== organizationId) {
+              throw new BadRequestException('Email is already registered in another organization');
+            }
+          }
+
+          const newUser = await tx.user.create({
+            data: {
+              organization: { connect: { id: organizationId } },
+              email,
+              passwordHash,
+              firstName: lead.firstName,
+              lastName: lastName,
+              phone: lead.phone,
+              role: 'STUDENT',
+              settings: { create: {} },
+            },
+          });
+          targetUserId = newUser.id;
+        }
+
+        // 2. Preserve lead provenance, source, and history notes
+        const leadHistoryNote = [
+          lead.notes ? `Lead Notes: ${lead.notes}` : null,
+          `[Converted from Lead: ${lead.id}] Source: ${lead.source || 'N/A'}, Stage before conversion: ${lead.stage}`,
+        ]
+          .filter(Boolean)
+          .join('\n\n');
+
         const student = await tx.student.create({
           data: {
             organization: { connect: { id: organizationId } },
-            user: {
-              create: {
-                organization: { connect: { id: organizationId } },
-                email,
-                passwordHash,
-                firstName: lead.firstName,
-                lastName: lastName,
-                phone: lead.phone,
-                role: 'STUDENT',
-                settings: { create: {} },
-              },
-            },
+            user: { connect: { id: targetUserId } },
+            notes: leadHistoryNote,
+            enrollmentDate: new Date(),
+            parentPhone: lead.phone ?? undefined,
           },
           include: { user: userPublicSelect },
         });
 
-      await tx.lead.update({
-        where: { id, organizationId },
-        data: { stage: 'WON' },
-      });
+        // 3. Mark lead as WON scoped by organizationId
+        if (typeof tx.lead.updateMany === 'function') {
+          await tx.lead.updateMany({
+            where: { id, organizationId },
+            data: { stage: 'WON' },
+          });
+        } else {
+          await tx.lead.update({
+            where: { id },
+            data: { stage: 'WON' },
+          });
+        }
 
-      return student;
-    });
+        // 4. Record LeadActivity for conversion history audit trail
+        if (typeof tx.leadActivity?.create === 'function') {
+          await tx.leadActivity.create({
+            data: {
+              leadId: id,
+              type: 'NOTE',
+              subject: 'Lead converted to student',
+              description: `Converted to Student ID: ${student.id} (${email})`,
+            },
+          });
+        }
+
+        // 5. Complete open follow-up tasks for this lead
+        if (typeof tx.followUp?.updateMany === 'function') {
+          await tx.followUp.updateMany({
+            where: { leadId: id, organizationId, isCompleted: false },
+            data: { isCompleted: true },
+          });
+        }
+
+        return student;
+      });
     } catch (error: any) {
       if (error.code === 'P2002') {
         throw new BadRequestException('This email is unavailable');

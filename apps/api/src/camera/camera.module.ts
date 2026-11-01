@@ -7,6 +7,7 @@ import { CameraService } from './camera.service';
 import { CameraWorkerManagerService } from './camera-worker-manager.service';
 import { CameraAlertingService } from './camera-alerting.service';
 import { AttendanceDecisionEngine } from './attendance-decision.engine';
+import { BiometricRetentionService } from './biometric-retention.service';
 
 import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -36,12 +37,14 @@ import { DevicesModule } from '../devices/devices.module';
     AttendanceDecisionEngine,
     CameraWorkerManagerService,
     CameraAlertingService,
+    BiometricRetentionService,
   ],
 
   exports: [
     CameraService,
     CameraWorkerManagerService,
     AttendanceDecisionEngine,
+    BiometricRetentionService,
   ],
 })
 export class CameraModule {}

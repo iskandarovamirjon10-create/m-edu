@@ -98,6 +98,67 @@ export class UpdateStudentDto {
   parentEmail?: string;
 }
 
+
+export class BulkAssignGroupDto {
+  @ApiProperty({ type: [String], description: 'List of student UUIDs to assign' })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  studentIds: string[];
+
+  @ApiProperty({ description: 'Target group UUID' })
+  @IsUUID('4')
+  groupId: string;
+}
+
+export class BulkFreezeDto {
+  @ApiProperty({ type: [String], description: 'List of student UUIDs to freeze' })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  studentIds: string[];
+
+  @ApiPropertyOptional({ example: '2026-11-01' })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiPropertyOptional({ example: '2026-11-15' })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ example: 'Medical leave' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
+
+export class BulkUnfreezeDto {
+  @ApiProperty({ type: [String], description: 'List of student UUIDs to unfreeze' })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  studentIds: string[];
+}
+
+export class BulkStatusDto {
+  @ApiProperty({ type: [String], description: 'List of student UUIDs to update status' })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  studentIds: string[];
+
+  @ApiProperty({ enum: ['ACTIVE', 'PAUSED', 'COMPLETED', 'DROPPED', 'TRIAL'] })
+  @IsString()
+  @IsEnum(['ACTIVE', 'PAUSED', 'COMPLETED', 'DROPPED', 'TRIAL'])
+  status: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'DROPPED' | 'TRIAL';
+}
+
+export class BulkDeleteStudentsDto {
+  @ApiProperty({ type: [String], description: 'List of student UUIDs to delete/archive' })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  studentIds: string[];
+}
+
 // ==================== Parent Links ====================
 
 export class CreateParentLinkDto {

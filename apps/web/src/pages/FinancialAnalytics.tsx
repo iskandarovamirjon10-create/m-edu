@@ -16,7 +16,7 @@
  *  - 100% logic preserved (queries, tabs, state, i18n, data shapes)
  */
 
-import { toLocalISOString } from '@/lib/format';
+import { toLocalISOString, formatCurrency } from '@/lib/format';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
@@ -216,12 +216,8 @@ function getDefaultDateRange() {
   };
 }
 
-function fmtCurrency(val: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(val);
+function fmtCurrency(val: number | string | null | undefined) {
+  return formatCurrency(val);
 }
 
 function fmtUZS(val: number) {

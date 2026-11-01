@@ -51,6 +51,8 @@ import {
   VolumeX,
   RotateCcw,
   Trash2,
+  DollarSign,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
 import { useUiStore } from '@/stores/ui.store';
@@ -293,7 +295,7 @@ function calcVariantClass(variant: CalcVariant, active: boolean): string {
         flash +
         (active
           ? ' bg-gradient-to-b from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/40 border border-white/40'
-          : ' bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 border border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-300 dark:hover:bg-amber-500/30 dark:border-amber-400/25')
+          : ' bg-gradient-to-b from-amber-500 to-orange-500 text-white shadow-[0_4px_14px_-2px_rgba(245,158,11,0.45)] border border-amber-400/40 hover:brightness-105')
       );
     case 'secondary':
       return (
@@ -307,7 +309,7 @@ function calcVariantClass(variant: CalcVariant, active: boolean): string {
         flash +
         (active
           ? ' bg-rose-500/25 text-rose-700 border border-rose-500/40 dark:text-rose-200'
-          : ' bg-rose-500/12 text-rose-600 hover:bg-rose-500/22 border border-rose-500/25 dark:bg-rose-500/20 dark:text-rose-300 dark:hover:bg-rose-500/30 dark:border-rose-400/25')
+          : ' bg-rose-500/15 text-rose-600 hover:bg-rose-500/25 border border-rose-500/30 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-400/30 text-[18px] font-bold')
       );
     case 'accent':
       return (
@@ -399,6 +401,10 @@ export function GlobalCalculator() {
     calculateMarkup,
     calculateInstallment,
     calculateSplit,
+    calculateSquare,
+    calculateSquareRoot,
+    calculateReciprocal,
+    convertCurrency,
   } = useCalculator();
 
   /* ------------------------------ sound -------------------------------- */
@@ -715,6 +721,10 @@ export function GlobalCalculator() {
       calculateMarkup,
       calculateInstallment,
       calculateSplit,
+    calculateSquare,
+    calculateSquareRoot,
+    calculateReciprocal,
+    convertCurrency,
       playClick,
     ],
   );
@@ -1018,7 +1028,78 @@ export function GlobalCalculator() {
                             scale: 0.98,
                             transition: { duration: 0.12 },
                           }}
-                          className="grid min-h-0 flex-1 auto-rows-fr grid-cols-4 gap-2 overflow-y-auto p-3.5"
+                          className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+                        >
+                          {/* Quick Math & Currency Strip */}
+                          <div className="mx-3.5 mb-1 mt-2.5 flex items-center justify-between gap-1.5 px-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playClick('tick');
+                                  convertCurrency(true);
+                                }}
+                                title="UZS ➔ USD (1$ = 12 850 so'm)"
+                                className="calc-key-glass flex items-center gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-600 transition-colors hover:bg-emerald-500/20 dark:text-emerald-400"
+                              >
+                                <DollarSign size={12} className="shrink-0" />
+                                <span>UZS ➔ $</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playClick('tick');
+                                  convertCurrency(false);
+                                }}
+                                title="USD ➔ UZS (1$ = 12 850 so'm)"
+                                className="calc-key-glass flex items-center gap-1 rounded-xl border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-[11px] font-bold text-blue-600 transition-colors hover:bg-blue-500/20 dark:text-blue-400"
+                              >
+                                <ArrowRightLeft size={11} className="shrink-0" />
+                                <span>$ ➔ UZS</span>
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playClick('tick');
+                                  calculateSquare();
+                                }}
+                                title="Kvadrat (x²)"
+                                className="calc-key-glass rounded-xl border border-black/5 bg-black/[0.04] px-2 py-1 font-mono text-[11px] font-bold text-slate-700 transition-colors hover:bg-black/[0.08] dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300"
+                              >
+                                x²
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playClick('tick');
+                                  calculateSquareRoot();
+                                }}
+                                title="Kvadrat ildiz (√x)"
+                                className="calc-key-glass rounded-xl border border-black/5 bg-black/[0.04] px-2 py-1 font-mono text-[11px] font-bold text-slate-700 transition-colors hover:bg-black/[0.08] dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300"
+                              >
+                                √x
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playClick('tick');
+                                  calculateReciprocal();
+                                }}
+                                title="Teskari (¹/x)"
+                                className="calc-key-glass rounded-xl border border-black/5 bg-black/[0.04] px-2 py-1 font-mono text-[11px] font-bold text-slate-700 transition-colors hover:bg-black/[0.08] dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300"
+                              >
+                                ¹/x
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-4 gap-2 p-3.5 pt-1.5"
                         >
                           <CalcBtn
                             onClick={() => {
@@ -1182,6 +1263,7 @@ export function GlobalCalculator() {
                           >
                             =
                           </CalcBtn>
+                          </div>
                         </motion.div>
                       ) : (
                         <motion.div
@@ -1223,7 +1305,7 @@ export function GlobalCalculator() {
                             <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                               Tezkor chegirmalar (1-bosishda):
                             </span>
-                            <div className="grid grid-cols-6 gap-1.5">
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                               {DISCOUNT_PRESETS.map((pct) => (
                                 <motion.button
                                   key={pct}

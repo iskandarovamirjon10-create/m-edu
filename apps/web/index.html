@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/medu-logo.png" />
+    <!-- 32px tab icon keeps the 27 KB brand mark off the critical path; the
+         full-size PNG stays as the high-DPI/legacy fallback. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="256x256" href="/medu-logo.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <!-- viewport-fit=cover makes env(safe-area-inset-*) report real values on
@@ -10,6 +13,10 @@
          resizing the whole app shell. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="M-EDU" />
+    <meta name="mobile-web-app-capable" content="yes" />
 
     <!-- Primary meta -->
     <title>M-EDU v2 — Enterprise Education Management Platform</title>
@@ -27,6 +34,60 @@
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="M-EDU v2 — Enterprise Education Management Platform" />
     <meta name="twitter:description" content="Enterprise multi-tenant education management: AI face-recognition attendance, double-entry finance, CRM, LMS and analytics." />
+
+    <!-- Instant branded boot shell: paints before the JS bundle is parsed, then
+         main.tsx fades it out after React commits its first frame. -->
+    <style>
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: #f4f6fb;
+        transition: opacity 0.28s ease;
+      }
+      html.dark #boot-splash, html.oled #boot-splash { background: #0b1020; }
+      #boot-splash.is-hidden { opacity: 0; pointer-events: none; }
+      .boot-splash__mark {
+        display: grid;
+        place-items: center;
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        box-shadow: 0 12px 30px -12px rgba(59, 130, 246, 0.65);
+        color: #fff;
+        font: 800 26px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        letter-spacing: -0.02em;
+      }
+      .boot-splash__bar {
+        width: 112px;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(100, 116, 139, 0.22);
+      }
+      .boot-splash__bar span {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        animation: boot-splash-slide 1.1s ease-in-out infinite;
+      }
+      @keyframes boot-splash-slide {
+        0% { transform: translateX(-110%); }
+        100% { transform: translateX(280%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-splash__bar span { animation: none; width: 100%; }
+        #boot-splash { transition: none; }
+      }
+    </style>
 
     <!-- Security baseline for the static shell (real headers are set in nginx) -->
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
@@ -65,7 +126,12 @@
       })();
     </script>
     <div id="root"></div>
+    <div id="boot-splash" aria-hidden="true">
+      <div class="boot-splash__mark">M</div>
+      <div class="boot-splash__bar"><span></span></div>
+    </div>
     <noscript>
+      <style>#boot-splash { display: none !important; }</style>
       <div style="display:flex;min-height:100vh;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#334155">
         <p>M-EDU requires JavaScript to run. Please enable JavaScript in your browser.</p>
       </div>

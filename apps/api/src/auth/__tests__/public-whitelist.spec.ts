@@ -61,6 +61,10 @@ const ALLOWED_PUBLIC_ROUTES: readonly string[] = [
   // production client-error telemetry (log-only sink, body-validated)
   'POST /api/client-errors',
   // webhooks (own shared-secret authentication, CSRF-exempt by policy)
+  'POST /api/billing/click',
+  'POST /api/billing/payme',
+  'POST /api/payments/webhook/click/:orgId',
+  'POST /api/payments/webhook/payme/:orgId',
   'POST /api/webhooks/telegram',
   'POST /api/webhooks/terminal/event',
   // public certificate verification (anonymously verifiable via QR / verification code)

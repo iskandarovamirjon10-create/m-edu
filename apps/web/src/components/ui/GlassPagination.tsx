@@ -115,38 +115,40 @@ export function GlassPagination({
   className,
 }: GlassPaginationProps) {
   const { t } = useSafeI18n();
+  const safeTotalPages = Number.isFinite(totalPages) && totalPages > 0 ? Math.floor(totalPages) : 1;
+  const safePage = Number.isFinite(page) && page > 0 ? Math.min(Math.floor(page), safeTotalPages) : 1;
 
   const pageNumbers = useMemo(() => {
     const pages: (number | '...')[] = [];
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i += 1) pages.push(i);
+    if (safeTotalPages <= maxVisible) {
+      for (let i = 1; i <= safeTotalPages; i += 1) pages.push(i);
     } else {
       pages.push(1);
-      if (page > 3) pages.push('...');
+      if (safePage > 3) pages.push('...');
       for (
-        let i = Math.max(2, page - 1);
-        i <= Math.min(totalPages - 1, page + 1);
+        let i = Math.max(2, safePage - 1);
+        i <= Math.min(safeTotalPages - 1, safePage + 1);
         i += 1
       ) {
         pages.push(i);
       }
-      if (page < totalPages - 2) pages.push('...');
-      pages.push(totalPages);
+      if (safePage < safeTotalPages - 2) pages.push('...');
+      pages.push(safeTotalPages);
     }
     return pages;
-  }, [page, totalPages, maxVisible]);
+  }, [safePage, safeTotalPages, maxVisible]);
 
-  if (totalPages <= 1) return null;
+  if (safeTotalPages <= 1) return null;
 
-  const canPrev = page > 1;
-  const canNext = page < totalPages;
+  const canPrev = safePage > 1;
+  const canNext = safePage < safeTotalPages;
   const pageWord = t('common.page', 'Page');
 
   // No `common.results` locale key exists yet → English literal fallback.
   const summary =
     totalItems != null
-      ? `${totalItems} results — page ${page} of ${totalPages}`
-      : `${pageWord} ${page} ${t('common.of', 'of')} ${totalPages}`;
+      ? `${totalItems} results — page ${safePage} of ${safeTotalPages}`
+      : `${pageWord} ${safePage} ${t('common.of', 'of')} ${safeTotalPages}`;
 
   return (
     <nav
@@ -161,7 +163,7 @@ export function GlassPagination({
         <PageChip
           shape="pill"
           size={size}
-          onClick={() => onPageChange(page - 1)}
+          onClick={() => onPageChange(safePage - 1)}
           disabled={!canPrev}
           ariaLabel={t('a11y.prevPage', 'Previous page')}
         >
@@ -188,7 +190,7 @@ export function GlassPagination({
                 key={`page-${pageNum}`}
                 shape="square"
                 size={size}
-                active={pageNum === page}
+                active={pageNum === safePage}
                 onClick={() => onPageChange(pageNum)}
                 ariaLabel={`${pageWord} ${pageNum}`}
                 ariaCurrent={pageNum === page ? 'page' : undefined}
@@ -201,13 +203,13 @@ export function GlassPagination({
 
         {/* Mobile page indicator */}
         <span className="text-xs font-medium text-secondary sm:hidden">
-          {page} / {totalPages}
+          {safePage} / {safeTotalPages}
         </span>
 
         <PageChip
           shape="pill"
           size={size}
-          onClick={() => onPageChange(page + 1)}
+          onClick={() => onPageChange(safePage + 1)}
           disabled={!canNext}
           ariaLabel={t('a11y.nextPage', 'Next page')}
         >

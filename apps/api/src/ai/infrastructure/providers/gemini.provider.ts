@@ -16,8 +16,9 @@ import type { AiProvider } from './ai-provider.interface';
 
 interface GeminiPart {
   text?: string;
-  functionCall?: { name: string; args?: Record<string, unknown> };
+  functionCall?: { name: string; args?: Record<string, unknown>; id?: string };
   functionResponse?: { name: string; response: unknown };
+  thoughtSignature?: string;
 }
 
 interface GeminiContent {
@@ -41,13 +42,13 @@ interface GeminiRequestBody {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_MODEL = 'gemini-3-flash-preview';
+const DEFAULT_MODEL = 'gemini-flash-lite-latest';
 
 /**
  * White-label fallback model list. If the primary model is unavailable the
  * adapter degrades model-by-model before giving up with a typed provider error.
  */
-const FALLBACK_MODELS = ['gemini-3-flash-preview', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'];
+const FALLBACK_MODELS = ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite'];
 
 @Injectable()
 export class GeminiProvider implements AiProvider {
@@ -135,7 +136,7 @@ export class GeminiProvider implements AiProvider {
         parts: [
           {
             functionResponse: {
-              name: message.toolCallId ?? 'tool',
+              name: (message as any).toolName ?? message.toolCallId ?? 'tool',
               response: { result: message.toolResult ?? null },
             },
           },
@@ -147,7 +148,8 @@ export class GeminiProvider implements AiProvider {
       return {
         role: 'model',
         parts: message.toolCalls.map((call) => ({
-          functionCall: { name: call.name, args: call.arguments },
+          functionCall: { name: call.name, args: call.arguments, id: call.id },
+          ...((call as any).thoughtSignature ? { thoughtSignature: (call as any).thoughtSignature } : {}),
         })),
       };
     }

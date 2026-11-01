@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { FollowUpAutomationService } from '../follow-up-automation.service';
 import { BackgroundJobsScheduler } from '../../cron/background-jobs.scheduler';
 import { NotFoundException } from '@nestjs/common';

@@ -54,6 +54,8 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar } from '@/stores/ui.store';
 import { formatDate } from '../lib/format';
 import { TiltCertificate } from '@/components/certificates/TiltCertificate';
+import { DigitalCertificateStudio } from '@/components/certificates/DigitalCertificateStudio';
+import { DigitalCredentialIssuerModal } from '@/components/certificates/DigitalCredentialIssuerModal';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -222,7 +224,7 @@ export function Icon({
       aria-hidden="true"
       {...rest}
     >
-      {paths.map((d, i) => (
+      {(paths || []).map((d, i) => (
         <path key={i} d={d} />
       ))}
     </svg>
@@ -459,14 +461,15 @@ export function CountUp({
       if (startRef.current === null) startRef.current = ts;
       const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(Math.round(value * eased));
+      const safeVal = Number.isFinite(value) ? value : 0;
+      setN(Math.round(safeVal * eased));
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
 
-  return <span className="tabular-nums">{n.toLocaleString()}</span>;
+  return <span className="tabular-nums">{(Number.isFinite(n) ? n : 0).toLocaleString()}</span>;
 }
 
 /* ============================================================================
@@ -571,8 +574,8 @@ export function SegmentedTabs({
   active,
   onChange,
 }: {
-  active: 'certificates' | 'templates';
-  onChange: (v: 'certificates' | 'templates') => void;
+  active: 'certificates' | 'templates' | 'studio';
+  onChange: (v: 'certificates' | 'templates' | 'studio') => void;
 }) {
   const { t } = useSafeI18n();
   const reduced = usePrefersReducedMotion();
@@ -589,6 +592,12 @@ export function SegmentedTabs({
       label: t('certificates.tab.templates', 'Shablonlar'),
       icon: I.layers,
       tone: 'purple' as Tone,
+    },
+    {
+      id: 'studio' as const,
+      label: t('certificates.tab.studio', '🏅 Diplom Studio'),
+      icon: I.award,
+      tone: 'amber' as Tone,
     },
   ];
 
@@ -669,8 +678,9 @@ export function CertificatesPage() {
   const qc = useQueryClient();
   const { playPop, playTick, playSuccess, playError } = usePremiumSound();
 
-  const [activeTab, setActiveTab] = useState<'certificates' | 'templates'>('certificates');
+  const [activeTab, setActiveTab] = useState<'certificates' | 'templates' | 'studio'>('certificates');
   const [modalOpen, setModalOpen] = useState(false);
+  const [isCredentialIssuerOpen, setIsCredentialIssuerOpen] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<CertificateTemplate | null>(null);
   const [deletingTemplate, setDeletingTemplate] = useState<CertificateTemplate | null>(null);
@@ -999,7 +1009,7 @@ export function CertificatesPage() {
     const links = selectedCerts
       .map((c) => `${window.location.origin}/verify/${c.verificationCode}`)
       .join('\n');
-    navigator.clipboard.writeText(links);
+    void navigator.clipboard?.writeText(links).catch(() => {});
     clearSelection();
     push({ type: 'success', message: `${selectedCerts.length} ${t('certificates.batchLinksCopied', 'ta tekshirish havolasi nusxalandi!')}` });
   };
@@ -1716,6 +1726,19 @@ export function CertificatesPage() {
             </div>
           </motion.div>
         )}
+
+        {activeTab === 'studio' && (
+          <motion.div
+            key="certificate-studio"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={SPRING.smooth}
+            className="space-y-4"
+          >
+            <DigitalCertificateStudio />
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* ============================================================
@@ -2316,6 +2339,11 @@ export function CertificatesPage() {
       />
 
       {/* Executive PDF Studio Modal */}
+      <DigitalCredentialIssuerModal
+        isOpen={isCredentialIssuerOpen}
+        onClose={() => setIsCredentialIssuerOpen(false)}
+      />
+
       <ExecutivePDFStudio
         open={Boolean(studioCertificate)}
         onClose={() => setStudioCertificate(null)}

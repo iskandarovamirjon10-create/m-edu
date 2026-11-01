@@ -27,6 +27,8 @@ describe('AI tool catalog', () => {
       [
         'attendance.groups',
         'attendance.summary',
+        'biometrics.recent_events',
+        'biometrics.status',
         'courses.create',
         'courses.list',
         'finance.debtors',

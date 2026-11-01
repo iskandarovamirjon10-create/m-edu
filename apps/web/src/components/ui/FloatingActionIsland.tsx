@@ -61,23 +61,25 @@ export const FloatingActionIsland = memo(function FloatingActionIsland({
           animate={{ y: 0, opacity: 1, scale: 1, filter: 'blur(0px)' }}
           exit={{ y: 50, opacity: 0, scale: 0.94, filter: 'blur(6px)' }}
           transition={SPRING.snappy}
-          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-7 left-1/2 z-50 -translate-x-1/2 max-w-[calc(100vw-1.5rem)]"
+          className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] md:bottom-7 left-1/2 z-50 -translate-x-1/2 w-[calc(100vw-1.25rem)] sm:w-auto max-w-[32rem] sm:max-w-none"
         >
           {/* Glass Shell */}
           <div
-            className="flex items-center gap-1.5 sm:gap-2 rounded-2xl border border-slate-300/80 bg-white/90 p-1.5 shadow-[0_0_0_1px_rgba(255,255,255,0.8)_inset,0_16px_45px_-10px_rgba(15,23,42,0.22)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#0B0F19]/90 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset,0_20px_50px_-10px_rgba(0,0,0,0.7)] overflow-x-auto scrollbar-none"
+            className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 rounded-2xl border border-slate-300/80 bg-white/95 p-2 sm:p-1.5 shadow-[0_0_0_1px_rgba(255,255,255,0.8)_inset,0_16px_45px_-10px_rgba(15,23,42,0.22)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#0B0F19]/95 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset,0_20px_50px_-10px_rgba(0,0,0,0.7)]"
             style={{
               WebkitBackdropFilter: 'blur(24px) saturate(180%)',
             }}
           >
-            {/* Counter Badge */}
-            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 border-r border-slate-200/80 px-2 sm:px-3 py-1.5 dark:border-white/10">
-              <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-bold tabular-nums text-white shadow-sm dark:bg-blue-500">
-                {selectedCount}
-              </span>
-              <span className="text-[12px] sm:text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
-                {displayLabel} tanlandi
-              </span>
+            {/* Counter Badge & Clear trigger */}
+            <div className="flex shrink-0 items-center justify-between sm:justify-start gap-1.5 sm:gap-2 border-b sm:border-b-0 sm:border-r border-slate-200/80 pb-1.5 sm:pb-0 px-2 sm:px-3 sm:py-1.5 dark:border-white/10">
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-bold tabular-nums text-white shadow-sm dark:bg-blue-500">
+                  {selectedCount}
+                </span>
+                <span className="truncate text-[12px] sm:text-[12.5px] font-semibold text-slate-800 dark:text-slate-200">
+                  {displayLabel} tanlandi
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -86,9 +88,9 @@ export const FloatingActionIsland = memo(function FloatingActionIsland({
                 }}
                 title="Tanlovni bekor qilish (Esc)"
                 aria-label="Tanlovni bekor qilish"
-                className="ml-0.5 sm:ml-1 flex h-5 w-5 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-200/60 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200"
+                className="ml-1 flex h-7 w-7 sm:h-5 sm:w-5 min-h-[36px] min-w-[36px] sm:min-h-[20px] sm:min-w-[20px] items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-200/60 hover:text-slate-700 active:scale-95 dark:hover:bg-white/10 dark:hover:text-slate-200"
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
@@ -103,7 +105,7 @@ export const FloatingActionIsland = memo(function FloatingActionIsland({
             )}
 
             {/* Action Buttons */}
-            <div className="flex shrink-0 items-center gap-1.5 pl-1">
+            <div className="flex w-full sm:w-auto items-center gap-1.5 sm:gap-1.5 pl-0 sm:pl-1 overflow-x-auto scrollbar-none">
               {actions.map((act, index) => {
                 const actId = act.id ?? `island-act-${index}-${act.label}`;
                 const isPrimary = act.variant === 'primary';
@@ -118,10 +120,10 @@ export const FloatingActionIsland = memo(function FloatingActionIsland({
                       playPop();
                       void act.onClick();
                     }}
-                    whileHover={{ scale: 1.03 }}
+                    whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.96 }}
                     transition={SPRING.snappy}
-                    className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 sm:px-3 py-1.5 text-[12px] sm:text-[12.5px] font-semibold whitespace-nowrap transition-all disabled:opacity-40 ${
+                    className={`flex min-h-[40px] sm:min-h-[34px] flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-xl px-3 sm:px-3 py-1.5 text-[12px] sm:text-[12.5px] font-semibold whitespace-nowrap transition-all disabled:opacity-40 ${
                       isPrimary
                         ? 'bg-blue-600 text-white shadow-[0_2px_8px_-1px_rgba(37,99,235,0.4)] hover:bg-blue-700 active:bg-blue-800 dark:bg-blue-500 dark:hover:bg-blue-600'
                         : isDanger
@@ -130,7 +132,7 @@ export const FloatingActionIsland = memo(function FloatingActionIsland({
                     }`}
                   >
                     {act.icon && <span className="shrink-0">{act.icon}</span>}
-                    <span>{act.label}</span>
+                    <span className="truncate">{act.label}</span>
                     {(act.shortcut || act.shortcutBadge) && (
                       <kbd className="hidden sm:inline-block ml-1 rounded border border-current/20 bg-black/5 px-1 py-0.2 text-[9px] font-mono uppercase dark:bg-white/10">
                         {act.shortcut || act.shortcutBadge}

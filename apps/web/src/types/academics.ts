@@ -41,6 +41,11 @@ export interface Teacher {
   experience?: number | null;
   user?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'phone' | 'isActive'>;
   groups?: Group[];
+  metrics?: {
+    totalStudents: number;
+    weeklyHours: number;
+    groupsCount: number;
+  };
 }
 
 export interface Schedule {
@@ -51,6 +56,11 @@ export interface Schedule {
   endTime: string;
   room?: string | null;
   isActive: boolean;
+  group?: {
+    id?: string;
+    name?: string;
+    room?: string | null;
+  };
 }
 
 /** Schedule row as returned inside a Group detail (backend Group.schedules). */

@@ -18,8 +18,6 @@ export default defineConfig({
       '/api': {
         target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:3001',
         changeOrigin: true,
-        // Enable sending cookies/credentials for cross-origin OAuth callback
-        cookieDomainRewrite: 'localhost',
       },
       // Socket.IO (chat) handshake + websocket upgrade must reach the API in dev
       '/socket.io': {
@@ -35,7 +33,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     cssCodeSplit: true,
     target: 'es2022',
-    minify: 'esbuild',
+    // On 8GB Windows dev machines, esbuild parallel chunk minification across 3,350+ modules
+    // exceeds pagefile commitment limits (errno 1455). Default to safe, lightning-fast build.
+    minify: process.env.VITE_MINIFY === 'true' ? 'esbuild' : false,
     modulePreload: {
       polyfill: false,
     },

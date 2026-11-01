@@ -406,16 +406,17 @@ export function WebcamCapture({
       return;
     }
 
+    const intervalMs = isKiosk ? 1400 : AUTOSCAN_INTERVAL_MS;
     autoScanTimerRef.current = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
       handleCapture();
-    }, AUTOSCAN_INTERVAL_MS);
+    }, intervalMs);
 
     return () => {
       if (autoScanTimerRef.current) clearInterval(autoScanTimerRef.current);
       autoScanTimerRef.current = null;
     };
-  }, [autoScan, status, busy, isCapturing, cameraOn, docVisible, handleCapture]);
+  }, [autoScan, status, busy, isCapturing, cameraOn, docVisible, isKiosk, handleCapture]);
 
   /* ── Handlers ──────────────────────────────────────────────── */
   const handleAllow = useCallback(() => {

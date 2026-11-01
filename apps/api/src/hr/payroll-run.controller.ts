@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   BadRequestException,
   UseGuards,
+  Inject,
 } from '@nestjs/common';
 import { PayrollService } from './payroll.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -21,7 +22,7 @@ import { AllowAnyRole } from '../auth/roles.decorator';
 @Controller(['payroll/runs', 'hr/payroll/runs'])
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class PayrollRunController {
-  constructor(private readonly payrollService: PayrollService) {}
+  constructor(@Inject(PayrollService) private readonly payrollService: PayrollService) {}
 
   @AllowAnyRole()
   @Get()
@@ -73,6 +74,7 @@ export class PayrollRunController {
     @Query('month') month?: string,
     @Query('sharePercent') sharePercent?: string,
     @Query('retentionBonus') retentionBonus?: string,
+    @Query('groupId') groupId?: string,
   ) {
     if (!teacherId) throw new BadRequestException('teacherId is required');
     const y = year ? Number(year) : new Date().getFullYear();
@@ -81,6 +83,7 @@ export class PayrollRunController {
       teacherId,
       year: y,
       month: m,
+      groupId: groupId || undefined,
       revenueSharePercentage: sharePercent ? Number(sharePercent) : 40,
       retentionBonusPercentage: retentionBonus ? Number(retentionBonus) : 10,
     });

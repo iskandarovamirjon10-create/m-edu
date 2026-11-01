@@ -64,9 +64,9 @@ export const FloatingPiPCamera = memo(function FloatingPiPCamera() {
         setIsCameraActive(true);
       }
     } catch {
-      // Fallback demo simulation mode so UI is always functional
+      // Fallback: camera permission denied or no hardware device attached
       setIsCameraActive(false);
-      setCameraError('Kamera ulanmadi (Demo monitoring rejimida)');
+      setCameraError("Kamera ulanmadi yoki ruxsat berilmadi");
     }
   }, [sound]);
 
@@ -135,16 +135,16 @@ export const FloatingPiPCamera = memo(function FloatingPiPCamera() {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.85, y: 30 }}
         transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-        className="fixed bottom-6 right-6 z-[9980] select-none"
+        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] right-3 md:bottom-6 md:right-6 z-[9980] select-none"
       >
         <GlassSurface
           tone="frost"
           elevation="floating"
           className={cn(
-            'overflow-hidden shadow-2xl border border-white/60 dark:border-white/[0.14] rounded-3xl transition-all duration-300',
-            pipSize === 'compact' && 'w-72 h-36',
-            pipSize === 'standard' && 'w-80 h-64 sm:w-96 sm:h-72',
-            pipSize === 'expanded' && 'w-96 h-80 sm:w-[28rem] sm:h-96',
+            'overflow-hidden shadow-2xl border border-white/60 dark:border-white/[0.14] rounded-3xl transition-all duration-300 max-w-[calc(100vw-1.5rem)]',
+            pipSize === 'compact' && 'w-64 sm:w-72 h-36',
+            pipSize === 'standard' && 'w-76 h-60 sm:w-96 sm:h-72',
+            pipSize === 'expanded' && 'w-84 h-72 sm:w-[28rem] sm:h-96',
           )}
         >
           {/* Top Traffic Light Bar & Drag Handle */}

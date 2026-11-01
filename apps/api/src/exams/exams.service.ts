@@ -162,7 +162,7 @@ export class ExamsService {
 
     // Check if results exist
     const resultsCount = await this.prisma.examResult.count({
-      where: { examId: id },
+      where: { examId: id, organizationId },
     });
 
     if (resultsCount > 0) {
@@ -179,7 +179,7 @@ export class ExamsService {
 
     // Validate results exist
     const results = await this.prisma.examResult.findMany({
-      where: { examId: id },
+      where: { examId: id, organizationId },
     });
 
     if (results.length === 0 && !dto.force) {
@@ -259,7 +259,7 @@ export class ExamsService {
 
     // Check if result already exists
     const existingResult = await this.prisma.examResult.findFirst({
-      where: { examId, studentId: dto.studentId },
+      where: { examId, studentId: dto.studentId, organizationId },
     });
 
     if (existingResult) {
@@ -270,6 +270,9 @@ export class ExamsService {
     const marksObtained = Number(dto.marksObtained);
     const totalMarks = Number(exam.totalMarks);
 
+    if (totalMarks <= 0) {
+      throw new BadRequestException('Total marks must be greater than zero');
+    }
     if (marksObtained < 0) {
       throw new BadRequestException('Marks obtained cannot be negative');
     }
@@ -401,7 +404,44 @@ export class ExamsService {
     // Calculate statistics
     const passed = results.filter((r) => r.isPassed).length;
     const total = results.length;
-    const average = results.reduce((sum, r) => sum + Number(r.marksObtained), 0) / (total || 1);
+    const average = total > 0
+      ? results.reduce((sum, r) => sum + Number(r.marksObtained), 0) / total
+      : 0;
+
+    // Standard 4.0 scale GPA calculation weighted by exam totalMarks
+    const GRADE_POINTS: Record<string, number> = {
+      'A+': 4.0,
+      'A': 4.0,
+      'B+': 3.5,
+      'B': 3.0,
+      'C': 2.0,
+      'F': 0.0,
+    };
+
+    let totalWeight = 0;
+    let weightedPoints = 0;
+
+    for (const r of results) {
+      const weight = Number(r.exam?.totalMarks || 1);
+      const grade = r.grade || (
+        r.exam?.totalMarks && Number(r.exam.totalMarks) > 0
+          ? (Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.9 ? 'A+' :
+             Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.8 ? 'A' :
+             Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.7 ? 'B+' :
+             Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.6 ? 'B' :
+             Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.5 ? 'C' : 'F')
+          : 'F'
+      );
+      const points = GRADE_POINTS[grade] ?? 0;
+      if (weight > 0) {
+        weightedPoints += points * weight;
+        totalWeight += weight;
+      }
+    }
+
+    const gpa = total > 0 && totalWeight > 0
+      ? Math.round((weightedPoints / totalWeight) * 100) / 100
+      : 0;
 
     return {
       student,
@@ -412,6 +452,7 @@ export class ExamsService {
         failedExams: total - passed,
         averageScore: average || 0,
         passingRate: total > 0 ? (passed / total) * 100 : 0,
+        gpa,
       },
     };
   }

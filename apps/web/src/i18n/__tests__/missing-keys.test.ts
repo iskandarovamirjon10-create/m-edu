@@ -19,7 +19,9 @@ import * as path from 'node:path';
 
 import en from '../locales/en';
 
-const SRC = path.resolve(process.cwd(), 'src');
+const SRC = fs.existsSync(path.resolve(process.cwd(), 'src'))
+  ? path.resolve(process.cwd(), 'src')
+  : path.resolve(__dirname, '../../');
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

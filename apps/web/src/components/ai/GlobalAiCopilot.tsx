@@ -22,7 +22,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   IconClose,
-  IconCopilotMark,
   IconMaximize,
   IconSpark,
   IconTrash,
@@ -42,6 +41,7 @@ import {
   openAiCopilot,
 } from '@/stores/ui.store';
 import { ConfirmDialog } from '@/components/ui';
+import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { AiComposer } from './AiComposer';
 import { AiMessageList } from './AiMessageList';
 import { AiWelcome } from './AiWelcome';
@@ -305,8 +305,9 @@ export function GlobalAiCopilot({ onOpen, onClose, initialPrompt }: GlobalAiCopi
               aria-hidden="true"
               className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(180deg,rgba(255,255,255,0.38),transparent_58%)]"
             />
-            <IconCopilotMark
-              size={24}
+            <MeduAiLogo
+              size="md"
+              glow
               className={cn('relative transition-transform duration-300', !reduced && 'group-hover:rotate-12 group-hover:scale-110')}
             />
             {busy && (
@@ -392,7 +393,7 @@ export function GlobalAiCopilot({ onOpen, onClose, initialPrompt }: GlobalAiCopi
                     className="relative flex h-9 w-9 items-center justify-center rounded-[12px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_8px_18px_-10px_rgba(10,132,255,0.7)]"
                     style={{ background: 'var(--cp-brand-gradient)' }}
                   >
-                    <IconCopilotMark size={18} />
+                    <MeduAiLogo size="xs" />
                   </span>
                   <div className="min-w-0">
                     <h3 id={titleId} className="truncate text-[13.5px] font-semibold tracking-[-0.015em] text-[color:var(--cp-text)]">

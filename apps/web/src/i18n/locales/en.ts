@@ -177,6 +177,9 @@ const en = {
 
   // Dashboard
   'dashboard.title': 'Dashboard',
+  'dashboard.tabOverview': 'Overview & Analytics',
+  'dashboard.tabOperations': 'Operations & Risk Radar',
+  'dashboard.tabKiosk': 'Live Face ID Kiosk',
   'dashboard.subtitle': 'Overview of your organization',
   'dashboard.totalStudents': 'Total students',
   'dashboard.totalTeachers': 'Total teachers',
@@ -325,6 +328,8 @@ const en = {
   'settings.telegram.disconnected': 'Telegram disconnected',
   'settings.telegram.testSent': 'Test notification sent',
   'settings.telegram.testFailed': 'Telegram is not available for this account',
+  'cameras.presets.title': 'Wall camera presets (1-Click Presets)',
+  'cameras.testFailed': 'Could not connect to camera',
 
   // Active Devices & Sync
   'settings.devices.title': 'Active Devices & Device Sync',
@@ -440,6 +445,8 @@ const en = {
   'subjects.toast.undoHint': 'Archived by mistake? Re-activate it from the archived filter.',
   'teachers.total': 'total',
   'teachers.active': 'active',
+  'teachers.filter.highWorkload': "High Workload",
+  'teachers.filter.available': "Available (No Groups)",
   'teachers.faculty': 'Faculty',
   'teachers.form.addHint': 'Fill in the details below. First and last name are required.',
   'teachers.form.editHint': 'Update the teacher profile. Changes are reflected immediately.',
@@ -565,6 +572,15 @@ const en = {
   'dashboard.pendingRate': 'Pending',
   'dashboard.todayAttendance': "Today's Attendance",
   'dashboard.todayRevenue': "Today's Revenue",
+  'dashboard.teachersCountSuffix': "teachers",
+  'dashboard.stable': "Stable",
+  'dashboard.overdueWarning': "Urgent collection action needed",
+  'dashboard.leadsConversion': "Leads & Conversion",
+  'dashboard.wonSuffix': "won",
+  'dashboard.newLeadsSuffix': "new leads",
+  'dashboard.highGrowth': "High Growth",
+  'dashboard.normalGrowth': "Normal",
+  'dashboard.cleanDebt': "No debt",
   'face.autoScanPaused': 'Auto Scan Paused',
   'face.toggleMirror': 'Toggle Mirror',
   'followUp.tabs.stats': 'Stats',

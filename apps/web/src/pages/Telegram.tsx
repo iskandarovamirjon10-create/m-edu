@@ -18,6 +18,7 @@ import {
   ConfirmDialog,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { OmnichannelBroadcastStudio } from '@/components/telegram/OmnichannelBroadcastStudio';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 /* ============================================================================
@@ -261,14 +262,15 @@ function CountUp({
       if (startRef.current === null) startRef.current = ts;
       const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(value * eased);
+      const safeVal = Number.isFinite(value) ? value : 0;
+      setN(safeVal * eased);
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
 
-  return <span className="tabular-nums">{Math.round(n).toLocaleString('uz-UZ')}</span>;
+  return <span className="tabular-nums">{Math.round(Number.isFinite(n) ? n : 0).toLocaleString('uz-UZ')}</span>;
 }
 
 /** Premium KPI tile */
@@ -1222,6 +1224,17 @@ export function TelegramPage() {
                 tone="orange"
               />
             </div>
+          )}
+
+          {/* ========== OMNICHANNEL BROADCAST TAB ========== */}
+          {activeTab === 'broadcast' && isAdmin && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={SPRING.smooth}
+            >
+              <OmnichannelBroadcastStudio />
+            </motion.div>
           )}
 
           {/* ========== ADMIN TAB ========== */}

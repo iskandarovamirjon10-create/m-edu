@@ -35,7 +35,7 @@ import {
   useToast,
   FloatingActionIsland,
 } from '@/components/ui';
-import { formatDate, formatCurrency } from '@/lib/format';
+import { formatDate, formatCurrency, parseFinancialAmount } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Expense, ExpenseCategory } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -106,7 +106,7 @@ const INITIAL_FORM: ExpenseFormState = {
 };
 
 export function calculateTotal(expenses: Expense[]): number {
-  return expenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0);
+  return expenses.reduce((sum, expense) => sum + (parseFinancialAmount(expense.amount) || 0), 0);
 }
 
 /* ============================================================================
@@ -295,9 +295,10 @@ export function ExpensesPage() {
 
   const save = useMutation({
     mutationFn: () => {
+      const parsed = parseFinancialAmount(form.amount);
       const payload = {
         category: form.category,
-        amount: parseFloat(form.amount) || 0,
+        amount: Number.isFinite(parsed) ? parsed : 0,
         description: form.description.trim() || undefined,
         date: new Date(form.date).toISOString(),
       };
@@ -335,7 +336,8 @@ export function ExpensesPage() {
 
   const validateForm = useCallback((): boolean => {
     const errors: Partial<Record<keyof ExpenseFormState, string>> = {};
-    if (!form.amount || parseFloat(form.amount) <= 0) {
+    const parsed = parseFinancialAmount(form.amount);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
       errors.amount = t('expenses.validation.amountPositive');
     }
     if (!form.date) {

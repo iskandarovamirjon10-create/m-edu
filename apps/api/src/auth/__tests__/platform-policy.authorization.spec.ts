@@ -159,16 +159,16 @@ describe('Platform policy authorization', () => {
       expect(prisma.accessControlConfig.upsert).not.toHaveBeenCalled();
     });
 
-    it('ALLOWS SUPER_ADMIN', async () => {
-      const res = await svc.updateAccessControlConfig(
-        payload,
-        'root',
-        'SUPER_ADMIN',
-        'org-1',
-      );
-
-      expect(prisma.accessControlConfig.upsert).toHaveBeenCalledTimes(1);
-      expect(res.inviteOnly).toBe(true);
+    it('DENIES tenant SUPER_ADMIN from changing global platform configuration', async () => {
+      await expect(
+        svc.updateAccessControlConfig(
+          payload,
+          'root',
+          'SUPER_ADMIN',
+          'org-1',
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.accessControlConfig.upsert).not.toHaveBeenCalled();
     });
 
     it('ALLOWS PLATFORM_OWNER', async () => {
@@ -232,8 +232,9 @@ describe('Platform policy authorization', () => {
       ) as string[] | undefined;
 
       expect(handler).toEqual(
-        expect.arrayContaining(['SUPER_ADMIN', 'PLATFORM_OWNER']),
+        expect.arrayContaining(['PLATFORM_OWNER']),
       );
+      expect(handler).not.toContain('SUPER_ADMIN');
       expect(handler).not.toContain('ORG_ADMIN');
     });
   });

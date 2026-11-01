@@ -293,13 +293,14 @@ export function CountUp({
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
+    const safeVal = Number.isFinite(value) ? value : 0;
     if (isTest || reduced) {
-      setN(value);
-      prevRef.current = value;
+      setN(safeVal);
+      prevRef.current = safeVal;
       return;
     }
-    const start = prevRef.current;
-    const end = value;
+    const start = Number.isFinite(prevRef.current) ? prevRef.current : 0;
+    const end = safeVal;
     if (start === end) return;
     const startedAt = performance.now();
     const step = (ts: number) => {
@@ -319,7 +320,7 @@ export function CountUp({
     };
   }, [value, duration, reduced, isTest]);
 
-  return <span className="tabular-nums">{Math.round(n).toLocaleString()}{suffix}</span>;
+  return <span className="tabular-nums">{Math.round(Number.isFinite(n) ? n : 0).toLocaleString()}{suffix}</span>;
 }
 
 export function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {

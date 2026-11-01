@@ -342,8 +342,16 @@ export function AuditTimelinePage() {
                   <motion.tr
                     key={item.id}
                     variants={rowVariants}
+                    tabIndex={0}
+                    role="button"
                     onClick={() => handleOpenAuditSidecar(item)}
-                    className="group cursor-pointer transition-colors duration-200 hover:bg-white/40 dark:hover:bg-white/[0.03]"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleOpenAuditSidecar(item);
+                      }
+                    }}
+                    className="group cursor-pointer transition-colors duration-200 hover:bg-white/40 dark:hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   >
                     <td className="py-4 pl-6 pr-4 whitespace-nowrap font-mono text-xs text-[var(--text-muted)]">
                       {new Date(item.createdAt).toLocaleString(DATE_LOCALES[locale], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}

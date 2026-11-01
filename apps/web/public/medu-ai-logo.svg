@@ -1,0 +1,134 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background Ambient Glow Filter -->
+    <filter id="outerGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="40" result="blur1" />
+      <feGaussianBlur stdDeviation="20" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur1" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="15" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Main Electric Holographic Gradient -->
+    <linearGradient id="mainSparkleGrad" x1="120" y1="120" x2="904" y2="904" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00F0FF" />
+      <stop offset="25%" stop-color="#0072FF" />
+      <stop offset="60%" stop-color="#7B2CBF" />
+      <stop offset="85%" stop-color="#D946EF" />
+      <stop offset="100%" stop-color="#FF2A85" />
+    </linearGradient>
+
+    <!-- Inner Core Radial Luminous Glow -->
+    <radialGradient id="coreRadiance" cx="512" cy="512" r="320" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1" />
+      <stop offset="18%" stop-color="#D1F5FF" stop-opacity="0.95" />
+      <stop offset="38%" stop-color="#8B5CF6" stop-opacity="0.65" />
+      <stop offset="70%" stop-color="#0072FF" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#0072FF" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Top Left Gloss Specular Light -->
+    <linearGradient id="specularRim" x1="200" y1="100" x2="600" y2="500" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.85" />
+      <stop offset="35%" stop-color="#FFFFFF" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Companion Star Gradient -->
+    <linearGradient id="subSparkleGrad" x1="720" y1="140" x2="960" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="50%" stop-color="#A855F7" />
+      <stop offset="100%" stop-color="#EC4899" />
+    </linearGradient>
+
+    <!-- Micro Star Gradient -->
+    <linearGradient id="microSparkleGrad" x1="120" y1="680" x2="300" y2="860" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00F0FF" />
+      <stop offset="100%" stop-color="#9333EA" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient Glow Behind Sparkles -->
+  <g opacity="0.65" filter="url(#outerGlow)">
+    <path
+      d="M512 84 C512 320 704 512 940 512 C704 512 512 704 512 940 C512 704 320 512 84 512 C320 512 512 320 512 84 Z"
+      fill="url(#mainSparkleGrad)"
+    />
+  </g>
+
+  <!-- PRIMARY 4-POINT CELESTIAL SPARKLE STAR (✨) -->
+  <path
+    d="M512 96 C512 326 698 512 928 512 C698 512 512 698 512 928 C512 698 326 512 96 512 C326 512 512 326 512 96 Z"
+    fill="url(#mainSparkleGrad)"
+  />
+
+  <!-- Specular 3D Gloss Highlight Arc (Top-Left) -->
+  <path
+    d="M512 96 C512 326 326 512 96 512 C260 480 480 260 512 96 Z"
+    fill="url(#specularRim)"
+    opacity="0.75"
+  />
+
+  <!-- Internal 3D Prism Facet Curves -->
+  <path
+    d="M512 180 L512 844"
+    stroke="#FFFFFF"
+    stroke-width="2.5"
+    stroke-opacity="0.3"
+    stroke-linecap="round"
+  />
+  <path
+    d="M180 512 L844 512"
+    stroke="#FFFFFF"
+    stroke-width="2.5"
+    stroke-opacity="0.3"
+    stroke-linecap="round"
+  />
+
+  <!-- Radiant Inner Energy Core -->
+  <circle cx="512" cy="512" r="240" fill="url(#coreRadiance)" />
+
+  <!-- Brilliant Center Star Flare -->
+  <path
+    d="M512 340 C512 430 594 512 684 512 C594 512 512 594 512 684 C512 594 430 512 340 512 C430 512 512 430 512 340 Z"
+    fill="#FFFFFF"
+    opacity="0.9"
+    filter="url(#softGlow)"
+  />
+  <circle cx="512" cy="512" r="32" fill="#FFFFFF" />
+
+  <!-- SECONDARY DELICATE COMPANION SPARKLE (Top-Right ✨) -->
+  <g filter="url(#softGlow)">
+    <path
+      d="M800 130 C800 216 864 280 950 280 C864 280 800 344 800 430 C800 344 736 280 650 280 C736 280 800 216 800 130 Z"
+      fill="url(#subSparkleGrad)"
+    />
+    <!-- Sparkle core -->
+    <circle cx="800" cy="280" r="16" fill="#FFFFFF" opacity="0.95" />
+    <circle cx="800" cy="280" r="8" fill="#FFFFFF" />
+  </g>
+
+  <!-- TERTIARY MICRO SPARKLE (Bottom-Left ✨) -->
+  <g filter="url(#softGlow)">
+    <path
+      d="M210 680 C210 735 250 775 305 775 C250 775 210 815 210 870 C210 815 170 775 115 775 C170 775 210 735 210 680 Z"
+      fill="url(#microSparkleGrad)"
+      opacity="0.9"
+    />
+    <circle cx="210" cy="775" r="10" fill="#FFFFFF" opacity="0.95" />
+    <circle cx="210" cy="775" r="5" fill="#FFFFFF" />
+  </g>
+
+  <!-- TINY STELLAR PARTICLES -->
+  <circle cx="680" cy="180" r="8" fill="#FFFFFF" opacity="0.8" />
+  <circle cx="880" cy="440" r="6" fill="#FFFFFF" opacity="0.75" />
+  <circle cx="340" cy="850" r="7" fill="#FFFFFF" opacity="0.8" />
+  <circle cx="160" cy="620" r="6" fill="#FFFFFF" opacity="0.7" />
+</svg>

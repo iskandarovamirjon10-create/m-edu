@@ -27,6 +27,8 @@ import {
 import { formatCurrency, formatDate, formatTime, fullName } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { ParentWeeklyDigestCard } from '@/components/parent/ParentWeeklyDigestCard';
+import { FamilyGuardianHub } from '@/components/parent/FamilyGuardianHub';
+import { useAuth } from '@/auth/AuthContext';
 import type {
   ParentChild,
   ParentAttendanceRecord,
@@ -714,6 +716,8 @@ export function ParentPortalPage() {
   usePageTitle(t('parentPortal.title'));
   const reduced = usePrefersReducedMotion();
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [portalMode, setPortalMode] = useState<'individual' | 'familyHub'>('individual');
+  const { user } = useAuth();
 
   const childrenQuery = useQuery({
     queryKey: ['parent-portal-children'],
@@ -813,6 +817,7 @@ export function ParentPortalPage() {
   const perms = activeChild.permissions ?? {};
   const student = activeChild.student;
   const studentName = fullName(student?.user.firstName ?? '', student?.user.lastName ?? '');
+  const parentName = user ? fullName(user.firstName ?? '', user.lastName ?? '') : undefined;
 
   const attendanceData = (attendanceQuery.data as ParentAttendanceRecord[] | undefined) ?? [];
   const attendanceSummary = attendanceSummaryQuery.data as ParentAttendanceSummary | undefined;
@@ -834,18 +839,56 @@ export function ParentPortalPage() {
             status={student?.status}
           />
 
-          {/* ═══ CHILDREN SELECTOR ═══ */}
-          {children.length > 1 && (
-            <PremiumTabSwitcher
-              tabs={children.map((c) => ({
-                id: c.studentId,
-                label: fullName(c.student?.user.firstName ?? '', c.student?.user.lastName ?? ''),
-              }))}
-              active={activeChild.studentId}
-              onChange={setSelectedStudentId}
-            />
-          )}
+          {/* ═══ VIEW MODE SELECTOR (Individual vs Family Hub) ═══ */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {children.length > 1 && portalMode === 'individual' && (
+              <PremiumTabSwitcher
+                tabs={children.map((c) => ({
+                  id: c.studentId,
+                  label: fullName(c.student?.user.firstName ?? '', c.student?.user.lastName ?? ''),
+                }))}
+                active={activeChild.studentId}
+                onChange={setSelectedStudentId}
+              />
+            )}
 
+            <div className="ml-auto flex items-center gap-1.5 rounded-2xl border border-white/20 bg-white/40 p-1.5 backdrop-blur-xl dark:border-white/10 dark:bg-black/20">
+              <button
+                type="button"
+                onClick={() => setPortalMode('individual')}
+                className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+                  portalMode === 'individual'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Farzand Profili
+              </button>
+              <button
+                type="button"
+                onClick={() => setPortalMode('familyHub')}
+                className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+                  portalMode === 'familyHub'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span>👨‍👩‍👧‍👦</span>
+                <span>Oila Hubi (Multi-Farzand)</span>
+              </button>
+            </div>
+          </div>
+
+          {portalMode === 'familyHub' ? (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={SPRING.smooth}
+            >
+              <FamilyGuardianHub parentName={parentName} />
+            </motion.div>
+          ) : (
+            <>
           {/* ═══ HERO PROFILE CARD ═══ */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -1369,6 +1412,8 @@ export function ParentPortalPage() {
               )}
             </div>
           </div>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { isAllowedOrigin } from '../common/cors.util';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -15,7 +16,7 @@ export const ATTENDANCE_CREATED_EVENT = 'attendance.created';
 @Injectable()
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: (origin: string, callback: (err: Error | null, success: boolean) => void) => callback(null, isAllowedOrigin(origin, (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000').split(','))),
     credentials: true,
   },
   namespace: '/attendance',

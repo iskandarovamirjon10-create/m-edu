@@ -20,6 +20,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { teachersApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
+import {
+  TeacherProfileDrawer,
+  TeacherAiLessonPlanModal,
+  BulkTeacherActionsModals,
+  TeacherQuickAssignGroupModal,
+  TeacherClassroomAuditStudio,
+} from '@/components/teachers';
+import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { openQuickLook, openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -448,7 +456,7 @@ const MetricPill = memo(function MetricPill({
           </p>
           <div className="flex items-baseline gap-1.5 mt-0.5">
             <span className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
-              {value.toLocaleString()}
+              {(value ?? 0).toLocaleString()}
             </span>
             {showPercent && total > 0 && (
               <span className="text-[11.5px] font-medium text-slate-400 dark:text-white/40">
@@ -584,7 +592,12 @@ export function TeachersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE' | 'HIGH_WORKLOAD' | 'AVAILABLE'>('ALL');
+  const [profileDrawerTeacher, setProfileDrawerTeacher] = useState<Teacher | null>(null);
+  const [aiPlannerTeacher, setAiPlannerTeacher] = useState<Teacher | null>(null);
+  const [assignGroupTeacher, setAssignGroupTeacher] = useState<Teacher | null>(null);
+  const [isAuditStudioOpen, setIsAuditStudioOpen] = useState(false);
+  const [bulkTeacherModal, setBulkTeacherModal] = useState<'status' | 'salary' | 'specialization' | 'message' | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   /* ── Modals & Popovers ─────────────────────────────────────────────── */
@@ -625,6 +638,18 @@ export function TeachersPage() {
     let list = teacherList;
     if (statusFilter === 'ACTIVE') list = list.filter((t) => t.user?.isActive !== false);
     else if (statusFilter === 'INACTIVE') list = list.filter((t) => t.user?.isActive === false);
+    else if (statusFilter === 'HIGH_WORKLOAD') {
+      list = list.filter((t) => {
+        const weeklyHours = (t as any).metrics?.weeklyHours ?? 0;
+        const groupsCount = (t as any).metrics?.groupsCount ?? ((t as any)._count?.groups ?? (t as any).groups?.length ?? 0);
+        return weeklyHours >= 20 || groupsCount >= 3;
+      });
+    } else if (statusFilter === 'AVAILABLE') {
+      list = list.filter((t) => {
+        const groupsCount = (t as any).metrics?.groupsCount ?? ((t as any)._count?.groups ?? (t as any).groups?.length ?? 0);
+        return groupsCount === 0;
+      });
+    }
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -1060,7 +1085,24 @@ export function TeachersPage() {
               </span>
             </GlassButton>
 
-            <GlassButton
+                        <GlassButton
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                sound.playPop?.();
+                haptics.light();
+                setIsAuditStudioOpen(true);
+              }}
+              title="AI Dars Sifati & Pedagogik Audit Studiyasi"
+              className="!rounded-full border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
+            >
+              <span className="inline-flex items-center gap-1.5 font-semibold">
+                <MeduAiLogo size="xs" />
+                <span className="hidden sm:inline">AI Dars Auditi</span>
+              </span>
+            </GlassButton>
+
+<GlassButton
               type="button"
               variant="primary"
               onClick={handleOpenCreateModal}
@@ -1143,7 +1185,7 @@ export function TeachersPage() {
       {/* ═══ 2 · SEARCH & FILTER TOOLBAR ═══ */}
       <div className="p-3.5 sm:p-4 rounded-3xl bg-white/80 dark:bg-white/[0.04] backdrop-blur-2xl border border-slate-200/70 dark:border-white/[0.08] shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative flex-1 min-w-[240px]">
+          <div className="relative flex-1 w-full min-w-0 sm:min-w-[240px]">
             <GlassInput
               ref={searchInputRef}
               data-testid="teachers-search-input"
@@ -1171,12 +1213,14 @@ export function TeachersPage() {
             <div
               role="tablist"
               aria-label={t('teachers.filterStatusLabel')}
-              className="inline-flex p-1 rounded-xl bg-slate-200/60 dark:bg-white/[0.08] backdrop-blur-md border border-slate-300/40 dark:border-white/[0.08]"
+              className="inline-flex p-1 rounded-xl bg-slate-200/60 dark:bg-white/[0.08] backdrop-blur-md border border-slate-300/40 dark:border-white/[0.08] overflow-x-auto max-w-full no-scrollbar"
             >
               {[
                 { id: 'ALL' as const, label: t('teachers.filter.all') },
                 { id: 'ACTIVE' as const, label: t('teachers.filter.active') },
                 { id: 'INACTIVE' as const, label: t('teachers.filter.inactive') },
+                { id: 'HIGH_WORKLOAD' as const, label: t('teachers.filter.highWorkload', 'Yuqori yuklama') },
+                { id: 'AVAILABLE' as const, label: t('teachers.filter.available', 'Band emas') },
               ].map((opt) => {
                 const sel = statusFilter === opt.id;
                 return (
@@ -1231,7 +1275,7 @@ export function TeachersPage() {
               <div
                 role="tablist"
                 aria-label={t('teachers.view.aria')}
-                className="inline-flex p-1 rounded-xl bg-slate-200/60 dark:bg-white/[0.08] backdrop-blur-md border border-slate-300/40 dark:border-white/[0.08]"
+                className="inline-flex p-1 rounded-xl bg-slate-200/60 dark:bg-white/[0.08] backdrop-blur-md border border-slate-300/40 dark:border-white/[0.08] overflow-x-auto max-w-full no-scrollbar"
               >
                 {[
                   { id: 'list' as const, label: t('teachers.view.list'), glyph: 'list' as GlyphName },
@@ -1355,7 +1399,10 @@ export function TeachersPage() {
                     key={teacher.id}
                     id={`teacher-row-${teacher.id}`}
                     variants={rowVariants}
-                    onClick={() => handleOpenTeacherSidecar(teacher)}
+                    onClick={() => {
+                      setProfileDrawerTeacher(teacher);
+                      handleOpenTeacherSidecar(teacher);
+                    }}
                     tabIndex={0}
                     role="link"
                     aria-label={t('teachers.viewAria', { name })}
@@ -2040,7 +2087,48 @@ export function TeachersPage() {
           },
         ]}
       />
-    </div>
+
+      <TeacherProfileDrawer
+        teacher={profileDrawerTeacher}
+        isOpen={Boolean(profileDrawerTeacher)}
+        onClose={() => setProfileDrawerTeacher(null)}
+        onEdit={(t) => {
+          setProfileDrawerTeacher(null);
+          handleEdit(t);
+        }}
+        onAssignGroup={(t) => setAssignGroupTeacher(t)}
+        onOpenAiPlanner={(t) => setAiPlannerTeacher(t)}
+      />
+
+      <TeacherAiLessonPlanModal
+        teacher={aiPlannerTeacher}
+        isOpen={Boolean(aiPlannerTeacher)}
+        onClose={() => setAiPlannerTeacher(null)}
+      />
+
+      <TeacherQuickAssignGroupModal
+        teacher={assignGroupTeacher}
+        isOpen={Boolean(assignGroupTeacher)}
+        onClose={() => setAssignGroupTeacher(null)}
+      />
+
+      <BulkTeacherActionsModals
+        selectedIds={Array.from(selectedIds)}
+        isOpen={Boolean(bulkTeacherModal)}
+        activeModal={bulkTeacherModal}
+        onClose={() => setBulkTeacherModal(null)}
+        onSuccess={() => {
+          clearSelection();
+          qc.invalidateQueries({ queryKey: queryKeys.teachers.all() });
+        }}
+      />
+    
+      <TeacherClassroomAuditStudio
+        isOpen={isAuditStudioOpen}
+        onClose={() => setIsAuditStudioOpen(false)}
+        teachers={teacherList}
+      />
+</div>
   );
 }
 

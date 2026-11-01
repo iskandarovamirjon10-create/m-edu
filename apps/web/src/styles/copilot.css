@@ -1140,3 +1140,41 @@
   from { transform: translateX(-100%); }
   to { transform: translateX(100%); }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * MOBILE PERFORMANCE & LOW-POWER GPU OPTIMIZATION
+ * Eliminates 92px blur and nested backdrop-filter bottlenecks on mobile devices
+ * ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .cp-aurora__blob,
+  .cp-aurora__grain {
+    display: none !important;
+  }
+  .cp-aurora {
+    background: linear-gradient(180deg, var(--cp-canvas) 0%, var(--cp-canvas-deep) 100%) !important;
+  }
+  .cp-glass,
+  .cp-glass--raised,
+  .cp-glass--floating,
+  .cp-panel,
+  .cp-header,
+  .cp-composer-wrap {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  .cp-ambient-glow {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-aurora__blob {
+    animation: none !important;
+  }
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

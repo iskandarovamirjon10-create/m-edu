@@ -198,6 +198,8 @@ const ApiKeysPage              = lazyPage(() => import('@/pages/ApiKeys'), 'ApiK
 const ObservabilityPage        = lazyPage(() => import('@/pages/Observability'), 'ObservabilityPage');
 const PerformanceMonitorPage   = lazyPage(() => import('@/pages/PerformanceMonitor'), 'PerformanceMonitorPage');
 const SettingsPage             = lazyPage(() => import('@/pages/Settings'), 'SettingsPage');
+const SuperAdminPage           = lazyPage(() => import('@/pages/SuperAdmin'), 'SuperAdminPage');
+const BillingSettingsPage      = lazyPage(() => import('@/pages/BillingSettings'), 'BillingSettingsPage');
 
 // Fallback Status Pages
 const NotFoundPage             = lazyPage(() => import('@/pages/NotFound'), 'NotFoundPage');
@@ -226,6 +228,8 @@ const PRELOAD_MAP: Record<string, PreloadableComponent<any>> = {
   '/ai-copilot': AiCopilotPage,
   '/executive-dashboard': ExecutiveDashboardPage,
   '/settings': SettingsPage,
+  '/settings/billing': BillingSettingsPage,
+  '/super-admin': SuperAdminPage,
 };
 
 /**
@@ -343,6 +347,8 @@ export const routeConfig: RouteConfig[] = [
       { path: 'security', element: <SecurityCenterPage />, title: 'Security Center', roles: STAFF_ROLES },
       { path: 'system-health', element: <SystemHealthPage />, title: 'System Health', titleKey: 'systemHealth.title', roles: STAFF_ROLES },
       { path: 'settings', element: <SettingsPage />, title: 'Settings', titleKey: 'nav.settings' },
+      { path: 'settings/billing', element: <BillingSettingsPage />, title: 'Billing & Subscription', titleKey: 'nav.billing', roles: STAFF_ROLES },
+      { path: 'super-admin', element: <SuperAdminPage />, title: 'Super Admin Control Plane', roles: ['PLATFORM_OWNER'] },
 
       // Academic Tools
       { path: 'teacher-cockpit', element: <TeacherCockpitPage />, title: 'Teacher Cockpit', titleKey: 'nav.teacherCockpit', roles: STAFF_ROLES },

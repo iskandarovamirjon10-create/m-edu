@@ -61,7 +61,7 @@ export class CommunicationHistoryService {
       this.prisma.communicationHistory.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async getTimeline(organizationId: string, entityType: string, entityId: string): Promise<{ items: any[] }> {

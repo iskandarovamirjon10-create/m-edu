@@ -39,6 +39,8 @@ import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { ExamRankingsMatrixStudio } from '@/components/exams/ExamRankingsMatrixStudio';
+import { VoiceSpeakingDiagnosticStudio } from '@/components/exams/VoiceSpeakingDiagnosticStudio';
 
 /* ============================================================================
  * MOTION TOKENS (Glass High-Fidelity Physics)
@@ -426,6 +428,7 @@ export function ExamsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState<ExamFilterStatus>('ALL');
+  const [examViewMode, setExamViewMode] = useState<'list' | 'matrix' | 'speaking'>('list');
 
   // Queries
   const examsQuery = useQuery({
@@ -891,6 +894,67 @@ export function ExamsPage() {
       </motion.div>
 
       {/* ============================================================
+          VIEW MODE SELECTOR (Schedule List vs Olympic Rankings Matrix)
+      ============================================================ */}
+      <motion.div variants={cardVariants}>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              playTick();
+              setExamViewMode('list');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              examViewMode === 'list'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
+                : 'bg-white/40 dark:bg-black/20 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Icon paths={I.exam} size={14} strokeWidth={2} />
+            <span>Imtihonlar Jadvali & Ro‘yxati</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              playTick();
+              setExamViewMode('matrix');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              examViewMode === 'matrix'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/25'
+                : 'bg-white/40 dark:bg-black/20 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <span>🏆</span>
+            <span>Olimpiada Reyting & Baholash Matritsasi</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              playTick();
+              setExamViewMode('speaking');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${examViewMode === 'speaking' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/25' : 'bg-white/40 dark:bg-black/20 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}
+          >
+            <span>🎙</span>
+            <span>Ovozli Speaking & Nutq Diagnostikasi</span>
+          </button>
+        </div>
+      </motion.div>
+
+      {examViewMode === 'speaking' ? (
+        <motion.div variants={cardVariants}>
+          <VoiceSpeakingDiagnosticStudio />
+        </motion.div>
+      ) : examViewMode === 'matrix' ? (
+        <motion.div variants={cardVariants}>
+          <ExamRankingsMatrixStudio />
+        </motion.div>
+      ) : (
+        <>
+      {/* ============================================================
           MAIN CONTENT CARD (SEARCH, FILTERS, TABLE & CARDS)
       ============================================================ */}
       <motion.div variants={cardVariants}>
@@ -1269,6 +1333,8 @@ export function ExamsPage() {
           )}
         </div>
       </motion.div>
+        </>
+      )}
 
       {/* ============================================================
           CREATE / EDIT EXAM MODAL

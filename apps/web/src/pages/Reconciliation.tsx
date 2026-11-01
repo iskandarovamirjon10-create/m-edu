@@ -21,6 +21,10 @@ import {
 import { getErrorMessage} from'@/lib/errorMessages';
 import { usePageTitle} from'@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
+import { formatCurrency } from '@/lib/format';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { useEffect } from 'react';
 
 function AuroraMesh() {
   return (
@@ -31,9 +35,6 @@ function AuroraMesh() {
     </div>
   );
 }
-import { usePremiumSound } from '@/hooks/usePremiumSound';
-import { openSidecar, type QuickLookData } from '@/stores/ui.store';
-import { useEffect } from 'react';
 
 type TabId ='overview' |'discrepancies' |'studentBalances' |'history';
 
@@ -42,8 +43,8 @@ function getDefaultYearMonth() {
  return { year: now.getFullYear(), month: now.getMonth() + 1};
 }
 
-function fmtCurrency(val: number) {
- return new Intl.NumberFormat('en-US', { style:'currency', currency:'USD', maximumFractionDigits: 0}).format(val);
+function fmtCurrency(val: number | string | null | undefined) {
+ return formatCurrency(val);
 }
 
 function fmtDate(val: string | Date | null) {

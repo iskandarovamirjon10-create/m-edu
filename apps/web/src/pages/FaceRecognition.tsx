@@ -37,6 +37,13 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useOfflineFaceQueue } from '@/hooks/useOfflineFaceQueue';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { TurnstileEmergencyLockdown } from '@/components/turnstile/TurnstileEmergencyLockdown';
+import { MultiCameraAttendanceDirector } from '@/components/camera/MultiCameraAttendanceDirector';
+import { LivenessSpoofShieldHUD } from '@/components/camera/LivenessSpoofShieldHUD';
+import { RushHourBatchAttendanceProcessor } from '@/components/camera/RushHourBatchAttendanceProcessor';
+import { BiometricVoiceGreetingConsole } from '@/components/camera/BiometricVoiceGreetingConsole';
+import { TurnstileTelegramNotificationBridge } from '@/components/camera/TurnstileTelegramNotificationBridge';
+import { AttendanceTrafficFlowHeatmap } from '@/components/camera/AttendanceTrafficFlowHeatmap';
 
 /* ============================================================================
  * ANIMATION TOKENS — Apple Glass Fluid Springs
@@ -265,6 +272,7 @@ const I = {
   chevronRight: ['M9 18l6-6-6-6'],
   layers: ['M12 2 2 7l10 5 10-5z', 'M2 17l10 5 10-5', 'M2 12l10 5 10-5'],
   shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
+  lock: ['M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z', 'M7 11V7a5 5 0 0 1 10 0v4'],
 };
 
 /* ============================================================================
@@ -426,77 +434,47 @@ export function FaceRecognitionPage() {
   const [liveFeed, setLiveFeed] = useState<FeedItem[]>([]);
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
   const [historyQuery, setHistoryQuery] = useState('');
+  const [activeBiometricModule, setActiveBiometricModule] = useState<
+    'director' | 'liveness' | 'rushHour' | 'voice' | 'telegram' | 'traffic' | null
+  >(null);
 
   const lastCaptureTimeRef = useRef<number>(0);
   const bannerSeq = useRef(0);
 
-  /* ── Kiosk Mode Fullscreen Controls ── */
-  const handleEnterKiosk = useCallback(() => {
-    setIsKioskMode(true);
-    haptics.medium();
+  /* ── Kiosk Security & Audio Synthesis ── */
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState(false);
+
+  const speakGreeting = useCallback((name: string) => {
     try {
-      if (typeof document !== 'undefined' && document.documentElement.requestFullscreen && !document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        const firstName = name.split(' ')[0] || name;
+        const text = `Xush kelibsiz, ${firstName}!`;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.05;
+        utterance.lang = 'uz-UZ';
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
       }
     } catch {
-      // Graceful fallback if fullscreen is blocked by browser policy
+      // Audio speech fallback silent
     }
-  }, [haptics]);
+  }, []);
 
-  const handleExitKiosk = useCallback(() => {
-    setIsKioskMode(false);
-    haptics.light();
+  const triggerTurnstileRelay = useCallback(() => {
     try {
-      if (typeof document !== 'undefined' && document.exitFullscreen && document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      }
-    } catch {
-      // Graceful fallback
-    }
-  }, [haptics]);
-
-  /* ── Sync with browser native fullscreen exit (e.g. Esc or F11) ── */
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      if (!document.fullscreenElement && isKioskMode) {
-        setIsKioskMode(false);
-      }
-    };
-    document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
-  }, [isKioskMode]);
-
-  /* ── Keyboard Shortcuts (Esc to exit kiosk, K to toggle kiosk) ── */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isInput = /INPUT|TEXTAREA|SELECT/.test(target?.tagName || '') || target?.isContentEditable;
-      if (e.key === 'Escape' && isKioskMode) {
-        handleExitKiosk();
-        return;
-      }
-      if (isInput || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key.toLowerCase() === 'k') {
-        if (isKioskMode) {
-          handleExitKiosk();
-        } else {
-          handleEnterKiosk();
+      if (typeof window !== 'undefined') {
+        const relayUrl = localStorage.getItem('m_edu_turnstile_relay_url');
+        if (relayUrl && /^https?:\/\//i.test(relayUrl)) {
+          fetch(relayUrl, { method: 'POST', mode: 'no-cors' }).catch(() => {});
         }
       }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isKioskMode, handleEnterKiosk, handleExitKiosk]);
-
-  /* ── Kiosk Body Scroll Lock ── */
-  useEffect(() => {
-    if (!isKioskMode) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [isKioskMode]);
+    } catch {
+      // Relay network fallback silent
+    }
+  }, []);
 
   /* ── Auto-dismiss Banner ── */
   const bannerId = liveBanner?.id;
@@ -661,6 +639,11 @@ export function FaceRecognitionPage() {
         timestamp: new Date().toLocaleTimeString('uz-UZ'),
       });
 
+      if (kind === 'success' && studentName && studentName !== '—') {
+        speakGreeting(studentName);
+        triggerTurnstileRelay();
+      }
+
       // Append to live session stream
       if (studentName && studentName !== '—') {
         setLiveFeed((prev) => [
@@ -682,6 +665,17 @@ export function FaceRecognitionPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.attendance.all() });
     },
     onError: (err: any, variables: string) => {
+      const isRateLimited =
+        err?.status === 429 ||
+        err?.statusCode === 429 ||
+        /too many requests|rate limit/i.test(err?.message || '');
+
+      if (isRateLimited) {
+        playTick();
+        push('info', 'Ko‘p so‘rov yuborildi. Iltimos, biroz kuting...');
+        return;
+      }
+
       const isNetwork = !navigator.onLine || /network|failed to fetch|offline/i.test(err?.message || '');
       if (isNetwork && form.sessionId) {
         if (variables) {
@@ -693,7 +687,16 @@ export function FaceRecognitionPage() {
       } else {
         playError();
         haptics.error();
-        push('error', friendlyFaceError(err?.message || getErrorMessage(err)));
+        const friendlyMsg = friendlyFaceError(err);
+        push('error', friendlyMsg);
+        bannerSeq.current += 1;
+        setLiveBanner({
+          id: bannerSeq.current,
+          kind: 'unknown',
+          title: 'Qayta urinib ko‘ring',
+          subtitle: friendlyMsg,
+          timestamp: new Date().toLocaleTimeString('uz-UZ'),
+        });
       }
     },
   });
@@ -702,7 +705,18 @@ export function FaceRecognitionPage() {
   useEffect(() => {
     if (isOnline && queueCount > 0 && !isSyncing) {
       syncQueue(async (sessionId, base64) => {
-        return faceApi.submitAttempt(sessionId, base64);
+        try {
+          return await faceApi.submitAttempt(sessionId, base64);
+        } catch (err: any) {
+          const isSessionErr =
+            err?.status === 400 ||
+            err?.statusCode === 400 ||
+            /session/i.test(err?.message || '');
+          if (isSessionErr && form.sessionId && form.sessionId !== sessionId) {
+            return await faceApi.submitAttempt(form.sessionId, base64);
+          }
+          throw err;
+        }
       }).then(({ synced }) => {
         if (synced > 0) {
           push('success', `${synced} ta oflayn davomat sinxronlandi`);
@@ -713,13 +727,24 @@ export function FaceRecognitionPage() {
         // Suppress unhandled rejections during background retry
       });
     }
-  }, [isOnline, queueCount, isSyncing, syncQueue, push, queryClient]);
+  }, [isOnline, queueCount, isSyncing, syncQueue, push, queryClient, form.sessionId]);
 
   const handleManualSync = useCallback(() => {
     if (queueCount === 0 || isSyncing || !isOnline) return;
     playTick();
     syncQueue(async (sessionId, base64) => {
-      return faceApi.submitAttempt(sessionId, base64);
+      try {
+        return await faceApi.submitAttempt(sessionId, base64);
+      } catch (err: any) {
+        const isSessionErr =
+          err?.status === 400 ||
+          err?.statusCode === 400 ||
+          /session/i.test(err?.message || '');
+        if (isSessionErr && form.sessionId && form.sessionId !== sessionId) {
+          return await faceApi.submitAttempt(form.sessionId, base64);
+        }
+        throw err;
+      }
     }).then(({ synced }) => {
       if (synced > 0) {
         push('success', `${synced} ta oflayn davomat sinxronlandi`);
@@ -727,9 +752,9 @@ export function FaceRecognitionPage() {
         queryClient.invalidateQueries({ queryKey: queryKeys.attendance.all() });
       }
     }).catch((err: any) => {
-      push('error', friendlyFaceError(err?.message || getErrorMessage(err)));
+      push('error', friendlyFaceError(err));
     });
-  }, [queueCount, isSyncing, isOnline, playTick, syncQueue, push, queryClient]);
+  }, [queueCount, isSyncing, isOnline, playTick, syncQueue, push, queryClient, form.sessionId]);
 
   const handleCapture = useCallback(
     (base64: string) => {
@@ -762,11 +787,144 @@ export function FaceRecognitionPage() {
     finishSession.mutate(form.sessionId);
   }, [form.sessionId, playTick, finishSession]);
 
+  /* ── Kiosk Mode Fullscreen Controls & Anti-Tamper Security ── */
+  const handleEnterKiosk = useCallback(() => {
+    setIsKioskMode(true);
+    haptics.medium();
+    if (!form.sessionId && !startSession.isPending) {
+      startSession.mutate();
+    }
+    try {
+      if (typeof document !== 'undefined' && document.documentElement.requestFullscreen && !document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    } catch {
+      // Graceful fallback if fullscreen is blocked by browser policy
+    }
+  }, [haptics, form.sessionId, startSession]);
+
+  const actuallyExitKiosk = useCallback(() => {
+    setIsPinModalOpen(false);
+    setIsKioskMode(false);
+    haptics.light();
+    try {
+      if (typeof document !== 'undefined' && document.exitFullscreen && document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    } catch {
+      // Graceful fallback
+    }
+  }, [haptics]);
+
+  const requestExitKiosk = useCallback(() => {
+    setPinInput('');
+    setPinError(false);
+    setIsPinModalOpen(true);
+  }, []);
+
+  const handlePinSubmit = useCallback((enteredPin: string) => {
+    const configuredPin = typeof window !== 'undefined' ? localStorage.getItem('m_edu_kiosk_pin') || '1234' : '1234';
+    if (enteredPin === configuredPin) {
+      playSuccess();
+      actuallyExitKiosk();
+    } else {
+      playError();
+      haptics.error();
+      setPinError(true);
+      setPinInput('');
+    }
+  }, [playSuccess, playError, haptics, actuallyExitKiosk]);
+
+  /* ── PIN Keypad Listener ── */
+  useEffect(() => {
+    if (!isPinModalOpen) return;
+    const onPinKey = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9') {
+        if (pinInput.length < 4) {
+          playTick();
+          haptics.light();
+          const next = pinInput + e.key;
+          setPinInput(next);
+          setPinError(false);
+          if (next.length === 4) {
+            handlePinSubmit(next);
+          }
+        }
+      } else if (e.key === 'Backspace') {
+        playTick();
+        haptics.light();
+        setPinInput((p) => p.slice(0, -1));
+        setPinError(false);
+      } else if (e.key === 'Escape') {
+        setIsPinModalOpen(false);
+        setPinInput('');
+        setPinError(false);
+        if (isKioskMode && typeof document !== 'undefined' && !document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+      }
+    };
+    window.addEventListener('keydown', onPinKey);
+    return () => window.removeEventListener('keydown', onPinKey);
+  }, [isPinModalOpen, pinInput, playTick, haptics, handlePinSubmit, isKioskMode]);
+
+  /* ── Sync with browser native fullscreen exit ── */
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement && isKioskMode && !isPinModalOpen) {
+        requestExitKiosk();
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, [isKioskMode, isPinModalOpen, requestExitKiosk]);
+
+  /* ── Keyboard Shortcuts (Esc to exit kiosk, K to toggle kiosk) ── */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = /INPUT|TEXTAREA|SELECT/.test(target?.tagName || '') || target?.isContentEditable;
+      if (e.key === 'Escape' && isKioskMode && !isPinModalOpen) {
+        e.preventDefault();
+        requestExitKiosk();
+        return;
+      }
+      if (isInput || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.toLowerCase() === 'k') {
+        if (isKioskMode) {
+          requestExitKiosk();
+        } else {
+          handleEnterKiosk();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isKioskMode, isPinModalOpen, handleEnterKiosk, requestExitKiosk]);
+
+  /* ── Kiosk Body Scroll Lock ── */
+  useEffect(() => {
+    if (!isKioskMode) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isKioskMode]);
+
   const handleCopySession = useCallback(() => {
     if (!form.sessionId) return;
-    navigator.clipboard.writeText(form.sessionId);
-    haptics.light();
-    push('success', 'Sessiya identifikatori nusxalandi');
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      navigator.clipboard
+        .writeText(form.sessionId)
+        .then(() => {
+          haptics.light();
+          push('success', 'Sessiya identifikatori nusxalandi');
+        })
+        .catch(() => {
+          push('error', "Nusxalab bo'lmadi");
+        });
+    }
   }, [form.sessionId, haptics, push]);
 
   const handleGroupChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
@@ -943,7 +1101,7 @@ export function FaceRecognitionPage() {
 
                     <button
                       type="button"
-                      onClick={handleExitKiosk}
+                      onClick={requestExitKiosk}
                       className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3.5 text-xs font-semibold text-white hover:bg-white/20 transition-colors"
                     >
                       <Icon paths={I.minimize} size={15} />
@@ -954,7 +1112,7 @@ export function FaceRecognitionPage() {
                 </header>
 
                 {/* Kiosk Main Stage */}
-                <main className="relative z-10 grid min-h-0 flex-1 grid-cols-1 gap-6 p-6 lg:grid-cols-[1fr_380px]">
+                <main className="relative z-10 grid min-h-0 flex-1 grid-cols-1 gap-4 p-3 sm:gap-6 sm:p-6 lg:grid-cols-[1fr_380px]">
                   {/* Viewfinder Column */}
                   <div className="relative flex flex-col items-center justify-center">
                     {isSessionActive ? (
@@ -1116,6 +1274,129 @@ export function FaceRecognitionPage() {
                 </main>
               </motion.div>
             )}
+
+            {/* ── Kiosk Operator PIN Modal ── */}
+            <AnimatePresence>
+              {isPinModalOpen && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-2xl"
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.92, y: 16 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.92, y: 16 }}
+                    transition={SPRING.snappy}
+                    className={cn(
+                      "w-full max-w-sm overflow-hidden rounded-[2.5rem] border p-8 shadow-2xl backdrop-blur-3xl text-center text-white",
+                      pinError
+                        ? "border-rose-500/50 bg-[#1e0a0d]/95 shadow-rose-500/20"
+                        : "border-white/20 bg-black/80 shadow-black/80"
+                    )}
+                  >
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-white shadow-inner">
+                      <Icon paths={I.lock} size={24} />
+                    </div>
+
+                    <h3 className="mt-4 text-lg font-bold">Terminalni qulfdan chiqarish</h3>
+                    <p className="mt-1.5 text-xs text-white/60">
+                      Kiosk rejimidan chiqish uchun administrator PIN-kodini kiriting
+                    </p>
+
+                    {/* PIN Indicators */}
+                    <div className="mt-6 flex justify-center gap-3.5">
+                      {[0, 1, 2, 3].map((i) => (
+                        <span
+                          key={i}
+                          className={cn(
+                            "h-4 w-4 rounded-full border transition-all duration-200",
+                            pinInput.length > i
+                              ? pinError
+                                ? "border-rose-500 bg-rose-500 scale-110 shadow-[0_0_10px_rgba(244,63,94,0.8)]"
+                                : "border-emerald-400 bg-emerald-400 scale-110 shadow-[0_0_10px_rgba(52,199,89,0.8)]"
+                              : "border-white/30 bg-white/10"
+                          )}
+                        />
+                      ))}
+                    </div>
+
+                    {pinError && (
+                      <p className="mt-3 text-xs font-semibold text-rose-400 animate-pulse">
+                        PIN-kod noto‘g‘ri. Qayta urinib ko‘ring.
+                      </p>
+                    )}
+
+                    {/* Numeric Keypad */}
+                    <div className="mt-7 grid grid-cols-3 gap-3">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
+                        <button
+                          key={digit}
+                          type="button"
+                          onClick={() => {
+                            if (pinInput.length < 4) {
+                              playTick();
+                              haptics.light();
+                              const next = pinInput + digit;
+                              setPinInput(next);
+                              setPinError(false);
+                              if (next.length === 4) {
+                                handlePinSubmit(next);
+                              }
+                            }
+                          }}
+                          className="flex h-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-xl font-bold text-white shadow-sm hover:bg-white/15 active:scale-95 transition-all"
+                        >
+                          {digit}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsPinModalOpen(false);
+                          setPinInput('');
+                          setPinError(false);
+                        }}
+                        className="flex h-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-xs font-bold text-white/70 hover:bg-white/15 active:scale-95 transition-all"
+                      >
+                        Bekor
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (pinInput.length < 4) {
+                            playTick();
+                            haptics.light();
+                            const next = pinInput + '0';
+                            setPinInput(next);
+                            setPinError(false);
+                            if (next.length === 4) {
+                              handlePinSubmit(next);
+                            }
+                          }
+                        }}
+                        className="flex h-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-xl font-bold text-white shadow-sm hover:bg-white/15 active:scale-95 transition-all"
+                      >
+                        0
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playTick();
+                          haptics.light();
+                          setPinInput((p) => p.slice(0, -1));
+                          setPinError(false);
+                        }}
+                        className="flex h-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm font-bold text-white/80 hover:bg-white/15 active:scale-95 transition-all"
+                      >
+                        ⌫
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </AnimatePresence>,
           document.body,
         )}
@@ -1191,6 +1472,11 @@ export function FaceRecognitionPage() {
           </div>
         </div>
       </motion.header>
+
+      {/* Hardware Emergency Evacuation & Lockdown Bar */}
+      <motion.div variants={cardVariants}>
+        <TurnstileEmergencyLockdown />
+      </motion.div>
 
       {/* ══════════════════════════════════════════════════════════════════
        * 3. KPI TELEMETRY BENTO GRID
@@ -1279,6 +1565,153 @@ export function FaceRecognitionPage() {
             {stats.recognized} ta tanilgan · {stats.failed} ta boshqa
           </p>
         </div>
+      </motion.section>
+
+      {/* ══════════════════════════════════════════════════════════════════
+       * 3.5. INTELLIGENT AI BIOMETRICS & MULTI-CAMERA COMMAND SUITE
+       * ════════════════════════════════════════════════════════════════ */}
+      <motion.section
+        variants={cardVariants}
+        className="space-y-4 rounded-[2.25rem] border border-white/60 bg-white/70 p-5 sm:p-6 shadow-2xl backdrop-blur-3xl dark:border-white/10 dark:bg-[#121622]/70"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/[0.06] pb-4 dark:border-white/[0.08]">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-500 ring-1 ring-cyan-500/30">
+              <Icon paths={I.camera} size={20} strokeWidth={2.2} />
+            </span>
+            <div>
+              <h2 className="text-base sm:text-lg font-black tracking-tight text-[var(--text-primary)]">
+                Intelligent Face ID & Kamera Boshqaruv Markazi
+              </h2>
+              <p className="text-xs text-[var(--text-secondary)]">
+                6 ta ilg‘or sun’iy intellekt moduli: Rejissyor, Anti-Spoof, Oqim, Ovoz, Telegram va Tirbandlik
+              </p>
+            </div>
+          </div>
+
+          {activeBiometricModule && (
+            <button
+              type="button"
+              onClick={() => {
+                playTick();
+                setActiveBiometricModule(null);
+              }}
+              className="self-start sm:self-center text-xs font-semibold text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/10 transition-colors"
+            >
+              Yopish ✕
+            </button>
+          )}
+        </div>
+
+        {/* Quick Module Switcher Pills */}
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { id: 'director', label: 'Multikamera Rejissyor', badge: 'RTSP 2x2' },
+            { id: 'liveness', label: '3D Liveness & Anti-Spoof', badge: '99.4% Tirik' },
+            { id: 'rushHour', label: 'Tig‘iz Vaqt Oqimi', badge: 'Parallel Batch' },
+            { id: 'voice', label: 'Ovozli Salomlashish', badge: 'Web Speech' },
+            { id: 'telegram', label: 'Telegram Push Shlyuz', badge: '<220ms' },
+            { id: 'traffic', label: 'Tirbandlik Xaritasi', badge: 'AI Radar' },
+          ].map((mod) => {
+            const isActive = activeBiometricModule === mod.id;
+            return (
+              <button
+                key={mod.id}
+                type="button"
+                onClick={() => {
+                  playTick();
+                  setActiveBiometricModule(isActive ? null : (mod.id as typeof activeBiometricModule));
+                }}
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-bold transition-all border shadow-sm',
+                  isActive
+                    ? 'bg-cyan-500/15 border-cyan-500/50 text-cyan-500 dark:text-cyan-400 ring-2 ring-cyan-500/30'
+                    : 'bg-black/[0.03] dark:bg-white/[0.05] border-black/[0.06] dark:border-white/[0.08] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-black/20'
+                )}
+              >
+                <span>{mod.label}</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-black/10 dark:bg-white/15">
+                  {mod.badge}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Active Module Stage Panel */}
+        <AnimatePresence mode="wait">
+          {activeBiometricModule === 'director' && (
+            <motion.div
+              key="mod-director"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="pt-2"
+            >
+              <MultiCameraAttendanceDirector />
+            </motion.div>
+          )}
+
+          {activeBiometricModule === 'liveness' && (
+            <motion.div
+              key="mod-liveness"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="pt-2"
+            >
+              <LivenessSpoofShieldHUD />
+            </motion.div>
+          )}
+
+          {activeBiometricModule === 'rushHour' && (
+            <motion.div
+              key="mod-rushHour"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="pt-2"
+            >
+              <RushHourBatchAttendanceProcessor />
+            </motion.div>
+          )}
+
+          {activeBiometricModule === 'voice' && (
+            <motion.div
+              key="mod-voice"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="pt-2"
+            >
+              <BiometricVoiceGreetingConsole />
+            </motion.div>
+          )}
+
+          {activeBiometricModule === 'telegram' && (
+            <motion.div
+              key="mod-telegram"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="pt-2"
+            >
+              <TurnstileTelegramNotificationBridge />
+            </motion.div>
+          )}
+
+          {activeBiometricModule === 'traffic' && (
+            <motion.div
+              key="mod-traffic"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="pt-2"
+            >
+              <AttendanceTrafficFlowHeatmap />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.section>
 
       {/* ══════════════════════════════════════════════════════════════════

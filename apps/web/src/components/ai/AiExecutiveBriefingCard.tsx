@@ -86,7 +86,7 @@ export function AiExecutiveBriefingCard() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
       className={cn(
-        'relative overflow-hidden rounded-2xl border transition-all duration-300',
+        'relative w-full min-w-0 max-w-full overflow-hidden rounded-2xl border transition-all duration-300',
         'bg-gradient-to-br backdrop-blur-2xl backdrop-saturate-150',
         'shadow-[0_4px_24px_-8px_rgba(0,122,255,0.12),inset_0_1px_0_rgba(255,255,255,0.6)]',
         'dark:shadow-[0_4px_24px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]',
@@ -100,28 +100,28 @@ export function AiExecutiveBriefingCard() {
       />
 
       {/* Header bar */}
-      <div className="relative flex items-center justify-between px-5 pt-4 pb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-[#007AFF] to-[#5856D6] text-white shadow-sm shadow-[#007AFF]/30">
+      <div className="relative flex items-center justify-between px-3.5 sm:px-5 pt-3.5 sm:pt-4 pb-2.5 sm:pb-3">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#007AFF] to-[#5856D6] text-white shadow-sm shadow-[#007AFF]/30">
             <Sparkles className="h-4 w-4" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="truncate text-xs font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
                 AI Boshqaruv Brifingi
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#007AFF]/10 px-2 py-0.5 text-[10px] font-medium text-[#007AFF] dark:bg-[#007AFF]/20 dark:text-[#64D2FF]">
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#007AFF]/10 px-2 py-0.5 text-[10px] font-medium text-[#007AFF] dark:bg-[#007AFF]/20 dark:text-[#64D2FF]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#007AFF] animate-pulse" />
                 Jonli tahlil
               </span>
             </div>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
               Bugungi eng muhim operatsion xulosalar va tavsiyalar
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 shrink-0 ml-2">
           <button
             type="button"
             onClick={() => fetchBriefing(true)}
@@ -149,7 +149,7 @@ export function AiExecutiveBriefingCard() {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="px-5 pb-4 space-y-3.5"
+            className="px-3.5 sm:px-5 pb-4 space-y-3.5 w-full min-w-0"
           >
             {/* Digest text */}
             <p className="text-sm font-medium leading-relaxed text-zinc-800 dark:text-zinc-200">
@@ -157,12 +157,12 @@ export function AiExecutiveBriefingCard() {
             </p>
 
             {/* Quick telemetry chips */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-              <div className="flex items-center gap-2 rounded-xl bg-white/70 dark:bg-zinc-800/60 border border-black/5 dark:border-white/5 p-2.5">
-                <Users className="h-4 w-4 text-[#007AFF]" />
-                <div>
-                  <div className="text-[10px] uppercase font-semibold text-zinc-400">Davomat</div>
-                  <div className="text-xs font-bold text-zinc-800 dark:text-zinc-100">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 w-full min-w-0">
+              <div className="flex items-center gap-2 rounded-xl bg-white/70 dark:bg-zinc-800/60 border border-black/5 dark:border-white/5 p-2 sm:p-2.5 min-w-0 overflow-hidden">
+                <Users className="h-4 w-4 shrink-0 text-[#007AFF]" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] uppercase font-semibold text-zinc-400 truncate">Davomat</div>
+                  <div className="text-xs font-bold text-zinc-800 dark:text-zinc-100 truncate">
                     {briefing.metrics.attendanceRate}%{' '}
                     <span className="text-[10px] font-normal text-zinc-500">
                       ({briefing.metrics.presentToday} / {briefing.metrics.presentToday + briefing.metrics.absentToday})
@@ -171,33 +171,33 @@ export function AiExecutiveBriefingCard() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 rounded-xl bg-white/70 dark:bg-zinc-800/60 border border-black/5 dark:border-white/5 p-2.5">
-                <CreditCard className="h-4 w-4 text-emerald-500" />
-                <div>
-                  <div className="text-[10px] uppercase font-semibold text-zinc-400">Qarzdorlar</div>
-                  <div className="text-xs font-bold text-zinc-800 dark:text-zinc-100">
+              <div className="flex items-center gap-2 rounded-xl bg-white/70 dark:bg-zinc-800/60 border border-black/5 dark:border-white/5 p-2 sm:p-2.5 min-w-0 overflow-hidden">
+                <CreditCard className="h-4 w-4 shrink-0 text-emerald-500" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] uppercase font-semibold text-zinc-400 truncate">Qarzdorlar</div>
+                  <div className="text-xs font-bold text-zinc-800 dark:text-zinc-100 truncate">
                     {briefing.metrics.debtorsCount}{' '}
                     <span className="text-[10px] font-normal text-zinc-500">nafar</span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 rounded-xl bg-white/70 dark:bg-zinc-800/60 border border-black/5 dark:border-white/5 p-2.5">
-                <GraduationCap className="h-4 w-4 text-indigo-500" />
-                <div>
-                  <div className="text-[10px] uppercase font-semibold text-zinc-400">Guruhlar</div>
-                  <div className="text-xs font-bold text-zinc-800 dark:text-zinc-100">
+              <div className="flex items-center gap-2 rounded-xl bg-white/70 dark:bg-zinc-800/60 border border-black/5 dark:border-white/5 p-2 sm:p-2.5 min-w-0 overflow-hidden">
+                <GraduationCap className="h-4 w-4 shrink-0 text-indigo-500" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] uppercase font-semibold text-zinc-400 truncate">Guruhlar</div>
+                  <div className="text-xs font-bold text-zinc-800 dark:text-zinc-100 truncate">
                     {briefing.metrics.groupsCount}{' '}
                     <span className="text-[10px] font-normal text-zinc-500">faol</span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 rounded-xl bg-white/70 dark:bg-zinc-800/60 border border-black/5 dark:border-white/5 p-2.5">
-                <AlertTriangle className={cn("h-4 w-4", briefing.metrics.highRiskStudents > 0 ? "text-amber-500" : "text-emerald-500")} />
-                <div>
-                  <div className="text-[10px] uppercase font-semibold text-zinc-400">Xavf guruhi</div>
-                  <div className="text-xs font-bold text-zinc-800 dark:text-zinc-100">
+              <div className="flex items-center gap-2 rounded-xl bg-white/70 dark:bg-zinc-800/60 border border-black/5 dark:border-white/5 p-2 sm:p-2.5 min-w-0 overflow-hidden">
+                <AlertTriangle className={cn("h-4 w-4 shrink-0", briefing.metrics.highRiskStudents > 0 ? "text-amber-500" : "text-emerald-500")} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] uppercase font-semibold text-zinc-400 truncate">Xavf guruhi</div>
+                  <div className="text-xs font-bold text-zinc-800 dark:text-zinc-100 truncate">
                     {briefing.metrics.highRiskStudents}{' '}
                     <span className="text-[10px] font-normal text-zinc-500">o'quvchi</span>
                   </div>

@@ -391,7 +391,12 @@ export class RecognitionService {
       qualityScore = quality.overallScore;
       if (!quality.passesThreshold || qualityScore < config.qualityThreshold) {
         attemptStatus = RecognitionAttemptStatus.QUALITY_FAILED;
-        throw new FaceQualityTooLowError(qualityScore, config.qualityThreshold);
+        throw new FaceQualityTooLowError(
+          qualityScore,
+          config.qualityThreshold,
+          quality.rejectionReason,
+          quality.issues,
+        );
       }
       attemptStatus = RecognitionAttemptStatus.QUALITY_PASSED;
 
@@ -520,6 +525,23 @@ export class RecognitionService {
       });
 
       const isIdentified = decision.outcome === 'IDENTIFIED';
+
+      if (
+        isIdentified &&
+        decision.studentId &&
+        similarityScore != null &&
+        similarityScore >= 0.94 &&
+        qualityScore >= 0.85 &&
+        livenessResult === 'PASS'
+      ) {
+        void this.adaptivelyRefineTemplate(
+          tenant,
+          decision.studentId,
+          probeEmbedding,
+          qualityScore,
+          similarityScore,
+        ).catch(() => {});
+      }
 
       return {
         attemptId: attempt.id,
@@ -1195,5 +1217,89 @@ export class RecognitionService {
       attendanceDecision: record.decision,
       attendanceRecordId: attendanceRecorded ? record.id : null,
     };
+  }
+
+  /**
+   * Adaptive Template Refinement (Self-Learning Anchor)
+   * Asynchronously saves a refreshed template anchor for students recognized
+   * with high confidence under optimal conditions if no template has been added
+   * in the last 14 days. Retains max 3 templates per student.
+   */
+  private async adaptivelyRefineTemplate(
+    tenant: TenantContext,
+    studentId: string,
+    probeEmbedding: FaceEmbedding,
+    qualityScore: number,
+    similarityScore: number,
+  ): Promise<void> {
+    try {
+      const activeTemplates = await this.enrollmentRepo.findActiveTemplatesByStudentId(
+        tenant.organizationId,
+        studentId,
+      );
+      if (!activeTemplates || activeTemplates.length === 0) return;
+
+      const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const hasRecentTemplate = activeTemplates.some(
+        (t) => now - new Date(t.createdAt).getTime() < FOURTEEN_DAYS_MS,
+      );
+      if (hasRecentTemplate) return;
+
+      const enrollment = await this.enrollmentRepo.findActiveByStudentId(
+        tenant.organizationId,
+        studentId,
+      );
+      if (!enrollment) return;
+
+      if (activeTemplates.length >= 3 && typeof this.enrollmentRepo.revokeTemplate === 'function') {
+        const adaptiveTemplates = activeTemplates
+          .filter((t) => (t.metadata as Record<string, unknown> | null)?.adaptive === true)
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        if (adaptiveTemplates.length > 0) {
+          await this.enrollmentRepo.revokeTemplate(
+            tenant.organizationId,
+            adaptiveTemplates[0].id,
+            'REPLACED_BY_NEWER_ADAPTIVE_ANCHOR',
+          );
+        }
+      }
+
+      const serialized = probeEmbedding.serialize();
+      const encryptedTemplate = await this.encryption.encrypt(serialized);
+      const templateHash = await this.encryption.hash(serialized);
+      const nextVersion = Math.max(...activeTemplates.map((t) => t.version || 1), 1) + 1;
+
+      await this.enrollmentRepo.addTemplate({
+        organizationId: tenant.organizationId,
+        enrollmentId: enrollment.id,
+        studentId,
+        templateData: encryptedTemplate,
+        templateHash,
+        version: nextVersion,
+        modelVersion: this.faceEngine.getModelVersion(),
+        qualityScore,
+      });
+
+      RecognitionService.invalidateTemplateCache(tenant.organizationId);
+
+      await this.audit.log({
+        organizationId: tenant.organizationId,
+        userId: tenant.userId,
+        type: AuditEventType.FACE_ENROLLMENT_CREATED,
+        resourceType: 'FaceTemplate',
+        resourceId: enrollment.id,
+        description: `Adaptively registered anchor template (similarity: ${similarityScore.toFixed(3)}, quality: ${qualityScore.toFixed(3)})`,
+        metadata: {
+          studentId,
+          version: nextVersion,
+          qualityScore,
+          similarityScore,
+          adaptive: true,
+        },
+      });
+    } catch {
+      // Background adaptive template refinement must never fail recognition
+    }
   }
 }

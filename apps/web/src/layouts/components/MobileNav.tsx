@@ -316,11 +316,11 @@ const FOCUS_RING =
   'outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/70 focus-visible:ring-offset-0';
 
 const GLASS_SLAB = cn(
-  'border border-black/[0.08] bg-white/80',
-  'backdrop-blur-2xl backdrop-saturate-[180%]',
-  'shadow-[0_10px_32px_-4px_rgba(0,0,0,0.1),0_2px_8px_-2px_rgba(0,0,0,0.04)]',
-  'dark:border-white/[0.12] dark:bg-[#1c1c1e]/85',
-  'dark:shadow-[0_14px_36px_-6px_rgba(0,0,0,0.55),0_2px_10px_-2px_rgba(0,0,0,0.35)]',
+  'border border-white/60 bg-white/80',
+  'backdrop-blur-2xl backdrop-saturate-[200%]',
+  'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.92),inset_0_-1px_0_0_rgba(0,122,255,0.14),0_12px_36px_-6px_rgba(0,0,0,0.12),0_2px_10px_-2px_rgba(0,0,0,0.04)]',
+  'dark:border-white/[0.14] dark:bg-[#16161a]/85',
+  'dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.22),inset_0_-1px_0_0_rgba(10,132,255,0.18),0_16px_44px_-8px_rgba(0,0,0,0.7),0_2px_12px_-2px_rgba(0,0,0,0.4)]',
 );
 
 const GLASS_SOLID =
@@ -328,21 +328,11 @@ const GLASS_SOLID =
 
 /** High-performance mobile drawer glass (ultra-smooth 60/120fps hardware compositing) */
 const GLASS_DRAWER = cn(
-  'border border-white/50 bg-white/85',
-  'backdrop-blur-xl backdrop-saturate-[180%]',
-  'shadow-[',
-  'inset_0_1.5px_0_rgba(255,255,255,0.9),',
-  'inset_0_-1px_0_rgba(255,255,255,0.3),',
-  '0_20px_40px_-12px_rgba(0,0,0,0.25),',
-  '0_4px_12px_-4px_rgba(0,0,0,0.1)',
-  ']',
-  'dark:border-white/[0.12] dark:bg-[#18181e]/90',
-  'dark:shadow-[',
-  'inset_0_1.5px_0_rgba(255,255,255,0.16),',
-  'inset_0_-1px_0_rgba(255,255,255,0.06),',
-  '0_24px_48px_-12px_rgba(0,0,0,0.65),',
-  '0_6px_16px_-4px_rgba(0,0,0,0.35)',
-  ']',
+  'border border-white/60 bg-white/85',
+  'backdrop-blur-2xl backdrop-saturate-[200%]',
+  'shadow-[inset_0_1.5px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(0,122,255,0.12),0_24px_48px_-12px_rgba(0,0,0,0.28),0_4px_16px_-4px_rgba(0,0,0,0.12)]',
+  'dark:border-white/[0.14] dark:bg-[#16161a]/92',
+  'dark:shadow-[inset_0_1.5px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(10,132,255,0.14),0_28px_56px_-12px_rgba(0,0,0,0.7),0_6px_20px_-4px_rgba(0,0,0,0.4)]',
 );
 
 const GLASS_CHIP = cn(
@@ -353,10 +343,10 @@ const GLASS_CHIP = cn(
 );
 
 const LENS_ACTIVE = cn(
-  'border border-black/[0.04] bg-black/[0.045]',
-  'shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(0,0,0,0.03)]',
-  'dark:border-white/[0.08] dark:bg-white/[0.10]',
-  'dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.25)]',
+  'border border-apple-blue/25 bg-gradient-to-b from-apple-blue/15 to-apple-blue/[0.06]',
+  'shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_10px_-2px_rgba(0,122,255,0.28)]',
+  'dark:border-apple-blue/35 dark:from-apple-blue/25 dark:to-apple-blue/[0.10]',
+  'dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_12px_-2px_rgba(10,132,255,0.42)]',
 );
 
 const TAB_IDLE = 'text-[#8E8E93] dark:text-[#98989D]';
@@ -394,7 +384,7 @@ const SheenLayer = memo(function SheenLayer({
   opacity,
   driftEnabled,
   withRim = true,
-  withRefract = true,
+  withRefract = false,
 }: SheenLayerProps) {
   const warmAnim = driftEnabled
     ? { x: [-10, 10, -10], y: [-8, 5, -8], scale: [1, 1.04, 1] }
@@ -558,17 +548,17 @@ export const MobileBottomNav = memo(function MobileBottomNav({
         transition={reduced ? { duration: 0.15 } : SPRING_MORPH}
         onFocusCapture={revealDock}
         className={cn(
-          'relative mx-auto max-w-[27rem]',
+          'relative mx-auto max-w-[25.5rem] sm:max-w-[26.5rem]',
           dockHidden ? 'pointer-events-none' : 'pointer-events-auto',
         )}
       >
         <div
           className={cn(
-            'relative overflow-hidden rounded-[2rem]',
+            'relative overflow-hidden rounded-[1.85rem]',
             reducedTransparency ? GLASS_SOLID : GLASS_SLAB,
           )}
         >
-          <ul className="relative z-10 flex items-stretch p-1.5">
+          <ul className="relative z-10 flex items-stretch p-1 sm:p-1.5">
             {tabs.map((item) => (
               <li key={item.to} className="relative min-w-0 flex-1">
                 <NavLink
@@ -576,7 +566,7 @@ export const MobileBottomNav = memo(function MobileBottomNav({
                   end={item.end}
                   onClick={handleTabClick}
                   className={cn(
-                    'group relative flex min-h-[3.5rem] w-full flex-col items-center justify-center rounded-[1.25rem] px-1 py-1',
+                    'group relative flex min-h-[3.25rem] w-full flex-col items-center justify-center rounded-[1.15rem] px-1 py-1',
                     FOCUS_RING,
                   )}
                 >
@@ -592,22 +582,22 @@ export const MobileBottomNav = memo(function MobileBottomNav({
                           }
                           aria-hidden="true"
                           className={cn(
-                            'absolute inset-0 z-0 rounded-[1.25rem]',
+                            'absolute inset-0 z-0 rounded-[1.15rem]',
                             LENS_ACTIVE,
                           )}
                         />
                       )}
 
                       <motion.div
-                        whileTap={reduced ? undefined : { scale: 0.92 }}
+                        whileTap={reduced ? undefined : { scale: 0.88 }}
                         transition={SPRING_TOUCH}
                         className="relative z-10 flex flex-col items-center justify-center gap-1"
                       >
                         <span
                           className={cn(
-                            'transition-colors duration-200',
+                            'transition-transform duration-200',
                             isActive
-                              ? TAB_ACTIVE
+                              ? cn(TAB_ACTIVE, 'scale-[1.06]')
                               : cn(
                                   TAB_IDLE,
                                   'group-hover:text-[var(--text-primary)]',
@@ -616,7 +606,7 @@ export const MobileBottomNav = memo(function MobileBottomNav({
                         >
                           <StaticIcon
                             paths={item.iconPath}
-                            className="h-[1.35rem] w-[1.35rem]"
+                            className="h-[1.25rem] w-[1.25rem]"
                           />
                         </span>
                         <span
@@ -641,18 +631,18 @@ export const MobileBottomNav = memo(function MobileBottomNav({
               <motion.button
                 type="button"
                 onClick={handleOpenMore}
-                whileTap={reduced ? undefined : { scale: 0.92 }}
+                whileTap={reduced ? undefined : { scale: 0.88 }}
                 transition={SPRING_TOUCH}
                 aria-label={t('a11y.openMenu', 'Open menu')}
                 className={cn(
-                  'group relative flex min-h-[3.5rem] w-full flex-col items-center justify-center gap-1 rounded-[1.25rem] px-1 py-1',
+                  'group relative flex min-h-[3.25rem] w-full flex-col items-center justify-center gap-1 rounded-[1.15rem] px-1 py-1',
                   'transition-colors duration-200',
                   TAB_IDLE,
                   'hover:text-[var(--text-primary)] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]',
                   FOCUS_RING,
                 )}
               >
-                <StaticIcon paths={I.menu} className="h-[1.35rem] w-[1.35rem]" />
+                <StaticIcon paths={I.menu} className="h-[1.25rem] w-[1.25rem]" />
                 <span className="max-w-full truncate text-[10px] font-medium tracking-[-0.01em]">
                   {t('nav.more', 'More')}
                 </span>

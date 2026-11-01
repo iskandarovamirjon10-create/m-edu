@@ -36,6 +36,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { ClassroomResourceFloorMap } from '@/components/schedule/ClassroomResourceFloorMap';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -220,14 +221,15 @@ export function CountUp({
       if (startRef.current === null) startRef.current = ts;
       const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(Math.round(value * eased));
+      const safeVal = Number.isFinite(value) ? value : 0;
+      setN(Math.round(safeVal * eased));
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
 
-  return <span className="tabular-nums">{n.toLocaleString()}</span>;
+  return <span className="tabular-nums">{(Number.isFinite(n) ? n : 0).toLocaleString()}</span>;
 }
 
 /* ============================================================================
@@ -241,7 +243,7 @@ export function ResourceBookingPage() {
   const toast = useToast();
   const { playTick, playPop, playSuccess, playError } = usePremiumSound();
 
-  const [view, setView] = useState<'bookings' | 'resources'>('bookings');
+  const [view, setView] = useState<'bookings' | 'resources' | 'floormap'>('floormap');
   const [statusFilter, setStatusFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<BookingFormState>(EMPTY_FORM);
@@ -538,6 +540,18 @@ export function ResourceBookingPage() {
         <div className="flex gap-2">
           <GlassButton
             size="sm"
+            variant={view === 'floormap' ? 'primary' : 'ghost'}
+            onClick={() => {
+              playTick();
+              setView('floormap');
+            }}
+            className="min-h-[44px] inline-flex items-center gap-2"
+          >
+            <span>🏢 {t('resourceBooking.tab.floormap', 'Qavatlar Xaritasi')}</span>
+            <kbd className="text-[10px] opacity-60 font-mono px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10">3</kbd>
+          </GlassButton>
+          <GlassButton
+            size="sm"
             variant={view === 'bookings' ? 'primary' : 'ghost'}
             onClick={() => {
               playTick();
@@ -581,7 +595,9 @@ export function ResourceBookingPage() {
       </motion.div>
 
       {/* ── Main View Content ───────────────────────────────────────────── */}
-      {view === 'bookings' ? (
+      {view === 'floormap' ? (
+        <ClassroomResourceFloorMap />
+      ) : view === 'bookings' ? (
         <motion.div
           variants={itemVariants}
           className="liquid-glass-surface relative overflow-hidden rounded-3xl border border-black/[0.08] dark:border-white/[0.12] bg-white/80 dark:bg-surface-900/80 shadow-sm backdrop-blur-2xl"

@@ -21,6 +21,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, type Variants } from 'framer-motion';
 import { groupsApi, coursesApi, teachersApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
+import {
+  GroupDossierDrawer,
+  GroupAiAdvisorModal,
+  BulkGroupActionsModals,
+} from '@/components/groups';
 import { openQuickLook, openSidecar } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import {
@@ -186,6 +191,10 @@ const I: Record<string, string[]> = {
     'M7 10l5 5 5-5',
     'M12 15V3',
   ],
+  settings: [
+    'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z',
+    'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  ],
 };
 
 function Icon({
@@ -195,7 +204,7 @@ function Icon({
   strokeWidth = ICON_STROKE,
   ...rest
 }: {
-  paths: string[];
+  paths?: string[];
   size?: number;
   className?: string;
   strokeWidth?: number;
@@ -214,7 +223,7 @@ function Icon({
       aria-hidden="true"
       {...rest}
     >
-      {paths.map((d, i) => (
+      {(paths || []).map((d, i) => (
         <path key={i} d={d} />
       ))}
     </svg>
@@ -667,6 +676,9 @@ export function GroupsPage() {
   /* ── Modal & Confirmation State ───────────────────────────────────── */
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [dossierDrawerGroup, setDossierDrawerGroup] = useState<Group | null>(null);
+  const [aiAdvisorGroup, setAiAdvisorGroup] = useState<Group | null>(null);
+  const [bulkGroupModal, setBulkGroupModal] = useState<'status' | 'teacher' | 'room' | null>(null);
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
 
@@ -1303,7 +1315,7 @@ export function GroupsPage() {
       >
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           {/* Left: Spotlight Search with Keyboard Shortcut Badge */}
-          <div className="relative flex-1 min-w-[240px]">
+          <div className="relative flex-1 w-full min-w-0 sm:min-w-[240px]">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[var(--text-tertiary)]">
               <Icon paths={I.search} size={15} strokeWidth={2.2} />
             </div>
@@ -1337,7 +1349,7 @@ export function GroupsPage() {
           {/* Right: Segmented Status + View Switcher */}
           <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2">
             {/* Apple Sliding Pill Segmented Control for Status */}
-            <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
+            <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06] overflow-x-auto max-w-full no-scrollbar">
               {(
                 [
                   { key: 'ALL', label: 'Hammasi', count: stats.total, testId: undefined },
@@ -1392,7 +1404,7 @@ export function GroupsPage() {
             </div>
 
             {/* Tri-Mode View Switcher: List | Grid | Rooms Matrix */}
-            <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06]">
+            <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06] overflow-x-auto max-w-full no-scrollbar">
               <button
                 type="button"
                 onClick={() => {
@@ -1774,6 +1786,32 @@ export function GroupsPage() {
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e: React.KeyboardEvent) => e.stopPropagation()}
                   >
+                    {/* Group Dossier Drawer */}
+                    <motion.button
+                      type="button"
+                      onClick={() => setDossierDrawerGroup(group)}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      transition={SPRING.snappy}
+                      aria-label="Guruh dosyesi & Talabalar ro'yxati"
+                      title="Guruh dosyesi & Talabalar ro'yxati"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 transition-colors"
+                    >
+                      <Icon paths={I.users} size={13} strokeWidth={2.2} />
+                    </motion.button>
+                    {/* Group AI Advisor */}
+                    <motion.button
+                      type="button"
+                      onClick={() => setAiAdvisorGroup(group)}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      transition={SPRING.snappy}
+                      aria-label="AI Maslahatchi"
+                      title="AI Maslahatchi"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-purple-500/20 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 transition-colors"
+                    >
+                      <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
+                    </motion.button>
                     {/* Sidecar Split-View trigger */}
                     <motion.button
                       type="button"
@@ -2017,6 +2055,30 @@ export function GroupsPage() {
                   <div className="flex items-center gap-1.5">
                     <motion.button
                       type="button"
+                      onClick={() => setDossierDrawerGroup(group)}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      transition={SPRING.snappy}
+                      aria-label="Guruh dosyesi & Talabalar ro'yxati"
+                      title="Guruh dosyesi & Talabalar ro'yxati"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 transition-colors"
+                    >
+                      <Icon paths={I.users} size={13} strokeWidth={2.2} />
+                    </motion.button>
+                    <motion.button
+                      type="button"
+                      onClick={() => setAiAdvisorGroup(group)}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      transition={SPRING.snappy}
+                      aria-label="AI Maslahatchi"
+                      title="AI Maslahatchi"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-purple-500/20 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 transition-colors"
+                    >
+                      <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
+                    </motion.button>
+                    <motion.button
+                      type="button"
                       onClick={() => handleOpenGroupSidecar(group)}
                       whileHover={{ scale: 1.08 }}
                       whileTap={{ scale: 0.92 }}
@@ -2185,6 +2247,13 @@ export function GroupsPage() {
         onClearSelection={clearSelection}
         entityName="guruh"
         actions={[
+          {
+            label: 'Holat',
+            shortcut: 'H',
+            icon: <Icon paths={I.settings} size={13} strokeWidth={2.2} />,
+            variant: 'primary',
+            onClick: () => setBulkGroupModal('status'),
+          },
           {
             label: 'CSV Eksport',
             shortcut: 'C',
@@ -2542,6 +2611,43 @@ export function GroupsPage() {
         onConfirm={executeBatchDeleteGroups}
         description={`Tanlangan ${selectedCount} ta guruhni haqiqatan ham o'chirib tashlamoqchimisiz? Bu amalni ortga qaytarib bo'lmaydi.`}
         loading={isBatchDeleting}
+      />
+
+      <GroupDossierDrawer
+        group={dossierDrawerGroup}
+        isOpen={Boolean(dossierDrawerGroup)}
+        onClose={() => setDossierDrawerGroup(null)}
+        onEdit={(g) => {
+          setDossierDrawerGroup(null);
+          navigate(`/groups/${g.id}/edit`);
+        }}
+        onGraduate={(g) => {
+          setDossierDrawerGroup(null);
+          setGraduateTarget(g);
+        }}
+        onOpenAiAdvisor={(g) => {
+          setDossierDrawerGroup(null);
+          setAiAdvisorGroup(g);
+        }}
+      />
+
+      <GroupAiAdvisorModal
+        group={aiAdvisorGroup}
+        isOpen={Boolean(aiAdvisorGroup)}
+        onClose={() => setAiAdvisorGroup(null)}
+      />
+
+      <BulkGroupActionsModals
+        selectedIds={Array.from(selectedIds)}
+        isOpen={Boolean(bulkGroupModal)}
+        activeModal={bulkGroupModal}
+        onClose={() => setBulkGroupModal(null)}
+        onSuccess={() => {
+          clearSelection();
+          qc.invalidateQueries({ queryKey: queryKeys.groups.all() });
+        }}
+        teachers={teacherList}
+        availableRooms={stats.uniqueRooms}
       />
     </motion.div>
   );

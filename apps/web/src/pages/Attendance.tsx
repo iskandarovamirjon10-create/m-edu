@@ -36,6 +36,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useAttendanceSocket } from '@/hooks/useAttendanceSocket';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
+import { OfficialAttendanceRegisterModal } from '@/components/attendance/OfficialAttendanceRegisterModal';
 
 /* ============================================================================
  * APPLE SPRING PHYSICS & MOTION TOKENS
@@ -233,7 +234,7 @@ function Icon({
       aria-hidden="true"
       {...rest}
     >
-      {paths.map((d, i) => (
+      {(paths || []).map((d, i) => (
         <path key={i} d={d} />
       ))}
     </svg>
@@ -910,6 +911,7 @@ export function AttendancePage() {
 
   /* ── Modal state ──────────────────────────────────────────────────── */
   const [modalOpen, setModalOpen] = useState(false);
+  const [registerModalOpen, setRegisterModalOpen] = useState(false);
   const [form, setForm] = useState<AttendanceFormState>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<
     Partial<Record<keyof AttendanceFormState, string>>
@@ -1492,6 +1494,20 @@ export function AttendancePage() {
                   <span className="hidden sm:inline">CSV</span>
                 </motion.button>
               )}
+
+              {/* Official A4 Attendance Register Sheet Button */}
+              <motion.button
+                type="button"
+                onClick={() => setRegisterModalOpen(true)}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
+                title="Rasmiy Davomat Vedomosti (A4)"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3.5 text-[12.5px] font-semibold text-violet-700 hover:bg-violet-500/20 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300 transition-colors"
+              >
+                <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
+                <span>📋 Vedomost (A4)</span>
+              </motion.button>
 
               {/* AI Copilot Analysis */}
               <motion.div
@@ -2171,6 +2187,11 @@ export function AttendancePage() {
         )}
       </motion.div>
 
+      <OfficialAttendanceRegisterModal
+        open={registerModalOpen}
+        onClose={() => setRegisterModalOpen(false)}
+      />
+
       {/* ============================================================
           RECORD ATTENDANCE MODAL (Refactored with StatusSegmented)
       ============================================================ */}
@@ -2424,7 +2445,7 @@ export function AttendancePage() {
               <strong className="text-[#1D1D1F] dark:text-[#F5F5F7]">
                 {voidTarget?.student
                   ? (voidTarget.student.user
-                    ? `${voidTarget.student.user.firstName || ''} ${voidTarget.student.user.lastName || ''}`.trim()
+                    ? `${voidTarget.student?.user?.firstName || ''} ${voidTarget.student?.user?.lastName || ''}`.trim()
                     : (voidTarget.student as any).name || t('attendance.thisStudent'))
                   : t('attendance.thisStudent')}
               </strong>{' '}

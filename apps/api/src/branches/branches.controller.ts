@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { QuotaGuard, RequireQuota } from '../subscriptions/guards/quota.guard';
 import { AllowAnyRole } from '../auth/roles.decorator';
 
 @ApiTags('Branches')
@@ -36,6 +37,8 @@ export class BranchesController {
   }
 
   @Post()
+  @UseGuards(QuotaGuard)
+  @RequireQuota('branches')
   @Roles(Role.SUPER_ADMIN, Role.ORG_ADMIN)
   @ApiOperation({ summary: 'Create a branch' })
   create(

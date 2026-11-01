@@ -107,12 +107,16 @@ export class AdminService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    if (caller.role !== 'SUPER_ADMIN' && user.organizationId !== caller.organizationId) {
+    const isPlatformOwner = caller.role === 'PLATFORM_OWNER';
+
+    // Tenant administrators can only modify users inside their own organization
+    if (!isPlatformOwner && user.organizationId !== caller.organizationId) {
       throw new ForbiddenException('You cannot modify users outside your organization');
     }
 
-    if (caller.role !== 'SUPER_ADMIN' && user.role === 'SUPER_ADMIN') {
-      throw new ForbiddenException('You cannot modify a Super Admin');
+    // Tenant administrators cannot modify a Super Admin or Platform Owner
+    if (!isPlatformOwner && (user.role === 'SUPER_ADMIN' || user.role === 'PLATFORM_OWNER')) {
+      throw new ForbiddenException('You cannot modify a Super Admin or Platform Owner');
     }
 
     await this.prisma.$transaction(async (tx) => {

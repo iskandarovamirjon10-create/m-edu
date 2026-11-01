@@ -85,7 +85,7 @@ function renderComponent() {
 
   return render(
     <QueryClientProvider client={qc}>
-      <I18nProvider>
+      <I18nProvider initialLocale="en">
         <MemoryRouter>
           <TeachersPage />
         </MemoryRouter>

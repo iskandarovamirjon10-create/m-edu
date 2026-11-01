@@ -86,7 +86,7 @@ export function GlassPageHeader({
         className,
       )}
     >
-      <div className={cn('flex min-w-0 flex-wrap items-start justify-between', sz.gap)}>
+      <div className={cn('flex min-w-0 flex-col sm:flex-row sm:items-start justify-between', sz.gap)}>
         <div className="flex min-w-0 flex-col gap-1">
           {breadcrumb && (
             <nav
@@ -118,7 +118,7 @@ export function GlassPageHeader({
           <div
             role="group"
             aria-label="Page actions"
-            className="flex flex-shrink-0 items-center gap-3"
+            className="flex flex-wrap items-center gap-2 sm:gap-3"
           >
             {actionNodes}
           </div>

@@ -32,9 +32,11 @@ describe('toMinor — exact decimal quantization (regression F1)', () => {
     expect(toMinor(mockDecimal3)).toBe(123456);
   });
 
-  it('handles negatives symmetrically', () => {
+  it('handles negatives and explicit positives symmetrically', () => {
     expect(toMinor('-3.005')).toBe(-301);
     expect(toMinor('-0.01')).toBe(-1);
+    expect(toMinor('+1.005')).toBe(101);
+    expect(toMinor('+8.165')).toBe(817);
   });
 
   it('keeps the float path for numeric inputs (incl. float noise)', () => {

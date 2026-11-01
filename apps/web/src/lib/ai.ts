@@ -7,7 +7,7 @@
  * tool names and statuses into short Uzbek phrases. Raw tool payloads and
  * server error text are never surfaced directly.
  */
-import request, { ApiError, aiApi, apiUrl, ensureCsrfCookie, readXsrfCookie } from './api';
+import request, { ApiError, aiApi, apiUrl, attemptSilentRefresh, ensureCsrfCookie, readXsrfCookie } from './api';
 import type {
   AiChatResponse,
   AiErrorInfo,
@@ -42,6 +42,7 @@ const TOOL_META: Record<string, ToolMeta> = {
   'groups.list': { subject: "Guruhlar ro'yxati" },
   'courses.list': { subject: "Kurslar ro'yxati" },
   'finance.debtors': { subject: "Qarzdorlar ro'yxati" },
+  'finance.overdue_debtors': { subject: "Muddati o'tgan qarzdorlar ro'yxati" },
   'finance.summary': { subject: 'Moliyaviy hisobot' },
   'reports.summary': { subject: 'Kunlik hisobot' },
   'notifications.broadcast': {
@@ -85,6 +86,7 @@ const TOOL_SUCCESS: Record<string, string> = {
   'groups.list': "Guruhlar ro'yxati olindi",
   'courses.list': "Kurslar ro'yxati olindi",
   'finance.debtors': "Qarzdorlar ro'yxati olindi",
+  'finance.overdue_debtors': "Qarzdorlar ro'yxati olindi",
   'finance.summary': 'Moliyaviy hisobot olindi',
   'reports.summary': 'Hisobot tayyorlandi',
   'notifications.broadcast': 'Xabarnoma yuborish tayyorlandi',
@@ -395,6 +397,7 @@ export async function aiChatStream(
     conversationId?: string;
     route?: string;
     model?: string;
+    _isRefreshRetry?: boolean;
     onDelta: (chunk: string) => void;
     onTool?: (event: unknown) => void;
   }
@@ -443,6 +446,13 @@ export async function aiChatStream(
     signal: options.signal,
   });
 
+  if (res.status === 401 && !options._isRefreshRetry) {
+    const refreshed = await attemptSilentRefresh();
+    if (refreshed) {
+      return aiChatStream(messages, { ...options, _isRefreshRetry: true });
+    }
+  }
+
   if (!res.ok) {
     // Surface the real failure class so the UI can react (401 → re-login,
     // 403 → forbidden, 429 → back off) instead of a generic message.
@@ -467,14 +477,16 @@ export async function aiChatStream(
 
   // SSE frames may be split across chunks, so events are parsed from a
   // rolling buffer at frame boundaries (blank line), not per raw chunk.
-  let eventType = '';
   const processFrame = (frame: string) => {
+    let eventType = 'delta';
     let dataStr: string | null = null;
-    for (const line of frame.split('\n')) {
-      if (line.startsWith('event: ')) {
-        eventType = line.slice(7).trim();
-      } else if (line.startsWith('data: ')) {
-        dataStr = line.slice(6).trim();
+    for (const rawLine of frame.split('\n')) {
+      const line = rawLine.replace(/\r$/, '');
+      if (line.startsWith('event:')) {
+        eventType = line.slice(6).trim();
+      } else if (line.startsWith('data:')) {
+        const val = line.slice(5).trim();
+        dataStr = dataStr !== null ? `${dataStr}\n${val}` : val;
       }
     }
     if (dataStr === null || dataStr === '') return;
@@ -525,7 +537,7 @@ export async function aiChatStream(
   }
   flushFrames(true);
 
-  if (streamError) throw streamError;
+  if (streamError && !fullContent.trim()) throw streamError;
 
   return { conversationId: finalConversationId, content: fullContent };
 }

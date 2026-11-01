@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SecurityEventService, SecurityEventType } from '../common/security/security-event.service';
 import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
-import { CreateStudentDto, UpdateStudentDto, CreateParentLinkDto, UpdateParentLinkDto } from '../common/dto';
+import { CreateStudentDto, UpdateStudentDto, CreateParentLinkDto, UpdateParentLinkDto, BulkAssignGroupDto, BulkFreezeDto, BulkUnfreezeDto, BulkStatusDto, BulkDeleteStudentsDto } from '../common/dto';
 import { StudentQuery } from '../common/dto/query';
 import { userPublicSelect } from '../common/selects/user.select';
 
@@ -61,7 +61,7 @@ export class StudentsService {
       this.prisma.student.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async findOne(organizationId: string, id: string) {
@@ -298,11 +298,19 @@ export class StudentsService {
     // concurrent requests cannot both pass when only 1 slot remains.
     return this.prisma.$transaction(async (tx) => {
       // Serialize access to this group to prevent TOCTOU race condition
-      await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${groupId}::uuid FOR UPDATE`;
+      if (typeof tx.$queryRaw === 'function') {
+        await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${groupId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+      }
+
+      const lockedGroup = await tx.group.findFirst({
+        where: { id: groupId, organizationId },
+        select: { capacity: true, isActive: true },
+      });
+      const effectiveCapacity = lockedGroup?.capacity ?? group.capacity;
 
       // Count active enrollments (including this student if re-activating).
       const currentCount = await tx.studentGroup.count({
-        where: { groupId, isActive: true },
+        where: { groupId, organizationId, isActive: true },
       });
 
       // If the student is already an active member, upsert is safe — they are
@@ -311,9 +319,9 @@ export class StudentsService {
         where: { studentId_groupId: { studentId, groupId } },
       });
       if (!alreadyActive || !alreadyActive.isActive) {
-        if (group.capacity !== null && currentCount >= group.capacity) {
+        if (effectiveCapacity !== null && currentCount >= effectiveCapacity) {
           throw new BadRequestException(
-            `Group capacity reached: ${currentCount}/${group.capacity}. Cannot add more students.`,
+            `Group capacity reached: ${currentCount}/${effectiveCapacity}. Cannot add more students.`,
           );
         }
       }
@@ -554,9 +562,186 @@ export class StudentsService {
       },
     });
   }
+
+  async bulkAssignGroup(organizationId: string, dto: BulkAssignGroupDto) {
+    const { studentIds, groupId } = dto;
+    if (!studentIds.length) return { assignedCount: 0, studentIds: [] };
+
+    const group = await this.prisma.group.findFirst({ where: { id: groupId, organizationId } });
+    if (!group) throw new NotFoundException('Group not found');
+    if (group.isActive === false) {
+      throw new BadRequestException('Cannot assign students to an inactive group');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (typeof tx.$queryRaw === 'function') {
+        await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${groupId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+      }
+
+      const lockedGroup = await tx.group.findFirst({
+        where: { id: groupId, organizationId },
+        select: { capacity: true, isActive: true },
+      });
+      const effectiveCapacity = lockedGroup?.capacity ?? group.capacity;
+
+      const currentCount = await tx.studentGroup.count({
+        where: { groupId, organizationId, isActive: true },
+      });
+
+      const validStudents = await tx.student.findMany({
+        where: {
+          id: { in: studentIds },
+          organizationId,
+          user: { isActive: true },
+        },
+        select: { id: true },
+      });
+
+      const validIds = validStudents.map((s) => s.id);
+      if (!validIds.length) {
+        throw new BadRequestException('No active valid students found in this organization');
+      }
+
+      const existingMembers = await tx.studentGroup.findMany({
+        where: { groupId, organizationId, studentId: { in: validIds } },
+        select: { studentId: true, isActive: true },
+      });
+
+      const alreadyActiveSet = new Set(existingMembers.filter((m) => m.isActive).map((m) => m.studentId));
+      const newlyAddingCount = validIds.filter((id) => !alreadyActiveSet.has(id)).length;
+
+      if (effectiveCapacity !== null && currentCount + newlyAddingCount > effectiveCapacity) {
+        throw new BadRequestException(
+          `Guruh sig'imi yetarli emas: Hozir ${currentCount}/${effectiveCapacity}, yana ${newlyAddingCount} ta talaba sig'maydi (Bo'sh joy: ${Math.max(0, effectiveCapacity - currentCount)}).`,
+        );
+      }
+
+      for (const studentId of validIds) {
+        await tx.studentGroup.upsert({
+          where: { studentId_groupId: { studentId, groupId } },
+          update: { isActive: true, leftAt: null, organizationId },
+          create: { organizationId, studentId, groupId, isActive: true },
+        });
+      }
+
+      return { assignedCount: validIds.length, studentIds: validIds };
+    });
+  }
+
+  async bulkFreeze(organizationId: string, dto: BulkFreezeDto) {
+    const { studentIds, startDate, endDate, reason } = dto;
+    if (!studentIds.length) return { count: 0 };
+
+    const start = startDate || new Date().toISOString().slice(0, 10);
+    const end = endDate || 'Muddatsiz';
+    const reasonText = reason?.trim() || "Sabab ko'rsatilmagan";
+    const freezeLog = `\n[OMMAVIY MUZLATILGAN / BULK FROZEN ${new Date().toISOString().slice(0, 10)}]: ${start} dan ${end} gacha. Sabab: ${reasonText}`;
+
+    const students = await this.prisma.student.findMany({
+      where: { id: { in: studentIds }, organizationId },
+      select: { id: true, notes: true },
+    });
+
+    await this.prisma.$transaction(
+      students.map((s) =>
+        this.prisma.student.update({
+          where: { id: s.id },
+          data: {
+            status: 'PAUSED',
+            notes: ((s.notes ?? '') + freezeLog).trim(),
+          },
+        }),
+      ),
+    );
+
+    return { count: students.length };
+  }
+
+  async bulkUnfreeze(organizationId: string, dto: BulkUnfreezeDto) {
+    const { studentIds } = dto;
+    if (!studentIds.length) return { count: 0 };
+
+    const unfreezeLog = `\n[FAOL / UNFREEZE ${new Date().toISOString().slice(0, 10)}]: O'qish qayta tiklandi`;
+
+    const students = await this.prisma.student.findMany({
+      where: { id: { in: studentIds }, organizationId },
+      select: { id: true, notes: true },
+    });
+
+    await this.prisma.$transaction(
+      students.map((s) =>
+        this.prisma.student.update({
+          where: { id: s.id },
+          data: {
+            status: 'ACTIVE',
+            notes: ((s.notes ?? '') + unfreezeLog).trim(),
+          },
+        }),
+      ),
+    );
+
+    return { count: students.length };
+  }
+
+  async bulkStatus(organizationId: string, dto: BulkStatusDto) {
+    const { studentIds, status } = dto;
+    if (!studentIds.length) return { count: 0 };
+
+    const isUserActive = status === 'ACTIVE';
+
+    const students = await this.prisma.student.findMany({
+      where: { id: { in: studentIds }, organizationId },
+      select: { id: true, userId: true },
+    });
+
+    const userIds = students.map((s) => s.userId).filter(Boolean) as string[];
+
+    await this.prisma.$transaction([
+      this.prisma.student.updateMany({
+        where: { id: { in: students.map((s) => s.id) }, organizationId },
+        data: { status },
+      }),
+      ...(userIds.length > 0
+        ? [
+            this.prisma.user.updateMany({
+              where: { id: { in: userIds }, organizationId },
+              data: { isActive: isUserActive },
+            }),
+          ]
+        : []),
+    ]);
+
+    return { count: students.length };
+  }
+
+  async bulkDelete(organizationId: string, dto: BulkDeleteStudentsDto) {
+    const { studentIds } = dto;
+    if (!studentIds.length) return { deleted: [], archived: [] };
+
+    const deleted: string[] = [];
+    const archived: string[] = [];
+
+    for (const id of studentIds) {
+      try {
+        await this.remove(organizationId, id);
+        deleted.push(id);
+      } catch (err) {
+        if (err instanceof NotFoundException) {
+          continue;
+        }
+        try {
+          await this.prisma.student.update({
+            where: { id, organizationId },
+            data: { status: 'DROPPED' },
+          });
+          archived.push(id);
+        } catch {
+          // Ignore if student is missing or cannot be updated
+        }
+      }
+    }
+
+    return { deleted, archived, count: deleted.length + archived.length };
+  }
+
 }
-
-
-
-
-

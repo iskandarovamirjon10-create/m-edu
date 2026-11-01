@@ -161,11 +161,20 @@ export class QualityAssessor {
 
     const poseExceeded = yawExceeded || pitchExceeded || rollExceeded;
     const passesQuality = overallScore >= this.config.overallThreshold && !poseExceeded;
-    const rejectionReason = poseExceeded
-      ? 'HEAD_POSE_EXCEEDED'
-      : !passesQuality
-        ? 'QUALITY_BELOW_THRESHOLD'
-        : undefined;
+    let rejectionReason: string | undefined = undefined;
+    if (poseExceeded) {
+      rejectionReason = 'HEAD_POSE_EXCEEDED';
+    } else if (faceSizeRatio < this.config.minFaceSizeRatio) {
+      rejectionReason = 'FACE_TOO_SMALL';
+    } else if (brightness < this.config.brightnessRange[0]) {
+      rejectionReason = 'LOW_BRIGHTNESS';
+    } else if (brightness > this.config.brightnessRange[1]) {
+      rejectionReason = 'HIGH_BRIGHTNESS';
+    } else if (sharpness < this.config.minSharpness) {
+      rejectionReason = 'LOW_SHARPNESS';
+    } else if (!passesQuality) {
+      rejectionReason = 'QUALITY_BELOW_THRESHOLD';
+    }
 
     return this.createMetrics(
       overallScore,

@@ -81,7 +81,7 @@ export class DataGovernanceService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(total / (limit || 1)),
     };
   }
 
@@ -195,7 +195,7 @@ export class DataGovernanceService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(total / (limit || 1)),
     };
   }
 

@@ -12,6 +12,9 @@ describe('CoursesController', () => {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     remove: ReturnType<typeof vi.fn>;
+    getStats: ReturnType<typeof vi.fn>;
+    bulkStatus: ReturnType<typeof vi.fn>;
+    bulkPrice: ReturnType<typeof vi.fn>;
   };
 
   const orgId = '11111111-1111-4111-8111-111111111111';
@@ -24,6 +27,9 @@ describe('CoursesController', () => {
       create: vi.fn(),
       update: vi.fn(),
       remove: vi.fn(),
+      getStats: vi.fn(),
+      bulkStatus: vi.fn(),
+      bulkPrice: vi.fn(),
     };
     controller = new CoursesController(service as unknown as CoursesService);
   });
@@ -36,6 +42,38 @@ describe('CoursesController', () => {
 
     expect(service.findAll).toHaveBeenCalledWith(orgId, query);
     expect(result).toEqual({ items: [], total: 0 });
+  });
+
+  it('delegates getStats to CoursesService', async () => {
+    const mockStats = { totalCourses: 4, activeCourses: 3, avgTuitionPrice: 300000 };
+    service.getStats.mockResolvedValue(mockStats);
+
+    const result = await controller.getStats(orgId);
+
+    expect(service.getStats).toHaveBeenCalledWith(orgId);
+    expect(result).toEqual(mockStats);
+  });
+
+  it('delegates bulkStatus to CoursesService', async () => {
+    const dto = { courseIds: ['c1', 'c2'], isActive: true };
+    const mockRes = { success: true, count: 2 };
+    service.bulkStatus.mockResolvedValue(mockRes);
+
+    const result = await controller.bulkStatus(orgId, dto);
+
+    expect(service.bulkStatus).toHaveBeenCalledWith(orgId, dto);
+    expect(result).toEqual(mockRes);
+  });
+
+  it('delegates bulkPrice to CoursesService', async () => {
+    const dto = { courseIds: ['c1'], mode: 'increase_percent' as const, value: 10 };
+    const mockRes = { success: true, count: 1 };
+    service.bulkPrice.mockResolvedValue(mockRes);
+
+    const result = await controller.bulkPrice(orgId, dto);
+
+    expect(service.bulkPrice).toHaveBeenCalledWith(orgId, dto);
+    expect(result).toEqual(mockRes);
   });
 
   it('delegates findOne to CoursesService', async () => {

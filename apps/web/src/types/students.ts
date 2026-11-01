@@ -12,6 +12,7 @@ export interface Student {
   id: string;
   organizationId: string;
   userId: string;
+  status?: string | null;
   dateOfBirth?: string | null;
   gender?: Gender | null;
   address?: string | null;

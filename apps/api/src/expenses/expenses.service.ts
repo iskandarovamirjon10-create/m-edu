@@ -21,9 +21,21 @@ export class ExpensesService {
     if (query.category) where.category = query.category as Prisma.ExpenseWhereInput['category'];
     if (query.dateFrom || query.dateTo) {
       where.date = {};
-      if (query.dateFrom) where.date.gte = startOfDay(query.dateFrom);
-      const dateTo = toDateToInclusive(query.dateTo);
-      if (dateTo) where.date.lte = dateTo;
+      if (query.dateFrom) {
+        try {
+          where.date.gte = startOfDay(query.dateFrom);
+        } catch {
+          throw new BadRequestException('Invalid dateFrom format');
+        }
+      }
+      if (query.dateTo) {
+        try {
+          const dateTo = toDateToInclusive(query.dateTo);
+          if (dateTo) where.date.lte = dateTo;
+        } catch {
+          throw new BadRequestException('Invalid dateTo format');
+        }
+      }
     }
 
     const [items, total] = await Promise.all([
@@ -31,7 +43,7 @@ export class ExpensesService {
       this.prisma.expense.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async findOne(organizationId: string, id: string) {
@@ -104,9 +116,21 @@ export class ExpensesService {
     const where: Prisma.ExpenseWhereInput = { organizationId };
     if (query.dateFrom || query.dateTo) {
       where.date = {};
-      if (query.dateFrom) where.date.gte = startOfDay(query.dateFrom);
-      const dateTo = toDateToInclusive(query.dateTo);
-      if (dateTo) where.date.lte = dateTo;
+      if (query.dateFrom) {
+        try {
+          where.date.gte = startOfDay(query.dateFrom);
+        } catch {
+          throw new BadRequestException('Invalid dateFrom format');
+        }
+      }
+      if (query.dateTo) {
+        try {
+          const dateTo = toDateToInclusive(query.dateTo);
+          if (dateTo) where.date.lte = dateTo;
+        } catch {
+          throw new BadRequestException('Invalid dateTo format');
+        }
+      }
     }
 
     const [categoryStats, monthlyExpenses, totalResult] = await Promise.all([

@@ -112,7 +112,7 @@ export class AiActionService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit) || 1,
+      totalPages: Math.ceil(total / (limit || 1)) || 1,
     };
   }
 

@@ -106,7 +106,7 @@ describe(
             LIMIT_META,
             FaceController.prototype
               .processCapture,
-          );
+        );
 
         expect(limit).toBe(10);
       },
@@ -122,7 +122,7 @@ describe(
               .submitAttempt,
           );
 
-        expect(limit).toBe(10);
+        expect(limit).toBe(60);
       },
     );
 
@@ -139,7 +139,7 @@ describe(
           Reflect.getMetadata(
             LIMIT_META,
             AuthController.prototype.login,
-          );
+        );
 
         expect(limit).toBe(10);
       },

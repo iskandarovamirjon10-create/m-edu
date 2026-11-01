@@ -362,7 +362,7 @@ const AttendanceRing = memo(function AttendanceRing({
  * ═══════════════════════════════════════════════════════════════════ */
 const MetricSkeleton = memo(function MetricSkeleton({ reduced }: { reduced: boolean }) {
   return (
-    <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {[0, 1, 2, 3].map((i) => (
         <div key={i} className="rounded-xl p-3">
           <div className="mb-2 h-2.5 w-14 rounded bg-slate-900/[0.06] dark:bg-white/[0.08]" />
@@ -1008,7 +1008,7 @@ export function AiAttendanceWidget({
           ) : isEmpty ? (
             <EmptyState reduced={reduced} onRefresh={onRefresh} />
           ) : (
-            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <MetricCard icon={I.users} label="Jami" value={total}
                 accent={METRIC.total.fg} soft={METRIC.total.soft}
                 spark={sparkTotal} reduced={reduced} delay={0.18} />

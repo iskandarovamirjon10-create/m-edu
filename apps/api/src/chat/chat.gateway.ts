@@ -12,6 +12,7 @@ import { UseGuards, Logger, BadRequestException, ForbiddenException } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { WsException } from '@nestjs/websockets';
 import { ChatService } from './chat.service';
+import { isAllowedOrigin } from '../common/cors.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { SendMessageDto, TypingDto, MarkReadDto } from './dto/chat.dto';
 import { WsJwtGuard, AuthenticatedSocket, AuthenticatedUser } from './ws-jwt.guard';
@@ -19,7 +20,7 @@ import { JwtService } from '@nestjs/jwt';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: (origin: string, callback: (err: Error | null, success: boolean) => void) => callback(null, isAllowedOrigin(origin, (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000').split(','))),
     credentials: true,
   },
   namespace: '/chat',

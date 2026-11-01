@@ -15,6 +15,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { CommandPalette } from '@/components/CommandPalette';
+import { ExecutiveSpotlight } from '@/components/spotlight/ExecutiveSpotlight';
 import { GlobalAiCopilot } from '@/components/ai';
 import { GlobalCalculator } from '@/components/calculator';
 import { QuickLookModal } from '@/components/quicklook';
@@ -23,7 +24,7 @@ import { DynamicWallpaper } from '@/components/wallpaper';
 import { LiquidGlassStudio } from '@/components/ui';
 import { FloatingPiPCamera } from '@/components/camera/FloatingPiPCamera';
 import { initials, fullName } from '@/lib/format';
-import { cn, usePrefersReducedMotion, SPRING } from '@/lib/design';
+import { cn, usePrefersReducedMotion } from '@/lib/design';
 
 import { DeviceProfileProvider, usePersistedState, useMediaQuery } from './core/singletons';
 import { Sidebar, ALL_ITEMS_MAP } from './components/Sidebar';
@@ -40,7 +41,9 @@ import {
   RouteAnnouncer,
   ScrollProgress,
   AnimatedOutlet,
+  RouteProgressBar,
 } from './components/LayoutDecorations';
+import { ScrollToTop } from '@/routes/ScrollToTop';
 import { useAttendanceSocket } from '@/hooks/useAttendanceSocket';
 
 export function AppLayout() {
@@ -213,6 +216,18 @@ function AppLayoutInner() {
         setShortcutsOpen((v) => !v);
         return;
       }
+      // F11 → Toggle native Fullscreen via HTML5 Fullscreen API
+      if (e.key === 'F11') {
+        e.preventDefault();
+        if (typeof document !== 'undefined') {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          } else if (document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          }
+        }
+        return;
+      }
       // ? → shortcuts modal (Shift + /)
       if (e.key === '?' && !inInput && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
@@ -380,6 +395,8 @@ function AppLayoutInner() {
         '--sidebar-center-offset': `${showRail ? mainPaddingLeft / 2 : 0}px`,
       } as React.CSSProperties}
     >
+      <ScrollToTop containerSelector="[data-scroll-container]" viewTransitions={false} />
+      <RouteProgressBar />
       <DynamicWallpaper />
       <OfflineBanner />
       <RouteAnnouncer routeTitle={currentTitle} />
@@ -437,9 +454,9 @@ function AppLayoutInner() {
 
       {/* Main Content Column */}
       <motion.div
-        className="relative z-10 flex h-full min-h-0 min-w-0 flex-1 flex-col"
-        animate={{ paddingLeft: mainPaddingLeft }}
-        transition={reducedMotion ? { duration: 0 } : SPRING.smooth}
+        className="relative z-10 flex h-full min-h-0 min-w-0 flex-1 flex-col will-change-[padding-left]"
+        animate={{ paddingLeft: showRail ? mainPaddingLeft : 0 }}
+        transition={reducedMotion ? { duration: 0 } : { duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
       >
         {showRail && (
           <TopBar
@@ -480,13 +497,15 @@ function AppLayoutInner() {
           className={cn(
             'relative min-h-0 min-w-0 flex-1 outline-none overscroll-y-contain touch-pan-y',
             isAiCopilot
-              ? 'flex flex-col min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-0 pt-[env(safe-area-inset-top,0px)] pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] scrollbar-thin md:px-6 md:pt-3 md:pb-8'
-              : 'overflow-y-auto overflow-x-hidden pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-[calc(5.25rem+env(safe-area-inset-top,0px))] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] scrollbar-thin sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))] md:pt-3 md:pb-8 xl:pl-[max(2rem,env(safe-area-inset-left,0px))] xl:pr-[max(2rem,env(safe-area-inset-right,0px))] xl:pb-10 xl:pt-3',
+              ? 'flex flex-col min-h-0 min-w-0 flex-1 overflow-hidden p-0'
+              : 'overflow-y-auto overflow-x-hidden pl-[max(0.625rem,env(safe-area-inset-left,0px))] pr-[max(0.625rem,env(safe-area-inset-right,0px))] pt-[calc(4.25rem+env(safe-area-inset-top,0px))] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] scrollbar-thin sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))] md:pt-3 md:pb-8 xl:pl-[max(2rem,env(safe-area-inset-left,0px))] xl:pr-[max(2rem,env(safe-area-inset-right,0px))] xl:pb-10 xl:pt-3',
           )}
           style={{
             WebkitOverflowScrolling: 'touch',
             overscrollBehaviorY: 'contain',
             touchAction: 'pan-y',
+            transform: 'translateZ(0)',
+            willChange: 'scroll-position',
           }}
         >
           <ScrollProgress containerRef={mainRef} />
@@ -497,6 +516,7 @@ function AppLayoutInner() {
       </motion.div>
 
       <CommandPalette />
+      <ExecutiveSpotlight />
       <ErrorBoundary>
         <GlobalAiCopilot />
       </ErrorBoundary>

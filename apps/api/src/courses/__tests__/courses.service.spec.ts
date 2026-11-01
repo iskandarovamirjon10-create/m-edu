@@ -2,15 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CoursesService } from '../courses.service';
 
 function createMockPrisma() {
-  return {
+  const mock: any = {
     course: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       count: vi.fn(),
     },
+    $transaction: vi.fn((fn: any) => fn(mock)),
   };
+  return mock;
 }
 
 describe('CoursesService', () => {
@@ -145,6 +148,134 @@ describe('CoursesService', () => {
     it('throws NotFoundException when the course does not exist', async () => {
       prisma.course.findFirst.mockResolvedValue(null);
       await expect(svc.remove('org-1', 'missing')).rejects.toThrow('Course not found');
+    });
+  });
+
+  describe('getStats', () => {
+    it('aggregates total, active, groups, and popularity metrics', async () => {
+      prisma.course.findMany.mockResolvedValue([
+        {
+          id: 'c-1',
+          name: 'React',
+          price: 400000,
+          duration: 6,
+          level: 'ADVANCED',
+          isActive: true,
+          groups: [
+            { id: 'g-1', _count: { enrollments: 15 } },
+            { id: 'g-2', _count: { enrollments: 10 } },
+          ],
+        },
+        {
+          id: 'c-2',
+          name: 'Python',
+          price: 200000,
+          duration: 3,
+          level: 'BEGINNER',
+          isActive: true,
+          groups: [{ id: 'g-3', _count: { enrollments: 8 } }],
+        },
+        {
+          id: 'c-3',
+          name: 'PHP',
+          price: 150000,
+          duration: 2,
+          level: 'INTERMEDIATE',
+          isActive: false,
+          groups: [],
+        },
+      ]);
+
+      const stats = await svc.getStats('org-1');
+
+      expect(stats.totalCourses).toBe(3);
+      expect(stats.activeCourses).toBe(2);
+      expect(stats.inactiveCourses).toBe(1);
+      expect(stats.totalActiveGroups).toBe(3);
+      expect(stats.totalEnrolledStudents).toBe(33);
+      expect(stats.avgTuitionPrice).toBe(300000);
+      expect(stats.levelDistribution.ADVANCED).toBe(1);
+      expect(stats.levelDistribution.BEGINNER).toBe(1);
+      expect(stats.popularCourses[0].name).toBe('React');
+      expect(stats.popularCourses[0].enrolledCount).toBe(25);
+    });
+  });
+
+  describe('bulkStatus', () => {
+    it('updates status for multiple courses', async () => {
+      prisma.course.findMany.mockResolvedValue([{ id: 'c-1' }, { id: 'c-2' }]);
+      prisma.course.updateMany.mockResolvedValue({ count: 2 });
+
+      const res = await svc.bulkStatus('org-1', { courseIds: ['c-1', 'c-2'], isActive: false });
+
+      expect(res.success).toBe(true);
+      expect(res.count).toBe(2);
+      expect(prisma.course.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['c-1', 'c-2'] }, organizationId: 'org-1' },
+        data: { isActive: false },
+      });
+    });
+
+    it('rejects when courses do not belong to organization', async () => {
+      prisma.course.findMany.mockResolvedValue([{ id: 'c-1' }]);
+
+      await expect(
+        svc.bulkStatus('org-1', { courseIds: ['c-1', 'c-foreign'], isActive: true }),
+      ).rejects.toThrow('Barcha tanlangan kurslar ushbu tashkilotga tegishli emas');
+    });
+  });
+
+  describe('bulkPrice', () => {
+    it('sets new price for multiple courses', async () => {
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'c-1', price: 100000 },
+        { id: 'c-2', price: 200000 },
+      ]);
+      prisma.course.update.mockResolvedValue({ id: 'c-1', price: 250000 });
+
+      const res = await svc.bulkPrice('org-1', {
+        courseIds: ['c-1', 'c-2'],
+        mode: 'set',
+        value: 250000,
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.count).toBe(2);
+      expect(prisma.course.update).toHaveBeenCalledWith({
+        where: { id: 'c-1', organizationId: 'org-1' },
+        data: { price: 250000 },
+      });
+    });
+
+    it('adjusts price with percentage increase', async () => {
+      prisma.course.findMany.mockResolvedValue([{ id: 'c-1', price: 200000 }]);
+      prisma.course.update.mockResolvedValue({ id: 'c-1', price: 220000 });
+
+      const res = await svc.bulkPrice('org-1', {
+        courseIds: ['c-1'],
+        mode: 'increase_percent',
+        value: 10,
+      });
+
+      expect(res.success).toBe(true);
+      expect(prisma.course.update).toHaveBeenCalledWith({
+        where: { id: 'c-1', organizationId: 'org-1' },
+        data: { price: 220000 }, // +10%
+      });
+    });
+    it('handles duplicate courseIds gracefully in bulkStatus', async () => {
+      prisma.course.findMany.mockResolvedValue([{ id: 'c-1' }]);
+      prisma.course.updateMany.mockResolvedValue({ count: 1 });
+
+      const res = await svc.bulkStatus('org-1', { courseIds: ['c-1', 'c-1'], isActive: true });
+      expect(res.success).toBe(true);
+      expect(res.count).toBe(1);
+    });
+
+    it('rejects negative price values in bulkPrice', async () => {
+      await expect(
+        svc.bulkPrice('org-1', { courseIds: ['c-1'], mode: 'set', value: -500 }),
+      ).rejects.toThrow("Kurs narxi manfiy bo'lishi mumkin emas");
     });
   });
 });

@@ -4,8 +4,9 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const SRC = new URL('../src', import.meta.url).pathname.replace(/%20/g, ' ');
+const SRC = fileURLToPath(new URL('../src', import.meta.url));
 
 function walk(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -16,20 +17,54 @@ function walk(dir, out = []) {
   return out;
 }
 
-// 1. Load dictionary keys by evaluating the default exports
-function loadDict(file) {
-  const src = readFileSync(file, 'utf8');
-  const keys = [...src.matchAll(/'([a-zA-Z0-9_.]+)'\s*:/g)].map((m) => m[1]);
-  return new Set(keys);
+// 1. Load dictionary keys by scanning all locale files and slice files
+function loadAllKeysForLocale(locale) {
+  const dir = join(SRC, 'i18n', 'locales');
+  const files = readdirSync(dir);
+  const keys = new Set();
+
+  for (const file of files) {
+    if (!file.endsWith('.ts')) continue;
+    const content = readFileSync(join(dir, file), 'utf8');
+
+    // If it's a main locale file like en.ts, uz.ts, ru.ts
+    // or locale specific slice like *.uz.ts, *.ru.ts, or shared like ai-slices.ts
+    // Check if file belongs to this locale
+    let isForLocale = false;
+    if (file === `${locale}.ts`) isForLocale = true;
+    else if (file.endsWith(`.${locale}.ts`)) isForLocale = true;
+    else if (locale === 'en' && !file.includes('.uz.') && !file.includes('.ru.')) isForLocale = true;
+    else if (file === 'ai-slices.ts' || file === 'students-slices.ts' || file === 'groups-slices.ts' || file === 'teachers-slices.ts' || file === 'tgapp-slices.ts') {
+      // In these shared files, keys are defined in objects like aiEn, aiUz, aiRu etc.
+      // We can extract keys inside the respective object block
+      const prefix = locale === 'en' ? 'En' : locale === 'uz' ? 'Uz' : 'Ru';
+      const regex = new RegExp(`export const \\w+${prefix}(?::[\\s\\S]*?)?\\s*=\\s*\\{([\\s\\S]*?)\\};`, 'g');
+      for (const match of content.matchAll(regex)) {
+        for (const k of match[1].matchAll(/['"]([a-zA-Z0-9_.]+)['"]\s*:/g)) {
+          keys.add(k[1]);
+        }
+      }
+      continue;
+    }
+
+    if (isForLocale) {
+      for (const m of content.matchAll(/['"]([a-zA-Z0-9_.]+)['"]\s*:/g)) {
+        keys.add(m[1]);
+      }
+    }
+  }
+
+  return keys;
 }
-const en = loadDict(join(SRC, 'i18n/locales/en.ts'));
-const uz = loadDict(join(SRC, 'i18n/locales/uz.ts'));
-const ru = loadDict(join(SRC, 'i18n/locales/ru.ts'));
+
+const en = loadAllKeysForLocale('en');
+const uz = loadAllKeysForLocale('uz');
+const ru = loadAllKeysForLocale('ru');
 
 // 2. Collect used keys from t('...') / t("...") calls, incl. template fallbacks
 const used = new Map(); // key -> [file:line]
 for (const f of walk(SRC)) {
-  if (f.includes('/i18n/')) continue;
+  if (f.includes('/i18n/') || f.includes('\\i18n\\')) continue;
   const src = readFileSync(f, 'utf8');
   const lines = src.split('\n');
   lines.forEach((line, i) => {

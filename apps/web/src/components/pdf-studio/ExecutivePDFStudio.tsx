@@ -120,23 +120,23 @@ export const ExecutivePDFStudio = memo(function ExecutivePDFStudio({
           className="relative z-10 w-full max-w-5xl overflow-hidden rounded-3xl border border-white/60 bg-white/95 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#121214] print:border-none print:shadow-none print:rounded-none print:w-full print:max-w-none print:bg-white print:text-black"
         >
           {/* Header Controls (hidden in print) */}
-          <div className="flex flex-wrap items-center justify-between border-b border-slate-200/80 px-6 py-4 dark:border-white/10 print:hidden">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-500/25 font-bold">
+          <div className="flex flex-wrap items-center justify-between border-b border-slate-200/80 px-4 sm:px-6 py-3.5 sm:py-4 dark:border-white/10 print:hidden gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-500/25 font-bold">
                 🖨️
               </span>
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              <div className="min-w-0">
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate">
                   Apple Print & Executive PDF Studio
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-zinc-400 truncate">
                   Davlat va xalqaro standartdagi Guilloché QR-himoyalangan rasmiy hujjat
                 </p>
               </div>
             </div>
 
-            {/* Document Mode Selector */}
-            <div className="flex items-center gap-2">
+            {/* Document Mode Selector & Actions */}
+            <div className="flex flex-wrap items-center gap-2">
               <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-white/[0.06]">
                 {(
                   [
@@ -185,12 +185,12 @@ export const ExecutivePDFStudio = memo(function ExecutivePDFStudio({
           {/* ══════════════════════════════════════════════════════════════
               DOCUMENT RENDER AREA
              ══════════════════════════════════════════════════════════════ */}
-          <div className="p-4 sm:p-8 bg-slate-100 dark:bg-[#0A0A0C] print:bg-white print:p-0 flex justify-center">
+          <div className="p-2 sm:p-8 bg-slate-100 dark:bg-[#0A0A0C] print:bg-white print:p-0 flex justify-center overflow-x-auto w-full min-w-0">
             {docType === 'certificate' ? (
               /* ── LUXURY DIPLOMA CERTIFICATE ────────────────────────────── */
               <div
                 ref={printAreaRef}
-                className="relative w-full max-w-[960px] bg-[#FAF8F5] p-8 sm:p-14 text-slate-900 shadow-2xl rounded-2xl print:shadow-none print:rounded-none print:p-8 print:max-w-none print:w-full border-4 border-[#C5A059]"
+                className="relative w-full max-w-[960px] bg-[#FAF8F5] p-5 sm:p-14 text-slate-900 shadow-2xl rounded-2xl print:shadow-none print:rounded-none print:p-8 print:max-w-none print:w-full border-4 border-[#C5A059]"
                 style={{
                   backgroundImage: `radial-gradient(#C5A059 1px, transparent 1px), radial-gradient(#C5A059 1px, #FAF8F5 1px)`,
                   backgroundSize: '24px 24px',
@@ -263,7 +263,7 @@ export const ExecutivePDFStudio = memo(function ExecutivePDFStudio({
                 </div>
 
                 {/* Signatures & Seal Grid */}
-                <div className="relative mt-10 grid grid-cols-3 items-end gap-6 border-t border-[#C5A059]/40 pt-6">
+                <div className="relative mt-8 sm:mt-10 grid grid-cols-1 sm:grid-cols-3 items-center sm:items-end gap-6 border-t border-[#C5A059]/40 pt-6">
                   {/* Director Signature */}
                   <div className="text-center sm:text-left">
                     <div className="font-serif italic text-lg text-slate-900 font-bold">

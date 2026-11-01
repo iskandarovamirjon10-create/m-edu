@@ -18,8 +18,12 @@ export abstract class FacePlatformError extends Error {
   }
 
   /** Safe error object for client consumption — never includes internal details */
-  toClientError(): { code: string; message: string } {
-    return { code: this.code, message: this.message };
+  toClientError(): { code: string; message: string; details?: Record<string, unknown> } {
+    return {
+      code: this.code,
+      message: this.message,
+      ...(this.details ? { details: this.details } : {}),
+    };
   }
 }
 
@@ -96,8 +100,18 @@ export class FaceQualityTooLowError extends FacePlatformError {
   readonly code = 'FACE_QUALITY_TOO_LOW';
   readonly httpStatus = 422;
 
-  constructor(score: number, threshold: number) {
-    super(`Face quality score ${score.toFixed(3)} is below threshold ${threshold}`);
+  constructor(
+    score: number,
+    threshold: number,
+    public readonly reason?: string,
+    public readonly issues?: string[]
+  ) {
+    super(
+      reason
+        ? `Face quality score ${score.toFixed(3)} is below threshold ${threshold} (${reason})`
+        : `Face quality score ${score.toFixed(3)} is below threshold ${threshold}`,
+      { score, threshold, ...(reason ? { reason } : {}), ...(issues ? { issues } : {}) }
+    );
   }
 }
 

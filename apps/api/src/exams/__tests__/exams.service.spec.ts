@@ -303,6 +303,7 @@ describe('ExamsService', () => {
       expect(res.statistics.failedExams).toBe(1);
       expect(res.statistics.averageScore).toBe(65);
       expect(res.statistics.passingRate).toBe(50);
+      expect(res.statistics.gpa).toBeDefined();
     });
 
     it('throws NotFoundException if student does not exist', async () => {
@@ -310,6 +311,29 @@ describe('ExamsService', () => {
       await expect(svc.getStudentExamResults('org-1', 'st-missing')).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('handles GPA calculation safely when total exams is 0', async () => {
+      prisma.student.findFirst.mockResolvedValue({ id: 'st-1', organizationId: 'org-1' });
+      prisma.examResult.findMany.mockResolvedValue([]);
+
+      const res = await svc.getStudentExamResults('org-1', 'st-1');
+      expect(res.statistics.totalExams).toBe(0);
+      expect(res.statistics.averageScore).toBe(0);
+      expect(res.statistics.passingRate).toBe(0);
+      expect(res.statistics.gpa).toBe(0);
+    });
+
+    it('handles GPA calculation safely when exam totalMarks / weight is 0', async () => {
+      prisma.student.findFirst.mockResolvedValue({ id: 'st-1', organizationId: 'org-1' });
+      prisma.examResult.findMany.mockResolvedValue([
+        { id: 'r1', marksObtained: 0, isPassed: false, grade: 'F', exam: { totalMarks: 0 } },
+      ]);
+
+      const res = await svc.getStudentExamResults('org-1', 'st-1');
+      expect(res.statistics.totalExams).toBe(1);
+      expect(res.statistics.gpa).toBe(0);
+      expect(Number.isNaN(res.statistics.gpa)).toBe(false);
     });
   });
 });

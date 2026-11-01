@@ -20,6 +20,8 @@ import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { GlassModal } from '@/components/ui';
+import { AiLessonPlanStudio } from '@/components/ai/AiLessonPlanStudio';
 
 /* ============================================================================
  * MOTION TOKENS (Apple Spring Physics)
@@ -263,14 +265,15 @@ function CountUp({
       if (startRef.current === null) startRef.current = ts;
       const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(value * eased);
+      const safeVal = Number.isFinite(value) ? value : 0;
+      setN(safeVal * eased);
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
 
-  return <span className="tabular-nums">{Math.round(n).toLocaleString()}{suffix}</span>;
+  return <span className="tabular-nums">{Math.round(Number.isFinite(n) ? n : 0).toLocaleString()}{suffix}</span>;
 }
 
 /* ============================================================================
@@ -579,6 +582,7 @@ export function CurriculumPage() {
   const [selectedSubject, setSelectedSubject] = useState('');
   const [name, setName] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAiStudioOpen, setIsAiStudioOpen] = useState(false);
   const [formErrors, setFormErrors] = useState<{ name?: string; subject?: string }>({});
 
   const filterSelectId = useId();
@@ -849,6 +853,17 @@ export function CurriculumPage() {
                 type="button"
                 onClick={() => {
                   playPop();
+                  setIsAiStudioOpen(true);
+                }}
+                className="min-h-[44px] inline-flex items-center justify-center gap-2 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-5 py-2.5 text-xs font-bold shadow-sm transition-all active:scale-95"
+              >
+                <span className="text-sm">✨</span>
+                {t('curriculum.aiLessonStudio', 'AI Dars & Test Generatori')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  playPop();
                   setIsModalOpen(true);
                 }}
                 className="min-h-[44px] inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:opacity-95 active:scale-95"
@@ -905,7 +920,7 @@ export function CurriculumPage() {
               playTick();
               setSelectedSubject(e.target.value);
             }}
-            className="bg-transparent text-xs font-bold text-slate-800 outline-none dark:text-slate-200 cursor-pointer min-h-[36px]"
+            className="bg-transparent text-xs font-bold text-slate-800 outline-none dark:text-slate-200 cursor-pointer min-h-[36px] max-w-full truncate"
             aria-label={t('curriculum.filterAria', "Fan bo'yicha filtrlash")}
           >
             <option value="">{t('curriculum.allSubjects', 'Barcha fanlar')}</option>
@@ -1146,6 +1161,16 @@ export function CurriculumPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Gemini 3 AI Pedagogical Lesson Studio Modal */}
+      <GlassModal
+        open={isAiStudioOpen}
+        onClose={() => setIsAiStudioOpen(false)}
+        size="xl"
+        title="Gemini 3 Pedagogik Dars Rejasi & Test Generatori"
+      >
+        <AiLessonPlanStudio onClose={() => setIsAiStudioOpen(false)} />
+      </GlassModal>
     </motion.div>
   );
 }

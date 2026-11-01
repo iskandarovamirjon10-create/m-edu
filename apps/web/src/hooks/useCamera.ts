@@ -512,6 +512,9 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraResult {
     ctx.drawImage(video, 0, 0, width, height);
 
     const dataUrl = canvas.toDataURL('image/jpeg', quality);
+    // Free canvas GPU buffer allocations immediately to avoid memory leak
+    canvas.width = 0;
+    canvas.height = 0;
     const comma = dataUrl.indexOf(',');
     return {
       dataUrl,

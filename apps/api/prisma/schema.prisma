@@ -100,6 +100,8 @@ model Organization {
   StudentProgressSnapshot StudentProgressSnapshot[]
   Subject                 Subject[]
   subscription            Subscription?
+  subscriptionInvoices    SubscriptionInvoice[]
+  usageSnapshots          OrganizationUsageSnapshot[]
   teachers                Teacher[]
   telegramAccounts        TelegramAccount[]
   telegramLinkTokens      TelegramLinkToken[]
@@ -1408,23 +1410,113 @@ model PaymentTransaction {
 model Subscription {
   id                 String             @id @default(uuid()) @db.Uuid
   organizationId     String             @unique @db.Uuid
-  plan               SubscriptionPlan
-  status             SubscriptionStatus
+  planId             String?            @db.Uuid
+  plan               SubscriptionPlan   @default(START)
+  status             SubscriptionStatus @default(TRIALING)
   trialStartAt       DateTime?
   trialEndAt         DateTime?
-  currentPeriodStart DateTime
+  currentPeriodStart DateTime           @default(now())
   currentPeriodEnd   DateTime
   cancelledAt        DateTime?
   features           Json?
-  maxStudents        Int?
-  maxTeachers        Int?
-  maxCameras         Int?
+  maxStudents        Int?               @default(100)
+  maxTeachers        Int?               @default(5)
+  maxBranches        Int?               @default(1)
+  maxCameras         Int?               @default(0)
+  maxEmployees       Int?               @default(5)
+  hasFaceId          Boolean            @default(false)
+  hasAiCopilot       Boolean            @default(true)
+  priceUzs           BigInt?            @default(299000)
+  gracePeriodEndsAt  DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   organization       Organization       @relation(fields: [organizationId], references: [id])
+  saasPlan           SaaSPlan?          @relation(fields: [planId], references: [id])
+  invoices           SubscriptionInvoice[]
 
   @@index([status])
   @@index([currentPeriodEnd])
+  @@index([organizationId])
+}
+
+model SaaSPlan {
+  id               String         @id @default(uuid()) @db.Uuid
+  code             String         @unique // "START", "STANDARD", "PRO", "ENTERPRISE"
+  nameUz           String
+  nameRu           String
+  priceUzsPerMonth BigInt
+  maxStudents      Int
+  maxBranches      Int
+  maxEmployees     Int
+  maxCameras       Int
+  hasFaceId        Boolean        @default(false)
+  hasAiCopilot     Boolean        @default(true)
+  featureFlags     Json?
+  isActive         Boolean        @default(true)
+  sortOrder        Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  subscriptions    Subscription[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model SubscriptionInvoice {
+  id               String                @id @default(uuid()) @db.Uuid
+  organizationId   String                @db.Uuid
+  subscriptionId   String                @db.Uuid
+  invoiceNumber    String                @unique
+  planCode         String
+  amountUzs        BigInt
+  status           InvoiceStatus         @default(ISSUED)
+  dueDate          DateTime
+  paidAt           DateTime?
+  paymentMethod    PaymentGateway?
+  notes            String?
+  metadata         Json?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  organization     Organization          @relation(fields: [organizationId], references: [id])
+  subscription     Subscription          @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  payments         SubscriptionPayment[]
+
+  @@index([organizationId])
+  @@index([subscriptionId])
+  @@index([status])
+}
+
+model SubscriptionPayment {
+  id                    String              @id @default(uuid()) @db.Uuid
+  invoiceId             String              @db.Uuid
+  provider              PaymentGateway
+  amountUzs             BigInt
+  status                PaymentStatus       @default(PENDING)
+  externalTransactionId String?
+  performedAt           DateTime?
+  rawPayload            Json?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  invoice               SubscriptionInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([externalTransactionId])
+  @@index([status])
+}
+
+model OrganizationUsageSnapshot {
+  id                  String       @id @default(uuid()) @db.Uuid
+  organizationId      String       @db.Uuid
+  recordedDate        DateTime     @default(now())
+  activeStudentsCount Int          @default(0)
+  branchesCount       Int          @default(0)
+  employeesCount      Int          @default(0)
+  camerasCount        Int          @default(0)
+  aiTokensUsed        Int          @default(0)
+  storageBytesUsed    BigInt       @default(0)
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, recordedDate])
 }
 
 model CustomRole {
@@ -3087,13 +3179,20 @@ enum SubscriptionPlan {
   BASIC
   PREMIUM
   ENTERPRISE
+  START
+  STANDARD
+  PRO
 }
 
 enum SubscriptionStatus {
   ACTIVE
   TRIAL
-  EXPIRED
+  TRIALING
+  PAST_DUE
+  GRACE_PERIOD
+  SUSPENDED
   CANCELLED
+  EXPIRED
 }
 
 enum LeaveType {

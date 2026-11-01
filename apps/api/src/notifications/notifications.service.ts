@@ -34,7 +34,7 @@ export class NotificationsService {
         this.prisma.notification.count({ where: { userId, isRead: false } }),
       ]);
 
-      return { items, total, page, limit, totalPages: Math.ceil(total / limit), unread };
+      return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)), unread };
     } catch {
       return { items: [], total: 0, page, limit, totalPages: 0, unread: 0 };
     }

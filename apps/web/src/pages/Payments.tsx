@@ -536,14 +536,15 @@ function CountUp({
       if (startRef.current === null) startRef.current = ts;
       const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(value * eased);
+      const safeVal = Number.isFinite(value) ? value : 0;
+      setN(safeVal * eased);
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
 
-  return <span className="tabular-nums">{Math.round(n).toLocaleString('uz-UZ')}</span>;
+  return <span className="tabular-nums">{Math.round(Number.isFinite(n) ? n : 0).toLocaleString('uz-UZ')}</span>;
 }
 
 /** Refractive  KPI Lens Tile */
@@ -1783,7 +1784,7 @@ export function PaymentsPage() {
                   {receiptTarget.student?.user?.email && (
                     <p className="mt-0.5 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-slate-500 dark:text-slate-400">
                       <Icon paths={I.mail} size={11} strokeWidth={2} className="opacity-70" />
-                      {receiptTarget.student.user.email}
+                      {receiptTarget.student?.user?.email}
                     </p>
                   )}
                 </div>

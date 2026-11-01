@@ -76,6 +76,11 @@ services:
       - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL:-admin@medu.test}
       - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD}
       - TRUST_PROXY=1
+      - PAYME_MERCHANT_ID=${PAYME_MERCHANT_ID}
+      - PAYME_MERCHANT_KEY=${PAYME_MERCHANT_KEY}
+      - CLICK_SERVICE_ID=${CLICK_SERVICE_ID}
+      - CLICK_MERCHANT_ID=${CLICK_MERCHANT_ID}
+      - CLICK_SECRET_KEY=${CLICK_SECRET_KEY}
     depends_on:
       db:
         condition: service_healthy

@@ -2028,8 +2028,11 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     ms: number,
     message: string,
   ): Promise<T> {
+    if (!promise || typeof (promise as unknown as Promise<T>).then !== 'function') {
+      return Promise.resolve(promise as unknown as T);
+    }
     // Prevent unhandled rejection if the underlying promise rejects after timeout
-    void promise.catch(() => {});
+    promise.catch(() => {});
 
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(message)), ms);
@@ -2054,8 +2057,19 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
     signal: AbortSignal,
     timeoutMessage: string,
   ): Promise<T> {
-    // Prevent unhandled rejection if `session.start()` rejects after abort/timeout
-    void promise.catch(() => {});
+    if (!promise || typeof (promise as unknown as Promise<T>).then !== 'function') {
+      if (signal.aborted) {
+        return Promise.reject(
+          new HttpException(
+            'Operation aborted before completion',
+            HttpStatus.CONFLICT,
+          ),
+        );
+      }
+      return Promise.resolve(promise as unknown as T);
+    }
+    // Prevent unhandled rejection if session.start() rejects after abort/timeout
+    promise.catch(() => {});
 
     if (signal.aborted) {
       return Promise.reject(

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/globals.css';
 import { initErrorReporting, reportClientError } from './lib/errorReporter';
+import { getStoredLocale, loadLocale } from './i18n';
 
 // 1. Telemetriyani har qanday boshqa amaldan oldin birinchi navbatda ishga tushiramiz
 if (import.meta.env.PROD) {
@@ -18,29 +19,15 @@ if (import.meta.env.DEV) {
   performance.mark('app-init-start');
 }
 
-// 2. Mobil qurilmalar (iOS Safari / Android) uchun Responsive Viewport balandligini hisoblash
+// 2. Mobil qurilmalar (iOS Safari / Android) uchun Responsive Viewport balandligini hisoblash (dastlabki paint uchun)
 function setupResponsiveViewport(): void {
-  const updateViewportHeight = () => {
-    const vh = window.innerHeight * 0.01;
-    document.documentElement.style.setProperty('--app-vh', `${vh}px`);
-  };
-
-  updateViewportHeight();
-  window.addEventListener('resize', updateViewportHeight, { passive: true });
-  window.addEventListener('orientationchange', updateViewportHeight, { passive: true });
-
-  // Virtual klaviatura ochilganda layout sakrab ketishining oldini olish
-  if (window.visualViewport) {
-    const handleVisualResize = () => {
-      if (window.visualViewport) {
-        document.documentElement.style.setProperty(
-          '--visual-viewport-height',
-          `${window.visualViewport.height}px`,
-        );
-      }
-    };
-    window.visualViewport.addEventListener('resize', handleVisualResize, { passive: true });
-  }
+  if (typeof window === 'undefined') return;
+  const vh = (window.visualViewport?.height ?? window.innerHeight) * 0.01;
+  const vw = (window.visualViewport?.width ?? window.innerWidth) * 0.01;
+  const vvHeight = window.visualViewport?.height ?? window.innerHeight;
+  document.documentElement.style.setProperty('--app-vh', `${vh}px`);
+  document.documentElement.style.setProperty('--app-vw', `${vw}px`);
+  document.documentElement.style.setProperty('--visual-viewport-height', `${vvHeight}px`);
 }
 setupResponsiveViewport();
 
@@ -96,11 +83,31 @@ if (!rootElement) {
 // 4. React Root yaratish va dasturni ishga tushirish
 const root = ReactDOM.createRoot(rootElement);
 
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+/** Fade out the static boot shell once React has painted its first frame. */
+function dismissBootSplash(): void {
+  const splash = document.getElementById('boot-splash');
+  if (!splash) return;
+  splash.classList.add('is-hidden');
+  window.setTimeout(() => splash.remove(), 320);
+}
+
+/**
+ * The English dictionary is bundled; uz/ru are fetched on demand. Resolve the
+ * persisted locale before the first paint so the shell never flashes English
+ * for an Uzbek/Russian user.
+ */
+async function bootstrap(): Promise<void> {
+  await loadLocale(getStoredLocale());
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+  // Two frames: React 18 commits on a scheduled tick, so hide after paint.
+  requestAnimationFrame(() => requestAnimationFrame(dismissBootSplash));
+}
+
+void bootstrap();
 
 if (import.meta.env.DEV) {
   performance.mark('app-init-rendered');

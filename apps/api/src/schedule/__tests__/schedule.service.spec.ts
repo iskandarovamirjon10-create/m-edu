@@ -132,6 +132,58 @@ describe('ScheduleService', () => {
         }),
       );
     });
+    it('detects room conflict when room is inherited from group.room', async () => {
+      prisma.group.findFirst.mockResolvedValue({ id: 'g-1', teacherId: 't-1', room: 'A-101' });
+      prisma.schedule.findMany.mockResolvedValue([
+        {
+          id: 's-existing',
+          dayOfWeek: 'WEDNESDAY',
+          startTime: '09:00',
+          endTime: '10:30',
+          room: null,
+          group: { id: 'g-2', name: 'Group 2', teacherId: 't-2', room: 'A-101' },
+        },
+      ]);
+
+      await expect(
+        svc.create('org-1', { groupId: 'g-1', dayOfWeek: 'WEDNESDAY', startTime: '09:00', endTime: '10:30' }),
+      ).rejects.toThrow('SCHEDULE_ROOM_CONFLICT');
+    });
+
+    it('allows same room/time when groups have disjoint non-overlapping date intervals', async () => {
+      prisma.group.findFirst.mockResolvedValue({
+        id: 'g-1',
+        teacherId: 't-1',
+        room: 'A-101',
+        startDate: new Date('2026-06-01'),
+        endDate: new Date('2026-08-31'),
+      });
+      prisma.schedule.findMany.mockResolvedValue([
+        {
+          id: 's-existing',
+          dayOfWeek: 'WEDNESDAY',
+          startTime: '09:00',
+          endTime: '10:30',
+          room: 'A-101',
+          group: {
+            id: 'g-2',
+            name: 'Spring Group',
+            teacherId: 't-2',
+            startDate: new Date('2026-01-01'),
+            endDate: new Date('2026-05-31'),
+          },
+        },
+      ]);
+      prisma.schedule.create.mockResolvedValue({ id: 's-new' });
+
+      const res = await svc.create('org-1', {
+        groupId: 'g-1',
+        dayOfWeek: 'WEDNESDAY',
+        startTime: '09:00',
+        endTime: '10:30',
+      });
+      expect(res).toBeDefined();
+    });
   });
 
   describe('update', () => {

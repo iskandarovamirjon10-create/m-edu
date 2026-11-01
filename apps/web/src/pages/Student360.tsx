@@ -349,7 +349,7 @@ const Icon = memo(function Icon({
       aria-hidden="true"
       {...rest}
     >
-      {paths.map((d, i) => (
+      {(paths || []).map((d, i) => (
         <path
           key={i}
           d={d}

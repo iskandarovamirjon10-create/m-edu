@@ -476,7 +476,7 @@ export function ApiKeysPage() {
         metrics: [
           {
             label: 'Usage Count',
-            value: key.usageCount.toLocaleString(),
+            value: (key.usageCount ?? 0).toLocaleString(),
           },
           {
             label: 'Rate Limit',
@@ -780,7 +780,7 @@ export function ApiKeysPage() {
         >
           {/* Segmented Filter Control */}
           <div
-            className="flex items-center rounded-2xl bg-neutral-200/50 p-1 dark:bg-white/[0.05]"
+            className="flex items-center rounded-2xl bg-neutral-200/50 p-1 dark:bg-white/[0.05] overflow-x-auto max-w-full no-scrollbar"
             role="tablist"
           >
             {(['ALL', 'ACTIVE', 'REVOKED'] as StatusFilter[]).map((filter) => {
@@ -832,7 +832,7 @@ export function ApiKeysPage() {
           </div>
 
           {/* Search Box */}
-          <div className="relative min-w-[240px] flex-1 sm:max-w-xs">
+          <div className="relative w-full sm:w-auto sm:min-w-[240px] flex-1 sm:max-w-xs">
             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-neutral-400">
               <Icon paths={ICONS.search} size={16} />
             </span>
@@ -970,7 +970,7 @@ export function ApiKeysPage() {
                             </td>
 
                             <td className="py-4 px-5 text-xs font-bold font-mono text-neutral-900 dark:text-white">
-                              {key.usageCount.toLocaleString()}
+                              {(key.usageCount ?? 0).toLocaleString()}
                             </td>
 
                             <td className="py-4 px-5 text-right">
@@ -1063,7 +1063,7 @@ export function ApiKeysPage() {
                         </div>
 
                         <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
-                          <span>Usage: {key.usageCount.toLocaleString()} calls</span>
+                          <span>Usage: {(key.usageCount ?? 0).toLocaleString()} calls</span>
                           <span>Last: {formatKeyDate(key.lastUsedAt)}</span>
                         </div>
                       </div>
@@ -1098,7 +1098,7 @@ export function ApiKeysPage() {
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
-              className="liquid-glass-card relative w-full max-w-lg overflow-hidden p-6 sm:p-8"
+              className="liquid-glass-card relative w-full max-w-lg max-h-[min(90dvh,100%)] overflow-y-auto overscroll-contain p-5 sm:p-8"
             >
               <div className="flex items-center justify-between pb-4 border-b border-black/[0.06] dark:border-white/[0.06]">
                 <div className="flex items-center gap-3">
@@ -1205,7 +1205,7 @@ export function ApiKeysPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-3">
+                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 pt-3">
                   <button
                     type="button"
                     onClick={() => setShowCreate(false)}
@@ -1260,7 +1260,7 @@ export function ApiKeysPage() {
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
-              className="liquid-glass-card relative w-full max-w-lg overflow-hidden p-6 sm:p-8"
+              className="liquid-glass-card relative w-full max-w-lg max-h-[min(90dvh,100%)] overflow-y-auto overscroll-contain p-5 sm:p-8"
             >
               <div className="flex items-center gap-3 pb-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
@@ -1283,7 +1283,7 @@ export function ApiKeysPage() {
                 </p>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 rounded-xl border border-black/[0.1] bg-black/5 p-3 dark:border-white/[0.1] dark:bg-white/5">
+              <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-xl border border-black/[0.1] bg-black/5 p-3 dark:border-white/[0.1] dark:bg-white/5">
                 <code className="min-w-0 flex-1 font-mono text-xs font-bold text-neutral-900 dark:text-white break-all">
                   {generatedKey}
                 </code>

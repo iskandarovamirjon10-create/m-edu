@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CoursesService } from './courses.service';
 import { CreateCourseDto, UpdateCourseDto } from '../common/dto';
 import { CourseQuery } from '../common/dto/query';
+import { BulkCoursePriceDto, BulkCourseStatusDto } from './dto/courses-bulk.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -21,6 +22,27 @@ export class CoursesController {
   @ApiOperation({ summary: 'List all courses' })
   findAll(@CurrentUser('organizationId') orgId: string, @Query() query: CourseQuery) {
     return this.coursesService.findAll(orgId, query);
+  }
+
+  @Get('stats')
+  @Roles(...STAFF_ROLES)
+  @ApiOperation({ summary: 'Get aggregated course statistics and popularity metrics' })
+  getStats(@CurrentUser('organizationId') orgId: string) {
+    return this.coursesService.getStats(orgId);
+  }
+
+  @Post('bulk/status')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Bulk update courses active status' })
+  bulkStatus(@CurrentUser('organizationId') orgId: string, @Body() dto: BulkCourseStatusDto) {
+    return this.coursesService.bulkStatus(orgId, dto);
+  }
+
+  @Post('bulk/price')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Bulk update or adjust course tuition prices' })
+  bulkPrice(@CurrentUser('organizationId') orgId: string, @Body() dto: BulkCoursePriceDto) {
+    return this.coursesService.bulkPrice(orgId, dto);
   }
 
   @Get(':id')

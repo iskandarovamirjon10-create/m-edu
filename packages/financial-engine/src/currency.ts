@@ -12,7 +12,7 @@
 /** Number of minor units per major unit. UZS uses 2 (tiyin). */
 export const MINOR_UNITS_PER_UNIT = 100;
 
-const PLAIN_DECIMAL = /^-?\d+\.?\d*$/;
+const PLAIN_DECIMAL = /^[+-]?\d+\.?\d*$/;
 
 /**
  * Exact decimal-string → minor units (round-half-up at the third decimal).
@@ -22,7 +22,8 @@ const PLAIN_DECIMAL = /^-?\d+\.?\d*$/;
  */
 function decimalStringToMinor(raw: string): number {
   const neg = raw.startsWith('-');
-  const unsigned = raw.slice(Number(neg));
+  const hasSign = raw.startsWith('-') || raw.startsWith('+');
+  const unsigned = raw.slice(Number(hasSign));
   const [intPart = '', fracPart = ''] = unsigned.split('.');
   const frac = (fracPart + '00').slice(0, 3); // minor digits + rounding digit
   const third = frac.length >= 3 ? Number(frac[2]) : 0;

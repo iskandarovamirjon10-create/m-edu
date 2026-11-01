@@ -34,7 +34,14 @@ export class BoundedFrameQueue {
   push(frame: VideoFrame): { dropped: boolean } {
     let dropped = false;
     if (this.items.length >= this.capacity) {
-      this.items.shift();
+      const old = this.items.shift();
+      if (old && Buffer.isBuffer(old.buffer)) {
+        try {
+          old.buffer.fill(0);
+        } catch {
+          // ignore read-only / immutable buffer
+        }
+      }
       dropped = true;
     }
     this.items.push(frame);
@@ -46,6 +53,15 @@ export class BoundedFrameQueue {
   }
 
   clear(): void {
+    for (const item of this.items) {
+      if (item && Buffer.isBuffer(item.buffer)) {
+        try {
+          item.buffer.fill(0);
+        } catch {
+          // ignore read-only / immutable buffer
+        }
+      }
+    }
     this.items.length = 0;
   }
 }
@@ -355,6 +371,16 @@ export class FfmpegStreamIngester {
     this.proc.on('close', (code) => {
       const proc = this.proc;
       this.proc = null;
+      if (proc) {
+        try {
+          proc.stdout?.removeAllListeners();
+          proc.stderr?.removeAllListeners();
+          proc.removeAllListeners();
+        } catch {
+          // ignore
+        }
+      }
+      this.freeFrameBuffers();
       if (this.stopping) return;
       if (code && code !== 0) {
         this.emitError(new Error(`ffmpeg exited with code ${code}`));
@@ -364,15 +390,33 @@ export class FfmpegStreamIngester {
     });
   }
 
+  private freeFrameBuffers(): void {
+    if (this.frameBuffer && Buffer.isBuffer(this.frameBuffer)) {
+      try {
+        this.frameBuffer.fill(0);
+      } catch {
+        // ignore
+      }
+    }
+    this.frameBuffer = null;
+    this.frameStart = null;
+  }
+
   async stop(): Promise<void> {
     this.stopping = true;
     if (this.proc) {
       const p = this.proc;
       this.proc = null;
-      p.kill('SIGKILL');
+      try {
+        p.stdout?.removeAllListeners();
+        p.stderr?.removeAllListeners();
+        p.removeAllListeners();
+        p.kill('SIGKILL');
+      } catch {
+        // ignore
+      }
     }
-    this.frameBuffer = null;
-    this.frameStart = null;
+    this.freeFrameBuffers();
   }
 
   private handleData(chunk: Buffer): void {

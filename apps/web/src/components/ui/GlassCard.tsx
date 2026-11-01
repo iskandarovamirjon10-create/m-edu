@@ -41,9 +41,9 @@ const VARIANT_CLASSES: Record<GlassCardVariant, string> = {
 const PADDING_CLASSES: Record<string, string> = {
   none: '',
   sm: 'p-3',
-  md: 'p-5',
-  lg: 'p-6',
-  xl: 'p-8',
+  md: 'p-4 sm:p-5',
+  lg: 'p-4 sm:p-6',
+  xl: 'p-5 sm:p-8',
 };
 
 export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
@@ -68,7 +68,7 @@ export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
     const paddingClass = padding ? PADDING_CLASSES[padding] : hasExplicitPadding ? '' : PADDING_CLASSES.md;
 
     return (
-      <div ref={ref} className={cn(VARIANT_CLASSES[variant], paddingClass, className)} {...rest}>
+      <div ref={ref} className={cn('min-w-0 max-w-full box-border', VARIANT_CLASSES[variant], paddingClass, className)} {...rest}>
         {children}
       </div>
     );

@@ -199,13 +199,13 @@ export const QuickLookModal = memo(function QuickLookModal() {
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6 md:p-10">
           {/* Apple macOS Sequoia Frosted Backdrop */}
           <motion.div
-            initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
-            animate={{ opacity: 1, backdropFilter: 'blur(14px)' }}
-            exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
             onClick={handleClose}
             className="
-              absolute inset-0
+              absolute inset-0 backdrop-blur-md
               bg-slate-950/35 dark:bg-black/70
             "
             aria-hidden="true"

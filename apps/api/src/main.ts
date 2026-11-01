@@ -12,6 +12,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import * as express from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { isAllowedOrigin } from './common/cors.util';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './filters/http-exception.filter';
 import { RequestLoggerMiddleware } from './config/request-logger.middleware';
@@ -111,7 +112,18 @@ async function bootstrap() {
     scriptSrc: process.env.NODE_ENV === 'production' ? ["'none'"] : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
     styleSrc: process.env.NODE_ENV === 'production' ? ["'none'"] : ["'self'", "'unsafe-inline'"],
     imgSrc: ["'self'", 'data:', 'blob:'],
-    connectSrc: ["'self'", ...corsOriginList],
+    connectSrc:
+      process.env.NODE_ENV === 'production'
+        ? ["'self'", ...corsOriginList]
+        : [
+            "'self'",
+            ...corsOriginList,
+            'http://localhost:*',
+            'http://127.0.0.1:*',
+            'http://192.168.*:*',
+            'ws:',
+            'wss:',
+          ],
     fontSrc: ["'self'", 'data:'],
     objectSrc: ["'none'"],
     upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
@@ -160,7 +172,12 @@ async function bootstrap() {
   }
 
   app.enableCors({
-    origin: corsOriginList.length > 0 ? corsOriginList : false,
+    origin: (requestOrigin, callback) => {
+      if (isAllowedOrigin(requestOrigin, corsOriginList)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'), false);
+    },
     credentials: true,
   });
 

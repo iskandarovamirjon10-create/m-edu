@@ -98,6 +98,12 @@ const LANDMARK_COORDS = NUM_LANDMARKS * 2;
 const MAX_SCALE_LOGIT = 10.0;
 const MIN_SCALE_LOGIT = -10.0;
 
+/** Precomputed Gamma LUT (gamma=0.78) for sub-millisecond low-light face enhancement */
+const LOW_LIGHT_GAMMA_LUT = new Float32Array(256);
+for (let i = 0; i < 256; i++) {
+  LOW_LIGHT_GAMMA_LUT[i] = Math.min(255, Math.round(255 * Math.pow(i / 255, 0.78)));
+}
+
 const DEFAULT_CONFIG: DetectorConfig = Object.freeze({
   modelPath: '',
   inputSize: 640,
@@ -586,10 +592,31 @@ export class RealDetector {
     const gOffset = planeSize;
     const rOffset = planeSize * 2;
 
-    for (let pixelIdx = 0, byteIdx = 0; pixelIdx < planeSize; pixelIdx++, byteIdx += 3) {
-      targetTensorBuffer[bOffset + pixelIdx] = data[byteIdx + 2]; // Blue
-      targetTensorBuffer[gOffset + pixelIdx] = data[byteIdx + 1]; // Green
-      targetTensorBuffer[rOffset + pixelIdx] = data[byteIdx];     // Red
+    // Sub-millisecond luminance check: if mean perceived luminance < 55 (dark hallway/entrance),
+    // apply adaptive gamma enhancement LUT (gamma=0.78) to lift facial contours and landmarks
+    // out of deep shadows without clipping bright highlights.
+    let sampleSum = 0;
+    const sampleStep = Math.max(1, Math.floor(planeSize / 128));
+    let sampleCount = 0;
+    for (let p = 0; p < planeSize; p += sampleStep) {
+      const b = p * 3;
+      sampleSum += 0.299 * data[b] + 0.587 * data[b + 1] + 0.114 * data[b + 2];
+      sampleCount++;
+    }
+    const isLowLight = sampleCount > 0 && sampleSum / sampleCount < 55;
+
+    if (isLowLight) {
+      for (let pixelIdx = 0, byteIdx = 0; pixelIdx < planeSize; pixelIdx++, byteIdx += 3) {
+        targetTensorBuffer[bOffset + pixelIdx] = LOW_LIGHT_GAMMA_LUT[data[byteIdx + 2]]; // Blue
+        targetTensorBuffer[gOffset + pixelIdx] = LOW_LIGHT_GAMMA_LUT[data[byteIdx + 1]]; // Green
+        targetTensorBuffer[rOffset + pixelIdx] = LOW_LIGHT_GAMMA_LUT[data[byteIdx]];     // Red
+      }
+    } else {
+      for (let pixelIdx = 0, byteIdx = 0; pixelIdx < planeSize; pixelIdx++, byteIdx += 3) {
+        targetTensorBuffer[bOffset + pixelIdx] = data[byteIdx + 2]; // Blue
+        targetTensorBuffer[gOffset + pixelIdx] = data[byteIdx + 1]; // Green
+        targetTensorBuffer[rOffset + pixelIdx] = data[byteIdx];     // Red
+      }
     }
 
     return { origWidth, origHeight, scale, padX, padY };

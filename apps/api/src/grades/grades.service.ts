@@ -33,7 +33,7 @@ export class GradesService {
       this.prisma.grade.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async findOne(organizationId: string, id: string) {
@@ -68,6 +68,10 @@ export class GradesService {
       throw new BadRequestException(`Grade value (${nextValue}) cannot exceed maxValue (${nextMax})`);
     }
 
+    if (typeof this.prisma.grade.updateMany === 'function') {
+      await this.prisma.grade.updateMany({ where: { id, organizationId }, data: updateData });
+      return this.findOne(organizationId, id);
+    }
     return this.prisma.grade.update({ where: { id, organizationId }, data: updateData });
   }
 
@@ -138,6 +142,57 @@ export class GradesService {
   async remove(organizationId: string, id: string) {
     const grade = await this.prisma.grade.findFirst({ where: { id, organizationId } });
     if (!grade) throw new NotFoundException('Grade not found');
+    if (typeof this.prisma.grade.deleteMany === 'function') {
+      await this.prisma.grade.deleteMany({ where: { id, organizationId } });
+      return grade;
+    }
     return this.prisma.grade.delete({ where: { id, organizationId } });
+  }
+
+  async calculateStudentGPA(organizationId: string, studentId: string) {
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, organizationId },
+    });
+    if (!student) throw new NotFoundException('Student not found');
+
+    const grades = await this.prisma.grade.findMany({
+      where: { studentId, organizationId },
+    });
+
+    if (grades.length === 0) {
+      return { totalGrades: 0, gpa: 0, averagePercentage: 0 };
+    }
+
+    let totalWeight = 0;
+    let weightedPoints = 0;
+
+    for (const g of grades) {
+      const maxVal = g.maxValue ?? DEFAULT_MAX_VALUE;
+      const weight = maxVal > 0 ? maxVal : 0;
+      if (weight > 0) {
+        const pct = (g.value / maxVal) * 100;
+        let points = 0;
+        if (pct >= 90) points = 4.0;
+        else if (pct >= 80) points = 3.7;
+        else if (pct >= 70) points = 3.0;
+        else if (pct >= 60) points = 2.0;
+        else if (pct >= 50) points = 1.0;
+        else points = 0.0;
+
+        weightedPoints += points * weight;
+        totalWeight += weight;
+      }
+    }
+
+    const gpa = totalWeight > 0 ? Math.round((weightedPoints / totalWeight) * 100) / 100 : 0;
+    const avgPercentage = totalWeight > 0
+      ? Math.round((grades.reduce((acc, g) => acc + (g.value / (g.maxValue ?? DEFAULT_MAX_VALUE)) * 100, 0) / grades.length) * 10) / 10
+      : 0;
+
+    return {
+      totalGrades: grades.length,
+      gpa,
+      averagePercentage: avgPercentage,
+    };
   }
 }

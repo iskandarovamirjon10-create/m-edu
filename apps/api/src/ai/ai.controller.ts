@@ -14,6 +14,7 @@ import {
   HttpCode,
   Res,
   Headers,
+  Logger,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
@@ -33,6 +34,7 @@ import {
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
+import { EntitlementGuard, RequireEntitlement } from '../subscriptions/guards/entitlement.guard';
 import { Roles } from '../auth/roles.decorator';
 import { STAFF_ROLES, isAdminRole } from '../auth/authorization.policy';
 import { AllowPublic } from '../auth/public.decorator';
@@ -43,6 +45,10 @@ import {
   GenerateLessonPlanDto,
   GenerateReportDto,
   AnalyzeDocumentDto,
+  SpeechToTextDto,
+  TextToSpeechDto,
+  DraftDebtRecoveryCampaignDto,
+  GenerateAssessmentRubricDto,
 } from './dto/deep-ai.dto';
 import { RenameConversationDto } from './dto/conversation.dto';
 
@@ -169,8 +175,11 @@ export class ImportConversationsBodyDto {
 // ============================================================================
 
 @Controller('ai')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, EntitlementGuard)
+@RequireEntitlement('hasAiCopilot')
 export class AiController {
+  private readonly logger = new Logger(AiController.name);
+
   constructor(
     private readonly aiService: AiService,
     private readonly configService: ConfigService,
@@ -593,6 +602,61 @@ export class AiController {
     return this.aiService.analyzeDocument(organizationId, body);
   }
 
+  @Roles(...STAFF_ROLES)
+  @Get('churn-radar')
+  async getChurnRadar(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    return this.aiService.getChurnRadar(organizationId);
+  }
+
+  @Roles(...STAFF_ROLES)
+  @Post('draft-debt-recovery-campaign')
+  async draftDebtRecoveryCampaign(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: DraftDebtRecoveryCampaignDto,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    return this.aiService.draftDebtRecoveryCampaign(organizationId, body);
+  }
+
+  @Roles(...STAFF_ROLES)
+  @Post('generate-rubric')
+  async generateRubric(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: GenerateAssessmentRubricDto,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    return this.aiService.generateAssessmentRubric(organizationId, body);
+  }
+
+  @Roles(...STAFF_ROLES)
+  @Post('speech-to-text')
+  async speechToText(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: SpeechToTextDto,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    return this.aiService.speechToText(organizationId, body);
+  }
+
+  @Roles(...STAFF_ROLES)
+  @Post('text-to-speech')
+  async textToSpeech(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: TextToSpeechDto,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    return this.aiService.textToSpeech(organizationId, body);
+  }
+
+  @Roles(...STAFF_ROLES)
   @Post('chat')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async chat(
@@ -667,6 +731,11 @@ export class AiController {
           : HttpStatus.BAD_GATEWAY;
       const errorMessage =
         e instanceof Error ? e.message : 'AI streaming error';
+
+      this.logger.error(
+        `chatStream error for user=${userId} org=${organizationId}: ${errorMessage}`,
+        e instanceof Error ? e.stack : undefined,
+      );
 
       // If SSE headers were not yet sent, return standard HTTP error status
       // or initialize SSE headers cleanly before sending the error frame

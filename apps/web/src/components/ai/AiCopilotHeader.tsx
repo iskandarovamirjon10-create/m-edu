@@ -23,7 +23,6 @@ import {
   IconChevronDown,
   IconClose,
   IconCompass,
-  IconCopilotMark,
   IconDownload,
   IconHistory,
   IconModels,
@@ -44,6 +43,7 @@ import {
   CopilotStatusDot,
 } from './CopilotControls';
 import { cn } from '@/lib/design';
+import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { CopilotPreferences } from '@/hooks/useCopilotPreferences';
 
@@ -511,11 +511,7 @@ export function AiCopilotHeader({
               )}
               style={{ background: 'var(--cp-brand-gradient)' }}
             >
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(180deg,rgba(255,255,255,0.4),transparent_58%)]"
-              />
-              <IconCopilotMark size={17} />
+              <MeduAiLogo size="xs" />
             </span>
 
             <div className="flex min-w-0 flex-col leading-tight">
@@ -609,7 +605,7 @@ export function AiCopilotHeader({
                   <span className="font-semibold text-[color:var(--cp-text-secondary)]">
                     {messageCount.toLocaleString()}
                   </span>{' '}
-                  {tr(t, 'ai.meta.messages', 'xabar')}
+                  {tr(t, 'ai.meta.messages', 'ta xabar')}
                 </span>
               )}
               {messageCount !== undefined && tokens !== undefined && (

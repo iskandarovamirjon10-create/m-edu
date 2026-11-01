@@ -226,7 +226,7 @@ export const ScrollProgress = memo(function ScrollProgress({
 });
 
 /* ══════════════════════════════════════════════════════════════════
- * 5 · ANIMATED OUTLET — Fluid Frozen Outlet & Containing-Block Cleanup
+ * 5 · ANIMATED OUTLET — Fluid VisionOS-Grade Screen Transitions
  * ══════════════════════════════════════════════════════════════════ */
 
 export const AnimatedOutlet = memo(function AnimatedOutlet() {
@@ -235,17 +235,66 @@ export const AnimatedOutlet = memo(function AnimatedOutlet() {
   const reduced = usePrefersReducedMotion();
 
   return (
-    <motion.div
-      key={location.pathname}
-      initial={reduced ? false : { opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        duration: reduced ? 0 : 0.22,
-        ease: [0.16, 1, 0.3, 1],
-      }}
-      className="min-h-full w-full flex-1 flex flex-col transform-gpu will-change-[opacity,transform]"
-    >
-      {outlet}
-    </motion.div>
+    <AnimatePresence mode="wait" initial={false}>
+      {outlet && (
+        <motion.div
+          key={location.pathname}
+          initial={reduced ? undefined : { opacity: 0, y: 10, scale: 0.996 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={reduced ? undefined : { opacity: 0, y: -8, scale: 0.996 }}
+          transition={{
+            duration: reduced ? 0 : 0.22,
+            ease: [0.22, 1, 0.36, 1],
+          }}
+          className="min-h-full w-full max-w-full min-w-0 flex-1 flex flex-col transform-gpu will-change-[opacity,transform]"
+        >
+          {outlet}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════
+ * 6 · ROUTE PROGRESS BAR — Luminous Top Accent Beam on Screen Transition
+ * ══════════════════════════════════════════════════════════════════ */
+
+export const RouteProgressBar = memo(function RouteProgressBar() {
+  const location = useLocation();
+  const reduced = usePrefersReducedMotion();
+  const [active, setActive] = useState(false);
+  const isFirstMount = useRef(true);
+
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+    if (reduced) return;
+    setActive(true);
+    const timer = setTimeout(() => setActive(false), 420);
+    return () => clearTimeout(timer);
+  }, [location.pathname, reduced]);
+
+  return (
+    <AnimatePresence>
+      {active && (
+        <motion.div
+          aria-hidden="true"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="pointer-events-none fixed top-0 inset-x-0 z-[100] h-[2.5px] overflow-hidden"
+        >
+          <motion.div
+            initial={{ x: '-100%' }}
+            animate={{ x: '100%' }}
+            transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+            className="h-full w-full bg-gradient-to-r from-transparent via-[#007AFF] to-[#5856D6] dark:via-[#0A84FF] dark:to-[#BF5AF2] shadow-[0_0_12px_rgba(0,122,255,0.7)]"
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 });

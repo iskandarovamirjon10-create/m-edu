@@ -649,17 +649,22 @@ function StreamingShimmer() {
   const reduced = usePrefersReducedMotion();
   if (reduced) return null;
   return (
-    <motion.span
+    <span
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 rounded-2xl"
-      style={{
-        background:
-          'linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--ai-primary) 10%, transparent) 50%, transparent 100%)',
-        backgroundSize: '200% 100%',
-      }}
-      animate={{ backgroundPosition: ['-100% 0%', '200% 0%'] }}
-      transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-    />
+      className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl"
+    >
+      <motion.span
+        className="absolute inset-y-0 w-full"
+        style={{
+          background:
+            'linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--ai-primary) 15%, transparent) 50%, transparent 100%)',
+          willChange: 'transform',
+        }}
+        initial={{ x: '-100%' }}
+        animate={{ x: '100%' }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+      />
+    </span>
   );
 }
 
@@ -880,7 +885,7 @@ function AiUserMessageComponent({
           whileHover={reduced ? undefined : { scale: 1.005 }}
           transition={SPRING.snappy}
           className={[
-            'relative min-w-0 overflow-hidden px-4 py-2.5 text-white bg-[#007AFF]',
+            'relative w-fit min-w-[3.75rem] overflow-hidden px-4 py-2.5 text-white bg-[#007AFF]',
             'max-w-[85%] sm:max-w-[70%] rounded-2xl',
             compact ? 'rounded-tr-md' : 'rounded-br-md',
           ].join(' ')}
@@ -891,7 +896,8 @@ function AiUserMessageComponent({
               'inset 0 1px 0 rgba(255,255,255,0.28), ' +
               'inset 0 -1px 0 rgba(0,0,0,0.08), ' +
               '0 6px 20px -6px var(--ai-shadow-glow-primary, rgba(0, 122, 255, 0.35))',
-            overflowWrap: 'anywhere',
+            overflowWrap: 'break-word',
+            wordBreak: 'normal',
           }}
         >
           <span
@@ -941,7 +947,7 @@ function AiUserMessageComponent({
             </div>
           )}
 
-          <div className="relative whitespace-pre-wrap text-[13.5px] font-medium leading-[1.55] tracking-tight">
+          <div className="relative whitespace-pre-wrap [overflow-wrap:break-word] [word-break:normal] text-[13.5px] font-medium leading-[1.55] tracking-tight">
             {message.content}
           </div>
         </motion.div>
@@ -1124,19 +1130,35 @@ function AiAssistantMessageComponent({
             if (!activity.result || activity.status === 'running') return null;
             const key = activity.id ?? `${activity.toolName}-${index}`;
 
-            if (activity.toolName === 'attendance.summary') {
+            if (
+              activity.toolName === 'attendance.summary' ||
+              activity.toolName === 'attendance.groups' ||
+              activity.toolName === 'attendance.today' ||
+              activity.toolName === 'attendance.mark'
+            ) {
               return <AiAttendanceCard key={key} data={activity.result} />;
             }
             if (
               activity.toolName === 'finance.debtors' ||
-              activity.toolName === 'payments.debtors'
+              activity.toolName === 'finance.overdue_debtors' ||
+              activity.toolName === 'payments.debtors' ||
+              activity.toolName === 'payments.list' ||
+              activity.toolName === 'payments.create'
             ) {
               return <AiDebtorsCard key={key} data={activity.result} />;
             }
-            if (activity.toolName === 'schedule.list') {
+            if (
+              activity.toolName === 'schedule.list' ||
+              activity.toolName === 'schedule.today' ||
+              activity.toolName === 'schedule.roomConflictCheck'
+            ) {
               return <AiScheduleTimeline key={key} data={activity.result} />;
             }
-            if (activity.toolName === 'students.search') {
+            if (
+              activity.toolName === 'students.search' ||
+              activity.toolName === 'students.create' ||
+              activity.toolName === 'students.get'
+            ) {
               return <AiStudentProfileCard key={key} data={activity.result} />;
             }
             if (activity.toolName === 'grades.analytics' || activity.toolName === 'exams.summary') {
@@ -1347,7 +1369,7 @@ function AiSystemMessageComponent({ message, onRetry }: AiSystemMessageProps) {
           background: tone.bg,
           borderColor: tone.border,
           boxShadow: `inset 0 1px 0 rgba(255,255,255,0.3), 0 2px 8px -4px ${tone.glow}`,
-          overflowWrap: 'anywhere',
+          overflowWrap: 'break-word',
           backdropFilter: 'blur(16px) saturate(1.4)',
           WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
         }}

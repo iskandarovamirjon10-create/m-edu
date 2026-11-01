@@ -22,6 +22,13 @@ export const FACE_ERROR_MESSAGES: Record<SupportedLocale, Record<string, string>
     FACE_NOT_DETECTED: 'Yuz aniqlanmadi. Yuzingiz kadrda to‘liq va yaxshi yoritilgan bo‘lishi kerak.',
     MULTIPLE_FACES_DETECTED: 'Bir nechta yuz aniqlandi. Kadrda faqat bitta shaxs bo‘lishi kerak.',
     FACE_QUALITY_TOO_LOW: 'Yuz tasviri sifati past. Kameraga yaqinroq keling va yorug‘likni yaxshilang.',
+    LOW_BRIGHTNESS: 'Yorug‘lik juda past. Yuzingizga yorug‘lik tushishini ta’minlang yoki manbaga yaqinroq keling.',
+    HIGH_BRIGHTNESS: 'Yorug‘lik juda kuchli (ortiqcha yaltirash). To‘g‘ridan-to‘g‘ri quyosh yoki chiroq nuridan chetlashing.',
+    LOW_SHARPNESS: 'Tasvir xiralashgan. Harakatlanmasdan kameraga qarab turing.',
+    HEAD_POSE_EXCEEDED: 'Bosh holati noto‘g‘ri burilgan. Kameraga to‘g‘ridan-to‘g‘ri qarang.',
+    HEAD_POSE_TOO_EXTREME: 'Bosh holati noto‘g‘ri burilgan. Kameraga to‘g‘ridan-to‘g‘ri qarang.',
+    FACE_TOO_SMALL: 'Yuz kameradan juda uzoqda. Kameraga yaqinroq keling.',
+    QUALITY_BELOW_THRESHOLD: 'Yuz tasviri sifati talabga javob bermaydi. Yaxshiroq yorug‘likda to‘g‘ri qarang.',
     QUALITY_FAILED: 'Yuz tasviri sifati talabga javob bermaydi. Yaxshiroq yorug‘likda qayta urinib ko‘ring.',
     LIVENESS_FAILED: 'Jonlilik tekshiruvidan o‘tmadi (foto yoki ekran tasviri shubhasi). Jonli yuz bilan qayta urinib ko‘ring.',
     LIVENESS_UNCERTAIN: 'Jonlilik tekshiruvi noaniq. To‘g‘ri qarab, harakatlanmasdan qayta urinib ko‘ring.',
@@ -76,6 +83,13 @@ export const FACE_ERROR_MESSAGES: Record<SupportedLocale, Record<string, string>
     FACE_NOT_DETECTED: 'Лицо не обнаружено. Убедитесь, что лицо хорошо освещено и полностью видно в кадре.',
     MULTIPLE_FACES_DETECTED: 'Обнаружено несколько лиц. В кадре должен быть только один человек.',
     FACE_QUALITY_TOO_LOW: 'Качество изображения лица слишком низкое. Подойдите ближе и улучшите освещение.',
+    LOW_BRIGHTNESS: 'Слишком темно. Направьте свет на лицо или подойдите ближе к источнику света.',
+    HIGH_BRIGHTNESS: 'Слишком яркий свет или засветка. Избегайте прямого яркого света.',
+    LOW_SHARPNESS: 'Изображение размыто. Не двигайтесь и посмотрите прямо в камеру.',
+    HEAD_POSE_EXCEEDED: 'Слишком сильный наклон головы. Посмотрите прямо в камеру.',
+    HEAD_POSE_TOO_EXTREME: 'Слишком сильный наклон головы. Посмотрите прямо в камеру.',
+    FACE_TOO_SMALL: 'Лицо слишком далеко от камеры. Подойдите ближе.',
+    QUALITY_BELOW_THRESHOLD: 'Качество изображения лица не соответствует требованиям. Повторите попытку при лучшем освещении.',
     QUALITY_FAILED: 'Качество изображения лица не соответствует требованиям. Повторите попытку при лучшем освещении.',
     LIVENESS_FAILED: 'Проверка на живость не пройдена (возможно фото или экран). Используйте реальное лицо.',
     LIVENESS_UNCERTAIN: 'Неуверенная проверка на живость. Посмотрите прямо и не двигайтесь.',
@@ -130,6 +144,13 @@ export const FACE_ERROR_MESSAGES: Record<SupportedLocale, Record<string, string>
     FACE_NOT_DETECTED: 'No face detected. Make sure your face is well-lit and fully visible in the frame.',
     MULTIPLE_FACES_DETECTED: 'Multiple faces detected. Only one person may be in the frame.',
     FACE_QUALITY_TOO_LOW: 'Face quality is too low. Move closer and improve the lighting.',
+    LOW_BRIGHTNESS: 'Lighting is too dark. Please face towards a light source.',
+    HIGH_BRIGHTNESS: 'Lighting is too bright or overexposed. Avoid direct glare.',
+    LOW_SHARPNESS: 'Image is blurry. Please hold still and look at the camera.',
+    HEAD_POSE_EXCEEDED: 'Head angle is too extreme. Please look straight into the camera.',
+    HEAD_POSE_TOO_EXTREME: 'Head angle is too extreme. Please look straight into the camera.',
+    FACE_TOO_SMALL: 'Face is too far from the camera. Please step closer.',
+    QUALITY_BELOW_THRESHOLD: 'Face quality check failed. Please try again with better lighting.',
     QUALITY_FAILED: 'Face quality check failed. Please try again with better lighting.',
     LIVENESS_FAILED: 'Liveness check failed — the capture may be a photo or screen replay. Use a live face.',
     LIVENESS_UNCERTAIN: 'Liveness check uncertain. Face the camera straight-on and hold still.',
@@ -194,6 +215,11 @@ export function friendlyFaceError(err: unknown, requestedLocale?: string): strin
       message?: string;
     } | null | undefined;
 
+    const reason = (details as any)?.reason;
+    if (reason && (FACE_ERROR_MESSAGES[loc]?.[reason] || FACE_ERROR_MESSAGES.en[reason])) {
+      return FACE_ERROR_MESSAGES[loc]?.[reason] || FACE_ERROR_MESSAGES.en[reason];
+    }
+
     const code = details?.code;
     if (code) {
       // Dynamic interpolation for student/group enrollments
@@ -241,6 +267,11 @@ export function friendlyFaceError(err: unknown, requestedLocale?: string): strin
       if (loc === 'ru') return 'Ученик не зачислен в эту группу. Пожалуйста, сначала добавьте ученика в группу.';
       return 'Student is not enrolled in this group. Please enroll the student in this group first.';
     }
+  }
+
+  if (typeof err === 'string') {
+    const match = FACE_ERROR_MESSAGES[loc]?.[err] || FACE_ERROR_MESSAGES.en[err];
+    if (match) return match;
   }
 
   return err instanceof Error ? err.message : String(err);

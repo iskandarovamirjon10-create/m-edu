@@ -244,7 +244,7 @@ export class FaceController {
   @HttpCode(200)
   @Throttle({
     default: {
-      limit: 10,
+      limit: 60,
       ttl: 60_000,
     },
   })

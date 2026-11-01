@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export enum SecurityEventType {
@@ -11,6 +11,7 @@ export enum SecurityEventType {
   UNAUTHORIZED_RESOURCE_ACCESS = 'UNAUTHORIZED_RESOURCE_ACCESS',
   INVITE_CREATED = 'INVITE_CREATED',
   INVITE_REDEEMED = 'INVITE_REDEEMED',
+  SUBSCRIPTION_UPDATED = 'SUBSCRIPTION_UPDATED',
   RATE_LIMIT_TRIGGERED = 'RATE_LIMIT_TRIGGERED',
   PLATFORM_BOOTSTRAPPED = 'PLATFORM_BOOTSTRAPPED'
 }

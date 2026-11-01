@@ -29,6 +29,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { formatCurrency as formatCurrencyLib } from '@/lib/format';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -195,12 +196,8 @@ const RANGE_OPTIONS = [3, 6, 12] as const;
  * HELPERS
  * ========================================================================== */
 
-function formatCurrency(v: number): string {
-  return new Intl.NumberFormat('uz-UZ', {
-    style: 'currency',
-    currency: 'UZS',
-    maximumFractionDigits: 0,
-  }).format(v ?? 0);
+function formatCurrency(v: number | string | null | undefined): string {
+  return formatCurrencyLib(v);
 }
 
 function formatMonth(label: string, short = false): string {

@@ -59,7 +59,7 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   /**
@@ -323,13 +323,14 @@ export class UsersService {
       if (activeSuperAdmins <= 1) throw new ForbiddenException('Cannot delete the last active SUPER_ADMIN');
     }
 
-    const [student, teacher] = await Promise.all([
-      this.prisma.student.findUnique({ where: { userId: id } }),
-      this.prisma.teacher.findUnique({ where: { userId: id } }),
+    const [student, teacher, employee] = await Promise.all([
+      this.prisma.student?.findUnique ? this.prisma.student.findUnique({ where: { userId: id } }) : null,
+      this.prisma.teacher?.findUnique ? this.prisma.teacher.findUnique({ where: { userId: id } }) : null,
+      this.prisma.employee?.findUnique ? this.prisma.employee.findUnique({ where: { userId: id } }) : null,
     ]);
     
-    if (student || teacher) {
-      throw new BadRequestException('This account has a Student/Teacher profile with historical records — deactivate the account instead of deleting it');
+    if (student || teacher || employee) {
+      throw new BadRequestException('This account has a linked profile (Student/Teacher/Employee) with historical records — deactivate the account instead of deleting it');
     }
 
     try {

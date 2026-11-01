@@ -39,9 +39,9 @@ export interface GlassTextAreaProps
     BaseFieldProps {}
 
 const SIZE: Record<InputSize, string> = {
-  sm: 'h-8 text-xs px-2.5',
-  md: 'h-10 text-sm px-3',
-  lg: 'h-12 text-[15px] px-3.5',
+  sm: 'h-8 text-base sm:text-xs px-2.5',
+  md: 'h-10 text-[16px] sm:text-sm px-3',
+  lg: 'h-12 text-[16px] sm:text-[15px] px-3.5',
 };
 
 const STATUS: Record<InputStatus, string> = {
@@ -182,7 +182,7 @@ export const GlassTextArea = forwardRef<HTMLTextAreaElement, GlassTextAreaProps>
             aria-required={required || undefined}
             className={cn(
               CONTROL,
-              'min-h-[96px] resize-y px-3 py-2 text-sm leading-relaxed',
+              'min-h-[96px] resize-y px-3 py-2 text-base sm:text-sm leading-relaxed',
               STATUS[effective],
               className,
             )}
@@ -235,7 +235,7 @@ export const GlassPasswordInput = forwardRef<HTMLInputElement, GlassInputProps>(
             <button
               type="button"
               onClick={() => setShow((s) => !s)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-1.5 py-1 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/10"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 flex min-h-[36px] min-w-[44px] items-center justify-center rounded-lg px-2 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               aria-label={toggleLabel}
               aria-pressed={show}
             >

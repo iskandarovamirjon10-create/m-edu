@@ -207,7 +207,7 @@ export function QuickAttendanceModal() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 dark:bg-slate-950/70 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 dark:bg-slate-950/70 backdrop-blur-md animate-fade-in"
       onClick={() => setOpen(false)}
     >
       <motion.div
@@ -216,11 +216,14 @@ export function QuickAttendanceModal() {
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/95 p-6 shadow-2xl backdrop-blur-md text-slate-900 dark:border-white/15 dark:bg-[#121826]/95 dark:text-white"
+        className="relative w-full max-w-xl max-h-[92dvh] flex flex-col overflow-hidden rounded-t-[28px] rounded-b-none sm:rounded-2xl border border-black/10 bg-white/95 p-4 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] shadow-2xl backdrop-blur-md text-slate-900 dark:border-white/15 dark:bg-[#121826]/95 dark:text-white"
         style={{
           boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.25), 0 0 40px -10px rgba(16, 185, 129, 0.2)',
         }}
       >
+        {/* Mobile Pull Handle */}
+        <div className="w-10 h-1.5 rounded-full bg-slate-300 dark:bg-white/20 mx-auto mb-3 shrink-0 sm:hidden" aria-hidden="true" />
+
         {/* Header */}
         <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4 mb-4 shrink-0">
           <div className="flex items-center gap-3">
@@ -256,7 +259,7 @@ export function QuickAttendanceModal() {
           <select
             value={selectedGroupId}
             onChange={(e) => setSelectedGroupId(e.target.value)}
-            className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-2.5 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-white/10 dark:bg-white/5 dark:text-white"
+            className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-2.5 text-base sm:text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-white/10 dark:bg-white/5 dark:text-white"
           >
             {groups.map((g: any) => (
               <option key={g.id} value={g.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
@@ -275,21 +278,21 @@ export function QuickAttendanceModal() {
             <button
               type="button"
               onClick={() => handleMarkAll('PRESENT')}
-              className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30 transition-colors"
+              className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 min-h-[36px] text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30 transition-colors flex items-center gap-1"
             >
               🟢 Keldi
             </button>
             <button
               type="button"
               onClick={() => handleMarkAll('EXCUSED')}
-              className="rounded-xl bg-sky-500/10 border border-sky-500/30 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-500/20 dark:bg-sky-500/20 dark:text-sky-300 dark:hover:bg-sky-500/30 transition-colors"
+              className="rounded-xl bg-sky-500/10 border border-sky-500/30 px-3 py-1.5 min-h-[36px] text-xs font-semibold text-sky-700 hover:bg-sky-500/20 dark:bg-sky-500/20 dark:text-sky-300 dark:hover:bg-sky-500/30 transition-colors flex items-center gap-1"
             >
               🔵 Sababli
             </button>
             <button
               type="button"
               onClick={() => handleMarkAll('ABSENT')}
-              className="rounded-xl bg-red-500/10 border border-red-500/30 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-500/20 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30 transition-colors"
+              className="rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-1.5 min-h-[36px] text-xs font-semibold text-red-700 hover:bg-red-500/20 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30 transition-colors flex items-center gap-1"
             >
               🔴 Kelmadi
             </button>

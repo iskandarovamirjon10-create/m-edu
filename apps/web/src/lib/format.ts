@@ -30,13 +30,94 @@ export function formatDateTime(value?: string | null, locale?: string): string {
   });
 }
 
+/**
+ * Robust financial amount parser for enterprise multi-currency handling.
+ * Safely parses:
+ *  - Numbers and BigInts
+ *  - Space separated thousands: "1 500 000", "1 500 000.50", "1 500 000,50"
+ *  - Non-breaking spaces (\u00A0, \u202F)
+ *  - Comma separated thousands: "1,500,000", "1,500,000.50"
+ *  - European dot thousands: "1.500.000,50", "1.500.000"
+ *  - Accounting negatives: "(1 500 000)", "-1 500 000"
+ *  - Currency labels / suffixes: "1 500 000 UZS", "$1,500.00", "so'm"
+ *  - Tiyin / cent precision rounding (2 decimal places)
+ */
+export function parseFinancialAmount(raw: unknown): number {
+  if (raw === null || raw === undefined || raw === '') return NaN;
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? raw : NaN;
+  }
+  let str = String(raw).trim();
+  if (!str) return NaN;
+
+  // Check negative signs
+  let isNegative = false;
+  if (str.startsWith('(') && str.endsWith(')')) {
+    isNegative = true;
+    str = str.slice(1, -1).trim();
+  } else if (str.startsWith('-')) {
+    isNegative = true;
+    str = str.slice(1).trim();
+  } else if (str.startsWith('+')) {
+    str = str.slice(1).trim();
+  }
+
+  // Remove common currency symbols and words
+  str = str.replace(/[$\u20AC\u00A3\u00A5\u20BD\u058F]/g, '');
+  str = str.replace(/\b(uzs|so'?m|сум|usd|eur|rub)\b/gi, '');
+
+  // Strip all whitespace including non-breaking spaces
+  str = str.replace(/[\s\u00A0\u202F\uFEFF]+/g, '');
+  if (!str) return NaN;
+
+  const lastDot = str.lastIndexOf('.');
+  const lastComma = str.lastIndexOf(',');
+
+  if (lastDot !== -1 && lastComma !== -1) {
+    if (lastDot > lastComma) {
+      // e.g. "1,500,000.50"
+      str = str.replace(/,/g, '');
+    } else {
+      // e.g. "1.500.000,50"
+      str = str.replace(/\./g, '').replace(/,/g, '.');
+    }
+  } else if (lastComma !== -1) {
+    const parts = str.split(',');
+    if (parts.length > 2) {
+      // "1,500,000"
+      str = str.replace(/,/g, '');
+    } else if (parts.length === 2) {
+      // "500,000" vs "123,50"
+      if (parts[1].length === 3 && parts[1] === '000') {
+        str = parts[0] + parts[1];
+      } else if (parts[1].length === 3 && /^\d{1,3}$/.test(parts[0])) {
+        str = parts[0] + parts[1];
+      } else {
+        str = parts[0] + '.' + parts[1];
+      }
+    }
+  } else if (lastDot !== -1) {
+    const parts = str.split('.');
+    if (parts.length > 2) {
+      str = str.replace(/\./g, '');
+    } else if (parts.length === 2 && parts[1].length === 3 && parts[1] === '000') {
+      str = parts[0] + parts[1];
+    }
+  }
+
+  const val = parseFloat(str);
+  if (!Number.isFinite(val)) return NaN;
+  const result = isNegative ? -Math.abs(val) : val;
+  return Math.round(result * 100) / 100;
+}
+
 export function formatCurrency(
   value: string | number | null | undefined,
   options?: { locale?: string; currency?: string },
 ): string {
   if (value === null || value === undefined || value === '') return '—';
-  const n = typeof value === 'string' ? parseFloat(value) : value;
-  if (Number.isNaN(n)) return '—';
+  const n = typeof value === 'number' ? value : parseFinancialAmount(value);
+  if (!Number.isFinite(n)) return '—';
   const currency = options?.currency || 'UZS';
   const loc = options?.locale || (currency === 'UZS' ? 'uz-UZ' : (typeof navigator !== 'undefined' ? navigator.language : undefined) || 'en-US');
   return new Intl.NumberFormat(loc, {

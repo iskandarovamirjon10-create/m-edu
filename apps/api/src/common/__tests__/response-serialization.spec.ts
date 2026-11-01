@@ -167,8 +167,9 @@ describe('Response serialization — never leak auth material (F-008)', () => {
       const created = { id: 's1', user: {} };
       prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
+          user: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 'u1' }) },
           student: { create: vi.fn().mockResolvedValue(created) },
-          lead: { update: vi.fn().mockResolvedValue({}) },
+          lead: { update: vi.fn().mockResolvedValue({}), updateMany: vi.fn().mockResolvedValue({}) },
         }),
       );
 
@@ -181,8 +182,9 @@ describe('Response serialization — never leak auth material (F-008)', () => {
       // We re-run it against a recording stub and inspect the query.
       const studentCreate = vi.fn().mockResolvedValue(created);
       await txArg({
+        user: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 'u1' }) },
         student: { create: studentCreate },
-        lead: { update: vi.fn().mockResolvedValue({}) },
+        lead: { update: vi.fn().mockResolvedValue({}), updateMany: vi.fn().mockResolvedValue({}) },
       });
       expect(findUnsafeUserIncludes(studentCreate.mock.calls)).toEqual([]);
     });

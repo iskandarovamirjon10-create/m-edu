@@ -73,8 +73,11 @@ export class FaceEmbedding {
           `(declared length ${length}, buffer ${buffer.length} bytes)`,
       );
     }
-    const floatBuffer = buffer.slice(4, 4 + length * 4);
-    return new FaceEmbedding(new Float32Array(floatBuffer.buffer, floatBuffer.byteOffset, length));
+    const floatData = new Float32Array(length);
+    for (let i = 0; i < length; i++) {
+      floatData[i] = buffer.readFloatLE(4 + i * 4);
+    }
+    return new FaceEmbedding(floatData);
   }
 
   /** Compute cosine similarity with another embedding */

@@ -26,7 +26,8 @@ export class ManualOpenDto {
 export class RegisterDeviceDto {
   id!: string;
   name!: string;
-  protocol!: 'HTTP_PULSE' | 'TCP_SOCKET' | 'MQTT' | 'MOCK';
+  protocol!: 'HTTP_PULSE' | 'TCP_SOCKET' | 'IPC_SOCKET' | 'MQTT' | 'MOCK';
+  ipcPath?: string;
   endpointUrl?: string;
   authToken?: string;
   defaultPulseMs?: number;
@@ -75,6 +76,7 @@ export class TurnstileRelayController {
       protocol: dto.protocol,
       endpointUrl: dto.endpointUrl,
       authToken: dto.authToken,
+      ipcPath: dto.ipcPath,
       defaultPulseMs: dto.defaultPulseMs ?? 1000,
       enabled: dto.enabled !== false,
     };

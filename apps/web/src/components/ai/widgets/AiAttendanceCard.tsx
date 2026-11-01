@@ -165,33 +165,33 @@ export const AiAttendanceCard = memo(function AiAttendanceCard({
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-3 gap-2 py-1">
-        <div className="flex flex-col items-center rounded-xl border border-black/[0.04] dark:border-white/[0.06] bg-black/[0.02] p-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:bg-white/[0.02] dark:shadow-none">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)]">
-            <CheckCircle2 className="h-3.5 w-3.5 text-[#34C759]" />
-            <span>{tr(t, 'attendance.status.present', 'Kelgan')}</span>
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2 py-1">
+        <div className="flex flex-col items-center rounded-xl border border-black/[0.04] dark:border-white/[0.06] bg-black/[0.02] p-1.5 sm:p-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:bg-white/[0.02] dark:shadow-none min-w-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-medium text-[var(--text-secondary)] truncate">
+            <CheckCircle2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-[#34C759] shrink-0" />
+            <span className="truncate">{tr(t, 'attendance.status.present', 'Kelgan')}</span>
           </div>
-          <span className="mt-1 text-sm font-bold tabular-nums text-[var(--text-primary)]">
+          <span className="mt-1 text-xs sm:text-sm font-bold tabular-nums text-[var(--text-primary)]">
             {present}
           </span>
         </div>
 
-        <div className="flex flex-col items-center rounded-xl border border-black/[0.04] dark:border-white/[0.06] bg-black/[0.02] p-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:bg-white/[0.02] dark:shadow-none">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)]">
-            <Clock className="h-3.5 w-3.5 text-[#FF9500]" />
-            <span>{tr(t, 'attendance.status.late', 'Kechikkan')}</span>
+        <div className="flex flex-col items-center rounded-xl border border-black/[0.04] dark:border-white/[0.06] bg-black/[0.02] p-1.5 sm:p-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:bg-white/[0.02] dark:shadow-none min-w-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-medium text-[var(--text-secondary)] truncate">
+            <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-[#FF9500] shrink-0" />
+            <span className="truncate">{tr(t, 'attendance.status.late', 'Kechikkan')}</span>
           </div>
-          <span className="mt-1 text-sm font-bold tabular-nums text-[var(--text-primary)]">
+          <span className="mt-1 text-xs sm:text-sm font-bold tabular-nums text-[var(--text-primary)]">
             {lateCount}
           </span>
         </div>
 
-        <div className="flex flex-col items-center rounded-xl border border-black/[0.04] dark:border-white/[0.06] bg-black/[0.02] p-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:bg-white/[0.02] dark:shadow-none">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)]">
-            <XCircle className="h-3.5 w-3.5 text-[#FF3B30]" />
-            <span>{tr(t, 'attendance.status.absent', 'Kelmadi')}</span>
+        <div className="flex flex-col items-center rounded-xl border border-black/[0.04] dark:border-white/[0.06] bg-black/[0.02] p-1.5 sm:p-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:bg-white/[0.02] dark:shadow-none min-w-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-medium text-[var(--text-secondary)] truncate">
+            <XCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-[#FF3B30] shrink-0" />
+            <span className="truncate">{tr(t, 'attendance.status.absent', 'Kelmadi')}</span>
           </div>
-          <span className="mt-1 text-sm font-bold tabular-nums text-[var(--text-primary)]">
+          <span className="mt-1 text-xs sm:text-sm font-bold tabular-nums text-[var(--text-primary)]">
             {absentCount}
           </span>
         </div>

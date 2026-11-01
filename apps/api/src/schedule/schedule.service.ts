@@ -50,7 +50,7 @@ export class ScheduleService {
     const [items, total] = await Promise.all([
       this.prisma.schedule.findMany({
         where,
-        include: { group: { select: { id: true, name: true } } },
+        include: { group: { select: { id: true, name: true, room: true } } },
         orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
         skip,
         take: limit,
@@ -58,7 +58,7 @@ export class ScheduleService {
       this.prisma.schedule.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async findOne(organizationId: string, id: string, user?: RequestUser | { id: string; role?: string }) {
@@ -82,9 +82,23 @@ export class ScheduleService {
 
     const result = await this.prisma.$transaction(async (tx) => {
       // pg_advisory_xact_lock auto-releases at commit/rollback
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}::text || 'schedule'))`;
+      if (typeof tx.$queryRaw === 'function') {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}::text || 'schedule'))`;
+      }
 
-      await this.checkForConflictsTx(tx, organizationId, data.dayOfWeek, data.startTime, data.endTime, data.room, group.teacherId);
+      const effectiveRoom = data.room !== undefined && data.room !== null ? data.room : group.room;
+      await this.checkForConflictsTx(
+        tx,
+        organizationId,
+        data.dayOfWeek,
+        data.startTime,
+        data.endTime,
+        effectiveRoom,
+        group.teacherId,
+        undefined,
+        group.startDate,
+        group.endDate,
+      );
 
       return tx.schedule.create({
         data: {
@@ -134,11 +148,25 @@ export class ScheduleService {
     const isActive = data.isActive !== undefined ? data.isActive : schedule.isActive;
     
     const result = await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}::text || 'schedule'))`;
+      if (typeof tx.$queryRaw === 'function') {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}::text || 'schedule'))`;
+      }
 
       if (isActive) {
         const group = await tx.group.findFirst({ where: { id: schedule.groupId, organizationId } });
-        await this.checkForConflictsTx(tx, organizationId, checkDay as DayOfWeek, checkStart, checkEnd, checkRoom, group?.teacherId, schedule.id);
+        const effectiveRoom = checkRoom !== undefined && checkRoom !== null ? checkRoom : group?.room;
+        await this.checkForConflictsTx(
+          tx,
+          organizationId,
+          checkDay as DayOfWeek,
+          checkStart,
+          checkEnd,
+          effectiveRoom,
+          group?.teacherId,
+          schedule.id,
+          group?.startDate,
+          group?.endDate,
+        );
       }
 
       return tx.schedule.update({ where: { id, group: { organizationId } }, data: updateData });
@@ -170,8 +198,10 @@ export class ScheduleService {
     room?: string | null,
     teacherId?: string | null,
     excludeScheduleId?: string,
+    groupStartDate?: Date | null,
+    groupEndDate?: Date | null,
   ) {
-    return this.checkForConflictsTx(this.prisma, organizationId, dayOfWeek, startTime, endTime, room, teacherId, excludeScheduleId);
+    return this.checkForConflictsTx(this.prisma, organizationId, dayOfWeek, startTime, endTime, room, teacherId, excludeScheduleId, groupStartDate, groupEndDate);
   }
 
   /**
@@ -187,12 +217,14 @@ export class ScheduleService {
     room?: string | null,
     teacherId?: string | null,
     excludeScheduleId?: string,
+    groupStartDate?: Date | null,
+    groupEndDate?: Date | null,
   ) {
     // A simple string comparison for "HH:mm" works correctly since "09:00" < "10:00"
     // Time overlap condition: (ExistingStart < NewEnd) AND (ExistingEnd > NewStart)
     const overlappingSchedules = await client.schedule.findMany({
       where: {
-        group: { organizationId },
+        group: { organizationId, isActive: true },
         dayOfWeek,
         isActive: true,
         startTime: { lt: endTime },
@@ -200,13 +232,25 @@ export class ScheduleService {
         ...(excludeScheduleId ? { id: { not: excludeScheduleId } } : {}),
       },
       include: {
-        group: { select: { name: true, teacherId: true } },
+        group: { select: { id: true, name: true, teacherId: true, room: true, startDate: true, endDate: true } },
       },
     });
 
     for (const overlap of overlappingSchedules) {
       // 1. Room Conflict
-      if (room && overlap.room === room) {
+      // Check date interval overlap between groups:
+      // If one group ends before the other starts, they run in disjoint calendar intervals and do not conflict.
+      if (groupStartDate && overlap.group.endDate && groupStartDate > overlap.group.endDate) {
+        continue;
+      }
+      if (groupEndDate && overlap.group.startDate && groupEndDate < overlap.group.startDate) {
+        continue;
+      }
+
+      // 1. Room Conflict (comparing effective schedule room or inherited group room)
+      const targetRoom = room ? room.trim().toLowerCase() : null;
+      const existingRoom = (overlap.room ?? overlap.group.room)?.trim().toLowerCase() || null;
+      if (targetRoom && existingRoom && targetRoom === existingRoom) {
         throw new BadRequestException('SCHEDULE_ROOM_CONFLICT');
       }
       

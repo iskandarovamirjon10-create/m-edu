@@ -101,14 +101,14 @@ const LiveClock = memo(function LiveClock() {
   return (
     <div
       className={cn(
-        'inline-flex h-11 shrink-0 items-center gap-2 rounded-2xl px-3.5',
+        'inline-flex h-11 shrink-0 items-center gap-1.5 sm:gap-2 rounded-2xl px-2.5 sm:px-3.5',
         'border border-white/60 bg-white/70 backdrop-blur-3xl backdrop-saturate-[210%]',
         'shadow-[inset_0_1.5px_1.5px_rgba(255,255,255,0.9),0_8px_24px_-8px_rgba(0,0,0,0.08)]',
         'dark:border-white/[0.15] dark:bg-[#1C1C1E]/70 dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)]'
       )}
     >
       {/* Live status dot */}
-      <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+      <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
         <span className="absolute inline-flex h-full w-full rounded-full bg-[#34C759] motion-safe:animate-[livePulse_2.4s_ease-in-out_infinite]" />
         <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#34C759]" />
       </span>
@@ -125,7 +125,7 @@ const LiveClock = memo(function LiveClock() {
       <time
         dateTime={now.toISOString()}
         aria-label={`Hozirgi vaqt: ${formattedTime}, ${formattedDate}`}
-        className="whitespace-nowrap text-[13px] font-bold tabular-nums tracking-tight text-[var(--text-primary,#1D1D1F)] dark:text-[var(--text-primary,#F5F5F7)]"
+        className="whitespace-nowrap text-[12.5px] sm:text-[13px] font-bold tabular-nums tracking-tight text-[var(--text-primary,#1D1D1F)] dark:text-[var(--text-primary,#F5F5F7)]"
       >
         {formattedTime}
       </time>
@@ -207,7 +207,7 @@ export const DashboardHeader = memo(function DashboardHeader({
   return (
     <header
       className={cn(
-        'relative isolate overflow-hidden rounded-[2.25rem] p-5 sm:p-6 lg:p-7.5',
+        'relative isolate overflow-hidden rounded-3xl sm:rounded-[2.25rem] p-4 sm:p-6 lg:p-7.5',
         'border border-white/65 bg-white/75 backdrop-blur-3xl backdrop-saturate-[210%]',
         'shadow-[0_24px_64px_-16px_rgba(0,0,0,0.18),inset_0_1.5px_2px_rgba(255,255,255,0.95)]',
         'dark:border-white/[0.16] dark:bg-[#161618]/75 dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.7),inset_0_1.5px_2px_rgba(255,255,255,0.22)]'
@@ -228,34 +228,34 @@ export const DashboardHeader = memo(function DashboardHeader({
         className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/45"
       />
 
-      <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
+      <div className="relative flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
         {/* ══ Left Column: Identity · Greeting · Subtitle ═══════════ */}
-        <div className="min-w-0 flex-1 space-y-3.5 sm:space-y-4">
+        <div className="min-w-0 flex-1 space-y-3 sm:space-y-4">
           {/* Identity badge */}
           <div
-            className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] inline-flex items-center gap-2.5 rounded-full border border-black/[0.06] bg-white/70 py-1.5 pl-1.5 pr-3.5 backdrop-blur-2xl dark:border-white/[0.1] dark:bg-white/[0.07]"
+            className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] inline-flex max-w-full items-center gap-2 sm:gap-2.5 rounded-full border border-black/[0.06] bg-white/70 py-1.5 pl-1.5 pr-3.5 backdrop-blur-2xl dark:border-white/[0.1] dark:bg-white/[0.07]"
             style={{ animationDelay: '0ms' }}
           >
             <span
               aria-hidden="true"
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-[#0A84FF] to-[#5E5CE6] text-[11px] font-bold text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.5),0_2px_6px_rgba(0,102,255,0.4)]"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#0A84FF] to-[#5E5CE6] text-[11px] font-bold text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.5),0_2px_6px_rgba(0,102,255,0.4)]"
             >
               {orgInitial}
             </span>
-            <span className="text-[12px] font-semibold tracking-tight text-[var(--text-secondary,#515154)] dark:text-[var(--text-secondary,#A1A1A6)]">
+            <span className="truncate text-[12px] font-semibold tracking-tight text-[var(--text-secondary,#515154)] dark:text-[var(--text-secondary,#A1A1A6)]">
               <strong className="font-bold text-[var(--text-primary,#1D1D1F)] dark:text-[var(--text-primary,#F5F5F7)]">
                 {orgName}
               </strong>
               <span className="mx-1.5 opacity-40" aria-hidden="true">
                 ·
               </span>
-              {badgeSubtitle}
+              <span className="opacity-80">{badgeSubtitle}</span>
             </span>
           </div>
 
           {/* Greeting */}
           <h1
-            className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] truncate text-[28px] font-bold leading-[1.1] tracking-[-0.035em] text-[var(--text-primary,#1D1D1F)] sm:text-[32px] lg:text-[34px] dark:text-[var(--text-primary,#F5F5F7)]"
+            className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] truncate text-[26px] sm:text-[32px] lg:text-[34px] font-bold leading-[1.1] tracking-[-0.035em] text-[var(--text-primary,#1D1D1F)] dark:text-[var(--text-primary,#F5F5F7)]"
             style={{ animationDelay: '80ms' }}
           >
             <span key={greeting.key} className="motion-safe:animate-[greetingFade_400ms_ease-out]">
@@ -272,7 +272,7 @@ export const DashboardHeader = memo(function DashboardHeader({
 
           {/* Subtitle */}
           <p
-            className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] line-clamp-2 max-w-2xl text-[14px] leading-relaxed text-balance text-[var(--text-secondary,#515154)] sm:line-clamp-none dark:text-[var(--text-secondary,#A1A1A6)]"
+            className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] line-clamp-2 max-w-2xl text-[13px] sm:text-[14px] leading-relaxed text-balance text-[var(--text-secondary,#515154)] sm:line-clamp-none dark:text-[var(--text-secondary,#A1A1A6)]"
             style={{ animationDelay: '140ms' }}
           >
             {subtitleText}
@@ -281,7 +281,7 @@ export const DashboardHeader = memo(function DashboardHeader({
 
         {/* ══ Right Column: Action Bar ══════════════════════════════ */}
         <div
-          className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] flex w-full items-center gap-2.5 sm:gap-3 lg:w-auto lg:shrink-0"
+          className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] flex flex-wrap w-full items-center gap-2 sm:gap-3 lg:w-auto lg:shrink-0"
           style={{ animationDelay: '200ms' }}
         >
           <LiveClock />
@@ -294,8 +294,8 @@ export const DashboardHeader = memo(function DashboardHeader({
             whileTap={{ scale: 0.96 }}
             aria-keyshortcuts="Meta+K Control+K"
             className={cn(
-              'group relative inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl px-4.5 lg:flex-initial',
-              'text-[13.5px] font-bold text-white',
+              'group relative inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 sm:gap-2 overflow-hidden rounded-2xl px-3 sm:px-4.5 lg:flex-initial',
+              'text-[12.5px] sm:text-[13.5px] font-bold text-white',
               'bg-gradient-to-r from-[#007AFF] to-[#5E5CE6]',
               'shadow-[inset_0_1.5px_1.5px_rgba(255,255,255,0.4),0_4px_18px_-4px_rgba(0,122,255,0.55)]',
               'transition-[background-color,box-shadow] duration-200 ease-out',

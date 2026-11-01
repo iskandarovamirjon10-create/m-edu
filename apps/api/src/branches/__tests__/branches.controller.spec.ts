@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { BranchesController } from '../branches.controller';
 import { BranchesService } from '../branches.service';
+import { SubscriptionsService } from '../../subscriptions/subscriptions.service';
 import { AssignManagerDto, CreateBranchDto, UpdateBranchDto } from '../dto/branch.dto';
 
 describe('BranchesController', () => {
@@ -28,6 +29,10 @@ describe('BranchesController', () => {
         {
           provide: BranchesService,
           useValue: mockService,
+        },
+        {
+          provide: SubscriptionsService,
+          useValue: { checkQuota: vi.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();

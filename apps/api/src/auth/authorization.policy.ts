@@ -53,7 +53,6 @@ export const FAMILY_ROLES: readonly Role[] = [Role.PARENT, Role.STUDENT];
  * a cross-tenant privilege escalation.
  */
 export const PLATFORM_ROLES: readonly Role[] = [
-  Role.SUPER_ADMIN,
   Role.PLATFORM_OWNER,
 ];
 

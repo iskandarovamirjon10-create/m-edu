@@ -53,6 +53,15 @@ const mockList = vi.fn();
 const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
 const mockRemove = vi.fn();
+const mockGetStats = vi.fn().mockResolvedValue({
+  total: 3,
+  active: 2,
+  inactive: 1,
+  avgPrice: 233333,
+  levelDistribution: { ADVANCED: 1, BEGINNER: 1, INTERMEDIATE: 1 },
+  totalGroups: 5,
+  totalStudents: 42,
+});
 
 vi.mock('@/lib/api', () => ({
   coursesApi: {
@@ -60,6 +69,7 @@ vi.mock('@/lib/api', () => ({
     create: (...args: unknown[]) => mockCreate(...args),
     update: (...args: unknown[]) => mockUpdate(...args),
     remove: (...args: unknown[]) => mockRemove(...args),
+    getStats: (...args: unknown[]) => mockGetStats(...args),
   },
 }));
 

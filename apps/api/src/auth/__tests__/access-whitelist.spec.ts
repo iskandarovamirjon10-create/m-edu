@@ -268,7 +268,7 @@ describe('Access Control & Whitelist (AuthService)', () => {
       expect(res.success).toBe(true);
     });
 
-    it('allows admin to update access control configuration', async () => {
+    it('allows platform owner to update access control configuration', async () => {
       prisma.accessControlConfig.upsert.mockResolvedValue({
         id: 'global',
         inviteOnly: true,
@@ -278,7 +278,7 @@ describe('Access Control & Whitelist (AuthService)', () => {
       const res = await svc.updateAccessControlConfig(
         { inviteOnly: true, requireApproval: true },
         'admin-1',
-        'SUPER_ADMIN',
+        'PLATFORM_OWNER',
         null,
       );
 

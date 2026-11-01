@@ -326,12 +326,20 @@ function ExportLogTab() {
                 {items.map((item: { id: string; [key: string]: any }) => (
                   <tr
                     key={item.id}
+                    tabIndex={0}
+                    role="button"
                     onClick={() => handleOpenExportSidecar(item as any)}
-                    className="hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-400/[0.04] transition-colors cursor-pointer"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleOpenExportSidecar(item as any);
+                      }
+                    }}
+                    className="hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-400/[0.04] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
                     <td className="px-5 py-3.5 font-semibold text-[var(--text-primary)]">{item.exportType}</td>
                     <td className="px-5 py-3.5 font-mono text-xs text-[var(--text-secondary)]">{item.format}</td>
-                    <td className="px-5 py-3.5 font-mono text-xs font-bold text-[var(--text-primary)]">{item.recordCount.toLocaleString()}</td>
+                    <td className="px-5 py-3.5 font-mono text-xs font-bold text-[var(--text-primary)]">{(item.recordCount ?? 0).toLocaleString()}</td>
                     <td className="px-5 py-3.5 font-medium">{item.user ? `${item.user.firstName} ${item.user.lastName}` : '—'}</td>
                     <td className="px-5 py-3.5">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[0.7rem] font-bold ${
@@ -595,7 +603,7 @@ function SummaryTab() {
         {stats?.lastExport && (
           <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]/40">
             <h4 className="text-[0.72rem] font-bold text-[var(--text-muted)] uppercase tracking-wide mb-2">{t('dg.lastExport')}</h4>
-            <p className="text-sm font-semibold">{stats.lastExport.exportType} ({stats.lastExport.format}) — {stats.lastExport.recordCount.toLocaleString()} records</p>
+            <p className="text-sm font-semibold">{stats.lastExport.exportType} ({stats.lastExport.format}) — {(stats.lastExport.recordCount ?? 0).toLocaleString()} records</p>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">{new Date(stats.lastExport.createdAt).toLocaleString()}</p>
           </div>
         )}

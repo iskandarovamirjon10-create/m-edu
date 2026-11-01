@@ -97,7 +97,7 @@ export class AuditService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(total / (limit || 1)),
     };
   }
 

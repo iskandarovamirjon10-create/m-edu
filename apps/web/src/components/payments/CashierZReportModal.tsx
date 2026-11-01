@@ -14,9 +14,10 @@ import {
 } from 'lucide-react';
 import { GlassModal, GlassButton, useToast } from '@/components/ui';
 import { paymentsApi } from '@/lib/api';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, parseFinancialAmount } from '@/lib/format';
 import { queryKeys } from '@/lib/query-keys.factory';
 import type { ZReportSummary, ZReportRecord } from '@/types/finance';
+import { triggerPrint } from '@/lib/printEngine';
 
 interface CashierZReportModalProps {
   open: boolean;
@@ -59,8 +60,7 @@ export function CashierZReportModal({
   const expectedCash = summary?.netCashDrawerExpected ?? 0;
   const actualCash = useMemo(() => {
     if (!actualCashStr.trim()) return expectedCash;
-    const clean = actualCashStr.replace(/\s+/g, '').replace(/,/g, '.');
-    const parsed = parseFloat(clean);
+    const parsed = parseFinancialAmount(actualCashStr);
     return isNaN(parsed) ? 0 : parsed;
   }, [actualCashStr, expectedCash]);
 
@@ -86,7 +86,10 @@ export function CashierZReportModal({
   });
 
   const handlePrint = () => {
-    window.print();
+    triggerPrint({
+      type: 'z-report',
+      title: closedReport ? `Z_Hisobot_${closedReport.reportNumber}` : 'Z_Hisobot',
+    });
   };
 
   const handleResetModal = () => {
@@ -148,7 +151,10 @@ export function CashierZReportModal({
             </div>
 
             {/* Thermal Receipt Visual Preview */}
-            <div className="mx-auto max-w-md rounded-2xl border border-white/15 bg-slate-900/90 p-5 shadow-2xl font-mono text-xs text-slate-300 space-y-3 print:bg-white print:text-black">
+            <div
+              data-printable="thermal"
+              className="printable-thermal mx-auto max-w-md rounded-2xl border border-white/15 bg-slate-900/90 p-5 shadow-2xl font-mono text-xs text-slate-300 space-y-3 print:bg-white print:text-black print:border-none print:shadow-none"
+            >
               <div className="text-center space-y-1 border-b border-dashed border-white/20 pb-3">
                 <p className="font-bold text-sm text-white print:text-black">M-EDU EDUCATION</p>
                 <p className="text-[11px] text-slate-400">KASSA Z-HISOBOTI (SHIFT REPORT)</p>
@@ -389,12 +395,12 @@ export function CashierZReportModal({
                     value={closingNotes}
                     onChange={(e) => setClosingNotes(e.target.value)}
                     placeholder="Masalan: Barcha cheklar va terminal lentalari solishtirildi. Kamomad sababi..."
-                    className="w-full rounded-xl border border-white/10 bg-black/30 p-2.5 text-xs text-white outline-none focus:border-emerald-500/50 placeholder:text-slate-500"
+                    className="w-full rounded-xl border border-white/10 bg-black/30 p-2.5 text-base sm:text-xs text-white outline-none focus:border-emerald-500/50 placeholder:text-slate-500"
                   />
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center justify-between pt-2">
+                <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
                   <button
                     type="button"
                     onClick={() => refetch()}

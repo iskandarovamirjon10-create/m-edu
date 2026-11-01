@@ -490,7 +490,7 @@ const CountUp = memo(function CountUp({
     prevRef.current = value;
 
     if (from === to) {
-      el.textContent = to.toLocaleString('uz-UZ');
+      el.textContent = (Number.isFinite(to) ? to : 0).toLocaleString('uz-UZ');
       return;
     }
 
@@ -515,7 +515,7 @@ const CountUp = memo(function CountUp({
 
   return (
     <span ref={spanRef} className="tabular-nums">
-      {value.toLocaleString('uz-UZ')}
+      {(Number.isFinite(value) ? value : 0).toLocaleString('uz-UZ')}
     </span>
   );
 });
@@ -1185,11 +1185,17 @@ export function CamerasPage() {
       const endpoint = `${camera.protocol.toLowerCase()}://${camera.host}:${camera.port}${
         camera.streamPath || ''
       }`;
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        void navigator.clipboard.writeText(endpoint);
-        setCopiedId(camera.id);
-        push('success', `${endpoint} nusxalandi`);
-        setTimeout(() => setCopiedId(null), 1800);
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard
+          .writeText(endpoint)
+          .then(() => {
+            setCopiedId(camera.id);
+            push('success', `${endpoint} nusxalandi`);
+            setTimeout(() => setCopiedId(null), 1800);
+          })
+          .catch(() => {
+            push('error', "Nusxalab bo'lmadi");
+          });
       }
     },
     [push],

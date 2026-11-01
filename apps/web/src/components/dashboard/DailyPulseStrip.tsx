@@ -138,7 +138,7 @@ interface TileConfig {
 }
 
 const PANEL_SURFACE = cn(
-  'relative isolate overflow-hidden rounded-[2rem] p-3.5 sm:p-5',
+  'relative isolate overflow-hidden rounded-[2rem] p-3.5 sm:p-5 w-full min-w-0 max-w-full',
   'border border-white/60 bg-white/75 backdrop-blur-3xl backdrop-saturate-[200%]',
   'shadow-[0_20px_50px_-16px_rgba(0,0,0,0.08),inset_0_1.5px_1.5px_rgba(255,255,255,0.9)]',
   'dark:border-white/[0.12] dark:bg-[#161618]/75',

@@ -69,7 +69,7 @@ export class DocumentsService {
       this.prisma.document.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async findOne(user: RequestUser, id: string) {

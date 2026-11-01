@@ -7,7 +7,7 @@ describe('InventoryService race-condition regression', () => {
     // This ensures concurrent transactions cannot read stale quantity.
     const source = await import('fs').then((fs) =>
       fs.readFileSync(
-        'src/inventory/inventory.service.ts',
+        require('path').resolve(__dirname, '../inventory.service.ts'),
         'utf8',
       ),
     );
@@ -19,7 +19,7 @@ describe('InventoryService race-condition regression', () => {
   it('adjustStock uses atomic update instead of read-then-set', async () => {
     const source = await import('fs').then((fs) =>
       fs.readFileSync(
-        'src/inventory/inventory.service.ts',
+        require('path').resolve(__dirname, '../inventory.service.ts'),
         'utf8',
       ),
     );

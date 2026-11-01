@@ -32,6 +32,7 @@ import * as React from 'react';
 import { motion, useReducedMotion, useSpring, useTransform } from 'framer-motion';
 import type { MotionValue } from 'framer-motion';
 import { RealQrCode } from '../ui/RealQrCode';
+import { AppleWalletPassModal } from './AppleWalletPassModal';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * TYPES
@@ -385,9 +386,8 @@ function DockButton({
 }
 
 /**
- * Specular sheen. The clip wrapper is STATIC; only the inner gradient moves,
- * so rounded corners never detach from the card (the old version translated
- * the clipped layer itself). Compositor-only: transform + opacity.
+ * Specular & Holographic Diffraction Sheen.
+ * Compositor-only: hardware-accelerated transform + opacity with spectral rainbow dispersal.
  */
 const Sheen = React.memo(function Sheen({
   x,
@@ -398,15 +398,30 @@ const Sheen = React.memo(function Sheen({
   y: MotionValue<number>;
   o: MotionValue<number>;
 }) {
-  const tx = useTransform(x, (v) => `${(v - 0.5) * 100}%`);
-  const ty = useTransform(y, (v) => `${(v - 0.5) * 100}%`);
+  const tx = useTransform(x, (v) => `${(v - 0.5) * 110}%`);
+  const ty = useTransform(y, (v) => `${(v - 0.5) * 110}%`);
+  const rot = useTransform(x, (v) => `${(v - 0.5) * 45 + 30}deg`);
+
   return (
     <div
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-[inherit]"
     >
+      {/* 1. Holographic Rainbow Dispersion Foil */}
       <motion.div
-        className="absolute inset-0 [--sheen:rgba(255,255,255,0.85)] dark:[--sheen:rgba(255,255,255,0.13)]"
+        className="absolute inset-[-50%] mix-blend-color-dodge opacity-50 dark:opacity-35 pointer-events-none"
+        style={{
+          x: tx,
+          y: ty,
+          rotate: rot,
+          opacity: o,
+          background:
+            'linear-gradient(115deg, transparent 15%, rgba(255,0,128,0.25) 30%, rgba(255,215,0,0.3) 45%, rgba(0,255,180,0.3) 55%, rgba(0,180,255,0.3) 70%, rgba(180,0,255,0.25) 85%, transparent 95%)',
+        }}
+      />
+      {/* 2. Specular Core Highlight */}
+      <motion.div
+        className="absolute inset-0 [--sheen:rgba(255,255,255,0.92)] dark:[--sheen:rgba(255,255,255,0.18)]"
         style={{
           x: tx,
           y: ty,
@@ -471,6 +486,7 @@ function SpatialIdentityCard360Impl({
   const [isFlipped, setIsFlipped] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [avatarFailed, setAvatarFailed] = React.useState(false);
+  const [walletModalOpen, setWalletModalOpen] = React.useState(false);
 
   const reduceMotion = Boolean(useReducedMotion());
 
@@ -913,15 +929,23 @@ function SpatialIdentityCard360Impl({
                     {orgName}
                   </span>
                 </div>
-                {nfcEnabled && (
+                <div className="flex items-center gap-1.5 shrink-0">
                   <span
-                    title="NFC faol"
-                    className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-[rgba(120,120,128,0.12)] px-2.5 text-[12px] font-semibold ${SUB}`}
+                    title="Rasmiy Tasdiqlangan Guvohnoma"
+                    className="inline-flex h-7 items-center gap-1 rounded-full border border-amber-500/30 bg-gradient-to-r from-amber-500/15 to-yellow-500/10 px-2.5 text-[10.5px] font-bold tracking-tight text-amber-600 dark:text-amber-400 shadow-2xs"
                   >
-                    <NfcWaveIcon className="h-3.5 w-3.5" />
-                    NFC
+                    ★ VERIFIED
                   </span>
-                )}
+                  {nfcEnabled && (
+                    <span
+                      title="NFC faol"
+                      className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-[rgba(120,120,128,0.12)] px-2 text-[11.5px] font-semibold ${SUB}`}
+                    >
+                      <NfcWaveIcon className="h-3.5 w-3.5" />
+                      NFC
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Identity */}
@@ -1101,6 +1125,16 @@ function SpatialIdentityCard360Impl({
           <CopyIcon copied={copied} />
           {copied ? 'Nusxalandi' : 'Nusxalash'}
         </DockButton>
+        <DockButton
+          onClick={() => {
+            haptic('light');
+            setWalletModalOpen(true);
+          }}
+          label="Apple Wallet passini yuklab olish va ko'rish"
+        >
+          <span className="font-bold text-sm leading-none"></span>
+          Wallet
+        </DockButton>
         {onShare && (
           <DockButton onClick={handleShare} label="Kartani ulashish" primary>
             <ShareIcon />
@@ -1108,6 +1142,12 @@ function SpatialIdentityCard360Impl({
           </DockButton>
         )}
       </div>
+
+      <AppleWalletPassModal
+        open={walletModalOpen}
+        onClose={() => setWalletModalOpen(false)}
+        data={data}
+      />
 
       <span aria-live="polite" className="sr-only">
         {copied ? 'ID raqami nusxalandi' : ''}

@@ -1,7 +1,12 @@
 /**
  * ============================================================================
- * KPIGrid v2.1 — Executive metric grid (Hyper-Refractive Liquid Glass)
+ * KPIGrid v3.0 — Strategic Executive Metric Grid (Hyper-Refractive Liquid Glass)
  * ============================================================================
+ * Displays non-redundant macro-level organizational health:
+ * 1. Active Students & Group Capacity
+ * 2. Monthly Revenue & Collection Velocity
+ * 3. Overdue Balance & Receivables Risk
+ * 4. Marketing Leads & Sales Conversion Rate
  */
 
 import { Icon } from '@/lib/design';
@@ -28,99 +33,121 @@ function monthOverMonth(trend?: number[]): number | null {
 
 export function KPIGrid({ stats, paidShare, revenueTrend }: KPIGridProps) {
   const { t } = useI18n();
-  const todayRevenue = Number(stats.todayRevenue ?? 0);
-  const todayPaymentsCount = Number(stats.todayPaymentsCount ?? 0);
 
-  const todayMap = new Map<string, number>();
-  for (const item of stats.todayAttendanceStats || []) {
-    todayMap.set(item.status, (todayMap.get(item.status) || 0) + (Number(item.count) || 0));
-  }
-  const todayInClass = (todayMap.get('PRESENT') || 0) + (todayMap.get('LATE') || 0);
-  const todayAbsent = todayMap.get('ABSENT') || 0;
-  const todayTotal = todayInClass + todayAbsent + (todayMap.get('EXCUSED') || 0);
-  const todayRate = todayTotal > 0 ? Math.round((todayInClass / todayTotal) * 100) : null;
-
-  const totalOverdue = Math.max(0, Number(stats.totalOverdue) || 0);
-  const totalPending = Math.max(0, Number(stats.totalPending) || 0);
+  // 1. Students & Capacity
   const activeStudents = stats.activeStudents || stats.totalStudents || 0;
+  const totalStudents = stats.totalStudents || 0;
+  const activeGroups = stats.activeGroups || 0;
+
+  // 2. Monthly Revenue & Collections
+  const lastRevenueItem = (stats.monthlyRevenue ?? [])[
+    stats.monthlyRevenue && stats.monthlyRevenue.length > 0
+      ? stats.monthlyRevenue.length - 1
+      : 0
+  ];
+  const monthlyRevenueValue = lastRevenueItem
+    ? Number(lastRevenueItem.total) || 0
+    : revenueTrend && revenueTrend.length > 0
+      ? revenueTrend[revenueTrend.length - 1]
+      : Math.max(0, Number(stats.todayRevenue) || 0);
 
   const mom = monthOverMonth(revenueTrend);
-  const paidLabel = typeof paidShare === 'number' ? `${Math.round(paidShare)}% ${t('dashboard.collectedShare', "yig'ildi")}` : null;
+  const totalPending = Math.max(0, Number(stats.totalPending) || 0);
+  const paidLabel =
+    typeof paidShare === 'number'
+      ? `${Math.round(paidShare)}% ${t('dashboard.collectedShare', "yig'ildi")}`
+      : null;
+
+  // 3. Overdue Debt Risk
+  const totalOverdue = Math.max(0, Number(stats.totalOverdue) || 0);
+
+  // 4. Marketing Leads & Sales Conversion
+  const totalLeads = Number(stats.totalLeads) || 0;
+  const wonLeads = Number(stats.wonLeads) || 0;
+  const newLeadsThisMonth = Number(stats.newLeadsThisMonth) || 0;
+  const conversionRate =
+    Number(stats.conversionRate) ||
+    (totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0);
 
   return (
-    <section aria-label={t('dashboard.kpiSection', "Asosiy boshqaruv ko'rsatkichlari")}>
-      <div className="grid grid-cols-1 gap-4.5 sm:grid-cols-2 xl:grid-cols-4">
+    <section aria-label={t('dashboard.kpiSection', "Asosiy strategik ko'rsatkichlar")}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {/* Metric 1: Active Students & Groups */}
         <KPICard
-          title={t('dashboard.todayRevenue', 'Bugungi tushum')}
-          value={todayRevenue}
-          formattedValue={`${todayRevenue.toLocaleString()} UZS`}
+          title={t('dashboard.activeStudents', "Faol o'quvchilar")}
+          value={activeStudents}
+          formattedValue={activeStudents.toLocaleString()}
+          description={`${t('common.total', 'Jami')}: ${totalStudents} · ${activeGroups} ${t('dashboard.groupsSuffix', 'ta faol guruh')}`}
+          trend={{
+            label: `${stats.totalTeachers || 0} ${t('dashboard.teachersCountSuffix', "o'qituvchi")}`,
+            isPositive: true,
+          }}
+          accentColor="#5E5CE6"
+          href="/students"
+          icon={<Icon name="users" size={18} />}
+          delay={0}
+        />
+
+        {/* Metric 2: Monthly Inflow & Collection Rate */}
+        <KPICard
+          title={t('dashboard.monthlyRevenue', 'Oylik tushum')}
+          value={monthlyRevenueValue}
+          formattedValue={`${monthlyRevenueValue.toLocaleString()} UZS`}
           description={
-            todayPaymentsCount > 0
-              ? `${todayPaymentsCount} ${t('dashboard.paymentsCountSuffix', "ta to'lov")}`
-              : t('dashboard.noPaymentsRecorded', "To'lov qayd etilmagan")
+            paidLabel
+              ? `${paidLabel} · ${t('dashboard.pending', 'Kutilmoqda')}: ${totalPending.toLocaleString()} UZS`
+              : `${t('dashboard.pending', 'Kutilmoqda')}: ${totalPending.toLocaleString()} UZS`
           }
           trend={
             mom !== null
-              ? { label: `${mom >= 0 ? '+' : ''}${mom}% ${t('dashboard.monthSuffix', 'oy')}`, isPositive: mom > 0, isNeutral: mom === 0 }
-              : { label: t('dashboard.today', 'Bugun'), isPositive: true }
+              ? {
+                  label: `${mom >= 0 ? '+' : ''}${mom}% ${t('dashboard.monthSuffix', 'oy')}`,
+                  isPositive: mom > 0,
+                  isNeutral: mom === 0,
+                }
+              : { label: t('dashboard.stable', 'Barqaror'), isPositive: true }
           }
           accentColor="#34C759"
           href="/payments"
           icon={<Icon name="creditCard" size={18} />}
-        />
-        <KPICard
-          title={t('dashboard.todayAttendance', 'Bugungi davomat')}
-          value={todayRate ?? 0}
-          formattedValue={todayRate !== null ? `${todayRate}%` : t('dashboard.pendingRate', 'Kutilmoqda')}
-          description={
-            todayTotal > 0
-              ? `${todayInClass}/${todayTotal} ${t('attendance.present', 'kelgan')} · ${todayAbsent} ${t('attendance.absent', "yo'q")}`
-              : stats.todayLessonsCount
-                ? `${stats.todayLessonsCount} ${t('dashboard.lessonsScheduled', 'ta dars rejalashtirilgan')}`
-                : t('dashboard.attendancePending', 'Davomat kutilmoqda')
-          }
-          trend={
-            todayRate === null
-              ? { label: t('dashboard.lessonTime', 'Dars vaqti'), isNeutral: true }
-              : todayRate >= 85
-                ? { label: t('dashboard.gradeExcellent', "A'lo"), isPositive: true }
-                : todayRate >= 70
-                  ? { label: t('dashboard.gradeAverage', "O'rtacha"), isNeutral: true }
-                  : { label: t('dashboard.gradeLow', 'Past'), isPositive: false }
-          }
-          accentColor="#0A84FF"
-          href="/attendance"
-          icon={<Icon name="checkCircle" size={18} />}
           delay={0.06}
         />
+
+        {/* Metric 3: Overdue Receivables Risk */}
         <KPICard
           title={t('dashboard.overdueBalance', "Muddati o'tgan qarzdorlik")}
           value={totalOverdue}
           formattedValue={`${totalOverdue.toLocaleString()} UZS`}
           description={
-            paidLabel
-              ? `${t('dashboard.pending', 'Kutilmoqda')}: ${totalPending.toLocaleString()} · ${paidLabel}`
-              : `${t('dashboard.pending', 'Kutilmoqda')}: ${totalPending.toLocaleString()} UZS`
+            totalOverdue > 0
+              ? t('dashboard.overdueWarning', 'Shoshilinch undirish choralari zarur')
+              : t('dashboard.noDebt', "Barcha to'lovlar o'z vaqtida amalga oshirilgan")
           }
           trend={
             totalOverdue > 0
               ? { label: t('dashboard.overdue', "Muddati o'tgan"), isPositive: false }
-              : { label: t('dashboard.noDebt', "Qarz yo'q"), isPositive: true }
+              : { label: t('dashboard.cleanDebt', 'Qarz yo‘q'), isPositive: true }
           }
           accentColor="#FF9F0A"
           href="/invoices?status=OVERDUE"
           icon={<Icon name="alert" size={18} />}
           delay={0.12}
         />
+
+        {/* Metric 4: Leads & Conversion Pipeline */}
         <KPICard
-          title={t('dashboard.activeStudents', "Faol o'quvchilar")}
-          value={activeStudents}
-          formattedValue={activeStudents.toLocaleString()}
-          description={`${t('common.total', 'Jami')}: ${stats.totalStudents || 0} · ${stats.activeGroups || 0} ${t('dashboard.groupsSuffix', 'ta guruh')}`}
-          trend={{ label: t('common.active', 'Faol'), isPositive: true }}
-          accentColor="#5E5CE6"
-          href="/students"
-          icon={<Icon name="users" size={18} />}
+          title={t('dashboard.leadsConversion', 'Lidlar va konversiya')}
+          value={conversionRate}
+          formattedValue={`${conversionRate}%`}
+          description={`${wonLeads}/${totalLeads} ${t('dashboard.wonSuffix', 'yutildi')} · ${newLeadsThisMonth} ${t('dashboard.newLeadsSuffix', 'ta yangi lid')}`}
+          trend={
+            conversionRate >= 30
+              ? { label: t('dashboard.highGrowth', "Yuqori o'sish"), isPositive: true }
+              : { label: t('dashboard.normalGrowth', 'Normal'), isNeutral: true }
+          }
+          accentColor="#0A84FF"
+          href="/leads"
+          icon={<Icon name="target" size={18} />}
           delay={0.18}
         />
       </div>

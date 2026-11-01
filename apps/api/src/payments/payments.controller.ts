@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { PaymentsService } from './payments.service';
+import { PaymentsService, PaymeJsonRpcRequest, ClickWebhookPayload } from './payments.service';
 import { CreatePaymentDto, UpdatePaymentDto } from '../common/dto';
 import { CloseCashierShiftDto, ZReportQueryDto } from './dto/z-report.dto';
 import { PaymentQuery } from '../common/dto/query';
@@ -10,6 +10,7 @@ import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ADMIN_ROLES } from '../auth/authorization.policy';
 import { Idempotent } from '../common/idempotency';
+import { AllowPublic } from '../auth/public.decorator';
 
 @ApiTags('Payments')
 @ApiBearerAuth()
@@ -17,6 +18,27 @@ import { Idempotent } from '../common/idempotency';
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
+
+  @AllowPublic()
+  @Post('webhook/payme/:orgId')
+  @ApiOperation({ summary: 'Public Payme JSON-RPC 2.0 webhook for student tuition payments' })
+  async handlePaymeWebhook(
+    @Param('orgId') orgId: string,
+    @Body() body: PaymeJsonRpcRequest,
+    @Headers('authorization') authHeader?: string,
+  ) {
+    return this.paymentsService.handlePaymeWebhook(orgId, authHeader, body);
+  }
+
+  @AllowPublic()
+  @Post('webhook/click/:orgId')
+  @ApiOperation({ summary: 'Public Click Merchant webhook for student tuition payments' })
+  async handleClickWebhook(
+    @Param('orgId') orgId: string,
+    @Body() payload: ClickWebhookPayload,
+  ) {
+    return this.paymentsService.handleClickWebhook(orgId, payload);
+  }
 
   @Get()
   @Roles(...ADMIN_ROLES)

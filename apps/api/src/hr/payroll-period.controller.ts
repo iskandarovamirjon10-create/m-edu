@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Inject } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PayrollService } from './payroll.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -21,7 +21,7 @@ import { AllowAnyRole } from '../auth/roles.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller(['payroll', 'hr/payroll'])
 export class PayrollPeriodController {
-  constructor(private readonly payrollService: PayrollService) {}
+  constructor(@Inject(PayrollService) private readonly payrollService: PayrollService) {}
 
   @AllowAnyRole()
   @Get('period-summary')

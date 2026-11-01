@@ -313,6 +313,19 @@ export class TelegramService {
         return { ok: false, errorCategory: 'BLOCKED_USER', retryable: false };
       }
       if (status === 400) {
+        try {
+          const fallbackResp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text,
+              ...(options?.replyMarkup ? { reply_markup: options.replyMarkup } : {}),
+            }),
+            signal: AbortSignal.timeout(TELEGRAM_API_TIMEOUT_MS),
+          });
+          if (fallbackResp.ok) return { ok: true, retryable: false };
+        } catch {}
         return { ok: false, errorCategory: 'INVALID_CHAT', retryable: false };
       }
       if (status === 401) {

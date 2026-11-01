@@ -36,23 +36,14 @@ describe('EmailService', () => {
       },
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        EmailService,
-        {
-          provide: PrismaService,
-          useValue: mockPrisma,
-        },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: vi.fn(),
-          },
-        },
-      ],
-    }).compile();
+    const mockConfig = {
+      get: vi.fn(),
+    };
 
-    service = module.get<EmailService>(EmailService);
+    service = new EmailService(
+      mockPrisma as unknown as PrismaService,
+      mockConfig as unknown as ConfigService,
+    );
   });
 
   it('should be defined', () => {

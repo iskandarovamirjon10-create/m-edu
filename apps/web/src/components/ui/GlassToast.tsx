@@ -202,7 +202,7 @@ export function ToastItemView({
       role={toast.type === 'error' ? 'alert' : 'status'}
       className={cn(
         'bg-white/90 dark:bg-surface-900/90 backdrop-blur-2xl backdrop-saturate-150 border border-black/[0.08] dark:border-white/[0.12] shadow-dropdown shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] rounded-2xl px-4 py-3',
-        'relative flex w-full min-w-[18rem] max-w-sm items-start gap-3 overflow-hidden',
+        'relative flex w-full min-w-0 max-w-[calc(100vw-2rem)] sm:min-w-[18rem] sm:max-w-sm items-start gap-3 overflow-hidden box-border',
         reduced
           ? 'animate-none'
           : leaving
@@ -228,7 +228,7 @@ export function ToastItemView({
       <button
         type="button"
         onClick={handleClose}
-        className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-tertiary transition-colors duration-150 hover:bg-black/[0.04] hover:text-secondary dark:hover:bg-white/[0.08]"
+        className="flex h-7 w-7 sm:h-6 sm:w-6 min-h-[28px] min-w-[28px] flex-shrink-0 items-center justify-center rounded-lg text-tertiary transition-colors duration-150 hover:bg-black/[0.04] hover:text-secondary dark:hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         aria-label={t('a11y.dismiss') || 'Dismiss'}
       >
         <CloseIcon />
@@ -263,12 +263,12 @@ export interface ToastHostProps {
 }
 
 const POSITIONS: Record<ToastPosition, string> = {
-  'top-right': 'top-6 right-6 items-end',
-  'top-left': 'top-6 left-6 items-start',
-  'bottom-right': 'bottom-6 right-6 items-end',
-  'bottom-left': 'bottom-6 left-6 items-start',
-  'top-center': 'top-6 left-1/2 -translate-x-1/2 items-center',
-  'bottom-center': 'bottom-6 left-1/2 -translate-x-1/2 items-center',
+  'top-right': 'top-4 sm:top-6 right-4 sm:right-6 items-end',
+  'top-left': 'top-4 sm:top-6 left-4 sm:left-6 items-start',
+  'bottom-right': 'bottom-4 sm:bottom-6 right-4 sm:right-6 items-end',
+  'bottom-left': 'bottom-4 sm:bottom-6 left-4 sm:left-6 items-start',
+  'top-center': 'top-4 sm:top-6 left-1/2 -translate-x-1/2 items-center',
+  'bottom-center': 'bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 items-center',
 };
 
 export function ToastHost({

@@ -313,18 +313,19 @@ function CountUp({
   useEffect(() => {
     let raf: number;
     startRef.current = null;
+    const safeVal = Number.isFinite(value) ? value : 0;
     const step = (ts: number) => {
       if (startRef.current === null) startRef.current = ts;
       const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(value * eased);
+      setN(safeVal * eased);
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
 
-  return <span className="tabular-nums">{Math.round(n).toLocaleString()}{suffix}</span>;
+  return <span className="tabular-nums">{Math.round(Number.isFinite(n) ? n : 0).toLocaleString()}{suffix}</span>;
 }
 
 /* ============================================================================

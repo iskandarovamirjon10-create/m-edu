@@ -197,14 +197,15 @@ export function CountUp({
       if (startRef.current === null) startRef.current = ts;
       const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(Math.round(value * eased));
+      const safeVal = Number.isFinite(value) ? value : 0;
+      setN(Math.round(safeVal * eased));
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
 
-  return <span className="tabular-nums">{n.toLocaleString()}</span>;
+  return <span className="tabular-nums">{(Number.isFinite(n) ? n : 0).toLocaleString()}</span>;
 }
 
 /* ============================================================================

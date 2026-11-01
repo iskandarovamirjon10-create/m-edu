@@ -4,6 +4,7 @@
 
 import { Link } from 'react-router-dom';
 import { Icon, type IconName } from '@/lib/design';
+import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 
 interface QuickAction {
   title: string;
@@ -59,7 +60,7 @@ export function QuickActionsGrid() {
       >
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-apple-indigo/10 text-apple-indigo">
-            <Icon name="sparkles" size={18} />
+            <MeduAiLogo size="sm" glow />
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-2">

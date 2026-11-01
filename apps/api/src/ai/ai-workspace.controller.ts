@@ -13,6 +13,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
+import { EntitlementGuard, RequireEntitlement } from '../subscriptions/guards/entitlement.guard';
 import { Roles } from '../auth/roles.decorator';
 import { STAFF_ROLES } from '../auth/authorization.policy';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -39,7 +40,8 @@ import type { AiAuthenticatedUser } from './domain/ai.types';
  * Redis-backed ThrottlerGuard (tightened here for the expensive routes).
  */
 @Controller('workspace/ai')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, EntitlementGuard)
+@RequireEntitlement('hasAiCopilot')
 @Roles(...STAFF_ROLES)
 export class AiWorkspaceController {
   constructor(

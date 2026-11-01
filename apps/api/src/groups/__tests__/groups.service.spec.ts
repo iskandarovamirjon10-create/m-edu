@@ -10,6 +10,7 @@ function createMockPrisma() {
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       count: vi.fn(),
     },
     studentGroup: {
@@ -186,6 +187,122 @@ describe('GroupsService cross-tenant reference guards', () => {
         where: { studentId_groupId: { studentId: 'stu-1', groupId: 'target-1' } },
         update: expect.objectContaining({ isActive: true }),
         create: expect.objectContaining({ organizationId: 'org-1', studentId: 'stu-1', groupId: 'target-1', isActive: true }),
+      });
+    });
+  });
+
+  describe('getStats', () => {
+    it('aggregates total, active, capacity, and occupancy metrics', async () => {
+      prisma.group.findMany.mockResolvedValue([
+        {
+          id: 'g-1',
+          isActive: true,
+          capacity: 20,
+          room: 'Room 101',
+          teacher: { id: 't-1', user: { firstName: 'Ali', lastName: 'Valiyev' } },
+          _count: { enrollments: 18 },
+        },
+        {
+          id: 'g-2',
+          isActive: true,
+          capacity: 15,
+          room: 'Room 102',
+          teacher: { id: 't-1', user: { firstName: 'Ali', lastName: 'Valiyev' } },
+          _count: { enrollments: 5 },
+        },
+        {
+          id: 'g-3',
+          isActive: false,
+          capacity: 10,
+          room: 'Room 101',
+          teacher: null,
+          _count: { enrollments: 0 },
+        },
+      ]);
+
+      const stats = await svc.getStats('org-1');
+
+      expect(stats.totalGroups).toBe(3);
+      expect(stats.activeGroups).toBe(2);
+      expect(stats.inactiveGroups).toBe(1);
+      expect(stats.totalCapacity).toBe(35);
+      expect(stats.enrolledStudents).toBe(23);
+      expect(stats.nearFullGroups).toBe(1); // 18/20 = 90%
+      expect(stats.vacantGroups).toBe(1); // 5/15 = 33%
+      expect(stats.uniqueRoomsCount).toBe(2);
+      expect(stats.roomDistribution['Room 101']).toBe(2);
+      expect(stats.topTeachers[0].teacherName).toBe('Ali Valiyev');
+      expect(stats.topTeachers[0].groupCount).toBe(2);
+    });
+  });
+
+  describe('bulkStatus', () => {
+    it('deactivates groups and cancels future planned lessons', async () => {
+      prisma.group.findMany.mockResolvedValue([{ id: 'g-1' }, { id: 'g-2' }]);
+      prisma.group.updateMany.mockResolvedValue({ count: 2 });
+
+      const res = await svc.bulkStatus('org-1', { groupIds: ['g-1', 'g-2'], isActive: false });
+
+      expect(res.success).toBe(true);
+      expect(res.count).toBe(2);
+      expect(prisma.studentGroup.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ groupId: { in: ['g-1', 'g-2'] } }) }),
+      );
+      expect(prisma.lesson.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ groupId: { in: ['g-1', 'g-2'] }, status: 'PLANNED' }) }),
+      );
+      expect(prisma.group.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['g-1', 'g-2'] }, organizationId: 'org-1' },
+        data: { isActive: false },
+      });
+    });
+
+    it('rejects when some groups do not belong to organization', async () => {
+      prisma.group.findMany.mockResolvedValue([{ id: 'g-1' }]); // g-2 not in org
+
+      await expect(
+        svc.bulkStatus('org-1', { groupIds: ['g-1', 'g-2'], isActive: true }),
+      ).rejects.toThrow('Barcha tanlangan guruhlar ushbu tashkilotga tegishli emas');
+    });
+  });
+
+  describe('bulkTeacher', () => {
+    it('updates teacher for multiple groups after verifying teacher belongs to org', async () => {
+      prisma.teacher.findFirst.mockResolvedValue({ id: 't-1' });
+      prisma.group.findMany.mockResolvedValue([{ id: 'g-1' }, { id: 'g-2' }]);
+      prisma.group.updateMany.mockResolvedValue({ count: 2 });
+
+      const res = await svc.bulkTeacher('org-1', { groupIds: ['g-1', 'g-2'], teacherId: 't-1' });
+
+      expect(res.success).toBe(true);
+      expect(res.count).toBe(2);
+      expect(prisma.group.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['g-1', 'g-2'] }, organizationId: 'org-1' },
+        data: { teacherId: 't-1' },
+      });
+    });
+
+    it('rejects when teacher belongs to another organization', async () => {
+      prisma.teacher.findFirst.mockResolvedValue(null);
+
+      await expect(
+        svc.bulkTeacher('org-1', { groupIds: ['g-1'], teacherId: 't-foreign' }),
+      ).rejects.toThrow('Teacher not found in organization');
+    });
+  });
+
+  describe('bulkRoom', () => {
+    it('updates room for multiple groups', async () => {
+      prisma.group.findMany.mockResolvedValue([{ id: 'g-1' }, { id: 'g-2' }]);
+      prisma.group.updateMany.mockResolvedValue({ count: 2 });
+
+      const res = await svc.bulkRoom('org-1', { groupIds: ['g-1', 'g-2'], room: 'Room 204' });
+
+      expect(res.success).toBe(true);
+      expect(res.count).toBe(2);
+      expect(prisma.group.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['g-1', 'g-2'] }, organizationId: 'org-1' },
+        data: { room: 'Room 204' },
       });
     });
   });

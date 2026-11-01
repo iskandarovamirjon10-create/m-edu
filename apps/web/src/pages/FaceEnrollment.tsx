@@ -293,9 +293,11 @@ function formatStudentName(
   return [firstName, lastName].filter(Boolean).join(' ') || '—';
 }
 
-function getInitials(name: string) {
+function getInitials(name?: string | null): string {
+  if (!name || typeof name !== 'string') return '—';
   return (
     name
+      .trim()
       .split(/\s+/)
       .map((p) => p.charAt(0))
       .filter(Boolean)
@@ -895,18 +897,18 @@ export function FaceEnrollmentPage() {
             </div>
 
             {/* 3-Step Guided Biometric Progress Rail */}
-            <div className="relative mt-4 grid grid-cols-3 gap-2">
+            <div className="relative mt-4 grid grid-cols-3 gap-1.5 sm:gap-2">
               {[
                 { step: 1, title: '1. Talaba' },
                 { step: 2, title: '2. Sessiya' },
-                { step: 3, title: '3. Face ID Scan' },
+                { step: 3, title: '3. Scan' },
               ].map((item) => {
                 const active = currentStep >= item.step;
                 const isCurrent = currentStep === item.step;
                 return (
                   <div
                     key={item.step}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[11.5px] font-bold transition-all ${
+                    className={`flex items-center gap-1.5 sm:gap-2 rounded-xl border px-2 py-1.5 sm:px-3 sm:py-2 text-[10.5px] sm:text-[11.5px] font-bold transition-all ${
                       isCurrent
                         ? 'border-[#10B981]/45 bg-[#10B981]/12 text-[#059669] shadow-[0_4px_14px_-4px_rgba(16,185,129,0.25)] dark:text-[#34D399]'
                         : active

@@ -226,7 +226,7 @@ export function SmartKpiScorecardModal({
                   step="1000"
                   value={customBonus !== '' ? customBonus : kpi.totalRecommendedBonus}
                   onChange={(e) => setCustomBonus(e.target.value)}
-                  className="min-h-[44px] w-40 rounded-xl border border-black/10 bg-white/80 dark:bg-slate-800/80 px-3 text-xs font-black text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  className="min-h-[44px] w-full sm:w-44 rounded-xl border border-black/10 bg-white/80 dark:bg-slate-800/80 px-3 text-base sm:text-xs font-black text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50"
                   placeholder="Bonus so'mda"
                 />
                 <span className="text-xs font-semibold text-slate-500">so'm</span>
@@ -234,7 +234,7 @@ export function SmartKpiScorecardModal({
             </div>
 
             {/* Final Action Buttons */}
-            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-3 border-t border-black/[0.06] dark:border-white/[0.08]">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 pt-3 border-t border-black/[0.06] dark:border-white/[0.08]">
               <GlassButton type="button" variant="secondary" onClick={onClose}>
                 {t('common.cancel', 'Bekor qilish')}
               </GlassButton>

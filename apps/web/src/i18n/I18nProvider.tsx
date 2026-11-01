@@ -25,6 +25,8 @@ import {
   LOCALE_META,
   getStoredLocale,
   isLocale,
+  isLocaleLoaded,
+  loadLocale,
   storeLocale,
   translate,
   type Locale,
@@ -195,6 +197,19 @@ export interface I18nProviderProps {
  */
 export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
   const [locale, setLocaleState] = useState<Locale>(() => initialLocale ?? getStoredLocale());
+  // Bumped when a lazily fetched dictionary arrives so `t` re-renders.
+  const [dictionaryRevision, setDictionaryRevision] = useState(0);
+
+  useEffect(() => {
+    if (isLocaleLoaded(locale)) return;
+    let alive = true;
+    void loadLocale(locale).then(() => {
+      if (alive) setDictionaryRevision((revision) => revision + 1);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [locale]);
 
   // Keep state reactive if initialLocale prop changes dynamically (tests/sandboxes)
   useEffect(() => {
@@ -261,8 +276,9 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
     };
   }, []);
 
-  // Stable setLocale that notifies storage, BroadcastChannel, and in-window listeners
-  const setLocale = useCallback((next: Locale) => {
+  // Stable setLocale that notifies storage, BroadcastChannel, and in-window listeners.
+  // The dictionary is fetched first so the UI never flashes untranslated English.
+  const applyLocale = useCallback((next: Locale) => {
     setLocaleState(next);
     storeLocale(next);
 
@@ -289,9 +305,22 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
     }
   }, []);
 
+  const setLocale = useCallback(
+    (next: Locale) => {
+      if (isLocaleLoaded(next)) {
+        applyLocale(next);
+        return;
+      }
+      void loadLocale(next).then(() => applyLocale(next));
+    },
+    [applyLocale],
+  );
+
   const t = useCallback<TranslateFn>(
     (key, varsOrFallback, fallback) => translate(locale, key, varsOrFallback, fallback),
-    [locale],
+    // `dictionaryRevision` is intentionally a dependency: it forces a new `t`
+    // (and therefore a re-render) once the lazy dictionary lands.
+    [locale, dictionaryRevision],
   );
 
   const formatNumberFn = useCallback(
@@ -336,6 +365,7 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
       formatCurrencyFn,
       formatDateFn,
       formatRelativeTimeFn,
+      dictionaryRevision,
     ],
   );
 

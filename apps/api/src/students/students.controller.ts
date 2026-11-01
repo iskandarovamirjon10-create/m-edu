@@ -1,13 +1,14 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { StudentsService } from './students.service';
-import { CreateStudentDto, UpdateStudentDto, CreateParentLinkDto, UpdateParentLinkDto } from '../common/dto';
+import { CreateStudentDto, UpdateStudentDto, CreateParentLinkDto, UpdateParentLinkDto, BulkAssignGroupDto, BulkFreezeDto, BulkUnfreezeDto, BulkStatusDto, BulkDeleteStudentsDto } from '../common/dto';
 import { StudentQuery } from '../common/dto/query';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ADMIN_ROLES, STAFF_ROLES } from '../auth/authorization.policy';
+import { QuotaGuard, RequireQuota } from '../subscriptions/guards/quota.guard';
 
 @ApiTags('Students')
 @ApiBearerAuth()
@@ -31,6 +32,8 @@ export class StudentsController {
   }
 
   @Post()
+  @UseGuards(QuotaGuard)
+  @RequireQuota('students')
   @Roles(...ADMIN_ROLES)
   @ApiOperation({ summary: 'Create a student' })
   create(@CurrentUser('organizationId') orgId: string, @Body() dto: CreateStudentDto) {
@@ -139,4 +142,55 @@ export class StudentsController {
   ) {
     return this.studentsService.unlinkParent(orgId, studentId, parentId);
   }
+
+  @Post('bulk-assign-group')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Bulk assign students to a group' })
+  bulkAssignGroup(
+    @CurrentUser('organizationId') orgId: string,
+    @Body() dto: BulkAssignGroupDto,
+  ) {
+    return this.studentsService.bulkAssignGroup(orgId, dto);
+  }
+
+  @Post('bulk-freeze')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Bulk freeze students' })
+  bulkFreeze(
+    @CurrentUser('organizationId') orgId: string,
+    @Body() dto: BulkFreezeDto,
+  ) {
+    return this.studentsService.bulkFreeze(orgId, dto);
+  }
+
+  @Post('bulk-unfreeze')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Bulk unfreeze students' })
+  bulkUnfreeze(
+    @CurrentUser('organizationId') orgId: string,
+    @Body() dto: BulkUnfreezeDto,
+  ) {
+    return this.studentsService.bulkUnfreeze(orgId, dto);
+  }
+
+  @Post('bulk-status')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Bulk update student status' })
+  bulkStatus(
+    @CurrentUser('organizationId') orgId: string,
+    @Body() dto: BulkStatusDto,
+  ) {
+    return this.studentsService.bulkStatus(orgId, dto);
+  }
+
+  @Post('bulk-delete')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN')
+  @ApiOperation({ summary: 'Bulk delete or archive students' })
+  bulkDelete(
+    @CurrentUser('organizationId') orgId: string,
+    @Body() dto: BulkDeleteStudentsDto,
+  ) {
+    return this.studentsService.bulkDelete(orgId, dto);
+  }
+
 }

@@ -41,6 +41,7 @@ import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { PayrollRun, PayrollPeriodSummary } from '@/lib/types';
 import { SmartKpiScorecardModal } from '@/components/payroll/SmartKpiScorecardModal';
+import { TeacherPayrollStudio } from '@/components/payroll/TeacherPayrollStudio';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -577,6 +578,7 @@ export function PayrollPage() {
 
   const [year, setYear] = useState(CURRENT_PERIOD.year);
   const [month, setMonth] = useState(CURRENT_PERIOD.month);
+  const [payrollView, setPayrollView] = useState<'runs' | 'studio'>('runs');
 
   const [calculateOpen, setCalculateOpen] = useState(false);
   const [smartKpiOpen, setSmartKpiOpen] = useState(false);
@@ -896,6 +898,51 @@ export function PayrollPage() {
         </div>
       </motion.div>
 
+      {/* ============================================================
+          VIEW MODE TABS (Runs Vedomosti vs KPI & Compensation Studio)
+      ============================================================ */}
+      <motion.div variants={cardVariants}>
+        <div className="flex flex-wrap items-center gap-2 p-1.5 rounded-2xl border border-white/20 bg-white/40 dark:bg-black/20 dark:border-white/10 backdrop-blur-xl w-fit">
+          <button
+            type="button"
+            onClick={() => {
+              playTick();
+              setPayrollView('runs');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              payrollView === 'runs'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/25'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Icon paths={I.payroll} size={14} strokeWidth={2} />
+            <span>Oylik Vedomosti (Runs)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              playTick();
+              setPayrollView('studio');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              payrollView === 'studio'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/25'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <span>💎</span>
+            <span>Ustozlar KPI & Kompensatsiya Studio</span>
+          </button>
+        </div>
+      </motion.div>
+
+      {payrollView === 'studio' ? (
+        <motion.div variants={cardVariants} className="mt-2">
+          <TeacherPayrollStudio />
+        </motion.div>
+      ) : (
+        <>
       {/* ============================================================
           PERIOD TOOLBAR
       ============================================================ */}
@@ -1228,6 +1275,8 @@ export function PayrollPage() {
           </motion.div>
         </>
       ) : null}
+        </>
+      )}
 
       {/* ============================================================
           CALCULATE MODAL

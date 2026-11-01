@@ -1050,7 +1050,9 @@ function PaymentSheet({
     const invNumbers = invoices.map((inv) => `№ ${inv.number}`).join(', ');
     const payText = `M-EDU To'lov ma'lumoti:\nO'quvchi: ${childName}\nQarzdorlik: ${formatUZS(outstanding)}\nHisob-faktura: ${invNumbers || 'Joriy oy'}\nTo'lov shakli: ${channel.label}`;
     try {
-      void navigator.clipboard?.writeText?.(payText);
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(payText).catch(() => {});
+      }
     } catch {
       /* ignore */
     }
@@ -2726,7 +2728,9 @@ function DigitalBadgeView({
 
   const handleCopyId = () => {
     try {
-      void navigator.clipboard?.writeText?.(displayId);
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(displayId).catch(() => {});
+      }
       setCopied(true);
       haptic('light');
       window.clearTimeout(copyTimer.current);

@@ -177,8 +177,8 @@ export class TurnstileRelayService {
         };
       }
 
-      if (targetDevice.protocol === 'TCP_SOCKET') {
-        await this.dispatchTcpPulse(targetDevice, pulseDuration, options);
+      if (targetDevice.protocol === 'TCP_SOCKET' || targetDevice.protocol === 'IPC_SOCKET') {
+        await this.dispatchSocketPulse(targetDevice, pulseDuration, options);
         return {
           success: true,
           deviceId: targetDevice.id,
@@ -293,42 +293,91 @@ export class TurnstileRelayService {
   }
 
   /**
-   * Dispatches a raw TCP socket pulse to an Ethernet/IP relay controller with timeout.
+   * Dispatches a raw TCP socket or IPC domain socket / named pipe pulse
+   * with explicit timeout, disconnection detection, and resource cleanup.
    */
-  private async dispatchTcpPulse(
+  private async dispatchSocketPulse(
     device: TurnstileDeviceConfig,
     pulseMs: number,
     _options: PulseRelayOptions,
   ): Promise<void> {
-    let host = device.host;
-    let port = device.port;
+    // Detect IPC vs TCP
+    const isIpc =
+      device.protocol === 'IPC_SOCKET' ||
+      Boolean(device.ipcPath) ||
+      Boolean(device.endpointUrl?.startsWith('ipc://')) ||
+      Boolean(device.endpointUrl?.startsWith('unix://')) ||
+      Boolean(device.host && (device.host.startsWith('/') || device.host.startsWith('\\\\.\\pipe\\')));
 
-    if (!host && device.endpointUrl) {
-      try {
-        const parsed = new URL(device.endpointUrl);
-        host = parsed.hostname;
-        if (parsed.port) port = Number(parsed.port);
-      } catch {
-        // fallback
+    let ipcPath: string | undefined;
+    let host: string | undefined;
+    let port: number | undefined;
+
+    if (isIpc) {
+      ipcPath =
+        device.ipcPath ||
+        (device.endpointUrl?.startsWith('ipc://') ? device.endpointUrl.slice(6) : undefined) ||
+        (device.endpointUrl?.startsWith('unix://') ? device.endpointUrl.slice(7) : undefined) ||
+        device.host;
+
+      if (!ipcPath) {
+        throw new Error(`Device [${device.id}] has no ipcPath configured for IPC socket communication.`);
+      }
+    } else {
+      host = device.host;
+      port = device.port;
+
+      if (!host && device.endpointUrl) {
+        try {
+          const parsed = new URL(device.endpointUrl);
+          host = parsed.hostname;
+          if (parsed.port) port = Number(parsed.port);
+        } catch {
+          // fallback
+        }
+      }
+
+      if (!host) {
+        throw new Error(`Device [${device.id}] has no host or valid endpointUrl configured for TCP socket.`);
       }
     }
 
-    if (!host) {
-      throw new Error(`Device [${device.id}] has no host or valid endpointUrl configured for TCP socket.`);
-    }
     const resolvedPort = port || 5000;
+    const destinationLabel = isIpc ? `IPC:${ipcPath}` : `TCP:${host}:${resolvedPort}`;
 
     return new Promise<void>((resolve, reject) => {
       const socket = new net.Socket();
       let settled = false;
 
+      // Hard timeout timer: guarantees cancellation even if DNS or OS connect hangs
+      const overallTimer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          cleanup();
+          socket.destroy();
+          const err = new Error(`Socket connection to ${destinationLabel} timed out after 3000ms`);
+          (err as any).isTimeout = true;
+          reject(err);
+        }
+      }, 3000);
+
       socket.setTimeout(3000);
+
+      const cleanup = () => {
+        clearTimeout(overallTimer);
+        try {
+          socket.removeAllListeners();
+        } catch {
+          // ignore
+        }
+      };
 
       socket.on('timeout', () => {
         if (!settled) {
           settled = true;
+          cleanup();
           socket.destroy();
-          const err = new Error(`TCP socket connection to ${host}:${resolvedPort} timed out after 3000ms`);
+          const err = new Error(`Socket connection to ${destinationLabel} timed out after 3000ms`);
           (err as any).isTimeout = true;
           reject(err);
         }
@@ -337,21 +386,55 @@ export class TurnstileRelayService {
       socket.on('error', (err) => {
         if (!settled) {
           settled = true;
+          cleanup();
           socket.destroy();
           reject(err);
         }
       });
 
-      socket.connect(resolvedPort, host, () => {
+      // Handle socket disconnection before pulse finishes
+      socket.on('close', (hadError) => {
+        if (!settled) {
+          settled = true;
+          cleanup();
+          socket.destroy();
+          reject(new Error(`Socket connection to ${destinationLabel} closed unexpectedly${hadError ? ' with error' : ''}`));
+        }
+      });
+
+      socket.on('end', () => {
+        if (!settled) {
+          settled = true;
+          cleanup();
+          socket.destroy();
+          reject(new Error(`Socket connection to ${destinationLabel} was ended by remote peer before pulse completed`));
+        }
+      });
+
+      const onConnect = () => {
         const cmd = `OPEN ${pulseMs}\r\n`;
-        socket.write(cmd, () => {
+        socket.write(cmd, (writeErr) => {
+          if (writeErr && !settled) {
+            settled = true;
+            cleanup();
+            socket.destroy();
+            reject(writeErr);
+            return;
+          }
           if (!settled) {
             settled = true;
+            cleanup();
             socket.end();
             resolve();
           }
         });
-      });
+      };
+
+      if (isIpc && ipcPath) {
+        socket.connect(ipcPath, onConnect);
+      } else if (host) {
+        socket.connect(resolvedPort, host, onConnect);
+      }
     });
   }
 }

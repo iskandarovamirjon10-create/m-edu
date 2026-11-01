@@ -141,7 +141,8 @@ export function LessonCopilotPanel({
               {isLoading ? (
                 <div className="space-y-3 py-4">
                   <div className="h-16 w-full animate-pulse rounded-xl bg-indigo-500/10" />
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="h-12 animate-pulse rounded-lg bg-indigo-500/10" />
                     <div className="h-12 animate-pulse rounded-lg bg-indigo-500/10" />
                     <div className="h-12 animate-pulse rounded-lg bg-indigo-500/10" />
                     <div className="h-12 animate-pulse rounded-lg bg-indigo-500/10" />

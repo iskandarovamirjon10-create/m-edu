@@ -158,6 +158,9 @@ export interface EnrollmentRepository {
     groupId?: string,
   ): AsyncGenerator<Array<TemplateEntity & { student: { id: string; firstName: string; lastName: string } }>>;
 
+  /** Revoke a single template by ID */
+  revokeTemplate?(organizationId: string, templateId: string, reason?: string): Promise<void>;
+
   /** Revoke all templates for an enrollment */
   revokeTemplates(organizationId: string, enrollmentId: string): Promise<void>;
 

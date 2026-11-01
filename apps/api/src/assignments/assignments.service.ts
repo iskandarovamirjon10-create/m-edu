@@ -85,7 +85,7 @@ export class AssignmentsService {
       this.prisma.assignment.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async findOne(organizationId: string, id: string, requester?: { id: string; role: string }) {

@@ -13,6 +13,8 @@ import {
   PayrollInputs,
   PayrollValidationError,
   toMajor2,
+  toMinor,
+  fromMinor,
 } from '@medu/financial-engine';
 import { CreatePayrollRunDto, AdjustPayrollRunDto } from './dto/payroll.dto';
 import { FinancialPeriodService } from '../analytics/financial-period.service';
@@ -92,7 +94,7 @@ export class PayrollService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(total / (limit || 1)),
       totals: {
         gross: Number(agg._sum.grossAmount ?? 0),
         net: Number(agg._sum.netAmount ?? 0),
@@ -159,7 +161,10 @@ export class PayrollService {
   async calculateRun(organizationId: string, actorId: string, dto: CreatePayrollRunDto) {
     const teacher = await this.prisma.teacher.findFirst({
       where: { id: dto.teacherId, organizationId },
-      include: { user: { select: { id: true, isActive: true } } },
+      include: {
+        user: { select: { id: true, isActive: true } },
+        Employee: { select: { salary: true } },
+      },
     });
     if (!teacher) throw new NotFoundException('Teacher not found');
     if (!teacher.user.isActive) throw new ConflictException('Teacher user is inactive');
@@ -188,6 +193,7 @@ export class PayrollService {
 
     let totalMinutes = 0;
     for (const lesson of lessonsForHours) {
+      if (!lesson.startTime || !lesson.endTime) continue;
       const [sh, sm] = lesson.startTime.split(':').map(Number);
       const [eh, em] = lesson.endTime.split(':').map(Number);
       if ([sh, sm, eh, em].every(Number.isFinite)) {
@@ -199,14 +205,27 @@ export class PayrollService {
     const absenceDays = dto.absenceDays ?? 0;
     const lateCount = dto.lateCount ?? 0;
 
-    const salaryType = (dto.salaryType ?? teacher.salaryType) as 'MONTHLY' | 'HOURLY' | 'PER_LESSON';
+    if (dto.bonus !== undefined && dto.bonus < 0) {
+      throw new BadRequestException('bonus must be non-negative');
+    }
+    if (dto.otherDeduction !== undefined && dto.otherDeduction < 0) {
+      throw new BadRequestException('otherDeduction must be non-negative');
+    }
+
+    const salaryType = (dto.salaryType ?? teacher.salaryType ?? 'MONTHLY') as 'MONTHLY' | 'HOURLY' | 'PER_LESSON';
+    if (!['MONTHLY', 'HOURLY', 'PER_LESSON'].includes(salaryType)) {
+      throw new BadRequestException(`Unknown salaryType: ${salaryType}`);
+    }
+
     const baseAmount =
       dto.baseAmount ??
       (salaryType === 'HOURLY'
         ? teacher.hourlyRate
         : salaryType === 'PER_LESSON'
           ? teacher.lessonRate
-          : null);
+          : salaryType === 'MONTHLY'
+            ? ((teacher as any).baseSalary ?? teacher.Employee?.salary ?? null)
+            : null);
     if (baseAmount === null || baseAmount === undefined) {
       throw new BadRequestException(
         'baseAmount is required when the teacher has no rate configured for the selected salary type',
@@ -260,9 +279,9 @@ export class PayrollService {
               overtimeRate: dto.overtimeMultiplier !== undefined ? toMajor2(dto.overtimeMultiplier) : undefined,
               bonus: toMajor2(inputs.bonus ?? 0),
               absenceDays: result.absenceDays,
-              absencePenalty: toMajor2(result.breakdown.totals.absenceMinor / 100),
+              absencePenalty: fromMinor(result.breakdown.totals.absenceMinor),
               lateCount: result.lateCount,
-              latePenalty: toMajor2(result.breakdown.totals.lateMinor / 100),
+              latePenalty: fromMinor(result.breakdown.totals.lateMinor),
               otherDeduction: toMajor2(inputs.otherDeduction ?? 0),
               tax: result.taxAmount,
               grossAmount: result.grossAmount,
@@ -430,6 +449,12 @@ export class PayrollService {
         `Only DRAFT or CALCULATED runs can be adjusted (current: ${existing.status})`,
       );
     }
+    if (dto.bonus !== undefined && dto.bonus < 0) {
+      throw new BadRequestException('bonus must be non-negative');
+    }
+    if (dto.otherDeduction !== undefined && dto.otherDeduction < 0) {
+      throw new BadRequestException('otherDeduction must be non-negative');
+    }
     const bonus = dto.bonus !== undefined ? dto.bonus : Number(existing.bonus);
     const otherDeduction =
       dto.otherDeduction !== undefined ? dto.otherDeduction : Number(existing.otherDeduction);
@@ -456,21 +481,29 @@ export class PayrollService {
       }
     }
 
-    const recomputed = computePayroll({
-      salaryType: existing.salaryType,
-      baseAmount: existing.baseAmount,
-      hoursWorked: existing.hoursWorked,
-      lessonsCount: existing.lessonsCount,
-      overtimeHours: existing.overtimeHours,
-      overtimeMultiplier,
-      bonus,
-      absenceDays: existing.absenceDays,
-      workdaysInMonth,
-      lateCount,
-      latePenaltyPerEvent,
-      otherDeduction,
-      taxBasisPoints: dto.taxBasisPoints,
-    });
+    let recomputed;
+    try {
+      recomputed = computePayroll({
+        salaryType: existing.salaryType,
+        baseAmount: existing.baseAmount,
+        hoursWorked: existing.hoursWorked,
+        lessonsCount: existing.lessonsCount,
+        overtimeHours: existing.overtimeHours,
+        overtimeMultiplier,
+        bonus,
+        absenceDays: existing.absenceDays,
+        workdaysInMonth,
+        lateCount,
+        latePenaltyPerEvent,
+        otherDeduction,
+        taxBasisPoints: dto.taxBasisPoints,
+      });
+    } catch (err) {
+      if (err instanceof PayrollValidationError) {
+        throw new BadRequestException(err.message);
+      }
+      throw err;
+    }
 
     await withPrismaRetry(async () => {
       await this.prisma.$transaction(async (tx) => {
@@ -488,12 +521,8 @@ export class PayrollService {
             tax: recomputed.taxAmount,
             grossAmount: recomputed.grossAmount,
             netAmount: recomputed.netAmount,
-            latePenalty: Number(
-              (recomputed.breakdown.totals.lateMinor / 100).toFixed(2),
-            ),
-            absencePenalty: Number(
-              (recomputed.breakdown.totals.absenceMinor / 100).toFixed(2),
-            ),
+            latePenalty: fromMinor(recomputed.breakdown.totals.lateMinor),
+            absencePenalty: fromMinor(recomputed.breakdown.totals.absenceMinor),
             breakdown: recomputed.breakdown as unknown as Prisma.InputJsonValue,
           },
         });
@@ -529,11 +558,12 @@ export class PayrollService {
       teacherId: string;
       year: number;
       month: number;
+      groupId?: string;
       revenueSharePercentage?: number;
       retentionBonusPercentage?: number;
     },
   ) {
-    const { teacherId, year, month } = params;
+    const { teacherId, year, month, groupId } = params;
     const sharePct = params.revenueSharePercentage ?? 40;
     const bonusPct = params.retentionBonusPercentage ?? 10;
 
@@ -555,11 +585,19 @@ export class PayrollService {
     const startDate = new Date(Date.UTC(year, month - 1, 1));
     const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
+    let targetGroups = teacher.groups;
+    if (groupId) {
+      targetGroups = teacher.groups.filter((g) => g.id === groupId);
+      if (targetGroups.length === 0) {
+        throw new BadRequestException('Specified group does not belong to this teacher');
+      }
+    }
+
     const studentIds: string[] = Array.from(
-      new Set(teacher.groups.flatMap((g) => g.enrollments.map((s) => s.studentId))),
+      new Set(targetGroups.flatMap((g) => g.enrollments.map((s) => s.studentId))),
     );
 
-    const payments = await this.prisma.payment.findMany({
+    const payments = studentIds.length > 0 ? await this.prisma.payment.findMany({
       where: {
         organizationId,
         studentId: { in: studentIds },
@@ -567,14 +605,14 @@ export class PayrollService {
         paidAt: { gte: startDate, lte: endDate },
       },
       select: { amount: true },
-    });
+    }) : [];
 
-    const totalCollected = payments.reduce((acc, p) => acc + Number(p.amount), 0);
-    const baseShareAmount = Math.round(totalCollected * (sharePct / 100));
+    const totalCollectedMinor = payments.reduce((acc, p) => acc + toMinor(p.amount), 0);
+    const baseShareAmountMinor = Math.round((totalCollectedMinor * sharePct) / 100);
 
     let activeStudentsCount = 0;
     let totalEnrolledCount = 0;
-    for (const g of teacher.groups) {
+    for (const g of targetGroups) {
       for (const s of g.enrollments) {
         totalEnrolledCount++;
         if (s.isActive) activeStudentsCount++;
@@ -582,12 +620,17 @@ export class PayrollService {
     }
 
     const retentionRate =
-      totalEnrolledCount > 0 ? Math.round((activeStudentsCount / totalEnrolledCount) * 100) : 100;
+      totalEnrolledCount > 0 ? Math.round((activeStudentsCount / totalEnrolledCount) * 100) : 0;
 
-    const retentionBonusEarned =
-      retentionRate >= 85 ? Math.round(baseShareAmount * (bonusPct / 100)) : 0;
+    const retentionBonusEarnedMinor =
+      (totalEnrolledCount > 0 && retentionRate >= 85)
+        ? Math.round((baseShareAmountMinor * bonusPct) / 100)
+        : 0;
 
-    const totalEarnings = baseShareAmount + retentionBonusEarned;
+    const baseShareAmount = fromMinor(baseShareAmountMinor);
+    const retentionBonusEarned = fromMinor(retentionBonusEarnedMinor);
+    const totalEarnings = fromMinor(baseShareAmountMinor + retentionBonusEarnedMinor);
+    const totalCollected = fromMinor(totalCollectedMinor);
 
     return {
       teacherId,
@@ -653,6 +696,7 @@ export class PayrollService {
       where: { id: teacherId, organizationId },
       include: {
         user: { select: { firstName: true, lastName: true, email: true, phone: true } },
+        Employee: { select: { salary: true } },
         groups: {
           select: {
             id: true,
@@ -681,10 +725,10 @@ export class PayrollService {
       }
     }
     const retentionRate =
-      totalEnrolledCount > 0 ? Math.round((activeStudentsCount / totalEnrolledCount) * 100) : 100;
+      totalEnrolledCount > 0 ? Math.round((activeStudentsCount / totalEnrolledCount) * 100) : 0;
 
     // 2. Attendance KPI
-    let attendanceRate = 100;
+    let attendanceRate = 0;
     let attendanceStats = { total: 0, present: 0, late: 0, absent: 0 };
     if (groupIds.length > 0) {
       const attendanceRecords = await this.prisma.attendance.findMany({
@@ -708,7 +752,7 @@ export class PayrollService {
     }
 
     // 3. Academic Grade / Exam KPI
-    let averageGradeScore = 85;
+    let averageGradeScore = 0;
     let gradeCount = 0;
     if (groupIds.length > 0) {
       const grades = await this.prisma.grade.findMany({
@@ -763,45 +807,55 @@ export class PayrollService {
     const salaryType = (teacher.salaryType || 'MONTHLY') as 'MONTHLY' | 'HOURLY' | 'PER_LESSON';
     let estimatedBase = (teacher as { baseSalary?: unknown }).baseSalary
       ? Number((teacher as { baseSalary?: unknown }).baseSalary)
-      : 4_000_000;
+      : (teacher.Employee?.salary ? Number(teacher.Employee.salary) : 4_000_000);
     if (salaryType === 'HOURLY' && teacher.hourlyRate) {
-      estimatedBase = Number(teacher.hourlyRate) * (hoursWorked || 20);
+      estimatedBase = Number(teacher.hourlyRate) * hoursWorked;
     } else if (salaryType === 'PER_LESSON' && teacher.lessonRate) {
-      estimatedBase = Number(teacher.lessonRate) * (conductedLessons || 12);
+      estimatedBase = Number(teacher.lessonRate) * conductedLessons;
     }
 
     // 6. Dynamic Bonus Pillars
+    const estimatedBaseMinor = toMinor(estimatedBase);
+    const hasTeachingActivity =
+      conductedLessons > 0 || hoursWorked > 0 || (salaryType === 'MONTHLY' && (teacher.groups.length > 0 || conductedLessons > 0));
+
     // Attendance Bonus: >=92% -> +10%, >=85% -> +5%
     let attendanceBonus = 0;
     let attendanceBonusPct = 0;
-    if (attendanceRate >= 92) {
-      attendanceBonusPct = 10;
-      attendanceBonus = Math.round(estimatedBase * 0.10);
-    } else if (attendanceRate >= 85) {
-      attendanceBonusPct = 5;
-      attendanceBonus = Math.round(estimatedBase * 0.05);
+    if (hasTeachingActivity && attendanceStats.total > 0) {
+      if (attendanceRate >= 92) {
+        attendanceBonusPct = 10;
+        attendanceBonus = fromMinor(Math.round((estimatedBaseMinor * 10) / 100));
+      } else if (attendanceRate >= 85) {
+        attendanceBonusPct = 5;
+        attendanceBonus = fromMinor(Math.round((estimatedBaseMinor * 5) / 100));
+      }
     }
 
     // Retention Bonus: >=95% -> +15%, >=88% -> +10%
     let retentionBonus = 0;
     let retentionBonusPct = 0;
-    if (retentionRate >= 95) {
-      retentionBonusPct = 15;
-      retentionBonus = Math.round(estimatedBase * 0.15);
-    } else if (retentionRate >= 88) {
-      retentionBonusPct = 10;
-      retentionBonus = Math.round(estimatedBase * 0.10);
+    if (hasTeachingActivity && totalEnrolledCount > 0) {
+      if (retentionRate >= 95) {
+        retentionBonusPct = 15;
+        retentionBonus = fromMinor(Math.round((estimatedBaseMinor * 15) / 100));
+      } else if (retentionRate >= 88) {
+        retentionBonusPct = 10;
+        retentionBonus = fromMinor(Math.round((estimatedBaseMinor * 10) / 100));
+      }
     }
 
     // Academic / Exam Bonus: >=88% -> +10%, >=80% -> +5%
     let academicBonus = 0;
     let academicBonusPct = 0;
-    if (averageGradeScore >= 88) {
-      academicBonusPct = 10;
-      academicBonus = Math.round(estimatedBase * 0.10);
-    } else if (averageGradeScore >= 80) {
-      academicBonusPct = 5;
-      academicBonus = Math.round(estimatedBase * 0.05);
+    if (hasTeachingActivity && gradeCount > 0) {
+      if (averageGradeScore >= 88) {
+        academicBonusPct = 10;
+        academicBonus = fromMinor(Math.round((estimatedBaseMinor * 10) / 100));
+      } else if (averageGradeScore >= 80) {
+        academicBonusPct = 5;
+        academicBonus = fromMinor(Math.round((estimatedBaseMinor * 5) / 100));
+      }
     }
 
     const totalRecommendedBonus = attendanceBonus + retentionBonus + academicBonus;
@@ -909,6 +963,9 @@ export class PayrollService {
       month: params.month,
     });
 
+    if (params.customBonus !== undefined && params.customBonus < 0) {
+      throw new BadRequestException('customBonus must be non-negative');
+    }
     const finalBonus =
       params.customBonus !== undefined ? params.customBonus : kpi.totalRecommendedBonus;
 

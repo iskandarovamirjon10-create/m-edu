@@ -239,6 +239,36 @@ export class SmsService {
       return false;
     }
 
+    const dailyLimit = Number(this.configService?.get?.<string>('SMS_DAILY_LIMIT_PER_ORG') || 1000);
+    if (organizationId && dailyLimit > 0 && typeof this.prisma?.sMSLog?.count === 'function') {
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      try {
+        const sentToday = await this.prisma.sMSLog.count({
+          where: {
+            organizationId,
+            status: 'DELIVERED',
+            createdAt: { gte: todayStart },
+          },
+        });
+        if (sentToday >= dailyLimit) {
+          this.logger.warn(
+            'Daily SMS limit (' + dailyLimit + ') reached for organization ' + organizationId + '. Suppressing SMS.',
+          );
+          await this.logSms({
+            organizationId,
+            recipient: to,
+            message,
+            status: 'FAILED',
+            errorMessage: 'Daily SMS quota reached (' + sentToday + '/' + dailyLimit + ')',
+          });
+          return false;
+        }
+      } catch (countErr) {
+        this.logger.warn('Failed to query daily SMS count; proceeding safely', { error: String(countErr) });
+      }
+    }
+
     let currentAttempt = 0;
     let tokenRefreshed = false;
 

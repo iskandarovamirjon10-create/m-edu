@@ -366,9 +366,9 @@ function AnomalyRow({ anomaly, onOpenSidecar }: { anomaly: Anomaly; onOpenSideca
                 {t('anomaly.observed')}
               </div>
               <div className="mt-0.5 text-[15px] font-semibold tabular-nums text-black/90 dark:text-white/90">
-                {anomaly.observed.toLocaleString()}
+                {(anomaly.observed ?? 0).toLocaleString()}
               </div>
-              {anomaly.baseline !== null && (
+              {anomaly.baseline != null && (
                 <div className="mt-1.5 text-[10.5px] font-medium text-black/40 dark:text-white/40">
                   Baseline {anomaly.baseline.toLocaleString()}
                 </div>
@@ -423,8 +423,8 @@ export function AnomalyDetectionPage() {
         tone: anomaly.severity === 'HIGH' ? 'red' : anomaly.severity === 'MEDIUM' ? 'amber' : 'neutral',
       },
       metrics: [
-        { label: 'Kuzatilgan', value: anomaly.observed.toLocaleString() },
-        { label: 'Baza (Baseline)', value: anomaly.baseline !== null ? anomaly.baseline.toLocaleString() : '—' },
+        { label: 'Kuzatilgan', value: (anomaly.observed ?? 0).toLocaleString() },
+        { label: 'Baza (Baseline)', value: anomaly.baseline != null ? anomaly.baseline.toLocaleString() : '—' },
         { label: 'Metrika', value: anomaly.metric },
         { label: 'Davr', value: anomaly.period },
       ],
@@ -432,8 +432,8 @@ export function AnomalyDetectionPage() {
         { label: 'Anomaliya turi', value: anomaly.type },
         { label: 'Tavsif', value: anomaly.description },
         { label: 'Metrika', value: anomaly.metric },
-        { label: 'Kuzatilgan qiymat', value: String(anomaly.observed) },
-        { label: 'Baza qiymat', value: anomaly.baseline !== null ? String(anomaly.baseline) : 'Mavjud emas' },
+        { label: 'Kuzatilgan qiymat', value: String(anomaly.observed ?? 0) },
+        { label: 'Baza qiymat', value: anomaly.baseline != null ? String(anomaly.baseline) : 'Mavjud emas' },
         { label: 'Tavsiya', value: anomaly.recommendation || '—' },
       ],
     };

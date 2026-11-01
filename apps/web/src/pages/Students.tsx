@@ -10,6 +10,7 @@ import {
   useRef,
   useEffect,
   memo,
+  forwardRef,
 } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -35,6 +36,10 @@ import {
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { useDebounce } from '@/hooks/useDebounce';
 import { fullName } from '@/lib/format';
+import { UniversityAdmissionPathfinder } from '@/components/students/UniversityAdmissionPathfinder';
+import { ReferralGrowthEngineModal } from '@/components/marketing/ReferralGrowthEngineModal';
+import { StudentMilestoneCelebrationModal } from '@/components/students/StudentMilestoneCelebrationModal';
+import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Student, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -344,7 +349,7 @@ const Icon = memo(function Icon({
       aria-hidden="true"
       {...rest}
     >
-      {paths.map((d, i) => (
+      {(paths || []).map((d, i) => (
         <path
           key={i}
           d={d}
@@ -435,14 +440,14 @@ const CountUp = memo(function CountUp({
     if (!el) return;
     if (reduced) {
       prevValueRef.current = value;
-      el.textContent = `${value.toLocaleString()}${suffix}`;
+      el.textContent = `${(Number.isFinite(value) ? value : 0).toLocaleString()}${suffix}`;
       return;
     }
     const from = prevValueRef.current;
     const to = value;
     prevValueRef.current = value;
     if (from === to) {
-      el.textContent = `${to.toLocaleString()}${suffix}`;
+      el.textContent = `${(Number.isFinite(to) ? to : 0).toLocaleString()}${suffix}`;
       return;
     }
     let rafId: number;
@@ -464,7 +469,7 @@ const CountUp = memo(function CountUp({
 
   return (
     <span ref={spanRef} className="tabular-nums">
-      {value.toLocaleString()}
+      {(Number.isFinite(value) ? value : 0).toLocaleString()}
       {suffix}
     </span>
   );
@@ -779,10 +784,14 @@ const CopyChip = memo(function CopyChip({
   const handleCopy = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!navigator?.clipboard) return;
-      void navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      if (!navigator?.clipboard?.writeText) return;
+      navigator.clipboard
+        .writeText(value)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1600);
+        })
+        .catch(() => {});
     },
     [value],
   );
@@ -1125,21 +1134,23 @@ interface FilterChip {
   tone?: 'blue' | 'amber' | 'emerald' | 'slate';
 }
 
-const FilterChips = memo(function FilterChips({ chips }: { chips: FilterChip[] }) {
-  if (chips.length === 0) return null;
-  const toneMap: Record<NonNullable<FilterChip['tone']>, string> = {
-    blue: 'bg-blue-500/10 text-blue-700 ring-blue-500/25 dark:bg-sky-400/12 dark:text-sky-300 dark:ring-sky-400/25',
-    amber: 'bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:bg-amber-400/12 dark:text-amber-300 dark:ring-amber-400/25',
-    emerald: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-400/12 dark:text-emerald-300 dark:ring-emerald-400/25',
-    slate: 'bg-slate-500/10 text-slate-700 ring-slate-500/20 dark:bg-white/[0.06] dark:text-slate-300 dark:ring-white/10',
-  };
-  return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: 'auto' }}
-      exit={{ opacity: 0, height: 0 }}
-      className="flex flex-wrap items-center gap-1.5 px-1"
-    >
+const FilterChips = memo(
+  forwardRef<HTMLDivElement, { chips: FilterChip[] }>(function FilterChips({ chips }, ref) {
+    if (chips.length === 0) return null;
+    const toneMap: Record<NonNullable<FilterChip['tone']>, string> = {
+      blue: 'bg-blue-500/10 text-blue-700 ring-blue-500/25 dark:bg-sky-400/12 dark:text-sky-300 dark:ring-sky-400/25',
+      amber: 'bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:bg-amber-400/12 dark:text-amber-300 dark:ring-amber-400/25',
+      emerald: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-400/12 dark:text-emerald-300 dark:ring-emerald-400/25',
+      slate: 'bg-slate-500/10 text-slate-700 ring-slate-500/20 dark:bg-white/[0.06] dark:text-slate-300 dark:ring-white/10',
+    };
+    return (
+      <motion.div
+        ref={ref}
+        initial={{ opacity: 0, height: 0 }}
+        animate={{ opacity: 1, height: 'auto' }}
+        exit={{ opacity: 0, height: 0 }}
+        className="flex flex-wrap items-center gap-1.5 px-1"
+      >
       <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
         Filtrlar:
       </span>
@@ -1166,7 +1177,8 @@ const FilterChips = memo(function FilterChips({ chips }: { chips: FilterChip[] }
       ))}
     </motion.div>
   );
-});
+  }),
+);
 
 /* ══════════════════════════════════════════════════════════════════════════
  * SELECTION PREVIEW — Floating island avatars
@@ -1395,7 +1407,7 @@ const RowHoverPeek = memo(function RowHoverPeek({
 }) {
   const name = formatStudentName(student);
   const isActive = student.user?.isActive !== false;
-  const activeGroups = (student.groups ?? []).filter((g) => g.isActive);
+  const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
   const style = avatarStyle(name);
 
   return (
@@ -1407,10 +1419,10 @@ const RowHoverPeek = memo(function RowHoverPeek({
       style={{
         position: 'fixed',
         top: Math.min(anchorRect.bottom + 8, window.innerHeight - 260),
-        left: Math.min(anchorRect.left + 60, window.innerWidth - 340),
+        left: Math.max(12, Math.min(anchorRect.left + 60, window.innerWidth - 320)),
         pointerEvents: 'none',
       }}
-      className="z-50 w-[300px] overflow-hidden rounded-[18px] border border-white/70 bg-white/95 p-3.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25),0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-2xl dark:border-white/[0.12] dark:bg-surface-900/95 dark:shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)]"
+      className="z-50 w-[300px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-[18px] border border-white/70 bg-white/95 p-3.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25),0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-2xl dark:border-white/[0.12] dark:bg-surface-900/95 dark:shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)]"
     >
       <div className="flex items-center gap-3">
         <div
@@ -1492,6 +1504,10 @@ export function StudentsPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [freezeTarget, setFreezeTarget] = useState<Student | null>(null);
   const [freezeForm, setFreezeForm] = useState<FreezeFormData>(createDefaultFreezeForm);
+  const [isAdmissionPathfinderOpen, setIsAdmissionPathfinderOpen] = useState(false);
+  const [isReferralEngineOpen, setIsReferralEngineOpen] = useState(false);
+  const [isMilestoneCelebrationOpen, setIsMilestoneCelebrationOpen] = useState(false);
+  const [selectedStudentForCelebration] = useState<string>('');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [hoveredStudent, setHoveredStudent] = useState<{ student: Student; rect: DOMRect } | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
@@ -1568,7 +1584,7 @@ export function StudentsPage() {
   const studentList = useMemo(() => {
     const filtered = rawStudentList.filter((s) => {
       const isActive = s.user?.isActive !== false;
-      const activeGroupCount = (s.groups ?? []).filter((g) => g.isActive).length;
+      const activeGroupCount = (s.groups ?? []).filter((g) => g.isActive && g.group).length;
       if (statusFilter === 'ACTIVE') return isActive;
       if (statusFilter === 'INACTIVE') return !isActive;
       if (statusFilter === 'WITH_GROUPS') return activeGroupCount > 0;
@@ -1659,7 +1675,7 @@ export function StudentsPage() {
   const handleQuickLook = useCallback(
     (student: Student) => {
       const studentName = formatStudentName(student);
-      const activeGroups = (student.groups ?? []).filter((g) => g.isActive);
+      const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
       const isActive = student.user?.isActive !== false;
 
       openQuickLook({
@@ -1710,7 +1726,7 @@ export function StudentsPage() {
     (student: Student) => {
       sound.playTick();
       const studentName = formatStudentName(student);
-      const activeGroups = (student.groups ?? []).filter((g) => g.isActive);
+      const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
       const isActive = student.user?.isActive !== false;
 
       openSidecar({
@@ -1810,8 +1826,7 @@ export function StudentsPage() {
     const headers = ['ID', 'Ism Familiya', 'Email', 'Telefon', 'Guruhlar', 'Ota-ona', 'Holati'];
     const rows = source.map((s) => {
       const name = formatStudentName(s);
-      const activeGroups = (s.groups ?? [])
-        .filter((g) => g.isActive)
+      const activeGroups = (s.groups ?? []).filter((g) => g.isActive && g.group)
         .map((g) => g.group.name)
         .join('; ');
       const status = s.user?.isActive !== false ? 'Faol' : 'Muzlatilgan';
@@ -1997,7 +2012,55 @@ export function StudentsPage() {
           </span>
         </GlassButton>
 
-        <GlassButton type="button" variant="secondary" onClick={handleExportCsv} title="CSV formatda eksport qilish">
+        <GlassButton
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            sound.playPop?.();
+            setIsAdmissionPathfinderOpen(true);
+          }}
+          title="AI Abituriyent & Karyera Pathfinder"
+          className="border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20"
+        >
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <MeduAiLogo size="xs" />
+            <span className="hidden sm:inline">AI Karyera & Grant</span>
+          </span>
+        </GlassButton>
+
+        <GlassButton
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            sound.playPop?.();
+            setIsReferralEngineOpen(true);
+          }}
+          title="Referral & Affiliate Dvigateli"
+          className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+        >
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <span>🎁</span>
+            <span className="hidden sm:inline">Referral & Promo</span>
+          </span>
+        </GlassButton>
+
+        <GlassButton
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            sound.playPop?.();
+            setIsMilestoneCelebrationOpen(true);
+          }}
+          title="Yutuqlarni Nishonlash & Faxriy Kartochka"
+          className="border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+        >
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <span>🌟</span>
+            <span className="hidden sm:inline">Yutuqlar</span>
+          </span>
+        </GlassButton>
+
+<GlassButton type="button" variant="secondary" onClick={handleExportCsv} title="CSV formatda eksport qilish">
           <span className="inline-flex items-center gap-1.5">
             <Icon paths={I.download} size={15} strokeWidth={2.0} />
             <span className="hidden sm:inline">Eksport CSV</span>
@@ -2276,7 +2339,7 @@ export function StudentsPage() {
             >
               {studentList.map((student) => {
                 const statusBadge = getStudentStatusBadge(student.user?.isActive);
-                const activeGroups = (student.groups ?? []).filter((g) => g.isActive);
+                const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
                 const name = formatStudentName(student);
                 const isActive = student.user?.isActive !== false;
 
@@ -2323,9 +2386,7 @@ export function StudentsPage() {
                       <div className="mt-4 flex flex-wrap gap-1.5">
                         {activeGroups.length > 0 ? (
                           activeGroups.slice(0, 3).map((enrollment) => (
-                            <GlassBadge key={enrollment.group.id} color="blue">
-                              {enrollment.group.name}
-                            </GlassBadge>
+                            <GlassBadge key={enrollment.group.id} color="blue">{enrollment.group.name}</GlassBadge>
                           ))
                         ) : (
                           <span className="text-[11.5px] italic text-slate-400">
@@ -2491,7 +2552,7 @@ export function StudentsPage() {
                   <tbody>
                     {studentList.map((student, index) => {
                       const statusBadge = getStudentStatusBadge(student.user?.isActive);
-                      const activeGroups = (student.groups ?? []).filter((g) => g.isActive);
+                      const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
                       const name = formatStudentName(student);
                       const isActive = student.user?.isActive !== false;
                       const isSelected = selectedIds.has(student.id);
@@ -2586,9 +2647,7 @@ export function StudentsPage() {
                           <td className={`px-6 ${densityRowPadding}`}>
                             <div className="flex flex-wrap gap-1.5">
                               {activeGroups.slice(0, 3).map((enrollment) => (
-                                <GlassBadge key={enrollment.group.id} color="blue">
-                                  {enrollment.group.name}
-                                </GlassBadge>
+                                <GlassBadge key={enrollment.group.id} color="blue">{enrollment.group.name}</GlassBadge>
                               ))}
                               {activeGroups.length === 0 && (
                                 <span className="text-[var(--text-tertiary)] opacity-45">—</span>
@@ -2914,6 +2973,23 @@ export function StudentsPage() {
           <RowHoverPeek student={hoveredStudent.student} anchorRect={hoveredStudent.rect} />
         )}
       </AnimatePresence>
+
+      <UniversityAdmissionPathfinder
+        isOpen={isAdmissionPathfinderOpen}
+        onClose={() => setIsAdmissionPathfinderOpen(false)}
+        students={rawStudentList}
+      />
+
+      <ReferralGrowthEngineModal
+        isOpen={isReferralEngineOpen}
+        onClose={() => setIsReferralEngineOpen(false)}
+      />
+
+      <StudentMilestoneCelebrationModal
+        isOpen={isMilestoneCelebrationOpen}
+        onClose={() => setIsMilestoneCelebrationOpen(false)}
+        defaultStudentId={selectedStudentForCelebration}
+      />
 
       {toastNode}
     </div>

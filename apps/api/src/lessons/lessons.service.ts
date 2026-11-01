@@ -61,7 +61,7 @@ export class LessonsService {
       this.prisma.lesson.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async findOne(organizationId: string, id: string) {
@@ -270,15 +270,19 @@ export class LessonsService {
     let absentToday = 0;
     let lateToday = 0;
 
+    const hasAttendanceData = (lesson.attendances || []).length > 0;
     for (const enr of enrolledStudents) {
       const sid = enr.student?.id || enr.studentId;
-      const st = todayAttMap.get(sid) ?? 'PRESENT';
+      const st = todayAttMap.get(sid);
       if (st === 'PRESENT') presentToday++;
       else if (st === 'ABSENT') absentToday++;
       else if (st === 'LATE') lateToday++;
     }
 
-    const attendanceRateToday = totalStudents > 0 ? Math.round((presentToday / totalStudents) * 100) : 100;
+    const attendanceRateToday =
+      hasAttendanceData && totalStudents > 0
+        ? Math.round(((presentToday + lateToday) / totalStudents) * 100)
+        : 0;
 
     // Student-level risk & historical aggregation
     const atRiskStudents: Array<{

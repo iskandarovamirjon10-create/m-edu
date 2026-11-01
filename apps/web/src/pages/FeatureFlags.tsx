@@ -231,7 +231,7 @@ function FeatureFlagsSkeleton() {
   return (
     <div className="space-y-6 animate-pulse" aria-busy="true">
       <div className="h-36 w-full rounded-3xl bg-neutral-200/60 dark:bg-white/[0.04]" />
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {[1, 2, 3].map((i) => (
           <div
             key={i}
@@ -347,6 +347,7 @@ export function FeatureFlagsPage() {
 
   const handleCreate = (e: FormEvent) => {
     e.preventDefault();
+    if (createMutation.isPending) return;
     const keyPattern = /^[a-z0-9][a-z0-9._-]*$/i;
     if (!form.name.trim() || (!editingKey && !form.key.trim())) {
       setFormError(t('featureFlags.validation.required') || 'Key and Name are required');
@@ -557,7 +558,7 @@ export function FeatureFlagsPage() {
          * ================================================================== */}
         <motion.div
           variants={itemVariants}
-          className="grid grid-cols-3 gap-3 sm:gap-4"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4"
         >
           {/* Total Flags Tile */}
           <button

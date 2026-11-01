@@ -1,6 +1,7 @@
 /**
  * TodayActionItemsSection — consolidated operational action items:
  * follow-up calls, overdue collections and uncontacted leads.
+ * Elevated with iOS 27 / Apple Vision Pro Liquid Glass and Tactile Sound.
  */
 
 import { useState, useMemo } from 'react';
@@ -10,6 +11,7 @@ import { earlyWarningApi } from '@/lib/api';
 import type { DashboardStats } from '@/lib/types';
 import { formatCurrency } from '@/lib/format';
 import { cn, Icon, Shimmer } from '@/lib/design';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 interface TodayActionItemsSectionProps {
   stats: DashboardStats;
@@ -27,16 +29,16 @@ interface TaskItem {
   href: string;
 }
 
-const TASK_META: Record<TaskKind, { badge: string; chip: string }> = {
-  CALL: { badge: 'Qo\'ng\'iroq', chip: 'bg-apple-blue/10 text-apple-blue' },
-  DEBT: { badge: 'Qarzdorlik', chip: 'bg-apple-red/10 text-apple-red' },
-  LEAD: { badge: 'Yangi lidlar', chip: 'bg-apple-green/10 text-apple-green' },
+const TASK_META: Record<TaskKind, { badge: string; jewelClass: string }> = {
+  CALL: { badge: "Qo'ng'iroq", jewelClass: 'jewel-blue' },
+  DEBT: { badge: 'Qarzdorlik', jewelClass: 'jewel-rose' },
+  LEAD: { badge: 'Yangi lid', jewelClass: 'jewel-emerald' },
 };
 
 const FILTERS: Array<{ key: TaskType; label: string }> = [
   { key: 'ALL', label: 'Barchasi' },
-  { key: 'CALLS', label: 'Qo\'ng\'iroqlar' },
-  { key: 'DEBT', label: 'To\'lovlar' },
+  { key: 'CALLS', label: "Qo'ng'iroqlar" },
+  { key: 'DEBT', label: "To'lovlar" },
   { key: 'LEADS', label: 'Lidlar' },
 ];
 
@@ -54,6 +56,7 @@ interface PaymentWarningItem {
 
 export function TodayActionItemsSection({ stats }: TodayActionItemsSectionProps) {
   const [filter, setFilter] = useState<TaskType>('ALL');
+  const sound = usePremiumSound();
 
   const { data: warningsData, isLoading } = useQuery({
     queryKey: ['early-warning', 'payment-overdue'],
@@ -91,8 +94,8 @@ export function TodayActionItemsSection({ stats }: TodayActionItemsSectionProps)
       list.push({
         id: `debt-${warning.id}`,
         type: 'DEBT',
-        title: `${warning.entityName || 'O\'quvchi'} to'lovi muddati o'tgan`,
-        subtitle: warning.message || 'Muddati o\'tgan schyot mavjud',
+        title: `${warning.entityName || "O'quvchi"} to'lovi muddati o'tgan`,
+        subtitle: warning.message || "Muddati o'tgan schyot mavjud",
         href: '/invoices?status=OVERDUE',
       });
     }
@@ -101,7 +104,7 @@ export function TodayActionItemsSection({ stats }: TodayActionItemsSectionProps)
       list.push({
         id: 'debt-aggregate',
         type: 'DEBT',
-        title: 'Muddati o\'tgan to\'lovlarni undirish',
+        title: "Muddati o'tgan to'lovlarni undirish",
         subtitle: `${formatCurrency(stats.totalOverdue)} muddati o'tgan qarz`,
         href: '/invoices?status=OVERDUE',
       });
@@ -127,52 +130,72 @@ export function TodayActionItemsSection({ stats }: TodayActionItemsSectionProps)
   );
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-subtle bg-card p-5 shadow-card sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-subtle pb-3">
+    <div className="vision-card relative isolate overflow-hidden flex h-full flex-col p-5 sm:p-6 backdrop-blur-2xl">
+      {/* Top specular hairline */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/25"
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.06] pb-3.5 dark:border-white/[0.08]">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-apple-blue/10 text-apple-blue">
-            <Icon name="checkCircle" size={18} />
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#0A84FF] to-[#5E5CE6] text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.6),0_4px_10px_rgba(10,132,255,0.4)]">
+            <Icon name="checkCircle" size={18} strokeWidth={2.2} />
           </span>
           <div>
-            <h3 className="text-sm font-semibold tracking-tight text-primary">Bugungi vazifalar</h3>
-            <p className="text-xs text-tertiary">To'lovlar, lidlar va hal qilinadigan amallar</p>
+            <h3 className="text-sm font-bold tracking-tight text-[var(--text-primary,#1D1D1F)] dark:text-[var(--text-primary,#F5F5F7)]">
+              Bugungi vazifalar
+            </h3>
+            <p className="text-xs text-[var(--text-secondary,#86868B)]">
+              Qo'ng'iroqlar, to'lovlar va faol lidlar
+            </p>
           </div>
         </div>
 
         <div
           role="tablist"
           aria-label="Vazifa turi"
-          className="flex items-center gap-0.5 rounded-lg border border-subtle bg-black/[0.04] p-0.5 dark:bg-white/[0.06]"
+          className="flex items-center gap-1 rounded-full border border-black/[0.06] bg-black/[0.03] p-1 dark:border-white/[0.08] dark:bg-white/[0.05]"
         >
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              role="tab"
-              aria-selected={filter === f.key}
-              onClick={() => setFilter(f.key)}
-              className={cn(
-                'rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150',
-                filter === f.key ? 'bg-card text-primary shadow-xs' : 'text-tertiary hover:text-primary',
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
+          {FILTERS.map((f) => {
+            const active = filter === f.key;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  sound.playTick();
+                  setFilter(f.key);
+                }}
+                className={cn(
+                  'rounded-full px-2.5 py-0.5 text-xs font-semibold transition-all duration-200',
+                  active
+                    ? 'jewel-pill jewel-blue shadow-xs font-bold'
+                    : 'text-[var(--text-secondary,#86868B)] hover:text-[var(--text-primary,#1D1D1F)] dark:hover:text-white',
+                )}
+              >
+                {f.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div className="mt-4 flex-1 space-y-2.5">
         {isLoading ? (
-          [0, 1, 2].map((i) => <Shimmer key={i} className="h-14 w-full" rounded="10px" />)
+          [0, 1, 2].map((i) => <Shimmer key={i} className="h-14 w-full" rounded="12px" />)
         ) : visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-apple-green/10 text-apple-green">
-              <Icon name="checkCircle" size={20} />
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 shadow-[0_0_20px_rgba(52,199,89,0.25)] dark:text-emerald-400">
+              <Icon name="checkCircle" size={24} />
             </span>
-            <h4 className="mt-3 text-sm font-medium text-primary">Barcha vazifalar bajarildi</h4>
-            <p className="mt-1 max-w-xs text-xs text-tertiary">
-              Kechiktirilgan yoki zudlik talab qiluvchi vazifalar yo'q.
+            <h4 className="mt-3 text-sm font-bold text-[var(--text-primary,#1D1D1F)] dark:text-white">
+              Barcha vazifalar bajarildi
+            </h4>
+            <p className="mt-1 max-w-xs text-xs text-[var(--text-secondary,#86868B)]">
+              Kechiktirilgan yoki zudlik talab qiluvchi vazifalar mavjud emas.
             </p>
           </div>
         ) : (
@@ -181,42 +204,47 @@ export function TodayActionItemsSection({ stats }: TodayActionItemsSectionProps)
             return (
               <div
                 key={item.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-subtle bg-black/[0.02] p-3 transition-colors duration-150 hover:bg-black/[0.04] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+                className="group relative flex items-center justify-between gap-3 rounded-2xl border border-black/[0.05] bg-white/50 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-black/[0.1] hover:bg-white/80 hover:shadow-md dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:border-white/[0.15] dark:hover:bg-white/[0.06]"
               >
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <Link
                       to={item.href}
-                      className="truncate text-xs font-medium text-primary hover:text-brand-500"
+                      onClick={() => sound.playTick()}
+                      className="truncate text-xs font-bold text-[var(--text-primary,#1D1D1F)] hover:text-sky-600 dark:text-white dark:hover:text-sky-400"
                     >
                       {item.title}
                     </Link>
                     <span
                       className={cn(
-                        'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                        meta.chip,
+                        'jewel-pill text-[10px] uppercase font-bold py-0.5 px-2 tracking-wide',
+                        meta.jewelClass,
                       )}
                     >
                       {meta.badge}
                     </span>
                   </div>
-                  <p className="mt-0.5 truncate text-xs text-tertiary">{item.subtitle}</p>
+                  <p className="mt-0.5 truncate text-[11.5px] text-[var(--text-secondary,#86868B)]">
+                    {item.subtitle}
+                  </p>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-1.5">
                   {item.phone && (
                     <a
                       href={`tel:${item.phone}`}
+                      onClick={() => sound.playTick()}
                       aria-label={`${item.phone} raqamiga qo'ng'iroq qilish`}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-subtle text-secondary transition-colors hover:text-primary dark:hover:bg-white/[0.08]"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] bg-white/70 text-sky-600 transition hover:bg-sky-50 active:scale-95 dark:border-white/[0.12] dark:bg-white/[0.08] dark:text-sky-400 dark:hover:bg-white/15"
                     >
                       <Icon name="phone" size={14} />
                     </a>
                   )}
                   <Link
                     to={item.href}
+                    onClick={() => sound.playTick()}
                     aria-label={`${item.title} sahifasiga o'tish`}
-                    className="rounded-md p-1.5 text-tertiary transition-colors hover:bg-black/[0.05] hover:text-primary dark:hover:bg-white/[0.08]"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-transparent text-[var(--text-secondary,#86868B)] transition hover:border-black/[0.08] hover:bg-white/70 hover:text-[var(--text-primary,#1D1D1F)] active:scale-95 dark:hover:border-white/[0.12] dark:hover:bg-white/[0.08] dark:hover:text-white"
                   >
                     <Icon name="chevronRight" size={16} />
                   </Link>
@@ -227,11 +255,14 @@ export function TodayActionItemsSection({ stats }: TodayActionItemsSectionProps)
         )}
       </div>
 
-      <div className="mt-4 flex items-center justify-between border-t border-subtle pt-3 text-xs">
-        <span className="text-tertiary">Jami vazifalar: {visible.length} ta</span>
+      <div className="mt-4 flex items-center justify-between border-t border-black/[0.06] pt-3 text-xs dark:border-white/[0.08]">
+        <span className="text-[var(--text-secondary,#86868B)] font-medium">
+          Jami vazifalar: <strong className="text-[var(--text-primary,#1D1D1F)] dark:text-white">{visible.length}</strong> ta
+        </span>
         <Link
           to="/leads"
-          className="inline-flex items-center gap-1 font-medium text-brand-500 hover:text-brand-600"
+          onClick={() => sound.playTick()}
+          className="inline-flex items-center gap-1 font-bold text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
         >
           Lidlar boshqaruvi
           <Icon name="chevronRight" size={14} />

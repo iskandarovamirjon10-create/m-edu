@@ -127,7 +127,19 @@ export class RedisPubSubService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private pruneExpiredMemoryStore(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.memoryStore.entries()) {
+      if (now > entry.expiresAt) {
+        this.memoryStore.delete(key);
+      }
+    }
+  }
+
   async set(key: string, value: string, ttlMs: number): Promise<void> {
+    if (this.memoryStore.size > 500) {
+      this.pruneExpiredMemoryStore();
+    }
     // Always keep in memory store as fallback
     this.memoryStore.set(key, { value, expiresAt: Date.now() + ttlMs });
     if (!this.pubClient) return;
@@ -139,6 +151,9 @@ export class RedisPubSubService implements OnModuleInit, OnModuleDestroy {
   }
 
   async setIfNotExists(key: string, value: string, ttlMs: number): Promise<boolean> {
+    if (this.memoryStore.size > 500) {
+      this.pruneExpiredMemoryStore();
+    }
     if (this.pubClient) {
       try {
         const res = await this.pubClient.set(key, value, 'PX', ttlMs, 'NX');
@@ -168,6 +183,10 @@ export class RedisPubSubService implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       this.logger.warn(`Failed to delete Redis key ${key}: ${getErrorMessage(err)}`);
     }
+  }
+
+  async del(key: string): Promise<void> {
+    return this.delete(key);
   }
 
   async subscribe(channel: string, handler: (payload: string) => void): Promise<void> {

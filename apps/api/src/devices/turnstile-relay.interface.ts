@@ -1,4 +1,4 @@
-export type RelayProtocol = 'HTTP_PULSE' | 'TCP_SOCKET' | 'MQTT' | 'MOCK';
+export type RelayProtocol = 'HTTP_PULSE' | 'TCP_SOCKET' | 'IPC_SOCKET' | 'MQTT' | 'MOCK';
 
 export interface TurnstileDeviceConfig {
   id: string;
@@ -8,6 +8,7 @@ export interface TurnstileDeviceConfig {
   endpointUrl?: string;
   host?: string;
   port?: number;
+  ipcPath?: string;
   authToken?: string;
   defaultPulseMs?: number;
   enabled: boolean;

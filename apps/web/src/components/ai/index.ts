@@ -56,3 +56,4 @@ export { AiStudentDiagnosticWidget } from './AiStudentDiagnosticWidget';
 export { AiParentMessageModal } from './AiParentMessageModal';
 export { AiLessonQuizStudioModal } from './AiLessonQuizStudioModal';
 export { LessonCopilotPanel, type LessonCopilotPanelProps } from './LessonCopilotPanel';
+export { AiExecutiveSuperStudio } from './AiExecutiveSuperStudio';

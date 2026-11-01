@@ -648,29 +648,43 @@ export class AutomationService {
     // The pipeline handles queueing and all channel fallback internally.
     const studentId = entity.entityType === 'STUDENT' ? entity.id : entity.data?.studentId;
     if (target === 'PARENTS' && studentId) {
-      const parent = await this.prisma.parentStudent.findFirst({
-        where: {
-          studentId,
-          parent: { organizationId, isActive: true },
-        },
-        select: { parent: { select: { phone: true, email: true } } },
-      });
-      if (!parent) return [];
-      // Delivery is fully handled by the event pipeline (Telegram → SMS with
-      // the resolved parent contact); no user IDs can be returned for parents.
-      await this.notificationEvents.emit({
-        organizationId,
-        type: 'FOLLOWUP_DUE',
-        occurredAt: new Date().toISOString(),
-        entityType: entity.entityType,
-        entityId: entity.id,
-        data: {
-          studentId,
-          parentPhone: parent.parent.phone ?? undefined,
-          parentEmail: parent.parent.email ?? undefined,
-          ruleName,
-        },
-      });
+      let parents: Array<{ parent: { phone: string | null; email: string | null } }> = [];
+      if (typeof this.prisma.parentStudent.findMany === 'function') {
+        const res = await this.prisma.parentStudent.findMany({
+          where: {
+            studentId,
+            parent: { organizationId, isActive: true },
+          },
+          select: { parent: { select: { phone: true, email: true } } },
+        });
+        if (Array.isArray(res)) parents = res;
+      }
+      if (!parents.length && typeof this.prisma.parentStudent.findFirst === 'function') {
+        const single = await this.prisma.parentStudent.findFirst({
+          where: {
+            studentId,
+            parent: { organizationId, isActive: true },
+          },
+          select: { parent: { select: { phone: true, email: true } } },
+        });
+        if (single) parents = [single];
+      }
+      if (!parents.length) return [];
+      for (const parent of parents) {
+        await this.notificationEvents.emit({
+          organizationId,
+          type: 'FOLLOWUP_DUE',
+          occurredAt: new Date().toISOString(),
+          entityType: entity.entityType,
+          entityId: entity.id,
+          data: {
+            studentId,
+            parentPhone: parent.parent.phone ?? undefined,
+            parentEmail: parent.parent.email ?? undefined,
+            ruleName,
+          },
+        });
+      }
       return [];
     }
     return [];

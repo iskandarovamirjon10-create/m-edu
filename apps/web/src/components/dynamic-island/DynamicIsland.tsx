@@ -41,6 +41,8 @@ const WALLPAPERS = [
   { id: 'sequoia', label: 'Sequoia', gradient: 'from-amber-500 via-purple-500 to-indigo-600' },
   { id: 'sonoma', label: 'Sonoma', gradient: 'from-sky-400 via-cyan-500 to-blue-600' },
   { id: 'ventura', label: 'Ventura', gradient: 'from-orange-400 via-rose-500 to-amber-600' },
+  { id: 'aurora', label: 'Aurora', gradient: 'from-teal-400 via-emerald-500 to-indigo-700' },
+  { id: 'sunset', label: 'Sunset', gradient: 'from-amber-400 via-fuchsia-500 to-indigo-800' },
   { id: 'obsidian', label: 'Obsidian', gradient: 'from-zinc-600 via-zinc-800 to-zinc-950' },
 ] as const;
 

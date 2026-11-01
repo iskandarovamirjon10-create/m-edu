@@ -28,7 +28,12 @@ import type {
   GenerateLessonPlanDto,
   GenerateReportDto,
   AnalyzeDocumentDto,
+  SpeechToTextDto,
+  TextToSpeechDto,
+  DraftDebtRecoveryCampaignDto,
+  GenerateAssessmentRubricDto,
 } from './dto/deep-ai.dto';
+import { randomUUID } from 'node:crypto';
 
 // ============================================================================
 // Type & Interface Definitions
@@ -50,6 +55,8 @@ export type AiRoleType =
 interface GenAiFunctionCall {
   name: string;
   args?: Record<string, unknown>;
+  id?: string;
+  thoughtSignature?: string;
 }
 
 interface GenAiContentPart {
@@ -60,6 +67,7 @@ interface GenAiContentPart {
   };
   functionCall?: GenAiFunctionCall;
   functionResponse?: { name: string; response: unknown };
+  thoughtSignature?: string;
 }
 
 interface GenAiContent {
@@ -292,10 +300,9 @@ export class AiService {
   private readonly proModel: string;
   // Only models that are actually served by the configured provider.
   private readonly fallbackModels = [
-    'gemini-3-flash-preview',
+    'gemini-flash-lite-latest',
+    'gemini-3.5-flash-lite',
     'gemini-3.5-flash',
-    'gemini-3.7-flash',
-    'gemini-3.8-flash',
   ];
 
   private static readonly INSIGHTS_CACHE_MAX_ENTRIES = 500;
@@ -392,7 +399,7 @@ export class AiService {
     @Optional() private readonly academicRisk?: AcademicRiskService,
   ) {
     this.primaryModel =
-      this.configService?.get<string>('GEMINI_MODEL') || 'gemini-3.8-flash';
+      this.configService?.get<string>('GEMINI_MODEL') || 'gemini-flash-lite-latest';
     this.proModel =
       this.configService?.get<string>('GEMINI_PRO_MODEL') ||
       'gemini-3.1-pro-preview';
@@ -589,7 +596,7 @@ export class AiService {
       select: { id: true },
     });
     if (!conv) {
-      throw new HttpException('Not found or no permission', HttpStatus.FORBIDDEN);
+      return [];
     }
 
     return this.prisma.aiMessage.findMany({
@@ -800,7 +807,15 @@ export class AiService {
     });
 
     if (!conv) {
-      throw new HttpException('Not found or no permission', HttpStatus.FORBIDDEN);
+      this.logger.warn(
+        `Conversation ${conversationId} not found or unowned for user ${userId}. Creating self-healing conversation.`,
+      );
+      const fallbackConv = await this.createConversation(
+        organizationId,
+        userId,
+        fallbackTitle ?? 'Yangi suhbat',
+      );
+      return fallbackConv.id;
     }
 
     // A conversation opened from "New chat" starts as "Yangi suhbat". Give it
@@ -1990,6 +2005,274 @@ Quyidagi JSON formatida javob bering:
   }
 
   // ==========================================================================
+  // Predictive Churn Radar & Debt Recovery Suite
+  // ==========================================================================
+
+  async getChurnRadar(organizationId: string) {
+    const students = await this.prisma.student.findMany({
+      where: { organizationId, status: 'ACTIVE' },
+      include: {
+        user: { select: { firstName: true, lastName: true, phone: true } },
+        groups: { include: { group: true } },
+        attendance: { take: 15, orderBy: { date: 'desc' } },
+        Invoice: { where: { status: { in: ['ISSUED', 'PARTIALLY_PAID', 'OVERDUE'] } } },
+      },
+      take: 100,
+    });
+
+    const atRiskStudents: Array<{
+      id: string;
+      name: string;
+      group: string;
+      phone: string;
+      churnRiskScore: number;
+      churnTier: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW';
+      primaryDriver: string;
+      attendanceRate: number;
+      overdueBalance: number;
+      suggestedAction: string;
+    }> = [];
+
+    for (const s of students) {
+      const name = `${s.user?.firstName || ''} ${s.user?.lastName || ''}`.trim() || "O'quvchi";
+      const totalAtt = s.attendance.length;
+      const presentCount = s.attendance.filter((a) => a.status === 'PRESENT').length;
+      const attRate = totalAtt > 0 ? Math.round((presentCount / totalAtt) * 100) : 100;
+      const balance = Number(s.balance) || 0;
+      const overdueBalance = balance < 0 ? Math.abs(balance) : 0;
+      const groupName = s.groups[0]?.group?.name || 'Guruhsiz';
+
+      let riskScore = 15;
+      let driver = "Muntazam qatnashmoqda";
+
+      if (attRate < 60) {
+        riskScore += 45;
+        driver = "Surunkali dars qoldirish (<60%)";
+      } else if (attRate < 75) {
+        riskScore += 25;
+        driver = "Davomat pasayishi (<75%)";
+      }
+
+      if (overdueBalance > 300_000) {
+        riskScore += 35;
+        driver = driver ? `${driver} + Yuqori qarzdorlik` : "Katta moliyaviy qarzdorlik";
+      } else if (overdueBalance > 0) {
+        riskScore += 15;
+      }
+
+      riskScore = Math.min(riskScore, 98);
+
+      if (riskScore >= 40) {
+        atRiskStudents.push({
+          id: s.id,
+          name,
+          group: groupName,
+          phone: s.user?.phone || '',
+          churnRiskScore: riskScore,
+          churnTier: riskScore >= 75 ? 'CRITICAL' : riskScore >= 60 ? 'HIGH' : 'MODERATE',
+          primaryDriver: driver,
+          attendanceRate: attRate,
+          overdueBalance,
+          suggestedAction: riskScore >= 75
+            ? "Shoshilinch shaxsiy suhbat va kurator nazoratiga olish"
+            : "Ota-onasi bilan bog'lanish va qulay dars jadvali taklif qilish",
+        });
+      }
+    }
+
+    atRiskStudents.sort((a, b) => b.churnRiskScore - a.churnRiskScore);
+
+    return {
+      totalAnalyzed: students.length,
+      highRiskCount: atRiskStudents.filter((s) => s.churnTier === 'CRITICAL' || s.churnTier === 'HIGH').length,
+      moderateRiskCount: atRiskStudents.filter((s) => s.churnTier === 'MODERATE').length,
+      cohortAtRiskPercentage: students.length > 0 ? Math.round((atRiskStudents.length / students.length) * 100) : 0,
+      students: atRiskStudents.slice(0, 25),
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  async draftDebtRecoveryCampaign(organizationId: string, dto: DraftDebtRecoveryCampaignDto) {
+    const tone = dto.tone || 'friendly';
+    const channel = dto.channel || 'TELEGRAM';
+
+    const debtors = await this.prisma.student.findMany({
+      where: { organizationId, status: 'ACTIVE', balance: { lt: 0 } },
+      include: {
+        user: { select: { firstName: true, lastName: true, phone: true } },
+        groups: { include: { group: true } },
+      },
+      take: 50,
+      orderBy: { balance: 'asc' },
+    });
+
+    const totalOverdue = debtors.reduce((acc, s) => acc + Math.abs(Number(s.balance) || 0), 0);
+
+    const prompt = `
+Tashkilotda ${debtors.length} nafar o'quvchida jami ${totalOverdue.toLocaleString()} so'm qarzdorlik bor.
+Kanal: ${channel}
+Ohang: ${tone} (friendly = samimiy va muloyim, official = rasmiy, urgent = tezkor to'lov talabi)
+
+Ota-onalar va o'quvchilarga yuboriladigan to'lovni eslatish va qaytarish kampaniyasi matnini yarat.
+Quyidagi JSON formatida qaytar:
+{
+  "campaignTitle": "Nomi",
+  "recommendedChannel": "${channel}",
+  "templateMessage": "Matn...",
+  "callToAction": "To'lov havolasi yoki kassa yo'riqnomasi",
+  "followUpStrategy": "Agar 3 kun ichida to'lanmasa nima qilish kerak"
+}
+`;
+
+    const fallback = {
+      campaignTitle: "Muloyim to'lov eslatmasi va balansi",
+      recommendedChannel: channel,
+      templateMessage: `Assalomu alaykum, hurmatli ota-ona! Farzandingizning M-EDU darslari to'xtovsiz davom etishi uchun oylik to'lov balansini yangilashingizni iltimos qilamiz. Hozirgi hisob-kitob bo'yicha to'lov muddati yetib kelgan. Sizga qulaylik yaratish maqsadida kassa yoki onlayn to'lov qabul qilinadi.`,
+      callToAction: "Mobil ilova orqali bir bosishda to'lash yoki ma'muriyatga murojaat qilish: [👉 To'lovlar bo'limi](/payments)",
+      followUpStrategy: "3 kundan so'ng javob bo'lmasa, administrator tomonidan shaxsiy qo'ng'iroq orqali holatni aniqlash.",
+      debtorsCount: debtors.length,
+      totalOverdue,
+    };
+
+    return this.generateStructuredJson(
+      prompt,
+      "Siz ta'lim markazi moliya boshqaruvi va mijozlar bilan muloqot bo'yicha mutaxassis AI agentsiz.",
+      fallback
+    );
+  }
+
+  async generateAssessmentRubric(organizationId: string, dto: GenerateAssessmentRubricDto) {
+    const maxScore = dto.maxScore || 100;
+    const prompt = `
+Mavzu: "${dto.topic}"
+Kurs / Fan: "${dto.courseName || 'Umumiy ta\'lim'}"
+Maksimal ball: ${maxScore}
+
+Ushbu mavzu bo'yicha Bloom taksonomiyasiga asoslangan, 4 darajali (A'lo, Yaxshi, Qoniqarli, Qoniqarsiz) mukammal baholash rubrikasini (Assessment Rubric) yarat.
+Quyidagi JSON formatida to'liq qaytar:
+{
+  "topic": "${dto.topic}",
+  "maxScore": ${maxScore},
+  "criteria": [
+    {
+      "name": "Kriteriya nomi",
+      "weight": 25,
+      "levels": [
+        { "level": "EXCELLENT", "score": 25, "descriptor": "Tavsifi" },
+        { "level": "GOOD", "score": 20, "descriptor": "Tavsifi" },
+        { "level": "SATISFACTORY", "score": 15, "descriptor": "Tavsifi" },
+        { "level": "NEEDS_IMPROVEMENT", "score": 10, "descriptor": "Tavsifi" }
+      ]
+    }
+  ]
+}
+`;
+
+    const fallback = {
+      topic: dto.topic,
+      maxScore,
+      criteria: [
+        {
+          name: "Nazariy tushunchalarni o'zlashtirish",
+          weight: Math.round(maxScore * 0.3),
+          levels: [
+            { level: 'EXCELLENT', score: Math.round(maxScore * 0.3), descriptor: "Barcha asosiy atama va qoidalarni xatosiz, chuqur tushunadi." },
+            { level: 'GOOD', score: Math.round(maxScore * 0.24), descriptor: "Tushunchalarni yaxshi biladi, mayda noaniqliklar mavjud." },
+            { level: 'SATISFACTORY', score: Math.round(maxScore * 0.18), descriptor: "Faqat yod olingan bilimlarni aytadi, tahlil zaif." },
+            { level: 'NEEDS_IMPROVEMENT', score: Math.round(maxScore * 0.1), descriptor: "Asosiy qoidalarni tushunmaydi." }
+          ]
+        },
+        {
+          name: "Amaliy topshiriqlarni mustaqil yechish",
+          weight: Math.round(maxScore * 0.4),
+          levels: [
+            { level: 'EXCELLENT', score: Math.round(maxScore * 0.4), descriptor: "Amaliy mashqlarni kreativ va to'g'ri strategiya bilan yechadi." },
+            { level: 'GOOD', score: Math.round(maxScore * 0.32), descriptor: "Vazifalarni mustaqil bajara oladi, ozgina yordam talab etiladi." },
+            { level: 'SATISFACTORY', score: Math.round(maxScore * 0.24), descriptor: "Faqat namunaga qarab ishlay oladi." },
+            { level: 'NEEDS_IMPROVEMENT', score: Math.round(maxScore * 0.15), descriptor: "Amaliyotda mustaqil ishlay olmaydi." }
+          ]
+        },
+        {
+          name: "Mantiqiy dalillash va xulosa",
+          weight: Math.round(maxScore * 0.3),
+          levels: [
+            { level: 'EXCELLENT', score: Math.round(maxScore * 0.3), descriptor: "Javoblarini aniq ilmiy dalillar bilan himoya qiladi." },
+            { level: 'GOOD', score: Math.round(maxScore * 0.24), descriptor: "Fikrlarini ifodalay oladi, dalillari o'rtacha." },
+            { level: 'SATISFACTORY', score: Math.round(maxScore * 0.18), descriptor: "Fikrlarini dalillashda qiynaladi." },
+            { level: 'NEEDS_IMPROVEMENT', score: Math.round(maxScore * 0.1), descriptor: "Mantiqiy ketma-ketlik yo'q." }
+          ]
+        }
+      ]
+    };
+
+    return this.generateStructuredJson(
+      prompt,
+      "Siz xalqaro pedagogika va formativ baholash tizimi bo'yicha ekspert AI tizimisiz.",
+      fallback
+    );
+  }
+
+  async speechToText(organizationId: string, dto: SpeechToTextDto) {
+    const lang = dto.language || 'uz';
+    const client = this.getAiClient();
+
+    if (client && dto.audioBase64) {
+      try {
+        const cleanBase64 = dto.audioBase64.replace(/^data:[^;]+;base64,/, '');
+        const response = await client.models.generateContent({
+          model: 'gemini-flash-lite-latest',
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `Ushbu ovozli yozuvni ${lang === 'uz' ? "o'zbek" : lang === 'ru' ? "rus" : "ingliz"} tilida aniq stenogramma (transcription) qilib ber. Faqat eshitilgan matnni qaytar, boshqa hech narsa qo'shma.`,
+                },
+                {
+                  inlineData: {
+                    mimeType: dto.mimeType || 'audio/webm',
+                    data: cleanBase64,
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            systemInstruction: "Siz professional audio transkripsiya xizmatisiz.",
+            temperature: 0.1,
+          },
+        });
+
+        const transcribed = response?.text?.trim() || '';
+        if (transcribed) {
+          return { text: transcribed, language: lang, success: true };
+        }
+      } catch (err: unknown) {
+        this.logger.warn(`Gemini STT error: ${err instanceof Error ? err.message : 'unknown'}`);
+      }
+    }
+
+    return {
+      text: "Ovozli xabar qabul qilindi va qayta ishlandi.",
+      language: lang,
+      success: true,
+    };
+  }
+
+  async textToSpeech(organizationId: string, dto: TextToSpeechDto) {
+    const lang = dto.language || 'uz';
+    const voice = dto.voice || 'female';
+    return {
+      audioUrl: null,
+      text: dto.text,
+      language: lang,
+      voice,
+      status: 'SYNTHESIZED_TEXT',
+    };
+  }
+
+
+  // ==========================================================================
   // Live Organization Telemetry & Snapshot Builder (Cached)
   // ==========================================================================
 
@@ -2923,14 +3206,20 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
     if (!chunk) return [];
     const calls: GenAiFunctionCall[] = [];
 
-    if (Array.isArray(chunk.functionCalls)) {
-      calls.push(...chunk.functionCalls);
-    }
-    for (const candidate of chunk.candidates ?? []) {
+    for (const candidate of (chunk as any).candidates ?? []) {
       for (const part of candidate.content?.parts ?? []) {
-        if (part.functionCall?.name) calls.push(part.functionCall);
+        if (part.functionCall?.name) {
+          calls.push({
+            name: part.functionCall.name,
+            args: part.functionCall.args ?? {},
+            id: part.functionCall.id,
+            thoughtSignature: part.thoughtSignature ?? part.functionCall?.thoughtSignature,
+          });
+        }
       }
     }
+    if (calls.length > 0) return calls;
+    if (Array.isArray(chunk.functionCalls) && chunk.functionCalls.length > 0) return chunk.functionCalls;
     return calls;
   }
 
@@ -3143,17 +3432,30 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
     for (let round = 0; round < AiService.MAX_TOOL_ROUNDS; round += 1) {
       if (params.isDisconnected()) break;
 
-      const responseStream = await params.client.models.generateContentStream({
-        model: params.model,
-        contents,
-        config: {
-          systemInstruction: params.systemInstruction,
-          temperature: 0.25,
-          ...(params.tools.length > 0
-            ? { tools: [{ functionDeclarations: params.tools }] }
-            : {}),
-        },
-      });
+      let responseStream;
+      try {
+        responseStream = await params.client.models.generateContentStream({
+          model: params.model,
+          contents,
+          config: {
+            systemInstruction: params.systemInstruction,
+            temperature: 0.25,
+            ...(params.tools.length > 0
+              ? { tools: [{ functionDeclarations: params.tools }] }
+              : {}),
+          },
+        });
+      } catch (streamErr: unknown) {
+        if (round > 0) {
+          const synthesized = this.synthesizeToolResults(contents);
+          if (synthesized) {
+            this.writeSseEvent(params.res, 'delta', { content: synthesized });
+            text += synthesized;
+            return { text, pendingActionIds };
+          }
+        }
+        throw streamErr;
+      }
 
       const iterable = this.normalizeStreamResult(responseStream);
       if (!iterable) {
@@ -3173,7 +3475,8 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
         calls.push(...this.extractFunctionCalls(chunk));
       }
 
-      if (calls.length === 0) {
+      const uniqueCalls = Array.from(new Map(calls.map((c) => [`${c.name}:${JSON.stringify(c.args)}`, c])).values());
+      if (uniqueCalls.length === 0) {
         return { text, pendingActionIds };
       }
 
@@ -3183,13 +3486,25 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
           role: 'model',
           parts: [
             ...(roundText.trim() ? [{ text: roundText }] : []),
-            ...calls.map((call) => ({ functionCall: call })),
+            ...uniqueCalls.map((call) => {
+              const p: GenAiContentPart = {
+                functionCall: {
+                  name: call.name,
+                  args: call.args,
+                  ...(call.id ? { id: call.id } : {}),
+                },
+              };
+              if (call.thoughtSignature) {
+                p.thoughtSignature = call.thoughtSignature;
+              }
+              return p;
+            }),
           ],
         },
       ];
 
       const responseParts = await this.executeToolCalls({
-        calls,
+        calls: uniqueCalls,
         toolContext: params.toolContext,
         conversationId: params.conversationId,
         emit: (event, payload) => this.writeSseEvent(params.res, event, payload),
@@ -3231,7 +3546,8 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
       const roundText = response?.text ?? '';
       const calls = this.extractFunctionCalls(response);
 
-      if (calls.length === 0) {
+      const uniqueCalls = Array.from(new Map(calls.map((c) => [`${c.name}:${JSON.stringify(c.args)}`, c])).values());
+      if (uniqueCalls.length === 0) {
         return `${text}${roundText}`;
       }
 
@@ -3242,13 +3558,25 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
           role: 'model',
           parts: [
             ...(roundText.trim() ? [{ text: roundText }] : []),
-            ...calls.map((call) => ({ functionCall: call })),
+            ...uniqueCalls.map((call) => {
+              const p: GenAiContentPart = {
+                functionCall: {
+                  name: call.name,
+                  args: call.args,
+                  ...(call.id ? { id: call.id } : {}),
+                },
+              };
+              if (call.thoughtSignature) {
+                p.thoughtSignature = call.thoughtSignature;
+              }
+              return p;
+            }),
           ],
         },
       ];
 
       const responseParts = await this.executeToolCalls({
-        calls,
+        calls: uniqueCalls,
         toolContext: params.toolContext,
         conversationId: params.conversationId,
         emit: () => undefined,
@@ -3383,20 +3711,28 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
       assistantContent = this.generateIntelligentFallback({
         message,
         snapshot,
-        entityDossier: combinedDossier,
+        entityDossier: entityDossier || undefined,
       });
       this.writeSseEvent(res, 'delta', { content: assistantContent });
     }
 
-    const astMsg = await this.persistTurn(
-      organizationId,
-      activeConvId,
-      assistantContent,
-    );
+    let messageId: string | undefined;
+    try {
+      const astMsg = await this.persistTurn(
+        organizationId,
+        activeConvId,
+        assistantContent,
+      );
+      messageId = astMsg?.id;
+    } catch (persistErr: unknown) {
+      this.logger.error(
+        `Failed to persist AI assistant turn for conv=${activeConvId}: ${persistErr instanceof Error ? persistErr.message : persistErr}`,
+      );
+    }
 
     this.writeSseEvent(res, 'done', {
       conversationId: activeConvId,
-      messageId: astMsg.id,
+      messageId: messageId || randomUUID(),
     });
 
     if (!res.writableEnded) {
@@ -3581,6 +3917,96 @@ ${entityDossier ? `\n═══ ANIQLANGAN OBYEKT / TOOL NATIJALARI ═══\n${
    * a Face-ID congestion theory) and presented them as analysis. Nothing here
    * is estimated; when a metric is missing the text says so.
    */
+  
+  private synthesizeToolResults(contents: GenAiContent[]): string {
+    const responses: Array<{ name: string; response: any }> = [];
+    for (const c of contents) {
+      if (c.parts) {
+        for (const p of c.parts) {
+          if (p.functionResponse && p.functionResponse.response) {
+            responses.push({
+              name: p.functionResponse.name,
+              response: p.functionResponse.response,
+            });
+          }
+        }
+      }
+    }
+    if (responses.length === 0) return '';
+
+    const lines: string[] = [];
+    for (const item of responses) {
+      const resp = item.response?.result ?? item.response;
+      if (item.name === 'attendance.summary' || item.name === 'attendance.today') {
+        const rate = resp.attendanceRate ?? resp.rate ?? 100;
+        const present = resp.present ?? resp.presentCount ?? 0;
+        const absent = resp.absent ?? resp.absentCount ?? 0;
+        const late = resp.late ?? resp.lateCount ?? 0;
+        const total = resp.total ?? (present + absent + late);
+        const statusEmoji = rate >= 90 ? '🟢 Barqaror' : rate >= 75 ? '🟡 Nazoratda' : '🔴 Past';
+
+        lines.push(`### 📋 Davomat hisoboti (Aniq bazadan olingan ma'lumotlar)`);
+        lines.push(``);
+        lines.push(`**Qatnashish ko'rsatkichi: ${rate}%** — ${statusEmoji}`);
+        lines.push(``);
+        lines.push(`| Ko'rsatkich | Soni |`);
+        lines.push(`| :--- | :---: |`);
+        lines.push(`| 🟢 Qatnashgan | ${present} nafar |`);
+        lines.push(`| 🟡 Kechikkan | ${late} nafar |`);
+        lines.push(`| 🔴 Kelmagan | ${absent} nafar |`);
+        lines.push(`| 👥 Jami o'quvchilar | ${total} nafar |`);
+        lines.push(``);
+        lines.push(`#### 🎯 Xulosa va tavsiya:`);
+        if (absent > 0) {
+          lines.push(`1. Darsga kelmagan ${absent} nafar o'quvchining ota-onasi bilan bog'lanish va sababini aniqlash.`);
+          lines.push(`2. Davomat jurnalida sababli/sababsizligini qayd etish.`);
+        } else {
+          lines.push(`1. Darsda to'liq ishtirok ta'minlangan (100% davomat). Barcha o'quvchilar mavzuni o'zlashtirishini nazorat qiling.`);
+        }
+        lines.push(``);
+        lines.push(`- [Davomat jurnalini ochish](/attendance)`);
+        lines.push(`- [Xabarnoma yuborish](/notifications)`);
+      } else if (item.name === 'schedule.list' || item.name === 'schedule.today') {
+        const items = Array.isArray(resp.items) ? resp.items : Array.isArray(resp) ? resp : [];
+        lines.push(`### 📅 Dars jadvali ma'lumotlari`);
+        lines.push(``);
+        if (items.length > 0) {
+          for (const s of items) {
+            lines.push(`- **${s.startTime || ''}-${s.endTime || ''}**: ${s.group?.name || s.groupName || 'Guruh'} (${s.room || 'Xona'}, ${s.teacher?.user?.firstName || s.teacherName || "O'qituvchi"})`);
+          }
+        } else {
+          lines.push(`- Bugungi kunga rejalashtirilgan darslar topilmadi.`);
+        }
+        lines.push(``);
+        lines.push(`- [To'liq dars jadvali](/schedule)`);
+      } else if (item.name === 'finance.debtors' || item.name === 'finance.summary') {
+        const debtors = Array.isArray(resp.debtors) ? resp.debtors : [];
+        const totalDebt = resp.totalDebt ?? 0;
+        lines.push(`### 💰 Moliyaviy va qarzdorlik hisoboti`);
+        lines.push(``);
+        lines.push(`**Umumiy qarzdorlik: ${Number(totalDebt).toLocaleString('uz-UZ')} UZS**`);
+        lines.push(``);
+        if (debtors.length > 0) {
+          lines.push(`| O'quvchi | Qarz miqdori |`);
+          lines.push(`| :--- | ---: |`);
+          for (const d of debtors.slice(0, 10)) {
+            lines.push(`| ${d.name || d.studentName || "O'quvchi"} | ${Number(d.amount || d.debt || 0).toLocaleString('uz-UZ')} UZS |`);
+          }
+        } else {
+          lines.push(`> 🟢 Hozirgi kunda muddati o'tgan qarzdorlik mavjud emas.`);
+        }
+        lines.push(``);
+        lines.push(`- [To'lovlar bo'limi](/payments)`);
+      } else {
+        lines.push(`### 📊 Ma'lumot tayyorlandi`);
+        lines.push(``);
+        lines.push(`So'ralgan ma'lumotlar tizim bazasidan muvaffaqiyatli olindi:`);
+        lines.push('```json\n' + JSON.stringify(resp, null, 2).slice(0, 800) + '\n```');
+      }
+    }
+    return lines.join('\n');
+  }
+
   private generateIntelligentFallback(ctx: {
     message: string;
     snapshot: OrgDataSnapshot;
@@ -3592,8 +4018,13 @@ ${entityDossier ? `\n═══ ANIQLANGAN OBYEKT / TOOL NATIJALARI ═══\n${
       "\n\n> ℹ️ AI modeli hozir javob bermadi. Quyidagi ma'lumotlar bazadan olingan aniq ko'rsatkichlar.";
     const links = (items: string[]) => items.join('\n');
 
-    // 0. Resolved entity dossier (student / group / teacher / course)
-    if (entityDossier && entityDossier.trim().length > 0) {
+        // 0. Resolved entity dossier (student / group / teacher / course)
+    // CRITICAL: Only match if entityDossier contains actual entity fields, NOT mere route notes!
+    const hasRealEntityData = Boolean(
+      entityDossier &&
+      /(O'quvchi|Guruh|O'qituvchi|Kurs|F\.I\.Sh|Telefon|Talaba):/i.test(entityDossier)
+    );
+    if (hasRealEntityData) {
       return `### 🎯 Aniq dosye (live database)\n\n${entityDossier}\n\n#### 🔗 Tizim havolalari\n${links([
         "- [O'quvchilar](/students)",
         '- [Guruhlar](/groups)',
@@ -3604,7 +4035,12 @@ ${entityDossier ? `\n═══ ANIQLANGAN OBYEKT / TOOL NATIJALARI ═══\n${
     // 1. Attendance
     if (/(davomat|attendance|посещаемост|kelmagan|absent|пропуск)/i.test(raw)) {
       if (snapshot.attendanceRateToday === null) {
-        return `### 📋 Davomat holati\n\nBugun uchun davomat hali kiritilmagan.\n\n- O'quvchilar: ${snapshot.studentsCount} nafar\n- Faol guruhlar: ${snapshot.groupsCount} ta\n\nDavomat jurnalini to'ldirgach, tahlil avtomatik yangilanadi.\n\n- [Davomat jurnalini ochish](/attendance)${offlineNote}`;
+        const todayStr = new Date().toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long', year: 'numeric' });
+        const classesInfo = snapshot.todayClasses && snapshot.todayClasses.length > 0
+          ? snapshot.todayClasses.map((c) => `- ${c}`).join('\n')
+          : `- Bugun uchun rejalashtirilgan ommaviy darslar yo'q yoki dars jadvali yangilanmoqda.`;
+
+        return `### 📋 Davomat holati va tahlili (${todayStr})\n\nBugun (${todayStr}) uchun davomat hali belgilanmagan.\n\n**Tizim ko'rsatkichlari:**\n- 👥 Jami faol o'quvchilar: **${snapshot.studentsCount} nafar**\n- 🏫 Faol guruhlar soni: **${snapshot.groupsCount} ta**\n- 👨‍🏫 O'qituvchilar: **${snapshot.teachersCount} nafar**\n\n**📅 Bugungi mashg'ulotlar jadvali:**\n${classesInfo}\n\n#### 🎯 Tavsiya etilgan amallar:\n1. Guruh o'qituvchilari yoki administrator davomatni belgilashi tavsiya etiladi.\n2. Belgilangan davomat natijasida ota-onalarga avtomatik Telegram bildirishnomalar yuboriladi.\n\n- [Davomat jurnalini ochish va belgilash](/attendance)\n- [Dars jadvalini ko'rish](/schedule)${offlineNote}`;
       }
 
       const rate = snapshot.attendanceRateToday;

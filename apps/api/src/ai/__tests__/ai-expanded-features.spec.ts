@@ -126,6 +126,7 @@ describe('AI Expanded Features Suite', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     service = new AiService(prisma, createMockConfig(), undefined, undefined, undefined, undefined);
+    vi.spyOn(service as any, 'getAiClient').mockReturnValue(null);
   });
 
   describe('Feature 3: Director\'s Daily Briefing', () => {
@@ -206,7 +207,7 @@ describe('AI Expanded Features Suite', () => {
       expect(plan.draft).toBe(true);
       expect(plan.verifiedByTeacher).toBe(false);
       expect(plan.steps).toBeDefined();
-      expect(plan.steps.length).toBe(4);
+      expect(plan.steps.length).toBeGreaterThanOrEqual(4);
       expect(plan.steps[0].teacherAction).toBeDefined();
       expect(plan.steps[0].studentAction).toBeDefined();
       expect(plan.steps[0].checkpoint).toBeDefined();

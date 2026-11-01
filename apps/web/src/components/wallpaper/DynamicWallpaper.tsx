@@ -148,6 +148,50 @@ export const WALLPAPER_THEMES = {
       glow: 'rgba(251, 146, 60, 0.20)',
     },
   },
+  aurora: {
+    name: 'Northern Solstice',
+    description: 'Arctic cyan, aurora emerald & cosmic indigo',
+    light: {
+      bgFrom: 'rgba(204, 251, 241, 0.40)',
+      bgVia: 'rgba(207, 250, 254, 0.32)',
+      bgTo: 'rgba(224, 231, 255, 0.28)',
+      blob1: 'rgba(16, 185, 129, 0.22)',
+      blob2: 'rgba(6, 182, 212, 0.20)',
+      blob3: 'rgba(99, 102, 241, 0.16)',
+      glow: 'rgba(52, 211, 153, 0.28)',
+    },
+    dark: {
+      bgFrom: 'rgba(6, 78, 59, 0.70)',
+      bgVia: 'rgba(8, 47, 73, 0.75)',
+      bgTo: 'rgba(2, 6, 23, 0.95)',
+      blob1: 'rgba(52, 211, 153, 0.30)',
+      blob2: 'rgba(34, 211, 238, 0.26)',
+      blob3: 'rgba(129, 140, 248, 0.24)',
+      glow: 'rgba(52, 211, 153, 0.22)',
+    },
+  },
+  sunset: {
+    name: 'Yosemite Twilight',
+    description: 'Sunset magenta, alpine lavender & starry sapphire',
+    light: {
+      bgFrom: 'rgba(253, 230, 138, 0.35)',
+      bgVia: 'rgba(252, 231, 243, 0.32)',
+      bgTo: 'rgba(224, 231, 255, 0.30)',
+      blob1: 'rgba(236, 72, 153, 0.20)',
+      blob2: 'rgba(168, 85, 247, 0.18)',
+      blob3: 'rgba(59, 130, 246, 0.16)',
+      glow: 'rgba(244, 114, 182, 0.26)',
+    },
+    dark: {
+      bgFrom: 'rgba(88, 28, 135, 0.70)',
+      bgVia: 'rgba(30, 27, 75, 0.85)',
+      bgTo: 'rgba(2, 6, 23, 0.95)',
+      blob1: 'rgba(236, 72, 153, 0.28)',
+      blob2: 'rgba(168, 85, 247, 0.26)',
+      blob3: 'rgba(96, 165, 250, 0.24)',
+      glow: 'rgba(216, 180, 254, 0.22)',
+    },
+  },
   obsidian: {
     name: 'Obsidian Studio',
     description: 'OLED graphite with subtle specular mesh',
@@ -285,7 +329,8 @@ const WALLPAPER_CSS = `
 .m-edu-blob {
   position: absolute;
   border-radius: 9999px;
-  filter: blur(80px);
+  filter: blur(40px);
+  contain: strict;
   will-change: transform;
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
@@ -358,6 +403,28 @@ const WALLPAPER_CSS = `
   opacity: 0.35;
   mix-blend-mode: overlay;
   pointer-events: none;
+}
+
+
+@media (max-width: 1024px) {
+  .m-edu-blob {
+    display: none !important;
+  }
+  .m-edu-grain {
+    display: none !important;
+  }
+  .m-edu-wallpaper {
+    background:
+      radial-gradient(120% 70% at 50% -10%, var(--m-edu-glow) 0%, transparent 60%),
+      radial-gradient(80% 50% at 10% 20%, var(--m-edu-b1) 0%, transparent 55%),
+      radial-gradient(80% 50% at 90% 80%, var(--m-edu-b3) 0%, transparent 55%),
+      linear-gradient(
+        to top right,
+        var(--m-edu-bg-from),
+        var(--m-edu-bg-via),
+        var(--m-edu-bg-to)
+      ) !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

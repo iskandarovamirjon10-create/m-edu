@@ -81,7 +81,7 @@ export class LessonGeneratorService {
         group: { organizationId, isActive: true },
       },
       include: {
-        group: { select: { id: true, teacherId: true, room: true } },
+        group: { select: { id: true, teacherId: true, room: true, startDate: true, endDate: true } },
       },
     });
 
@@ -101,10 +101,20 @@ export class LessonGeneratorService {
     // safely against the (groupId, date, startTime) unique constraint.
     const batch: Prisma.LessonCreateManyInput[] = [];
 
+    const startNormalized = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate(), 0, 0, 0, 0));
+    const endNormalized = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate(), 23, 59, 59, 999));
+
     for (const schedule of schedules) {
-      const cursor = new Date(from);
-      while (cursor <= to) {
-        if (cursor.getUTCDay() === DAY_INDEX[schedule.dayOfWeek] && !holidayDates.has(cursor.toISOString().split('T')[0])) {
+      const cursor = new Date(startNormalized);
+      while (cursor <= endNormalized) {
+        const dateStr = cursor.toISOString().split('T')[0];
+        const dayMatches = cursor.getUTCDay() === DAY_INDEX[schedule.dayOfWeek];
+        const notHoliday = !holidayDates.has(dateStr);
+        const withinGroupRange =
+          (!schedule.group.startDate || cursor >= schedule.group.startDate) &&
+          (!schedule.group.endDate || cursor <= schedule.group.endDate);
+
+        if (dayMatches && notHoliday && withinGroupRange) {
           batch.push({
             organizationId,
             scheduleId: schedule.id,

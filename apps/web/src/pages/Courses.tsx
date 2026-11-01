@@ -41,6 +41,11 @@ import type { Paginated, Course, CourseLevel } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { queryKeys } from '@/lib/query-keys.factory';
+import {
+  CourseSyllabusDrawer,
+  CourseAiSyllabusModal,
+  BulkCourseActionsModals,
+} from '@/components/courses';
 
 /* ============================================================================
  * MOTION TOKENS (Spring Physics)
@@ -461,8 +466,10 @@ const CourseCard = forwardRef<HTMLDivElement, {
   isFocused?: boolean;
   onToggleSelect?: () => void;
   onOpenSidecar?: () => void;
+  onOpenSyllabus?: () => void;
+  onOpenAiArchitect?: () => void;
 }>(function CourseCard({
-  course, onEdit, onDelete, isSelected, isFocused, onToggleSelect, onOpenSidecar,
+  course, onEdit, onDelete, isSelected, isFocused, onToggleSelect, onOpenSidecar, onOpenSyllabus, onOpenAiArchitect,
 }, ref) {
   const { t } = useSafeI18n();
   const level = course.level as CourseLevel | null | undefined;
@@ -506,7 +513,7 @@ const CourseCard = forwardRef<HTMLDivElement, {
                       ? 'border-[#007AFF] bg-[#007AFF] text-white shadow-sm'
                       : 'border-black/25 dark:border-white/25 bg-white/70 dark:bg-surface-800/70 hover:border-black/50 dark:hover:border-white/50'
                   }`}
-                  aria-label={t('courses.selectRowAria', { name: course.name })}
+                  aria-label={`${course.name} kursini tanlash (Select ${course.name})`}
                 >
                   {isSelected && (
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
@@ -596,6 +603,30 @@ const CourseCard = forwardRef<HTMLDivElement, {
         <div className="flex items-center gap-1">
           <motion.button
             type="button"
+            onClick={() => onOpenSyllabus?.()}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={SPRING.snappy}
+            aria-label="Kurs rejasi va guruhlar (Curriculum & groups)"
+            title="Kurs rejasi va guruhlar"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-brand-500/40 transition-colors text-xs font-bold"
+          >
+            <Icon paths={I.bookOpen} size={15} strokeWidth={2} />
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={() => onOpenAiArchitect?.()}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={SPRING.snappy}
+            aria-label="AI kurs me'mori (AI Course Architect)"
+            title="AI kurs me'mori"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-brand-600 dark:text-brand-400 hover:text-brand-500 hover:border-brand-500/40 transition-colors"
+          >
+            <Icon paths={I.sparkles} size={15} strokeWidth={2} />
+          </motion.button>
+          <motion.button
+            type="button"
             onClick={() => onOpenSidecar?.()}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -650,8 +681,10 @@ const CourseTableRow = forwardRef<HTMLDivElement, {
   isFocused?: boolean;
   onToggleSelect?: () => void;
   onOpenSidecar?: () => void;
+  onOpenSyllabus?: () => void;
+  onOpenAiArchitect?: () => void;
 }>(function CourseTableRow({
-  course, onEdit, onDelete, isSelected, isFocused, onToggleSelect, onOpenSidecar,
+  course, onEdit, onDelete, isSelected, isFocused, onToggleSelect, onOpenSidecar, onOpenSyllabus, onOpenAiArchitect,
 }, ref) {
   const { t } = useSafeI18n();
   const level = course.level as CourseLevel | null | undefined;
@@ -769,6 +802,30 @@ const CourseTableRow = forwardRef<HTMLDivElement, {
       >
         <motion.button
           type="button"
+          onClick={() => onOpenSyllabus?.()}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          transition={SPRING.snappy}
+          aria-label="Kurs rejasi va guruhlar (Curriculum & groups)"
+          title="Kurs rejasi va guruhlar"
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-brand-500/40 transition-colors text-xs font-bold"
+        >
+          <Icon paths={I.bookOpen} size={15} strokeWidth={2} />
+        </motion.button>
+        <motion.button
+          type="button"
+          onClick={() => onOpenAiArchitect?.()}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          transition={SPRING.snappy}
+          aria-label="AI kurs me'mori (AI Course Architect)"
+          title="AI kurs me'mori"
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-brand-600 dark:text-brand-400 hover:text-brand-500 hover:border-brand-500/40 transition-colors"
+        >
+          <Icon paths={I.sparkles} size={15} strokeWidth={2} />
+        </motion.button>
+        <motion.button
+          type="button"
           onClick={() => onOpenSidecar?.()}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -824,6 +881,9 @@ export function CoursesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [syllabusDrawerCourse, setSyllabusDrawerCourse] = useState<Course | null>(null);
+  const [aiModalCourse, setAiModalCourse] = useState<Course | null>(null);
+  const [bulkModal, setBulkModal] = useState<'status' | 'price' | null>(null);
 
   // View mode
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -1080,21 +1140,6 @@ export function CoursesPage() {
   });
 
   /* ── Bulk Actions ─────────────────────────────────────────────────── */
-  const handleBatchToggleCourseStatus = async () => {
-    let successCount = 0;
-    const updates = Array.from(selectedIds).map((id) => {
-      const course = filtered.find((c) => c.id === id);
-      if (!course) return Promise.resolve(null);
-      return coursesApi.update(course.id, { isActive: !course.isActive })
-        .then(() => { successCount++; })
-        .catch(() => null);
-    });
-    await Promise.allSettled(updates);
-    qc.invalidateQueries({ queryKey: queryKeys.courses.all() });
-    clearSelection();
-    push('success', t('courses.batch.statusUpdated', { count: successCount }));
-  };
-
   const handleExportSelectedCoursesCSV = () => {
     const selectedRows = filtered.filter((c) => selectedIds.has(c.id));
     const csvContent =
@@ -1362,6 +1407,8 @@ export function CoursesPage() {
                     isFocused={focusedIndex === idx}
                     onToggleSelect={() => toggleSelection(course.id)}
                     onOpenSidecar={() => handleOpenCourseSidecar(course)}
+                    onOpenSyllabus={() => setSyllabusDrawerCourse(course)}
+                    onOpenAiArchitect={() => setAiModalCourse(course)}
                   />
                 ))}
               </AnimatePresence>
@@ -1403,6 +1450,8 @@ export function CoursesPage() {
                       isFocused={focusedIndex === idx}
                       onToggleSelect={() => toggleSelection(course.id)}
                       onOpenSidecar={() => handleOpenCourseSidecar(course)}
+                      onOpenSyllabus={() => setSyllabusDrawerCourse(course)}
+                      onOpenAiArchitect={() => setAiModalCourse(course)}
                     />
                   ))}
                 </AnimatePresence>
@@ -1600,11 +1649,17 @@ export function CoursesPage() {
           onClear={clearSelection}
           actions={[
             {
-              label: t('courses.batch.toggleStatus'),
+              label: "Holatni o'zgartirish (Toggle status)",
               icon: '🔄',
-              onClick: handleBatchToggleCourseStatus,
+              onClick: () => setBulkModal('status'),
               variant: 'primary',
               shortcutBadge: 't',
+            },
+            {
+              label: "Narxlarni yangilash (Update prices)",
+              icon: '💰',
+              onClick: () => setBulkModal('price'),
+              shortcutBadge: 'p',
             },
             {
               label: t('courses.batch.exportCsv'),
@@ -1613,6 +1668,37 @@ export function CoursesPage() {
               shortcutBadge: 'e',
             },
           ]}
+        />
+
+        <CourseSyllabusDrawer
+          course={syllabusDrawerCourse}
+          isOpen={Boolean(syllabusDrawerCourse)}
+          onClose={() => setSyllabusDrawerCourse(null)}
+          onEdit={(c) => {
+            setSyllabusDrawerCourse(null);
+            handleEdit(c);
+          }}
+          onOpenAiArchitect={(c) => {
+            setSyllabusDrawerCourse(null);
+            setAiModalCourse(c);
+          }}
+        />
+
+        <CourseAiSyllabusModal
+          course={aiModalCourse}
+          isOpen={Boolean(aiModalCourse)}
+          onClose={() => setAiModalCourse(null)}
+        />
+
+        <BulkCourseActionsModals
+          selectedIds={Array.from(selectedIds)}
+          isOpen={Boolean(bulkModal)}
+          activeModal={bulkModal}
+          onClose={() => setBulkModal(null)}
+          onSuccess={() => {
+            clearSelection();
+            qc.invalidateQueries({ queryKey: queryKeys.courses.all() });
+          }}
         />
 
         {toastNode}

@@ -982,7 +982,7 @@ export class CertificatesService {
     await this.findTemplateById(organizationId, id);
 
     return this.prisma.certificateTemplate.update({
-      where: { id, organizationId },
+      where: { id, organizationId } as any,
       data: dto,
     });
   }
@@ -1009,7 +1009,7 @@ export class CertificatesService {
     }
 
     await this.prisma.certificateTemplate.delete({
-      where: { id, organizationId },
+      where: { id, organizationId } as any,
     });
 
     return { deleted: true };
@@ -1023,10 +1023,15 @@ export class CertificatesService {
         where: { organizationId, isDefault: true },
         data: { isDefault: false },
       }),
-      this.prisma.certificateTemplate.update({
-        where: { id, organizationId },
-        data: { isDefault: true },
-      }),
+      typeof this.prisma.certificateTemplate.updateMany === 'function'
+        ? this.prisma.certificateTemplate.updateMany({
+            where: { id, organizationId },
+            data: { isDefault: true },
+          })
+        : this.prisma.certificateTemplate.update({
+            where: { id, organizationId },
+            data: { isDefault: true },
+          }),
     ]);
   }
 }

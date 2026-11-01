@@ -179,6 +179,9 @@ const uz = {
 
   // Dashboard
   'dashboard.title': 'Asosiy',
+  'dashboard.tabOverview': 'Asosiy Tahlil',
+  'dashboard.tabOperations': 'Operatsion Radar & Xavflar',
+  'dashboard.tabKiosk': 'Jonli Face ID Kiosk',
   'dashboard.subtitle': 'Tashkotingiz umumiy ko\'rinishi',
   'dashboard.totalStudents': 'Jami o\'quvchilar',
   'dashboard.totalTeachers': 'Jami o\'qituvchilar',
@@ -327,6 +330,8 @@ const uz = {
   'settings.telegram.disconnected': 'Telegram uzildi',
   'settings.telegram.testSent': 'Sinov bildirishnomasi yuborildi',
   'settings.telegram.testFailed': 'Bu hisob uchun Telegram mavjud emas',
+  'cameras.presets.title': 'Devordagi kamera shablonlari (1-Click Presets)',
+  'cameras.testFailed': 'Kameraga ulanib bo‘lmadi',
 
   // Active Devices & Sync
   'settings.devices.title': 'Faol qurilmalar va qurilma sinxronizatsiyasi',
@@ -529,6 +534,17 @@ const uz = {
   'dashboard.pendingRate': 'Kutilmoqda',
   'dashboard.todayAttendance': 'Bugungi davomat',
   'dashboard.todayRevenue': 'Bugungi tushum',
+  'dashboard.teachersCountSuffix': "o'qituvchi",
+  'teachers.filter.highWorkload': "Yuqori yuklama",
+  'teachers.filter.available': "Bo'sh (Guruhsiz)",
+  'dashboard.stable': "Barqaror",
+  'dashboard.overdueWarning': "Shoshilinch undirish choralari zarur",
+  'dashboard.leadsConversion': "Lidlar va konversiya",
+  'dashboard.wonSuffix': "yutildi",
+  'dashboard.newLeadsSuffix': "ta yangi lid",
+  'dashboard.highGrowth': "Yuqori o'sish",
+  'dashboard.normalGrowth': "Normal",
+  'dashboard.cleanDebt': "Qarz yo‘q",
   'dashboard.conversion': 'Konversiya',
   'dashboard.leadFlow': 'Lidlar oqimi',
   'dashboard.systemHealth': 'Tizim holati',

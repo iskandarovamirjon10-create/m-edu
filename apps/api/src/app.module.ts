@@ -75,6 +75,8 @@ import { ChatModule } from './chat/chat.module';
 import { DataGovernanceModule } from './data-governance/data-governance.module';
 import { AutomationModule } from './automation/automation.module';
 import { PlatformModule } from './platform/platform.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { BillingModule } from './billing/billing.module';
 import { CronModule } from './cron/cron.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { PerformanceModule } from './performance/performance.module';
@@ -215,6 +217,8 @@ const redisEnabled = isRedisEnabled();
     DataGovernanceModule,
     AutomationModule,
     PlatformModule,
+    SubscriptionsModule,
+    BillingModule,
     CronModule,
     ObservabilityModule,
     PerformanceModule,

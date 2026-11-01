@@ -441,7 +441,7 @@ export const aiUz: typeof aiEn = {
   'ai.context.panel': 'Kontekst paneli',
   'ai.header.aria': 'AI Copilot sarlavhasi',
   'ai.search': 'Qidiruv',
-  'ai.meta.messages': '{count} ta xabar',
+  'ai.meta.messages': 'ta xabar',
   'ai.parameters': 'Parametrlar',
   'ai.assistantTyping': 'AI javob tayyorlamoqda…',
   'ai.clearChat': 'Chatni tozalash',

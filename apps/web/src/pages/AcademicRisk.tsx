@@ -544,7 +544,7 @@ export function AcademicRiskPage() {
                 <Icon paths={ICONS.radar} size={28} strokeWidth={2} />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-semibold text-rose-600 ring-1 ring-rose-500/25 dark:text-rose-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
@@ -758,7 +758,7 @@ export function AcademicRiskPage() {
         >
           {/* Segmented Filter Control */}
           <div
-            className="flex items-center rounded-2xl bg-neutral-200/50 p-1 dark:bg-white/[0.05]"
+            className="flex items-center rounded-2xl bg-neutral-200/50 p-1 dark:bg-white/[0.05] overflow-x-auto max-w-full no-scrollbar"
             role="tablist"
           >
             {(['ALL', 'HIGH', 'MEDIUM', 'LOW'] as FilterLevel[]).map((level) => {
@@ -800,7 +800,7 @@ export function AcademicRiskPage() {
           </div>
 
           {/* Search Box */}
-          <div className="relative min-w-[240px] flex-1 sm:max-w-xs">
+          <div className="relative w-full sm:w-auto sm:min-w-[240px] flex-1 sm:max-w-xs">
             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-neutral-400">
               <Icon paths={ICONS.search} size={16} />
             </span>
@@ -904,7 +904,7 @@ export function AcademicRiskPage() {
                       </div>
 
                       {/* Factors Mini-Grid */}
-                      <div className="mt-4 grid grid-cols-2 gap-2 pt-3 border-t border-black/[0.04] dark:border-white/[0.04]">
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3 border-t border-black/[0.04] dark:border-white/[0.04]">
                         {s.factors.map((f) => (
                           <div
                             key={f.name}

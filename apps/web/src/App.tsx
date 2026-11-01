@@ -33,6 +33,7 @@ import { ToastHost } from '@/components/ui';
 import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { QuickPaymentModal } from '@/components/QuickPaymentModal';
 import { QuickAttendanceModal } from '@/components/QuickAttendanceModal';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import {
   IconDefsHost,
   PremiumIcon,
@@ -104,31 +105,61 @@ function usePrefersReducedMotion(): boolean {
 }
 
 /**
- * Keeps `--app-vh` synchronized with the true visual viewport height on mobile browsers.
+ * Keeps `--app-vh` and `--app-vw` synchronized with the true visual viewport on mobile browsers,
+ * accounting for dynamic toolbars, keyboards, and orientation shifts.
  */
 function useViewportCssVar(): void {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     let rafId = 0;
 
-    const updateVh = () => {
+    const updateViewport = () => {
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
         const vh = (window.visualViewport?.height ?? window.innerHeight) * 0.01;
+        const vw = (window.visualViewport?.width ?? window.innerWidth) * 0.01;
+        const vvHeight = window.visualViewport?.height ?? window.innerHeight;
         document.documentElement.style.setProperty('--app-vh', `${vh}px`);
+        document.documentElement.style.setProperty('--app-vw', `${vw}px`);
+        document.documentElement.style.setProperty('--visual-viewport-height', `${vvHeight}px`);
       });
     };
 
-    updateVh();
-    window.addEventListener('resize', updateVh, { passive: true });
-    window.visualViewport?.addEventListener('resize', updateVh, { passive: true });
+    updateViewport();
+    window.addEventListener('resize', updateViewport, { passive: true });
+    window.addEventListener('orientationchange', updateViewport, { passive: true });
+    window.visualViewport?.addEventListener('resize', updateViewport, { passive: true });
 
     return () => {
       cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', updateVh);
-      window.visualViewport?.removeEventListener('resize', updateVh);
+      window.removeEventListener('resize', updateViewport);
+      window.removeEventListener('orientationchange', updateViewport);
+      window.visualViewport?.removeEventListener('resize', updateViewport);
     };
   }, []);
+}
+
+/**
+ * Synchronizes online network lifecycle with React Query caches.
+ * When the device reconnects to the network, automatically invalidates stale queries
+ * and resets errored queries so UI data springs back to life immediately without page reload.
+ */
+function GlobalNetworkSync() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleOnline = () => {
+      void queryClient.invalidateQueries();
+      void queryClient.resetQueries({
+        predicate: (q) => q.state.status === 'error',
+      });
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
+
+  return null;
 }
 
 /**
@@ -161,6 +192,7 @@ interface TonePalette {
   glow: string;
   border: string;
   badge: string;
+  jewelClass: string;
 }
 
 const TONE: Record<Tone, TonePalette> = {
@@ -170,6 +202,7 @@ const TONE: Record<Tone, TonePalette> = {
     glow: 'var(--tone-blue-glow, rgba(0,122,255,0.30))',
     border: 'var(--tone-blue-border, rgba(0,122,255,0.26))',
     badge: 'SYS · UPDATE',
+    jewelClass: 'jewel-blue',
   },
   green: {
     fg: 'var(--tone-green-fg, #34C759)',
@@ -177,6 +210,7 @@ const TONE: Record<Tone, TonePalette> = {
     glow: 'var(--tone-green-glow, rgba(52,199,89,0.30))',
     border: 'var(--tone-green-border, rgba(52,199,89,0.26))',
     badge: 'SYS · READY',
+    jewelClass: 'jewel-emerald',
   },
   orange: {
     fg: 'var(--tone-orange-fg, #FF9500)',
@@ -184,6 +218,7 @@ const TONE: Record<Tone, TonePalette> = {
     glow: 'var(--tone-orange-glow, rgba(255,149,0,0.30))',
     border: 'var(--tone-orange-border, rgba(255,149,0,0.26))',
     badge: 'NET · WARN',
+    jewelClass: 'jewel-amber',
   },
   red: {
     fg: 'var(--tone-red-fg, #FF3B30)',
@@ -191,6 +226,7 @@ const TONE: Record<Tone, TonePalette> = {
     glow: 'var(--tone-red-glow, rgba(255,59,48,0.30))',
     border: 'var(--tone-red-border, rgba(255,59,48,0.26))',
     badge: 'ERR · FAULT',
+    jewelClass: 'jewel-rose',
   },
   purple: {
     fg: 'var(--tone-purple-fg, #AF52DE)',
@@ -198,6 +234,7 @@ const TONE: Record<Tone, TonePalette> = {
     glow: 'var(--tone-purple-glow, rgba(175,82,222,0.30))',
     border: 'var(--tone-purple-border, rgba(175,82,222,0.26))',
     badge: 'AUTH · LOCK',
+    jewelClass: 'jewel-purple',
   },
   slate: {
     fg: 'var(--tone-slate-fg, #8E8E93)',
@@ -205,6 +242,7 @@ const TONE: Record<Tone, TonePalette> = {
     glow: 'var(--tone-slate-glow, rgba(142,142,147,0.30))',
     border: 'var(--tone-slate-border, rgba(142,142,147,0.26))',
     badge: '404 · MISSING',
+    jewelClass: 'jewel-slate',
   },
 };
 
@@ -229,6 +267,7 @@ function isChunkLoadError(error: unknown): boolean {
 /**
  * Attempts a single automatic hard reload if a chunk fails to load,
  * guarded by a 15-second session cooldown to prevent infinite reload loops.
+ * Flushes stale Vite/SW cache partitions to ensure fresh bundles.
  */
 function attemptSafeChunkAutoReload(): boolean {
   if (typeof window === 'undefined') return false;
@@ -237,6 +276,19 @@ function attemptSafeChunkAutoReload(): boolean {
     const lastAttempt = Number(sessionStorage.getItem(CHUNK_RELOAD_STORAGE_KEY) || 0);
     if (now - lastAttempt > CHUNK_RELOAD_COOLDOWN_MS) {
       sessionStorage.setItem(CHUNK_RELOAD_STORAGE_KEY, String(now));
+      if ('caches' in window) {
+        try {
+          caches.keys().then((names) => {
+            for (const name of names) {
+              if (name.includes('vite') || name.includes('workbox') || name.includes('precache')) {
+                void caches.delete(name);
+              }
+            }
+          }).catch(() => {});
+        } catch {
+          /* ignore cache deletion errors */
+        }
+      }
       window.location.reload();
       return true;
     }
@@ -499,7 +551,7 @@ export const BrandedSplash = memo(function BrandedSplash({
       {/* Ambient Chromatic Caustics */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-36 -top-36 h-[500px] w-[500px] rounded-full opacity-45 blur-3xl"
+        className="glow-sapphire pointer-events-none absolute -left-36 -top-36 h-[500px] w-[500px] rounded-full opacity-45 blur-3xl"
         style={{
           background:
             'radial-gradient(circle, var(--tone-blue-glow), transparent 70%)',
@@ -507,7 +559,7 @@ export const BrandedSplash = memo(function BrandedSplash({
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -bottom-36 -right-36 h-[500px] w-[500px] rounded-full opacity-45 blur-3xl"
+        className="glow-purple pointer-events-none absolute -bottom-36 -right-36 h-[500px] w-[500px] rounded-full opacity-45 blur-3xl"
         style={{
           background:
             'radial-gradient(circle, var(--tone-purple-glow), transparent 70%)',
@@ -590,17 +642,17 @@ export const BrandedSplash = memo(function BrandedSplash({
           </motion.div>
         </motion.div>
 
-        {/* ── Typography ── */}
+        {/* ── Typography with Sparkle & Crystal Badge ── */}
         <motion.div variants={cardVariants} className="text-center">
-          <div className="inline-flex items-center gap-2">
-            <h1 className="text-2xl font-extrabold tracking-tight text-[var(--text-primary)]">
+          <div className="inline-flex items-center gap-2.5">
+            <h1 className="text-3xl font-black tracking-tight text-sparkle font-sans">
               M-EDU
             </h1>
-            <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-widest text-sky-600 shadow-2xs dark:text-sky-400">
+            <span className="jewel-pill jewel-blue font-extrabold tracking-widest text-[10px] uppercase shadow-2xs">
               Studio v2
             </span>
           </div>
-          <p className="mt-1.5 text-[12.5px] font-medium tracking-tight text-[var(--text-secondary)]">
+          <p className="mt-2 text-[13px] font-medium tracking-tight text-[var(--text-secondary)]">
             {label}
           </p>
         </motion.div>
@@ -608,14 +660,17 @@ export const BrandedSplash = memo(function BrandedSplash({
         {/* ── Liquid Glass Progress Bar ── */}
         <motion.div
           variants={cardVariants}
-          aria-hidden="true"
-          className="relative h-1.5 w-52 overflow-hidden rounded-full border border-white/70 bg-white/50 p-[1px] backdrop-blur-md dark:border-white/10 dark:bg-white/[0.06]"
+          role="progressbar"
+          aria-label={label}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className="relative h-1.5 w-56 overflow-hidden rounded-full border border-white/70 bg-white/50 p-[1px] backdrop-blur-md dark:border-white/10 dark:bg-white/[0.06]"
         >
           <motion.div
             className="h-full rounded-full"
             style={{
               background: 'var(--gradient-hero)',
-              boxShadow: '0 0 12px rgba(0, 122, 255, 0.5)',
+              boxShadow: '0 0 14px rgba(0, 122, 255, 0.55)',
             }}
             initial={{ width: '0%' }}
             animate={{ width: ['0%', '78%', '95%'] }}
@@ -627,10 +682,10 @@ export const BrandedSplash = memo(function BrandedSplash({
           />
           {!reduced && (
             <motion.div
-              className="pointer-events-none absolute inset-y-0 w-16 -skew-x-12"
+              className="pointer-events-none absolute inset-y-0 w-20 -skew-x-12"
               style={{
                 background:
-                  'linear-gradient(90deg, transparent, rgba(255,255,255,0.92), transparent)',
+                  'linear-gradient(90deg, transparent, rgba(255,255,255,0.95), transparent)',
               }}
               animate={{ x: ['-120%', '420%'] }}
               transition={{ duration: 1.4, repeat: Infinity, ease: 'linear' }}
@@ -668,6 +723,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
 }: PremiumErrorFallbackProps) {
   const reduced = usePrefersReducedMotion();
   const tr = useSafeTranslate();
+  const { playTick, playPop, playSuccess, playError } = usePremiumSound();
 
   const [showDetails, setShowDetails] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -683,8 +739,10 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
   useEffect(() => {
     if (chunkMismatch) {
       attemptSafeChunkAutoReload();
+    } else if (error) {
+      playError();
     }
-  }, [chunkMismatch]);
+  }, [chunkMismatch, error, playError]);
 
   const resolvedTitle = chunkMismatch
     ? tr('error.updateAvailableTitle', 'Tizimning yangi versiyasi mavjud')
@@ -710,12 +768,13 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
 
   /* ── Primary Retry Handler ── */
   const handlePrimaryAction = useCallback(() => {
+    playTick();
     if (chunkMismatch && typeof window !== 'undefined') {
       window.location.reload();
       return;
     }
     onRetry?.();
-  }, [chunkMismatch, onRetry]);
+  }, [chunkMismatch, onRetry, playTick]);
 
   /* ── Rich Telemetry Report Builder & Clipboard Copy ── */
   const handleCopyReport = useCallback(async () => {
@@ -741,12 +800,13 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
 
     try {
       await navigator.clipboard.writeText(payload);
+      playSuccess();
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
     } catch {
       /* Ignore clipboard permission errors */
     }
-  }, [statusCode, errorName, errorText, errorStack]);
+  }, [statusCode, errorName, errorText, errorStack, playSuccess]);
 
   /* ── Keyboard Recovery Matrix (R = Retry, H = Home, D = Diagnostics, C = Copy) ── */
   useEffect(() => {
@@ -768,9 +828,11 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
         handlePrimaryAction();
       } else if (key === 'h' && onHome) {
         e.preventDefault();
+        playTick();
         onHome();
       } else if (key === 'd' && Boolean(error)) {
         e.preventDefault();
+        playPop();
         setShowDetails((prev) => !prev);
       } else if (key === 'c' && showDetails && Boolean(error)) {
         e.preventDefault();
@@ -780,7 +842,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handlePrimaryAction, handleCopyReport, onHome, onRetry, chunkMismatch, error, showDetails]);
+  }, [handlePrimaryAction, handleCopyReport, onHome, onRetry, chunkMismatch, error, showDetails, playTick, playPop]);
 
   return (
     <div
@@ -811,7 +873,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
         <motion.div
           variants={cardVariants}
           className={[
-            'relative overflow-hidden rounded-3xl sm:rounded-[2.25rem] p-5 sm:p-8 backdrop-blur-2xl',
+            'vision-card relative overflow-hidden rounded-3xl sm:rounded-[2.25rem] p-6 sm:p-8 backdrop-blur-2xl',
             'border border-white/90 dark:border-white/[0.12]',
             'bg-white/85 dark:bg-[#0F172A]/85',
             'shadow-[0_1px_0_rgba(255,255,255,0.98)_inset,0_32px_80px_-16px_rgba(15,23,42,0.20)]',
@@ -825,14 +887,9 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
           />
 
           <div className="relative z-10 flex flex-col items-center text-center">
-            {/* Status Telemetry Pill */}
+            {/* Status Telemetry Pill with Faceted Jewel Optics */}
             <span
-              className="mb-3.5 inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-[10px] font-extrabold uppercase tracking-widest shadow-2xs"
-              style={{
-                background: c.bg,
-                color: c.fg,
-                border: `1px solid ${c.border}`,
-              }}
+              className={`mb-3.5 jewel-pill ${c.jewelClass} uppercase tracking-widest text-[10.5px] shadow-2xs`}
             >
               <span
                 className="h-1.5 w-1.5 rounded-full animate-pulse"
@@ -877,7 +934,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                   whileHover={reduced ? undefined : { scale: 1.02 }}
                   whileTap={reduced ? undefined : { scale: 0.97 }}
                   transition={SPRING.snappy}
-                  className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
+                  className="btn-glow-primary inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] shadow-md"
                   style={{
                     background: 'var(--gradient-hero)',
                     boxShadow:
@@ -903,7 +960,10 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
               {onHome && (
                 <motion.button
                   type="button"
-                  onClick={onHome}
+                  onClick={() => {
+                    playTick();
+                    onHome();
+                  }}
                   whileHover={reduced ? undefined : { scale: 1.02 }}
                   whileTap={reduced ? undefined : { scale: 0.97 }}
                   transition={SPRING.snappy}
@@ -933,7 +993,10 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
               <div className="mt-5 w-full">
                 <button
                   type="button"
-                  onClick={() => setShowDetails((prev) => !prev)}
+                  onClick={() => {
+                    playPop();
+                    setShowDetails((prev) => !prev);
+                  }}
                   aria-expanded={showDetails}
                   className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold text-[var(--text-tertiary)] transition-colors hover:bg-slate-500/10 hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
                 >
@@ -1128,6 +1191,7 @@ const PwaUpdateNotification = memo(function PwaUpdateNotification() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const tr = useSafeTranslate();
   const reduced = usePrefersReducedMotion();
+  const { playTick } = usePremiumSound();
 
   useEffect(() => {
     const handleUpdate = () => setUpdateAvailable(true);
@@ -1135,6 +1199,49 @@ const PwaUpdateNotification = memo(function PwaUpdateNotification() {
     return () =>
       window.removeEventListener('medu:pwa-update-available', handleUpdate);
   }, []);
+
+  const handleApplyUpdate = useCallback(() => {
+    playTick();
+    if ('caches' in window) {
+      try {
+        caches.keys().then((names) => {
+          for (const name of names) {
+            void caches.delete(name);
+          }
+        }).catch(() => {});
+      } catch {
+        /* ignore cache flush errors */
+      }
+    }
+    window.location.reload();
+  }, [playTick]);
+
+  useEffect(() => {
+    if (!updateAvailable) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement)?.isContentEditable ||
+        e.metaKey ||
+        e.ctrlKey
+      ) {
+        return;
+      }
+      if (e.key.toLowerCase() === 'u') {
+        e.preventDefault();
+        handleApplyUpdate();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        playTick();
+        setUpdateAvailable(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [updateAvailable, handleApplyUpdate, playTick]);
 
   return (
     <AnimatePresence>
@@ -1148,31 +1255,40 @@ const PwaUpdateNotification = memo(function PwaUpdateNotification() {
           transition={SPRING.island}
           className={[
             'fixed bottom-4 left-4 right-4 z-50 mx-auto flex max-w-md items-center justify-between gap-3 sm:bottom-6',
-            'rounded-full border border-white/25 bg-slate-900/90 py-2.5 pl-4 pr-2.5 text-white backdrop-blur-2xl',
-            'shadow-[0_1px_0_rgba(255,255,255,0.22)_inset,0_20px_50px_-10px_rgba(0,0,0,0.65)]',
+            'vision-card rounded-full border border-white/30 dark:border-white/15 bg-slate-900/90 py-2.5 pl-4 pr-2.5 text-white backdrop-blur-2xl',
+            'glow-sapphire shadow-[0_1px_0_rgba(255,255,255,0.28)_inset,0_20px_50px_-10px_rgba(0,0,0,0.65)]',
           ].join(' ')}
         >
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <span className="relative flex h-2.5 w-2.5 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-sky-400" />
+            <span className="jewel-pill jewel-blue py-0.5 px-2 text-[9.5px] uppercase tracking-wider font-extrabold">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-400" />
+              </span>
+              PWA
             </span>
-            <p className="truncate text-xs font-semibold tracking-tight">
-              {tr('pwa.updateAvailable', 'M-EDU v2 yangi versiyasi tayyor')}
+            <p className="truncate text-xs font-semibold tracking-tight text-white/95">
+              {tr('pwa.updateAvailable', 'M-EDU Studio v2 yangilanishi tayyor')}
             </p>
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
-              onClick={() => window.location.reload()}
-              className="min-h-[32px] rounded-full bg-sky-500 px-3.5 py-1 text-xs font-bold text-white shadow-sm transition hover:bg-sky-400 active:scale-95"
+              onClick={handleApplyUpdate}
+              className="btn-glow-primary min-h-[32px] rounded-full bg-sky-500 px-3.5 py-1 text-xs font-bold text-white shadow-sm transition hover:bg-sky-400 active:scale-95 flex items-center gap-1.5"
             >
-              {tr('common.updateNow', 'Yangilash')}
+              <span>{tr('common.updateNow', 'Yangilash')}</span>
+              <kbd className="hidden rounded bg-black/25 px-1.5 py-0.2 font-mono text-[9px] uppercase opacity-85 sm:inline">
+                U
+              </kbd>
             </button>
             <button
               type="button"
-              onClick={() => setUpdateAvailable(false)}
+              onClick={() => {
+                playTick();
+                setUpdateAvailable(false);
+              }}
               aria-label={tr('common.close', 'Yopish')}
               className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-white"
             >
@@ -1244,6 +1360,7 @@ export default function App() {
                 <ScrollToTop />
                 <DocumentTitleManager />
                 <UserSettingsSync />
+                <GlobalNetworkSync />
                 <AppRoutes />
                 <PwaUpdateNotification />
                 <OfflineIndicator />

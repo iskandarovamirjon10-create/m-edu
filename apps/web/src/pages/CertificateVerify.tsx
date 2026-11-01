@@ -13,7 +13,7 @@
  *  - Trilingual resilience (UZ, RU, EN) with safe fallbacks
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,6 +23,7 @@ import { useSafeI18n } from '@/i18n/I18nProvider';
 import { GlassButton, GlassInput, useToasts } from '@/components/ui';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { TiltCertificate } from '@/components/certificates/TiltCertificate';
+import { triggerPrint } from '@/lib/printEngine';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -184,6 +185,13 @@ export function CertificateVerifyPage() {
   const [inputCode, setInputCode] = useState(urlCode ? cleanVerificationCode(urlCode) : '');
   const [activeCode, setActiveCode] = useState(urlCode ? cleanVerificationCode(urlCode) : '');
   const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (urlCode) {
@@ -222,13 +230,17 @@ export function CertificateVerifyPage() {
       type: 'success',
       message: t('certificates.linkCopied', 'Verification link copied to clipboard!'),
     });
-    setTimeout(() => setCopied(false), 2400);
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2400);
   }, [push, t, playPop]);
 
   const printCertificate = useCallback(() => {
     playTick();
-    if (typeof window !== 'undefined') window.print();
-  }, [playTick]);
+    triggerPrint({
+      type: 'certificate',
+      title: data ? `Sertifikat_${data.certificateNumber}` : 'Sertifikat_M-EDU',
+    });
+  }, [playTick, data]);
 
   return (
     <div className="min-h-screen relative flex flex-col justify-between overflow-hidden bg-gradient-to-b from-[#F5F5F7] via-[#FFFFFF] to-[#F5F5F7] dark:from-[#0B0C10] dark:via-[#12141A] dark:to-[#0B0C10] px-4 py-8 sm:px-6 lg:px-8 pb-[max(4rem,env(safe-area-inset-bottom))]">

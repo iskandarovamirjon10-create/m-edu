@@ -709,7 +709,7 @@ function WorkloadRow({
                   {t('teacherWorkload.baseSalary', 'Fiksa Oklad')}
                 </span>
                 <span className="tabular-nums font-bold text-slate-900 dark:text-white">
-                  {baseSalary.toLocaleString()} so'm
+                  {(baseSalary ?? 0).toLocaleString()} so'm
                 </span>
               </div>
               <div>
@@ -717,7 +717,7 @@ function WorkloadRow({
                   {t('teacherWorkload.lessonHours', 'Dars soatlari')} ({teacher.hoursPerWeek}h/h)
                 </span>
                 <span className="tabular-nums font-bold text-slate-900 dark:text-white">
-                  {salaryCalc.hoursEarnings.toLocaleString()} so'm
+                  {(salaryCalc.hoursEarnings ?? 0).toLocaleString()} so'm
                 </span>
               </div>
               <div>
@@ -725,7 +725,7 @@ function WorkloadRow({
                   {t('teacherWorkload.kpiBonuses', 'KPI Bonuslari')}
                 </span>
                 <span className="tabular-nums font-bold text-emerald-600 dark:text-emerald-400">
-                  +{(salaryCalc.retentionBonus + salaryCalc.attendanceBonus).toLocaleString()} so'm
+                  +{((salaryCalc.retentionBonus ?? 0) + (salaryCalc.attendanceBonus ?? 0)).toLocaleString()} so'm
                 </span>
               </div>
               <div>
@@ -733,7 +733,7 @@ function WorkloadRow({
                   {t('teacherWorkload.totalEstimated', 'Jami Hisoblangan')}
                 </span>
                 <span className="text-sm font-black tabular-nums text-emerald-600 dark:text-emerald-300">
-                  {estimatedSalary.toLocaleString()} so'm
+                  {(estimatedSalary ?? 0).toLocaleString()} so'm
                 </span>
               </div>
             </div>
@@ -1037,14 +1037,14 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
                 <span className="h-2 w-2 rounded-full bg-blue-400" />
                 {t('teacherWorkload.baseSalary', 'Asosiy oklad (Fiksa):')}
               </span>
-              <span className="font-semibold text-white">{salary.baseSalary.toLocaleString()} so'm</span>
+              <span className="font-semibold text-white">{(salary.baseSalary ?? 0).toLocaleString()} so'm</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
                 {t('teacherWorkload.lessonHours', 'Dars soatlari')} ({salary.monthlyHours} soat):
               </span>
-              <span className="font-semibold text-white">{salary.hoursEarnings.toLocaleString()} so'm</span>
+              <span className="font-semibold text-white">{(salary.hoursEarnings ?? 0).toLocaleString()} so'm</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span className="flex items-center gap-1.5">
@@ -1052,7 +1052,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
                 Retention Bonusi (≥90%):
               </span>
               <span className={`font-semibold ${salary.retentionBonus > 0 ? 'text-amber-300' : 'text-slate-500 line-through'}`}>
-                {salary.retentionBonus > 0 ? `+${salary.retentionBonus.toLocaleString()} so'm` : "0 so'm"}
+                {salary.retentionBonus > 0 ? `+${(salary.retentionBonus ?? 0).toLocaleString()} so'm` : "0 so'm"}
               </span>
             </div>
             <div className="flex justify-between text-slate-300">
@@ -1061,7 +1061,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
                 Davomat Bonusi (≥85%):
               </span>
               <span className={`font-semibold ${salary.attendanceBonus > 0 ? 'text-purple-300' : 'text-slate-500 line-through'}`}>
-                {salary.attendanceBonus > 0 ? `+${salary.attendanceBonus.toLocaleString()} so'm` : "0 so'm"}
+                {salary.attendanceBonus > 0 ? `+${(salary.attendanceBonus ?? 0).toLocaleString()} so'm` : "0 so'm"}
               </span>
             </div>
           </div>
@@ -1072,7 +1072,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
                 {t('teacherWorkload.totalEstimatedSalary', 'Jami Kutilayotgan Maosh')}
               </span>
               <span className="bg-gradient-to-r from-emerald-300 via-teal-200 to-white bg-clip-text text-2xl font-black tracking-tight text-transparent">
-                {salary.totalSalary.toLocaleString()}
+                {(salary.totalSalary ?? 0).toLocaleString()}
               </span>
               <span className="ml-1 text-xs font-semibold text-slate-400">so'm</span>
             </div>

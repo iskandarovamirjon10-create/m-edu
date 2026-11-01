@@ -74,9 +74,9 @@ const SIZES: Record<
   StatCardSize,
   { pad: string; label: string; value: string; icon: string; gap: string }
 > = {
-  sm: { pad: 'p-4', label: 'text-xs', value: 'text-xl', icon: 'h-8 w-8', gap: 'gap-2' },
-  md: { pad: 'p-5', label: 'text-xs', value: 'text-2xl', icon: 'h-9 w-9', gap: 'gap-3' },
-  lg: { pad: 'p-6', label: 'text-sm', value: 'text-3xl', icon: 'h-11 w-11', gap: 'gap-4' },
+  sm: { pad: 'p-3 sm:p-4', label: 'text-xs', value: 'text-lg sm:text-xl', icon: 'h-8 w-8', gap: 'gap-2' },
+  md: { pad: 'p-3.5 sm:p-5', label: 'text-xs', value: 'text-xl sm:text-2xl', icon: 'h-9 w-9', gap: 'gap-2.5 sm:gap-3' },
+  lg: { pad: 'p-4 sm:p-6', label: 'text-sm', value: 'text-2xl sm:text-3xl', icon: 'h-10 w-10 sm:h-11 sm:w-11', gap: 'gap-3 sm:gap-4' },
 };
 
 export function Sparkline({ values, color, width = 64, height = 24 }: SparklineProps) {
@@ -174,7 +174,7 @@ export function GlassStatCard({
       </span>
 
       <span className="flex items-end justify-between gap-3">
-        <span className={cn('font-semibold leading-none tracking-tight tabular-nums text-primary', sz.value)}>
+        <span className={cn('font-semibold leading-none tracking-tight tabular-nums text-primary min-w-0 truncate', sz.value)}>
           {value}
         </span>
         {sparkline && sparkline.length >= 2 && (
@@ -210,7 +210,7 @@ export function GlassStatCard({
   );
 
   const base = cn(
-    'relative overflow-hidden bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-card shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] text-left transition-all duration-200',
+    'relative min-w-0 max-w-full box-border overflow-hidden bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-card shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] text-left transition-all duration-200',
     sz.pad,
     interactive &&
       'cursor-pointer hover:shadow-card-hover hover:border-black/[0.1] dark:hover:border-white/[0.15] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.985] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-focus)]',

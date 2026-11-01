@@ -26,6 +26,7 @@ import { usePrefersReducedMotion } from '@/layouts/core/singletons';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { SmartScheduleClashMatrix } from '@/components/schedule/SmartScheduleClashMatrix';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * MOTION TOKENS
@@ -182,7 +183,7 @@ function durationMinutes(start: string, end: string): number {
  * TYPES
  * ════════════════════════════════════════════════════════════════════════ */
 
-type ViewMode = 'grid' | 'list' | 'heatmap';
+type ViewMode = 'grid' | 'list' | 'heatmap' | 'optimizer';
 
 interface ScheduleFilters {
   page: number;
@@ -320,7 +321,7 @@ function GridView({
 
   return (
     <div className="overflow-x-auto pb-4 pt-1" style={{ scrollbarWidth: 'thin' }}>
-      <div className="grid min-w-[700px] grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:min-w-0 lg:grid-cols-7">
+      <div className="grid min-w-0 sm:min-w-[700px] grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:min-w-0 lg:grid-cols-7">
         {DAYS.map((day) => {
           const dayEntries = byDay.get(day) || [];
           const tone = DAY_TONES[day];
@@ -432,10 +433,10 @@ function GridView({
                         </p>
 
                         {/* Room Info */}
-                        {s.room && (
+                        {(s.room || s.group?.room) && (
                           <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-[var(--text-muted)]">
                             <Icon paths={I.door} size={10} strokeWidth={2.2} />
-                            <span className="truncate">{s.room}</span>
+                            <span className="truncate">{s.room || s.group?.room}</span>
                           </div>
                         )}
 
@@ -573,13 +574,13 @@ function ListView({
                       {t('schedule.conflict')}
                     </span>
                   )}
-                  {s.room && (
+                  {(s.room || s.group?.room) && (
                     <span
                       className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
                       style={{ background: c.bg, color: c.fg }}
                     >
                       <Icon paths={I.door} size={9} strokeWidth={2.2} />
-                      {s.room}
+                      {s.room || s.group?.room}
                     </span>
                   )}
                 </div>
@@ -927,14 +928,16 @@ export function SchedulePage() {
     const len = items.length;
     for (let i = 0; i < len; i++) {
       const a = items[i];
-      if (!a.room) continue;
+      const aRoom = (a.room || a.group?.room)?.trim().toLowerCase();
+      if (!aRoom) continue;
       const aStart = timeToMinutes(a.startTime);
       const aEnd = timeToMinutes(a.endTime);
       for (let j = i + 1; j < len; j++) {
         const b = items[j];
         if (a.dayOfWeek !== b.dayOfWeek) continue;
-        if (!b.room) continue;
-        if (a.room.trim().toLowerCase() !== b.room.trim().toLowerCase()) continue;
+        const bRoom = (b.room || b.group?.room)?.trim().toLowerCase();
+        if (!bRoom) continue;
+        if (aRoom !== bRoom) continue;
         const bStart = timeToMinutes(b.startTime);
         const bEnd = timeToMinutes(b.endTime);
         if (aStart < bEnd && bStart < aEnd) {
@@ -1035,11 +1038,12 @@ export function SchedulePage() {
     const gName = (s as Schedule & { group?: { name?: string } }).group?.name ?? t('schedule.sidecar.title');
     const dayLabel = t(formatDay(s.dayOfWeek));
     const mins = durationMinutes(s.startTime, s.endTime);
+    const effectiveRoom = s.room || s.group?.room;
     const sidecarData: QuickLookData = {
       id: s.id,
       type: 'group',
       title: gName,
-      subtitle: `${dayLabel} · ${s.startTime} → ${s.endTime}${s.room ? ` · ${t('schedule.sidecar.room')}: ${s.room}` : ''}`,
+      subtitle: `${dayLabel} · ${s.startTime} → ${s.endTime}${effectiveRoom ? ` · ${t('schedule.sidecar.room')}: ${effectiveRoom}` : ''}`,
       badge: {
         text: dayLabel,
         tone: 'blue',
@@ -1052,13 +1056,13 @@ export function SchedulePage() {
         { label: t('schedule.sidecar.startTime'), value: s.startTime },
         { label: t('schedule.sidecar.endTime'), value: s.endTime },
         { label: t('schedule.sidecar.duration'), value: mins > 0 ? t('schedule.sidecar.minutes', { count: mins }) : '—' },
-        { label: t('schedule.sidecar.room'), value: s.room || t('schedule.sidecar.unassigned') },
+        { label: t('schedule.sidecar.room'), value: effectiveRoom || t('schedule.sidecar.unassigned') },
       ],
       details: [
         { label: t('schedule.sidecar.slotId'), value: s.id, copyable: true },
         { label: t('schedule.sidecar.groupId'), value: s.groupId, copyable: true },
         { label: t('schedule.sidecar.day'), value: dayLabel },
-        { label: t('schedule.sidecar.room'), value: s.room || t('schedule.sidecar.unassigned') },
+        { label: t('schedule.sidecar.room'), value: effectiveRoom || t('schedule.sidecar.unassigned') },
       ],
       primaryAction: {
         label: t('schedule.sidecar.edit'),
@@ -1120,7 +1124,7 @@ export function SchedulePage() {
   const stats = useMemo(() => {
     const uniqueGroups = new Set(items.map((s) => s.groupId)).size;
     const uniqueDays = new Set(items.map((s) => s.dayOfWeek)).size;
-    const uniqueRooms = new Set(items.map((s) => s.room).filter(Boolean)).size;
+    const uniqueRooms = new Set(items.map((s) => s.room || s.group?.room).filter(Boolean)).size;
     return {
       total: data?.total ?? 0,
       uniqueGroups,
@@ -1203,6 +1207,7 @@ export function SchedulePage() {
                   { id: 'grid', icon: I.grid, label: t('schedule.view.grid') },
                   { id: 'list', icon: I.list, label: t('schedule.view.list') },
                   { id: 'heatmap', icon: I.flame, label: t('schedule.view.heatmap') },
+                  { id: 'optimizer', icon: I.calendarCheck, label: "Xonalar Matritsasi" },
                 ] as const).map((v) => {
                   const active = viewMode === v.id;
                   return (
@@ -1389,7 +1394,17 @@ export function SchedulePage() {
 
             {/* ── Content Switch ── */}
             <AnimatePresence mode="wait">
-              {viewMode === 'heatmap' ? (
+              {viewMode === 'optimizer' ? (
+                <motion.div
+                  key="optimizer"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={SPRING.smooth}
+                >
+                  <SmartScheduleClashMatrix />
+                </motion.div>
+              ) : viewMode === 'heatmap' ? (
                 <motion.div
                   key="heatmap"
                   initial={{ opacity: 0, y: 8 }}
@@ -1595,7 +1610,7 @@ export function SchedulePage() {
             <p className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
               {t('schedule.dayOfWeek')}
             </p>
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+            <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 sm:gap-2">
               {DAYS.map((d) => {
                 const active = form.dayOfWeek === d;
                 const c = TONES[DAY_TONES[d]];

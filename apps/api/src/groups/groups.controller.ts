@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto, UpdateGroupDto } from '../common/dto';
 import { GroupQuery } from '../common/dto/query';
+import { BulkGroupRoomDto, BulkGroupStatusDto, BulkGroupTeacherDto } from './dto/groups-bulk.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -21,6 +22,34 @@ export class GroupsController {
   @ApiOperation({ summary: 'List groups' })
   findAll(@CurrentUser('organizationId') orgId: string, @Query() query: GroupQuery) {
     return this.groupsService.findAll(orgId, query);
+  }
+
+  @AllowAnyRole()
+  @Get('stats')
+  @ApiOperation({ summary: 'Get aggregated group statistics and occupancy metrics' })
+  getStats(@CurrentUser('organizationId') orgId: string) {
+    return this.groupsService.getStats(orgId);
+  }
+
+  @Post('bulk/status')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
+  @ApiOperation({ summary: 'Bulk update group active statuses' })
+  bulkStatus(@CurrentUser('organizationId') orgId: string, @Body() dto: BulkGroupStatusDto) {
+    return this.groupsService.bulkStatus(orgId, dto);
+  }
+
+  @Post('bulk/teacher')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
+  @ApiOperation({ summary: 'Bulk assign teacher to groups' })
+  bulkTeacher(@CurrentUser('organizationId') orgId: string, @Body() dto: BulkGroupTeacherDto) {
+    return this.groupsService.bulkTeacher(orgId, dto);
+  }
+
+  @Post('bulk/room')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
+  @ApiOperation({ summary: 'Bulk assign room to groups' })
+  bulkRoom(@CurrentUser('organizationId') orgId: string, @Body() dto: BulkGroupRoomDto) {
+    return this.groupsService.bulkRoom(orgId, dto);
   }
 
   @AllowAnyRole()
@@ -79,4 +108,3 @@ export class GroupsController {
     return this.groupsService.graduateAndPromote(orgId, id, body);
   }
 }
-

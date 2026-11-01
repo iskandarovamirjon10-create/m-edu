@@ -62,11 +62,42 @@ export class StudentQuery extends SearchQuery {
 export class TeacherQuery extends SearchQuery {
   @ApiPropertyOptional() @IsOptional() @IsString()
   override isActive?: string;
+
+  @ApiPropertyOptional({ enum: ['MONTHLY', 'HOURLY', 'PER_LESSON'] })
+  @IsOptional() @IsString()
+  salaryType?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  specialization?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by whether the teacher has assigned groups ("true" | "false")' })
+  @IsOptional() @IsString()
+  hasGroups?: string;
+
+  @ApiPropertyOptional({ enum: ['createdAt', 'name', 'hourlyRate', 'experience'] })
+  @IsOptional() @IsString()
+  sortBy?: string;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'] })
+  @IsOptional() @IsString()
+  sortOrder?: 'asc' | 'desc';
 }
 
 export class CourseQuery extends SearchQuery {
   @ApiPropertyOptional() @IsOptional() @IsString()
   override isActive?: string;
+
+  @ApiPropertyOptional({ enum: ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] })
+  @IsOptional() @IsString()
+  level?: string;
+
+  @ApiPropertyOptional({ enum: ['createdAt', 'name', 'price', 'duration'] })
+  @IsOptional() @IsString()
+  sortBy?: string;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'] })
+  @IsOptional() @IsString()
+  sortOrder?: 'asc' | 'desc';
 }
 
 export class GroupQuery extends SearchQuery {
@@ -78,6 +109,22 @@ export class GroupQuery extends SearchQuery {
 
   @ApiPropertyOptional() @IsOptional() @IsString()
   override isActive?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by room name/number' })
+  @IsOptional() @IsString()
+  room?: string;
+
+  @ApiPropertyOptional({ enum: ['FULL', 'AVAILABLE', 'EMPTY'] })
+  @IsOptional() @IsString()
+  occupancyStatus?: 'FULL' | 'AVAILABLE' | 'EMPTY';
+
+  @ApiPropertyOptional({ enum: ['createdAt', 'name', 'capacity'] })
+  @IsOptional() @IsString()
+  sortBy?: string;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'] })
+  @IsOptional() @IsString()
+  sortOrder?: 'asc' | 'desc';
 }
 
 export class GradeQuery extends PaginationQuery {

@@ -4,6 +4,7 @@ import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
 import { CreateGroupDto, UpdateGroupDto } from '../common/dto';
 import { GroupQuery } from '../common/dto/query';
+import { BulkGroupRoomDto, BulkGroupStatusDto, BulkGroupTeacherDto } from './dto/groups-bulk.dto';
 
 @Injectable()
 export class GroupsService {
@@ -15,6 +16,7 @@ export class GroupsService {
 
     if (query.courseId) where.courseId = query.courseId;
     if (query.teacherId) where.teacherId = query.teacherId;
+    if (query.room) where.room = { contains: query.room, mode: 'insensitive' };
     if (query.isActive !== undefined) where.isActive = query.isActive === 'true';
     if (query.search) {
       where.OR = [
@@ -26,6 +28,15 @@ export class GroupsService {
       ];
     }
 
+    let orderBy: Prisma.GroupOrderByWithRelationInput = { createdAt: 'desc' };
+    if (query.sortBy === 'name') {
+      orderBy = { name: query.sortOrder === 'desc' ? 'desc' : 'asc' };
+    } else if (query.sortBy === 'capacity') {
+      orderBy = { capacity: query.sortOrder === 'desc' ? 'desc' : 'asc' };
+    } else if (query.sortBy === 'createdAt') {
+      orderBy = { createdAt: query.sortOrder === 'asc' ? 'asc' : 'desc' };
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.group.findMany({
         where,
@@ -34,14 +45,14 @@ export class GroupsService {
           teacher: { include: { user: { select: { firstName: true, lastName: true } } } },
           _count: { select: { enrollments: { where: { isActive: true } } } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),
       this.prisma.group.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async findOne(organizationId: string, id: string) {
@@ -134,7 +145,7 @@ export class GroupsService {
       // Prevent reducing capacity below current active enrollment.
       if (data.capacity < (group.capacity ?? Infinity)) {
         const activeCount = await this.prisma.studentGroup.count({
-          where: { groupId: id, isActive: true },
+          where: { groupId: id, organizationId, isActive: true },
         });
         if (data.capacity < activeCount) {
           throw new BadRequestException('CAPACITY_LESS_THAN_ACTIVE_STUDENTS');
@@ -177,7 +188,7 @@ export class GroupsService {
     const group = await this.findOne(organizationId, id);
     const capacity = group.capacity ?? 20;
     const activeCount = await this.prisma.studentGroup.count({
-      where: { groupId: id, isActive: true },
+      where: { groupId: id, organizationId, isActive: true },
     });
 
     const availableSeats = Math.max(0, capacity - activeCount);
@@ -222,7 +233,11 @@ export class GroupsService {
       let targetGroup: { id: string; capacity: number | null; isActive: boolean } | null = null;
 
       if (targetGroupId) {
-        // Enforce tenant boundary on target group
+        // Enforce tenant boundary and serialize access to prevent capacity race conditions
+        if (typeof tx.$queryRaw === 'function') {
+          await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${targetGroupId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+        }
+
         targetGroup = await tx.group.findFirst({
           where: { id: targetGroupId, organizationId },
           select: { id: true, capacity: true, isActive: true },
@@ -284,7 +299,7 @@ export class GroupsService {
       const targetCapacity = targetGroup.capacity ?? sourceGroup.capacity;
       if (targetCapacity !== null && targetCapacity !== undefined) {
         const currentTargetCount = await tx.studentGroup.count({
-          where: { groupId: targetGroupId!, isActive: true },
+          where: { groupId: targetGroupId!, organizationId, isActive: true },
         });
         if (currentTargetCount + data.studentIds.length > targetCapacity) {
           throw new BadRequestException(
@@ -347,5 +362,191 @@ export class GroupsService {
         message: `${data.studentIds.length} nafar o'quvchi keyingi bosqich guruhiga muvaffaqiyatli o'tkazildi`,
       };
     });
+  }
+
+  // ------------------------------------------------------------------
+  // Aggregated Stats & Telemetry
+  // ------------------------------------------------------------------
+
+  async getStats(organizationId: string) {
+    const groups = await this.prisma.group.findMany({
+      where: { organizationId },
+      include: {
+        course: { select: { id: true, name: true } },
+        teacher: { include: { user: { select: { firstName: true, lastName: true } } } },
+        _count: { select: { enrollments: { where: { isActive: true } } } },
+      },
+    });
+
+    const totalGroups = groups.length;
+    const activeGroups = groups.filter((g) => g.isActive).length;
+    const inactiveGroups = totalGroups - activeGroups;
+
+    let totalCapacity = 0;
+    let enrolledStudents = 0;
+    let fullGroups = 0;
+    let nearFullGroups = 0;
+    let vacantGroups = 0;
+
+    const roomDistribution: Record<string, number> = {};
+    const teacherDistribution: Record<string, { teacherName: string; groupCount: number }> = {};
+
+    for (const group of groups) {
+      if (group.room) {
+        roomDistribution[group.room] = (roomDistribution[group.room] || 0) + 1;
+      }
+      if (group.teacher) {
+        const teacherName = `${group.teacher.user.firstName} ${group.teacher.user.lastName}`.trim();
+        if (!teacherDistribution[group.teacher.id]) {
+          teacherDistribution[group.teacher.id] = { teacherName, groupCount: 0 };
+        }
+        teacherDistribution[group.teacher.id].groupCount++;
+      }
+
+      if (group.isActive) {
+        const cap = group.capacity ?? 20;
+        const count = group._count?.enrollments ?? 0;
+        totalCapacity += cap;
+        enrolledStudents += count;
+
+        if (count >= cap) {
+          fullGroups++;
+        } else if (cap > 0 && count / cap >= 0.8) {
+          nearFullGroups++;
+        } else {
+          vacantGroups++;
+        }
+      }
+    }
+
+    const averageOccupancyPercent =
+      totalCapacity > 0 ? Math.min(100, Math.round((enrolledStudents / totalCapacity) * 100)) : 0;
+    const uniqueRoomsCount = Object.keys(roomDistribution).length;
+
+    return {
+      totalGroups,
+      activeGroups,
+      inactiveGroups,
+      fullGroups,
+      nearFullGroups,
+      vacantGroups,
+      totalCapacity,
+      enrolledStudents,
+      averageOccupancyPercent,
+      uniqueRoomsCount,
+      roomDistribution,
+      topTeachers: Object.values(teacherDistribution)
+        .sort((a, b) => b.groupCount - a.groupCount)
+        .slice(0, 5),
+    };
+  }
+
+  // ------------------------------------------------------------------
+  // Bulk Operations
+  // ------------------------------------------------------------------
+
+  async bulkStatus(organizationId: string, dto: BulkGroupStatusDto) {
+    if (!dto.groupIds || dto.groupIds.length === 0) {
+      throw new BadRequestException("Guruhlar ro'yxati (groupIds) bo'sh bo'lishi mumkin emas");
+    }
+
+    const existingGroups = await this.prisma.group.findMany({
+      where: { id: { in: dto.groupIds }, organizationId },
+      select: { id: true },
+    });
+
+    if (existingGroups.length !== dto.groupIds.length) {
+      throw new NotFoundException("Barcha tanlangan guruhlar ushbu tashkilotga tegishli emas");
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (!dto.isActive) {
+        // Deactivate active student enrollments
+        await tx.studentGroup.updateMany({
+          where: { groupId: { in: dto.groupIds }, organizationId, isActive: true },
+          data: { isActive: false, leftAt: new Date() },
+        });
+        // Cancel future planned lessons
+        await tx.lesson.updateMany({
+          where: { groupId: { in: dto.groupIds }, organizationId, status: 'PLANNED', date: { gte: new Date() } },
+          data: { status: 'CANCELLED' },
+        });
+      }
+
+      const result = await tx.group.updateMany({
+        where: { id: { in: dto.groupIds }, organizationId },
+        data: { isActive: dto.isActive },
+      });
+
+      return {
+        success: true,
+        count: result.count,
+        isActive: dto.isActive,
+        message: `${result.count} ta guruh holati muvaffaqiyatli ${dto.isActive ? 'faollashtirildi' : 'nofaol qilindi'}`,
+      };
+    });
+  }
+
+  async bulkTeacher(organizationId: string, dto: BulkGroupTeacherDto) {
+    if (!dto.groupIds || dto.groupIds.length === 0) {
+      throw new BadRequestException("Guruhlar ro'yxati (groupIds) bo'sh bo'lishi mumkin emas");
+    }
+
+    if (dto.teacherId) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { id: dto.teacherId, organizationId },
+      });
+      if (!teacher) {
+        throw new NotFoundException('Teacher not found in organization');
+      }
+    }
+
+    const existingGroups = await this.prisma.group.findMany({
+      where: { id: { in: dto.groupIds }, organizationId },
+      select: { id: true },
+    });
+
+    if (existingGroups.length !== dto.groupIds.length) {
+      throw new NotFoundException("Barcha tanlangan guruhlar ushbu tashkilotga tegishli emas");
+    }
+
+    const result = await this.prisma.group.updateMany({
+      where: { id: { in: dto.groupIds }, organizationId },
+      data: { teacherId: dto.teacherId || null },
+    });
+
+    return {
+      success: true,
+      count: result.count,
+      teacherId: dto.teacherId || null,
+      message: `${result.count} ta guruh o'qituvchisi muvaffaqiyatli yangilandi`,
+    };
+  }
+
+  async bulkRoom(organizationId: string, dto: BulkGroupRoomDto) {
+    if (!dto.groupIds || dto.groupIds.length === 0) {
+      throw new BadRequestException("Guruhlar ro'yxati (groupIds) bo'sh bo'lishi mumkin emas");
+    }
+
+    const existingGroups = await this.prisma.group.findMany({
+      where: { id: { in: dto.groupIds }, organizationId },
+      select: { id: true },
+    });
+
+    if (existingGroups.length !== dto.groupIds.length) {
+      throw new NotFoundException("Barcha tanlangan guruhlar ushbu tashkilotga tegishli emas");
+    }
+
+    const result = await this.prisma.group.updateMany({
+      where: { id: { in: dto.groupIds }, organizationId },
+      data: { room: dto.room || null },
+    });
+
+    return {
+      success: true,
+      count: result.count,
+      room: dto.room || null,
+      message: `${result.count} ta guruh xonasi muvaffaqiyatli yangilandi`,
+    };
   }
 }

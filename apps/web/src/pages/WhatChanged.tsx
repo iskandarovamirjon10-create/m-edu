@@ -335,8 +335,16 @@ export function WhatChangedPage() {
               <motion.li
                 key={e.id}
                 variants={itemVariants}
+                tabIndex={0}
+                role="button"
                 onClick={() => handleOpenEventSidecar(e)}
-                className="group p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 transition-all duration-200 hover:bg-white/30 dark:hover:bg-white/[0.04] cursor-pointer"
+                onKeyDown={(ev) => {
+                  if (ev.key === 'Enter' || ev.key === ' ') {
+                    ev.preventDefault();
+                    handleOpenEventSidecar(e);
+                  }
+                }}
+                className="group p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 transition-all duration-200 hover:bg-white/30 dark:hover:bg-white/[0.04] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-xl"
               >
                 <div className="shrink-0 mt-0.5">
                   <GlassBadge

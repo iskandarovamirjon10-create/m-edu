@@ -54,30 +54,38 @@ export const userStore = {
     }
   },
   set<T>(user: T) {
-    if (!user || typeof user !== 'object') {
-      localStorage.setItem('medu_user', JSON.stringify(user));
-      return;
+    try {
+      if (!user || typeof user !== 'object') {
+        localStorage.setItem('medu_user', JSON.stringify(user));
+        return;
+      }
+      // Defense-in-depth (SEC-08): strip any accidental sensitive credentials before localStorage write
+      const sanitized = { ...(user as Record<string, unknown>) };
+      const sensitiveKeys = [
+        'password',
+        'passwordHash',
+        'token',
+        'accessToken',
+        'refreshToken',
+        'secret',
+        'twoFactorSecret',
+        'faceDescriptor',
+        'embedding',
+      ];
+      for (const key of sensitiveKeys) {
+        delete sanitized[key];
+      }
+      localStorage.setItem('medu_user', JSON.stringify(sanitized));
+    } catch {
+      // Ignore quota/security errors in restricted or private browsing modes
     }
-    // Defense-in-depth (SEC-08): strip any accidental sensitive credentials before localStorage write
-    const sanitized = { ...(user as Record<string, unknown>) };
-    const sensitiveKeys = [
-      'password',
-      'passwordHash',
-      'token',
-      'accessToken',
-      'refreshToken',
-      'secret',
-      'twoFactorSecret',
-      'faceDescriptor',
-      'embedding',
-    ];
-    for (const key of sensitiveKeys) {
-      delete sanitized[key];
-    }
-    localStorage.setItem('medu_user', JSON.stringify(sanitized));
   },
   clear() {
-    localStorage.removeItem('medu_user');
+    try {
+      localStorage.removeItem('medu_user');
+    } catch {
+      // Ignore quota/security errors in restricted or private browsing modes
+    }
   },
 };
 
@@ -104,6 +112,7 @@ export type RequestOptions = RequestInit & {
   timeout?: number;
   defaultFilename?: string;
   _isCsrfRetry?: boolean;
+  _isRefreshRetry?: boolean;
   idempotencyKey?: string;
 };
 
@@ -155,6 +164,51 @@ export async function ensureCsrfCookie(force = false): Promise<void> {
       });
   }
   await csrfSeed;
+}
+
+/**
+ * Deduplicated single-flight silent refresh for expired JWT sessions.
+ * Allows the active database session to issue a fresh access_token cookie
+ * without interrupting the user's workflow or dropping active form state.
+ */
+let silentRefreshPromise: Promise<boolean> | null = null;
+export async function attemptSilentRefresh(): Promise<boolean> {
+  if (silentRefreshPromise) {
+    return silentRefreshPromise;
+  }
+
+  silentRefreshPromise = (async () => {
+    try {
+      await ensureCsrfCookie(false);
+      const xsrf = readXsrfCookie();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (xsrf) {
+        headers['x-xsrf-token'] = xsrf;
+      }
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+      });
+
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.user) {
+          userStore.set(data.user);
+        }
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      silentRefreshPromise = null;
+    }
+  })();
+
+  return silentRefreshPromise;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -227,12 +281,21 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       path.startsWith('/auth/forgot') ||
       path.startsWith('/auth/reset') ||
       path.startsWith('/auth/parent-login') ||
+      path.startsWith('/auth/refresh') ||
       path.startsWith('/telegram/webapp');
     const onPublic =
       typeof window !== 'undefined' &&
       /^\/(login|register|forgot-password|reset-password|terms|privacy|auth\/callback|tg-app|kiosk)/.test(
         window.location.pathname,
       );
+
+    if (!isAuthProbe && !options._isRefreshRetry && !onPublic) {
+      const refreshed = await attemptSilentRefresh();
+      if (refreshed) {
+        return request<T>(path, { ...options, _isRefreshRetry: true });
+      }
+    }
+
     if (!isAuthProbe && !onPublic) {
       userStore.clear();
       // Hard boundary: wipe any cached (previous-session) data before the
@@ -402,14 +465,196 @@ export const studentsApi = {
     request<any>(`/students/${studentId}/freeze`, { method: 'POST', body: JSON.stringify(data) }),
   unfreeze: (studentId: string) =>
     request<any>(`/students/${studentId}/unfreeze`, { method: 'POST' }),
+  bulkAssignGroup: (studentIds: string[], groupId: string) =>
+    request<{ assignedCount: number; studentIds: string[] }>('/students/bulk-assign-group', {
+      method: 'POST',
+      body: JSON.stringify({ studentIds, groupId }),
+    }),
+  bulkFreeze: (studentIds: string[], data: { startDate?: string; endDate?: string; reason?: string }) =>
+    request<{ count: number }>('/students/bulk-freeze', {
+      method: 'POST',
+      body: JSON.stringify({ studentIds, ...data }),
+    }),
+  bulkUnfreeze: (studentIds: string[]) =>
+    request<{ count: number }>('/students/bulk-unfreeze', {
+      method: 'POST',
+      body: JSON.stringify({ studentIds }),
+    }),
+  bulkStatus: (studentIds: string[], status: string) =>
+    request<{ count: number }>('/students/bulk-status', {
+      method: 'POST',
+      body: JSON.stringify({ studentIds, status }),
+    }),
+  bulkDelete: (studentIds: string[]) =>
+    request<{ deleted: string[]; archived: string[]; count: number }>('/students/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ studentIds }),
+    }),
 };
-export const teachersApi = crud('/teachers');
-export const coursesApi = crud('/courses');
+export interface TeacherStatsData {
+  total: number;
+  active: number;
+  inactive: number;
+  withGroups: number;
+  withoutGroups: number;
+  totalGroups: number;
+  totalHoursWeekly: number;
+  avgHourlyRate: number;
+  avgExperience: number;
+  salaryTypes: {
+    monthly: number;
+    hourly: number;
+    perLesson: number;
+  };
+  specializations: Array<{ name: string; count: number }>;
+}
+
+export interface TeacherAnalyticsData {
+  teacherId: string;
+  name: string;
+  salaryType: string;
+  hourlyRate: number;
+  lessonRate: number;
+  weeklyHours: number;
+  capacityHours: number;
+  utilization: number;
+  workloadStatus: 'UNDERUTILIZED' | 'BALANCED' | 'OVERLOADED';
+  totalStudents: number;
+  groupsCount: number;
+  estimatedMonthlyCompensation: number;
+  groups: any[];
+}
+
+export const teachersApi = {
+  ...crud('/teachers'),
+  getStats: (options: RequestOptions = {}) =>
+    request<TeacherStatsData>('/teachers/stats', options),
+  getAnalytics: (id: string, options: RequestOptions = {}) =>
+    request<TeacherAnalyticsData>(`/teachers/${id}/analytics`, options),
+  bulkStatus: (data: { teacherIds: string[]; isActive: boolean }, options: RequestOptions = {}) =>
+    request<{ success: boolean; updatedCount: number; isActive: boolean }>('/teachers/bulk/status', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
+  bulkSalary: (
+    data: {
+      teacherIds: string[];
+      salaryType?: 'MONTHLY' | 'HOURLY' | 'PER_LESSON';
+      hourlyRate?: number;
+      lessonRate?: number;
+    },
+    options: RequestOptions = {},
+  ) =>
+    request<{ success: boolean; updatedCount: number }>('/teachers/bulk/salary', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
+  bulkSpecializations: (
+    data: {
+      teacherIds: string[];
+      specializations: string[];
+      mode?: 'add' | 'replace';
+    },
+    options: RequestOptions = {},
+  ) =>
+    request<{ success: boolean; updatedCount: number }>('/teachers/bulk/specializations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
+  assignGroup: (teacherId: string, groupId: string, options: RequestOptions = {}) =>
+    request<{ success: boolean; message: string; group: any }>(`/teachers/${teacherId}/assign-group`, {
+      method: 'POST',
+      body: JSON.stringify({ groupId }),
+      ...options,
+    }),
+};
+export interface CourseStatsData {
+  totalCourses: number;
+  activeCourses: number;
+  inactiveCourses: number;
+  totalActiveGroups: number;
+  totalEnrolledStudents: number;
+  avgTuitionPrice: number;
+  levelDistribution: Record<string, number>;
+  popularCourses: Array<{
+    id: string;
+    name: string;
+    price: number;
+    duration: number;
+    level: string;
+    activeGroupsCount: number;
+    enrolledCount: number;
+  }>;
+}
+
+export const coursesApi = {
+  ...crud('/courses'),
+  getStats: (options: RequestOptions = {}) =>
+    request<CourseStatsData>('/courses/stats', options),
+  bulkStatus: (data: { courseIds: string[]; isActive: boolean }, options: RequestOptions = {}) =>
+    request<{ success: boolean; count: number; isActive: boolean; message: string }>('/courses/bulk/status', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
+  bulkPrice: (
+    data: {
+      courseIds: string[];
+      mode?: 'set' | 'increase_percent' | 'decrease_percent';
+      value: number;
+    },
+    options: RequestOptions = {},
+  ) =>
+    request<{ success: boolean; count: number; message: string }>('/courses/bulk/price', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
+};
+
+export interface GroupStatsData {
+  totalGroups: number;
+  activeGroups: number;
+  inactiveGroups: number;
+  fullGroups: number;
+  nearFullGroups: number;
+  vacantGroups: number;
+  totalCapacity: number;
+  enrolledStudents: number;
+  averageOccupancyPercent: number;
+  uniqueRoomsCount: number;
+  roomDistribution: Record<string, number>;
+  topTeachers: Array<{ teacherName: string; groupCount: number }>;
+}
+
 export const groupsApi = {
   ...crud('/groups'),
+  getStats: (options: RequestOptions = {}) =>
+    request<GroupStatsData>('/groups/stats', options),
   getCapacity: (id: string) => request<any>(`/groups/${id}/capacity`),
   graduate: (id: string, data: unknown) =>
     request<any>(`/groups/${id}/graduate`, { method: 'POST', body: JSON.stringify(data) }),
+  bulkStatus: (data: { groupIds: string[]; isActive: boolean }, options: RequestOptions = {}) =>
+    request<{ success: boolean; count: number; isActive: boolean; message: string }>('/groups/bulk/status', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
+  bulkTeacher: (data: { groupIds: string[]; teacherId?: string | null }, options: RequestOptions = {}) =>
+    request<{ success: boolean; count: number; teacherId: string | null; message: string }>('/groups/bulk/teacher', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
+  bulkRoom: (data: { groupIds: string[]; room?: string | null }, options: RequestOptions = {}) =>
+    request<{ success: boolean; count: number; room: string | null; message: string }>('/groups/bulk/room', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
 };
 export const scheduleApi = {
   ...crud('/schedule'),
@@ -623,8 +868,85 @@ export const aiApi = {
       body: JSON.stringify(body),
       ...options,
     }),
+  generateAssessmentRubric: (body: { topic: string; level?: string; scale?: string; objectives?: string[] }, options: RequestOptions = {}) =>
+    request<any>('/ai/generate-rubric', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
   analyzeDocument: (body: { base64: string; mimeType: string; fileName?: string; instruction?: string; analysisType?: string }, options: RequestOptions = {}) =>
     request<any>('/ai/analyze-document', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
+  getChurnRadar: (options: RequestOptions = {}) =>
+    request<{
+      totalAnalyzed: number;
+      highRiskCount: number;
+      mediumRiskCount: number;
+      students: Array<{
+        studentId: string;
+        name: string;
+        phone: string;
+        groups: string[];
+        attendanceRate: number;
+        balanceUzs: number;
+        riskScore: number;
+        riskLevel: 'HIGH' | 'MEDIUM' | 'LOW';
+        primaryFactors: string[];
+        recommendation: string;
+      }>;
+      generatedAt: string;
+    }>('/ai/churn-radar', options),
+  draftDebtRecoveryCampaign: (body: { segment?: string; tone?: string; channel?: string }, options: RequestOptions = {}) =>
+    request<{
+      channel: string;
+      tone: string;
+      targetCount: number;
+      totalDebtUzs: number;
+      templates: Record<string, { title: string; textUz: string }>;
+      targets: Array<{
+        invoiceId: string;
+        studentId: string;
+        studentName: string;
+        phone: string;
+        daysOverdue: number;
+        debtAmount: number;
+        segment: string;
+      }>;
+    }>('/ai/draft-debt-recovery-campaign', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
+  generateRubric: (body: { topic: string; courseName?: string; maxScore?: number }, options: RequestOptions = {}) =>
+    request<{
+      topic: string;
+      course: string;
+      maxScore: number;
+      gradingScale: Array<{ grade: string; range: string; gpa: number }>;
+      criteria: Array<{
+        name: string;
+        weightPercent: number;
+        exemplary: string;
+        proficient: string;
+        developing: string;
+        novice: string;
+      }>;
+    }>('/ai/generate-rubric', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
+  speechToText: (body: { audioBase64: string; mimeType?: string; language?: string }, options: RequestOptions = {}) =>
+    request<{ success: boolean; language: string; transcription: string }>('/ai/speech-to-text', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
+  textToSpeech: (body: { text: string; language?: string; voice?: string }, options: RequestOptions = {}) =>
+    request<{ success: boolean; language: string; voice: string; text: string; audioUrl: string | null }>('/ai/text-to-speech', {
       method: 'POST',
       body: JSON.stringify(body),
       ...options,
@@ -1305,6 +1627,52 @@ export const assessmentApi = {
 
 export const progressApi = {
   student360: (studentId: string) => request<any>(`/progress/student-360/${studentId}`),
+};
+
+export const platformApi = {
+  getStatistics: () => request<any>('/platform/statistics'),
+  getOrganizations: () => request<any[]>('/platform/organizations'),
+  updateOrganizationSubscription: (orgId: string, data: object) =>
+    request<any>(`/platform/organizations/${orgId}/subscription`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  suspendOrganization: (orgId: string) =>
+    request<any>(`/platform/organizations/${orgId}/suspend`, { method: 'POST' }),
+  reactivateOrganization: (orgId: string) =>
+    request<any>(`/platform/organizations/${orgId}/reactivate`, { method: 'POST' }),
+  getPlans: () => request<any[]>('/platform/plans'),
+  updatePlan: (planId: string, data: object) =>
+    request<any>(`/platform/plans/${planId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  createInvitation: (data: { maxUses: number; expiresAt: string; metadata?: object }) =>
+    request<any>('/platform/invitations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+export const subscriptionsApi = {
+  getPlans: () => request<any[]>('/subscriptions/plans'),
+  getCurrentSubscription: () => request<any>('/subscriptions/current'),
+  getUsage: () => request<any>('/subscriptions/usage'),
+  changePlan: (data: { planId?: string; plan?: string; billingCycle?: string }) =>
+    request<any>('/subscriptions/change-plan', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  cancelSubscription: () =>
+    request<any>('/subscriptions/cancel', { method: 'POST' }),
+};
+
+export const billingApi = {
+  getInvoices: () => request<any[]>('/billing/invoices'),
+  getPaymentLinks: (invoiceNumber: string) =>
+    request<{ invoiceNumber: string; amountUzs: number; paymeUrl: string; clickUrl: string }>(
+      `/billing/invoices/${encodeURIComponent(invoiceNumber)}/pay-links`,
+    ),
 };
 
 export const calendarApi = {

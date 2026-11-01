@@ -243,11 +243,12 @@ export const ConfirmDialog = memo(function ConfirmDialog({
             </kbd>
           </span>
 
-          <div ref={cancelWrapRef} className="flex items-center gap-2">
-            <GlassButton variant="secondary" onClick={handleSafeClose} disabled={isBusy}>
+          <div ref={cancelWrapRef} className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+            <GlassButton className="w-full sm:w-auto" variant="secondary" onClick={handleSafeClose} disabled={isBusy}>
               {resolvedCancel}
             </GlassButton>
             <GlassButton
+              className="w-full sm:w-auto"
               variant={toneStyle.buttonVariant}
               onClick={() => void handleExecuteConfirm()}
               loading={isBusy}

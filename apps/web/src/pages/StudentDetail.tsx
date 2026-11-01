@@ -35,6 +35,7 @@ import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { SpatialIdentityCard360 } from '@/components/cards/SpatialIdentityCard360';
 import { AiStudentDiagnosticWidget, AiParentMessageModal } from '@/components/ai';
+import { OfficialStudentContractModal } from '@/components/students/OfficialStudentContractModal';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * 120Hz PROMOTION SPRING PHYSICS & CHOREOGRAPHY
@@ -220,6 +221,13 @@ const I = {
     'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
   ],
   check: ['M20 6 9 17l-5-5'],
+  contract: [
+    'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z',
+    'M14 2v6h6',
+    'M16 13H8',
+    'M16 17H8',
+    'M10 9H8',
+  ],
   idCard: [
     'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z',
     'M9 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
@@ -262,7 +270,7 @@ const Icon = memo(function Icon({
       aria-hidden="true"
       {...rest}
     >
-      {paths.map((d, i) => (
+      {(paths || []).map((d, i) => (
         <path key={i} d={d} />
       ))}
     </svg>
@@ -873,6 +881,7 @@ export function StudentDetailPage() {
 
   // 360° Card & Parent Management State
   const [card360Open, setCard360Open] = useState(false);
+  const [contractModalOpen, setContractModalOpen] = useState(false);
   const [parentModalOpen, setParentModalOpen] = useState(false);
   const [editLinkModalOpen, setEditLinkModalOpen] = useState(false);
   const [unlinkParentTarget, setUnlinkParentTarget] = useState<{
@@ -1063,11 +1072,11 @@ export function StudentDetailPage() {
   // Derived Telemetry Stats
   const stats = useMemo(() => {
     const presentCount = studentAttendance.filter(
-      (a) => a.status === 'PRESENT',
+      (a) => a.status === 'PRESENT' || a.status === 'LATE',
     ).length;
     const attendanceRate = studentAttendance.length
       ? Math.round((presentCount / studentAttendance.length) * 100)
-      : 0;
+      : 100;
     const activeGroupsCount = studentGroups.filter(
       (g: any) => g.isActive !== false,
     ).length;
@@ -1283,6 +1292,7 @@ export function StudentDetailPage() {
     editLinkModalOpen ||
     unlinkParentTarget !== null ||
     card360Open ||
+    contractModalOpen ||
     isAiMessageModalOpen;
 
   useEffect(() => {
@@ -1315,6 +1325,10 @@ export function StudentDetailPage() {
         e.preventDefault();
         playPop();
         setCard360Open(true);
+      } else if (key === 'k') {
+        e.preventDefault();
+        playPop();
+        setContractModalOpen(true);
       } else if (key === 'i') {
         e.preventDefault();
         handleAiAnalyze();
@@ -1498,6 +1512,26 @@ export function StudentDetailPage() {
                     <span>360° Karta</span>
                     <kbd aria-hidden="true" className="hidden rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.2 font-mono text-[10px] xl:inline-block">
                       C
+                    </kbd>
+                  </span>
+                                </GlassButton>
+              </motion.div>
+
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    playPop();
+                    setContractModalOpen(true);
+                  }}
+                  className="min-h-[44px] px-3.5 !border-purple-500/30 hover:!border-purple-500/55 shadow-sm"
+                >
+                  <span className="inline-flex items-center gap-2 font-semibold text-purple-600 dark:text-purple-400">
+                    <Icon paths={I.contract} size={16} strokeWidth={2.1} />
+                    <span>Shartnoma</span>
+                    <kbd aria-hidden="true" className="hidden rounded border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.2 font-mono text-[10px] xl:inline-block">
+                      K
                     </kbd>
                   </span>
                 </GlassButton>
@@ -3058,6 +3092,15 @@ export function StudentDetailPage() {
             : undefined
         }
       />
+
+      {/* Official Student Education Contract Modal */}
+      {studentData && (
+        <OfficialStudentContractModal
+          open={contractModalOpen}
+          onClose={() => setContractModalOpen(false)}
+          student={studentData as any}
+        />
+      )}
 
       {toastNode}
     </motion.div>

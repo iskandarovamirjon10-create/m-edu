@@ -43,6 +43,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
     let code: string | undefined;
+    let details: Record<string, unknown> | undefined;
 
     if (exception instanceof OAuthRedirectException) {
       // Controlled OAuth redirect (single write path — see the class docs).
@@ -76,6 +77,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       const clientError = exception.toClientError();
       message = clientError.message;
       code = clientError.code;
+      if (clientError.details) {
+        details = clientError.details;
+      }
     } else if (
       exception instanceof Error &&
       'code' in exception &&
@@ -121,6 +125,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       statusCode: status,
       code,
       message,
+      ...(details ? { details } : {}),
       path: request.url,
       requestId: request.id,
       timestamp: new Date().toISOString(),

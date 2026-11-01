@@ -41,6 +41,7 @@ import {
   useMediaQuery,
 } from '../core/singletons';
 import { Brand } from './Brand';
+import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { StaticIcon, PremiumIcon, I, type IconPaths } from './Icons';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 
@@ -545,8 +546,8 @@ export const NavItems = memo(function NavItems({
             cn(
               'group relative flex items-center rounded-xl transition-transform duration-150 ease-out active:scale-[0.97]',
               collapsed
-                ? 'min-h-[44px] min-w-[44px] justify-center px-2 py-2.5'
-                : 'min-h-[40px] gap-3 px-3 py-2',
+                ? 'min-h-[44px] min-w-[44px] justify-center px-2 py-2'
+                : 'min-h-[38px] gap-2.5 px-3 py-1.5',
               FOCUS,
               isActive
                 ? cn('font-semibold', visuals.text)
@@ -590,7 +591,7 @@ export const NavItems = memo(function NavItems({
                   transition={reduced ? { duration: 0 } : LIQUID_SPRING}
                   aria-hidden="true"
                   className={cn(
-                    'pointer-events-none absolute left-0 top-1/2 z-10 h-5 w-[3px] -translate-y-1/2 rounded-full bg-gradient-to-b',
+                    'pointer-events-none absolute left-0 top-1/2 z-10 h-5 w-[3.5px] -translate-y-1/2 rounded-full bg-gradient-to-b',
                     visuals.bar,
                   )}
                 />
@@ -598,18 +599,22 @@ export const NavItems = memo(function NavItems({
 
               {/* ── 4. Icon with Magnetic Lift ── */}
               <span className="relative z-10 flex shrink-0 items-center justify-center transition-transform duration-200 ease-out group-hover:scale-[1.07]">
-                <PremiumIcon
-                  paths={item.iconPath}
-                  isActive={isActive}
-                  accent={item.accent}
-                  size={18}
-                />
+                {isAiCopilot ? (
+                  <MeduAiLogo size="xs" glow={isActive} />
+                ) : (
+                  <PremiumIcon
+                    paths={item.iconPath}
+                    isActive={isActive}
+                    accent={item.accent}
+                    size={17}
+                  />
+                )}
               </span>
 
               {/* ── 5. Label + Optional AI Studio Shimmer Badge ── */}
               {!collapsed && (
                 <span className="relative z-10 flex min-w-0 flex-1 items-center justify-between gap-2">
-                  <span className="truncate text-[13.5px] tracking-[-0.01em]">
+                  <span className="truncate text-[13px] tracking-[-0.01em]">
                     <HighlightMatch text={label} query={trimmedFilter} />
                   </span>
                   {isAiCopilot && (

@@ -26,6 +26,14 @@ export const AiPermission = {
   REPORTS_READ: 'reports:read',
   NOTIFICATIONS_READ: 'notifications:read',
   NOTIFICATIONS_WRITE: 'notifications:write',
+  LEADS_READ: 'leads:read',
+  LEADS_WRITE: 'leads:write',
+  FINANCE_READ: 'finance:read',
+  FINANCE_WRITE: 'finance:write',
+  BIOMETRICS_READ: 'biometrics:read',
+  INVENTORY_READ: 'inventory:read',
+  EXAMS_READ: 'exams:read',
+  EXAMS_WRITE: 'exams:write',
 } as const;
 export type AiPermission = (typeof AiPermission)[keyof typeof AiPermission];
 
@@ -43,6 +51,11 @@ const READ_ONLY_AI_PERMISSIONS: AiPermission[] = [
   AiPermission.DASHBOARD_READ,
   AiPermission.REPORTS_READ,
   AiPermission.NOTIFICATIONS_READ,
+  AiPermission.LEADS_READ,
+  AiPermission.FINANCE_READ,
+  AiPermission.BIOMETRICS_READ,
+  AiPermission.INVENTORY_READ,
+  AiPermission.EXAMS_READ,
 ];
 
 /** Role → AI permissions. Unknown/absent roles get nothing. */
@@ -60,14 +73,21 @@ export const AiRolePermissions: Record<string, AiPermission[]> = {
     AiPermission.GROUPS_WRITE,
     AiPermission.COURSES_WRITE,
     AiPermission.NOTIFICATIONS_WRITE,
+    AiPermission.LEADS_WRITE,
+    AiPermission.FINANCE_WRITE,
+    AiPermission.EXAMS_WRITE,
   ],
   // Finance staff read money but must not change rosters or the catalogue.
   ACCOUNTANT: [
     AiPermission.STUDENTS_READ,
     AiPermission.GROUPS_READ,
     AiPermission.PAYMENTS_READ,
+    AiPermission.PAYMENTS_WRITE,
+    AiPermission.FINANCE_READ,
+    AiPermission.FINANCE_WRITE,
     AiPermission.DASHBOARD_READ,
     AiPermission.REPORTS_READ,
+    AiPermission.INVENTORY_READ,
   ],
   TEACHER: [
     AiPermission.STUDENTS_READ,
@@ -75,6 +95,8 @@ export const AiRolePermissions: Record<string, AiPermission[]> = {
     AiPermission.ATTENDANCE_WRITE,
     AiPermission.SCHEDULE_READ,
     AiPermission.LESSONS_READ,
+    AiPermission.EXAMS_READ,
+    AiPermission.EXAMS_WRITE,
   ],
   ASSISTANT: [AiPermission.STUDENTS_READ, AiPermission.ATTENDANCE_READ],
   STUDENT: [],

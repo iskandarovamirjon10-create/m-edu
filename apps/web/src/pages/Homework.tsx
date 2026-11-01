@@ -41,6 +41,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { usePrefersReducedMotion } from '@/layouts/core/singletons';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
+import { AiHomeworkFeedbackStudio } from '@/components/homework/AiHomeworkFeedbackStudio';
 
 /* ============================================================================
  * PURE FORMATTER CONTRACTS (Tested by pageFormatters.test.ts)
@@ -602,6 +603,7 @@ export function HomeworkPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
+  const [isFeedbackStudioOpen, setIsFeedbackStudioOpen] = useState(false);
 
   // Filters
   const [groupFilter, setGroupFilter] = useState('');
@@ -1025,6 +1027,17 @@ export function HomeworkPage() {
               {/* Add CTA Button (Touch target >= 44px) */}
               <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row">
                 <GlassButton
+                  variant="secondary"
+                  size="md"
+                  onClick={() => setIsFeedbackStudioOpen((v) => !v)}
+                  className="min-h-[44px] px-4 font-bold border-indigo-500/30 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 active:scale-95"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <span className="text-base">✨</span>
+                    <span>AI Tekshiruv Studio</span>
+                  </span>
+                </GlassButton>
+                <GlassButton
                   variant="primary"
                   size="md"
                   onClick={handleOpenModal}
@@ -1042,6 +1055,18 @@ export function HomeworkPage() {
             </div>
           </div>
         </motion.div>
+
+        {isFeedbackStudioOpen && (
+          <motion.div variants={cardVariants}>
+            <AiHomeworkFeedbackStudio />
+          </motion.div>
+        )}
+
+        {isFeedbackStudioOpen && (
+          <motion.div variants={cardVariants}>
+            <AiHomeworkFeedbackStudio />
+          </motion.div>
+        )}
 
         {/* ── 2. KPI Bar (Liquid Glass Substrates) ── */}
         {homeworkList.length > 0 && (

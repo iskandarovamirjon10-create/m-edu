@@ -654,7 +654,7 @@ export function AiComposer({
               className={cn(
                 'min-h-[46px] max-h-[168px] min-w-0 flex-1 resize-none',
                 'border-0 bg-transparent px-2.5 py-3 sm:px-3',
-                'text-[14.5px] leading-[1.55] tracking-[-0.011em]',
+                'text-base sm:text-[14.5px] leading-[1.55] tracking-[-0.011em]',
                 'text-[#1c1c1e] dark:text-[#f5f5f7] outline-none',
                 'placeholder:text-[#8e8e93] dark:placeholder:text-[#636366]',
                 'focus:ring-0 focus-visible:outline-none',

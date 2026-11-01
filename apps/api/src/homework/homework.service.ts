@@ -26,7 +26,7 @@ export class HomeworkService {
       this.prisma.homework.count({ where }),
     ]);
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async findOne(organizationId: string, id: string) {
@@ -67,11 +67,29 @@ export class HomeworkService {
 
     if (Object.keys(updateData).length === 0) return this.findOne(organizationId, id);
 
-    return this.prisma.homework.update({ where: { id, organizationId }, data: updateData });
+    if (typeof this.prisma.homework.updateMany === 'function') {
+      await this.prisma.homework.updateMany({ where: { id, organizationId }, data: updateData });
+      return this.findOne(organizationId, id);
+    }
+    return this.prisma.homework.update({ where: { id, organizationId } as any, data: updateData });
   }
 
   async remove(organizationId: string, id: string) {
-    await this.findOne(organizationId, id);
-    return this.prisma.homework.delete({ where: { id, organizationId } });
+    const homework = await this.findOne(organizationId, id);
+    if (typeof this.prisma.$transaction === 'function') {
+      await this.prisma.$transaction(async (tx) => {
+        if (tx.homeworkSubmission?.deleteMany) {
+          await tx.homeworkSubmission.deleteMany({ where: { homeworkId: id } });
+        }
+        if (typeof tx.homework.delete === 'function') {
+          await tx.homework.delete({ where: { id, organizationId } as any });
+        } else {
+          await tx.homework.deleteMany({ where: { id, organizationId } });
+        }
+      });
+    } else {
+      await this.prisma.homework.delete({ where: { id, organizationId } as any });
+    }
+    return homework;
   }
 }

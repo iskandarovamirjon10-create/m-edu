@@ -81,6 +81,9 @@ export const queryKeys = {
     list: (params?: ListParams): QueryKey => ['courses', params],
     selectors: (): QueryKey => ['courses', 'selectors'],
     selector: (params?: ListParams): QueryKey => ['courses', 'selectors', params],
+    stats: (): QueryKey => ['courses', 'stats'],
+    details: (): QueryKey => ['courses', 'detail'],
+    detail: (id: string): QueryKey => ['courses', 'detail', id],
   },
 
   /* ── Dashboard ────────────────────────────────────────────────────────── */

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { studentsApi, paymentsApi } from '@/lib/api';
+import { studentsApi, paymentsApi, generateIdempotencyKey } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
 import { useToast } from '@/components/ui/GlassToast';
 import { useVoiceFeedback } from '@/hooks/useVoiceFeedback';
@@ -38,6 +38,7 @@ export function QuickPaymentModal() {
   const [amount, setAmount] = useState<string>('300 000');
   const [method, setMethod] = useState<string>('CASH');
   const [description, setDescription] = useState<string>('');
+  const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +109,7 @@ export function QuickPaymentModal() {
       setSearchTerm('');
       setSelectedStudent(null);
       setDescription('');
+      idempotencyKeyRef.current = generateIdempotencyKey();
     }
   }, [open, selectedStudent]);
 
@@ -121,14 +123,18 @@ export function QuickPaymentModal() {
         throw new Error('Iltimos, to\'g\'ri to\'lov summasini kiriting');
       }
 
-      return paymentsApi.create({
-        studentId: selectedStudent.id,
-        amount: numAmount,
-        method,
-        description: description.trim() || undefined,
-      });
+      return paymentsApi.create(
+        {
+          studentId: selectedStudent.id,
+          amount: numAmount,
+          method,
+          description: description.trim() || undefined,
+        },
+        { idempotencyKey: idempotencyKeyRef.current },
+      );
     },
     onSuccess: () => {
+      idempotencyKeyRef.current = generateIdempotencyKey();
       const sName = selectedStudent?.user
         ? `${selectedStudent.user.firstName} ${selectedStudent.user.lastName}`
         : (selectedStudent?.firstName ? `${selectedStudent.firstName} ${selectedStudent.lastName || ''}` : 'O\'quvchi');
@@ -162,6 +168,7 @@ export function QuickPaymentModal() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (recordPayment.isPending || !selectedStudent?.id) return;
     recordPayment.mutate();
   };
 
@@ -169,7 +176,7 @@ export function QuickPaymentModal() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 dark:bg-slate-950/70 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 dark:bg-slate-950/70 backdrop-blur-md animate-fade-in"
       onClick={() => setOpen(false)}
     >
       <motion.div
@@ -178,11 +185,14 @@ export function QuickPaymentModal() {
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
         transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-6 shadow-2xl backdrop-blur-md text-slate-900 dark:border-white/15 dark:bg-[#121826]/95 dark:text-white"
+        className="relative w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-t-[28px] rounded-b-none sm:rounded-2xl border border-black/10 bg-white/95 p-4 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] shadow-2xl backdrop-blur-md text-slate-900 dark:border-white/15 dark:bg-[#121826]/95 dark:text-white"
         style={{
           boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.25), 0 0 40px -10px rgba(99, 102, 241, 0.2)',
         }}
       >
+        {/* Mobile Pull Handle */}
+        <div className="w-10 h-1.5 rounded-full bg-slate-300 dark:bg-white/20 mx-auto mb-3 shrink-0 sm:hidden" aria-hidden="true" />
+
         {/* Header */}
         <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4 mb-4">
           <div className="flex items-center gap-3">
@@ -258,7 +268,7 @@ export function QuickPaymentModal() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Ism, familiya yoki telefon raqami bilan qidiring..."
-                  className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-slate-500"
+                  className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-base sm:text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-slate-500"
                 />
 
                 {loadingStudents && (
@@ -326,7 +336,7 @@ export function QuickPaymentModal() {
                   key={preset.value}
                   type="button"
                   onClick={() => setAmount(preset.value.toLocaleString('uz-UZ'))}
-                  className="rounded-xl border border-black/10 bg-black/[0.03] px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-emerald-500/15 hover:border-emerald-500/30 hover:text-emerald-700 transition-all dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-emerald-500/20 dark:hover:border-emerald-500/30 dark:hover:text-emerald-300"
+                  className="rounded-xl border border-black/10 bg-black/[0.03] px-3 py-1.5 min-h-[36px] text-xs font-semibold text-slate-700 hover:bg-emerald-500/15 hover:border-emerald-500/30 hover:text-emerald-700 transition-all dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-emerald-500/20 dark:hover:border-emerald-500/30 dark:hover:text-emerald-300 flex items-center justify-center"
                 >
                   {preset.label}
                 </button>
@@ -347,7 +357,7 @@ export function QuickPaymentModal() {
                     key={m.id}
                     type="button"
                     onClick={() => setMethod(m.id)}
-                    className={`flex flex-col items-center justify-center rounded-xl p-2 border text-center transition-all ${
+                    className={`flex flex-col items-center justify-center rounded-xl p-2 min-h-[56px] border text-center transition-all ${
                       active
                         ? 'border-indigo-500 bg-indigo-500/15 text-indigo-700 dark:bg-indigo-500/20 dark:text-white shadow-lg shadow-indigo-500/20 font-bold'
                         : 'border-black/10 bg-black/[0.03] text-slate-600 hover:bg-black/[0.06] hover:text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white'
@@ -368,7 +378,7 @@ export function QuickPaymentModal() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Izoh (masalan: Oktyabr oyi ingliz tili kursi uchun)"
-              className="w-full rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-slate-500"
+              className="w-full rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2 text-base sm:text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-slate-500"
             />
           </div>
 

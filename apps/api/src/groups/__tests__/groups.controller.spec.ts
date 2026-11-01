@@ -10,6 +10,12 @@ describe('GroupsController', () => {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     remove: ReturnType<typeof vi.fn>;
+    getStats: ReturnType<typeof vi.fn>;
+    bulkStatus: ReturnType<typeof vi.fn>;
+    bulkTeacher: ReturnType<typeof vi.fn>;
+    bulkRoom: ReturnType<typeof vi.fn>;
+    getGroupCapacityAndOccupancy: ReturnType<typeof vi.fn>;
+    graduateAndPromote: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -19,6 +25,12 @@ describe('GroupsController', () => {
       create: vi.fn(),
       update: vi.fn(),
       remove: vi.fn(),
+      getStats: vi.fn(),
+      bulkStatus: vi.fn(),
+      bulkTeacher: vi.fn(),
+      bulkRoom: vi.fn(),
+      getGroupCapacityAndOccupancy: vi.fn(),
+      graduateAndPromote: vi.fn(),
     };
     controller = new GroupsController(service as unknown as GroupsService);
   });
@@ -30,6 +42,49 @@ describe('GroupsController', () => {
     const result = await controller.findAll('org-1', { page: 1, limit: 10 });
 
     expect(service.findAll).toHaveBeenCalledWith('org-1', { page: 1, limit: 10 });
+    expect(result).toBe(mockRes);
+  });
+
+  it('getStats delegates to groupsService.getStats', async () => {
+    const mockStats = { totalGroups: 5, activeGroups: 4, averageOccupancyPercent: 85 };
+    service.getStats.mockResolvedValue(mockStats);
+
+    const result = await controller.getStats('org-1');
+
+    expect(service.getStats).toHaveBeenCalledWith('org-1');
+    expect(result).toBe(mockStats);
+  });
+
+  it('bulkStatus delegates to groupsService.bulkStatus', async () => {
+    const dto = { groupIds: ['g1', 'g2'], isActive: true };
+    const mockRes = { success: true, count: 2 };
+    service.bulkStatus.mockResolvedValue(mockRes);
+
+    const result = await controller.bulkStatus('org-1', dto);
+
+    expect(service.bulkStatus).toHaveBeenCalledWith('org-1', dto);
+    expect(result).toBe(mockRes);
+  });
+
+  it('bulkTeacher delegates to groupsService.bulkTeacher', async () => {
+    const dto = { groupIds: ['g1', 'g2'], teacherId: 't-1' };
+    const mockRes = { success: true, count: 2 };
+    service.bulkTeacher.mockResolvedValue(mockRes);
+
+    const result = await controller.bulkTeacher('org-1', dto);
+
+    expect(service.bulkTeacher).toHaveBeenCalledWith('org-1', dto);
+    expect(result).toBe(mockRes);
+  });
+
+  it('bulkRoom delegates to groupsService.bulkRoom', async () => {
+    const dto = { groupIds: ['g1', 'g2'], room: 'Room 303' };
+    const mockRes = { success: true, count: 2 };
+    service.bulkRoom.mockResolvedValue(mockRes);
+
+    const result = await controller.bulkRoom('org-1', dto);
+
+    expect(service.bulkRoom).toHaveBeenCalledWith('org-1', dto);
     expect(result).toBe(mockRes);
   });
 

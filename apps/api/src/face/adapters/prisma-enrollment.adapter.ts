@@ -447,6 +447,13 @@ export class PrismaEnrollmentAdapter implements EnrollmentRepository {
     return batches;
   }
 
+  async revokeTemplate(organizationId: string, templateId: string): Promise<void> {
+    await this.prisma.faceTemplate.updateMany({
+      where: { organizationId, id: templateId, status: 'ACTIVE' },
+      data: { status: 'REVOKED', revokedAt: new Date() },
+    });
+  }
+
   async revokeTemplates(organizationId: string, enrollmentId: string): Promise<void> {
     await this.prisma.faceTemplate.updateMany({
       where: { organizationId, enrollmentId, status: 'ACTIVE' },

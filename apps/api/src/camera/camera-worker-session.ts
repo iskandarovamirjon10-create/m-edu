@@ -402,6 +402,7 @@ export class CameraWorkerSession extends EventEmitter {
       // Reset healthy frame counter; only reset reconnect attempts once
       // frames actively arrive and stream proves stable (M-EDU-CAM-003).
       this.consecutiveHealthyFrames = 0;
+    this.queue.clear();
 
       // FIX-4: emit recovered event (clear alert debounce)
       this.emit('camera-recovered', {
@@ -472,6 +473,8 @@ export class CameraWorkerSession extends EventEmitter {
           error: getErrorMessage(err),
         },
       );
+    } finally {
+      this.queue.clear();
     }
   }
 
@@ -1304,6 +1307,8 @@ export class CameraWorkerSession extends EventEmitter {
 
     const message =
       `Stream process exited with code ${code ?? 'unknown'}`;
+
+    this.queue.clear();
 
     this.logger.warn(
       'Camera stream closed',

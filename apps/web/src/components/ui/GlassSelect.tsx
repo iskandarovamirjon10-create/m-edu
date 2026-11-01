@@ -24,9 +24,9 @@ export interface GlassSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectEl
 }
 
 const SIZE: Record<SelectSize, string> = {
-  sm: 'h-8 text-xs px-2.5',
-  md: 'h-10 text-sm px-3',
-  lg: 'h-12 text-[15px] px-3.5',
+  sm: 'h-8 text-base sm:text-xs px-2.5',
+  md: 'h-10 text-[16px] sm:text-sm px-3',
+  lg: 'h-12 text-[16px] sm:text-[15px] px-3.5',
 };
 
 const STATUS: Record<SelectStatus, string> = {

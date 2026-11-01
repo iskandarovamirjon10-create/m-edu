@@ -159,3 +159,64 @@ export class AnalyzeDocumentDto {
   @IsIn(['curriculum', 'policy', 'quiz_extraction', 'summary'])
   analysisType?: 'curriculum' | 'policy' | 'quiz_extraction' | 'summary';
 }
+
+export class SpeechToTextDto {
+  @IsString()
+  @IsNotEmpty()
+  audioBase64!: string;
+
+  @IsOptional()
+  @IsString()
+  mimeType?: string;
+
+  @IsOptional()
+  @IsIn(['uz', 'ru', 'en'])
+  language?: 'uz' | 'ru' | 'en';
+}
+
+export class TextToSpeechDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(3000)
+  text!: string;
+
+  @IsOptional()
+  @IsIn(['uz', 'ru', 'en'])
+  language?: 'uz' | 'ru' | 'en';
+
+  @IsOptional()
+  @IsIn(['male', 'female'])
+  voice?: 'male' | 'female';
+}
+
+export class DraftDebtRecoveryCampaignDto {
+  @IsOptional()
+  @IsIn(['ALL', 'MILD_1_7_DAYS', 'MODERATE_7_30_DAYS', 'SEVERE_30_PLUS_DAYS'])
+  segment?: 'ALL' | 'MILD_1_7_DAYS' | 'MODERATE_7_30_DAYS' | 'SEVERE_30_PLUS_DAYS';
+
+  @IsOptional()
+  @IsIn(['friendly', 'official', 'urgent'])
+  tone?: 'friendly' | 'official' | 'urgent';
+
+  @IsOptional()
+  @IsIn(['TELEGRAM', 'SMS', 'WHATSAPP'])
+  channel?: 'TELEGRAM' | 'SMS' | 'WHATSAPP';
+}
+
+export class GenerateAssessmentRubricDto {
+  @IsString()
+  @MinLength(2)
+  @MaxLength(150)
+  topic!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  courseName?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(100)
+  maxScore?: number;
+}

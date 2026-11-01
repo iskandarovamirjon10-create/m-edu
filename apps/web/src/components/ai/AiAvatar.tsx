@@ -38,8 +38,9 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
-import { Sparkles, User, Check } from 'lucide-react';
+import { User, Check } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { cn } from '@/lib/design';
 
 /* ============================================================================
@@ -280,12 +281,11 @@ export function AiAvatar({
           </span>
         )}
 
-        {/* Sparkle glyph */}
-        <Sparkles
-          className="relative text-white"
-          style={{ width: s.icon, height: s.icon }}
-          strokeWidth={1.9}
-          aria-hidden="true"
+        {/* Official Premium AI Sparkle Logo (✨) */}
+        <MeduAiLogo
+          size={s.box >= 40 ? 'md' : s.box >= 32 ? 'sm' : 'xs'}
+          className="relative z-10"
+          alt=""
         />
       </span>
     </motion.span>

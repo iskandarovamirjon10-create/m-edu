@@ -10,9 +10,11 @@ interface RecentPaymentsProps {
   payments: DashboardStats['recentPayments'];
 }
 
-function getInitials(name: string) {
+function getInitials(name?: string | null): string {
+  if (!name || typeof name !== 'string') return '—';
   return (
     name
+      .trim()
       .split(/\s+/)
       .map((p) => p.charAt(0))
       .filter(Boolean)

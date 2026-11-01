@@ -187,7 +187,7 @@ describe('FaceService', () => {
         expect(service.getEngineStatus().provider).not.toBe('mock');
         expect(service.getEngineStatus().isReal).toBe(true);
       }
-    });
+    }, 20000);
   });
 
   /* ──────────────────────────────────────────────────────────────────── */

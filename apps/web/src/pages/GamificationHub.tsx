@@ -1,3 +1,4 @@
+import { useAuth } from '@/auth/AuthContext';
 /**
  * M-EDU GamificationHub — 
  *
@@ -20,6 +21,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
 import { openSidecar } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { StudentSkillConstellationStudio } from '@/components/gamification/StudentSkillConstellationStudio';
 import request from '@/lib/api';
 
 /* ══════════════════════════════════════════════════════════════════
@@ -764,12 +766,13 @@ function AchievementBadge({ achievement, index }: { achievement: Achievement; in
  * ══════════════════════════════════════════════════════════════════ */
 
 export function GamificationHubPage() {
+  const { user } = useAuth();
   const { t } = useSafeI18n();
   usePageTitle('M-Coins & Gamifikatsiya');
   const { push } = useToast();
   const queryClient = useQueryClient();
   const { playTick, playPop, playSuccess, playError } = usePremiumSound();
-  const [activeTab, setActiveTab] = useState<'leaderboard' | 'leagues' | 'store'>('leaderboard');
+  const [activeTab, setActiveTab] = useState<'leaderboard' | 'leagues' | 'store' | 'skillTree'>('leaderboard');
   const [selectedLeagueFilter, setSelectedLeagueFilter] = useState<LeagueTier | 'ALL'>('ALL');
   const [xpParticleTrigger, setXpParticleTrigger] = useState(0);
   const [confettiTrigger, setConfettiTrigger] = useState(0);
@@ -1062,7 +1065,7 @@ export function GamificationHubPage() {
               {achievements.filter((a) => a.unlocked).length} / {achievements.length}
             </span>
           </div>
-          <div className="grid grid-cols-6 gap-1">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-1">
             {achievements.map((a, i) => (
               <AchievementBadge key={a.id} achievement={a} index={i} />
             ))}
@@ -1096,6 +1099,14 @@ export function GamificationHubPage() {
           }}
           icon="🛍️"
           label="M-Coins Do'koni" />
+        <TabButton
+          active={activeTab === 'skillTree'}
+          onClick={() => {
+            playTick();
+            setActiveTab('skillTree');
+          }}
+          icon="⚡"
+          label="Mahorat Shajarasi (Skill Tree)" />
       </div>
 
       {/* ═══════════ TAB: LEADERBOARD ═══════════ */}
@@ -1454,6 +1465,28 @@ export function GamificationHubPage() {
                 ))
               )}
             </div>
+          </motion.div>
+        )}
+
+        {/* ═══════════ TAB: SKILL TREE (CONSTELLATION MAP) ═══════════ */}
+        {activeTab === 'skillTree' && (
+          <motion.div
+            key="skillTree"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={SPRING.smooth}
+            className="space-y-6"
+          >
+            <StudentSkillConstellationStudio
+              studentName={[user?.firstName, user?.lastName].filter(Boolean).join(' ') || "Talaba"}
+              studentLevel={myStats?.level || 7}
+              onSkillUnlocked={(_id, _xp, coins) => {
+                setXpParticleTrigger(Date.now());
+                if (coins > 50) setConfettiTrigger(Date.now());
+                void refetchMe();
+              }}
+            />
           </motion.div>
         )}
       </AnimatePresence>

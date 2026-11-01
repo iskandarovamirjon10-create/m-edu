@@ -66,7 +66,7 @@ export class AssessmentService {
       text: q.prompt,
     }));
 
-    return { items: mapped, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items: mapped, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async createQuestion(organizationId: string, dto: CreateQuestionDto) {
@@ -139,7 +139,7 @@ export class AssessmentService {
       },
     }));
 
-    return { items: mapped, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { items: mapped, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
   async findQuizForTeacher(organizationId: string, id: string) {

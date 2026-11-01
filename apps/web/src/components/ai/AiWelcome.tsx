@@ -17,7 +17,6 @@ import {
   IconArrowDown,
   IconAttendance,
   IconChevronRight,
-  IconCopilotMark,
   IconFinance,
   IconMegaphone,
   IconReport,
@@ -26,6 +25,7 @@ import {
 } from './copilotIcons';
 import { CopilotKbd } from './CopilotControls';
 import { cn } from '@/lib/design';
+import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -364,8 +364,7 @@ export function AiWelcome({
             className="relative flex h-full w-full items-center justify-center rounded-[24px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_20px_46px_-16px_rgba(10,132,255,0.7)]"
             style={{ background: 'var(--cp-brand-gradient)' }}
           >
-            <span className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(180deg,rgba(255,255,255,0.42),transparent_58%)]" />
-            <IconCopilotMark size={30} />
+            <MeduAiLogo size="xl" glow interactive />
           </div>
         </div>
 

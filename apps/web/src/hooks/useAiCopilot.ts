@@ -615,7 +615,11 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
           return;
         }
 
-        dispatch({ type: 'SET_ERROR', error: toAiErrorInfo(thrown, 'chat') });
+        const errInfo = toAiErrorInfo(thrown, 'chat');
+        if (errInfo.code === 'forbidden' || errInfo.code === 'not_found') {
+          dispatch({ type: 'SET_CONVERSATION_ID', conversationId: undefined });
+        }
+        dispatch({ type: 'SET_ERROR', error: errInfo });
         updateStatus('idle');
       } finally {
         if (abortRef.current === controller) {
