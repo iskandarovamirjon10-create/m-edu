@@ -31,10 +31,12 @@ import {
   AcousticSoundStudio,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { cn } from '@/lib/design';
 import { isPlatformRole } from '@/lib/roles';
 import { TelegramIntegration } from '@/components/TelegramIntegration';
 import type { Organization, User } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useTheme, type Theme } from '@/hooks/useTheme';
 import { usePersistSettings } from '@/hooks/usePersistSettings';
 import { useSafeI18n, isLocale } from '@/i18n/I18nProvider';
@@ -516,22 +518,26 @@ interface NavItem {
 function NavRail({
   items,
   activeId,
-  onJump,
+  selectedId,
+  viewMode,
+  onSelect,
 }: {
   items: NavItem[];
   activeId: string;
-  onJump: (id: string) => void;
+  selectedId: string;
+  viewMode: 'panel' | 'all';
+  onSelect: (id: string) => void;
 }) {
   return (
     <nav aria-label="Sozlamalar navigatsiyasi" className="space-y-1">
       {items.map((item) => {
-        const active = item.id === activeId;
+        const active = viewMode === 'panel' ? item.id === selectedId : item.id === activeId;
         const c = TONES[item.tone];
         return (
           <button
             key={item.id}
             type="button"
-            onClick={() => onJump(item.id)}
+            onClick={() => onSelect(item.id)}
             className={[
               'group relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left outline-none transition-all',
               active
@@ -738,8 +744,9 @@ function PasswordInput({
 
 function PasswordStrengthMeter({ value }: { value: string }) {
   const { t } = useSafeI18n();
+  if (!value) return null;
   const { score, label, tone } = getPasswordStrength(value);
-  const translatedLabel = t(label) || label;
+  const translatedLabel = label ? (t(label) || label) : '';
   const c = TONES[tone];
 
   return (
@@ -828,6 +835,10 @@ export function SettingsPage() {
   const [pwdForm, setPwdForm] = useState<PasswordFormState>(INITIAL_PASSWORD_FORM);
   const [pwdErrors, setPwdErrors] = useState<Partial<Record<keyof PasswordFormState, string>>>({});
   const [confirmRevokeOthersOpen, setConfirmRevokeOthersOpen] = useState(false);
+  const sound = usePremiumSound();
+  const [selectedCategory, setSelectedCategory] = useState<string>('section-appearance');
+  const [viewMode, setViewMode] = useState<'panel' | 'all'>('panel');
+  const [searchQuery, setSearchQuery] = useState('');
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>({
     language: locale,
     timezone: user?.settings?.timezone || 'UTC',
@@ -1117,10 +1128,10 @@ export function SettingsPage() {
   const navItems = useMemo<NavItem[]>(() => {
     const items: NavItem[] = [
       { id: 'section-appearance', number: '01', label: t('settings.appearance'), icon: I.palette, tone: 'purple' },
-      { id: 'section-sound',      number: '02', label: 'Ovoz va Akustika',       icon: I.volume,  tone: 'purple' },
+      { id: 'section-sound',      number: '02', label: t('settings.sound.title'), icon: I.volume,  tone: 'purple' },
       { id: 'section-account',    number: '03', label: t('settings.account'),    icon: I.user,    tone: 'green'  },
       { id: 'section-security',   number: '04', label: t('settings.changePassword'), icon: I.lock, tone: 'red'   },
-      { id: 'section-devices',    number: '05', label: t('settings.devices.title', 'Qurilmalar'), icon: I.laptop, tone: 'blue' },
+      { id: 'section-devices',    number: '05', label: t('settings.devices.title'), icon: I.laptop, tone: 'blue' },
       { id: 'section-telegram',   number: '06', label: t('settings.telegram.title'), icon: I.telegram, tone: 'blue' },
     ];
     if (isAdmin) {
@@ -1136,6 +1147,22 @@ export function SettingsPage() {
   const scrollTo = useCallback((id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
+
+  const filteredNavItems = useMemo(() => {
+    if (!searchQuery.trim()) return navItems;
+    const q = searchQuery.toLowerCase().trim();
+    return navItems.filter(
+      (item) => item.label.toLowerCase().includes(q) || item.id.toLowerCase().includes(q)
+    );
+  }, [navItems, searchQuery]);
+
+  const isSectionVisible = (id: string) => {
+    if (searchQuery.trim()) {
+      return filteredNavItems.some((item) => item.id === id);
+    }
+    if (viewMode === 'all') return true;
+    return selectedCategory === id;
+  };
 
   /* ── Loading ───────────────────────────────────────────────── */
   if (isAdmin && org.isLoading && !org.data) {
@@ -1165,7 +1192,7 @@ export function SettingsPage() {
     );
   }
 
-  /* ── Main Render ───────────────────────────────────────────── */
+    /* ── Main Render ───────────────────────────────────────────── */
   return (
     <div className="page-container relative z-10 mx-auto max-w-6xl pb-[max(6rem,env(safe-area-inset-bottom))]">
       <AuroraBackdrop />
@@ -1173,30 +1200,80 @@ export function SettingsPage() {
       <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-5">
         {/* ═══ FLOATING COMMAND BAR ═══ */}
         <motion.div variants={cardVariants} className="sticky top-4 z-30 mt-4">
-          <div className="flex items-center gap-3 rounded-2xl border border-black/[0.06] bg-white/80 px-3 py-2.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm"
-          >
-            <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#2563EB] to-[#6366F1] text-white shadow-[0_4px_14px_-4px_rgba(37,99,235,0.5)]"
-            >
-              <Icon paths={I.settings} size={16} strokeWidth={2.2} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                <span>M-EDU</span>
-                <span className="opacity-50">/</span>
-                <span className="text-[#2563EB] dark:text-[#38BDF8]">Settings</span>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.06] bg-white/80 p-2.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#2563EB] to-[#6366F1] text-white shadow-[0_4px_14px_-4px_rgba(37,99,235,0.5)]">
+                <Icon paths={I.settings} size={16} strokeWidth={2.2} />
               </div>
-              <h1 className="truncate text-[15px] font-extrabold leading-tight tracking-tight text-[var(--text-primary)]">
-                {t('settings.title')}
-              </h1>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                  <span>M-EDU</span>
+                  <span className="opacity-50">/</span>
+                  <span className="text-[#2563EB] dark:text-[#38BDF8]">Settings</span>
+                </div>
+                <h1 className="truncate text-[15px] font-extrabold leading-tight tracking-tight text-[var(--text-primary)]">
+                  {t('settings.title')}
+                </h1>
+              </div>
             </div>
-            <div className="hidden items-center gap-2 sm:flex">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/[0.08] px-2.5 py-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10B981]" />
-                <span className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
-                  Online
-                </span>
+
+            {/* Instant Search Bar */}
+            <div className="relative min-w-[200px] max-w-xs flex-1">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                🔍
               </span>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('settings.searchPlaceholder')}
+                className="w-full rounded-xl border border-black/[0.08] bg-white/70 pl-8 pr-7 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500/40 dark:border-white/[0.08] dark:bg-white/[0.05]"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* View Mode Switcher */}
+            <div className="flex items-center gap-1 rounded-xl border border-black/[0.08] bg-white/60 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('panel');
+                  sound?.playTick();
+                }}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all',
+                  viewMode === 'panel'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+                )}
+              >
+                <span>📑</span>
+                <span className="hidden sm:inline">{t('settings.viewMode.panel')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('all');
+                  sound?.playTick();
+                }}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all',
+                  viewMode === 'all'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+                )}
+              >
+                <span>📜</span>
+                <span className="hidden sm:inline">{t('settings.viewMode.all')}</span>
+              </button>
             </div>
           </div>
         </motion.div>
@@ -1240,7 +1317,17 @@ export function SettingsPage() {
                 className="rounded-2xl border border-slate-200/85 bg-white/72 p-2 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.03]"
                 style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85)' }}
               >
-                <NavRail items={navItems} activeId={activeId} onJump={scrollTo} />
+                <NavRail
+                  items={filteredNavItems}
+                  activeId={activeId}
+                  selectedId={selectedCategory}
+                  viewMode={viewMode}
+                  onSelect={(id) => {
+                    setSelectedCategory(id);
+                    sound?.playPop();
+                    if (viewMode === 'all') scrollTo(id);
+                  }}
+                />
               </div>
             </div>
           </aside>
@@ -1250,14 +1337,18 @@ export function SettingsPage() {
             {/* Mobile nav */}
             <div className="lg:hidden">
               <div className="flex gap-2 overflow-x-auto pb-2">
-                {navItems.map((item) => {
-                  const active = item.id === activeId;
+                {filteredNavItems.map((item) => {
+                  const active = viewMode === 'panel' ? item.id === selectedCategory : item.id === activeId;
                   const c = TONES[item.tone];
                   return (
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => scrollTo(item.id)}
+                      onClick={() => {
+                        setSelectedCategory(item.id);
+                        sound?.playPop();
+                        if (viewMode === 'all') scrollTo(item.id);
+                      }}
                       className={[
                         'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-bold transition-all',
                         active
@@ -1284,7 +1375,14 @@ export function SettingsPage() {
 
             {/* ═══ SECTIONS ═══ */}
 
+            {filteredNavItems.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-300/80 p-12 text-center text-xs text-[var(--text-muted)] dark:border-white/[0.10]">
+                <p className="text-sm font-semibold">{t('settings.noMatching', { query: searchQuery })}</p>
+              </div>
+            )}
+
             {/* 01 · Appearance */}
+            {isSectionVisible('section-appearance') && (
             <SettingsSection
               id="section-appearance"
               number="01"
@@ -1300,20 +1398,24 @@ export function SettingsPage() {
                 <ThemeSwitcher />
               </div>
             </SettingsSection>
+            )}
 
             {/* 02 · Sound & Acoustics */}
+            {isSectionVisible('section-sound') && (
             <SettingsSection
               id="section-sound"
               number="02"
-              title="Ovoz va Akustika"
-              subtitle="Apple VisionOS va Taptic standartidagi fazoviy mikro-tovushlar va haptik effektlar"
+              title={t('settings.sound.title')}
+              subtitle={t('settings.sound.subtitle')}
               icon={I.volume}
               tone="purple"
             >
               <AcousticSoundStudio />
             </SettingsSection>
+            )}
 
             {/* 03 · Account */}
+            {isSectionVisible('section-account') && (
             <SettingsSection
               id="section-account"
               number="03"
@@ -1378,8 +1480,10 @@ export function SettingsPage() {
                 </div>
               </form>
             </SettingsSection>
+            )}
 
             {/* 04 · Security */}
+            {isSectionVisible('section-security') && (
             <SettingsSection
               id="section-security"
               number="04"
@@ -1494,8 +1598,10 @@ export function SettingsPage() {
                 </div>
               </form>
             </SettingsSection>
+            )}
 
             {/* 05 · Devices */}
+            {isSectionVisible('section-devices') && (
             <SettingsSection
               id="section-devices"
               number="05"
@@ -1560,7 +1666,7 @@ export function SettingsPage() {
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="font-bold text-[13px] text-[var(--text-primary)]">
-                                  {session.deviceName || session.browser || 'Noma\'lum qurilma'}
+                                  {session.deviceName || session.browser || t('settings.devices.unknownDevice')}
                                 </span>
                                 {isCurrent && (
                                   <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
@@ -1570,7 +1676,7 @@ export function SettingsPage() {
                                 )}
                               </div>
                               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-[var(--text-muted)]">
-                                <span>{session.browser || 'Brauzer'} · {session.os || 'OS'}</span>
+                                <span>{session.browser || t('settings.devices.browser')} · {session.os || 'OS'}</span>
                                 <span className="opacity-40">·</span>
                                 <span className="font-mono">{session.ipAddress}</span>
                               </div>
@@ -1605,8 +1711,10 @@ export function SettingsPage() {
                 )}
               </div>
             </SettingsSection>
+            )}
 
             {/* 06 · Telegram */}
+            {isSectionVisible('section-telegram') && (
             <SettingsSection
               id="section-telegram"
               number="06"
@@ -1617,9 +1725,10 @@ export function SettingsPage() {
             >
               <TelegramIntegration />
             </SettingsSection>
+            )}
 
             {/* 07 · Organization (admin) */}
-            {isAdmin && (
+            {isAdmin && isSectionVisible('section-organization') && (
               <SettingsSection
                 id="section-organization"
                 number="07"
@@ -1700,7 +1809,7 @@ export function SettingsPage() {
             )}
 
             {/* 08 · Access Control (admin) */}
-            {isAdmin && (
+            {isAdmin && isSectionVisible('section-access') && (
               <SettingsSection
                 id="section-access"
                 number="08"
