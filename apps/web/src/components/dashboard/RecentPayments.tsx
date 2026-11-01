@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { GlassEmptyState } from '@/components/ui';
 import { formatCurrency, formatDate } from '@/lib/format';
 import type { DashboardStats } from '@/lib/types';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 interface RecentPaymentsProps {
@@ -34,7 +34,7 @@ function getStudentName(
 }
 
 export function RecentPayments({ payments }: RecentPaymentsProps) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const navigate = useNavigate();
   const sound = usePremiumSound();
 
@@ -44,14 +44,14 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-apple-green/10 dark:bg-apple-green/15 px-2 py-0.5 text-[11px] font-semibold text-apple-green">
             <span className="h-1.5 w-1.5 rounded-full bg-apple-green" />
-            {t('payments.status.PAID') || 'Paid'}
+            {t('payments.status.PAID', 'To‘langan')}
           </span>
         );
       case 'PENDING':
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-apple-orange/10 dark:bg-apple-orange/15 px-2 py-0.5 text-[11px] font-semibold text-apple-orange">
             <span className="h-1.5 w-1.5 rounded-full bg-apple-orange" />
-            {t('payments.status.PENDING') || 'Pending'}
+            {t('payments.status.PENDING', 'Kutilmoqda')}
           </span>
         );
       case 'FAILED':
@@ -59,7 +59,7 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-apple-red/10 dark:bg-apple-red/15 px-2 py-0.5 text-[11px] font-semibold text-apple-red">
             <span className="h-1.5 w-1.5 rounded-full bg-apple-red" />
-            {t(`payments.status.${status}`) || status}
+            {t(`payments.status.${status}`, status === 'FAILED' ? 'Xatolik' : 'Bekor qilingan')}
           </span>
         );
       default:
@@ -76,18 +76,19 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-primary">
-            {t('dashboard.recentPayments') || 'Recent Transactions'}
+            {t('dashboard.recentPayments', 'So‘nggi to‘lovlar')}
           </h2>
           <p className="text-xs text-secondary">
-            {t('dashboard.paymentCollection') || 'Latest tuition & fee payments'}
+            {t('dashboard.paymentCollection', 'Yaqinda amalga oshirilgan dars to‘lovlari')}
           </p>
         </div>
 
         <Link
           to="/payments"
-          className="items-center gap-1 text-xs font-semibold text-primary transition-colors hover:underline inline-flex"
+          onClick={() => sound.playTick?.()}
+          className="inline-flex min-h-[44px] items-center gap-1 text-xs font-semibold text-primary transition-colors hover:underline"
         >
-          <span>{t('dashboard.viewPayments') || 'View all'}</span>
+          <span>{t('dashboard.viewPayments', 'Barchasini ko‘rish')}</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M7 17 17 7" /><path d="M7 7h10v10" />
           </svg>
@@ -98,14 +99,14 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
         {!payments?.length ? (
           <div className="py-8">
             <GlassEmptyState
-              title={t('dashboard.noPayments') || 'No payments recorded'}
-              message={t('dashboard.noPaymentsHint') || 'Payments will appear here once recorded.'}
+              title={t('dashboard.noPayments', 'To‘lovlar mavjud emas')}
+              message={t('dashboard.noPaymentsHint', 'Yangi to‘lovlar qabul qilinganda shu yerda ko‘rinadi.')}
             />
           </div>
         ) : (
           <div className="divide-y divide-black/[0.04] dark:divide-white/[0.06] overflow-hidden rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02]">
             {payments.slice(0, 6).map((payment) => {
-              const studentName = getStudentName(payment, t('dashboard.student') || 'Student');
+              const studentName = getStudentName(payment, t('dashboard.student', 'O‘quvchi'));
               const studentId = payment.studentId;
 
               return (
@@ -126,7 +127,7 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
                       navigate(studentId ? `/students/${studentId}` : '/payments');
                     }
                   }}
-                  className="group flex cursor-pointer items-center justify-between gap-3 p-3 transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="group flex min-h-[48px] cursor-pointer items-center justify-between gap-3 p-3 transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {/* Left: Avatar + Student Name + Date */}
                   <div className="flex min-w-0 items-center gap-3">
@@ -177,3 +178,5 @@ export function RecentPayments({ payments }: RecentPaymentsProps) {
     </div>
   );
 }
+
+export default RecentPayments;

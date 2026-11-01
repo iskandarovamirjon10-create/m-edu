@@ -1,3 +1,9 @@
+/**
+ * M-EDU BillingSettingsPage — Ultra-Luxury Apple VisionOS Subscriptions & Quotas Center
+ * Features quota meters, plan selection matrix, fiscal invoice audit table,
+ * Payme / Click deep payment links, tactile sound cues, and safe i18n localization.
+ */
+
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -22,11 +28,38 @@ import {
   GlassTH,
   GlassTD,
 } from '@/components/ui';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { useSafeI18n } from '@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
+
+interface PlanItem {
+  id: string;
+  code: string;
+  name: string;
+  priceUzs: number;
+  maxStudents: number;
+  maxBranches: number;
+  maxEmployees: number;
+  hasFaceId: boolean;
+}
+
+interface InvoiceItem {
+  id: string;
+  invoiceNumber: string;
+  issuedAt?: string;
+  createdAt: string;
+  amountUzs: number;
+  status: 'PENDING' | 'PAID' | 'CANCELLED';
+}
 
 export function BillingSettingsPage() {
+  const { t } = useSafeI18n();
+  const sound = usePremiumSound();
   const queryClient = useQueryClient();
   const { push } = useToasts();
-  const [activeInvoiceForPay, setActiveInvoiceForPay] = useState<any | null>(null);
+  const [activeInvoiceForPay, setActiveInvoiceForPay] = useState<InvoiceItem | null>(null);
+
+  usePageTitle(t('settings.billing', 'Ta’rif va obuna to‘lovlari'));
 
   // Queries
   const { data: currentSub } = useQuery({
@@ -51,7 +84,10 @@ export function BillingSettingsPage() {
 
   const { data: payLinks, isLoading: isLinksLoading } = useQuery({
     queryKey: ['billing-pay-links', activeInvoiceForPay?.invoiceNumber],
-    queryFn: () => billingApi.getPaymentLinks(activeInvoiceForPay.invoiceNumber),
+    queryFn: () => {
+      if (!activeInvoiceForPay) throw new Error('No invoice selected');
+      return billingApi.getPaymentLinks(activeInvoiceForPay.invoiceNumber);
+    },
     enabled: Boolean(activeInvoiceForPay),
   });
 
@@ -59,13 +95,16 @@ export function BillingSettingsPage() {
   const changePlanMutation = useMutation({
     mutationFn: (planCode: string) => subscriptionsApi.changePlan({ plan: planCode }),
     onSuccess: () => {
+      sound.playSuccess?.();
       queryClient.invalidateQueries({ queryKey: ['subscription-current'] });
       queryClient.invalidateQueries({ queryKey: ['subscription-usage'] });
       queryClient.invalidateQueries({ queryKey: ['billing-invoices'] });
-      push('success', 'Subscription tier successfully updated!');
+      push('success', t('billing.planUpdated', 'Ta’rif rejasi muvaffaqiyatli yangilandi!'));
     },
-    onError: (err: any) => {
-      push('error', err.message || 'Failed to update subscription');
+    onError: (err: unknown) => {
+      sound.playError?.();
+      const message = err instanceof Error ? err.message : 'Ta’rifni o‘zgartirishda xatolik yuz berdi';
+      push('error', message);
     },
   });
 
@@ -89,11 +128,11 @@ export function BillingSettingsPage() {
               <CreditCard className="w-5 h-5" />
             </span>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              Billing & Subscription
+              {t('settings.billing', 'Ta’rif va obuna to‘lovlari')}
             </h1>
           </div>
           <p className="text-sm text-secondary mt-1.5">
-            Manage your educational operating tier, track resource quotas, and review fiscal invoices.
+            {t('billing.subtitle', 'Ta’lim platformangiz ta’rifini boshqaring, resurs limitlarini kuzating va hisob-fakturalarni tekshiring.')}
           </p>
         </div>
       </div>
@@ -108,10 +147,10 @@ export function BillingSettingsPage() {
               </div>
               <div>
                 <div className="text-sm font-semibold text-primary">
-                  Free Trial Active — {getDaysRemaining(currentSub.trialEndAt)} Days Remaining
+                  {t('billing.trialActive', 'Sinov davri faol')} — {getDaysRemaining(currentSub.trialEndAt)} {t('common.daysRemaining', 'kun qoldi')}
                 </div>
                 <div className="text-xs text-secondary mt-0.5">
-                  You are currently exploring M-EDU on the 7-day complimentary trial. Upgrade before expiration to ensure uninterrupted access.
+                  {t('billing.trialNotice', 'Siz hozirda 7 kunlik bepul sinov davridasiz. Uzluksiz ishlash uchun ta’rifni yangilang.')}
                 </div>
               </div>
             </div>
@@ -124,7 +163,7 @@ export function BillingSettingsPage() {
         {/* Student Quota */}
         <GlassCard padding="md" className="space-y-3">
           <div className="flex items-center justify-between text-xs text-secondary">
-            <span className="font-semibold uppercase tracking-wider">Active Students</span>
+            <span className="font-semibold uppercase tracking-wider">{t('students.title', 'Faol o‘quvchilar')}</span>
             <Users className="w-4 h-4 text-brand-500" />
           </div>
           <div className="flex items-baseline justify-between">
@@ -148,7 +187,7 @@ export function BillingSettingsPage() {
         {/* Branch Quota */}
         <GlassCard padding="md" className="space-y-3">
           <div className="flex items-center justify-between text-xs text-secondary">
-            <span className="font-semibold uppercase tracking-wider">Active Branches</span>
+            <span className="font-semibold uppercase tracking-wider">{t('branches.title', 'Faol filiallar')}</span>
             <Building className="w-4 h-4 text-purple-500" />
           </div>
           <div className="flex items-baseline justify-between">
@@ -172,7 +211,7 @@ export function BillingSettingsPage() {
         {/* Staff Quota */}
         <GlassCard padding="md" className="space-y-3 sm:col-span-2 md:col-span-1">
           <div className="flex items-center justify-between text-xs text-secondary">
-            <span className="font-semibold uppercase tracking-wider">Active Employees</span>
+            <span className="font-semibold uppercase tracking-wider">{t('hr.title', 'Xodimlar')}</span>
             <Briefcase className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="mt-3 flex items-baseline justify-between">
@@ -197,12 +236,16 @@ export function BillingSettingsPage() {
       {/* Subscription Plans Matrix */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-primary">Choose Your Operating Tier</h2>
-          <p className="text-xs text-secondary">Scale seamlessly as your educational organization grows.</p>
+          <h2 className="text-xl font-bold tracking-tight text-primary">
+            {t('billing.chooseTier', 'Ta’rif rejasini tanlang')}
+          </h2>
+          <p className="text-xs text-secondary">
+            {t('billing.chooseTierDesc', 'Tashkilotingiz ehtiyojlariga qarab mos ta’rifni tanlang.')}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {plans.map((p: any) => {
+          {(plans as PlanItem[]).map((p) => {
             const isCurrent = currentSub?.plan === p.code;
             return (
               <GlassCard
@@ -220,7 +263,7 @@ export function BillingSettingsPage() {
                     <h3 className="text-base font-bold text-primary">{p.name}</h3>
                     {isCurrent && (
                       <GlassBadge variant="purple" size="sm">
-                        Current
+                        {t('billing.currentPlan', 'Joriy')}
                       </GlassBadge>
                     )}
                   </div>
@@ -229,31 +272,31 @@ export function BillingSettingsPage() {
                     <div className="text-2xl font-extrabold text-primary">
                       {formatUzs(p.priceUzs)}
                     </div>
-                    <div className="text-xs text-secondary">per month</div>
+                    <div className="text-xs text-secondary">{t('billing.perMonth', 'oyiga')}</div>
                   </div>
 
                   <ul className="mt-5 space-y-2.5 text-xs text-secondary">
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                      <span>Up to <strong className="text-primary">{p.maxStudents}</strong> students</span>
+                      <span>{p.maxStudents} {t('billing.studentsLimit', 'tagacha o‘quvchi')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                      <span>Up to <strong className="text-primary">{p.maxBranches}</strong> branch(es)</span>
+                      <span>{p.maxBranches} {t('billing.branchesLimit', 'tagacha filial')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                      <span>Up to <strong className="text-primary">{p.maxEmployees}</strong> staff accounts</span>
+                      <span>{p.maxEmployees} {t('billing.staffLimit', 'tagacha xodim')}</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                       <span className={p.hasFaceId ? 'text-primary font-medium' : 'text-secondary'}>
-                        {p.hasFaceId ? 'Face ID Biometrics' : 'Manual Attendance'}
+                        {p.hasFaceId ? 'Face ID biometriya' : 'Standart davomat'}
                       </span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                      <span>Gemini AI Copilot</span>
+                      <span>M-EDU Gemini AI Copilot</span>
                     </li>
                   </ul>
                 </div>
@@ -264,19 +307,22 @@ export function BillingSettingsPage() {
                       disabled
                       size="sm"
                       variant="secondary"
-                      className="w-full text-xs font-semibold opacity-60 cursor-not-allowed"
+                      className="min-h-[44px] w-full text-xs font-semibold opacity-60 cursor-not-allowed"
                     >
-                      Active Plan
+                      {t('billing.activePlan', 'Faol ta’rif')}
                     </GlassButton>
                   ) : (
                     <GlassButton
                       variant="primary"
                       size="sm"
-                      onClick={() => changePlanMutation.mutate(p.code)}
+                      onClick={() => {
+                        sound.playTick?.();
+                        changePlanMutation.mutate(p.code);
+                      }}
                       loading={changePlanMutation.isPending}
-                      className="w-full text-xs font-semibold"
+                      className="min-h-[44px] w-full text-xs font-semibold"
                     >
-                      Switch to {p.name}
+                      {p.name} {t('billing.switchTo', 'ta’rifiga o‘tish')}
                     </GlassButton>
                   )}
                 </div>
@@ -289,29 +335,33 @@ export function BillingSettingsPage() {
       {/* Invoices History Table */}
       <GlassCard padding="none" className="overflow-hidden">
         <div className="p-5 border-b border-black/[0.06] dark:border-white/[0.08]">
-          <h2 className="text-lg font-semibold text-primary">Invoices & Receipts</h2>
-          <p className="text-xs text-secondary mt-0.5">Download fiscal documentation or pay outstanding subscription invoices.</p>
+          <h2 className="text-lg font-semibold text-primary">
+            {t('billing.invoicesTitle', 'Hisob-fakturalar va to‘lov cheklari')}
+          </h2>
+          <p className="text-xs text-secondary mt-0.5">
+            {t('billing.invoicesDesc', 'Platforma obunasi bo‘yicha moliyaviy hisobotlar va onlayn to‘lov qilish.')}
+          </p>
         </div>
 
         <GlassTable minWidth={560}>
           <GlassTHead>
             <GlassTR>
-              <GlassTH>Invoice #</GlassTH>
-              <GlassTH>Issue Date</GlassTH>
-              <GlassTH>Amount</GlassTH>
-              <GlassTH>Status</GlassTH>
-              <GlassTH align="right">Action</GlassTH>
+              <GlassTH>{t('billing.invoiceNumber', 'Hisob raqami')}</GlassTH>
+              <GlassTH>{t('billing.issueDate', 'Sana')}</GlassTH>
+              <GlassTH>{t('billing.amount', 'Summa')}</GlassTH>
+              <GlassTH>{t('billing.status', 'Holat')}</GlassTH>
+              <GlassTH align="right">{t('common.actions', 'Amal')}</GlassTH>
             </GlassTR>
           </GlassTHead>
           <tbody>
-            {invoices.length === 0 ? (
+            {(invoices as InvoiceItem[]).length === 0 ? (
               <GlassTR>
                 <GlassTD colSpan={5} className="py-8 text-center text-xs text-secondary">
-                  No billing invoices generated yet.
+                  {t('billing.noInvoices', 'Hozircha hisob-fakturalar mavjud emas.')}
                 </GlassTD>
               </GlassTR>
             ) : (
-              invoices.map((inv: any) => (
+              (invoices as InvoiceItem[]).map((inv) => (
                 <GlassTR key={inv.id}>
                   <GlassTD className="font-mono font-medium text-primary">
                     {inv.invoiceNumber}
@@ -327,7 +377,7 @@ export function BillingSettingsPage() {
                       variant={inv.status === 'PAID' ? 'green' : 'amber'}
                       size="sm"
                     >
-                      {inv.status}
+                      {inv.status === 'PAID' ? t('payments.status.PAID', 'To‘langan') : t('payments.status.PENDING', 'Kutilmoqda')}
                     </GlassBadge>
                   </GlassTD>
                   <GlassTD align="right">
@@ -335,14 +385,18 @@ export function BillingSettingsPage() {
                       <GlassButton
                         size="xs"
                         variant="success"
-                        onClick={() => setActiveInvoiceForPay(inv)}
+                        className="min-h-[36px]"
+                        onClick={() => {
+                          sound.playTick?.();
+                          setActiveInvoiceForPay(inv);
+                        }}
                       >
-                        Pay Online
+                        {t('billing.payOnline', 'Onlayn to‘lash')}
                       </GlassButton>
                     ) : (
                       <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium inline-flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Paid
+                        {t('payments.status.PAID', 'To‘langan')}
                       </span>
                     )}
                   </GlassTD>
@@ -356,18 +410,21 @@ export function BillingSettingsPage() {
       {/* Online Payment Modal */}
       <GlassModal
         open={Boolean(activeInvoiceForPay)}
-        onClose={() => setActiveInvoiceForPay(null)}
-        title="Pay Subscription Invoice"
+        onClose={() => {
+          sound.playTick?.();
+          setActiveInvoiceForPay(null);
+        }}
+        title={t('billing.payModalTitle', 'Obuna to‘lovini amalga oshirish')}
         description={
           activeInvoiceForPay
-            ? `Invoice ${activeInvoiceForPay.invoiceNumber} · ${formatUzs(activeInvoiceForPay.amountUzs)}`
+            ? `№ ${activeInvoiceForPay.invoiceNumber} · ${formatUzs(activeInvoiceForPay.amountUzs)}`
             : undefined
         }
         size="md"
       >
         <div className="p-6 space-y-4">
           <p className="text-xs text-secondary">
-            Select your preferred Uzbek payment gateway to complete the payment instantly:
+            {t('billing.selectGateway', 'To‘lovni tez va xavfsiz amalga oshirish uchun milliy to‘lov tizimini tanlang:')}
           </p>
 
           {isLinksLoading ? (
@@ -381,7 +438,8 @@ export function BillingSettingsPage() {
                   href={payLinks.paymeUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-4 rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-white/60 dark:bg-white/[0.05] hover:bg-white dark:hover:bg-white/[0.1] transition-all group"
+                  onClick={() => sound.playTick?.()}
+                  className="flex min-h-[48px] items-center justify-between p-4 rounded-2xl border border-black/[0.08] dark:border-white/[0.1] bg-white/60 dark:bg-white/[0.05] hover:bg-white dark:hover:bg-white/[0.1] transition-all group"
                 >
                   <span className="font-semibold text-sm text-cyan-600 dark:text-cyan-400">Payme</span>
                   <ExternalLink className="w-4 h-4 text-secondary group-hover:text-primary transition-colors" />
@@ -392,7 +450,8 @@ export function BillingSettingsPage() {
                   href={payLinks.clickUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-4 rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-white/60 dark:bg-white/[0.05] hover:bg-white dark:hover:bg-white/[0.1] transition-all group"
+                  onClick={() => sound.playTick?.()}
+                  className="flex min-h-[48px] items-center justify-between p-4 rounded-2xl border border-black/[0.08] dark:border-white/[0.1] bg-white/60 dark:bg-white/[0.05] hover:bg-white dark:hover:bg-white/[0.1] transition-all group"
                 >
                   <span className="font-semibold text-sm text-brand-600 dark:text-brand-400">Click</span>
                   <ExternalLink className="w-4 h-4 text-secondary group-hover:text-primary transition-colors" />

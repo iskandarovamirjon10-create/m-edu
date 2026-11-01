@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { RefreshCw, FileText, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/design';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { DashboardStats } from '@/lib/types';
 import { ExecutiveBriefingModal } from '@/components/dashboard/ExecutiveBriefingModal';
 
@@ -148,7 +148,7 @@ export const DashboardHeader = memo(function DashboardHeader({
   onRefresh,
   isRefreshing = false,
 }: DashboardHeaderProps) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const [isBriefingOpen, setIsBriefingOpen] = useState(false);
   const [currentHour, setCurrentHour] = useState(() => new Date().getHours());
 

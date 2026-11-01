@@ -20,7 +20,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { cn } from '@/lib/design';
 import type { AttendanceStat } from '@/lib/types';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 interface ActivityRingsProps {
   stats: AttendanceStat[];
@@ -74,7 +74,7 @@ function resolveTranslation(
 }
 
 export function ActivityRings({ stats, overallRate }: ActivityRingsProps) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const [mounted, setMounted] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
 

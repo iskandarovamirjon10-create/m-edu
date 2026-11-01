@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { GlassEmptyState } from '@/components/ui';
 import { formatDate, formatTime } from '@/lib/format';
 import type { DashboardStats } from '@/lib/types';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 interface FollowUpsSectionProps {
@@ -14,7 +14,7 @@ type UrgencyLevel = 'overdue' | 'today' | 'upcoming';
 
 function getUrgency(
   scheduledAt: string | Date,
-  t: (key: string) => string | undefined,
+  t: (key: string, fallback?: string) => string,
 ): { level: UrgencyLevel; label: string } {
   const d = new Date(scheduledAt);
   const now = new Date();
@@ -26,12 +26,12 @@ function getUrgency(
 
   if (isSameDay) {
     const timeStr = formatTime(d.toTimeString().slice(0, 5));
-    const todayLabel = t('dashboard.today') || 'Today';
+    const todayLabel = t('dashboard.today', 'Bugun');
     return { level: 'today', label: `${todayLabel} ${timeStr}` };
   }
 
   if (d < now) {
-    return { level: 'overdue', label: t('dashboard.overdue') || 'Overdue' };
+    return { level: 'overdue', label: t('dashboard.overdue', 'Muddati o‘tgan') };
   }
 
   return { level: 'upcoming', label: formatDate(d.toISOString()) };
@@ -46,7 +46,7 @@ function getLeadName(
 }
 
 export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const navigate = useNavigate();
   const sound = usePremiumSound();
 
@@ -55,18 +55,19 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-primary">
-            {t('dashboard.upcomingFollowUps') || 'Scheduled Follow-ups'}
+            {t('dashboard.upcomingFollowUps', 'Rejalashtirilgan muloqotlar')}
           </h2>
           <p className="text-xs text-secondary">
-            {t('dashboard.viewLeads') || 'Pending inquiries & calls'}
+            {t('dashboard.viewLeads', 'Kutilayotgan lidlar va qo‘ng‘iroqlar')}
           </p>
         </div>
 
         <Link
           to="/leads"
-          className="items-center gap-1 text-xs font-semibold text-primary transition-colors hover:underline inline-flex"
+          onClick={() => sound.playTick?.()}
+          className="inline-flex min-h-[44px] items-center gap-1 text-xs font-semibold text-primary transition-colors hover:underline"
         >
-          <span>{t('leads.title') || 'View pipeline'}</span>
+          <span>{t('leads.title', 'Voronkani ochish')}</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M7 17 17 7" /><path d="M7 7h10v10" />
           </svg>
@@ -77,14 +78,14 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
         {!followUps?.length ? (
           <div className="py-8">
             <GlassEmptyState
-              title={t('dashboard.noFollowUps') || 'All caught up!'}
-              message={t('dashboard.noFollowUpsHint') || 'No scheduled follow-ups pending at this time.'}
+              title={t('dashboard.noFollowUps', 'Rejali muloqotlar yo‘q')}
+              message={t('dashboard.noFollowUpsHint', 'Hozircha barcha muloqotlar o‘z vaqtida bajarilgan.')}
             />
           </div>
         ) : (
           <div className="divide-y divide-black/[0.04] dark:divide-white/[0.06] overflow-hidden rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02]">
             {followUps.slice(0, 6).map((item) => {
-              const name = getLeadName(item.lead, t('dashboard.lead') || 'Lead');
+              const name = getLeadName(item.lead, t('dashboard.lead', 'Lid'));
               const urgency = getUrgency(item.scheduledAt, t);
               const leadPhone = (item.lead as { phone?: string })?.phone;
 
@@ -106,7 +107,7 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
                       navigate('/leads');
                     }
                   }}
-                  className="group flex cursor-pointer items-center justify-between gap-3 p-3 transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="group flex min-h-[48px] cursor-pointer items-center justify-between gap-3 p-3 transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {/* Left: Contact Info */}
                   <div className="flex min-w-0 items-center gap-3">
@@ -129,7 +130,7 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
                         {name}
                       </p>
                       <p className="truncate text-[11px] text-tertiary">
-                        {item.note || leadPhone || t('dashboard.viewLeads') || 'Scheduled call'}
+                        {item.note || leadPhone || t('dashboard.viewLeads', 'Rejali qo‘ng‘iroq')}
                       </p>
                     </div>
                   </div>
@@ -180,3 +181,5 @@ export function FollowUpsSection({ followUps }: FollowUpsSectionProps) {
     </div>
   );
 }
+
+export default FollowUpsSection;

@@ -1,5 +1,5 @@
 /**
- * M-EDU ResetPasswordPage — Apple Premium 
+ * M-EDU ResetPasswordPage — Apple Premium VisionOS Glass Edition
  */
 
 import { useEffect, useState, type FormEvent, useCallback } from 'react';
@@ -10,6 +10,7 @@ import { GlassButton, GlassInput } from '@/components/ui';
 import { MeduLogo } from '@/components/brand/MeduLogo';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 function Backdrop() {
   return (
@@ -54,7 +55,8 @@ function Eye({ off }: { off: boolean }) {
 
 export function ResetPasswordPage() {
   const { t } = useSafeI18n();
-  usePageTitle(t('resetPassword.heading') || 'Reset Password');
+  const sound = usePremiumSound();
+  usePageTitle(t('resetPassword.heading', 'Yangi parol o‘rnatish'));
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || searchParams.get('t') || '';
 
@@ -69,35 +71,41 @@ export function ResetPasswordPage() {
 
   useEffect(() => {
     if (!hasToken) {
-      setError(t('resetPassword.invalidToken') || 'Parolni tiklash havolasi yaroqsiz yoki muddati o\'tgan.');
+      sound.playError?.();
+      setError(t('resetPassword.invalidToken', 'Parolni tiklash havolasi yaroqsiz yoki muddati o‘tgan.'));
     }
-  }, [hasToken, t]);
+  }, [hasToken, t, sound]);
 
   const handleSubmit = useCallback(async (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
     if (password.length < 8) {
-      setError(t('auth.passwordMinLength', { min: 8 }) || 'Parol kamida 8 ta belgidan iborat bo\'lishi kerak.');
+      sound.playError?.();
+      setError(t('auth.passwordMinLength', { min: 8 }, 'Parol kamida 8 ta belgidan iborat bo‘lishi kerak.'));
       return;
     }
 
     if (password !== confirm) {
-      setError(t('auth.passwordsDoNotMatch') || 'Parollar mos kelmadi.');
+      sound.playError?.();
+      setError(t('auth.passwordsDoNotMatch', 'Parollar mos kelmadi.'));
       return;
     }
 
     setBusy(true);
+    sound.playTick?.();
     try {
       await authApi.resetPassword(token, password);
+      sound.playSuccess?.();
       setDone(true);
     } catch (err: unknown) {
+      sound.playError?.();
       const apiErr = err as ApiError;
       setError(friendlyHttpMessage(apiErr.status, apiErr.message));
     } finally {
       setBusy(false);
     }
-  }, [password, confirm, token, t]);
+  }, [password, confirm, token, t, sound]);
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-12">
@@ -108,7 +116,7 @@ export function ResetPasswordPage() {
         transition={{ type: 'spring', stiffness: 350, damping: 30, mass: 0.8 }}
         className="relative z-10 w-full max-w-[420px]"
       >
-        <section className="relative overflow-hidden rounded-[2.25rem] bg-white/65 p-8 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12),inset_0_1px_0_0_rgba(255,255,255,0.85)] ring-1 ring-inset ring-white/70 backdrop-blur-md backdrop-saturate-[1.8] dark:bg-white/[0.04] dark:shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.08)] dark:ring-white/[0.08] sm:p-9">
+        <section className="relative overflow-hidden rounded-[2.25rem] bg-white/70 p-8 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12),inset_0_1px_0_0_rgba(255,255,255,0.9)] ring-1 ring-inset ring-white/80 backdrop-blur-xl backdrop-saturate-[1.8] dark:bg-white/[0.04] dark:shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.08)] dark:ring-white/[0.08] sm:p-9">
           {/* Specular top sheen */}
           <div
             aria-hidden
@@ -121,10 +129,10 @@ export function ResetPasswordPage() {
             M-EDU
           </p>
           <h1 className="mb-2 text-center text-[22px] font-black tracking-tight text-[var(--text-primary)]">
-            {t('resetPassword.heading')}
+            {t('resetPassword.heading', 'Yangi parol o‘rnatish')}
           </h1>
           <p className="mb-6 text-center text-[13.5px] leading-relaxed text-[var(--text-secondary)]">
-            {t('resetPassword.linkValid')}
+            {t('resetPassword.linkValid', 'Iltimos, xavfsiz va yangi parolingizni kiriting.')}
           </p>
 
           {!hasToken ? (
@@ -133,16 +141,16 @@ export function ResetPasswordPage() {
               animate={{ opacity: 1, scale: 1 }}
               className="space-y-4"
             >
-              <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-[14px] font-medium text-amber-600 dark:text-amber-400">
-                {t('resetPassword.invalidToken')}
+              <div className="flex items-center gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-[14px] font-medium text-amber-600 dark:text-amber-400">
+                {t('resetPassword.invalidToken', 'Parolni tiklash havolasi yaroqsiz yoki muddati o‘tgan.')}
               </div>
               <GlassButton
                 asChild
                 variant="primary"
-                className="h-[48px] w-full text-[15px] font-semibold"
+                className="h-[48px] w-full text-[15px] font-semibold min-h-[44px]"
               >
-                <Link to="/forgot-password">
-                  {t('resetPassword.requestNewLink')}
+                <Link to="/forgot-password" onClick={() => sound.playTick?.()}>
+                  {t('resetPassword.requestNewLink', 'Yangi havola so‘rash')}
                 </Link>
               </GlassButton>
             </motion.div>
@@ -152,17 +160,17 @@ export function ResetPasswordPage() {
               animate={{ opacity: 1, scale: 1 }}
               className="space-y-4"
             >
-              <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-[14px] font-medium text-emerald-600 dark:text-emerald-400">
+              <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-[14px] font-medium text-emerald-600 dark:text-emerald-400">
                 <Check />
-                {t('resetPassword.success')}
+                {t('resetPassword.success', 'Parolingiz muvaffaqiyatli yangilandi!')}
               </div>
               <GlassButton
                 asChild
                 variant="primary"
-                className="h-[48px] w-full text-[15px] font-semibold"
+                className="h-[48px] w-full text-[15px] font-semibold min-h-[44px]"
               >
-                <Link to="/login">
-                  {t('auth.login')}
+                <Link to="/login" onClick={() => sound.playTick?.()}>
+                  {t('auth.login', 'Tizimga kirish')}
                 </Link>
               </GlassButton>
             </motion.div>
@@ -176,7 +184,7 @@ export function ResetPasswordPage() {
                   minLength={8}
                   maxLength={128}
                   autoComplete="new-password"
-                  placeholder={t('settings.newPassword')}
+                  placeholder={t('settings.newPassword', 'Yangi parol (kamida 8 ta belgi)')}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={busy}
@@ -185,10 +193,13 @@ export function ResetPasswordPage() {
                     <button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => setShowPw((v) => !v)}
+                      onClick={() => {
+                        sound.playTick?.();
+                        setShowPw((v) => !v);
+                      }}
                       disabled={busy}
-                      aria-label={showPw ? t('auth.hidePassword') : t('auth.showPassword')}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-surface-500 transition-colors hover:bg-black/5 hover:text-surface-700 dark:hover:bg-white/10 dark:hover:text-surface-300"
+                      aria-label={showPw ? t('auth.hidePassword', 'Parolni yashirish') : t('auth.showPassword', 'Parolni ko‘rsatish')}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-surface-500 transition-colors hover:bg-black/5 hover:text-surface-700 dark:hover:bg-white/10 dark:hover:text-surface-300"
                     >
                       <Eye off={showPw} />
                     </button>
@@ -202,7 +213,7 @@ export function ResetPasswordPage() {
                 minLength={8}
                 maxLength={128}
                 autoComplete="new-password"
-                placeholder={t('auth.confirmPassword')}
+                placeholder={t('auth.confirmPassword', 'Parolni tasdiqlang')}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 disabled={busy}
@@ -228,9 +239,15 @@ export function ResetPasswordPage() {
                 disabled={busy || !password || !confirm}
                 aria-busy={busy}
                 variant="primary"
-                className="h-[48px] w-full text-[15px] font-semibold"
+                className="h-[48px] w-full text-[15px] font-semibold min-h-[44px]"
               >
-                {busy ? (<><Spinner /> {t('resetPassword.resetting')}</>) : t('resetPassword.submit')}
+                {busy ? (
+                  <>
+                    <Spinner /> {t('resetPassword.resetting', 'Yangilanmoqda...')}
+                  </>
+                ) : (
+                  t('resetPassword.submit', 'Parolni saqlash')
+                )}
               </GlassButton>
             </form>
           )}
@@ -239,9 +256,10 @@ export function ResetPasswordPage() {
         <p className="mt-6 text-center text-[13.5px] font-medium text-[var(--text-secondary)]">
           <Link
             to="/login"
-            className="font-semibold text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            onClick={() => sound.playTick?.()}
+            className="inline-flex min-h-[44px] items-center font-semibold text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
-            ← {t('auth.backToSignIn')}
+            ← {t('auth.backToSignIn', 'Tizimga qaytish')}
           </Link>
         </p>
       </motion.main>

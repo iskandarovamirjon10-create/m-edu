@@ -19,7 +19,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { cn, usePrefersReducedMotion } from '@/lib/design';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 type CameraStatus = 'STANDBY' | 'CONNECTING' | 'STREAMING' | 'ERROR';
@@ -46,7 +46,7 @@ const STATUS_META: Record<
 };
 
 export function LiveFaceCamera() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const sound = usePremiumSound();
   const reduced = usePrefersReducedMotion();
   const [status, setStatus] = useState<CameraStatus>('STANDBY');

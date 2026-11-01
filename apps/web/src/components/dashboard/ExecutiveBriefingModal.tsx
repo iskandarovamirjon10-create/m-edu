@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { GlassModal } from '@/components/ui/GlassModal';
 import { cn, usePrefersReducedMotion } from '@/lib/design';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useVoiceFeedback } from '@/hooks/useVoiceFeedback';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { formatCurrency } from '@/lib/format';
@@ -96,7 +96,7 @@ export function ExecutiveBriefingModal({
   userName,
   orgName,
 }: ExecutiveBriefingModalProps) {
-  const { t, locale } = useI18n();
+  const { t, locale } = useSafeI18n();
   const navigate = useNavigate();
   const { speakBriefingIntro, stopAll } = useVoiceFeedback();
   const { playSuccess, playPop } = usePremiumSound();

@@ -1,4 +1,4 @@
-import { useState, memo } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   GlassModal,
@@ -21,6 +21,13 @@ interface TeacherQuickAssignGroupModalProps {
   onClose: () => void;
 }
 
+interface GroupOption {
+  id: string;
+  name: string;
+  course?: { name?: string };
+  teacherId?: string | null;
+}
+
 export const TeacherQuickAssignGroupModal = memo(function TeacherQuickAssignGroupModal({
   teacher,
   isOpen,
@@ -40,7 +47,7 @@ export const TeacherQuickAssignGroupModal = memo(function TeacherQuickAssignGrou
     enabled: isOpen,
   });
 
-  const groupsList = (groupsQuery.data as any)?.items || [];
+  const groupsList = ((groupsQuery.data as { items?: GroupOption[] } | undefined)?.items || []) as GroupOption[];
   const teacherName = teacher ? fullName(teacher.user?.firstName, teacher.user?.lastName) : '';
 
   const assignMutation = useMutation({
@@ -51,7 +58,7 @@ export const TeacherQuickAssignGroupModal = memo(function TeacherQuickAssignGrou
     onSuccess: () => {
       sound.playSuccess?.();
       haptics.success();
-      push('success', t('teachers.assignModal.success'));
+      push('success', t('teachers.assignModal.success', 'Guruh muvaffaqiyatli biriktirildi'));
       qc.invalidateQueries({ queryKey: queryKeys.teachers.all() });
       qc.invalidateQueries({ queryKey: ['groups'] });
       setSelectedGroupId('');
@@ -59,9 +66,20 @@ export const TeacherQuickAssignGroupModal = memo(function TeacherQuickAssignGrou
     },
     onError: (err: Error) => {
       haptics.error();
+      sound.playError?.();
       push('error', getErrorMessage(err));
     },
   });
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && selectedGroupId && !assignMutation.isPending) {
+        e.preventDefault();
+        assignMutation.mutate();
+      }
+    },
+    [selectedGroupId, assignMutation],
+  );
 
   if (!isOpen || !teacher) return null;
 
@@ -69,18 +87,22 @@ export const TeacherQuickAssignGroupModal = memo(function TeacherQuickAssignGrou
     <GlassModal
       open={isOpen}
       onClose={onClose}
-      title={t('teachers.assignModal.title')}
-      description={`${teacherName} ga guruh biriktirish`}
+      title={t('teachers.assignModal.title', 'O‘qituvchiga guruh biriktirish')}
+      description={`${teacherName} ga yangi guruhni biriktirish`}
     >
-      <div className="space-y-4 pt-2">
-        <GlassField label={t('teachers.assignModal.selectGroup')}>
+      <div className="space-y-4 pt-2" onKeyDown={handleKeyDown}>
+        <GlassField label={t('teachers.assignModal.selectGroup', 'Guruhni tanlang')}>
           <select
             value={selectedGroupId}
-            onChange={(e) => setSelectedGroupId(e.target.value)}
-            className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={(e) => {
+              sound.playTick?.();
+              setSelectedGroupId(e.target.value);
+            }}
+            disabled={groupsQuery.isLoading || assignMutation.isPending}
+            className="w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl bg-white/70 dark:bg-white/[0.05] border border-black/[0.08] dark:border-white/[0.12] text-slate-800 dark:text-white text-sm outline-none focus:ring-2 focus:ring-brand-500 backdrop-blur-md transition-all shadow-inner"
           >
             <option value="">-- Guruhni tanlang --</option>
-            {groupsList.map((g: any) => (
+            {groupsList.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name} ({g.course?.name || 'Kurs'}) {g.teacherId ? '· [Boshqa o‘qituvchida]' : '· [Biriktirilmagan]'}
               </option>
@@ -89,19 +111,32 @@ export const TeacherQuickAssignGroupModal = memo(function TeacherQuickAssignGrou
         </GlassField>
 
         <div className="flex justify-end gap-2.5 pt-3">
-          <GlassButton variant="ghost" onClick={onClose}>
-            {t('common.cancel')}
+          <GlassButton
+            variant="ghost"
+            className="min-h-[44px]"
+            onClick={() => {
+              sound.playTick?.();
+              onClose();
+            }}
+          >
+            {t('common.cancel', 'Bekor qilish')}
           </GlassButton>
           <GlassButton
             variant="primary"
+            className="min-h-[44px]"
             disabled={!selectedGroupId}
             loading={assignMutation.isPending}
-            onClick={() => assignMutation.mutate()}
+            onClick={() => {
+              sound.playTick?.();
+              assignMutation.mutate();
+            }}
           >
-            {t('teachers.assignModal.submit')}
+            {t('teachers.assignModal.submit', 'Biriktirish')}
           </GlassButton>
         </div>
       </div>
     </GlassModal>
   );
 });
+
+export default TeacherQuickAssignGroupModal;

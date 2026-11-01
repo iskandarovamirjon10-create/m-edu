@@ -6,6 +6,7 @@ import { GlassButton, GlassInput } from '@/components/ui';
 import { MeduLogo } from '@/components/brand/MeduLogo';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 function Backdrop() {
   return (
@@ -52,7 +53,8 @@ function BrandMark() {
 
 export function ForgotPasswordPage() {
   const { t } = useSafeI18n();
-  usePageTitle(t('auth.forgotPasswordTitle'));
+  const sound = usePremiumSound();
+  usePageTitle(t('auth.forgotPasswordTitle', 'Parolni tiklash'));
 
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -63,10 +65,13 @@ export function ForgotPasswordPage() {
     e.preventDefault();
     setError('');
     setBusy(true);
+    sound.playTick?.();
     try {
       await authApi.forgotPassword(email);
+      sound.playSuccess?.();
       setDone(true);
     } catch (err: unknown) {
+      sound.playError?.();
       const apiErr = err as ApiError;
       setError(friendlyHttpMessage(apiErr.status, apiErr.message));
     } finally {
@@ -83,7 +88,7 @@ export function ForgotPasswordPage() {
         transition={{ type: 'spring', stiffness: 350, damping: 30, mass: 0.8 }}
         className="relative z-10 w-full max-w-[420px]"
       >
-        <section className="relative overflow-hidden rounded-[2.25rem] bg-white/65 p-8 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12),inset_0_1px_0_0_rgba(255,255,255,0.85)] ring-1 ring-inset ring-white/70 backdrop-blur-md backdrop-saturate-[1.8] dark:bg-white/[0.04] dark:shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.08)] dark:ring-white/[0.08] sm:p-9">
+        <section className="relative overflow-hidden rounded-[2.25rem] bg-white/70 p-8 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12),inset_0_1px_0_0_rgba(255,255,255,0.9)] ring-1 ring-inset ring-white/80 backdrop-blur-xl backdrop-saturate-[1.8] dark:bg-white/[0.04] dark:shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.08)] dark:ring-white/[0.08] sm:p-9">
           {/* Specular top sheen */}
           <div
             aria-hidden
@@ -93,13 +98,13 @@ export function ForgotPasswordPage() {
           <BrandMark />
 
           <p className="mb-1 text-center text-[12.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-            {t('common.medu')}
+            {t('common.medu', 'M-EDU')}
           </p>
           <h1 className="mb-2 text-center text-[22px] font-black tracking-tight text-[var(--text-primary)]">
-            {t('forgotPassword.heading')}
+            {t('forgotPassword.heading', 'Parolni unutdingizmi?')}
           </h1>
           <p className="mb-6 text-center text-[13.5px] leading-relaxed text-[var(--text-secondary)]">
-            {t('forgotPassword.subtitle')}
+            {t('forgotPassword.subtitle', 'Elektron pochtangizni kiriting, biz sizga parolni tiklash havolasini yuboramiz.')}
           </p>
 
           {done ? (
@@ -108,17 +113,17 @@ export function ForgotPasswordPage() {
               animate={{ opacity: 1, scale: 1 }}
               className="space-y-4"
             >
-              <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-[14px] font-medium text-emerald-600 dark:text-emerald-400">
+              <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-[14px] font-medium text-emerald-600 dark:text-emerald-400">
                 <Check />
-                {t('forgotPassword.success')}
+                {t('forgotPassword.success', 'Tiklash havolasi elektron pochtangizga yuborildi!')}
               </div>
               <GlassButton
                 asChild
                 variant="primary"
-                className="h-[48px] w-full text-[15px] font-semibold"
+                className="h-[48px] w-full text-[15px] font-semibold min-h-[44px]"
               >
-                <Link to="/login">
-                  {t('auth.backToSignIn')}
+                <Link to="/login" onClick={() => sound.playTick?.()}>
+                  {t('auth.backToSignIn', 'Tizimga kirish')}
                 </Link>
               </GlassButton>
             </motion.div>
@@ -129,7 +134,7 @@ export function ForgotPasswordPage() {
                 required
                 autoFocus
                 autoComplete="email"
-                placeholder={t('auth.emailAddress')}
+                placeholder={t('auth.emailAddress', 'Elektron pochta manzili')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={busy}
@@ -155,9 +160,18 @@ export function ForgotPasswordPage() {
                 disabled={busy || !email}
                 aria-busy={busy}
                 variant="primary"
-                className="group h-[48px] w-full text-[15px] font-semibold"
+                className="group h-[48px] w-full text-[15px] font-semibold min-h-[44px]"
               >
-                {busy ? (<><Spinner /> {t('forgotPassword.sending')}</>) : (<><span>{t('forgotPassword.submit')}</span><Arrow /></>)}
+                {busy ? (
+                  <>
+                    <Spinner /> {t('forgotPassword.sending', 'Yuborilmoqda...')}
+                  </>
+                ) : (
+                  <>
+                    <span>{t('forgotPassword.submit', 'Tiklash havolasini yuborish')}</span>
+                    <Arrow />
+                  </>
+                )}
               </GlassButton>
             </form>
           )}
@@ -166,9 +180,10 @@ export function ForgotPasswordPage() {
         <p className="mt-6 text-center text-[13.5px] font-medium text-[var(--text-secondary)]">
           <Link
             to="/login"
-            className="font-semibold text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            onClick={() => sound.playTick?.()}
+            className="inline-flex min-h-[44px] items-center font-semibold text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
-            {t('auth.backToSignIn')}
+            ← {t('auth.backToSignIn', 'Tizimga qaytish')}
           </Link>
         </p>
       </motion.main>

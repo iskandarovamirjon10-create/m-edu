@@ -10,7 +10,7 @@
  */
 
 import { Icon } from '@/lib/design';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { DashboardStats } from '@/lib/types';
 import { KPICard } from './KPICard';
 
@@ -32,7 +32,7 @@ function monthOverMonth(trend?: number[]): number | null {
 }
 
 export function KPIGrid({ stats, paidShare, revenueTrend }: KPIGridProps) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
 
   // 1. Students & Capacity
   const activeStudents = stats.activeStudents || stats.totalStudents || 0;

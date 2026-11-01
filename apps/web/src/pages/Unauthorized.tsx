@@ -1,18 +1,26 @@
 /**
  * UnauthorizedPage — Ultra Premium Apple-Style 403 Error
  * Features soft ambient blurs, deep frosted glass container, fluid 
- * typography, and high-end squircle iconography.
+ * typography, high-end squircle iconography, tactile sound cues and WCAG 44px touch targets.
  */
-import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { GlassButton } from '@/components/ui';
 
 export function UnauthorizedPage() {
   const { t } = useSafeI18n();
-  usePageTitle(t('error.forbiddenTitle'));
   const navigate = useNavigate();
+  const sound = usePremiumSound();
+
+  usePageTitle(t('error.forbiddenTitle', 'Ruxsat berilmagan'));
+
+  useEffect(() => {
+    sound.playFaceIdDenied?.();
+  }, [sound]);
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-transparent p-4 selection:bg-brand-500/30">
@@ -27,7 +35,7 @@ export function UnauthorizedPage() {
         initial={{ opacity: 0, y: 18, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: 'spring', stiffness: 350, damping: 30, mass: 0.8 }}
-        className="relative z-10 w-full max-w-[28rem] overflow-hidden rounded-[2.5rem] bg-white/65 p-10 text-center shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12),inset_0_1px_0_0_rgba(255,255,255,0.85)] ring-1 ring-inset ring-white/70 backdrop-blur-md backdrop-saturate-[1.8] dark:bg-white/[0.04] dark:shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.08)] dark:ring-white/[0.08] sm:p-12"
+        className="relative z-10 w-full max-w-[28rem] overflow-hidden rounded-[2.5rem] bg-white/70 p-8 text-center shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12),inset_0_1px_0_0_rgba(255,255,255,0.9)] ring-1 ring-inset ring-white/80 backdrop-blur-xl backdrop-saturate-[1.8] dark:bg-white/[0.04] dark:shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65),inset_0_1px_0_0_rgba(255,255,255,0.08)] dark:ring-white/[0.08] sm:p-10"
       >
         {/* Specular top sheen */}
         <div
@@ -50,7 +58,7 @@ export function UnauthorizedPage() {
             {/* Surface */}
             <div className="relative flex h-full w-full items-center justify-center rounded-[1.5rem] border border-white/60 bg-gradient-to-b from-amber-500/10 to-rose-500/10 shadow-inner ring-1 ring-inset ring-amber-500/20 transition-transform duration-500 group-hover:scale-105 dark:border-white/10">
               <svg
-                className="h-8 w-8 text-amber-600 dark:text-amber-400"
+                className="h-9 w-9 text-amber-600 dark:text-amber-400"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -69,10 +77,10 @@ export function UnauthorizedPage() {
             403
           </h1>
           <h2 className="mb-3 text-[1.25rem] font-extrabold tracking-tight text-[var(--text-primary)]">
-            {t('unauthorized.heading')}
+            {t('unauthorized.heading', 'Kirish taqiqlangan')}
           </h2>
-          <p className="mx-auto mb-8 max-w-[17rem] text-[0.92rem] font-medium leading-relaxed text-[var(--text-secondary)]">
-            {t('unauthorized.description')}
+          <p className="mx-auto mb-8 max-w-[20rem] text-[0.92rem] font-medium leading-relaxed text-[var(--text-secondary)]">
+            {t('unauthorized.description', 'Sizda ushbu sahifani ko‘rish uchun yetarli huquqlar mavjud emas. Administratorga murojaat qiling.')}
           </p>
 
           {/* Action Buttons */}
@@ -80,20 +88,64 @@ export function UnauthorizedPage() {
             <GlassButton
               type="button"
               variant="primary"
-              className="w-full sm:w-auto"
-              onClick={() => navigate(-1)}
+              size="md"
+              className="w-full sm:w-auto min-h-[44px]"
+              onClick={() => {
+                sound.playTick?.();
+                navigate(-1);
+              }}
             >
-              {t('unauthorized.goBack')}
+              <svg
+                className="mr-1.5 h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M19 12H5m7 7l-7-7 7-7" />
+              </svg>
+              {t('unauthorized.goBack', 'Orqaga qaytish')}
             </GlassButton>
+
             <GlassButton
               type="button"
               variant="secondary"
-              className="w-full sm:w-auto"
-              onClick={() => navigate('/')}
+              size="md"
+              className="w-full sm:w-auto min-h-[44px]"
+              onClick={() => {
+                sound.playTick?.();
+                navigate('/');
+              }}
             >
-              {t('nav.dashboard')}
+              <svg
+                className="mr-1.5 h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              {t('nav.dashboard', 'Bosh sahifa')}
             </GlassButton>
           </div>
+
+          <p className="mt-6 text-center text-xs text-[var(--text-muted)]">
+            Hisobni almashtirish kerakmi?{' '}
+            <Link
+              to="/login"
+              onClick={() => sound.playTick?.()}
+              className="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              {t('auth.login', 'Qayta kirish')}
+            </Link>
+          </p>
         </div>
       </motion.div>
     </div>

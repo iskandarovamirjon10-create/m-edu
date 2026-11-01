@@ -8,6 +8,7 @@ import { GlassButton } from '@/components/ui';
 import type { User } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
+import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 type CallbackStatus = 'processing' | 'success' | 'error';
 
@@ -24,24 +25,29 @@ const INITIAL_STATE: CallbackState = {
 
 export function AuthCallbackPage() {
   const { t } = useSafeI18n();
-  usePageTitle(t('authCallback.pageTitle'));
+  const sound = usePremiumSound();
+  usePageTitle(t('authCallback.pageTitle', 'Autentifikatsiya tekshirilmoqda'));
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { setUser } = useAuth();
   const [state, setState] = useState<CallbackState>(INITIAL_STATE);
   const exchangeAttemptedRef = useRef(false);
   const navTimerRef = useRef<number | null>(null);
-  useEffect(() => () => { if (navTimerRef.current) window.clearTimeout(navTimerRef.current); }, []);
+
+  useEffect(() => () => {
+    if (navTimerRef.current) window.clearTimeout(navTimerRef.current);
+  }, []);
 
   const handleError = useCallback(
     (messageKey: string, rawMessage?: string) => {
+      sound.playError?.();
       setState({
         status: 'error',
         messageKey,
         rawMessage,
       });
     },
-    [],
+    [sound],
   );
 
   const handleSuccess = useCallback(
@@ -52,6 +58,7 @@ export function AuthCallbackPage() {
         userStore.set(user);
         setUser(user);
 
+        sound.playSuccess?.();
         setState({
           status: 'success',
           messageKey: 'authCallback.success',
@@ -66,7 +73,7 @@ export function AuthCallbackPage() {
         handleError('authCallback.errorRetrieval');
       }
     },
-    [navigate, setUser, handleError],
+    [navigate, setUser, handleError, sound],
   );
 
   const exchangeCode = useCallback(
@@ -113,27 +120,28 @@ export function AuthCallbackPage() {
   }, [searchParams, exchangeCode, handleError]);
 
   const handleBackToLogin = useCallback(() => {
+    sound.playTick?.();
     navigate('/login', { replace: true });
-  }, [navigate]);
+  }, [navigate, sound]);
 
   return (
-    <AuthLayout title={t('authCallback.completing')}>
+    <AuthLayout title={t('authCallback.completing', 'Autentifikatsiya yakunlanmoqda')}>
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-        className="relative overflow-hidden rounded-2xl bg-white/70 dark:bg-white/[0.04] p-6 sm:p-8 backdrop-blur-md ring-1 ring-inset ring-black/[0.06] dark:ring-white/[0.08] shadow-[0_12px_40px_-15px_rgba(0,0,0,0.06)] dark:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.5)] w-full max-w-md mx-auto"
+        className="relative mx-auto w-full max-w-md overflow-hidden rounded-3xl bg-white/70 p-6 shadow-[0_12px_40px_-15px_rgba(0,0,0,0.06)] ring-1 ring-inset ring-black/[0.06] backdrop-blur-xl dark:bg-white/[0.04] dark:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.5)] dark:ring-white/[0.08] sm:p-8"
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20" />
         {state.status === 'error' ? (
           <div
-            className="rounded-2xl p-4 text-sm bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400"
+            className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-600 dark:text-rose-400"
             role="alert"
             aria-live="assertive"
           >
             <div className="flex items-start gap-3">
               <svg
-                className="h-5 w-5 shrink-0 mt-0.5 text-rose-500"
+                className="mt-0.5 h-5 w-5 shrink-0 text-rose-500"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -147,24 +155,28 @@ export function AuthCallbackPage() {
                 />
               </svg>
               <div className="flex-1">
-                <p className="font-semibold text-rose-700 dark:text-rose-300">{t('authCallback.failedTitle')}</p>
-                <p className="mt-1 text-slate-600 dark:text-slate-300 text-xs leading-relaxed">{state.rawMessage ?? t(state.messageKey)}</p>
+                <p className="font-semibold text-rose-700 dark:text-rose-300">
+                  {t('authCallback.failedTitle', 'Kirishda xatolik yuz berdi')}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                  {state.rawMessage ?? t(state.messageKey, 'Avtorizatsiya kodi eskirgan yoki xato.')}
+                </p>
               </div>
             </div>
             <div className="mt-4">
               <GlassButton
                 type="button"
                 variant="secondary"
-                className="w-full sm:w-auto text-xs"
+                className="min-h-[44px] w-full text-xs sm:w-auto"
                 onClick={handleBackToLogin}
               >
-                {t('auth.backToSignIn')}
+                {t('auth.backToSignIn', 'Tizimga kirishga qaytish')}
               </GlassButton>
             </div>
           </div>
         ) : state.status === 'success' ? (
           <div
-            className="rounded-2xl p-4 text-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+            className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-600 dark:text-emerald-400"
             role="status"
             aria-live="polite"
           >
@@ -185,16 +197,18 @@ export function AuthCallbackPage() {
                   />
                 </svg>
               </div>
-              <p className="font-semibold text-sm">{t(state.messageKey)}</p>
+              <p className="text-sm font-semibold">
+                {t(state.messageKey, 'Muvaffaqiyatli kirdingiz! Yo‘naltirilmoqda...')}
+              </p>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-4 py-8">
             <div className="relative flex h-12 w-12 items-center justify-center">
-              <div className="absolute inset-0 rounded-full border-2 border-indigo-500/20 border-t-indigo-600 animate-spin" />
+              <div className="absolute inset-0 animate-spin rounded-full border-2 border-indigo-500/20 border-t-indigo-600" />
             </div>
             <p className="text-center text-sm font-medium text-slate-600 dark:text-slate-300">
-              {t(state.messageKey)}
+              {t(state.messageKey, 'Profil tekshirilmoqda, kuting...')}
             </p>
           </div>
         )}
@@ -202,3 +216,5 @@ export function AuthCallbackPage() {
     </AuthLayout>
   );
 }
+
+export default AuthCallbackPage;
