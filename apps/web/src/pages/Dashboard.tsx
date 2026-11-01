@@ -59,6 +59,9 @@ interface DashboardTranslationBundle {
   readonly tabOverview: string;
   readonly tabOperations: string;
   readonly tabKiosk: string;
+  readonly tabDayEnd: string;
+  readonly tabCashflow: string;
+  readonly tabParentNps: string;
   readonly lastUpdatedLabel: string;
   readonly syncingLabel: string;
   readonly shortcutRefreshHint: string;
@@ -93,6 +96,9 @@ const DASHBOARD_I18N: Readonly<
     tabOverview: 'Asosiy Tahlil',
     tabOperations: 'Operatsion Radar & Xavflar',
     tabKiosk: 'Jonli Face ID Kiosk',
+    tabDayEnd: 'Kun Yakuni (20:00)',
+    tabCashflow: '90-Kunlik Kassa Radari',
+    tabParentNps: 'Ota-onalar NPS',
     lastUpdatedLabel: 'Oxirgi yangilanish:',
     syncingLabel: 'Yangilanmoqda...',
     shortcutRefreshHint: 'Yangilash (R)',
@@ -124,6 +130,9 @@ const DASHBOARD_I18N: Readonly<
     tabOverview: 'Основная аналитика',
     tabOperations: 'Операционный радар и риски',
     tabKiosk: 'Живой Face ID Киоск',
+    tabDayEnd: 'Закрытие дня (20:00)',
+    tabCashflow: '90-дневный радар кассы',
+    tabParentNps: 'NPS родителей',
     lastUpdatedLabel: 'Последнее обновление:',
     syncingLabel: 'Синхронизация...',
     shortcutRefreshHint: 'Обновить (R)',
@@ -155,6 +164,9 @@ const DASHBOARD_I18N: Readonly<
     tabOverview: 'Executive Overview',
     tabOperations: 'Operations Radar & Risks',
     tabKiosk: 'Live Face ID Kiosk',
+    tabDayEnd: 'Day-End Closing (20:00)',
+    tabCashflow: '90-Day Cashflow Radar',
+    tabParentNps: 'Parent NPS Pulse',
     lastUpdatedLabel: 'Last updated:',
     syncingLabel: 'Syncing...',
     shortcutRefreshHint: 'Refresh (R)',
@@ -604,7 +616,7 @@ export function DashboardPage() {
             )}
           >
             <span className="text-sm">🌙</span>
-            <span>Kun Yakuni (20:00)</span>
+            <span>{t('dashboard.tabDayEnd', dict.tabDayEnd)}</span>
           </button>
 
           <button
@@ -620,7 +632,7 @@ export function DashboardPage() {
             )}
           >
             <span className="text-sm">💰</span>
-            <span>90-Kunlik Kassa Radari</span>
+            <span>{t('dashboard.tabCashflow', dict.tabCashflow)}</span>
           </button>
 
           <button
@@ -636,7 +648,7 @@ export function DashboardPage() {
             )}
           >
             <span className="text-sm">❤️</span>
-            <span>Ota-onalar NPS</span>
+            <span>{t('dashboard.tabParentNps', dict.tabParentNps)}</span>
           </button>
         </div>
 

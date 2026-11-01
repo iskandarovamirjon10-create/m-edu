@@ -887,7 +887,7 @@ const RowAction = memo(function RowAction({
 }: {
   icon: readonly string[];
   label: string;
-  tone: 'edit' | 'freeze' | 'delete';
+  tone: 'edit' | 'freeze' | 'delete' | 'celebrate';
   to?: string;
   onClick?: () => void;
   disabled?: boolean;
@@ -898,6 +898,8 @@ const RowAction = memo(function RowAction({
       ? 'text-[#FF3B30] hover:bg-[#FF3B30]/12 hover:border-[#FF3B30]/30 dark:text-[#FF453A]'
       : tone === 'freeze'
         ? 'text-sky-600 hover:bg-sky-500/12 hover:border-sky-500/30 dark:text-sky-400'
+        : tone === 'celebrate'
+          ? 'text-amber-500 hover:bg-amber-500/12 hover:border-amber-500/30 dark:text-amber-400'
         : 'text-[#007AFF] hover:bg-[#007AFF]/12 hover:border-[#007AFF]/30 dark:text-[#38BDF8]';
 
   const baseClass = [
@@ -1507,7 +1509,7 @@ export function StudentsPage() {
   const [isAdmissionPathfinderOpen, setIsAdmissionPathfinderOpen] = useState(false);
   const [isReferralEngineOpen, setIsReferralEngineOpen] = useState(false);
   const [isMilestoneCelebrationOpen, setIsMilestoneCelebrationOpen] = useState(false);
-  const [selectedStudentForCelebration] = useState<string>('');
+  const [selectedStudentForCelebration, setSelectedStudentForCelebration] = useState<string>('');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [hoveredStudent, setHoveredStudent] = useState<{ student: Student; rect: DOMRect } | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
@@ -2433,6 +2435,16 @@ export function StudentsPage() {
                           <span className="text-[12px] leading-none">◨</span>
                         </button>
                         <RowAction
+                          icon={I.sparkles}
+                          label="Yutuq & Sertifikat (Milestone)"
+                          tone="celebrate"
+                          onClick={() => {
+                            sound.playPop?.();
+                            setSelectedStudentForCelebration(student.id);
+                            setIsMilestoneCelebrationOpen(true);
+                          }}
+                        />
+                        <RowAction
                           icon={I.eye}
                           label="Quick-Look"
                           tone="edit"
@@ -2731,6 +2743,16 @@ export function StudentsPage() {
                               >
                                 <span className="text-[12px] leading-none">◨</span>
                               </button>
+                              <RowAction
+                                icon={I.sparkles}
+                                label="Yutuq & Sertifikat (Milestone)"
+                                tone="celebrate"
+                                onClick={() => {
+                                  sound.playPop?.();
+                                  setSelectedStudentForCelebration(student.id);
+                                  setIsMilestoneCelebrationOpen(true);
+                                }}
+                              />
                               <RowAction
                                 icon={I.eye}
                                 label="Quick-Look (Space)"

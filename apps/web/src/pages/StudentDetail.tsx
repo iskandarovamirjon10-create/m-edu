@@ -3072,7 +3072,9 @@ export function StudentDetailPage() {
                   ? t('common.active') || 'Faol'
                   : t('common.inactive') || 'Nofaol',
                 biometricVerified: stats.faceEnrolled > 0,
-                nfcEnabled: false,
+                nfcEnabled: true,
+                codeOrId: studentData.id,
+                qrValue: typeof window !== 'undefined' ? `${window.location.origin}/students/${studentData.id}` : undefined,
               }}
             />
           </div>
