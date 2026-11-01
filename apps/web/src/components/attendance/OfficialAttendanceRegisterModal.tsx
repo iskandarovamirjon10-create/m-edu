@@ -13,6 +13,7 @@ import { triggerPrint } from '@/lib/printEngine';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { cn } from '@/lib/design';
 import { studentsApi, groupsApi } from '@/lib/api';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 export interface OfficialAttendanceRegisterModalProps {
   readonly open: boolean;
@@ -34,6 +35,7 @@ export function OfficialAttendanceRegisterModal({
   initialGroupName = 'Frontend & AI Masterclass — F-01',
   initialTeacherName = 'Sanjarbek Karimov',
 }: OfficialAttendanceRegisterModalProps): JSX.Element {
+  const { t } = useSafeI18n();
   const { playPop, playSuccess, playTick } = usePremiumSound();
   const { success } = useToast();
 
@@ -152,7 +154,7 @@ export function OfficialAttendanceRegisterModal({
     <GlassModal
       open={open}
       onClose={onClose}
-      title="📋 Rasmiy Oylik Davomat Vedomosti (A4)"
+      title={`📋 ${t('attendance.registerSheet.title')}`}
       size="xl"
     >
       <div className="space-y-6">
@@ -160,7 +162,9 @@ export function OfficialAttendanceRegisterModal({
         <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900/60 p-4">
           <div className="flex flex-wrap items-center gap-3">
             <div>
-              <label className="text-[11px] font-semibold text-slate-400">Guruh Nomi:</label>
+              <label className="text-[11px] font-semibold text-slate-400">
+                {t('attendance.registerSheet.groupName')}:
+              </label>
               <input
                 type="text"
                 value={groupName}
@@ -169,7 +173,9 @@ export function OfficialAttendanceRegisterModal({
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-slate-400">O‘qituvchi:</label>
+              <label className="text-[11px] font-semibold text-slate-400">
+                {t('attendance.registerSheet.teacherName')}:
+              </label>
               <input
                 type="text"
                 value={teacherName}
@@ -178,7 +184,9 @@ export function OfficialAttendanceRegisterModal({
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-slate-400">Hisobot Oyi:</label>
+              <label className="text-[11px] font-semibold text-slate-400">
+                {t('attendance.registerSheet.reportMonth')}:
+              </label>
               <input
                 type="text"
                 value={month}
@@ -195,10 +203,10 @@ export function OfficialAttendanceRegisterModal({
               onClick={() => {
                 playPop();
                 navigator.clipboard.writeText(verificationUrl);
-                success("Verifikatsiya havolasi nusxalandi!");
+                success(t('attendance.registerSheet.linkCopied'));
               }}
             >
-              Havoladan nusxa
+              {t('attendance.registerSheet.copyLink')}
             </GlassButton>
             <GlassButton
               variant="primary"
@@ -206,7 +214,7 @@ export function OfficialAttendanceRegisterModal({
               onClick={handlePrint}
               className="bg-gradient-to-r from-violet-600 to-indigo-600 font-bold"
             >
-              🖨️ A4 Chop etish (Print)
+              🖨️ {t('attendance.registerSheet.printA4')}
             </GlassButton>
           </div>
         </div>
@@ -225,7 +233,7 @@ export function OfficialAttendanceRegisterModal({
                   M-EDU Cloud Educational Platform
                 </span>
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  O‘quv Xizmatlari Nazorati va Davomat Jurnali
+                  {t('attendance.registerSheet.platformSubtitle')}
                 </p>
               </div>
               <div className="text-right">
@@ -235,13 +243,13 @@ export function OfficialAttendanceRegisterModal({
             </div>
 
             <h2 className="mt-3 text-lg font-black tracking-tight uppercase">
-              Oylik Davomat va Dars Qatnashishi Vedomosti
+              {t('attendance.registerSheet.docHeading')}
             </h2>
             <div className="mt-2 flex flex-wrap justify-center gap-6 text-xs font-medium text-slate-600 dark:text-slate-300">
-              <span><strong>Guruh:</strong> {groupName}</span>
-              <span><strong>O‘qituvchi:</strong> {teacherName}</span>
-              <span><strong>Darslar soni:</strong> {lessonDays.length} ta mashg‘ulot</span>
-              <span><strong>Umumiy Davomat:</strong> {classStats.attendanceRate}%</span>
+              <span><strong>{t('attendance.registerSheet.group')}:</strong> {groupName}</span>
+              <span><strong>{t('attendance.registerSheet.teacher')}:</strong> {teacherName}</span>
+              <span><strong>{t('attendance.registerSheet.lessonsCount')}:</strong> {lessonDays.length}</span>
+              <span><strong>{t('attendance.registerSheet.overallRate')}:</strong> {classStats.attendanceRate}%</span>
             </div>
           </div>
 
@@ -251,23 +259,23 @@ export function OfficialAttendanceRegisterModal({
               <thead>
                 <tr className="border-b-2 border-slate-800 bg-slate-100/80 text-[11px] font-bold text-slate-800 dark:border-white/60 dark:bg-slate-900 dark:text-slate-200">
                   <th className="p-2 w-8 text-center">#</th>
-                  <th className="p-2 min-w-[160px]">O‘quvchi F.I.SH.</th>
+                  <th className="p-2 min-w-[160px]">{t('attendance.registerSheet.studentNameCol')}</th>
                   {lessonDays.map((d, i) => (
                     <th key={i} className="p-1.5 text-center font-mono text-[10px] w-7">
                       {d}
                     </th>
                   ))}
-                  <th className="p-2 text-center w-12 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">Keldi</th>
-                  <th className="p-2 text-center w-12 bg-amber-500/10 text-amber-700 dark:text-amber-400">Sab.</th>
-                  <th className="p-2 text-center w-12 bg-rose-500/10 text-rose-700 dark:text-rose-400">Kelm.</th>
-                  <th className="p-2 text-center w-14 font-black">Foiz</th>
+                  <th className="p-2 text-center w-12 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">{t('attendance.registerSheet.presentCol')}</th>
+                  <th className="p-2 text-center w-12 bg-amber-500/10 text-amber-700 dark:text-amber-400">{t('attendance.registerSheet.excusedCol')}</th>
+                  <th className="p-2 text-center w-12 bg-rose-500/10 text-rose-700 dark:text-rose-400">{t('attendance.registerSheet.absentCol')}</th>
+                  <th className="p-2 text-center w-14 font-black">{t('attendance.registerSheet.rateCol')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-white/10">
                 {students.length === 0 ? (
                   <tr>
                     <td colSpan={16} className="py-12 text-center text-xs text-slate-500 dark:text-slate-400">
-                      Hozircha ushbu guruhda talabalar ro‘yxati mavjud emas.
+                      {t('attendance.registerSheet.emptyStudents')}
                     </td>
                   </tr>
                 ) : (
@@ -299,7 +307,7 @@ export function OfficialAttendanceRegisterModal({
                           key={dIdx}
                           onClick={() => toggleStudentStatus(sIdx, dIdx)}
                           className="p-1 text-center font-mono cursor-pointer transition-colors hover:bg-violet-500/20"
-                          title="Holatni almashtirish uchun bosing"
+                          title={t('attendance.registerSheet.cycleStatusHint')}
                         >
                           {status === 'PRESENT' && <span className="font-bold text-emerald-600 dark:text-emerald-400">+</span>}
                           {status === 'ABSENT' && <span className="font-bold text-rose-600 dark:text-rose-400">-</span>}
@@ -330,11 +338,11 @@ export function OfficialAttendanceRegisterModal({
           {/* Legend and Note */}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-3 text-[11px] text-slate-500 dark:border-white/10 dark:text-slate-400">
             <div className="flex items-center gap-4">
-              <span><strong>Belgilar:</strong></span>
-              <span className="text-emerald-600 font-bold">+ Kelgan</span>
-              <span className="text-rose-600 font-bold">- Kelmagan</span>
-              <span className="text-amber-600 font-bold">S Sababli</span>
-              <span className="text-sky-600 font-bold">K Kechikkan</span>
+              <span><strong>{t('attendance.registerSheet.legend')}:</strong></span>
+              <span className="text-emerald-600 font-bold">+ {t('attendance.registerSheet.legendPresent')}</span>
+              <span className="text-rose-600 font-bold">- {t('attendance.registerSheet.legendAbsent')}</span>
+              <span className="text-amber-600 font-bold">S {t('attendance.registerSheet.legendExcused')}</span>
+              <span className="text-sky-600 font-bold">K {t('attendance.registerSheet.legendLate')}</span>
             </div>
             <div>
               Hujjat ID: <code>ATT-{month.slice(0, 3).toUpperCase()}-{groupName.slice(0, 4)}-2026</code>
@@ -345,27 +353,27 @@ export function OfficialAttendanceRegisterModal({
           <div className="mt-6 flex flex-wrap items-end justify-between gap-6 border-t-2 border-slate-900/60 pt-4 dark:border-white/60">
             {/* Teacher Signature */}
             <div className="space-y-1">
-              <p className="text-[11px] font-bold uppercase text-slate-500">O‘qituvchi Tasdig‘i:</p>
+              <p className="text-[11px] font-bold uppercase text-slate-500">{t('attendance.registerSheet.teacherSign')}:</p>
               <div className="h-10 w-44 border-b border-dashed border-slate-400 flex items-end">
                 <span className="text-xs font-semibold">{teacherName}</span>
               </div>
-              <p className="text-[9px] text-slate-400">(Imzo va sana)</p>
+              <p className="text-[9px] text-slate-400">{t('attendance.registerSheet.signDate')}</p>
             </div>
 
             {/* Official Stamp Center Mark */}
             <div className="flex flex-col items-center justify-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-violet-500/40 text-[9px] font-black text-violet-500 text-center uppercase tracking-tight">
-                M-EDU<br />MUHR<br />O‘RNI
+                {t('attendance.registerSheet.stampPlace')}
               </div>
             </div>
 
             {/* Director Signature */}
             <div className="space-y-1">
-              <p className="text-[11px] font-bold uppercase text-slate-500">O‘quv Ishlari Bo‘yicha Direktor:</p>
+              <p className="text-[11px] font-bold uppercase text-slate-500">{t('attendance.registerSheet.directorSign')}:</p>
               <div className="h-10 w-48 border-b border-dashed border-slate-400 flex items-end">
-                <span className="text-xs font-semibold">Tasdiqlandi</span>
+                <span className="text-xs font-semibold">{t('attendance.registerSheet.directorConfirmed')}</span>
               </div>
-              <p className="text-[9px] text-slate-400">(Imzo va sana)</p>
+              <p className="text-[9px] text-slate-400">{t('attendance.registerSheet.signDate')}</p>
             </div>
 
             {/* ISO/IEC 18004 Verification Seal */}
@@ -375,7 +383,7 @@ export function OfficialAttendanceRegisterModal({
               </div>
               <div className="text-[9px] leading-tight text-slate-400 max-w-[100px]">
                 <strong className="block text-slate-700 dark:text-slate-300">ISO/IEC 18004</strong>
-                Raqamli muhr orqali haqiqiyligi tekshiriladi
+                {t('attendance.registerSheet.qrSealNote')}
               </div>
             </div>
           </div>

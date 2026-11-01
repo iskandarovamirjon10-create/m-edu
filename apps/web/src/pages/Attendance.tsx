@@ -22,6 +22,7 @@ import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useDebounce } from '@/hooks/useDebounce';
+import { cn } from '@/lib/design';
 import { formatDate, toLocalISOString } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type {
@@ -37,6 +38,11 @@ import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useAttendanceSocket } from '@/hooks/useAttendanceSocket';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { OfficialAttendanceRegisterModal } from '@/components/attendance/OfficialAttendanceRegisterModal';
+import { AttendanceWaveChart } from '@/components/dashboard/AttendanceWaveChart';
+import { AttendanceHeatmap } from '@/components/dashboard/AttendanceHeatmap';
+import { AttendanceRiskSection } from '@/components/dashboard/AttendanceRiskSection';
+import { AttendanceTrafficFlowHeatmap } from '@/components/camera/AttendanceTrafficFlowHeatmap';
+import { RushHourBatchAttendanceProcessor } from '@/components/camera/RushHourBatchAttendanceProcessor';
 
 /* ============================================================================
  * APPLE SPRING PHYSICS & MOTION TOKENS
@@ -628,6 +634,7 @@ function StatusBadge({
   onCycle?: () => void;
   isUpdating?: boolean;
 }) {
+  const { t } = useSafeI18n();
   const tone = STATUS_TONE[status];
   const c = TONES[tone];
   const pulse = STATUS_PULSE[status];
@@ -672,7 +679,7 @@ function StatusBadge({
         whileTap={{ scale: 0.94 }}
         transition={SPRING.snappy}
         disabled={isUpdating}
-        title="Statusni tezkor almashtirish uchun bosing"
+        title={t('attendance.cycleStatusTitle')}
         className="group/badge relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-shadow"
         style={{
           background: c.bg,
@@ -895,6 +902,7 @@ export function AttendancePage() {
   useAttendanceSocket();
 
   /* ── Filter & UI state ────────────────────────────────────────────── */
+  const [activeTab, setActiveTab] = useState<'ledger' | 'analytics' | 'radar' | 'flow'>('ledger');
   const [page, setPage] = useState(1);
   const [groupId, setGroupId] = useState('');
   const [date, setDate] = useState('');
@@ -1469,7 +1477,7 @@ export function AttendancePage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.94 }}
                 transition={SPRING.snappy}
-                title="Ma'lumotlarni yangilash"
+                title={t('attendance.refresh')}
                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/[0.08] bg-white/70 text-[#64748B] hover:text-[#1D1D1F] dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-300 dark:hover:text-white transition-colors"
               >
                 <Icon
@@ -1495,6 +1503,23 @@ export function AttendancePage() {
                 </motion.button>
               )}
 
+              {/* Fast-Tap Express Attendance Mode */}
+              <motion.button
+                type="button"
+                onClick={() => {
+                  sound.playPop();
+                  window.dispatchEvent(new CustomEvent('medu:open-quick-attendance'));
+                }}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
+                title={t('attendance.expressHint')}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-500/20 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300 transition-colors"
+              >
+                <span>⚡</span>
+                <span>{t('attendance.express')}</span>
+              </motion.button>
+
               {/* Official A4 Attendance Register Sheet Button */}
               <motion.button
                 type="button"
@@ -1502,7 +1527,7 @@ export function AttendancePage() {
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 transition={SPRING.snappy}
-                title="Rasmiy Davomat Vedomosti (A4)"
+                title={t('attendance.registerSheetTitle')}
                 className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3.5 text-[12.5px] font-semibold text-violet-700 hover:bg-violet-500/20 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300 transition-colors"
               >
                 <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
@@ -1557,6 +1582,86 @@ export function AttendancePage() {
         </div>
       </motion.div>
 
+      {/* ============================================================
+          ENTERPRISE ATTENDANCE TABS SWITCHER
+      ============================================================ */}
+      <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-black/[0.08] bg-white/70 p-1.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.03]">
+        <button
+          type="button"
+          onClick={() => setActiveTab('ledger')}
+          className={cn(
+            'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap',
+            activeTab === 'ledger'
+              ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white'
+              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+          )}
+        >
+          <span>📋</span>
+          <span>{t('attendance.tabs.ledger')}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('analytics')}
+          className={cn(
+            'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap',
+            activeTab === 'analytics'
+              ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white'
+              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+          )}
+        >
+          <span>📈</span>
+          <span>{t('attendance.tabs.analytics')}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('radar')}
+          className={cn(
+            'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap',
+            activeTab === 'radar'
+              ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white'
+              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+          )}
+        >
+          <span>🚨</span>
+          <span>{t('attendance.tabs.radar')}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('flow')}
+          className={cn(
+            'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap',
+            activeTab === 'flow'
+              ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white'
+              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+          )}
+        >
+          <span>🚪</span>
+          <span>{t('attendance.tabs.flow')}</span>
+        </button>
+      </div>
+
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          <AttendanceWaveChart overallRate={overallRate} />
+          <AttendanceHeatmap overallRate={overallRate} />
+        </div>
+      )}
+
+      {activeTab === 'radar' && (
+        <div className="space-y-6">
+          <AttendanceRiskSection />
+        </div>
+      )}
+
+      {activeTab === 'flow' && (
+        <div className="space-y-6">
+          <AttendanceTrafficFlowHeatmap />
+          <RushHourBatchAttendanceProcessor />
+        </div>
+      )}
+
+      {activeTab === 'ledger' && (
+        <>
       {/* ============================================================
           KPI STATS + INTERACTIVE STATUS FILTERING + DISTRIBUTION BAR
       ============================================================ */}
@@ -2186,6 +2291,9 @@ export function AttendancePage() {
           </div>
         )}
       </motion.div>
+
+        </>
+      )}
 
       <OfficialAttendanceRegisterModal
         open={registerModalOpen}

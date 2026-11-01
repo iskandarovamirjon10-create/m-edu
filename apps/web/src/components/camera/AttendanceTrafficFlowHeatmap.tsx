@@ -101,16 +101,31 @@ export function AttendanceTrafficFlowHeatmap({
     };
   }, []);
 
-  const selectedGate = useMemo(
-    () => gates.find((g) => g.gateId === selectedGateId) || gates[0],
+  const selectedGate = useMemo<GateTrafficData>(
+    () =>
+      gates.find((g) => g.gateId === selectedGateId) ||
+      gates[0] || {
+        gateId: 'gate-default',
+        gateName: 'Markaziy Kirish Gate-1',
+        cameraCount: 1,
+        currentThroughputPerMin: 0,
+        capacityLimitPerMin: 50,
+        congestionPercent: 0,
+        totalPassedToday: 0,
+        status: 'normal',
+        hourlyLoads: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
     [gates, selectedGateId]
   );
 
   const aggregate = useMemo(() => {
     const totalPassed = gates.reduce((acc, g) => acc + g.totalPassedToday, 0);
-    const avgCongestion = Math.round(
-      gates.reduce((acc, g) => acc + g.congestionPercent, 0) / gates.length
-    );
+    const avgCongestion =
+      gates.length > 0
+        ? Math.round(
+            gates.reduce((acc, g) => acc + g.congestionPercent, 0) / gates.length
+          )
+        : 0;
     const totalThroughput = gates.reduce(
       (acc, g) => acc + g.currentThroughputPerMin,
       0
@@ -282,7 +297,14 @@ export function AttendanceTrafficFlowHeatmap({
               </tr>
             </thead>
             <tbody className="divide-y divide-border/20">
-              {gates.map((g) => {
+              {gates.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="py-8 text-center text-xs text-muted-foreground">
+                    Faol kameralar yoki turniketlar hozircha ulanmagan.
+                  </td>
+                </tr>
+              ) : (
+                gates.map((g) => {
                 const isSelected = selectedGateId === g.gateId;
                 return (
                   <tr
@@ -342,7 +364,8 @@ export function AttendanceTrafficFlowHeatmap({
                     </td>
                   </tr>
                 );
-              })}
+              })
+            )}
             </tbody>
           </table>
         </div>
