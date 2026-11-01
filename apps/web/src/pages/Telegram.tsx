@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 
@@ -536,7 +537,30 @@ export function TelegramPage() {
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState('personal');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    urlTab && ['personal', 'features', 'broadcast', 'admin'].includes(urlTab)
+      ? urlTab
+      : 'personal',
+  );
+
+  useEffect(() => {
+    if (urlTab && urlTab !== activeTab && ['personal', 'features', 'broadcast', 'admin'].includes(urlTab)) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTab, activeTab]);
+
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (tab === 'personal') next.delete('tab');
+      else next.set('tab', tab);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
   const [pendingLink, setPendingLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirmUnlinkOpen, setConfirmUnlinkOpen] = useState(false);
@@ -647,6 +671,12 @@ export function TelegramPage() {
       },
       ...(isAdmin
         ? [
+            {
+              id: 'broadcast',
+              label: t('telegram.tabBroadcast') || 'Broadcast Studio',
+              icon: I.send,
+              tone: 'blue' as Tone,
+            },
             {
               id: 'admin',
               label: t('telegram.tabAdmin') || 'Admin Overview',
@@ -826,7 +856,7 @@ export function TelegramPage() {
           TABS
       ============================================================ */}
       <motion.div variants={cardVariants}>
-        <PremiumTabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
+        <PremiumTabs tabs={TABS} active={activeTab} onChange={handleTabChange} />
       </motion.div>
 
       {/* ============================================================
