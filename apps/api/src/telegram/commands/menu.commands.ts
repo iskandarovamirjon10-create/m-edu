@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ModuleRef } from '@nestjs/core';
 import {
   TelegramCommandHandler,
@@ -9,11 +10,13 @@ import {
 import { TelegramReply } from '../ui/telegram-ui.types';
 import {
   CallbackCodes,
+  backKeyboard,
   categoriesKeyboard,
   languageKeyboard,
   mainMenuKeyboard,
   settingsKeyboard,
   unlinkConfirmKeyboard,
+  webAppKeyboard,
 } from '../ui/keyboards';
 import { escapeHtml } from '../ui/format';
 import { TelegramNotificationPolicyService } from '../../notifications/telegram-notification-policy.service';
@@ -31,6 +34,8 @@ export class MenuCommand implements TelegramCommandHandler {
   readonly name = 'menu';
   readonly descriptionKey = 'menu.title';
   readonly roles = 'ALL' as const;
+
+  constructor(@Optional() private readonly config?: ConfigService) {}
 
   async handle(request: TelegramRequestContext): Promise<TelegramReply> {
     return this.render(request);
@@ -52,6 +57,11 @@ export class MenuCommand implements TelegramCommandHandler {
       name: escapeHtml(ctx.displayName),
     })}`;
 
+    const configuredWebApp = this.config?.get<string>('TELEGRAM_WEBAPP_URL');
+    const configuredFrontend = this.config?.get<string>('FRONTEND_URL');
+    const rawUrl = configuredWebApp || (configuredFrontend ? `${configuredFrontend.replace(/\/+$/, '')}/tg-app` : undefined);
+    const webAppUrl = rawUrl && /^https:\/\//i.test(rawUrl) ? rawUrl : undefined;
+
     return {
       text,
       keyboard: mainMenuKeyboard(
@@ -61,6 +71,7 @@ export class MenuCommand implements TelegramCommandHandler {
           isTeaching: ctx.isTeaching,
           isStudent: ctx.isStudent,
           isParent: ctx.isParent,
+          webAppUrl,
         },
       ),
     };
@@ -78,6 +89,36 @@ export class StartCommand implements TelegramCommandHandler {
 
   async handle(request: TelegramRequestContext): Promise<TelegramReply> {
     return this.menu.render(request);
+  }
+}
+
+/** `/webapp` — directly launch the M-EDU WebApp. */
+@Injectable()
+export class WebappCommand implements TelegramCommandHandler {
+  readonly name = 'webapp';
+  readonly descriptionKey = 'webapp.title';
+  readonly roles = 'ALL' as const;
+
+  constructor(@Optional() private readonly config?: ConfigService) {}
+
+  async handle(request: TelegramRequestContext): Promise<TelegramReply> {
+    const { tr } = request;
+    const configuredWebApp = this.config?.get<string>('TELEGRAM_WEBAPP_URL');
+    const configuredFrontend = this.config?.get<string>('FRONTEND_URL');
+    const rawUrl = configuredWebApp || (configuredFrontend ? `${configuredFrontend.replace(/\/+$/, '')}/tg-app` : undefined);
+    const webAppUrl = rawUrl && /^https:\/\//i.test(rawUrl) ? rawUrl : undefined;
+
+    if (!webAppUrl) {
+      return {
+        text: `<b>${escapeHtml(tr('webapp.title'))}</b>\n\n${escapeHtml(tr('webapp.notConfigured'))}`,
+        keyboard: backKeyboard({ tr, cb: request.cb }),
+      };
+    }
+
+    return {
+      text: `<b>${escapeHtml(tr('webapp.title'))}</b>\n\n${escapeHtml(tr('webapp.description'))}`,
+      keyboard: webAppKeyboard({ tr, cb: request.cb }, webAppUrl),
+    };
   }
 }
 

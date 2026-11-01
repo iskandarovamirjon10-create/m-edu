@@ -61,6 +61,10 @@ const CATALOGUE: Catalogue = {
     'menu.parent.title': '👨‍👩‍👧 Parent menu',
     'menu.subtitle': 'Hello, {name}. What would you like to view?',
 
+    'btn.openWebApp': '🚀 Open M-EDU WebApp',
+    'webapp.title': '📱 M-EDU WebApp Platform',
+    'webapp.description': 'All platform capabilities inside Telegram: live schedule, attendance, Face ID turnstile passes, payments, and AI Copilot.',
+    'webapp.notConfigured': 'Telegram WebApp is not yet configured on this server.',
     'btn.menu': '🏠 Menu',
     'btn.back': '⬅️ Back',
     'btn.help': '❓ Help',
@@ -214,6 +218,10 @@ const CATALOGUE: Catalogue = {
     'menu.parent.title': '👨‍👩‍👧 Меню родителя',
     'menu.subtitle': 'Здравствуйте, {name}. Что вы хотите посмотреть?',
 
+    'btn.openWebApp': '🚀 Открыть M-EDU WebApp',
+    'webapp.title': '📱 Платформа M-EDU WebApp',
+    'webapp.description': 'Все возможности платформы в Telegram: расписание, посещаемость, проходы Face ID, платежи и AI Copilot.',
+    'webapp.notConfigured': 'Telegram WebApp еще не настроен на этом сервере.',
     'btn.menu': '🏠 Меню',
     'btn.back': '⬅️ Назад',
     'btn.help': '❓ Помощь',
@@ -365,6 +373,10 @@ const CATALOGUE: Catalogue = {
     'menu.parent.title': '👨‍👩‍👧 Ota-ona menyusi',
     'menu.subtitle': 'Salom, {name}. Nimani ko’rmoqchisiz?',
 
+    'btn.openWebApp': '🚀 M-EDU WebApp ilovasi',
+    'webapp.title': '📱 M-EDU WebApp platformasi',
+    'webapp.description': "Telegram ichida barcha imkoniyatlar: dars jadvali, davomat, Face ID turniket o'tishlari, to'lovlar va AI Copilot.",
+    'webapp.notConfigured': 'Telegram WebApp serverda hali sozlanmagan.',
     'btn.menu': '🏠 Menyu',
     'btn.back': '⬅️ Orqaga',
     'btn.help': '❓ Yordam',

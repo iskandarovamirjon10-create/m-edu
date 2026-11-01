@@ -26,6 +26,7 @@ import {
   SettingsCommand,
   StartCommand,
   UnlinkCommand,
+  WebappCommand,
 } from './commands/menu.commands';
 import {
   AttendanceCommand,
@@ -56,6 +57,7 @@ import { TelegramExecutiveBriefingService } from './telegram-executive-briefing.
 const COMMAND_HANDLERS = [
   StartCommand,
   MenuCommand,
+  WebappCommand,
   HelpCommand,
   SettingsCommand,
   LanguageCommand,

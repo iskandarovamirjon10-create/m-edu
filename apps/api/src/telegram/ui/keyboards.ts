@@ -46,6 +46,7 @@ export interface RoleFlags {
   isTeaching: boolean;
   isStudent: boolean;
   isParent: boolean;
+  webAppUrl?: string;
 }
 
 function row(...buttons: InlineKeyboardButton[]): InlineKeyboardButton[] {
@@ -61,12 +62,29 @@ export function backKeyboard(ctx: KeyboardBuilderContext): InlineKeyboardMarkup 
   return { inline_keyboard: [row(button(ctx.tr('btn.menu'), ctx.cb(CallbackCodes.MAIN_MENU)))] };
 }
 
+/** Keyboard to directly launch the Telegram WebApp. */
+export function webAppKeyboard(
+  ctx: KeyboardBuilderContext,
+  webAppUrl: string,
+): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      row({ text: ctx.tr('btn.openWebApp'), web_app: { url: webAppUrl } }),
+      row(button(ctx.tr('btn.menu'), ctx.cb(CallbackCodes.MAIN_MENU))),
+    ],
+  };
+}
+
 /** Role-aware main menu. Only buttons backed by real commands are shown. */
 export function mainMenuKeyboard(
   ctx: KeyboardBuilderContext,
   flags: RoleFlags,
 ): InlineKeyboardMarkup {
   const rows: InlineKeyboardButton[][] = [];
+
+  if (flags.webAppUrl) {
+    rows.push(row({ text: ctx.tr('btn.openWebApp'), web_app: { url: flags.webAppUrl } }));
+  }
 
   if (flags.isStudent) {
     rows.push(row(button(ctx.tr('btn.profile'), ctx.cb('cmd', 'profile'))));

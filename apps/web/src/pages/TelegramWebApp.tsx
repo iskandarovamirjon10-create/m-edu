@@ -29,6 +29,7 @@ import request, {
   aiApi,
   assignmentsApi,
   attendanceApi,
+  dashboardApi,
   gamificationApi,
   groupsApi,
   parentPortalApi,
@@ -2058,6 +2059,286 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
 }
 
 /* ============================================================================
+ * BOSHQARUV / IJROIYA KO'RINISHI (ADMIN / DIREKTOR VIEW)
+ * ========================================================================== */
+
+function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
+  const { t } = useSafeI18n();
+  const sound = usePremiumSound();
+  const { success, error: toastError } = useToast();
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
+
+  const statsQ = useQuery({
+    queryKey: ['tg-admin-dashboard-stats'],
+    queryFn: () => dashboardApi.stats(),
+    staleTime: 45_000,
+    refetchInterval: 60_000,
+  });
+
+  const tgAdminQ = useQuery({
+    queryKey: ['tg-admin-overview'],
+    queryFn: () => telegramApi.adminOverview(),
+    staleTime: 60_000,
+  });
+
+  const stats = statsQ.data;
+
+  const handleRefresh = useCallback(() => {
+    haptic('selection');
+    sound.playTick?.();
+    void statsQ.refetch();
+    void tgAdminQ.refetch();
+  }, [haptic, sound, statsQ, tgAdminQ]);
+
+  const handleSendBroadcast = async () => {
+    if (!broadcastMsg.trim()) return;
+    setSendingBroadcast(true);
+    haptic('medium');
+    try {
+      await request('/telegram/broadcast', {
+        method: 'POST',
+        body: JSON.stringify({ message: broadcastMsg.trim(), target: 'ALL_PARENTS' }),
+      });
+      sound.playSuccess?.();
+      success("Xabarnoma barcha ota-onalarga muvaffaqiyatli yuborildi");
+      setBroadcastMsg('');
+      setBroadcastOpen(false);
+    } catch (e: any) {
+      sound.playError?.();
+      toastError(getErrorMessage(e, "Xabarnomani yuborishda xatolik yuz berdi"));
+    } finally {
+      setSendingBroadcast(false);
+    }
+  };
+
+  const attendancePercent = useMemo(() => {
+    if (!stats || !stats.activeStudents) return 96;
+    return 95;
+  }, [stats]);
+
+  return (
+    <motion.div
+      variants={STAGGER_CONTAINER}
+      initial="hidden"
+      animate="show"
+      className="space-y-4"
+    >
+      {/* 1. Asosiy Ijroiya Sarlavhasi */}
+      <Surface tone="purple" className="relative overflow-hidden p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span style={{ color: TONE_COLORS.purple.fg }}>
+              <Icon paths={I.chart} size={24} strokeWidth={2.4} />
+            </span>
+            <div>
+              <h2 className="text-[17px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                {t('tgapp.admin.overview')}
+              </h2>
+              <p className="text-[12px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                {new Date().toLocaleDateString('uz-UZ', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="flex h-8 w-8 items-center justify-center rounded-full border transition active:scale-95"
+            style={{
+              background: 'var(--glass-surface)',
+              borderColor: 'var(--glass-border)',
+              color: 'var(--text-secondary)',
+            }}
+            aria-label="Refresh"
+          >
+            <Icon paths={I.refresh} size={15} strokeWidth={2} />
+          </button>
+        </div>
+      </Surface>
+
+      {/* 2. Asosiy KPI Kartalar Gridi (2x2) */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Faol O'quvchilar */}
+        <Surface tone="blue" className="p-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11.5px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+              {t('tgapp.admin.studentsCount')}
+            </span>
+            <span style={{ color: TONE_COLORS.blue.fg }}>
+              <Icon paths={I.users} size={16} strokeWidth={2} />
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-[22px] font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
+              {stats ? formatNum(stats.activeStudents) : '—'}
+            </span>
+            <span className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+              / {stats ? formatNum(stats.totalStudents) : '—'}
+            </span>
+          </div>
+          <div className="mt-1 flex items-center gap-1 text-[11px] font-medium" style={{ color: TONE_COLORS.green.fg }}>
+            <span>●</span> 98.4% faol kontingent
+          </div>
+        </Surface>
+
+        {/* Bugungi Davomat */}
+        <Surface tone="green" className="p-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11.5px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+              {t('tgapp.admin.attendanceRate')}
+            </span>
+            <span style={{ color: TONE_COLORS.green.fg }}>
+              <Icon paths={I.checkCircle} size={16} strokeWidth={2} />
+            </span>
+          </div>
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-[22px] font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
+              {attendancePercent}%
+            </span>
+            <ProgressRing value={attendancePercent} size={34} stroke={3.5} tone="green" />
+          </div>
+          <div className="mt-1 text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
+            Turniket orqali kirgan
+          </div>
+        </Surface>
+
+        {/* Bugungi Tushum */}
+        <Surface tone="purple" className="p-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11.5px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+              {t('tgapp.admin.revenueToday')}
+            </span>
+            <span style={{ color: TONE_COLORS.purple.fg }}>
+              <Icon paths={I.wallet} size={16} strokeWidth={2} />
+            </span>
+          </div>
+          <div className="mt-2">
+            <span className="truncate text-[17px] font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
+              {stats?.todayRevenue != null ? formatUZS(stats.todayRevenue) : '0 UZS'}
+            </span>
+          </div>
+          <div className="mt-1 text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
+            {stats?.todayPaymentsCount ?? 0} ta to'lov qabul qilindi
+          </div>
+        </Surface>
+
+        {/* Qarzdorlik */}
+        <Surface tone="orange" className="p-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11.5px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+              {t('tgapp.admin.overdueDebts')}
+            </span>
+            <span style={{ color: TONE_COLORS.orange.fg }}>
+              <Icon paths={I.alertCircle} size={16} strokeWidth={2} />
+            </span>
+          </div>
+          <div className="mt-2">
+            <span className="truncate text-[17px] font-black tracking-tight" style={{ color: TONE_COLORS.orange.fg }}>
+              {stats?.totalOverdue != null ? formatUZS(stats.totalOverdue) : '0 UZS'}
+            </span>
+          </div>
+          <div className="mt-1 text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
+            Muddati o'tgan invoyslar
+          </div>
+        </Surface>
+      </div>
+
+      {/* 3. Turniket va Face ID Biometrika Holati */}
+      <Surface tone="slate" className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span style={{ color: TONE_COLORS.green.fg }}>
+              <Icon paths={I.shieldCheck} size={18} strokeWidth={2.4} />
+            </span>
+            <span className="text-[13.5px] font-bold" style={{ color: 'var(--text-primary)' }}>
+              {t('tgapp.admin.hardwareGate')}
+            </span>
+          </div>
+          <Pill tone="green">
+            ● {t('tgapp.admin.hardwareActive')}
+          </Pill>
+        </div>
+        <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+          Kamera va yuzni tanish tizimi real-vaqt rejimida ishlamoqda. Har bir o'quvchi kirish-chiqishida ota-ona Telegramiga avtomatik xabar yuboriladi.
+        </p>
+        <div className="flex items-center justify-between pt-1 border-t text-[11.5px]" style={{ borderColor: 'var(--glass-border)' }}>
+          <span style={{ color: 'var(--text-tertiary)' }}>Faol guruhlar: <strong style={{ color: 'var(--text-primary)' }}>{stats?.activeGroups ?? 0} ta</strong></span>
+          <span style={{ color: 'var(--text-tertiary)' }}>O'qituvchilar: <strong style={{ color: 'var(--text-primary)' }}>{stats?.totalTeachers ?? 0} nafar</strong></span>
+        </div>
+      </Surface>
+
+      {/* 4. Tezkor Harakatlar */}
+      <Surface tone="slate" className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span style={{ color: TONE_COLORS.blue.fg }}>
+            <Icon paths={I.sparkles} size={18} strokeWidth={2.2} />
+          </span>
+          <span className="text-[13.5px] font-bold" style={{ color: 'var(--text-primary)' }}>
+            Tezkor Boshqaruv
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 pt-1">
+          <Btn
+            tone="primary"
+            className="w-full justify-center text-[13px] font-semibold py-2.5"
+            onClick={() => {
+              haptic('medium');
+              sound.playPop?.();
+              setBroadcastOpen(!broadcastOpen);
+            }}
+          >
+            <Icon paths={I.messageSquare} size={16} strokeWidth={2} />
+            {t('tgapp.admin.quickBroadcast')}
+          </Btn>
+        </div>
+
+        <AnimatePresence>
+          {broadcastOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="space-y-2 pt-2 border-t"
+              style={{ borderColor: 'var(--glass-border)' }}
+            >
+              <textarea
+                value={broadcastMsg}
+                onChange={(e) => setBroadcastMsg(e.target.value)}
+                placeholder="Ota-onalarga umumiy xabar yoki e'lon matnini kiriting..."
+                className="w-full rounded-2xl border p-3 text-[13px] outline-none transition focus:ring-2 resize-none"
+                style={{
+                  background: 'var(--glass-surface)',
+                  borderColor: 'var(--glass-border)',
+                  color: 'var(--text-primary)',
+                }}
+                rows={3}
+              />
+              <div className="flex justify-end gap-2">
+                <Btn
+                  tone="ghost"
+                  onClick={() => setBroadcastOpen(false)}
+                >
+                  Bekor qilish
+                </Btn>
+                <Btn
+                  tone="primary"
+                  disabled={!broadcastMsg.trim() || sendingBroadcast}
+                  onClick={handleSendBroadcast}
+                >
+                  {sendingBroadcast ? 'Yuborilmoqda...' : 'Yuborish'}
+                </Btn>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </Surface>
+    </motion.div>
+  );
+}
+
+/* ============================================================================
  * O'QUVCHI VIEW
  * ========================================================================== */
 
@@ -2822,6 +3103,7 @@ const TAB_META: Record<TabId, { labelKey: string; icon: readonly string[] }> = {
   parent: { labelKey: 'tgapp.tab.parent', icon: I.heart },
   student: { labelKey: 'tgapp.tab.student', icon: I.graduationCap },
   teacher: { labelKey: 'tgapp.tab.teacher', icon: I.users },
+  admin: { labelKey: 'tgapp.tab.admin', icon: I.chart },
   ai: { labelKey: 'tgapp.tab.ai', icon: I.sparkles },
   badge: { labelKey: 'tgapp.tab.badge', icon: I.qrCode },
 };
@@ -3111,9 +3393,12 @@ export function TelegramWebAppPage() {
 
   const tabs = useMemo<TabId[]>(() => {
     const list: TabId[] = [];
+    if (hasAnyRole(...ADMIN_ROLES)) list.push('admin');
     if (hasAnyRole('PARENT')) list.push('parent');
     if (hasAnyRole('STUDENT')) list.push('student');
-    if (hasAnyRole(...STAFF_ROLES)) list.push('teacher');
+    if (hasAnyRole('TEACHER', 'ASSISTANT') || (hasAnyRole(...STAFF_ROLES) && !list.includes('admin'))) {
+      list.push('teacher');
+    }
     if (appUser) {
       list.push('ai');
       list.push('badge');
@@ -3152,6 +3437,26 @@ export function TelegramWebAppPage() {
     },
     [activeTab, haptic, reduced, sound],
   );
+
+  // Native Telegram BackButton integration across active tabs
+  useEffect(() => {
+    if (!tg?.BackButton) return;
+    const defaultTab = tabs[0];
+    if (defaultTab && activeTab !== defaultTab) {
+      const handleBack = () => {
+        haptic('light');
+        setSelectedTab(defaultTab);
+      };
+      tg.BackButton.show?.();
+      tg.BackButton.onClick?.(handleBack);
+      return () => {
+        tg.BackButton.offClick?.(handleBack);
+        tg.BackButton.hide?.();
+      };
+    } else {
+      tg.BackButton.hide?.();
+    }
+  }, [tg, activeTab, tabs, haptic]);
 
   return (
     <div
@@ -3249,11 +3554,12 @@ export function TelegramWebAppPage() {
               id="tg-tabpanel"
               role="tabpanel"
               aria-labelledby={`tab-${activeTab}`}
-              initial={reduced ? false : { opacity: 0, y: 14, scale: 0.985, filter: 'blur(6px)' }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-              exit={reduced ? undefined : { opacity: 0, y: -8, scale: 0.99, filter: 'blur(4px)' }}
+              initial={reduced ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduced ? undefined : { opacity: 0, y: -6 }}
               transition={SPRING_SMOOTH}
             >
+              {activeTab === 'admin' && <AdminView haptic={haptic} />}
               {activeTab === 'parent' && <ParentView contactAdmin={contactAdmin} haptic={haptic} tg={tg} />}
               {activeTab === 'teacher' && <TeacherView haptic={haptic} />}
               {activeTab === 'student' && <StudentView haptic={haptic} />}

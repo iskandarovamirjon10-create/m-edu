@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Job, Queue } from 'bullmq';
 import * as crypto from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -56,6 +57,7 @@ export class NotificationEventProcessor extends WorkerHost {
     private readonly telegramDelivery: TelegramDeliveryService,
     private readonly deliveries: NotificationDeliveryService,
     private readonly telegramPolicy: TelegramNotificationPolicyService,
+    @Optional() private readonly config?: ConfigService,
   ) {
     super();
   }
@@ -301,7 +303,16 @@ export class NotificationEventProcessor extends WorkerHost {
       // Escape user-derived content before HTML-mode interpolation: names and
       // statuses are untrusted input and must never forge the message layout.
       const text = `<b>${escapeHtml(title)}</b>\n\n${escapeHtml(body)}`;
-      const result = await this.telegram.sendMessageDetailed(target.chatId, text);
+      const configuredWebApp = this.config?.get<string>('TELEGRAM_WEBAPP_URL');
+      const configuredFrontend = this.config?.get<string>('FRONTEND_URL');
+      const rawUrl = configuredWebApp || (configuredFrontend ? `${configuredFrontend.replace(/\/+$/, '')}/tg-app` : undefined);
+      const webAppUrl = rawUrl && /^https:\/\//i.test(rawUrl) ? rawUrl : undefined;
+
+      const replyMarkup = webAppUrl
+        ? { inline_keyboard: [[{ text: '📱 M-EDU WebApp ilovasi', web_app: { url: webAppUrl } }]] }
+        : undefined;
+
+      const result = await this.telegram.sendMessageDetailed(target.chatId, text, { replyMarkup });
       if (result.ok) {
         await this.deliveries.markSent(tracked.id, target.accountId);
         deliveries.push({ channel: 'TELEGRAM', ok: true });

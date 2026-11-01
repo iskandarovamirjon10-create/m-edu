@@ -1223,6 +1223,12 @@ export function TelegramPage() {
                 desc={t('telegram.feature.remindersDesc')}
                 tone="orange"
               />
+              <FeatureCard
+                icon={I.bot}
+                title="M-EDU Telegram Mini App (TMA)"
+                desc="Mobil Telegram ilovasi orqali dars jadvali, baholar, davomat, Face ID turniket statusi va to'lovlarni ko'rish imkoniyati."
+                tone="purple"
+              />
             </div>
           )}
 

@@ -14,7 +14,7 @@ import { motion, type Variants, type HTMLMotionProps } from 'framer-motion';
  * ========================================================================== */
 
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
-export type TabId = 'parent' | 'student' | 'teacher' | 'ai' | 'badge';
+export type TabId = 'parent' | 'student' | 'teacher' | 'admin' | 'ai' | 'badge';
 export type Tone = 'green' | 'red' | 'orange' | 'blue' | 'purple' | 'slate';
 
 /* ============================================================================
@@ -71,6 +71,7 @@ export const STAGGER_ITEM: Variants = {
 export const ICON_STROKE = 1.95;
 
 export const I: Readonly<Record<string, readonly string[]>> = {
+  chart: ['M18 20V10', 'M12 20V4', 'M6 20v-6'],
   checkCircle: ['M22 11.08V12a10 10 0 1 1-5.93-9.14', 'M22 4 12 14.01l-3-3'],
   xCircle: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M15 9l-6 6', 'M9 9l6 6'],
   close: ['M18 6 6 18', 'M6 6l12 12'],
