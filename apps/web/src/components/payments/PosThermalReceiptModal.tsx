@@ -9,6 +9,7 @@ import { GlassModal, GlassButton } from '@/components/ui';
 import { RealQrCode } from '@/components/ui/RealQrCode';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { triggerPrint } from '@/lib/printEngine';
 import type { Payment } from '@/lib/types';
 
@@ -27,6 +28,7 @@ export function PosThermalReceiptModal({
   orgName = 'M-EDU ACADEMY',
   cashierName = 'Kassir-Operator',
 }: PosThermalReceiptModalProps) {
+  const { t } = useSafeI18n();
   const receiptRef = useRef<HTMLDivElement>(null);
   const sound = usePremiumSound();
   const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>('80mm');
@@ -57,13 +59,13 @@ export function PosThermalReceiptModal({
     <GlassModal
       open={open}
       onClose={onClose}
-      title="Termal Kassa Cheki (POS Printer)"
+      title={t('payments.thermal.title')}
     >
       <div className="space-y-4">
         {/* Paper format selector */}
         <div className="flex items-center justify-between px-1">
           <span className="text-xs font-semibold text-[var(--text-secondary)]">
-            Printer qog'oz o'lchami:
+            {t('payments.thermal.paperSize')}
           </span>
           <div className="inline-flex rounded-xl bg-black/[0.05] dark:bg-white/[0.08] p-1 gap-1">
             <button
@@ -194,7 +196,7 @@ export function PosThermalReceiptModal({
         {/* Modal Controls */}
         <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3 pt-2 border-t border-slate-900/[0.06] dark:border-white/[0.08]">
           <GlassButton type="button" variant="secondary" onClick={onClose}>
-            Yopish
+            {t('common.close')}
           </GlassButton>
 
           <GlassButton
@@ -205,7 +207,7 @@ export function PosThermalReceiptModal({
           >
             <span className="inline-flex items-center gap-2">
               <Printer className="w-4 h-4" />
-              Chop etish ({paperWidth})
+              {t('payments.thermal.print', { width: paperWidth })}
             </span>
           </GlassButton>
         </div>

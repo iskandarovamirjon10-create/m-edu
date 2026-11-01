@@ -7,6 +7,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { I18nProvider } from '@/i18n/I18nProvider';
 import { AiDebtReminderModal } from '../AiDebtReminderModal';
 import { PosThermalReceiptModal } from '../PosThermalReceiptModal';
 import { PaymentsAnalyticsTab } from '../PaymentsAnalyticsTab';
@@ -107,11 +108,13 @@ describe('Payments v2 Suite', () => {
 
   it('renders AiDebtReminderModal and tone selector', async () => {
     render(
-      <AiDebtReminderModal
-        open={true}
-        onClose={vi.fn()}
-        payment={mockPayment}
-      />,
+      <I18nProvider initialLocale="uz">
+        <AiDebtReminderModal
+          open={true}
+          onClose={vi.fn()}
+          payment={mockPayment}
+        />
+      </I18nProvider>,
     );
 
     expect(screen.getByText(/AI Smart Eslatma/i)).toBeInTheDocument();

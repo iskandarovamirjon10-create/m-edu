@@ -17,6 +17,7 @@ import { paymentsApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { Payment } from '@/lib/types';
 
 interface AiDebtReminderModalProps {
@@ -28,6 +29,7 @@ interface AiDebtReminderModalProps {
 type MessageTone = 'friendly' | 'formal' | 'urgent';
 
 export function AiDebtReminderModal({ open, onClose, payment }: AiDebtReminderModalProps) {
+  const { t } = useSafeI18n();
   const { push } = useToasts();
   const sound = usePremiumSound();
   const haptics = useHaptics();
@@ -129,7 +131,7 @@ export function AiDebtReminderModal({ open, onClose, payment }: AiDebtReminderMo
     <GlassModal
       open={open}
       onClose={onClose}
-      title="AI Smart Eslatma (Qarzdorlik Undiruvi)"
+      title={t('payments.aiReminder.title')}
       wide
     >
       <div className="space-y-4">
@@ -144,7 +146,8 @@ export function AiDebtReminderModal({ open, onClose, payment }: AiDebtReminderMo
                 {studentName}
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Qarzdorlik: <span className="font-bold text-rose-600 dark:text-rose-400">{formatCurrency(amountNum)}</span>
+                {t('payments.aiReminder.debtAmount')}{' '}
+                <span className="font-bold text-rose-600 dark:text-rose-400">{formatCurrency(amountNum)}</span>
                 {parentPhone && ` · Tel: ${parentPhone}`}
               </p>
             </div>
@@ -153,10 +156,10 @@ export function AiDebtReminderModal({ open, onClose, payment }: AiDebtReminderMo
           <div className="flex items-center gap-1.5 self-end sm:self-auto">
             {(['friendly', 'formal', 'urgent'] as MessageTone[]).map((tOption) => {
               const isActive = tone === tOption;
-              const labels = {
-                friendly: 'Samimiy',
-                formal: 'Rasmiy',
-                urgent: 'Shoshilinch',
+              const labels: Record<MessageTone, string> = {
+                friendly: t('payments.aiReminder.toneFriendly'),
+                formal: t('payments.aiReminder.toneFormal'),
+                urgent: t('payments.aiReminder.toneUrgent'),
               };
               return (
                 <button
@@ -219,7 +222,7 @@ export function AiDebtReminderModal({ open, onClose, payment }: AiDebtReminderMo
         {/* Action bar */}
         <div className="flex items-center justify-between pt-2 border-t border-slate-900/[0.06] dark:border-white/[0.08]">
           <GlassButton type="button" variant="secondary" onClick={onClose}>
-            Yopish
+            {t('common.close')}
           </GlassButton>
 
           <div className="flex items-center gap-2">
@@ -232,7 +235,7 @@ export function AiDebtReminderModal({ open, onClose, payment }: AiDebtReminderMo
             >
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
                 {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'Nusxalandi!' : 'Nusxa olish'}
+                {copied ? t('payments.aiReminder.copied') : t('payments.aiReminder.copy')}
               </span>
             </GlassButton>
 
@@ -245,7 +248,7 @@ export function AiDebtReminderModal({ open, onClose, payment }: AiDebtReminderMo
             >
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
                 <Send className="w-4 h-4" />
-                Telegramda yuborish
+                {t('payments.aiReminder.sendTelegram')}
               </span>
             </GlassButton>
           </div>

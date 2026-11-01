@@ -2,7 +2,7 @@ import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 
 import { cn } from '@/lib/design';
 
 export interface GlassFieldProps {
-  label?: string;
+  label?: ReactNode;
   hint?: string;
   error?: string;
   required?: boolean;

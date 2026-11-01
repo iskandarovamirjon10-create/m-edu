@@ -5,6 +5,7 @@
  */
 
 import { useState, useMemo, useCallback, memo } from 'react';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { formatCurrency } from '@/lib/format';
 import { cn } from '@/lib/design';
@@ -33,6 +34,7 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
   onApplyPayment,
   onClose,
 }: CurrencySplitCalculatorProps) {
+  const { t } = useSafeI18n();
   const { playTick, playSuccess, playError } = usePremiumSound();
 
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'split' | 'foreign'>('cash');
@@ -150,17 +152,17 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
           </span>
           <div>
             <h4 className="text-sm font-bold tracking-tight">
-              Kassa & Valyuta Qaytim Kalkulyatori
+              {t('payments.calculator.title')}
             </h4>
             <p className="text-[11px] text-[var(--text-secondary,#86868b)]">
-              To'lov taqsimoti, valyuta kurslari va aniq qaytim
+              {t('payments.calculator.subtitle')}
             </p>
           </div>
         </div>
 
         <div className="text-right">
           <span className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider block">
-            To'lanishi kerak:
+            {t('payments.calculator.amountDue')}
           </span>
           <span className="text-sm font-black text-brand-600 dark:text-brand-400">
             {formatCurrency(requiredAmountUzs)}
@@ -180,7 +182,7 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
               : 'text-[var(--text-secondary)] hover:text-black dark:hover:text-white',
           )}
         >
-          💵 Naqd To'lov
+          💵 {t('payments.calculator.cashMode')}
         </button>
         <button
           type="button"
@@ -192,7 +194,7 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
               : 'text-[var(--text-secondary)] hover:text-black dark:hover:text-white',
           )}
         >
-          💳 Aralash (Naqd + Karta)
+          💳 {t('payments.calculator.splitMode')}
         </button>
         <button
           type="button"
@@ -204,7 +206,7 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
               : 'text-[var(--text-secondary)] hover:text-black dark:hover:text-white',
           )}
         >
-          🌎 Xorijiy Valyuta
+          🌎 {t('payments.calculator.foreignMode')}
         </button>
       </div>
 
@@ -213,7 +215,7 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
         {paymentMethod === 'cash' && (
           <div>
             <label className="text-xs font-semibold text-[var(--text-secondary)] mb-1 block">
-              Mijoz bergan naqd pul miqdori:
+              {t('payments.calculator.tenderedLabel')}
             </label>
             <input
               type="text"
@@ -243,7 +245,7 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-[var(--text-secondary)] mb-1 block">
-                💵 Naqd to'lov:
+                💵 {t('payments.calculator.cashMode')}:
               </label>
               <input
                 type="text"
@@ -299,7 +301,7 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
       {/* Summary & Change Display */}
       <div className="mt-4 rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.05] dark:border-white/[0.06] p-3.5 space-y-2">
         <div className="flex justify-between text-xs text-[var(--text-secondary)]">
-          <span>Jami kiritilgan mablag':</span>
+          <span>{t('payments.calculator.totalEntered')}</span>
           <span className="font-bold text-[var(--text-primary)] dark:text-white">
             {formatCurrency(totalPaidUzs)}
           </span>
@@ -307,13 +309,13 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
 
         {remainingUzs > 0 ? (
           <div className="flex justify-between text-xs font-bold text-rose-500">
-            <span>Yetmayotgan mablag':</span>
+            <span>{t('payments.calculator.remaining')}</span>
             <span>{formatCurrency(remainingUzs)}</span>
           </div>
         ) : (
           <div className="flex justify-between items-baseline border-t border-black/[0.05] dark:border-white/[0.06] pt-2">
             <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
-              Qaytim (Mijozga beriladi):
+              {t('payments.calculator.change')}
             </span>
             <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
               {formatCurrency(changeUzs)}
@@ -325,7 +327,7 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
         {changeBanknotes.length > 0 && (
           <div className="border-t border-black/[0.05] dark:border-white/[0.06] pt-2">
             <span className="text-[10px] font-semibold text-[var(--text-secondary)] block mb-1">
-              Kassadan chiqariladigan kupyuralar:
+              {t('payments.calculator.denominations')}
             </span>
             <div className="flex flex-wrap gap-1.5">
               {changeBanknotes.map((b) => (
@@ -349,7 +351,7 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
             onClick={onClose}
             className="rounded-xl border border-black/10 dark:border-white/15 px-4 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/10"
           >
-            Bekor qilish
+            {t('common.cancel')}
           </button>
         )}
         <button
@@ -358,7 +360,7 @@ export const CurrencySplitCalculator = memo(function CurrencySplitCalculator({
           onClick={handleApply}
           className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-2.5 text-xs font-bold text-white shadow-md disabled:opacity-40 transition-all"
         >
-          ✓ To'lovni Qabul Qilish ({formatCurrency(totalPaidUzs)})
+          ✓ {t('payments.calculator.apply', { amount: formatCurrency(totalPaidUzs) })}
         </button>
       </div>
     </div>

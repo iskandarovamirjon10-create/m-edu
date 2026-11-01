@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { I18nProvider } from '@/i18n/I18nProvider';
 
 import { ExecutiveSpotlight } from '../spotlight/ExecutiveSpotlight';
 import { AttendanceHeatmap } from '../dashboard/AttendanceHeatmap';
@@ -48,6 +49,17 @@ vi.mock('@/components/ui', () => ({
   }),
   GlassModal: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
     open ? <div>{children}</div> : null,
+}));
+
+vi.mock('@/lib/hardware/turnstileHardware', () => ({
+  turnstileHardware: {
+    isUsbRelayConnected: () => false,
+    isWebSerialSupported: () => false,
+    getEmergencyMode: vi.fn().mockResolvedValue('NORMAL'),
+    setEmergencyMode: vi.fn().mockResolvedValue({ success: true, mode: 'LOCKDOWN' }),
+    triggerGateRelease: vi.fn().mockResolvedValue({ success: true }),
+    requestUsbRelayConnection: vi.fn().mockResolvedValue({ success: true }),
+  },
 }));
 
 describe('10 Flagship Features V2 Comprehensive Verification', () => {
@@ -130,7 +142,7 @@ describe('10 Flagship Features V2 Comprehensive Verification', () => {
       expect(pinInput).toBeInTheDocument();
     });
 
-    it('successfully changes mode when correct PIN is entered', () => {
+    it('successfully changes mode when correct PIN is entered', async () => {
       const handleModeChange = vi.fn();
       localStorage.setItem('m_edu_kiosk_pin', '1234');
 
@@ -146,7 +158,9 @@ describe('10 Flagship Features V2 Comprehensive Verification', () => {
       fireEvent.change(pinInput, { target: { value: '1234' } });
       fireEvent.click(screen.getByText('Tasdiqlash'));
 
-      expect(handleModeChange).toHaveBeenCalledWith('LOCKDOWN');
+      await waitFor(() => {
+        expect(handleModeChange).toHaveBeenCalledWith('LOCKDOWN');
+      });
     });
   });
 
@@ -170,10 +184,12 @@ describe('10 Flagship Features V2 Comprehensive Verification', () => {
     it('calculates change and banknote denominations dynamically', () => {
       const handleApply = vi.fn();
       render(
-        <CurrencySplitCalculator
-          requiredAmountUzs={1000000}
-          onApplyPayment={handleApply}
-        />,
+        <I18nProvider initialLocale="uz">
+          <CurrencySplitCalculator
+            requiredAmountUzs={1000000}
+            onApplyPayment={handleApply}
+          />
+        </I18nProvider>,
       );
 
       const input = screen.getByPlaceholderText(/Masalan: 1 500 000/i);

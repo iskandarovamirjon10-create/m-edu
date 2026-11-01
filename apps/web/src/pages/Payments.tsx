@@ -23,6 +23,11 @@ import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { ExecutivePDFStudio } from '@/components/pdf-studio';
 import { CashierZReportModal } from '@/components/payments/CashierZReportModal';
+import { PosThermalReceiptModal } from '@/components/payments/PosThermalReceiptModal';
+import { AiDebtReminderModal } from '@/components/payments/AiDebtReminderModal';
+import { PaymentsAnalyticsTab } from '@/components/payments/PaymentsAnalyticsTab';
+import { ExecutiveCashflowForecastRadar } from '@/components/payments/ExecutiveCashflowForecastRadar';
+import { CurrencySplitCalculator } from '@/components/payments/CurrencySplitCalculator';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate, formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
@@ -742,6 +747,9 @@ export function PaymentsPage() {
   const qc = useQueryClient();
   const { playPayment, playError } = usePremiumSound();
 
+  /* ── Tab state ────────────────────────────────────────────────────── */
+  const [activeTab, setActiveTab] = useState<'ledger' | 'analytics' | 'cashflow'>('ledger');
+
   /* ── Filter state ─────────────────────────────────────────────────── */
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
@@ -751,8 +759,11 @@ export function PaymentsPage() {
   /* ── Modal state ──────────────────────────────────────────────────── */
   const [modalOpen, setModalOpen] = useState(false);
   const [receiptTarget, setReceiptTarget] = useState<Payment | null>(null);
+  const [thermalReceiptTarget, setThermalReceiptTarget] = useState<Payment | null>(null);
+  const [aiDebtTarget, setAiDebtTarget] = useState<Payment | null>(null);
   const [pdfStudioOpen, setPdfStudioOpen] = useState(false);
   const [zReportModalOpen, setZReportModalOpen] = useState(false);
+  const [splitCalcOpen, setSplitCalcOpen] = useState(false);
 
   /* ── Form state ───────────────────────────────────────────────────── */
   const [form, setForm] = useState<PaymentFormState>(INITIAL_FORM);
@@ -807,13 +818,14 @@ export function PaymentsPage() {
   /* ── macOS Split-View Detail Sidecar ──────────────────────────────── */
   const handleOpenPaymentSidecar = useCallback((payment: Payment) => {
     const studentName = formatStudentName(payment.student);
+    const isDebt = payment.status === 'PENDING' || payment.status === 'OVERDUE';
     const data: QuickLookData = {
       id: payment.id,
       type: 'payment',
       title: formatCurrency(payment.amount),
-      subtitle: `${studentName} · ${payment.method}`,
+      subtitle: `${studentName} · ${payment.method || 'CASH'}`,
       badge: {
-        text: payment.status,
+        text: t(`payments.status.${payment.status}`),
         tone: payment.status === 'PAID' ? 'emerald' : payment.status === 'PENDING' ? 'amber' : 'rose',
       },
       avatar: {
@@ -821,24 +833,33 @@ export function PaymentsPage() {
         color: payment.status === 'PAID' ? '#059669' : '#4F46E5',
       },
       metrics: [
-        { label: 'Summa', value: formatCurrency(payment.amount), trend: 'up' },
-        { label: 'Holat', value: payment.status },
-        { label: "To'lov usuli", value: payment.method || 'CASH' },
-        { label: 'Sana', value: formatDate(payment.createdAt) },
+        { label: t('payments.sidecar.amount'), value: formatCurrency(payment.amount), trend: 'up' },
+        { label: t('payments.sidecar.status'), value: t(`payments.status.${payment.status}`) },
+        { label: t('payments.sidecar.method'), value: t(`payments.method.${toPaymentMethod(payment.method)}`) },
+        { label: t('payments.sidecar.date'), value: formatDate(payment.createdAt) },
       ],
       details: [
-        { label: "To'lov ID", value: payment.id, copyable: true },
-        { label: 'Talaba', value: studentName },
-        { label: 'Izoh / Tavsif', value: payment.description || "To'lov qayd etildi" },
-        { label: "O'zgartirilgan", value: formatDate((payment as any).updatedAt || payment.createdAt) },
+        { label: t('payments.sidecar.id'), value: payment.id, copyable: true },
+        { label: t('payments.sidecar.student'), value: studentName },
+        { label: t('payments.sidecar.description'), value: payment.description || t('payments.sidecar.defaultDesc') },
+        { label: t('payments.sidecar.updatedAt'), value: formatDate((payment as any).updatedAt || payment.createdAt) },
       ],
       primaryAction: {
-        label: 'Rasmiy Kvitansiya (PDF Studio)',
+        label: t('payments.sidecar.officialReceipt'),
         onExecute: () => setReceiptTarget(payment),
       },
+      secondaryAction: isDebt
+        ? {
+            label: t('payments.sidecar.sendAiReminder'),
+            onExecute: () => setAiDebtTarget(payment),
+          }
+        : {
+            label: t('payments.sidecar.posSlip'),
+            onExecute: () => setThermalReceiptTarget(payment),
+          },
     };
     openSidecar(data);
-  }, []);
+  }, [t]);
 
   /* ── Fast Keyboard-First Navigation ─────────────────────────── */
   const {
@@ -1144,7 +1165,7 @@ export function PaymentsPage() {
                     }}
                   >
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500" />
-                    <span className="dark:brightness-125">{stats.overdue} overdue</span>
+                    <span className="dark:brightness-125">{t('payments.overdueBadge', { count: stats.overdue })}</span>
                   </span>
                 )}
               </div>
@@ -1172,7 +1193,7 @@ export function PaymentsPage() {
                 >
                   <span className="inline-flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-300">
                     <Icon paths={I.receipt} size={15} strokeWidth={2.2} />
-                    Kassa Z-Hisoboti
+                    {t('payments.zReport')}
                   </span>
                 </GlassButton>
               </motion.div>
@@ -1197,7 +1218,7 @@ export function PaymentsPage() {
                 >
                   <span className="inline-flex items-center gap-2 font-semibold text-violet-700 dark:text-violet-300">
                     <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
-                    {t('attendance.aiAnalysis')}
+                    {t('payments.aiAnalysis')}
                   </span>
                 </GlassButton>
               </motion.div>
@@ -1225,17 +1246,70 @@ export function PaymentsPage() {
       </motion.div>
 
       {/* ============================================================
-          REFRACTIVE KPI LENS BAR
+          ENTERPRISE FINANCIAL TABS
       ============================================================ */}
-      <motion.div
-        variants={containerVariants}
-        className="grid grid-cols-2 gap-3.5 sm:grid-cols-4"
-      >
-        <KpiTile label={t('payments.allStatuses')} value={stats.total} icon={I.receipt} tone="sapphire" />
-        <KpiTile label={t('payments.status.PAID')} value={stats.paid} icon={I.checkCircle} tone="jade" />
-        <KpiTile label={t('payments.status.PENDING')} value={stats.pending} icon={I.clock} tone="amber" />
-        <KpiTile label={t('payments.status.OVERDUE')} value={stats.overdue} icon={I.alertCircle} tone="coral" />
-      </motion.div>
+      <div className="flex rounded-2xl bg-slate-900/[0.04] p-1.5 dark:bg-white/[0.05] border border-slate-900/[0.06] dark:border-white/[0.08] backdrop-blur-xl">
+        <button
+          type="button"
+          onClick={() => setActiveTab('ledger')}
+          className={`flex-1 rounded-xl py-2 px-3 text-xs font-bold transition-all ${
+            activeTab === 'ledger'
+              ? 'bg-white text-blue-600 shadow-md dark:bg-white/[0.12] dark:text-white'
+              : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+          }`}
+        >
+          {t('payments.tabs.ledger')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('analytics')}
+          className={`flex-1 rounded-xl py-2 px-3 text-xs font-bold transition-all ${
+            activeTab === 'analytics'
+              ? 'bg-white text-blue-600 shadow-md dark:bg-white/[0.12] dark:text-white'
+              : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+          }`}
+        >
+          {t('payments.tabs.analytics')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('cashflow')}
+          className={`flex-1 rounded-xl py-2 px-3 text-xs font-bold transition-all ${
+            activeTab === 'cashflow'
+              ? 'bg-white text-blue-600 shadow-md dark:bg-white/[0.12] dark:text-white'
+              : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+          }`}
+        >
+          {t('payments.tabs.cashflow')}
+        </button>
+      </div>
+
+      {activeTab === 'analytics' && (
+        <PaymentsAnalyticsTab
+          payments={paymentList}
+          onOpenQuickPayment={handleOpenModal}
+          onOpenZReport={() => setZReportModalOpen(true)}
+        />
+      )}
+
+      {activeTab === 'cashflow' && (
+        <ExecutiveCashflowForecastRadar />
+      )}
+
+      {activeTab === 'ledger' && (
+        <>
+          {/* ============================================================
+              REFRACTIVE KPI LENS BAR
+          ============================================================ */}
+          <motion.div
+            variants={containerVariants}
+            className="grid grid-cols-2 gap-3.5 sm:grid-cols-4"
+          >
+            <KpiTile label={t('payments.allStatuses')} value={totalPayments || stats.total} icon={I.receipt} tone="sapphire" />
+            <KpiTile label={t('payments.status.PAID')} value={stats.paid} icon={I.checkCircle} tone="jade" />
+            <KpiTile label={t('payments.status.PENDING')} value={stats.pending} icon={I.clock} tone="amber" />
+            <KpiTile label={t('payments.status.OVERDUE')} value={stats.overdue} icon={I.alertCircle} tone="coral" />
+          </motion.div>
 
       {/* ============================================================
           LIQUID GLASS FILTER TOOLBAR
@@ -1470,6 +1544,22 @@ export function PaymentsPage() {
                           />
                         )}
 
+                        {/* AI Debt Reminder Shortcut for Pending / Overdue Payments */}
+                        {(payment.status === 'PENDING' || payment.status === 'OVERDUE') && (
+                          <motion.button
+                            type="button"
+                            onClick={() => setAiDebtTarget(payment)}
+                            whileHover={{ scale: 1.07, y: -1 }}
+                            whileTap={{ scale: 0.93 }}
+                            transition={SPRING.snappy}
+                            aria-label={t('payments.sidecar.sendAiReminder')}
+                            title={t('payments.sidecar.sendAiReminder')}
+                            className="h-9 w-9 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl border border-amber-400/40 bg-amber-500/[0.08] text-amber-600 shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.8)] backdrop-blur-md transition-colors hover:border-amber-400/70 hover:bg-amber-500/[0.16] hover:text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/[0.12] dark:text-amber-300"
+                          >
+                            <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
+                          </motion.button>
+                        )}
+
                         {/* Sidecar Split-View Optical Button with guaranteed >= 44x44px touch target */}
                         <motion.button
                           type="button"
@@ -1553,6 +1643,8 @@ export function PaymentsPage() {
           },
         ]}
       />
+    </>
+  )}
 
       {/* ============================================================
           CREATE PAYMENT MODAL
@@ -1619,7 +1711,18 @@ export function PaymentsPage() {
             </GlassField>
 
             <GlassField
-              label={t('payments.form.amount')}
+              label={
+                <div className="flex items-center justify-between">
+                  <span>{t('payments.form.amount')}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSplitCalcOpen((v) => !v)}
+                    className="text-[11px] font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    💱 {t('payments.calculator.button')}
+                  </button>
+                </div>
+              }
               required
               error={formErrors.amount ? t(formErrors.amount) : undefined}
             >
@@ -1675,6 +1778,27 @@ export function PaymentsPage() {
               </div>
             </GlassField>
           </div>
+
+          {splitCalcOpen && (
+            <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.04] p-2">
+              <CurrencySplitCalculator
+                requiredAmountUzs={parseSafeAmount(form.amount) || 0}
+                onApplyPayment={({ cashUzs, changeUzs }) => {
+                  setSplitCalcOpen(false);
+                  const netAmount = Math.max(0, cashUzs - changeUzs);
+                  setForm((prev) => ({
+                    ...prev,
+                    amount: String(netAmount || cashUzs),
+                    description:
+                      changeUzs > 0
+                        ? `${prev.description ? prev.description + ' · ' : ''}Qaytim: ${changeUzs.toLocaleString('uz-UZ')} UZS`
+                        : prev.description,
+                  }));
+                }}
+                onClose={() => setSplitCalcOpen(false)}
+              />
+            </div>
+          )}
 
           <GlassField label={t('common.description')}>
             <GlassInput
@@ -1801,7 +1925,7 @@ export function PaymentsPage() {
                   <div className="mt-1.5">
                     <StatusBadge
                       status={receiptTarget.status}
-                      label={formatPaymentStatus(receiptTarget.status)}
+                      label={t(`payments.status.${receiptTarget.status}`)}
                     />
                   </div>
                 </div>
@@ -1853,7 +1977,7 @@ export function PaymentsPage() {
             </div>
 
             {/* Modal Actions */}
-            <div className="flex justify-end gap-2.5">
+            <div className="flex flex-wrap justify-end gap-2.5">
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <GlassButton
                   type="button"
@@ -1861,6 +1985,19 @@ export function PaymentsPage() {
                   onClick={() => setReceiptTarget(null)}
                 >
                   {t('common.close')}
+                </GlassButton>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setThermalReceiptTarget(receiptTarget)}
+                  className="!rounded-2xl !border-emerald-400/35 !bg-emerald-500/[0.08] hover:!bg-emerald-500/[0.14]"
+                >
+                  <span className="inline-flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-300">
+                    <Icon paths={I.receipt} size={15} strokeWidth={2.2} />
+                    {t('payments.posThermalReceipt')}
+                  </span>
                 </GlassButton>
               </motion.div>
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
@@ -1884,7 +2021,7 @@ export function PaymentsPage() {
                 >
                   <span className="inline-flex items-center gap-2 font-semibold">
                     <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
-                    Executive PDF Studio
+                    {t('payments.receipt.pdfStudio')}
                   </span>
                 </GlassButton>
               </motion.div>
@@ -1916,6 +2053,20 @@ export function PaymentsPage() {
           }}
         />
       )}
+
+      {/* POS Thermal Receipt Modal */}
+      <PosThermalReceiptModal
+        open={thermalReceiptTarget !== null}
+        onClose={() => setThermalReceiptTarget(null)}
+        payment={thermalReceiptTarget}
+      />
+
+      {/* AI Smart Debt Reminder Modal */}
+      <AiDebtReminderModal
+        open={aiDebtTarget !== null}
+        onClose={() => setAiDebtTarget(null)}
+        payment={aiDebtTarget}
+      />
 
       {/* Cashier Shift Reconciliation & Z-Report Modal */}
       <CashierZReportModal
