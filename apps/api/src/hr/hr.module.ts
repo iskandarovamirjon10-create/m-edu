@@ -7,11 +7,18 @@ import { HremployeeController } from './hr.controller';
 import { PayrollService } from './payroll.service';
 import { PayrollRunController } from './payroll-run.controller';
 import { PayrollPeriodController } from './payroll-period.controller';
+import { TeacherKpiPayrollController } from './teacher-kpi-payroll.controller';
+import { TeacherKpiPayrollService } from './teacher-kpi-payroll.service';
 
 @Module({
   imports: [PrismaModule, AuditModule, AnalyticsModule],
-  controllers: [HremployeeController, PayrollRunController, PayrollPeriodController],
-  providers: [HremployeeService, PayrollService],
-  exports: [HremployeeService, PayrollService],
+  controllers: [
+    HremployeeController,
+    PayrollRunController,
+    PayrollPeriodController,
+    TeacherKpiPayrollController,
+  ],
+  providers: [HremployeeService, PayrollService, TeacherKpiPayrollService],
+  exports: [HremployeeService, PayrollService, TeacherKpiPayrollService],
 })
 export class HrModule {}

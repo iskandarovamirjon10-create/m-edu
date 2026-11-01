@@ -1692,6 +1692,112 @@ export const calendarApi = {
   create: (data: object) => request<any>('/calendar/events', { method: 'POST', body: JSON.stringify(data) }),
 };
 
+// ============================================================================
+// ENTERPRISE HIGH-VALUE COMMERCE & OPERATIONS APIS
+// ============================================================================
+
+export const retentionApi = {
+  getCockpit: (query?: { tier?: string; groupId?: string; page?: number; limit?: number }) =>
+    request<any>(`/students/retention/cockpit${buildQuery(query)}`),
+  recordIntervention: (
+    studentId: string,
+    data: { type: string; notes: string; promisedOutcome?: string; followUpDays?: number },
+  ) =>
+    request<any>(`/students/retention/${encodeURIComponent(studentId)}/intervene`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+export const scheduleOptimizerApi = {
+  auditConflicts: (query?: { branchId?: string; dayOfWeek?: string }) =>
+    request<any>(`/schedule/optimizer/conflicts${buildQuery(query)}`),
+  suggestResolution: (data: { scheduleId: string; preferredTimeOfDay?: string; preferredDays?: string[] }) =>
+    request<any>('/schedule/optimizer/suggest-resolution', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  applyResolution: (data: {
+    scheduleId: string;
+    targetRoom: string;
+    targetDayOfWeek: string;
+    targetStartTime: string;
+    targetEndTime: string;
+  }) =>
+    request<any>('/schedule/optimizer/apply-resolution', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+export const smartDiscountApi = {
+  evaluate: (data: { studentId: string; courseId?: string; tuitionAmount: number }) =>
+    request<any>('/payments/discounts/evaluate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getFamilyNetwork: (studentId: string) =>
+    request<any>(`/payments/discounts/family/${encodeURIComponent(studentId)}`),
+  applyFamilyDiscounts: (data: {
+    studentId: string;
+    discountPercentTier2?: number;
+    discountPercentTier3?: number;
+  }) =>
+    request<any>('/payments/discounts/apply-family', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+export const teacherKpiPayrollApi = {
+  calculateBatch: (data: {
+    periodYear: number;
+    periodMonth: number;
+    branchId?: string;
+    commissionRatePercent?: number;
+    retentionTargetPercent?: number;
+  }) =>
+    request<any>('/hr/teacher-kpi/calculate-batch', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  approveBatch: (data: {
+    periodYear: number;
+    periodMonth: number;
+    branchId?: string;
+    proposals: any[];
+  }) =>
+    request<any>('/hr/teacher-kpi/approve-batch', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+export const parentSafetyGuardApi = {
+  notifyMovement: (data: {
+    studentId: string;
+    direction: 'IN' | 'OUT';
+    gateOrDeviceName: string;
+    verificationMethod?: string;
+  }) =>
+    request<any>('/parent-portal/safety/movement', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getLivePresence: (branchId?: string) =>
+    request<any>(`/parent-portal/safety/live-presence${buildQuery({ branchId })}`),
+  emergencyBroadcast: (data: {
+    title: string;
+    message: string;
+    severity: 'HIGH' | 'CRITICAL';
+    targetAudience: 'CURRENTLY_PRESENT' | 'ALL_ACTIVE_STUDENTS';
+  }) =>
+    request<any>('/parent-portal/safety/emergency-broadcast', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
 export default request;
 
 

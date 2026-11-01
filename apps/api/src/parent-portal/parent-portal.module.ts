@@ -1,17 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ParentPortalController } from './parent-portal.controller';
 import { ParentPortalService } from './parent-portal.service';
+import { ParentSafetyGuardController } from './parent-safety-guard.controller';
+import { ParentSafetyGuardService } from './parent-safety-guard.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AuditModule } from '../audit/audit.module';
+import { TelegramCoreModule } from '../telegram/telegram-core.module';
 
-/**
- * Parent Portal module (37-Phase Report §17/§28): exposes the DB models that
- * existed but were unreachable (ParentAccount / ParentStudent) through
- * strictly child-scoped read endpoints.
- */
 @Module({
-  imports: [PrismaModule],
-  controllers: [ParentPortalController],
-  providers: [ParentPortalService],
-  exports: [ParentPortalService],
+  imports: [PrismaModule, AuditModule, TelegramCoreModule],
+  controllers: [ParentPortalController, ParentSafetyGuardController],
+  providers: [ParentPortalService, ParentSafetyGuardService],
+  exports: [ParentPortalService, ParentSafetyGuardService],
 })
 export class ParentPortalModule {}

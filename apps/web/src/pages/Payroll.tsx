@@ -42,6 +42,7 @@ import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { PayrollRun, PayrollPeriodSummary } from '@/lib/types';
 import { SmartKpiScorecardModal } from '@/components/payroll/SmartKpiScorecardModal';
 import { TeacherPayrollStudio } from '@/components/payroll/TeacherPayrollStudio';
+import { TeacherKpiBatchPayrollModal } from '@/components/hr/TeacherKpiBatchPayrollModal';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -582,6 +583,7 @@ export function PayrollPage() {
 
   const [calculateOpen, setCalculateOpen] = useState(false);
   const [smartKpiOpen, setSmartKpiOpen] = useState(false);
+  const [batchKpiModalOpen, setBatchKpiModalOpen] = useState(false);
   const [selectedKpiTeacher, setSelectedKpiTeacher] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState<CalculateFormState>(EMPTY_FORM);
   const [cancelTarget, setCancelTarget] = useState<PayrollRun | null>(null);
@@ -876,6 +878,17 @@ export function PayrollPage() {
               whileTap={{ scale: 0.97 }}
               transition={SPRING.snappy}
             >
+              <GlassButton
+                type="button"
+                variant="secondary"
+                onClick={() => setBatchKpiModalOpen(true)}
+                className="border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 mr-2"
+              >
+                <span className="inline-flex items-center gap-1.5 font-bold">
+                  <span>⚡</span>
+                  Auto KPI & Batch
+                </span>
+              </GlassButton>
               <GlassButton
                 type="button"
                 variant="secondary"
@@ -1496,6 +1509,11 @@ export function PayrollPage() {
           </div>
         </form>
       </GlassModal>
+
+      <TeacherKpiBatchPayrollModal
+        isOpen={batchKpiModalOpen}
+        onClose={() => setBatchKpiModalOpen(false)}
+      />
 
       {selectedKpiTeacher && (
         <SmartKpiScorecardModal

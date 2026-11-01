@@ -27,6 +27,7 @@ import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { SmartScheduleClashMatrix } from '@/components/schedule/SmartScheduleClashMatrix';
+import { ScheduleOptimizerModal } from '@/components/schedule/ScheduleOptimizerModal';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * MOTION TOKENS
@@ -881,6 +882,7 @@ export function SchedulePage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<Schedule | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [isOptimizerOpen, setIsOptimizerOpen] = useState(false);
   const { playPop, playTick } = usePremiumSound();
 
   const utilizationQ = useQuery({
@@ -1231,6 +1233,19 @@ export function SchedulePage() {
                   );
                 })}
               </div>
+
+              {/* AI Optimizer Button */}
+              <GlassButton
+                variant="secondary"
+                size="md"
+                onClick={() => setIsOptimizerOpen(true)}
+                className="min-h-[44px] px-3.5 font-bold border-cyan-500/30 bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 active:scale-95"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <span>⚡</span>
+                  <span className="hidden sm:inline">AI Ziddiyatlar & Optimizator</span>
+                </span>
+              </GlassButton>
 
               {/* Add Slot Button (Touch Target >= 44px) */}
               <GlassButton
@@ -1687,6 +1702,11 @@ export function SchedulePage() {
           />
         </form>
       </GlassModal>
+
+      <ScheduleOptimizerModal
+        isOpen={isOptimizerOpen}
+        onClose={() => setIsOptimizerOpen(false)}
+      />
     </div>
   );
 }

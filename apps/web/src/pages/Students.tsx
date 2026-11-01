@@ -39,6 +39,8 @@ import { fullName } from '@/lib/format';
 import { UniversityAdmissionPathfinder } from '@/components/students/UniversityAdmissionPathfinder';
 import { ReferralGrowthEngineModal } from '@/components/marketing/ReferralGrowthEngineModal';
 import { StudentMilestoneCelebrationModal } from '@/components/students/StudentMilestoneCelebrationModal';
+import { StudentRetentionCockpitModal } from '@/components/retention/StudentRetentionCockpitModal';
+import { SmartDiscountClusterModal } from '@/components/finance/SmartDiscountClusterModal';
 import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Student, Group } from '@/lib/types';
@@ -1509,6 +1511,8 @@ export function StudentsPage() {
   const [isAdmissionPathfinderOpen, setIsAdmissionPathfinderOpen] = useState(false);
   const [isReferralEngineOpen, setIsReferralEngineOpen] = useState(false);
   const [isMilestoneCelebrationOpen, setIsMilestoneCelebrationOpen] = useState(false);
+  const [isRetentionCockpitOpen, setIsRetentionCockpitOpen] = useState(false);
+  const [isSmartDiscountOpen, setIsSmartDiscountOpen] = useState(false);
   const [selectedStudentForCelebration, setSelectedStudentForCelebration] = useState<string>('');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [hoveredStudent, setHoveredStudent] = useState<{ student: Student; rect: DOMRect } | null>(null);
@@ -2059,6 +2063,38 @@ export function StudentsPage() {
           <span className="inline-flex items-center gap-1.5 font-semibold">
             <span>🌟</span>
             <span className="hidden sm:inline">Yutuqlar</span>
+          </span>
+        </GlassButton>
+
+        <GlassButton
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            sound.playPop?.();
+            setIsRetentionCockpitOpen(true);
+          }}
+          title="AI Churn Risk & Retention Cockpit"
+          className="border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"
+        >
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <span>🛡️</span>
+            <span className="hidden sm:inline">AI Retention</span>
+          </span>
+        </GlassButton>
+
+        <GlassButton
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            sound.playPop?.();
+            setIsSmartDiscountOpen(true);
+          }}
+          title="Smart Oila Klasteri & Dinamik Chegirmalar"
+          className="border-violet-500/30 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20"
+        >
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <span>👨‍👩‍👧‍👦</span>
+            <span className="hidden sm:inline">Oila Chegirmalari</span>
           </span>
         </GlassButton>
 
@@ -3011,6 +3047,16 @@ export function StudentsPage() {
         isOpen={isMilestoneCelebrationOpen}
         onClose={() => setIsMilestoneCelebrationOpen(false)}
         defaultStudentId={selectedStudentForCelebration}
+      />
+
+      <StudentRetentionCockpitModal
+        isOpen={isRetentionCockpitOpen}
+        onClose={() => setIsRetentionCockpitOpen(false)}
+      />
+
+      <SmartDiscountClusterModal
+        isOpen={isSmartDiscountOpen}
+        onClose={() => setIsSmartDiscountOpen(false)}
       />
 
       {toastNode}

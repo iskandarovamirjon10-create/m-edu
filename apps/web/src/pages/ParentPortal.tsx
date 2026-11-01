@@ -28,6 +28,7 @@ import { formatCurrency, formatDate, formatTime, fullName } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { ParentWeeklyDigestCard } from '@/components/parent/ParentWeeklyDigestCard';
 import { FamilyGuardianHub } from '@/components/parent/FamilyGuardianHub';
+import { ParentSafetyTurnstileModal } from '@/components/parent/ParentSafetyTurnstileModal';
 import { useAuth } from '@/auth/AuthContext';
 import type {
   ParentChild,
@@ -717,6 +718,7 @@ export function ParentPortalPage() {
   const reduced = usePrefersReducedMotion();
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [portalMode, setPortalMode] = useState<'individual' | 'familyHub'>('individual');
+  const [isSafetyTurnstileOpen, setIsSafetyTurnstileOpen] = useState(false);
   const { user } = useAuth();
 
   const childrenQuery = useQuery({
@@ -853,6 +855,14 @@ export function ParentPortalPage() {
             )}
 
             <div className="ml-auto flex items-center gap-1.5 rounded-2xl border border-white/20 bg-white/40 p-1.5 backdrop-blur-xl dark:border-white/10 dark:bg-black/20">
+              <button
+                type="button"
+                onClick={() => setIsSafetyTurnstileOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25"
+              >
+                <span>🛡️</span>
+                <span>Jonli Turniket & Xavfsizlik</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setPortalMode('individual')}
@@ -1416,6 +1426,11 @@ export function ParentPortalPage() {
           )}
         </div>
       </div>
+
+      <ParentSafetyTurnstileModal
+        isOpen={isSafetyTurnstileOpen}
+        onClose={() => setIsSafetyTurnstileOpen(false)}
+      />
     </div>
   );
 }
