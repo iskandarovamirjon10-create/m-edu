@@ -3074,8 +3074,8 @@ export function StudentDetailPage() {
                 biometricVerified: stats.faceEnrolled > 0,
                 nfcEnabled: true,
                 codeOrId: studentData.id,
-                qrValue: typeof window !== 'undefined' ? `${window.location.origin}/students/${studentData.id}` : undefined,
               }}
+              qrValue={typeof window !== 'undefined' ? `${window.location.origin}/students/${studentData.id}` : undefined}
             />
           </div>
         )}

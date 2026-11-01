@@ -284,6 +284,14 @@ const I: Record<string, string[]> = {
     'M3 5v14a2 2 0 0 0 2 2h16v-5',
     'M18 12a2 2 0 0 0 0 4h4v-4Z',
   ],
+  search: [
+    'M21 21l-4.35-4.35',
+    'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z',
+  ],
+  x: [
+    'M18 6L6 18',
+    'M6 6l12 12',
+  ],
 };
 
 function Icon({
@@ -1111,6 +1119,20 @@ export function TeacherWorkloadPage() {
     [teachersQuery.data],
   );
 
+  const [filterStatus, setFilterStatus] = useState<'ALL' | WorkloadStatus>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredTeachers = useMemo(() => {
+    return teachers.filter((tw) => {
+      if (filterStatus !== 'ALL' && tw.status !== filterStatus) return false;
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        if (!tw.teacherName.toLowerCase().includes(query)) return false;
+      }
+      return true;
+    });
+  }, [teachers, filterStatus, searchQuery]);
+
   const { playTick } = usePremiumSound();
 
   const handleOpenTeacherWorkloadSidecar = useCallback(
@@ -1159,7 +1181,7 @@ export function TeacherWorkloadPage() {
   );
 
   useListKeyboardNavigation<TeacherWorkload>({
-    items: teachers,
+    items: filteredTeachers,
     getItemId: (tw) => tw.teacherId,
     rowIdPrefix: 'teacher-workload-',
     onSelect: (tw) => {
@@ -1309,6 +1331,130 @@ export function TeacherWorkloadPage() {
 
       {/* ═══ WORKLOAD LIST ═══ */}
       <GlassCard className="overflow-hidden">
+        {/* Filter and Search Bar */}
+        <div className="flex flex-col gap-3 border-b border-black/[0.06] p-4 dark:border-white/[0.08] sm:flex-row sm:items-center sm:justify-between">
+          {/* Status Segmented Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label={t('teacherWorkload.filterStatus', 'Yuklama holati')}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filterStatus === 'ALL'}
+              onClick={() => {
+                playTick();
+                setFilterStatus('ALL');
+              }}
+              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                filterStatus === 'ALL'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-black/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.06]'
+              }`}
+            >
+              <span>{t('common.all', 'Barchasi')}</span>
+              <span className={`text-[10px] font-black rounded-full px-1.5 py-0.5 ${
+                filterStatus === 'ALL' ? 'bg-white/20 text-white' : 'bg-black/[0.06] dark:bg-white/10'
+              }`}>
+                {teachers.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filterStatus === 'OVERLOADED'}
+              onClick={() => {
+                playTick();
+                setFilterStatus('OVERLOADED');
+              }}
+              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                filterStatus === 'OVERLOADED'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-black/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.06]'
+              }`}
+            >
+              <span className="h-2 w-2 rounded-full bg-rose-500" />
+              <span>{t('teacherWorkload.overloaded', 'Ortiqcha')}</span>
+              <span className={`text-[10px] font-black rounded-full px-1.5 py-0.5 ${
+                filterStatus === 'OVERLOADED' ? 'bg-white/20 text-white' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+              }`}>
+                {summary?.overloaded ?? 0}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filterStatus === 'BALANCED'}
+              onClick={() => {
+                playTick();
+                setFilterStatus('BALANCED');
+              }}
+              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                filterStatus === 'BALANCED'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-black/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.06]'
+              }`}
+            >
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span>{t('teacherWorkload.balanced', 'Muvozanatda')}</span>
+              <span className={`text-[10px] font-black rounded-full px-1.5 py-0.5 ${
+                filterStatus === 'BALANCED' ? 'bg-white/20 text-white' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+              }`}>
+                {summary?.balanced ?? 0}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filterStatus === 'UNDERUTILIZED'}
+              onClick={() => {
+                playTick();
+                setFilterStatus('UNDERUTILIZED');
+              }}
+              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                filterStatus === 'UNDERUTILIZED'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-black/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.06]'
+              }`}
+            >
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              <span>{t('teacherWorkload.underutilized', 'Kam yuklama')}</span>
+              <span className={`text-[10px] font-black rounded-full px-1.5 py-0.5 ${
+                filterStatus === 'UNDERUTILIZED' ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+              }`}>
+                {summary?.underutilized ?? 0}
+              </span>
+            </button>
+          </div>
+
+          {/* Search Box */}
+          <div className="relative min-w-[220px]">
+            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+              <Icon paths={I.search} size={15} strokeWidth={2.2} />
+            </span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('teacherWorkload.searchPlaceholder', "O'qituvchi bo'yicha qidirish...")}
+              className="min-h-[44px] w-full rounded-xl border border-black/10 bg-black/[0.02] pl-9 pr-9 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-100"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  playTick();
+                  setSearchQuery('');
+                }}
+                className="min-h-[44px] min-w-[36px] absolute inset-y-0 right-0 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                aria-label={t('common.clear', 'Tozalash')}
+              >
+                <Icon paths={I.x} size={14} strokeWidth={2.4} />
+              </button>
+            )}
+          </div>
+        </div>
+
         <AnimatePresence mode="wait">
           {teachersQuery.isLoading ? (
             <motion.div
@@ -1359,6 +1505,27 @@ export function TeacherWorkloadPage() {
                 message={t('teacherWorkload.emptyMessage', "Hozircha yuklama qayd qilingan o'qituvchilar mavjud emas")}
               />
             </motion.div>
+          ) : filteredTeachers.length === 0 ? (
+            <motion.div
+              key="no-matches"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="p-8 text-center"
+            >
+              <GlassEmptyState
+                title={t('common.noResults', 'Natija topilmadi')}
+                message={t('teacherWorkload.noMatches', 'Tanlangan filtr yoki qidiruv bo‘yicha o‘qituvchilar topilmadi.')}
+                action={{
+                  label: t('common.resetFilters', 'Filtrlarni tozalash'),
+                  onClick: () => {
+                    playTick();
+                    setFilterStatus('ALL');
+                    setSearchQuery('');
+                  },
+                }}
+              />
+            </motion.div>
           ) : (
             <motion.ul
               key="list"
@@ -1367,7 +1534,7 @@ export function TeacherWorkloadPage() {
               animate="visible"
               className="m-0 list-none p-0"
             >
-              {teachers.map((teacher, idx) => (
+              {filteredTeachers.map((teacher, idx) => (
                 <WorkloadRow
                   key={teacher.teacherId}
                   teacher={teacher}
