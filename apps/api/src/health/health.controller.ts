@@ -44,4 +44,84 @@ export class HealthController {
     }
     return payload;
   }
+
+  @Get('liveness')
+  @ApiOperation({ summary: 'Kubernetes/Cloud Liveness probe — checks if process is responding' })
+  liveness() {
+    return {
+      status: 'ok',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Get('readiness')
+  @ApiOperation({ summary: 'Kubernetes/Cloud Readiness probe — checks database connection' })
+  async readiness(@Res({ passthrough: true }) res: Response) {
+    let database = 'down';
+    try {
+      if (typeof this.prisma.ping === 'function') {
+        const isUp = await this.prisma.ping();
+        database = isUp ? 'up' : 'down';
+      } else {
+        await this.prisma.$queryRaw`SELECT 1`;
+        database = 'up';
+      }
+    } catch {
+      database = 'down';
+    }
+
+    if (database !== 'up') {
+      res.status(503);
+      return { status: 'down', database, timestamp: new Date().toISOString() };
+    }
+
+    return { status: 'ready', database, timestamp: new Date().toISOString() };
+  }
+
+  @Get('detailed')
+  @ApiOperation({ summary: 'Detailed system health metrics for operators and monitoring' })
+  async detailed(@Res({ passthrough: true }) res: Response) {
+    let database = 'down';
+    let dbLatencyMs = -1;
+    const start = performance.now();
+    try {
+      if (typeof this.prisma.ping === 'function') {
+        const isUp = await this.prisma.ping();
+        database = isUp ? 'up' : 'down';
+      } else {
+        await this.prisma.$queryRaw`SELECT 1`;
+        database = 'up';
+      }
+      dbLatencyMs = Math.round(performance.now() - start);
+    } catch {
+      database = 'down';
+    }
+
+    const mem = process.memoryUsage();
+    const toMb = (bytes: number) => Math.round((bytes / 1024 / 1024) * 100) / 100;
+
+    const payload = {
+      status: database === 'up' ? 'ok' : 'degraded',
+      environment: process.env.NODE_ENV || 'development',
+      nodeVersion: process.version,
+      uptimeSeconds: Math.round(process.uptime()),
+      database: {
+        status: database,
+        latencyMs: dbLatencyMs,
+      },
+      memory: {
+        rssMb: toMb(mem.rss),
+        heapTotalMb: toMb(mem.heapTotal),
+        heapUsedMb: toMb(mem.heapUsed),
+        externalMb: toMb(mem.external),
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    if (database !== 'up') {
+      res.status(503);
+    }
+    return payload;
+  }
 }
