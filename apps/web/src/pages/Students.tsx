@@ -2011,120 +2011,115 @@ export function StudentsPage() {
 
   const HeaderActions = useMemo(
     () => (
-      <div className="flex items-center gap-2.5">
-        <GlassButton
-          type="button"
-          variant="secondary"
-          onClick={() => setPaletteOpen(true)}
-          title="Buyruq paneli (⌘K)"
-          className="hidden md:inline-flex"
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <Icon paths={I.command} size={13} strokeWidth={2.0} />
-            <kbd className="rounded border border-current/20 px-1 font-mono text-[10px] font-bold opacity-70">
-              ⌘K
-            </kbd>
-          </span>
-        </GlassButton>
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Pro AI & Operations Glass Toolbar */}
+        <div className="flex items-center gap-1 p-1 rounded-2xl bg-black/10 dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/10 backdrop-blur-xl shadow-xs">
+          <GlassButton
+            type="button"
+            variant="ghost"
+            onClick={() => setPaletteOpen(true)}
+            title="Buyruq paneli (⌘K)"
+            aria-label="Buyruq paneli"
+            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl"
+          >
+            <Icon paths={I.command} size={14} strokeWidth={2.0} />
+          </GlassButton>
 
-        <GlassButton
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            sound.playPop?.();
-            setIsAdmissionPathfinderOpen(true);
-          }}
-          title="AI Abituriyent & Karyera Pathfinder"
-          className="border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20"
-        >
-          <span className="inline-flex items-center gap-1.5 font-semibold">
+          <GlassButton
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              sound.playPop?.();
+              setIsAdmissionPathfinderOpen(true);
+            }}
+            title="AI Abituriyent & Karyera Pathfinder"
+            aria-label="AI Karyera"
+            className="h-9 px-2.5 flex items-center justify-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 hover:bg-cyan-500/20"
+          >
             <MeduAiLogo size="xs" />
-            <span className="hidden sm:inline">AI Karyera & Grant</span>
-          </span>
-        </GlassButton>
+            <span className="hidden xl:inline text-xs font-bold">Karyera</span>
+          </GlassButton>
 
-        <GlassButton
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            sound.playPop?.();
-            setIsReferralEngineOpen(true);
-          }}
-          title="Referral & Affiliate Dvigateli"
-          className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-        >
-          <span className="inline-flex items-center gap-1.5 font-semibold">
-            <span>🎁</span>
-            <span className="hidden sm:inline">Referral & Promo</span>
-          </span>
-        </GlassButton>
+          <GlassButton
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              sound.playPop?.();
+              setIsReferralEngineOpen(true);
+            }}
+            title="Referral & Promo Dvigateli"
+            aria-label="Referral"
+            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 hover:bg-emerald-500/20"
+          >
+            <span className="text-sm">🎁</span>
+          </GlassButton>
 
-        <GlassButton
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            sound.playPop?.();
-            setIsMilestoneCelebrationOpen(true);
-          }}
-          title="Yutuqlarni Nishonlash & Faxriy Kartochka"
-          className="border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
-        >
-          <span className="inline-flex items-center gap-1.5 font-semibold">
-            <span>🌟</span>
-            <span className="hidden sm:inline">Yutuqlar</span>
-          </span>
-        </GlassButton>
+          <GlassButton
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              sound.playPop?.();
+              setIsMilestoneCelebrationOpen(true);
+            }}
+            title="Yutuqlarni Nishonlash"
+            aria-label="Yutuqlar"
+            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-500 dark:text-amber-400 hover:bg-amber-500/20"
+          >
+            <span className="text-sm">🌟</span>
+          </GlassButton>
 
-        <GlassButton
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            sound.playPop?.();
-            setIsRetentionCockpitOpen(true);
-          }}
-          title="AI Churn Risk & Retention Cockpit"
-          className="border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"
-        >
-          <span className="inline-flex items-center gap-1.5 font-semibold">
-            <span>🛡️</span>
-            <span className="hidden sm:inline">AI Retention</span>
-          </span>
-        </GlassButton>
+          <GlassButton
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              sound.playPop?.();
+              setIsRetentionCockpitOpen(true);
+            }}
+            title="AI Retention & Churn Risk"
+            aria-label="AI Retention"
+            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-500 dark:text-rose-400 hover:bg-rose-500/20"
+          >
+            <span className="text-sm">🛡️</span>
+          </GlassButton>
 
-        <GlassButton
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            sound.playPop?.();
-            setIsSmartDiscountOpen(true);
-          }}
-          title="Smart Oila Klasteri & Dinamik Chegirmalar"
-          className="border-violet-500/30 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20"
-        >
-          <span className="inline-flex items-center gap-1.5 font-semibold">
-            <span>👨‍👩‍👧‍👦</span>
-            <span className="hidden sm:inline">Oila Chegirmalari</span>
-          </span>
-        </GlassButton>
+          <GlassButton
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              sound.playPop?.();
+              setIsSmartDiscountOpen(true);
+            }}
+            title="Smart Oila Klasteri & Dinamik Chegirmalar"
+            aria-label="Oila Chegirmalari"
+            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl border border-violet-500/30 bg-violet-500/10 text-violet-500 dark:text-violet-400 hover:bg-violet-500/20"
+          >
+            <span className="text-sm">👨‍👩‍👧</span>
+          </GlassButton>
 
-<GlassButton type="button" variant="secondary" onClick={handleExportCsv} title="CSV formatda eksport qilish">
-          <span className="inline-flex items-center gap-1.5">
-            <Icon paths={I.download} size={15} strokeWidth={2.0} />
-            <span className="hidden sm:inline">Eksport CSV</span>
-          </span>
-        </GlassButton>
+          <GlassButton
+            type="button"
+            variant="ghost"
+            onClick={handleExportCsv}
+            title="CSV formatda eksport qilish"
+            aria-label="Eksport CSV"
+            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl"
+          >
+            <Icon paths={I.download} size={14} strokeWidth={2.0} />
+          </GlassButton>
+        </div>
 
-        <GlassButton asChild variant="primary">
+        {/* Primary CTA */}
+        <GlassButton asChild variant="primary" className="h-10 px-4 rounded-2xl shadow-sm">
           <Link to="/students/new">
-            <span className="inline-flex items-center gap-2">
-              <Icon paths={I.userPlus} size={16} strokeWidth={2.2} />
+            <span className="inline-flex items-center gap-2 font-bold text-xs sm:text-sm">
+              <Icon paths={I.userPlus} size={15} strokeWidth={2.2} />
               <span>{t('students.add')}</span>
             </span>
           </Link>
         </GlassButton>
       </div>
     ),
-    [t, handleExportCsv],
+    [t, handleExportCsv, sound],
   );
 
   // ── Early states ─────────────────────────────────────────────

@@ -696,11 +696,11 @@ export function DashboardPage() {
               sound.playTick();
               setIsLaunchWizardOpen(true);
             }}
-            className="vision-card hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all shadow-xs"
-            title={t('dashboard.launchTelemetryBtn', 'Boshlang‘ich Sozlash')}
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-all shadow-xs"
+            title={`${t('dashboard.launchTelemetryBtn', 'Boshlang‘ich Sozlash')} (5 min)`}
+            aria-label={t('dashboard.launchTelemetryBtn', 'Boshlang‘ich Sozlash')}
           >
-            <span>🚀</span>
-            <span>{t('dashboard.launchTelemetryBtn', 'Boshlang‘ich Sozlash')}</span>
+            <span className="text-sm">🚀</span>
           </button>
 
           {/* Executive Diagnostic & Appearance Utility Pill Group */}

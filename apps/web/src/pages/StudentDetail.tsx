@@ -1503,110 +1503,131 @@ export function StudentDetailPage() {
               </div>
             </div>
 
-            {/* Right Tactile Action Cluster (WCAG >= 44x44px + Keyboard Hints) */}
-            <div className="flex shrink-0 flex-wrap items-center justify-center gap-2.5 border-t border-[var(--border-subtle)] pt-4 sm:justify-start xl:justify-end xl:border-t-0 xl:pt-0">
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-                <GlassButton
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    playPop();
-                    setCard360Open(true);
-                  }}
-                  className="min-h-[44px] px-3.5 !border-emerald-500/30 hover:!border-emerald-500/55 shadow-sm"
-                >
-                  <span className="inline-flex items-center gap-2 font-semibold text-emerald-600 dark:text-emerald-400">
-                    <Icon paths={I.idCard} size={16} strokeWidth={2.1} />
-                    <span>360° Karta</span>
-                    <kbd aria-hidden="true" className="hidden rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.2 font-mono text-[10px] xl:inline-block">
-                      C
-                    </kbd>
-                  </span>
-                                </GlassButton>
-              </motion.div>
+            {/* Right Tactile Action Cluster (Apple Pro Glass Utility Bar) */}
+            <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-[var(--border-subtle)] pt-4 sm:justify-start xl:justify-end xl:border-t-0 xl:pt-0">
+              {/* Pro Utilities Segmented Glass Bar */}
+              <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/10 dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/10 backdrop-blur-xl shadow-xs">
+                {/* 360° Pass */}
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <GlassButton
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      playPop();
+                      setCard360Open(true);
+                    }}
+                    title="360° Shaffof Karta (C)"
+                    aria-label="360° Karta"
+                    className="min-h-[40px] px-2.5 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 shadow-xs"
+                  >
+                    <span className="inline-flex items-center gap-1.5 font-bold text-xs">
+                      <Icon paths={I.idCard} size={15} strokeWidth={2.2} />
+                      <span className="font-mono text-[11px]">360°</span>
+                      <span className="sr-only">360° Karta</span>
+                      <kbd aria-hidden="true" className="hidden 2xl:inline-block rounded border border-emerald-500/30 bg-emerald-500/10 px-1 py-0.2 font-mono text-[9px]">
+                        C
+                      </kbd>
+                    </span>
+                  </GlassButton>
+                </motion.div>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-                <GlassButton
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    playPop();
-                    setContractModalOpen(true);
-                  }}
-                  className="min-h-[44px] px-3.5 !border-purple-500/30 hover:!border-purple-500/55 shadow-sm"
-                >
-                  <span className="inline-flex items-center gap-2 font-semibold text-purple-600 dark:text-purple-400">
-                    <Icon paths={I.contract} size={16} strokeWidth={2.1} />
-                    <span>Shartnoma</span>
-                    <kbd aria-hidden="true" className="hidden rounded border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.2 font-mono text-[10px] xl:inline-block">
-                      K
-                    </kbd>
-                  </span>
-                </GlassButton>
-              </motion.div>
+                {/* Shartnoma */}
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <GlassButton
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      playPop();
+                      setContractModalOpen(true);
+                    }}
+                    title="Talaba Shartnomasi (K)"
+                    aria-label="Shartnoma"
+                    className="min-h-[40px] px-2.5 py-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 shadow-xs"
+                  >
+                    <span className="inline-flex items-center gap-1.5 font-bold text-xs">
+                      <Icon paths={I.contract} size={15} strokeWidth={2.2} />
+                      <span className="sr-only">Shartnoma</span>
+                      <kbd aria-hidden="true" className="hidden 2xl:inline-block rounded border border-purple-500/30 bg-purple-500/10 px-1 py-0.2 font-mono text-[9px]">
+                        K
+                      </kbd>
+                    </span>
+                  </GlassButton>
+                </motion.div>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-                <GlassButton
-                  type="button"
-                  variant="secondary"
-                  onClick={handleOpenStudentSidecar}
-                  className="min-h-[44px] px-3.5 !border-blue-500/30 hover:!border-blue-500/55 shadow-sm"
-                >
-                  <span className="inline-flex items-center gap-2 font-semibold text-[#0066FF] dark:text-[#52ADFF]">
-                    <Icon paths={I.sidebar} size={15} strokeWidth={2.1} />
-                    <span>Sidecar</span>
-                    <kbd aria-hidden="true" className="hidden rounded border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.2 font-mono text-[10px] xl:inline-block">
-                      S
-                    </kbd>
-                  </span>
-                </GlassButton>
-              </motion.div>
+                {/* Sidecar */}
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <GlassButton
+                    type="button"
+                    variant="ghost"
+                    onClick={handleOpenStudentSidecar}
+                    title="Yon Panel — Sidecar (S)"
+                    aria-label="Sidecar"
+                    className="min-h-[40px] px-2.5 py-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-[#0066FF] dark:text-[#52ADFF] hover:bg-blue-500/20 shadow-xs"
+                  >
+                    <span className="inline-flex items-center gap-1.5 font-bold text-xs">
+                      <Icon paths={I.sidebar} size={15} strokeWidth={2.2} />
+                      <span className="sr-only">Sidecar</span>
+                      <kbd aria-hidden="true" className="hidden 2xl:inline-block rounded border border-blue-500/30 bg-blue-500/10 px-1 py-0.2 font-mono text-[9px]">
+                        S
+                      </kbd>
+                    </span>
+                  </GlassButton>
+                </motion.div>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-                <GlassButton
-                  type="button"
-                  variant="secondary"
-                  onClick={handleAiAnalyze}
-                  className="min-h-[44px] px-3.5 !border-purple-500/30 hover:!border-purple-500/55 shadow-sm"
-                >
-                  <span className="inline-flex items-center gap-2 font-semibold text-purple-600 dark:text-purple-400">
-                    <Icon paths={I.sparkles} size={16} strokeWidth={2.2} />
-                    <span>AI Tahlil</span>
-                    <kbd aria-hidden="true" className="hidden rounded border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.2 font-mono text-[10px] xl:inline-block">
-                      I
-                    </kbd>
-                  </span>
-                </GlassButton>
-              </motion.div>
+                {/* AI Tahlil */}
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <GlassButton
+                    type="button"
+                    variant="ghost"
+                    onClick={handleAiAnalyze}
+                    title="AI Chuqur Tahlili (I)"
+                    aria-label="AI Tahlil"
+                    className="min-h-[40px] px-2.5 py-1.5 rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 hover:bg-fuchsia-500/20 shadow-xs"
+                  >
+                    <span className="inline-flex items-center gap-1.5 font-bold text-xs">
+                      <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
+                      <span className="font-mono text-[11px]">AI</span>
+                      <span className="sr-only">AI Tahlil</span>
+                      <kbd aria-hidden="true" className="hidden 2xl:inline-block rounded border border-fuchsia-500/30 bg-fuchsia-500/10 px-1 py-0.2 font-mono text-[9px]">
+                        I
+                      </kbd>
+                    </span>
+                  </GlassButton>
+                </motion.div>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-                <GlassButton
-                  type="button"
-                  variant="secondary"
-                  onClick={handleEdit}
-                  className="min-h-[44px] px-3.5 shadow-sm"
-                >
-                  <span className="inline-flex items-center gap-2 font-semibold">
-                    <Icon paths={I.edit} size={15} strokeWidth={2} />
-                    <span>{t('common.edit')}</span>
-                    <kbd aria-hidden="true" className="hidden rounded border border-slate-400/30 bg-slate-500/10 px-1.5 py-0.2 font-mono text-[10px] text-[var(--text-tertiary)] xl:inline-block">
-                      E
-                    </kbd>
-                  </span>
-                </GlassButton>
-              </motion.div>
+                {/* Tahrirlash */}
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <GlassButton
+                    type="button"
+                    variant="ghost"
+                    onClick={handleEdit}
+                    title={`${t('common.edit')} (E)`}
+                    aria-label={t('common.edit')}
+                    className="min-h-[40px] px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 hover:bg-white/10 shadow-xs"
+                  >
+                    <span className="inline-flex items-center gap-1.5 font-medium text-xs">
+                      <Icon paths={I.edit} size={15} strokeWidth={2} />
+                      <span className="sr-only">{t('common.edit')}</span>
+                      <kbd aria-hidden="true" className="hidden 2xl:inline-block rounded border border-slate-400/30 bg-slate-500/10 px-1 py-0.2 font-mono text-[9px]">
+                        E
+                      </kbd>
+                    </span>
+                  </GlassButton>
+                </motion.div>
+              </div>
 
+              {/* Primary Action Button */}
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                 <GlassButton
                   type="button"
                   variant="primary"
                   onClick={handleOpenAssign}
-                  className="min-h-[44px] px-4 shadow-sm"
+                  className="min-h-[42px] px-4 rounded-2xl shadow-sm font-bold text-xs sm:text-sm"
                 >
-                  <span className="inline-flex items-center gap-2 font-bold">
-                    <Icon paths={I.plus} size={16} strokeWidth={2.5} />
+                  <span className="inline-flex items-center gap-2">
+                    <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                     <span>{t('studentDetail.assignToGroup')}</span>
-                    <kbd aria-hidden="true" className="hidden rounded border border-white/30 bg-white/15 px-1.5 py-0.2 font-mono text-[10px] xl:inline-block">
+                    <kbd aria-hidden="true" className="hidden xl:inline-block rounded border border-white/30 bg-white/15 px-1.5 py-0.2 font-mono text-[10px]">
                       A
                     </kbd>
                   </span>
