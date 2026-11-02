@@ -87,7 +87,7 @@ export function ImportExportPage() {
   const { push } = useToast();
   const { playTick, playPop, playSuccess, playError } = usePremiumSound();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [viewMode, setViewMode] = useState<'migration' | 'classic'>('migration');
+  const [viewMode, setViewMode] = useState<'migration' | 'classic'>('classic');
   const [entity, setEntity] = useState('STUDENT');
   const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv' | 'pdf'>('xlsx');
   const [isDragging, setIsDragging] = useState(false);
@@ -299,9 +299,11 @@ export function ImportExportPage() {
         </div>
 
         {/* ── View Mode Switcher (i18n & Responsive) ───────────────────── */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-1.5 rounded-2xl bg-black/30 border border-white/10 w-full sm:w-fit">
+        <div role="tablist" aria-label="Import/Export rejimlari" className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-1.5 rounded-2xl bg-black/30 border border-white/10 w-full sm:w-fit">
           <button
             type="button"
+            role="tab"
+            aria-selected={viewMode === 'migration'}
             onClick={() => {
               playTick();
               setViewMode('migration');
@@ -318,6 +320,8 @@ export function ImportExportPage() {
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={viewMode === 'classic'}
             onClick={() => {
               playTick();
               setViewMode('classic');
