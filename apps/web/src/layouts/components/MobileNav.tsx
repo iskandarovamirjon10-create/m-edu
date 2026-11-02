@@ -471,6 +471,10 @@ export const MobileBottomNav = memo(function MobileBottomNav({
   const reduced = usePrefersReducedMotion();
   const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
 
+  /* ── Optical refraction: pointer sheen on dock surface ── */
+  const { bind: refrBind, sheen, rim, opacity: refrOpacity } = useOpticalRefraction(180, 28);
+  useLiquidDefs(!reducedTransparency);
+
   /* ── Recede while reading down, return on scroll up / at either edge ── */
   const [dockHidden, setDockHidden] = useState(false);
   const lastScrollRef = useRef(0);
@@ -553,11 +557,27 @@ export const MobileBottomNav = memo(function MobileBottomNav({
         )}
       >
         <div
+          {...(reducedTransparency ? {} : refrBind)}
           className={cn(
             'relative overflow-hidden rounded-[1.85rem]',
             reducedTransparency ? GLASS_SOLID : GLASS_SLAB,
           )}
         >
+          {/* ── Liquid Glass optical layers ── */}
+          {!reducedTransparency && (
+            <>
+              <SheenLayer
+                sheen={sheen}
+                rim={rim}
+                opacity={refrOpacity}
+                driftEnabled={!reduced}
+                withRim
+                withRefract
+              />
+              <TopSpecular inset="inset-x-6" />
+            </>
+          )}
+
           <ul className="relative z-10 flex items-stretch p-1 sm:p-1.5">
             {tabs.map((item) => (
               <li key={item.to} className="relative min-w-0 flex-1">
@@ -585,19 +605,40 @@ export const MobileBottomNav = memo(function MobileBottomNav({
                             'absolute inset-0 z-0 rounded-[1.15rem]',
                             LENS_ACTIVE,
                           )}
-                        />
+                        >
+                          {/* Corner caustic catchlights — real liquid glass lens effect */}
+                          {!reducedTransparency && (
+                            <>
+                              <span
+                                aria-hidden="true"
+                                className="absolute -top-px -left-px h-4 w-4 rounded-tl-[1.15rem] bg-gradient-to-br from-white/70 via-white/10 to-transparent dark:from-white/30"
+                              />
+                              <span
+                                aria-hidden="true"
+                                className="absolute -top-px -right-px h-4 w-4 rounded-tr-[1.15rem] bg-gradient-to-bl from-white/50 via-white/5 to-transparent dark:from-white/20"
+                              />
+                              {/* Cool bounce line at bottom edge */}
+                              <span
+                                aria-hidden="true"
+                                className="absolute inset-x-3 bottom-0 h-px bg-gradient-to-r from-transparent via-apple-blue/30 to-transparent dark:via-apple-blue/45"
+                              />
+                            </>
+                          )}
+                        </motion.div>
                       )}
 
                       <motion.div
-                        whileTap={reduced ? undefined : { scale: 0.88 }}
-                        transition={SPRING_TOUCH}
+                        whileTap={reduced ? undefined : { scaleX: 1.06, scaleY: 0.88 }}
+                        transition={SPRING_GEL}
                         className="relative z-10 flex flex-col items-center justify-center gap-1"
                       >
-                        <span
+                        <motion.span
+                          animate={isActive ? { scale: 1.08, y: -0.5 } : { scale: 1, y: 0 }}
+                          transition={SPRING_TOUCH}
                           className={cn(
-                            'transition-transform duration-200',
+                            'transition-colors duration-200',
                             isActive
-                              ? cn(TAB_ACTIVE, 'scale-[1.06]')
+                              ? TAB_ACTIVE
                               : cn(
                                   TAB_IDLE,
                                   'group-hover:text-[var(--text-primary)]',
@@ -608,7 +649,7 @@ export const MobileBottomNav = memo(function MobileBottomNav({
                             paths={item.iconPath}
                             className="h-[1.25rem] w-[1.25rem]"
                           />
-                        </span>
+                        </motion.span>
                         <span
                           className={cn(
                             'max-w-[4.8rem] truncate text-[10px] tracking-[-0.01em] transition-colors duration-200',
@@ -631,8 +672,8 @@ export const MobileBottomNav = memo(function MobileBottomNav({
               <motion.button
                 type="button"
                 onClick={handleOpenMore}
-                whileTap={reduced ? undefined : { scale: 0.88 }}
-                transition={SPRING_TOUCH}
+                whileTap={reduced ? undefined : { scaleX: 1.06, scaleY: 0.88 }}
+                transition={SPRING_GEL}
                 aria-label={t('a11y.openMenu', 'Open menu')}
                 className={cn(
                   'group relative flex min-h-[3.25rem] w-full flex-col items-center justify-center gap-1 rounded-[1.15rem] px-1 py-1',
@@ -685,6 +726,10 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
   const soundRef = useStableSound();
   const reduced = usePrefersReducedMotion();
   const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
+
+  /* ── Liquid Glass optical refraction for drawer surface ── */
+  const { bind: drawerRefrBind, sheen: drawerSheen, rim: drawerRim, opacity: drawerRefrOpacity } = useOpticalRefraction(166, 40);
+  useLiquidDefs(open && !reducedTransparency);
 
   // Real focus trap: Tab cycles inside the dialog. Matches aria-modal="true".
   useFocusTrap(drawerRef, open, closeBtnRef);
@@ -814,6 +859,7 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
             className="absolute left-0 top-0 ml-[max(0.75rem,env(safe-area-inset-left,0px))] mt-[calc(0.75rem+env(safe-area-inset-top,0px))] h-[calc(100dvh-1.5rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-[min(332px,88vw)] origin-left transform-gpu will-change-transform"
           >
             <div
+              {...(open && !reducedTransparency ? drawerRefrBind : {})}
               className={cn(
                 'relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-[2.5rem]',
                 reducedTransparency ? GLASS_SOLID : GLASS_DRAWER,
@@ -821,10 +867,23 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
             >
               {!reducedTransparency && (
                 <>
+                  <SheenLayer
+                    sheen={drawerSheen}
+                    rim={drawerRim}
+                    opacity={drawerRefrOpacity}
+                    driftEnabled={!reduced}
+                    withRim
+                    withRefract
+                  />
                   <TopSpecular inset="inset-x-8" />
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute -left-12 -top-12 h-44 w-44 rounded-full bg-apple-blue/12 blur-2xl"
+                  />
+                  {/* Bottom-right warm caustic glow */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-[#FF9F0A]/8 blur-2xl dark:bg-[#FF9F0A]/12"
                   />
                 </>
               )}
@@ -838,7 +897,7 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
                 <motion.div
                   aria-hidden="true"
                   style={{ height: handleHeight }}
-                  className="w-1 rounded-full bg-black/20 dark:bg-white/30"
+                  className="w-1 rounded-full bg-gradient-to-b from-black/15 via-black/25 to-black/15 dark:from-white/20 dark:via-white/35 dark:to-white/20 shadow-[0_0_4px_rgba(0,122,255,0.15)]"
                 />
               </div>
 
@@ -885,8 +944,16 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
                     'relative flex items-center gap-3.5 overflow-hidden rounded-[1.6rem] p-3.5',
                     'border border-black/[0.05] bg-white/70 shadow-[inset_0_1.5px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(120,200,255,0.2),0_8px_20px_-8px_rgba(16,24,40,0.1)]',
                     'dark:border-white/[0.09] dark:bg-white/[0.06] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_8px_20px_-8px_rgba(0,0,0,0.5)]',
+                    'backdrop-blur-md',
                   )}
                 >
+                  {/* Profile card top specular hairline */}
+                  {!reducedTransparency && (
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/30"
+                    />
+                  )}
                   <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-apple-blue to-[#5E5CE6] text-[14px] font-bold tracking-tight text-white shadow-[inset_0_1.5px_0_rgba(255,255,255,0.55),inset_0_-1px_0_rgba(120,200,255,0.4),0_6px_16px_rgba(0,122,255,0.35)]">
                     {displayInitials}
                     <span
@@ -929,6 +996,7 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
                   type="button"
                   onClick={handleLogout}
                   whileTap={reduced ? undefined : { scaleX: 1.02, scaleY: 0.96 }}
+                  whileHover={reduced ? undefined : { scale: 1.01 }}
                   transition={SPRING_GEL}
                   className={cn(
                     'flex w-full items-center justify-center gap-2.5 rounded-[1.4rem] px-4 py-3.5 text-[14px] font-semibold tracking-tight',
@@ -936,8 +1004,9 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
                     'shadow-[inset_0_1px_0_rgba(255,255,255,0.6),inset_0_-1px_0_rgba(255,120,100,0.2)] transition-colors hover:bg-apple-red/[0.16]',
                     'dark:border-apple-red/35 dark:bg-apple-red/[0.18] dark:text-[#FF6961] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]',
                     'focus-visible:ring-2 focus-visible:ring-apple-red/60',
-                    'outline-none',
+                    'outline-none backdrop-blur-sm',
                   )}
+                  aria-label={t('nav.logout', 'Log out')}
                 >
                   <StaticIcon paths={I.logout} />
                   <span>{t('nav.logout', 'Log out')}</span>
