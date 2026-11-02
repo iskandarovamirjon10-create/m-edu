@@ -1,0 +1,21 @@
+{
+  "name": "@medu/edge-kiosk-runner",
+  "version": "2.0.0",
+  "description": "M-EDU Local Edge Face ID & Turnstile Kiosk Daemon for Learning Centers",
+  "main": "edge-runner.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node edge-runner.mjs",
+    "test:ping": "node edge-runner.mjs --dry-run"
+  },
+  "keywords": [
+    "medu",
+    "edge-ai",
+    "face-id",
+    "turnstile",
+    "kiosk"
+  ],
+  "author": "M-EDU Engineering",
+  "license": "UNLICENSED",
+  "dependencies": {}
+}

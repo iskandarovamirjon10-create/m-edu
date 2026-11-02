@@ -14,10 +14,11 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { usePrefersReducedMotion, cn, Icon } from '@/lib/design';
-import { GlassErrorState, GlassSurface } from '@/components/ui';
+import { GlassErrorState, GlassSurface, GlassModal } from '@/components/ui';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { DashboardStats } from '@/lib/types';
+import { SchoolLaunchWizardStudio } from '@/components/onboarding/SchoolLaunchWizardStudio';
 
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { KPIGrid } from '@/components/dashboard/KPIGrid';
@@ -393,6 +394,7 @@ export function DashboardPage() {
   const [isTelemetryHudOpen, setIsTelemetryHudOpen] = useState(false);
   const [isThemeStudioOpen, setIsThemeStudioOpen] = useState(false);
   const [isAuditSnapshotOpen, setIsAuditSnapshotOpen] = useState(false);
+  const [isLaunchWizardOpen, setIsLaunchWizardOpen] = useState(false);
 
   /* ── Executive Keyboard Shortcuts (`R` Refresh, `N` / `⌘N` New Student) ── */
   useEffect(() => {
@@ -539,6 +541,34 @@ export function DashboardPage() {
         />
       </motion.div>
 
+      {/* Zero Students Welcoming Banner */}
+      {stats.totalStudents === 0 && (
+        <motion.div
+          variants={SECTION_VARIANTS}
+          className="p-5 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-cyan-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm"
+        >
+          <div>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <span>🎉</span>
+              M-EDU ga Xush Kelibsiz! O‘quv Markazingizni 5 Daqiqada Sozlang
+            </h3>
+            <p className="text-xs text-white/60 mt-1">
+              Xonalar, asosiy kurslar, oylik to‘lovlar va birinchi dars jadvalini qadam-baqadam shakllantiring.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              sound.playSuccess();
+              setIsLaunchWizardOpen(true);
+            }}
+            className="px-4 py-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs whitespace-nowrap shadow-lg shadow-emerald-500/25 transition-all"
+          >
+            🚀 Sozlashni Boshlash (5 daqiqa)
+          </button>
+        </motion.div>
+      )}
+
       {/* 2. Liquid Glass Segmented Tab Controller & Live Telemetry Bar */}
       <motion.div
         variants={SECTION_VARIANTS}
@@ -654,6 +684,19 @@ export function DashboardPage() {
 
         {/* Right Telemetry & Executive Keyboard Shortcut Pill */}
         <div className="hidden sm:flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              sound.playTick();
+              setIsLaunchWizardOpen(true);
+            }}
+            className="vision-card inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all shadow-xs"
+            title="O‘quv markazni 5 daqiqada noldan sozlash"
+          >
+            <span>🚀</span>
+            <span>Boshlang‘ich Sozlash</span>
+          </button>
+
           {/* Executive Diagnostic & Appearance Utility Pill Group */}
           <div className="flex items-center gap-1 rounded-full border border-black/[0.06] bg-white/60 p-1 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.04]">
             <button
@@ -1024,6 +1067,21 @@ export function DashboardPage() {
         onClose={() => setIsAuditSnapshotOpen(false)}
         orgName={user?.organization?.name}
       />
+
+      {/* 5-Minute School Launch Wizard Modal */}
+      <GlassModal
+        open={isLaunchWizardOpen}
+        onClose={() => setIsLaunchWizardOpen(false)}
+        size="xl"
+      >
+        <SchoolLaunchWizardStudio
+          onClose={() => setIsLaunchWizardOpen(false)}
+          onLaunchCompleted={() => {
+            setIsLaunchWizardOpen(false);
+            void handleManualRefresh();
+          }}
+        />
+      </GlassModal>
     </motion.div>
   );
 }

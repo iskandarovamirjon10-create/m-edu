@@ -15,9 +15,14 @@ export class StorageService {
     
     // Standard AWS environment variables: AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
     const region = this.configService.get<string>('AWS_REGION') || 'us-east-1';
+    const endpoint =
+      this.configService.get<string>('AWS_ENDPOINT') ||
+      this.configService.get<string>('S3_ENDPOINT') ||
+      undefined;
     
     this.s3Client = new S3Client({
       region,
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
       ...(this.configService.get<string>('AWS_ACCESS_KEY_ID') && this.configService.get<string>('AWS_SECRET_ACCESS_KEY')
         ? {
             credentials: {

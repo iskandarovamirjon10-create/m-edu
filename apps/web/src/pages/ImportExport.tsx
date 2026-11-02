@@ -29,6 +29,7 @@ import request, { downloadFile } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { cn } from '@/lib/design';
+import { ModmeExcelMigrationStudio } from '@/components/migration/ModmeExcelMigrationStudio';
 
 function AuroraMesh() {
   return (
@@ -86,6 +87,7 @@ export function ImportExportPage() {
   const { push } = useToast();
   const { playTick, playPop, playSuccess, playError } = usePremiumSound();
   const fileInput = useRef<HTMLInputElement>(null);
+  const [viewMode, setViewMode] = useState<'migration' | 'classic'>('migration');
   const [entity, setEntity] = useState('STUDENT');
   const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv' | 'pdf'>('xlsx');
   const [isDragging, setIsDragging] = useState(false);
@@ -296,139 +298,182 @@ export function ImportExportPage() {
           </motion.div>
         </div>
 
-        {/* ── Upload & Action Card ────────────────────────────────────────── */}
-        <motion.div
-          variants={itemVariants}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setIsDragging(false);
-            const f = e.dataTransfer.files?.[0];
-            if (f) uploadMutation.mutate(f);
-          }}
-          className={cn(
-            'liquid-glass-card liquid-glass-surface relative overflow-hidden rounded-3xl p-6 sm:p-7 border shadow-sm transition-all duration-200',
-            isDragging
-              ? 'border-blue-500 bg-blue-50/20 dark:border-blue-400 dark:bg-blue-950/20 scale-[1.005]'
-              : 'border-slate-200/80 dark:border-slate-800/80',
-          )}
-        >
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
+        {/* ── View Mode Switcher ─────────────────────────────────────────── */}
+        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-black/30 border border-white/10 w-fit">
+          <button
+            type="button"
+            onClick={() => {
+              playTick();
+              setViewMode('migration');
+            }}
+            className={cn(
+              'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2',
+              viewMode === 'migration'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'text-white/60 hover:text-white'
+            )}
+          >
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            Modme & Smart Excel Migratsiya (1-Click)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              playTick();
+              setViewMode('classic');
+            }}
+            className={cn(
+              'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2',
+              viewMode === 'classic'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'text-white/60 hover:text-white'
+            )}
+          >
+            Klassik Import / Eksport & Tarix
+          </button>
+        </div>
 
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
-            <div>
-              <h3 className="text-base font-bold text-[var(--text-primary)] mb-1 flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+        {viewMode === 'migration' ? (
+          <motion.div variants={itemVariants}>
+            <ModmeExcelMigrationStudio />
+          </motion.div>
+        ) : (
+          <>
+            {/* ── Upload & Action Card ────────────────────────────────────────── */}
+            <motion.div
+              variants={itemVariants}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const f = e.dataTransfer.files?.[0];
+                if (f) uploadMutation.mutate(f);
+              }}
+              className={cn(
+                'liquid-glass-card liquid-glass-surface relative overflow-hidden rounded-3xl p-6 sm:p-7 border shadow-sm transition-all duration-200',
+                isDragging
+                  ? 'border-blue-500 bg-blue-50/20 dark:border-blue-400 dark:bg-blue-950/20 scale-[1.005]'
+                  : 'border-slate-200/80 dark:border-slate-800/80',
+              )}
+            >
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10" />
+
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+                <div>
+                  <h3 className="text-base font-bold text-[var(--text-primary)] mb-1 flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                    </div>
+                    {t('importExport.uploadCsv')}
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {isDragging ? 'Faylni yuklash uchun shu yerga tashlang (.csv, .xlsx)' : t('importExport.csvHint')}
+                  </p>
                 </div>
-                {t('importExport.uploadCsv')}
-              </h3>
-              <p className="text-xs text-[var(--text-muted)]">
-                {isDragging ? 'Faylni yuklash uchun shu yerga tashlang (.csv, .xlsx)' : t('importExport.csvHint')}
-              </p>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
-              <GlassSelect
-                value={entity}
-                onChange={(e) => {
-                  playTick();
-                  setEntity(e.target.value);
-                }}
-                aria-label={t('importExport.uploadCsv')}
-                className="w-auto"
-              >
-                {['STUDENT', 'TEACHER', 'GROUP', 'COURSE', 'PAYMENT'].map((e) => (
-                  <option key={e} value={e}>
-                    {t(`enum.badge.${e}`) || e}
-                  </option>
-                ))}
-              </GlassSelect>
-
-              <input
-                ref={fileInput}
-                type="file"
-                accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) uploadMutation.mutate(f);
-                  e.target.value = '';
-                }}
-                className="hidden"
-              />
-
-              <GlassButton
-                variant="primary"
-                onClick={() => fileInput.current?.click()}
-                disabled={uploadMutation.isPending}
-                loading={uploadMutation.isPending}
-                icon={
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-                }
-              >
-                {t('importExport.uploadCsv')}
-              </GlassButton>
-
-              <GlassButton variant="secondary" onClick={() => downloadTemplate(entity)}>
-                {t('importExport.downloadTemplate')}
-              </GlassButton>
-
-              {/* Format Switcher */}
-              <div className="flex rounded-xl bg-slate-100 p-0.5 dark:bg-white/[0.06] border border-black/5 dark:border-white/5">
-                {(['xlsx', 'csv', 'pdf'] as const).map((fmt) => (
-                  <button
-                    key={fmt}
-                    type="button"
-                    onClick={() => {
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <GlassSelect
+                    value={entity}
+                    onChange={(e) => {
                       playTick();
-                      setExportFormat(fmt);
+                      setEntity(e.target.value);
                     }}
-                    className={cn(
-                      'rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase transition-all',
-                      exportFormat === fmt
-                        ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                        : 'text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white',
-                    )}
+                    aria-label={t('importExport.uploadCsv')}
+                    className="w-auto"
                   >
-                    {fmt === 'xlsx' ? 'Excel' : fmt.toUpperCase()}
-                  </button>
-                ))}
+                    {['STUDENT', 'TEACHER', 'GROUP', 'COURSE', 'PAYMENT'].map((e) => (
+                      <option key={e} value={e}>
+                        {t(`enum.badge.${e}`) || e}
+                      </option>
+                    ))}
+                  </GlassSelect>
+
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadMutation.mutate(f);
+                      e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
+
+                  <GlassButton
+                    variant="primary"
+                    onClick={() => fileInput.current?.click()}
+                    disabled={uploadMutation.isPending}
+                    loading={uploadMutation.isPending}
+                    icon={
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                    }
+                  >
+                    {t('importExport.uploadCsv')}
+                  </GlassButton>
+
+                  <GlassButton variant="secondary" onClick={() => downloadTemplate(entity)}>
+                    {t('importExport.downloadTemplate')}
+                  </GlassButton>
+
+                  {/* Format Switcher */}
+                  <div className="flex rounded-xl bg-slate-100 p-0.5 dark:bg-white/[0.06] border border-black/5 dark:border-white/5">
+                    {(['xlsx', 'csv', 'pdf'] as const).map((fmt) => (
+                      <button
+                        key={fmt}
+                        type="button"
+                        onClick={() => {
+                          playTick();
+                          setExportFormat(fmt);
+                        }}
+                        className={cn(
+                          'rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase transition-all',
+                          exportFormat === fmt
+                            ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white',
+                        )}
+                      >
+                        {fmt === 'xlsx' ? 'Excel' : fmt.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+
+                  <GlassButton variant="ghost" onClick={() => exportData(entity, exportFormat)}>
+                    {t('importExport.exportEntity', { entity: t(`enum.badge.${entity}`) || entity })}
+                  </GlassButton>
+                </div>
               </div>
+            </motion.div>
 
-              <GlassButton variant="ghost" onClick={() => exportData(entity, exportFormat)}>
-                {t('importExport.exportEntity', { entity: t(`enum.badge.${entity}`) || entity })}
-              </GlassButton>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* ── Guidelines Info Card ────────────────────────────────────────── */}
-        <motion.div
-          variants={itemVariants}
-          className="liquid-glass-surface relative overflow-hidden rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800/80 space-y-2 text-xs"
-        >
-          <h4 className="font-bold text-xs text-[var(--text-primary)] uppercase tracking-wider">
-            {t('importExport.howItWorks')}
-          </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-[var(--text-muted)]">
-            <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
-              • {t('importExport.howValidation')}
-            </div>
-            <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
-              • {t('importExport.howTenant')}
-            </div>
-            <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
-              • {t('importExport.howAudit')}
-            </div>
-            <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
-              • {t('importExport.howNoAi')}
-            </div>
-          </div>
-        </motion.div>
+            {/* ── Guidelines Info Card ────────────────────────────────────────── */}
+            <motion.div
+              variants={itemVariants}
+              className="liquid-glass-surface relative overflow-hidden rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800/80 space-y-2 text-xs"
+            >
+              <h4 className="font-bold text-xs text-[var(--text-primary)] uppercase tracking-wider">
+                {t('importExport.howItWorks')}
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-[var(--text-muted)]">
+                <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                  • {t('importExport.howValidation')}
+                </div>
+                <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                  • {t('importExport.howTenant')}
+                </div>
+                <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                  • {t('importExport.howAudit')}
+                </div>
+                <div className="p-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                  • {t('importExport.howNoAi')}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
 
         {/* ── Jobs Ledger ─────────────────────────────────────────────────── */}
         <motion.div
