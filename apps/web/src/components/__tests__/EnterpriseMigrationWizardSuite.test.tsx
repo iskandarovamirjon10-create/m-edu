@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ModmeExcelMigrationStudio } from '../migration/ModmeExcelMigrationStudio';
 import { SchoolLaunchWizardStudio } from '../onboarding/SchoolLaunchWizardStudio';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { I18nProvider, type Locale } from '@/i18n/I18nProvider';
 
 // Mock audio hook
 vi.mock('@/hooks/usePremiumSound', () => ({
@@ -42,11 +43,15 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-function renderWithClient(ui: React.ReactElement) {
+function renderWithClient(ui: React.ReactElement, locale: Locale = 'uz') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return render(
+    <I18nProvider initialLocale={locale}>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </I18nProvider>
+  );
 }
 
 describe('Enterprise Migration & School Launch Wizard Suite', () => {
@@ -54,9 +59,9 @@ describe('Enterprise Migration & School Launch Wizard Suite', () => {
     vi.clearAllMocks();
   });
 
-  describe('1. ModmeExcelMigrationStudio', () => {
-    it('renders migration studio with presets and action triggers', () => {
-      renderWithClient(<ModmeExcelMigrationStudio />);
+  describe('1. ModmeExcelMigrationStudio (i18n & UX)', () => {
+    it('renders migration studio with presets and action triggers in Uzbek', () => {
+      renderWithClient(<ModmeExcelMigrationStudio />, 'uz');
       expect(
         screen.getByText(/Eski Tizimdan M-EDU ga 1 Qadamda Ko‘chirish/i)
       ).toBeInTheDocument();
@@ -66,8 +71,23 @@ describe('Enterprise Migration & School Launch Wizard Suite', () => {
       expect(screen.getByText(/Shablonni Yuklab Olish/i)).toBeInTheDocument();
     });
 
+    it('renders migration studio seamlessly in English and Russian (i18n verification)', () => {
+      const { unmount } = renderWithClient(<ModmeExcelMigrationStudio />, 'en');
+      expect(
+        screen.getByText(/Migrate from Legacy Systems to M-EDU in 1 Step/i)
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Download Template CSV/i)).toBeInTheDocument();
+      unmount();
+
+      renderWithClient(<ModmeExcelMigrationStudio />, 'ru');
+      expect(
+        screen.getByText(/Перенос из старых систем в M-EDU в 1 шаг/i)
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Скачать шаблон CSV/i)).toBeInTheDocument();
+    });
+
     it('switches between migration presets', () => {
-      renderWithClient(<ModmeExcelMigrationStudio />);
+      renderWithClient(<ModmeExcelMigrationStudio />, 'uz');
       const alfaBtn = screen.getByRole('button', { name: /AlfaCRM/i });
       fireEvent.click(alfaBtn);
       expect(alfaBtn).toBeInTheDocument();
@@ -78,7 +98,7 @@ describe('Enterprise Migration & School Launch Wizard Suite', () => {
     });
 
     it('loads sample Modme data and renders telemetry and preview table', () => {
-      renderWithClient(<ModmeExcelMigrationStudio />);
+      renderWithClient(<ModmeExcelMigrationStudio />, 'uz');
       const sampleBtn = screen.getByText(/Namunaviy Ma’lumotlar bilan Sinash/i);
       fireEvent.click(sampleBtn);
 
@@ -88,9 +108,9 @@ describe('Enterprise Migration & School Launch Wizard Suite', () => {
     });
   });
 
-  describe('2. SchoolLaunchWizardStudio', () => {
-    it('renders step 1 with center profile inputs and advances to next steps', async () => {
-      renderWithClient(<SchoolLaunchWizardStudio />);
+  describe('2. SchoolLaunchWizardStudio (i18n & Multi-Step Responsive UX)', () => {
+    it('renders step 1 with center profile inputs and advances to next steps in Uzbek', async () => {
+      renderWithClient(<SchoolLaunchWizardStudio />, 'uz');
       expect(
         screen.getByText(/Boshlang‘ich Sozlash Ustasi \(School Launch Wizard\)/i)
       ).toBeInTheDocument();
@@ -130,9 +150,17 @@ describe('Enterprise Migration & School Launch Wizard Suite', () => {
       });
     });
 
+    it('renders wizard cleanly in English (i18n)', () => {
+      renderWithClient(<SchoolLaunchWizardStudio />, 'en');
+      expect(
+        screen.getByText(/School Launch Wizard/i)
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Next Step/i)).toBeInTheDocument();
+    });
+
     it('triggers grand launch batch activation on step 5', async () => {
       const onLaunchCompleted = vi.fn();
-      renderWithClient(<SchoolLaunchWizardStudio onLaunchCompleted={onLaunchCompleted} />);
+      renderWithClient(<SchoolLaunchWizardStudio onLaunchCompleted={onLaunchCompleted} />, 'uz');
 
       // Fast forward to step 5
       fireEvent.click(screen.getByText(/Keyingi Qadam/i));

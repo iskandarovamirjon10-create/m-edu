@@ -842,8 +842,9 @@ import { studentsEn } from './students-slices';
 import { groupsEn } from './groups-slices';
 import { teachersEn } from './teachers-slices';
 import { tgappEn } from './tgapp-slices';
+import { migrationEn } from './migration-slices';
 
 // Legacy fills gaps → analytics fills more → curated base wins for overrides.
-export default { ...legacyEn, ...analyticsEn, ...pagesEn, ...aiEn, ...studentsEn, ...groupsEn, ...teachersEn, ...tgappEn, ...en };
+export default { ...legacyEn, ...analyticsEn, ...pagesEn, ...aiEn, ...studentsEn, ...groupsEn, ...teachersEn, ...tgappEn, ...migrationEn, ...en };
 
 

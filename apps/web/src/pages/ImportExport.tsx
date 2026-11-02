@@ -298,8 +298,8 @@ export function ImportExportPage() {
           </motion.div>
         </div>
 
-        {/* ── View Mode Switcher ─────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-black/30 border border-white/10 w-fit">
+        {/* ── View Mode Switcher (i18n & Responsive) ───────────────────── */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-1.5 rounded-2xl bg-black/30 border border-white/10 w-full sm:w-fit">
           <button
             type="button"
             onClick={() => {
@@ -307,14 +307,14 @@ export function ImportExportPage() {
               setViewMode('migration');
             }}
             className={cn(
-              'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2',
+              'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 min-h-[40px]',
               viewMode === 'migration'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
                 : 'text-white/60 hover:text-white'
             )}
           >
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            Modme & Smart Excel Migratsiya (1-Click)
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+            {t('importExport.tabMigration', 'Modme & Smart Excel Migratsiya (1-Click)')}
           </button>
           <button
             type="button"
@@ -323,13 +323,13 @@ export function ImportExportPage() {
               setViewMode('classic');
             }}
             className={cn(
-              'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2',
+              'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 min-h-[40px]',
               viewMode === 'classic'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
                 : 'text-white/60 hover:text-white'
             )}
           >
-            Klassik Import / Eksport & Tarix
+            {t('importExport.tabClassic', 'Klassik Import / Eksport & Tarix')}
           </button>
         </div>
 

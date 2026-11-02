@@ -541,19 +541,25 @@ export function DashboardPage() {
         />
       </motion.div>
 
-      {/* Zero Students Welcoming Banner */}
+      {/* Zero Students Welcoming Banner (i18n & Responsive) */}
       {stats.totalStudents === 0 && (
         <motion.div
           variants={SECTION_VARIANTS}
-          className="p-5 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-cyan-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm"
+          className="p-4 sm:p-5 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-cyan-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm"
         >
           <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
               <span>🎉</span>
-              M-EDU ga Xush Kelibsiz! O‘quv Markazingizni 5 Daqiqada Sozlang
+              {t(
+                'dashboard.launchBannerTitle',
+                'M-EDU ga Xush Kelibsiz! O‘quv Markazingizni 5 Daqiqada Sozlang'
+              )}
             </h3>
             <p className="text-xs text-white/60 mt-1">
-              Xonalar, asosiy kurslar, oylik to‘lovlar va birinchi dars jadvalini qadam-baqadam shakllantiring.
+              {t(
+                'dashboard.launchBannerDesc',
+                'Xonalar, asosiy kurslar, oylik to‘lovlar va birinchi dars jadvalini qadam-baqadam shakllantiring.'
+              )}
             </p>
           </div>
           <button
@@ -562,9 +568,9 @@ export function DashboardPage() {
               sound.playSuccess();
               setIsLaunchWizardOpen(true);
             }}
-            className="px-4 py-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs whitespace-nowrap shadow-lg shadow-emerald-500/25 transition-all"
+            className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs text-center whitespace-nowrap shadow-lg shadow-emerald-500/25 transition-all"
           >
-            🚀 Sozlashni Boshlash (5 daqiqa)
+            {t('dashboard.launchBannerBtn', '🚀 Sozlashni Boshlash (5 daqiqa)')}
           </button>
         </motion.div>
       )}
@@ -690,11 +696,11 @@ export function DashboardPage() {
               sound.playTick();
               setIsLaunchWizardOpen(true);
             }}
-            className="vision-card inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all shadow-xs"
-            title="O‘quv markazni 5 daqiqada noldan sozlash"
+            className="vision-card hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all shadow-xs"
+            title={t('dashboard.launchTelemetryBtn', 'Boshlang‘ich Sozlash')}
           >
             <span>🚀</span>
-            <span>Boshlang‘ich Sozlash</span>
+            <span>{t('dashboard.launchTelemetryBtn', 'Boshlang‘ich Sozlash')}</span>
           </button>
 
           {/* Executive Diagnostic & Appearance Utility Pill Group */}

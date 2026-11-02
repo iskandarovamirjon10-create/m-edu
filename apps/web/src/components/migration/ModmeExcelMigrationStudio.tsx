@@ -3,7 +3,7 @@
  * Seamless 1-click bulk ingestion engine tailored for Central Asian learning centers
  * migrating from Modme CRM, AlfaCRM, MoyKlass, or custom messy Excel spreadsheets.
  * Features automated column mapping, live row preview, phone number normalization,
- * and debt balance reconciliation before committing to PostgreSQL.
+ * debt balance reconciliation, full i18n support, and mobile-responsive layout.
  */
 
 import { useState, useRef, useCallback, useMemo } from 'react';
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui';
 import { cn, Icon } from '@/lib/design';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import request from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -50,6 +51,7 @@ export function ModmeExcelMigrationStudio({
   onMigrationComplete,
   className,
 }: ModmeExcelMigrationStudioProps): JSX.Element {
+  const { t, formatNumber } = useSafeI18n();
   const sound = usePremiumSound();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -93,7 +95,6 @@ export function ModmeExcelMigrationStudio({
       const rows: ParsedMigrationRow[] = [];
 
       for (let i = 1; i < lines.length; i++) {
-        // Simple CSV splitter respecting basic quotes
         const rawValues = lines[i].split(',').map((v) => v.replace(/^"|"$/g, '').trim());
         const rowMap: Record<string, string> = {};
         headers.forEach((h, idx) => {
@@ -192,10 +193,11 @@ export function ModmeExcelMigrationStudio({
           sound.playSuccess();
           toast.push(
             'success',
-            `Fayl muvaffaqiyatli o‘qildi: ${parsed.rows.length} ta o‘quvchi aniqlandi!`
+            t('migration.toastSuccessRead', { count: parsed.rows.length }) ||
+              `Fayl muvaffaqiyatli o‘qildi: ${parsed.rows.length} ta o‘quvchi aniqlandi!`
           );
         } else {
-          // For binary .xlsx, we present standard confirmation
+          // For binary .xlsx, standard confirmation preview
           setParsedRows([
             {
               rowNumber: 1,
@@ -222,7 +224,7 @@ export function ModmeExcelMigrationStudio({
           sound.playSuccess();
           toast.push(
             'info',
-            `Excel (.xlsx) fayli tayyorlandi. Server tekshiruvi orqali to‘liq yuklanadi.`
+            'Excel (.xlsx) fayli tayyorlandi. Server tekshiruvi orqali to‘liq yuklanadi.'
           );
         }
       } catch (err: unknown) {
@@ -235,7 +237,7 @@ export function ModmeExcelMigrationStudio({
         setIsParsing(false);
       }
     },
-    [parseClientCsv, sound, toast]
+    [parseClientCsv, sound, t, toast]
   );
 
   // Load sample template for quick testing
@@ -245,8 +247,8 @@ export function ModmeExcelMigrationStudio({
     setParsedRows(parsed.rows);
     setDetectedColumns(parsed.columns);
     setSelectedFile(new File([SAMPLE_MODME_CSV], 'modme_export_sample.csv', { type: 'text/csv' }));
-    toast.push('info', 'Namuna Modme eksport ma’lumotlari yuklandi!');
-  }, [parseClientCsv, sound, toast]);
+    toast.push('info', t('migration.toastSampleLoaded', 'Namuna Modme eksport ma’lumotlari yuklandi!'));
+  }, [parseClientCsv, sound, t, toast]);
 
   // Download Sample Template
   const handleDownloadTemplate = useCallback(() => {
@@ -260,13 +262,13 @@ export function ModmeExcelMigrationStudio({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast.push('success', 'Standart CSV shablon yuklab olindi!');
-  }, [preset, sound, toast]);
+    toast.push('success', t('migration.toastTemplateDownloaded', 'Standart CSV shablon yuklab olindi!'));
+  }, [preset, sound, t, toast]);
 
   // Execute Real Ingestion
   const handleCommitMigration = useCallback(async () => {
     if (!selectedFile && parsedRows.length === 0) {
-      toast.push('warning', 'Iltimos, avval ko‘chirish uchun fayl tanlang!');
+      toast.push('warning', t('migration.toastChooseFile', 'Iltimos, avval ko‘chirish uchun fayl tanlang!'));
       return;
     }
 
@@ -298,15 +300,17 @@ export function ModmeExcelMigrationStudio({
       });
 
       const count = res?.importedCount || res?.imported || parsedRows.length;
+
       sound.playSuccess();
       toast.push(
         'success',
         isDryRun
-          ? `Tekshiruv yakunlandi: ${count} ta qator muvaffaqiyatli tasdiqlandi (Dry-Run).`
-          : `Muvaffaqiyatli! ${count} ta o‘quvchi va guruhlar M-EDU tizimiga ko‘chirildi!`
+          ? t('migration.toastDryRun', { count }) ||
+            `Tekshiruv yakunlandi: ${count} ta qator muvaffaqiyatli tasdiqlandi (Dry-Run).`
+          : t('migration.toastCommitted', { count }) ||
+            `Muvaffaqiyatli! ${count} ta o‘quvchi va guruhlar M-EDU tizimiga ko‘chirildi!`
       );
 
-      // Invalidate relevant caches
       queryClient.invalidateQueries({ queryKey: ['students'] });
       queryClient.invalidateQueries({ queryKey: ['groups'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -317,12 +321,13 @@ export function ModmeExcelMigrationStudio({
       sound.playError();
       toast.push(
         'error',
-        `Ko‘chirishda xatolik yuz berdi: ${err instanceof Error ? err.message : 'Server rad etdi'}`
+        t('migration.toastError', { message: err instanceof Error ? err.message : 'Server rad etdi' }) ||
+          `Ko‘chirishda xatolik yuz berdi: ${err instanceof Error ? err.message : 'Server rad etdi'}`
       );
     } finally {
       setIsSubmitting(false);
     }
-  }, [isDryRun, mode, onMigrationComplete, parsedRows.length, queryClient, selectedFile, sound, toast]);
+  }, [isDryRun, mode, onMigrationComplete, parsedRows.length, queryClient, selectedFile, sound, t, toast]);
 
   // Aggregate Stats
   const stats = useMemo(() => {
@@ -337,32 +342,36 @@ export function ModmeExcelMigrationStudio({
   return (
     <GlassSurface
       className={cn(
-        'relative overflow-hidden rounded-3xl border border-white/10 p-5 sm:p-7 md:p-8',
+        'relative overflow-hidden rounded-3xl border border-white/10 p-4 sm:p-6 md:p-8',
         'bg-gradient-to-br from-white/[0.04] via-transparent to-indigo-500/[0.03]',
         className
       )}
     >
       {/* Header & Preset Selector */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8 pb-6 border-b border-white/10">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-6 sm:mb-8 pb-5 sm:pb-6 border-b border-white/10">
         <div>
-          <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
             <GlassBadge variant="purple" size="sm">
               <span className="flex h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse mr-1" />
-              1-Click Smart Migration Studio
+              {t('migration.badge', '1-Click Smart Migration Studio')}
             </GlassBadge>
-            <span className="text-xs text-white/50">Modme, AlfaCRM & Excel Konvertori</span>
+            <span className="text-xs text-white/50">
+              {t('migration.badgeSubtitle', 'Modme, AlfaCRM & Excel Konvertori')}
+            </span>
           </div>
-          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white">
-            Eski Tizimdan M-EDU ga 1 Qadamda Ko‘chirish
+          <h2 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-white">
+            {t('migration.title', 'Eski Tizimdan M-EDU ga 1 Qadamda Ko‘chirish')}
           </h2>
           <p className="text-xs md:text-sm text-white/60 mt-1 max-w-2xl">
-            Modme, AlfaCRM yoki Excel jadvallaringizdagi talabalar, ularning qarz/balansi va
-            guruhlarini avtomatik tahlil qilib, tizimga xatosiz import qilish
+            {t(
+              'migration.description',
+              'Modme, AlfaCRM yoki Excel jadvallaringizdagi talabalar, ularning qarz/balansi va guruhlarini avtomatik tahlil qilib, tizimga xatosiz import qilish'
+            )}
           </p>
         </div>
 
         {/* Source System Switcher */}
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/40 border border-white/10">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 p-1 rounded-2xl bg-black/40 border border-white/10 w-full sm:w-auto overflow-x-auto">
           <button
             type="button"
             onClick={() => {
@@ -370,14 +379,14 @@ export function ModmeExcelMigrationStudio({
               setPreset('modme');
             }}
             className={cn(
-              'px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5',
+              'flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 min-h-[36px]',
               preset === 'modme'
                 ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30'
                 : 'text-white/60 hover:text-white'
             )}
           >
-            <span className="w-2 h-2 rounded-full bg-cyan-400" />
-            Modme CRM
+            <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+            {t('migration.presetModme', 'Modme CRM')}
           </button>
           <button
             type="button"
@@ -386,13 +395,13 @@ export function ModmeExcelMigrationStudio({
               setPreset('alfacrm');
             }}
             className={cn(
-              'px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5',
+              'flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 min-h-[36px]',
               preset === 'alfacrm'
                 ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30'
                 : 'text-white/60 hover:text-white'
             )}
           >
-            AlfaCRM
+            {t('migration.presetAlfacrm', 'AlfaCRM')}
           </button>
           <button
             type="button"
@@ -401,13 +410,13 @@ export function ModmeExcelMigrationStudio({
               setPreset('universal_excel');
             }}
             className={cn(
-              'px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5',
+              'flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 min-h-[36px]',
               preset === 'universal_excel'
                 ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30'
                 : 'text-white/60 hover:text-white'
             )}
           >
-            Universal Excel
+            {t('migration.presetExcel', 'Universal Excel')}
           </button>
         </div>
       </div>
@@ -425,7 +434,7 @@ export function ModmeExcelMigrationStudio({
           }
         }}
         className={cn(
-          'border-2 border-dashed rounded-3xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 mb-8',
+          'border-2 border-dashed rounded-3xl p-5 sm:p-7 md:p-8 text-center cursor-pointer transition-all duration-200 mb-6 sm:mb-8',
           selectedFile
             ? 'border-indigo-400/60 bg-indigo-500/5'
             : 'border-white/15 bg-white/[0.01] hover:border-indigo-400/40 hover:bg-white/[0.02]'
@@ -449,48 +458,55 @@ export function ModmeExcelMigrationStudio({
 
         {selectedFile ? (
           <div>
-            <h4 className="text-base font-bold text-white mb-1">{selectedFile.name}</h4>
+            <h4 className="text-sm sm:text-base font-bold text-white mb-1 break-all">
+              {selectedFile.name}
+            </h4>
             <p className="text-xs text-indigo-300 font-mono">
-              {(selectedFile.size / 1024).toFixed(1)} KB • Bosib faylni almashtirishingiz mumkin
+              {t('migration.fileSelected', { size: (selectedFile.size / 1024).toFixed(1) }) ||
+                `${(selectedFile.size / 1024).toFixed(1)} KB • Bosib faylni almashtirishingiz mumkin`}
             </p>
           </div>
         ) : (
           <div>
-            <h4 className="text-base font-bold text-white mb-1">
+            <h4 className="text-sm sm:text-base font-bold text-white mb-1">
               {preset === 'modme'
-                ? 'Modme dan yuklangan .xlsx yoki .csv faylni bu yerga tashlang'
-                : 'Excel (.xlsx) yoki CSV faylni yuklang'}
+                ? t('migration.dropzoneModmeTitle', 'Modme dan yuklangan .xlsx yoki .csv faylni bu yerga tashlang')
+                : t('migration.dropzoneGenericTitle', 'Excel (.xlsx) yoki CSV faylni yuklang')}
             </h4>
             <p className="text-xs text-white/50 max-w-md mx-auto">
-              Tizim ustunlarni (F.I.SH, Telefon, Guruh, Balans) avtomatik aniqlaydi va telefon
-              raqamlarini standartlashtiradi
+              {t(
+                'migration.dropzoneHint',
+                'Tizim ustunlarni (F.I.SH, Telefon, Guruh, Balans) avtomatik aniqlaydi va telefon raqamlarini standartlashtiradi'
+              )}
             </p>
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
+        <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-2.5 sm:gap-3 mt-4">
           <GlassButton
             size="sm"
             variant="ghost"
+            className="w-full sm:w-auto"
             onClick={(e) => {
               e.stopPropagation();
               handleDownloadTemplate();
             }}
           >
             <Icon name="download" className="w-3.5 h-3.5 mr-1.5" />
-            Shablonni Yuklab Olish
+            {t('migration.downloadTemplate', 'Shablonni Yuklab Olish')}
           </GlassButton>
 
           <GlassButton
             size="sm"
             variant="secondary"
+            className="w-full sm:w-auto"
             onClick={(e) => {
               e.stopPropagation();
               handleLoadSample();
             }}
           >
             <Icon name="play" className="w-3.5 h-3.5 mr-1.5 text-cyan-400" />
-            Namunaviy Ma’lumotlar bilan Sinash
+            {t('migration.testSample', 'Namunaviy Ma’lumotlar bilan Sinash')}
           </GlassButton>
         </div>
       </div>
@@ -500,38 +516,50 @@ export function ModmeExcelMigrationStudio({
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6 sm:mb-8"
         >
-          <div className="p-4 rounded-2xl border border-white/10 bg-white/[0.02]">
-            <div className="text-xs text-white/50">Aniqlangan O‘quvchilar</div>
-            <div className="text-xl md:text-2xl font-bold text-white mt-1">
-              {stats.total} nafar
+          <div className="p-3.5 sm:p-4 rounded-2xl border border-white/10 bg-white/[0.02]">
+            <div className="text-xs text-white/50">{t('migration.statsStudents', 'Aniqlangan O‘quvchilar')}</div>
+            <div className="text-lg sm:text-2xl font-bold text-white mt-1">
+              {formatNumber ? formatNumber(stats.total) : stats.total} nafar
             </div>
-            <div className="text-[10px] text-white/40 mt-0.5">Yangi yozuvlar</div>
+            <div className="text-[10px] text-white/40 mt-0.5">{t('migration.statsStudentsHint', 'Yangi yozuvlar')}</div>
           </div>
 
-          <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10">
-            <div className="text-xs font-semibold text-emerald-300">To‘g‘ri Telefonlar</div>
-            <div className="text-xl md:text-2xl font-bold text-emerald-400 mt-1">
-              {stats.validPhones} ta
+          <div className="p-3.5 sm:p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10">
+            <div className="text-xs font-semibold text-emerald-300">
+              {t('migration.statsValidPhones', 'To‘g‘ri Telefonlar')}
             </div>
-            <div className="text-[10px] text-emerald-300/60 mt-0.5">+998 formatida tasdiqlandi</div>
+            <div className="text-lg sm:text-2xl font-bold text-emerald-400 mt-1">
+              {formatNumber ? formatNumber(stats.validPhones) : stats.validPhones} ta
+            </div>
+            <div className="text-[10px] text-emerald-300/60 mt-0.5">
+              {t('migration.statsValidPhonesHint', '+998 formatida tasdiqlandi')}
+            </div>
           </div>
 
-          <div className="p-4 rounded-2xl border border-rose-500/30 bg-rose-500/10">
-            <div className="text-xs font-semibold text-rose-300">Qarzdor Talabalar</div>
-            <div className="text-xl md:text-2xl font-bold text-rose-400 mt-1">
-              {stats.debtorsCount} ta
+          <div className="p-3.5 sm:p-4 rounded-2xl border border-rose-500/30 bg-rose-500/10">
+            <div className="text-xs font-semibold text-rose-300">
+              {t('migration.statsDebtors', 'Qarzdor Talabalar')}
             </div>
-            <div className="text-[10px] text-rose-300/60 mt-0.5">Balansi manfiy bo‘lganlar</div>
+            <div className="text-lg sm:text-2xl font-bold text-rose-400 mt-1">
+              {formatNumber ? formatNumber(stats.debtorsCount) : stats.debtorsCount} ta
+            </div>
+            <div className="text-[10px] text-rose-300/60 mt-0.5">
+              {t('migration.statsDebtorsHint', 'Balansi manfiy bo‘lganlar')}
+            </div>
           </div>
 
-          <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10">
-            <div className="text-xs font-semibold text-amber-300">Ko‘chirilayotgan Qarz</div>
-            <div className="text-xl md:text-2xl font-bold text-amber-400 mt-1">
-              {stats.totalDebtUzs.toLocaleString('uz-UZ')} UZS
+          <div className="p-3.5 sm:p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10">
+            <div className="text-xs font-semibold text-amber-300">
+              {t('migration.statsTotalDebt', 'Ko‘chirilayotgan Qarz')}
             </div>
-            <div className="text-[10px] text-amber-300/60 mt-0.5">Moliya moduliga biriktiriladi</div>
+            <div className="text-lg sm:text-2xl font-bold text-amber-400 mt-1">
+              {formatNumber ? formatNumber(stats.totalDebtUzs) : stats.totalDebtUzs.toLocaleString()} UZS
+            </div>
+            <div className="text-[10px] text-amber-300/60 mt-0.5">
+              {t('migration.statsTotalDebtHint', 'Moliya moduliga biriktiriladi')}
+            </div>
           </div>
         </motion.div>
       )}
@@ -540,9 +568,9 @@ export function ModmeExcelMigrationStudio({
       {detectedColumns.length > 0 && (
         <div className="mb-6">
           <div className="text-xs font-semibold text-white/60 mb-2">
-            Avtomatik Tanishdan O‘tgan Ustunlar:
+            {t('migration.detectedColumns', 'Avtomatik Tanishdan O‘tgan Ustunlar:')}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {detectedColumns.map((col) => (
               <GlassBadge key={col} variant="blue" size="sm">
                 <Icon name="check" className="w-3 h-3 mr-1 text-emerald-400" />
@@ -555,25 +583,27 @@ export function ModmeExcelMigrationStudio({
 
       {/* Live Preview Table */}
       {parsedRows.length > 0 && (
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-white">
-              Ko‘chirishdan Oldingi Jonli Tekshiruv (Dastlabki 5 ta qator)
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
+            <h3 className="text-xs sm:text-sm font-bold text-white">
+              {t('migration.previewTitle', 'Ko‘chirishdan Oldingi Jonli Tekshiruv (Dastlabki 5 ta qator)')}
             </h3>
-            <span className="text-xs text-white/40">Jami: {parsedRows.length} ta yozuv</span>
+            <span className="text-xs text-white/40">
+              {t('migration.totalRecords', { count: parsedRows.length }) || `Jami: ${parsedRows.length} ta yozuv`}
+            </span>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/20">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto -mx-1 sm:mx-0 rounded-2xl border border-white/10 bg-black/20">
+            <table className="min-w-[620px] w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-white/10 bg-white/[0.03]">
-                  <th className="py-2.5 px-3 text-white/50">#</th>
-                  <th className="py-2.5 px-3 text-white/80">O‘quvchi F.I.Sh</th>
-                  <th className="py-2.5 px-3 text-white/80">Telefon</th>
-                  <th className="py-2.5 px-3 text-white/80">Guruh</th>
-                  <th className="py-2.5 px-3 text-white/80">Balans / Qarz</th>
-                  <th className="py-2.5 px-3 text-white/80">Ota-onasi</th>
-                  <th className="py-2.5 px-3 text-white/80">Holat</th>
+                  <th className="py-2.5 px-3 text-white/50">{t('migration.thNum', '#')}</th>
+                  <th className="py-2.5 px-3 text-white/80">{t('migration.thName', 'O‘quvchi F.I.Sh')}</th>
+                  <th className="py-2.5 px-3 text-white/80">{t('migration.thPhone', 'Telefon')}</th>
+                  <th className="py-2.5 px-3 text-white/80">{t('migration.thGroup', 'Guruh')}</th>
+                  <th className="py-2.5 px-3 text-white/80">{t('migration.thBalance', 'Balans / Qarz')}</th>
+                  <th className="py-2.5 px-3 text-white/80">{t('migration.thParent', 'Ota-onasi')}</th>
+                  <th className="py-2.5 px-3 text-white/80">{t('migration.thStatus', 'Holat')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -596,7 +626,7 @@ export function ModmeExcelMigrationStudio({
                             : 'text-white/50'
                         )}
                       >
-                        {row.balanceUzs.toLocaleString('uz-UZ')} UZS
+                        {formatNumber ? formatNumber(row.balanceUzs) : row.balanceUzs.toLocaleString()} UZS
                       </span>
                     </td>
                     <td className="py-2 px-3 text-white/60">{row.parentName || '—'}</td>
@@ -605,7 +635,9 @@ export function ModmeExcelMigrationStudio({
                         variant={row.status === 'valid' ? 'green' : 'amber'}
                         size="sm"
                       >
-                        {row.status === 'valid' ? 'Tayyor' : 'Ogohlantirish'}
+                        {row.status === 'valid'
+                          ? t('migration.statusReady', 'Tayyor')
+                          : t('migration.statusWarning', 'Ogohlantirish')}
                       </GlassBadge>
                     </td>
                   </tr>
@@ -617,8 +649,8 @@ export function ModmeExcelMigrationStudio({
       )}
 
       {/* Migration Action Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-white/10">
-        <div className="flex flex-wrap items-center gap-4 text-xs text-white/60">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-4 border-t border-white/10">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 text-xs text-white/60">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -626,45 +658,48 @@ export function ModmeExcelMigrationStudio({
               onChange={(e) => setIsDryRun(e.target.checked)}
               className="rounded border-white/20 bg-black/40 text-indigo-500 focus:ring-0"
             />
-            <span>Sinov rejimida tekshirish (Dry-Run — bazaga yozmasdan)</span>
+            <span className="text-xs">
+              {t('migration.dryRunLabel', 'Sinov rejimida tekshirish (Dry-Run — bazaga yozmasdan)')}
+            </span>
           </label>
 
-          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-black/40 border border-white/10">
+          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-black/40 border border-white/10 w-fit">
             <button
               type="button"
               onClick={() => setMode('UPSERT')}
               className={cn(
-                'px-2 py-0.5 rounded text-[11px] font-semibold transition-all',
+                'px-2 py-1 rounded text-[11px] font-semibold transition-all',
                 mode === 'UPSERT' ? 'bg-indigo-500 text-white' : 'text-white/50 hover:text-white'
               )}
             >
-              Yangilash (Upsert)
+              {t('migration.modeUpsert', 'Yangilash (Upsert)')}
             </button>
             <button
               type="button"
               onClick={() => setMode('CREATE')}
               className={cn(
-                'px-2 py-0.5 rounded text-[11px] font-semibold transition-all',
+                'px-2 py-1 rounded text-[11px] font-semibold transition-all',
                 mode === 'CREATE' ? 'bg-indigo-500 text-white' : 'text-white/50 hover:text-white'
               )}
             >
-              Faqat Yangi (Create)
+              {t('migration.modeCreate', 'Faqat Yangi (Create)')}
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3">
           {parsedRows.length > 0 && (
             <GlassButton
               variant="ghost"
               size="md"
+              className="flex-1 sm:flex-initial"
               onClick={() => {
                 setParsedRows([]);
                 setSelectedFile(null);
                 setDetectedColumns([]);
               }}
             >
-              Tozalash
+              {t('migration.clear', 'Tozalash')}
             </GlassButton>
           )}
 
@@ -673,12 +708,13 @@ export function ModmeExcelMigrationStudio({
             size="md"
             loading={isSubmitting || isParsing}
             onClick={handleCommitMigration}
-            className="bg-indigo-600 hover:bg-indigo-500 font-bold"
+            className="flex-1 sm:flex-initial bg-indigo-600 hover:bg-indigo-500 font-bold"
           >
             <Icon name="upload" className="w-4 h-4 mr-1.5" />
             {isDryRun
-              ? 'Xatoliklarga Tekshirish'
-              : `${parsedRows.length || 0} Ta O‘quvchini Tizimga Ko‘chirish`}
+              ? t('migration.btnDryRun', 'Xatoliklarga Tekshirish')
+              : t('migration.btnCommit', { count: parsedRows.length || 0 }) ||
+                `${parsedRows.length || 0} Ta O‘quvchini Tizimga Ko‘chirish`}
           </GlassButton>
         </div>
       </div>

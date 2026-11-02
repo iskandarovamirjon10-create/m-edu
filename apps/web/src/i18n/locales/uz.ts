@@ -812,7 +812,8 @@ import { studentsUz } from './students-slices';
 import { groupsUz } from './groups-slices';
 import { teachersUz } from './teachers-slices';
 import { tgappUz } from './tgapp-slices';
+import { migrationUz } from './migration-slices';
 
 // Legacy fills gaps → analytics fills more → curated base wins for overrides.
-export default { ...legacyUz, ...analyticsUz, ...pagesUz, ...aiUz, ...studentsUz, ...groupsUz, ...teachersUz, ...tgappUz, ...uz };
+export default { ...legacyUz, ...analyticsUz, ...pagesUz, ...aiUz, ...studentsUz, ...groupsUz, ...teachersUz, ...tgappUz, ...migrationUz, ...uz };
 

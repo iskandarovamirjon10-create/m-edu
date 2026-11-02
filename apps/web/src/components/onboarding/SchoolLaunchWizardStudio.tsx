@@ -3,6 +3,7 @@
  * Interactive 5-Minute Zero-to-Launch setup assistant for educational centers.
  * Walks administrators through setting up their brand identity, rooms & capacity,
  * flagship courses, initial teachers/cohorts, and payment gateways with 1-click batch activation.
+ * Features full i18n multi-language support (UZ, RU, EN) and adaptive responsive layout.
  */
 
 import { useState, useCallback } from 'react';
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui';
 import { cn, Icon } from '@/lib/design';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { coursesApi, groupsApi } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -52,6 +54,7 @@ export function SchoolLaunchWizardStudio({
   onClose,
   className,
 }: SchoolLaunchWizardStudioProps): JSX.Element {
+  const { t, formatCurrency, formatNumber } = useSafeI18n();
   const sound = usePremiumSound();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -92,12 +95,12 @@ export function SchoolLaunchWizardStudio({
 
   const nextStep = useCallback(() => {
     sound.playTick();
-    setCurrentStep((prev) => (prev < 5 ? ((prev + 1) as any) : prev));
+    setCurrentStep((prev) => (prev < 5 ? (((prev + 1) as unknown) as 1 | 2 | 3 | 4 | 5) : prev));
   }, [sound]);
 
   const prevStep = useCallback(() => {
     sound.playPop();
-    setCurrentStep((prev) => (prev > 1 ? ((prev - 1) as any) : prev));
+    setCurrentStep((prev) => (prev > 1 ? (((prev - 1) as unknown) as 1 | 2 | 3 | 4 | 5) : prev));
   }, [sound]);
 
   // Batch commit configuration to real backend
@@ -130,7 +133,8 @@ export function SchoolLaunchWizardStudio({
       sound.playSuccess();
       toast.push(
         'success',
-        `Tabriklaymiz! "${schoolName}" o‘quv markazi M-EDU platformasida 100% muvaffaqiyatli ishga tushirildi!`
+        t('wizard.toastSuccess', { name: schoolName }) ||
+          `Tabriklaymiz! “${schoolName}” o‘quv markazi M-EDU platformasida 100% muvaffaqiyatli ishga tushirildi!`
       );
 
       // Invalidate queries so dashboard & courses immediately re-fetch
@@ -144,60 +148,63 @@ export function SchoolLaunchWizardStudio({
       sound.playError();
       toast.push(
         'error',
-        `Sozlashda xatolik yuz berdi: ${err instanceof Error ? err.message : 'Tarmoq xatosi'}`
+        t('wizard.toastError', { message: err instanceof Error ? err.message : 'Tarmoq xatosi' }) ||
+          `Sozlashda xatolik yuz berdi: ${err instanceof Error ? err.message : 'Tarmoq xatosi'}`
       );
     } finally {
       setIsDeploying(false);
     }
-  }, [courses, firstCohort.groupName, firstCohort.roomName, onLaunchCompleted, queryClient, schoolName, sound, toast]);
+  }, [courses, firstCohort.groupName, firstCohort.roomName, onLaunchCompleted, queryClient, schoolName, sound, t, toast]);
+
+  const stepsList = [
+    { num: 1 as const, title: t('wizard.step1', 'Brend & Filial') },
+    { num: 2 as const, title: t('wizard.step2', 'Auditoriyalar') },
+    { num: 3 as const, title: t('wizard.step3', 'Asosiy Kurslar') },
+    { num: 4 as const, title: t('wizard.step4', 'Birinchi Guruh') },
+    { num: 5 as const, title: t('wizard.step5', 'Faollashtirish') },
+  ];
 
   return (
     <GlassSurface
       className={cn(
-        'relative overflow-hidden rounded-3xl border border-white/10 p-6 sm:p-8',
+        'relative overflow-hidden rounded-3xl border border-white/10 p-4 sm:p-6 md:p-8 max-h-[88vh] overflow-y-auto',
         'bg-gradient-to-br from-white/[0.04] via-transparent to-emerald-500/[0.03]',
         className
       )}
     >
       {/* Top Telemetry & Close */}
-      <div className="flex items-center justify-between pb-5 border-b border-white/10 mb-6">
+      <div className="flex items-center justify-between pb-4 sm:pb-5 border-b border-white/10 mb-5 sm:mb-6">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center justify-center font-bold text-sm">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center justify-center font-bold text-sm shrink-0">
             🚀
           </div>
           <div>
-            <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
-              Boshlang‘ich Sozlash Ustasi (School Launch Wizard)
+            <h2 className="text-base sm:text-lg md:text-xl font-bold tracking-tight text-white flex flex-wrap items-center gap-2">
+              {t('wizard.modalTitle', 'Boshlang‘ich Sozlash Ustasi (School Launch Wizard)')}
               <GlassBadge variant="green" size="sm">
-                5 Daqiqada Tayyor
+                {t('wizard.badgeReady', '5 Daqiqada Tayyor')}
               </GlassBadge>
             </h2>
             <p className="text-xs text-white/50">
-              O‘quv markaz brendi, xonalari, kurslari va dars jadvalini tezkor sozlash
+              {t('wizard.subtitle', 'O‘quv markaz brendi, xonalari, kurslari va dars jadvalini tezkor sozlash')}
             </p>
           </div>
         </div>
 
         {onClose && (
-          <GlassButton variant="ghost" size="sm" onClick={onClose}>
+          <GlassButton variant="ghost" size="sm" onClick={onClose} aria-label={t('a11y.close', 'Yopish')}>
             <Icon name="x" className="w-4 h-4" />
           </GlassButton>
         )}
       </div>
 
-      {/* 5-Step Progress Stepper */}
-      <div className="grid grid-cols-5 gap-2 mb-8">
-        {[
-          { num: 1, title: 'Brend & Filial' },
-          { num: 2, title: 'Auditoriyalar' },
-          { num: 3, title: 'Asosiy Kurslar' },
-          { num: 4, title: 'Birinchi Guruh' },
-          { num: 5, title: 'Faollashtirish' },
-        ].map((s) => (
+      {/* 5-Step Progress Stepper (Responsive) */}
+      <div className="grid grid-cols-5 gap-1.5 sm:gap-2 mb-6 sm:mb-8">
+        {stepsList.map((s) => (
           <div
             key={s.num}
             className={cn(
-              'p-2.5 rounded-xl border text-center transition-all',
+              'p-2 sm:p-2.5 rounded-xl border text-center transition-all',
               currentStep === s.num
                 ? 'border-emerald-400 bg-emerald-500/15 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
                 : currentStep > s.num
@@ -206,15 +213,18 @@ export function SchoolLaunchWizardStudio({
             )}
           >
             <div className="text-[10px] font-mono uppercase tracking-wider mb-0.5">
-              Qadam {s.num}
+              {t('wizard.stepN', { num: s.num }) || `Qadam ${s.num}`}
             </div>
-            <div className="text-xs font-bold truncate text-white">{s.title}</div>
+            <div className="text-[11px] sm:text-xs font-bold truncate text-white">
+              <span className="sm:hidden">{s.num}</span>
+              <span className="hidden sm:inline">{s.title}</span>
+            </div>
           </div>
         ))}
       </div>
 
       {/* Step Content Area */}
-      <div className="min-h-[260px] mb-8">
+      <div className="min-h-[260px] mb-6 sm:mb-8">
         <AnimatePresence mode="wait">
           {currentStep === 1 && (
             <motion.div
@@ -225,31 +235,37 @@ export function SchoolLaunchWizardStudio({
               className="space-y-4"
             >
               <div className="text-sm font-bold text-white mb-3">
-                1-Qadam: O‘quv Markazingiz va Bosh Filialingiz Nomini Kiriting
+                {t('wizard.step1Title', '1-Qadam: O‘quv Markazingiz va Bosh Filialingiz Nomini Kiriting')}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="text-xs text-white/60 mb-1.5 block">O‘quv Markaz Nomi</label>
+                  <label className="text-xs text-white/60 mb-1.5 block">
+                    {t('wizard.schoolName', 'O‘quv Markaz Nomi')}
+                  </label>
                   <input
                     type="text"
                     value={schoolName}
                     onChange={(e) => setSchoolName(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm focus:border-emerald-400 focus:outline-none"
-                    placeholder="Masalan: Cambridge Learning Center"
+                    placeholder={t('wizard.schoolNamePlaceholder', 'Masalan: Cambridge Learning Center')}
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-white/60 mb-1.5 block">Bosh Filial Nomi</label>
+                  <label className="text-xs text-white/60 mb-1.5 block">
+                    {t('wizard.branchName', 'Bosh Filial Nomi')}
+                  </label>
                   <input
                     type="text"
                     value={branchName}
                     onChange={(e) => setBranchName(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm focus:border-emerald-400 focus:outline-none"
-                    placeholder="Masalan: Markaziy Filial"
+                    placeholder={t('wizard.branchNamePlaceholder', 'Masalan: Markaziy Filial')}
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-white/60 mb-1.5 block">Markaz Aloqa Telefoni</label>
+                  <label className="text-xs text-white/60 mb-1.5 block">
+                    {t('wizard.phone', 'Markaz Aloqa Telefoni')}
+                  </label>
                   <input
                     type="text"
                     value={phone}
@@ -259,13 +275,15 @@ export function SchoolLaunchWizardStudio({
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-white/60 mb-1.5 block">Shior (Slogan)</label>
+                  <label className="text-xs text-white/60 mb-1.5 block">
+                    {t('wizard.slogan', 'Shior (Slogan)')}
+                  </label>
                   <input
                     type="text"
                     value={slogan}
                     onChange={(e) => setSlogan(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm focus:border-emerald-400 focus:outline-none"
-                    placeholder="Bilim — kelajak poydevori"
+                    placeholder={t('wizard.sloganPlaceholder', 'Bilim — kelajak poydevori')}
                   />
                 </div>
               </div>
@@ -280,13 +298,14 @@ export function SchoolLaunchWizardStudio({
               exit={{ opacity: 0, x: -20 }}
               className="space-y-4"
             >
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                 <div className="text-sm font-bold text-white">
-                  2-Qadam: Dars O‘tiladigan Xonalar (Auditoriyalar)
+                  {t('wizard.step2Title', '2-Qadam: Dars O‘tiladigan Xonalar (Auditoriyalar)')}
                 </div>
                 <GlassButton
                   size="sm"
                   variant="ghost"
+                  className="w-fit"
                   onClick={() => {
                     sound.playTick();
                     setRooms((prev) => [
@@ -296,11 +315,11 @@ export function SchoolLaunchWizardStudio({
                   }}
                 >
                   <Icon name="plus" className="w-3.5 h-3.5 mr-1" />
-                  Xona Qo‘shish
+                  {t('wizard.addRoom', 'Xona Qo‘shish')}
                 </GlassButton>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {rooms.map((room, idx) => (
                   <div
                     key={room.id}
@@ -318,7 +337,7 @@ export function SchoolLaunchWizardStudio({
                         className="w-full bg-transparent font-bold text-white text-sm focus:outline-none border-b border-white/10 pb-1 mb-2"
                       />
                       <div className="flex items-center justify-between text-xs text-white/50">
-                        <span>Sig‘imi (partalar soni):</span>
+                        <span>{t('wizard.roomCapacity', 'Sig‘imi (partalar soni):')}</span>
                         <input
                           type="number"
                           value={room.capacity}
@@ -346,7 +365,7 @@ export function SchoolLaunchWizardStudio({
               className="space-y-4"
             >
               <div className="text-sm font-bold text-white mb-2">
-                3-Qadam: O‘quv Markazingizdagi Asosiy Kurslar va Oylik Narxlar
+                {t('wizard.step3Title', '3-Qadam: O‘quv Markazingizdagi Asosiy Kurslar va Oylik Narxlar')}
               </div>
 
               <div className="space-y-3">
@@ -367,12 +386,13 @@ export function SchoolLaunchWizardStudio({
                         className="w-full bg-transparent font-bold text-white text-sm focus:outline-none"
                       />
                       <span className="text-[11px] text-white/40">
-                        Davomiyligi: {course.durationMonths} oy
+                        {t('wizard.durationMonths', { months: course.durationMonths }) ||
+                          `Davomiyligi: ${course.durationMonths} oy`}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-white/50">Oylik to‘lov:</span>
+                      <span className="text-xs text-white/50">{t('wizard.monthlyFee', 'Oylik to‘lov:')}</span>
                       <input
                         type="number"
                         value={course.priceUzs}
@@ -400,12 +420,14 @@ export function SchoolLaunchWizardStudio({
               className="space-y-4"
             >
               <div className="text-sm font-bold text-white mb-2">
-                4-Qadam: Dastlabki Dars Guruhini Shakllantirish
+                {t('wizard.step4Title', '4-Qadam: Dastlabki Dars Guruhini Shakllantirish')}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="text-xs text-white/60 mb-1.5 block">Guruh Nomi</label>
+                  <label className="text-xs text-white/60 mb-1.5 block">
+                    {t('wizard.groupName', 'Guruh Nomi')}
+                  </label>
                   <input
                     type="text"
                     value={firstCohort.groupName}
@@ -415,7 +437,9 @@ export function SchoolLaunchWizardStudio({
                 </div>
 
                 <div>
-                  <label className="text-xs text-white/60 mb-1.5 block">O‘qituvchi F.I.Sh</label>
+                  <label className="text-xs text-white/60 mb-1.5 block">
+                    {t('wizard.teacherName', 'O‘qituvchi F.I.Sh')}
+                  </label>
                   <input
                     type="text"
                     value={firstCohort.teacherName}
@@ -427,21 +451,32 @@ export function SchoolLaunchWizardStudio({
                 </div>
 
                 <div>
-                  <label className="text-xs text-white/60 mb-1.5 block">Dars Jadvali Kunlari</label>
+                  <label className="text-xs text-white/60 mb-1.5 block">
+                    {t('wizard.scheduleDays', 'Dars Jadvali Kunlari')}
+                  </label>
                   <select
                     value={firstCohort.scheduleDays}
                     onChange={(e) =>
-                      setFirstCohort({ ...firstCohort, scheduleDays: e.target.value as any })
+                      setFirstCohort({
+                        ...firstCohort,
+                        scheduleDays: e.target.value as 'DU_CHOR_JUM' | 'SESH_PAY_SHAN',
+                      })
                     }
                     className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm focus:border-emerald-400 focus:outline-none"
                   >
-                    <option value="DU_CHOR_JUM">Dushanba - Chorshanba - Juma (Toq kunlar)</option>
-                    <option value="SESH_PAY_SHAN">Seshanba - Payshanba - Shanba (Juft kunlar)</option>
+                    <option value="DU_CHOR_JUM">
+                      {t('wizard.daysOdd', 'Dushanba - Chorshanba - Juma (Toq kunlar)')}
+                    </option>
+                    <option value="SESH_PAY_SHAN">
+                      {t('wizard.daysEven', 'Seshanba - Payshanba - Shanba (Juft kunlar)')}
+                    </option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs text-white/60 mb-1.5 block">Dars Vaqti</label>
+                  <label className="text-xs text-white/60 mb-1.5 block">
+                    {t('wizard.timeSlot', 'Dars Vaqti')}
+                  </label>
                   <input
                     type="text"
                     value={firstCohort.timeSlot}
@@ -462,30 +497,34 @@ export function SchoolLaunchWizardStudio({
               className="space-y-4"
             >
               <div className="text-sm font-bold text-white mb-2">
-                5-Qadam: Yakuniy Tasdiqlash & Markazni Ishga Tushirish
+                {t('wizard.step5Title', '5-Qadam: Yakuniy Tasdiqlash & Markazni Ishga Tushirish')}
               </div>
 
-              <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10">
-                <div className="flex items-center gap-2 text-emerald-300 font-bold text-sm mb-2">
-                  <Icon name="checkCircle" className="w-4 h-4" />
-                  Barcha ma’lumotlar tekshirildi va tasdiqlandi:
+              <div className="p-4 sm:p-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10">
+                <div className="flex items-center gap-2 text-emerald-300 font-bold text-sm mb-3">
+                  <Icon name="checkCircle" className="w-4 h-4 shrink-0" />
+                  {t('wizard.allVerified', 'Barcha ma’lumotlar tekshirildi va tasdiqlandi:')}
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mt-3">
-                  <div>
-                    <span className="text-white/40 block">O‘quv Markaz:</span>
-                    <strong className="text-white">{schoolName}</strong>
+                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                    <span className="text-white/40 block mb-0.5">{t('wizard.reviewCenter', 'O‘quv Markaz:')}</span>
+                    <strong className="text-white text-sm truncate block">{schoolName}</strong>
                   </div>
-                  <div>
-                    <span className="text-white/40 block">Auditoriyalar:</span>
-                    <strong className="text-white">{rooms.length} ta xona</strong>
+                  <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                    <span className="text-white/40 block mb-0.5">{t('wizard.reviewRooms', 'Auditoriyalar:')}</span>
+                    <strong className="text-white text-sm block">
+                      {t('wizard.roomsCount', { count: rooms.length }) || `${rooms.length} ta xona`}
+                    </strong>
                   </div>
-                  <div>
-                    <span className="text-white/40 block">Kurslar:</span>
-                    <strong className="text-white">{courses.length} ta yo‘nalish</strong>
+                  <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                    <span className="text-white/40 block mb-0.5">{t('wizard.reviewCourses', 'Kurslar:')}</span>
+                    <strong className="text-white text-sm block">
+                      {t('wizard.coursesCount', { count: courses.length }) || `${courses.length} ta yo‘nalish`}
+                    </strong>
                   </div>
-                  <div>
-                    <span className="text-white/40 block">Dastlabki Guruh:</span>
-                    <strong className="text-white">{firstCohort.groupName}</strong>
+                  <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                    <span className="text-white/40 block mb-0.5">{t('wizard.reviewGroup', 'Dastlabki Guruh:')}</span>
+                    <strong className="text-white text-sm truncate block">{firstCohort.groupName}</strong>
                   </div>
                 </div>
               </div>
@@ -494,21 +533,31 @@ export function SchoolLaunchWizardStudio({
         </AnimatePresence>
       </div>
 
-      {/* Navigation Controls */}
-      <div className="flex items-center justify-between pt-4 border-t border-white/10">
+      {/* Navigation Controls (Responsive) */}
+      <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-white/10">
         <div>
           {currentStep > 1 && (
-            <GlassButton variant="ghost" size="md" onClick={prevStep}>
+            <GlassButton
+              variant="ghost"
+              size="md"
+              className="w-full sm:w-auto"
+              onClick={prevStep}
+            >
               <Icon name="chevronLeft" className="w-4 h-4 mr-1" />
-              Oldingi
+              {t('wizard.btnPrev', 'Oldingi')}
             </GlassButton>
           )}
         </div>
 
         <div>
           {currentStep < 5 ? (
-            <GlassButton variant="primary" size="md" onClick={nextStep}>
-              Keyingi Qadam
+            <GlassButton
+              variant="primary"
+              size="md"
+              className="w-full sm:w-auto"
+              onClick={nextStep}
+            >
+              {t('wizard.btnNext', 'Keyingi Qadam')}
               <Icon name="chevronRight" className="w-4 h-4 ml-1" />
             </GlassButton>
           ) : (
@@ -517,9 +566,9 @@ export function SchoolLaunchWizardStudio({
               size="md"
               loading={isDeploying}
               onClick={handleGrandLaunch}
-              className="bg-emerald-600 hover:bg-emerald-500 font-bold px-6 shadow-lg shadow-emerald-600/30"
+              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 font-bold px-6 shadow-lg shadow-emerald-600/30"
             >
-              🚀 Markazni Ishga Tushirish
+              {t('wizard.btnLaunch', '🚀 Markazni Ishga Tushirish')}
             </GlassButton>
           )}
         </div>

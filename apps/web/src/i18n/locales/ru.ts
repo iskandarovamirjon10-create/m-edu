@@ -3761,11 +3761,13 @@ import { studentsRu } from './students-slices';
 import { groupsRu } from './groups-slices';
 import { teachersRu } from './teachers-slices';
 import { tgappRu } from './tgapp-slices';
+import { migrationRu } from './migration-slices';
 
 export default {
   ...legacyRu,
   ...analyticsRu,
   ...pagesRu,
+  ...migrationRu,
   ...ru,
   'dashboard.attendancePending': 'Ожидание посещаемости',
   'dashboard.collectedShare': 'собрано',
