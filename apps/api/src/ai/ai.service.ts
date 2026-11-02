@@ -300,9 +300,10 @@ export class AiService {
   private readonly proModel: string;
   // Only models that are actually served by the configured provider.
   private readonly fallbackModels = [
-    'gemini-flash-lite-latest',
-    'gemini-3.5-flash-lite',
+    'gemini-3-flash-preview',
     'gemini-3.5-flash',
+    'gemini-3.7-flash',
+    'gemini-3.8-flash',
   ];
 
   private static readonly INSIGHTS_CACHE_MAX_ENTRIES = 500;
@@ -399,7 +400,7 @@ export class AiService {
     @Optional() private readonly academicRisk?: AcademicRiskService,
   ) {
     this.primaryModel =
-      this.configService?.get<string>('GEMINI_MODEL') || 'gemini-flash-lite-latest';
+      this.configService?.get<string>('GEMINI_MODEL') || 'gemini-3.8-flash';
     this.proModel =
       this.configService?.get<string>('GEMINI_PRO_MODEL') ||
       'gemini-3.1-pro-preview';
@@ -807,15 +808,7 @@ export class AiService {
     });
 
     if (!conv) {
-      this.logger.warn(
-        `Conversation ${conversationId} not found or unowned for user ${userId}. Creating self-healing conversation.`,
-      );
-      const fallbackConv = await this.createConversation(
-        organizationId,
-        userId,
-        fallbackTitle ?? 'Yangi suhbat',
-      );
-      return fallbackConv.id;
+      throw new HttpException('Not found or no permission', HttpStatus.FORBIDDEN);
     }
 
     // A conversation opened from "New chat" starts as "Yangi suhbat". Give it

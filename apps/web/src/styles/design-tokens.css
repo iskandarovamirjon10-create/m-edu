@@ -720,22 +720,22 @@
   [data-theme="oled"] {
     color-scheme: dark;
 
-    --bg-base: #0B0F19;
-    --bg-app: #0B0F19;
-    --bg-page: #0B0F19;
-    --bg-surface: #131B2E;
-    --bg-surface-secondary: #19243C;
-    --bg-card: #131B2E;
-    --bg-card-elevated: #1C2742;
-    --bg-card-hover: #1A243D;
-    --bg-elevated: #1C2742;
-    --bg-input: #131B2E;
-    --bg-input-hover: #19243C;
-    --bg-input-focus: #131B2E;
-    --bg-input-disabled: #0A0E18;
-    --bg-overlay: rgba(11, 15, 25, 0.88);
-    --bg-muted: #131B2E;
-    --surface-soft: #131B2E;
+    --bg-base: #000000;
+    --bg-app: #000000;
+    --bg-page: #000000;
+    --bg-surface: #0A0A0C;
+    --bg-surface-secondary: #121216;
+    --bg-card: #0A0A0C;
+    --bg-card-elevated: #121218;
+    --bg-card-hover: #14141C;
+    --bg-elevated: #121218;
+    --bg-input: #0A0A0C;
+    --bg-input-hover: #121216;
+    --bg-input-focus: #0A0A0C;
+    --bg-input-disabled: #000000;
+    --bg-overlay: rgba(0, 0, 0, 0.92);
+    --bg-muted: #0A0A0C;
+    --surface-soft: #0A0A0C;
 
     --bg-glass: rgba(10, 10, 14, 0.86);
     --bg-glass-hover: rgba(18, 18, 24, 0.92);

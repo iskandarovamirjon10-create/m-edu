@@ -18,6 +18,30 @@ vi.mock('@/hooks/usePremiumSound', () => ({
   }),
 }));
 
+const mockUser = {
+  id: 'user-1',
+  role: 'STUDENT',
+  firstName: 'Zafar',
+  lastName: 'Olimov',
+  organizationId: 'org-1',
+};
+
+vi.mock('@/auth/AuthContext', () => ({
+  useAuth: () => ({
+    user: mockUser,
+    hasAnyRole: () => true,
+    hasRole: () => true,
+  }),
+  useOptionalAuthState: () => ({
+    user: mockUser,
+    isAuthenticated: true,
+  }),
+  useAuthState: () => ({
+    user: mockUser,
+    isAuthenticated: true,
+  }),
+}));
+
 const mockMe = {
   xp: 1850,
   coins: 240,

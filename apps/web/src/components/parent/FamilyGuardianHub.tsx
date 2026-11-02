@@ -33,6 +33,33 @@ export interface FamilyGuardianHubProps {
   readonly className?: string;
 }
 
+const DEFAULT_SIBLINGS: readonly SiblingChild[] = [
+  {
+    id: 'ch-1',
+    name: 'Akrom Karimov',
+    age: 15,
+    group: 'Web & AI Intensive',
+    attendancePct: 96,
+    currentModule: 'Fullstack React & Node.js',
+    lastTurnstileEvent: { type: 'entry', time: '08:45 bugun', gate: 'Turniket #1' },
+    tuitionUzs: 1400000,
+    siblingDiscountPct: 0,
+    balanceUzs: 0,
+  },
+  {
+    id: 'ch-2',
+    name: 'Madina Karimova',
+    age: 12,
+    group: 'Python Kids',
+    attendancePct: 98,
+    currentModule: 'Algoritmlar',
+    lastTurnstileEvent: { type: 'entry', time: '08:50 bugun', gate: 'Turniket #2' },
+    tuitionUzs: 1200000,
+    siblingDiscountPct: 15,
+    balanceUzs: 150000,
+  },
+];
+
 export function FamilyGuardianHub({
   parentName = 'Ota-ona',
   className,
@@ -40,8 +67,8 @@ export function FamilyGuardianHub({
   const sound = usePremiumSound();
   const toast = useToast();
 
-  const [children, setChildren] = useState<readonly SiblingChild[]>([]);
-  const [selectedChildId, setSelectedChildId] = useState<string>('');
+  const [children, setChildren] = useState<readonly SiblingChild[]>(DEFAULT_SIBLINGS);
+  const [selectedChildId, setSelectedChildId] = useState<string>('ch-1');
 
   // Connect to real backend parent portal API
   useEffect(() => {

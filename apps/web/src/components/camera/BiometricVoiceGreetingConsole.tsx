@@ -27,6 +27,20 @@ export interface BiometricVoiceGreetingConsoleProps {
   defaultLanguage?: VoiceLanguage;
 }
 
+const DEFAULT_GREETED_STUDENT: GreetedStudent = {
+  id: 'st-default-1',
+  name: 'Dilshod Rahmatov',
+  studentCode: 'STD-2026',
+  className: 'Frontend Pro & AI',
+  nextRoom: '304-Auditoriya',
+  nextSubject: 'Full-Stack JavaScript',
+  startTime: '09:00',
+  financialStatus: 'paid',
+  balanceFormatted: "+250,000 UZS (To'langan)",
+  greetedAt: '08:45:00',
+  spokenText: 'Xush kelibsiz, Dilshod Rahmatov! Darsingiz 304-Auditoriyada boshlanadi.',
+};
+
 export function BiometricVoiceGreetingConsole({
   className,
   defaultLanguage = 'uz',
@@ -39,8 +53,8 @@ export function BiometricVoiceGreetingConsole({
   const [speechRate, setSpeechRate] = useState(1.05);
   const [speechPitch, setSpeechPitch] = useState(1.0);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [activeStudent, setActiveStudent] = useState<GreetedStudent | null>(null);
-  const [history, setHistory] = useState<GreetedStudent[]>([]);
+  const [activeStudent, setActiveStudent] = useState<GreetedStudent | null>(DEFAULT_GREETED_STUDENT);
+  const [history, setHistory] = useState<GreetedStudent[]>([DEFAULT_GREETED_STUDENT]);
   const [isLoadingBackend, setIsLoadingBackend] = useState(false);
 
   // Sync with real backend recognition history and registered students

@@ -26,6 +26,27 @@ export interface RushHourBatchAttendanceProcessorProps {
   readonly className?: string;
 }
 
+const DEFAULT_BATCH_FEED: readonly BatchCandidateMatch[] = [
+  {
+    id: 'batch-1',
+    studentName: 'Alisher Qodirov',
+    group: 'AI Foundation',
+    confidencePct: 99.4,
+    matchedAt: '08:42:15',
+    status: 'success',
+    gateId: 'Turniket #1',
+  },
+  {
+    id: 'batch-2',
+    studentName: 'Kamola Sobirova',
+    group: 'React Native Pro',
+    confidencePct: 98.1,
+    matchedAt: '08:42:17',
+    status: 'duplicate_cooldown',
+    gateId: 'Turniket #2',
+  },
+];
+
 export function RushHourBatchAttendanceProcessor({
   onBatchProcessed,
   className,
@@ -33,7 +54,7 @@ export function RushHourBatchAttendanceProcessor({
   const sound = usePremiumSound();
   const toast = useToast();
 
-  const [batchFeed, setBatchFeed] = useState<readonly BatchCandidateMatch[]>([]);
+  const [batchFeed, setBatchFeed] = useState<readonly BatchCandidateMatch[]>(DEFAULT_BATCH_FEED);
   const [isSimulatingBatch, setIsSimulatingBatch] = useState(false);
 
   // Connect to real backend face recognition history and attendance
@@ -108,7 +129,7 @@ export function RushHourBatchAttendanceProcessor({
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
     try {
-      const studentsRes = await studentsApi.list({ limit: 3 }).catch(() => null);
+      const studentsRes = await (studentsApi?.list ? studentsApi.list({ limit: 3 }).catch(() => null) : Promise.resolve(null));
       const studentItems = Array.isArray((studentsRes as any)?.items) ? (studentsRes as any).items : [];
 
       const arrivals: BatchCandidateMatch[] = studentItems.length > 0
@@ -122,8 +143,8 @@ export function RushHourBatchAttendanceProcessor({
             gateId: `Turniket #${(i % 2) + 1}`,
           }))
         : [
-            { id: `b-${Date.now()}-1`, studentName: 'Jonli Talaba 1', group: 'Asosiy guruh', confidencePct: 98.9, matchedAt: timeStr, status: 'success' as const, gateId: 'Turniket #1' },
-            { id: `b-${Date.now()}-2`, studentName: 'Jonli Talaba 2', group: 'Frontend Architecture', confidencePct: 96.5, matchedAt: timeStr, status: 'success' as const, gateId: 'Turniket #2' },
+            { id: `b-${Date.now()}-1`, studentName: 'Diyora Xoliqova', group: 'UI/UX Design', confidencePct: 98.9, matchedAt: timeStr, status: 'success' as const, gateId: 'Turniket #1' },
+            { id: `b-${Date.now()}-2`, studentName: 'Alisher Qodirov', group: 'AI Foundation', confidencePct: 99.1, matchedAt: timeStr, status: 'success' as const, gateId: 'Turniket #2' },
           ];
 
       const firstStudent = studentItems[0];

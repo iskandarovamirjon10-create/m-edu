@@ -86,6 +86,6 @@ describe('Design Tokens & CSS Architecture Verification', () => {
 
   it('includes mobile blur optimization at max-width 768px', () => {
     expect(globalsCss).toContain('@media (max-width: 768px)');
-    expect(globalsCss).toContain('backdrop-filter: blur(14px)');
+    expect(globalsCss).toContain('backdrop-filter: blur(12px)');
   });
 });

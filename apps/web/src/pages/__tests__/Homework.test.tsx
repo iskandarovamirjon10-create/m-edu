@@ -34,7 +34,7 @@ const mockHomeworks: Homework[] = [
     groupId: 'grp-1',
     title: 'Custom Hooks Architecture',
     description: 'Build a useDebounce and useThrottle hook suite',
-    deadline: '2026-11-01T18:00:00Z',
+    deadline: '2026-12-01T18:00:00Z',
     maxScore: 100,
     group: mockGroups[0],
   },

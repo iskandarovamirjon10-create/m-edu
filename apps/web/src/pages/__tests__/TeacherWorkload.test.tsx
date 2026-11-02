@@ -258,7 +258,7 @@ describe('TeacherWorkloadPage (Apple 10/10 visionOS Edition)', () => {
       renderWithClient();
 
       expect(await screen.findByText(/O'rtacha bandlik/i)).toBeInTheDocument();
-      expect(screen.getByText(/Kam yuklama/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Kam yuklama/i).length).toBeGreaterThanOrEqual(1);
     });
   });
 

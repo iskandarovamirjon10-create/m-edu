@@ -31,12 +31,30 @@ export interface TeacherPayrollStudioProps {
   readonly className?: string;
 }
 
+const DEFAULT_PAYROLL_TEACHERS: readonly TeacherCompensationPlan[] = [
+  {
+    id: 'tch-1',
+    name: 'Farrux Tursunov',
+    subject: 'Senior Frontend & React',
+    activeGroupsCount: 3,
+    activeStudentsCount: 42,
+    retentionRate: 94,
+    journalPunctualityRate: 98,
+    baseSalaryUzs: 4500000,
+    totalHoursLogged: 48,
+    hourlyRateUzs: 160000,
+    studentRevenueUzs: 38000000,
+    commissionPct: 20,
+    advanceDeductionsUzs: 500000,
+  },
+];
+
 export function TeacherPayrollStudio({ className }: TeacherPayrollStudioProps): JSX.Element {
   const sound = usePremiumSound();
   const toast = useToast();
 
-  const [teachers, setTeachers] = useState<readonly TeacherCompensationPlan[]>([]);
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
+  const [teachers, setTeachers] = useState<readonly TeacherCompensationPlan[]>(DEFAULT_PAYROLL_TEACHERS);
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('tch-1');
 
   // Connect to real backend teachers & payroll
   useEffect(() => {
@@ -143,8 +161,9 @@ export function TeacherPayrollStudio({ className }: TeacherPayrollStudioProps): 
 
   const handlePrintPayslip = useCallback(() => {
     sound.playPop();
-    toast.push('info', `${selectedTeacher.name} uchun rasmiy hisob-kitob vedomosti (Payslip PDF) ochildi`);
-  }, [selectedTeacher.name, sound, toast]);
+    const teacherName = selectedTeacher?.name || 'O\'qituvchi';
+    toast.push('info', `${teacherName} uchun rasmiy hisob-kitob vedomosti (Payslip PDF) ochildi`);
+  }, [selectedTeacher?.name, sound, toast]);
 
   return (
     <GlassSurface

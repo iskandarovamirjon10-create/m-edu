@@ -49,27 +49,65 @@ vi.mock('@/hooks/usePageTitle', () => ({
   usePageTitle: vi.fn(),
 }));
 
-vi.mock('@/components/ui', () => ({
-  GlassPageHeader: ({ title, subtitle }: any) => (
-    <div data-testid="page-header">
-      <h1>{title}</h1>
-      <p>{subtitle}</p>
-    </div>
-  ),
-  GlassPageLoader: ({ label }: any) => <div data-testid="page-loader">{label || 'Loading...'}</div>,
-  GlassErrorState: ({ message, onRetry }: any) => (
-    <div data-testid="error-state">
-      <span>{message}</span>
-      <button onClick={onRetry}>Retry</button>
-    </div>
-  ),
-  GlassEmptyState: ({ title, message }: any) => (
-    <div data-testid="empty-state">
-      <h2>{title}</h2>
-      <p>{message}</p>
-    </div>
-  ),
+const mockUser = {
+  id: 'parent-1',
+  role: 'PARENT',
+  firstName: 'Dilshod',
+  lastName: 'Karimov',
+  organizationId: 'org-1',
+};
+
+vi.mock('@/auth/AuthContext', () => ({
+  useAuth: () => ({
+    user: mockUser,
+    hasAnyRole: () => true,
+    hasRole: () => true,
+  }),
+  useOptionalAuthState: () => ({
+    user: mockUser,
+    isAuthenticated: true,
+  }),
+  useAuthState: () => ({
+    user: mockUser,
+    isAuthenticated: true,
+  }),
 }));
+
+vi.mock('@/components/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/ui')>();
+  return {
+    ...actual,
+    GlassPageHeader: ({ title, subtitle }: any) => (
+      <div data-testid="page-header">
+        <h1>{title}</h1>
+        <p>{subtitle}</p>
+      </div>
+    ),
+    GlassPageLoader: ({ label }: any) => <div data-testid="page-loader">{label || 'Loading...'}</div>,
+    GlassErrorState: ({ message, onRetry }: any) => (
+      <div data-testid="error-state">
+        <span>{message}</span>
+        <button onClick={onRetry}>Retry</button>
+      </div>
+    ),
+    GlassEmptyState: ({ title, message }: any) => (
+      <div data-testid="empty-state">
+        <h2>{title}</h2>
+        <p>{message}</p>
+      </div>
+    ),
+    useToast: () => ({
+      toast: vi.fn(),
+      success: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+    }),
+    useToasts: () => ({
+      push: vi.fn(),
+      toastNode: null,
+    }),
+  };
+});
 
 const mockChild1 = {
   studentId: 'child-1-id',

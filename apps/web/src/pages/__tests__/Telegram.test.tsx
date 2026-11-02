@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TelegramPage } from '../Telegram';
 import { I18nProvider } from '@/i18n/I18nProvider';
@@ -67,9 +68,11 @@ function renderPage() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <I18nProvider initialLocale="en">
-        <TelegramPage />
-      </I18nProvider>
+      <MemoryRouter>
+        <I18nProvider initialLocale="en">
+          <TelegramPage />
+        </I18nProvider>
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }

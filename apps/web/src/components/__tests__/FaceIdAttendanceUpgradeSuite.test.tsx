@@ -56,6 +56,9 @@ vi.mock('@/lib/api', () => ({
     status: vi.fn().mockResolvedValue({ connected: true }),
     testNotification: vi.fn().mockResolvedValue({ sent: true }),
   },
+  studentsApi: {
+    list: vi.fn().mockResolvedValue({ items: [] }),
+  },
 }));
 
 describe('Face ID & Biometric Camera Upgrade Test Suite', () => {

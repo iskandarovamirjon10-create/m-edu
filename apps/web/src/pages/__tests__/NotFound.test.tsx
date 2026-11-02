@@ -45,10 +45,10 @@ describe('NotFoundPage', () => {
     expect(back).toHaveAttribute('href', '/');
   });
 
-  it('offers a secondary "Go home" link to /', () => {
+  it('offers a "Go Back" button action', () => {
     renderPage();
-    const home = screen.getByRole('link', { name: 'Go home' });
-    expect(home).toHaveAttribute('href', '/');
+    const backBtn = screen.getByRole('button', { name: /Go Back/i });
+    expect(backBtn).toBeInTheDocument();
   });
 
   it('sets a professional document title', () => {

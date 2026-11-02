@@ -62,6 +62,35 @@ const FALLBACK_CANDIDATE: SpeakingCandidate = {
   lastTopic: 'Ta’lim va Sun’iy Intellekt',
 };
 
+const DEFAULT_CANDIDATES: SpeakingCandidate[] = [
+  {
+    id: 'sp-1',
+    name: 'Dilnoza Karimova',
+    group: 'IELTS Intensive C1',
+    targetLevel: 'IELTS 7.5',
+    wpm: 135,
+    hesitationPct: 3.2,
+    lexicalScore: 8.0,
+    grammarPct: 90,
+    phoneticsPct: 88,
+    predictedBand: '7.5 (C1)',
+    lastTopic: 'Sun’iy Intellekt va Zamonaviy Ta’lim',
+  },
+  {
+    id: 'sp-2',
+    name: 'Temurbek Oripov',
+    group: 'General English B2',
+    targetLevel: 'CEFR B2',
+    wpm: 118,
+    hesitationPct: 4.8,
+    lexicalScore: 6.5,
+    grammarPct: 82,
+    phoneticsPct: 84,
+    predictedBand: '6.5 (B2)',
+    lastTopic: 'Global Iqtisodiyot va Barqaror Rivojlanish',
+  },
+];
+
 export function VoiceSpeakingDiagnosticStudio({
   examTitle = 'Rasmiy Ovozli Speaking & Nutq Diagnostikasi',
   onClose,
@@ -69,8 +98,8 @@ export function VoiceSpeakingDiagnosticStudio({
   const { playSuccess, playTick, playLaserScan } = usePremiumSound();
   const { push, toastNode } = useToast();
 
-  const [candidates, setCandidates] = useState<SpeakingCandidate[]>([]);
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string>('');
+  const [candidates, setCandidates] = useState<SpeakingCandidate[]>(DEFAULT_CANDIDATES);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string>('sp-1');
   const [activePart, setActivePart] = useState<SpeakingPart>(2);
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [elapsedSec, setElapsedSec] = useState<number>(0);

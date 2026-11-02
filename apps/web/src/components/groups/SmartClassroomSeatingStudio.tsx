@@ -94,7 +94,14 @@ export function SmartClassroomSeatingStudio({
 
     if (fromGroup.length > 0) return fromGroup;
 
-    return [];
+    return [
+      { id: 's-1', name: 'Alisher Qodirov', score: 92, attendanceRate: 98, hasGlasses: true, isHighEnergy: false },
+      { id: 's-2', name: 'Zilola Rahimova', score: 88, attendanceRate: 95, hasGlasses: false, isHighEnergy: false },
+      { id: 's-3', name: 'Bekzod Karimov', score: 74, attendanceRate: 82, hasGlasses: false, isHighEnergy: true },
+      { id: 's-4', name: 'Madina Usmonova', score: 96, attendanceRate: 100, hasGlasses: true, isHighEnergy: false },
+      { id: 's-5', name: 'Sardor Azimov', score: 68, attendanceRate: 78, hasGlasses: false, isHighEnergy: true },
+      { id: 's-6', name: 'Diyora Rustamova', score: 85, attendanceRate: 91, hasGlasses: false, isHighEnergy: false },
+    ];
   }, [group]);
 
   // Initial seating layout generator
