@@ -1513,36 +1513,38 @@ export function AttendancePage() {
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 transition={SPRING.snappy}
-                title={t('attendance.expressHint')}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-500/20 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300 transition-colors"
+                title={`${t('attendance.expressHint')} (E)`}
+                aria-label={t('attendance.express')}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-500/20 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300 transition-colors shadow-xs"
               >
-                <span>⚡</span>
-                <span>{t('attendance.express')}</span>
+                <span className="text-sm">⚡</span>
+                <span className="hidden sm:inline">{t('attendance.express')}</span>
               </motion.button>
 
               {/* Official A4 Attendance Register Sheet Button */}
               <motion.button
                 type="button"
                 onClick={() => setRegisterModalOpen(true)}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
                 transition={SPRING.snappy}
-                title={t('attendance.registerSheetTitle')}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3.5 text-[12.5px] font-semibold text-violet-700 hover:bg-violet-500/20 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300 transition-colors"
+                title={`${t('attendance.registerSheetTitle')} (V)`}
+                aria-label="Vedomost A4"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-500/10 px-2.5 text-xs font-bold text-violet-700 hover:bg-violet-500/20 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300 transition-colors shadow-xs"
               >
-                <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
-                <span>📋 Vedomost (A4)</span>
+                <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
+                <span className="hidden sm:inline">Vedomost</span>
               </motion.button>
 
               {/* AI Copilot Analysis */}
               <motion.div
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
                 transition={SPRING.snappy}
               >
                 <GlassButton
                   type="button"
-                  variant="secondary"
+                  variant="ghost"
                   onClick={() => {
                     window.dispatchEvent(
                       new CustomEvent('open-ai-copilot', {
@@ -1550,18 +1552,20 @@ export function AttendancePage() {
                       }),
                     );
                   }}
-                  className="!border-purple-500/30 hover:!border-purple-500/50"
+                  title={`${t('attendance.aiAnalysis')} (I)`}
+                  aria-label={t('attendance.aiAnalysis')}
+                  className="h-9 px-2.5 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 shadow-xs"
                 >
-                  <span className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-semibold">
-                    <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
-                    {t('attendance.aiAnalysis')}
+                  <span className="inline-flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-bold text-xs">
+                    <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
+                    <span className="hidden sm:inline">{t('attendance.aiAnalysis')}</span>
                   </span>
                 </GlassButton>
               </motion.div>
 
               {/* Primary CTA: Record Attendance */}
               <motion.div
-                whileHover={{ scale: 1.03 }}
+                whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
                 transition={SPRING.snappy}
               >
@@ -1570,10 +1574,14 @@ export function AttendancePage() {
                   variant="primary"
                   onClick={() => setModalOpen(true)}
                   aria-label={t('attendance.record')}
+                  className="h-10 px-4 rounded-2xl shadow-sm font-bold text-xs sm:text-sm"
                 >
                   <span className="inline-flex items-center gap-2">
                     <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                    {t('attendance.record')}
+                    <span>{t('attendance.record')}</span>
+                    <kbd aria-hidden="true" className="hidden xl:inline-block rounded border border-white/30 bg-white/15 px-1.5 py-0.2 font-mono text-[10px]">
+                      N
+                    </kbd>
                   </span>
                 </GlassButton>
               </motion.div>

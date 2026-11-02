@@ -1181,53 +1181,69 @@ export function PaymentsPage() {
               </p>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row">
-              <motion.div
-                whileHover={{ scale: 1.03, y: -1 }}
-                whileTap={{ scale: 0.97 }}
-                transition={SPRING.snappy}
-              >
-                <GlassButton
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setZReportModalOpen(true)}
-                  className="!rounded-2xl !border-emerald-400/35 !bg-emerald-500/[0.08] hover:!bg-emerald-500/[0.14] !shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.8)]"
+            {/* Action Buttons (Apple Pro Segmented Toolbar) */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/10 dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/10 backdrop-blur-xl shadow-xs">
+                {/* Z-Report */}
+                <motion.div
+                  whileHover={{ scale: 1.04, y: -0.5 }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={SPRING.snappy}
                 >
-                  <span className="inline-flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-300">
-                    <Icon paths={I.receipt} size={15} strokeWidth={2.2} />
-                    {t('payments.zReport')}
-                  </span>
-                </GlassButton>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.03, y: -1 }}
-                whileTap={{ scale: 0.97 }}
-                transition={SPRING.snappy}
-              >
-                <GlassButton
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    window.dispatchEvent(
-                      new CustomEvent('open-ai-copilot', {
-                        detail: {
-                          prompt: t('payments.aiPrompt'),
-                        },
-                      }),
-                    );
-                  }}
-                  className="!rounded-2xl !border-violet-400/35 !bg-violet-500/[0.08] hover:!bg-violet-500/[0.14] !shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.8)]"
-                >
-                  <span className="inline-flex items-center gap-2 font-semibold text-violet-700 dark:text-violet-300">
-                    <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
-                    {t('payments.aiAnalysis')}
-                  </span>
-                </GlassButton>
-              </motion.div>
+                  <GlassButton
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setZReportModalOpen(true)}
+                    title={`${t('payments.zReport')} (Z)`}
+                    aria-label={t('payments.zReport')}
+                    className="min-h-[40px] px-3 rounded-xl border border-emerald-400/35 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.18] shadow-xs"
+                  >
+                    <span className="inline-flex items-center gap-1.5 font-bold text-xs text-emerald-700 dark:text-emerald-300">
+                      <Icon paths={I.receipt} size={15} strokeWidth={2.2} />
+                      <span className="hidden sm:inline">{t('payments.zReport')}</span>
+                      <kbd aria-hidden="true" className="hidden lg:inline-block rounded border border-emerald-500/30 bg-emerald-500/10 px-1 py-0.2 font-mono text-[9px]">
+                        Z
+                      </kbd>
+                    </span>
+                  </GlassButton>
+                </motion.div>
 
+                {/* AI Analysis */}
+                <motion.div
+                  whileHover={{ scale: 1.04, y: -0.5 }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={SPRING.snappy}
+                >
+                  <GlassButton
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      window.dispatchEvent(
+                        new CustomEvent('open-ai-copilot', {
+                          detail: {
+                            prompt: t('payments.aiPrompt'),
+                          },
+                        }),
+                      );
+                    }}
+                    title={`${t('payments.aiAnalysis')} (I)`}
+                    aria-label={t('payments.aiAnalysis')}
+                    className="min-h-[40px] px-3 rounded-xl border border-violet-400/35 bg-violet-500/[0.08] hover:bg-violet-500/[0.18] shadow-xs"
+                  >
+                    <span className="inline-flex items-center gap-1.5 font-bold text-xs text-violet-700 dark:text-violet-300">
+                      <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
+                      <span className="hidden sm:inline">{t('payments.aiAnalysis')}</span>
+                      <kbd aria-hidden="true" className="hidden lg:inline-block rounded border border-violet-500/30 bg-violet-500/10 px-1 py-0.2 font-mono text-[9px]">
+                        I
+                      </kbd>
+                    </span>
+                  </GlassButton>
+                </motion.div>
+              </div>
+
+              {/* Primary CTA: Record Payment */}
               <motion.div
-                whileHover={{ scale: 1.03, y: -1 }}
+                whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
                 transition={SPRING.snappy}
               >
@@ -1235,11 +1251,14 @@ export function PaymentsPage() {
                   type="button"
                   variant="primary"
                   onClick={handleOpenModal}
-                  className="!rounded-2xl !border-white/30 !bg-gradient-to-r !from-blue-600 !via-indigo-600 !to-violet-600 !text-white !shadow-[0_12px_24px_-6px_rgba(37,99,235,0.45),inset_0_1.5px_1px_rgba(255,255,255,0.5)]"
+                  className="min-h-[42px] px-4 rounded-2xl shadow-sm font-bold text-xs sm:text-sm !border-white/30 !bg-gradient-to-r !from-blue-600 !via-indigo-600 !to-violet-600 !text-white !shadow-[0_12px_24px_-6px_rgba(37,99,235,0.45),inset_0_1.5px_1px_rgba(255,255,255,0.5)]"
                 >
-                  <span className="inline-flex items-center gap-2 font-semibold">
+                  <span className="inline-flex items-center gap-2">
                     <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                    {t('payments.add')}
+                    <span>{t('payments.add')}</span>
+                    <kbd aria-hidden="true" className="hidden xl:inline-block rounded border border-white/30 bg-white/15 px-1.5 py-0.2 font-mono text-[10px]">
+                      P
+                    </kbd>
                   </span>
                 </GlassButton>
               </motion.div>
