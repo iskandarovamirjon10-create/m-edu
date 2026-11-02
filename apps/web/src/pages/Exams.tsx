@@ -739,25 +739,31 @@ export function ExamsPage() {
             </div>
 
             {/* Header Actions (≥44px Touch Targets) */}
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  playTick();
-                  examsQuery.refetch();
-                }}
-                className="inline-flex min-h-[44px] items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/70 dark:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200/70 dark:border-white/10 hover:bg-white/90 dark:hover:bg-white/15 transition-all shadow-sm active:scale-95"
-                title="Refresh Assessments (R)"
-                aria-label={t('common.refresh') || 'Refresh'}
-              >
-                <Icon paths={I.refresh} size={14} strokeWidth={2} />
-                <span>{t('common.refresh') || 'Refresh'}</span>
-                <kbd className="hidden sm:inline-block text-[10px] opacity-60 font-mono px-1 py-0.5 rounded bg-black/5 dark:bg-white/10">R</kbd>
-              </button>
+            <div className="flex items-center gap-2.5">
+              {/* Pro Glass Segmented Capsule */}
+              <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.06] dark:border-white/10 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    playTick();
+                    examsQuery.refetch();
+                  }}
+                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  title="Refresh Assessments (R)"
+                  aria-label={t('common.refresh') || 'Refresh'}
+                >
+                  <Icon paths={I.refresh} size={14} strokeWidth={2} />
+                  <span className="text-xs font-semibold hidden sm:inline">{t('common.refresh') || 'Refresh'}</span>
+                  <span className="sr-only">{t('common.refresh') || 'Refresh'}</span>
+                  <kbd className="hidden md:inline-block text-[10px] opacity-60 font-mono px-1 py-0.5 rounded bg-black/5 dark:bg-white/10">R</kbd>
+                </button>
+              </div>
+
+              {/* 1 Primary Solid Gradient CTA */}
               <GlassButton
                 onClick={() => openModal()}
                 variant="primary"
-                className="inline-flex min-h-[44px] items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 active:scale-[0.98] transition-all"
+                className="inline-flex min-h-[44px] items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 active:scale-[0.98] transition-all"
                 aria-label={t('exams.add') || 'Create Exam'}
               >
                 <Icon paths={I.plus} size={16} strokeWidth={2.5} />

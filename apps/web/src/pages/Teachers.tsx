@@ -1077,45 +1077,48 @@ export function TeachersPage() {
         description={t('teachers.pageSubtitle')}
         actions={
           <div className="flex items-center gap-2.5">
-            <GlassButton
-              type="button"
-              variant="secondary"
-              onClick={() => handleExportCSV()}
-              title={t('teachers.bulk.exportCsv')}
-              className="!rounded-full border-slate-200/80 dark:border-white/10"
-            >
-              <span className="inline-flex items-center gap-1.5 font-semibold">
+            {/* Pro Glass Segmented Capsule */}
+            <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.06] dark:border-white/10 shadow-sm">
+              <button
+                type="button"
+                onClick={() => handleExportCSV()}
+                title={`${t('teachers.bulk.exportCsv')} (E)`}
+                aria-label={t('teachers.bulk.exportCsv')}
+                className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
                 <Glyph name="export" size={15} weight={2} />
-                <span className="hidden sm:inline">{t('teachers.bulk.exportCsv')}</span>
-              </span>
-            </GlassButton>
+                <span className="text-xs font-semibold hidden sm:inline">CSV</span>
+                <span className="sr-only">{t('teachers.bulk.exportCsv')}</span>
+              </button>
 
-                        <GlassButton
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                sound.playPop?.();
-                haptics.light();
-                setIsAuditStudioOpen(true);
-              }}
-              title="AI Dars Sifati & Pedagogik Audit Studiyasi"
-              className="!rounded-full border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
-            >
-              <span className="inline-flex items-center gap-1.5 font-semibold">
+              <button
+                type="button"
+                onClick={() => {
+                  sound.playPop?.();
+                  haptics.light();
+                  setIsAuditStudioOpen(true);
+                }}
+                title="AI Dars Sifati & Pedagogik Audit Studiyasi (A)"
+                aria-label="AI Dars Auditi"
+                className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-500 dark:text-blue-400 hover:bg-blue-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
                 <MeduAiLogo size="xs" />
-                <span className="hidden sm:inline">AI Dars Auditi</span>
-              </span>
-            </GlassButton>
+                <span className="text-xs font-semibold hidden sm:inline">AI Audit</span>
+                <span className="sr-only">AI Dars Auditi</span>
+              </button>
+            </div>
 
-<GlassButton
+            {/* 1 Primary Solid Gradient CTA */}
+            <GlassButton
               type="button"
               variant="primary"
               onClick={handleOpenCreateModal}
-              className="!rounded-full shadow-lg shadow-blue-500/20"
+              className="!rounded-2xl shadow-lg shadow-blue-500/20 font-bold min-h-[44px] px-4"
             >
-              <span className="inline-flex items-center gap-1.5 font-semibold">
+              <span className="inline-flex items-center gap-2 font-semibold">
                 <Glyph name="userPlus" size={16} weight={2.2} />
                 <span>{t('teachers.add')}</span>
+                <kbd className="hidden sm:inline-block rounded bg-white/20 px-1 py-0.2 text-[10px] text-white/90">N</kbd>
               </span>
             </GlassButton>
           </div>

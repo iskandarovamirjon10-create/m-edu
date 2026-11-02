@@ -1238,29 +1238,33 @@ export function SchedulePage() {
                 })}
               </div>
 
-              {/* AI Optimizer Button */}
-              <GlassButton
-                variant="secondary"
-                size="md"
-                onClick={() => setIsOptimizerOpen(true)}
-                className="min-h-[44px] px-3.5 font-bold border-cyan-500/30 bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 active:scale-95"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <span>⚡</span>
-                  <span className="hidden sm:inline">AI Ziddiyatlar & Optimizator</span>
-                </span>
-              </GlassButton>
+              {/* Pro Glass Segmented Capsule */}
+              <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.06] dark:border-white/10 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setIsOptimizerOpen(true)}
+                  title="AI Ziddiyatlar & Optimizator (O)"
+                  aria-label="AI Ziddiyatlar & Optimizator"
+                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 hover:bg-cyan-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-cyan-500"
+                >
+                  <span className="text-sm">⚡</span>
+                  <span className="text-xs font-semibold hidden md:inline">Optimizator</span>
+                  <span className="sr-only">AI Ziddiyatlar & Optimizator</span>
+                  <kbd className="hidden lg:inline-block rounded bg-cyan-500/20 px-1 py-0.2 text-[10px] text-cyan-600 dark:text-cyan-300">O</kbd>
+                </button>
+              </div>
 
-              {/* Add Slot Button (Touch Target >= 44px) */}
+              {/* 1 Primary Solid Gradient CTA */}
               <GlassButton
                 variant="primary"
                 size="md"
                 onClick={openCreate}
-                className="min-h-[44px] px-4 font-bold shadow-md active:scale-95"
+                className="min-h-[44px] px-4 font-bold shadow-md shadow-blue-500/20 active:scale-95 !rounded-2xl"
               >
                 <span className="inline-flex items-center gap-2">
                   <Icon paths={I.plus} size={16} strokeWidth={2.5} />
                   <span>{t('schedule.addEntry')}</span>
+                  <kbd className="hidden sm:inline-block rounded bg-white/20 px-1 py-0.2 text-[10px] text-white/90">N</kbd>
                 </span>
               </GlassButton>
             </div>

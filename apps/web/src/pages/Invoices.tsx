@@ -862,15 +862,32 @@ export function InvoicesPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
+              {/* Pro Glass Segmented Capsule */}
+              <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.06] dark:border-white/10 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setProrateOpen(true)}
+                  title={`${t('invoices.prorate.button')} (P)`}
+                  aria-label={t('invoices.prorate.button')}
+                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  <Icon paths={I.calculator} size={15} strokeWidth={2.2} />
+                  <span className="text-xs font-semibold hidden sm:inline">Prorate</span>
+                  <span className="sr-only">{t('invoices.prorate.button')}</span>
+                  <kbd className="hidden md:inline-block rounded bg-indigo-500/20 px-1 py-0.2 text-[10px] text-indigo-600 dark:text-indigo-300">P</kbd>
+                </button>
+              </div>
+
+              {/* 1 Primary Solid Gradient CTA */}
               <motion.div
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 transition={SPRING.snappy}
               >
                 <GlassButton
-                  variant="secondary"
-                  onClick={() => setProrateOpen(true)}
-                  className="min-h-[44px] px-4"
+                  variant="primary"
+                  onClick={() => setCreateOpen(true)}
+                  className="min-h-[44px] px-5 font-bold shadow-md shadow-blue-500/20"
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e: any) => {
@@ -878,37 +895,14 @@ export function InvoicesPage() {
                       e.preventDefault();
                       e.currentTarget.click();
                     }
-                  }}
-                >
+                  }}>
                   <span className="inline-flex items-center gap-2">
-                    <Icon paths={I.calculator} size={15} strokeWidth={2.2} />
-                    {t('invoices.prorate.button')}
+                    <Icon paths={I.plus} size={15} strokeWidth={2.5} />
+                    <span>{t('invoices.createDraft')}</span>
+                    <kbd className="hidden sm:inline-block rounded bg-white/20 px-1 py-0.2 text-[10px] text-white/90">N</kbd>
                   </span>
                 </GlassButton>
               </motion.div>
-            <motion.div
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              transition={SPRING.snappy}
-            >
-              <GlassButton
-                variant="primary"
-                onClick={() => setCreateOpen(true)}
-                className="min-h-[44px] px-5"
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e: any) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.currentTarget.click();
-                  }
-                }}>
-                <span className="inline-flex items-center gap-2">
-                  <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                  {t('invoices.createDraft')}
-                </span>
-              </GlassButton>
-            </motion.div>
             </div>
           </div>
         </div>

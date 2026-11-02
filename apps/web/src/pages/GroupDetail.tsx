@@ -762,6 +762,15 @@ export function GroupDetailPage() {
       } else if (e.key === 'r' || e.key === 'R') {
         playTick();
         void refetchGroup();
+      } else if (e.key === 'i' || e.key === 'I') {
+        playTick();
+        window.dispatchEvent(
+          new CustomEvent('open-ai-copilot', {
+            detail: {
+              prompt: `"${groupData.name}" guruhi bo'yicha tahlil ber: o'quvchilar soni (${stats.totalMembers} nafar, sig'imi ${stats.capacity || 'cheklanmagan'}), o'qituvchi (${teacherName}), dars xonasi (${groupData.room || 'belgilanmagan'}) va dars jadvali.`,
+            },
+          }),
+        );
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -908,78 +917,78 @@ export function GroupDetailPage() {
               </div>
             </div>
 
-            {/* Quick Actions with >= 44x44px touch targets */}
+            {/* Quick Actions (Apple Pro Glass Segmented Icon Toolbar + 1 Primary CTA) */}
             <div className="flex flex-wrap items-center gap-2.5 shrink-0 pt-4 border-t border-black/[0.06] dark:border-white/[0.08] lg:pt-0 lg:border-t-0">
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <GlassButton asChild variant="secondary" className="min-h-[44px] px-4 !border-sky-500/30 hover:!border-sky-500/50">
-                  <Link to={`/attendance?groupId=${groupData.id}`}>
-                    <span className="inline-flex items-center gap-2 text-sky-600 dark:text-sky-400 font-semibold text-xs">
-                      <Icon paths={I.checkCircle} size={15} strokeWidth={2.2} />
-                      <span>{t('nav.attendance', 'Davomat')}</span>
-                    </span>
-                  </Link>
-                </GlassButton>
-              </motion.div>
+              {/* Pro Glass Segmented Capsule */}
+              <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.06] dark:border-white/10 shadow-sm">
+                {/* 1. Davomat */}
+                <Link
+                  to={`/attendance?groupId=${groupData.id}`}
+                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-sky-500"
+                  title={`${t('nav.attendance', 'Davomat')} (D)`}
+                  aria-label={t('nav.attendance', 'Davomat')}
+                >
+                  <Icon paths={I.checkCircle} size={15} strokeWidth={2.2} />
+                  <span className="text-xs font-semibold hidden md:inline">{t('nav.attendance', 'Davomat')}</span>
+                  <span className="sr-only">{t('nav.attendance', 'Davomat')}</span>
+                </Link>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <GlassButton asChild variant="secondary" className="min-h-[44px] px-4 !border-indigo-500/30 hover:!border-indigo-500/50">
-                  <Link to={`/grades?groupId=${groupData.id}`}>
-                    <span className="inline-flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-semibold text-xs">
-                      <Icon paths={I.book} size={15} strokeWidth={2.2} />
-                      <span>{t('nav.grades', 'Baholar')}</span>
-                    </span>
-                  </Link>
-                </GlassButton>
-              </motion.div>
+                {/* 2. Baholar */}
+                <Link
+                  to={`/grades?groupId=${groupData.id}`}
+                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  title={`${t('nav.grades', 'Baholar')} (G)`}
+                  aria-label={t('nav.grades', 'Baholar')}
+                >
+                  <Icon paths={I.book} size={15} strokeWidth={2.2} />
+                  <span className="text-xs font-semibold hidden md:inline">{t('nav.grades', 'Baholar')}</span>
+                  <span className="sr-only">{t('nav.grades', 'Baholar')}</span>
+                </Link>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <GlassButton asChild variant="secondary" className="min-h-[44px] px-4 !border-amber-500/30 hover:!border-amber-500/50">
-                  <Link to={`/homework?groupId=${groupData.id}`}>
-                    <span className="inline-flex items-center gap-2 text-amber-600 dark:text-amber-400 font-semibold text-xs">
-                      <Icon paths={I.layers} size={15} strokeWidth={2.2} />
-                      <span>{t('nav.homework', 'Vazifalar')}</span>
-                    </span>
-                  </Link>
-                </GlassButton>
-              </motion.div>
+                {/* 3. Vazifalar */}
+                <Link
+                  to={`/homework?groupId=${groupData.id}`}
+                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500"
+                  title={`${t('nav.homework', 'Vazifalar')} (H)`}
+                  aria-label={t('nav.homework', 'Vazifalar')}
+                >
+                  <Icon paths={I.layers} size={15} strokeWidth={2.2} />
+                  <span className="text-xs font-semibold hidden md:inline">{t('nav.homework', 'Vazifalar')}</span>
+                  <span className="sr-only">{t('nav.homework', 'Vazifalar')}</span>
+                </Link>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <GlassButton
+                {/* 4. Partalar Xaritasi */}
+                <button
                   type="button"
-                  variant="secondary"
                   onClick={() => {
                     playPop();
                     setSeatingModalOpen(true);
                   }}
-                  className="min-h-[44px] px-4 !border-emerald-500/30 hover:!border-emerald-500/50"
+                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  title="Partalar Xaritasi (P)"
                   aria-label="Partalar Xaritasi"
                 >
-                  <span className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
-                    <span>🪑</span>
-                    <span>Partalar Xaritasi</span>
-                  </span>
-                </GlassButton>
-              </motion.div>
+                  <span className="text-sm">🪑</span>
+                  <span className="text-xs font-semibold hidden md:inline">Partalar</span>
+                  <span className="sr-only">Partalar Xaritasi</span>
+                </button>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <GlassButton
+                {/* 5. Split View Sidecar */}
+                <button
                   type="button"
-                  variant="secondary"
                   onClick={handleOpenGroupSidecar}
-                  className="min-h-[44px] px-4 !border-blue-500/30 hover:!border-blue-500/50"
+                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                  title="Split View Sidecar [S]"
                   aria-label="Split View Sidecar [S]"
                 >
-                  <span className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 font-semibold text-xs">
-                    <span>◨</span>
-                    <span>Sidecar [S]</span>
-                  </span>
-                </GlassButton>
-              </motion.div>
+                  <span className="text-sm">◨</span>
+                  <span className="text-xs font-semibold hidden md:inline">Sidecar</span>
+                  <span className="sr-only">Split View Sidecar [S]</span>
+                </button>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <GlassButton
+                {/* 6. AI Tahlil */}
+                <button
                   type="button"
-                  variant="secondary"
                   onClick={() => {
                     playPop();
                     window.dispatchEvent(
@@ -990,22 +999,24 @@ export function GroupDetailPage() {
                       }),
                     );
                   }}
-                  className="min-h-[44px] px-4 !border-purple-500/30 hover:!border-purple-500/50"
+                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-purple-500"
+                  title={`${t('aiAnalysis', 'AI Tahlil')} (I)`}
                   aria-label={t('aiAnalysis', 'AI Tahlil')}
                 >
-                  <span className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-semibold text-xs">
-                    <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
-                    {t('aiAnalysis', 'AI Tahlil')}
-                  </span>
-                </GlassButton>
-              </motion.div>
+                  <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
+                  <span className="text-xs font-semibold hidden md:inline">AI</span>
+                  <span className="sr-only">{t('aiAnalysis', 'AI Tahlil')}</span>
+                </button>
+              </div>
 
+              {/* 1 Primary Solid Gradient CTA */}
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <GlassButton asChild variant="primary" className="min-h-[44px] px-4">
+                <GlassButton asChild variant="primary" className="min-h-[44px] px-4 font-bold shadow-md shadow-blue-500/20">
                   <Link to={`/groups/${groupData.id}/edit`}>
                     <span className="inline-flex items-center gap-2 font-semibold text-xs">
                       <Icon paths={I.edit} size={15} strokeWidth={2} />
-                      {t('groupForm.editTitle', 'Tahrirlash')}
+                      <span>{t('groupForm.editTitle', 'Tahrirlash')}</span>
+                      <kbd className="hidden sm:inline-block rounded bg-white/20 px-1 py-0.2 text-[10px] text-white/90">E</kbd>
                     </span>
                   </Link>
                 </GlassButton>
