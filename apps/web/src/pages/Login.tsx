@@ -171,7 +171,7 @@ function calculatePasswordStrength(pass: string): {
 
 export function LoginPage() {
   const { t } = useSafeI18n();
-  const { user, login, changePassword, logout } = useAuth();
+  const { user, login, parentLogin, changePassword, logout } = useAuth();
   const navigate = useNavigate();
   const sound = usePremiumSound();
   const prefersReducedMotion = useReducedMotion();
@@ -190,6 +190,37 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
+
+  // Quick 1-click dev role login
+  const handleQuickLogin = async (u: string, p: string, isParent = false) => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    sound.playPop();
+    try {
+      if (isParent) {
+        await parentLogin(u, p);
+        sound.playSuccess();
+        navigate('/parent-portal', { replace: true });
+      } else {
+        const loggedUser = await login(u, p);
+        sound.playSuccess();
+        if (loggedUser.role === 'TEACHER') {
+          navigate('/teacher-cockpit', { replace: true });
+        } else if (loggedUser.role === 'STUDENT') {
+          navigate('/schedule', { replace: true });
+        } else {
+          navigate('/', { replace: true });
+        }
+      }
+    } catch (err: unknown) {
+      sound.playError();
+      setError(getErrorMessage(err));
+      setErrorShakeKey((k) => k + 1);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // Mandatory password change state
   const [mustChangeStep, setMustChangeStep] = useState(false);
@@ -631,11 +662,11 @@ export function LoginPage() {
                 htmlFor="login-username"
                 className="block text-[13px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#E2E8F0]"
               >
-                Foydalanuvchi nomi
+                {t('auth.username', 'Foydalanuvchi nomi')}
               </label>
               {username.length > 0 && username.toLowerCase() !== username && (
                 <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
-                  Kichik harfga o'tkaziladi
+                  {t('login.lowercaseNotice', "Kichik harfga o'tkaziladi")}
                 </span>
               )}
             </div>
@@ -683,7 +714,7 @@ export function LoginPage() {
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={handleClearUsername}
-                    aria-label="Foydalanuvchi nomini tozalash"
+                    aria-label={t('login.clearUsername', 'Foydalanuvchi nomini tozalash')}
                     className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-black/[0.06] hover:text-slate-700 active:scale-90 dark:hover:bg-white/10 dark:hover:text-slate-200"
                   >
                     <svg
@@ -814,7 +845,7 @@ export function LoginPage() {
               type="submit"
               disabled={!canSubmit}
               aria-busy={busy}
-              aria-label="Kirish"
+              aria-label={t('login.continue', 'Kirish')}
               className="group relative flex h-12.5 w-full items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-r from-[#0071E3] via-[#007AFF] to-[#0066D6] text-[15px] font-semibold tracking-tight text-white shadow-[0_12px_32px_-6px_rgba(0,122,255,0.48),inset_0_1.5px_0_0_rgba(255,255,255,0.45)] transition-all duration-200 hover:shadow-[0_16px_38px_-6px_rgba(0,122,255,0.65),inset_0_1.5px_0_0_rgba(255,255,255,0.55)] active:scale-[0.985] disabled:pointer-events-none disabled:opacity-45 disabled:shadow-none dark:from-[#0A84FF] dark:via-[#007AFF] dark:to-[#0055B3]"
             >
               {/* Shimmer reflection highlight line sweep */}
@@ -865,11 +896,68 @@ export function LoginPage() {
             </button>
           </div>
 
+          {/* ── 1-Tugma bilan Tezkor Kirish (Dev / Test) ──────────────── */}
+          <div className="pt-3">
+            <div className="relative flex py-2 items-center">
+              <div className="flex-grow border-t border-black/10 dark:border-white/10" />
+              <span className="flex-shrink mx-2 text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                1-Tugma bilan kirish (Dev)
+              </span>
+              <div className="flex-grow border-t border-black/10 dark:border-white/10" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1 sm:grid-cols-4">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => handleQuickLogin('admin', 'Password123!')}
+                className="group relative flex flex-col items-center justify-center rounded-2xl border border-blue-500/25 bg-blue-500/10 p-2.5 text-center transition-all duration-150 hover:bg-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
+              >
+                <span className="text-xl">👑</span>
+                <span className="mt-1 text-[12px] font-bold text-blue-700 dark:text-blue-300">Admin</span>
+                <span className="text-[10px] text-blue-600/70 dark:text-blue-400/70">ORG_ADMIN</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => handleQuickLogin('teacher', 'Password123!')}
+                className="group relative flex flex-col items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-2.5 text-center transition-all duration-150 hover:bg-emerald-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
+              >
+                <span className="text-xl">👨‍🏫</span>
+                <span className="mt-1 text-[12px] font-bold text-emerald-700 dark:text-emerald-300">O'qituvchi</span>
+                <span className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70">TEACHER</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => handleQuickLogin('student', 'Password123!')}
+                className="group relative flex flex-col items-center justify-center rounded-2xl border border-purple-500/25 bg-purple-500/10 p-2.5 text-center transition-all duration-150 hover:bg-purple-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
+              >
+                <span className="text-xl">🎓</span>
+                <span className="mt-1 text-[12px] font-bold text-purple-700 dark:text-purple-300">O'quvchi</span>
+                <span className="text-[10px] text-purple-600/70 dark:text-purple-400/70">STUDENT</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => handleQuickLogin('parent@medu.test', 'Password123!', true)}
+                className="group relative flex flex-col items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/10 p-2.5 text-center transition-all duration-150 hover:bg-amber-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
+              >
+                <span className="text-xl">👨‍👩‍👦</span>
+                <span className="mt-1 text-[12px] font-bold text-amber-700 dark:text-amber-300">Ota-ona</span>
+                <span className="text-[10px] text-amber-600/70 dark:text-amber-400/70">PARENT</span>
+              </button>
+            </div>
+          </div>
+
           {/* ── Security Trust Footer ───────────────────────────────── */}
           <div className="flex items-center justify-center gap-2.5 pt-3 text-[11.5px] font-medium text-slate-400 dark:text-slate-500">
             <span className="inline-flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Markazlashgan IAM Tizimi</span>
+              <span>{t('login.centralizedIam', 'Markazlashgan IAM Tizimi')}</span>
             </span>
             <span className="opacity-40">·</span>
             <span>M-EDU Identity Guard</span>
