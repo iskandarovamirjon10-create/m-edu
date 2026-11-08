@@ -161,23 +161,33 @@ const {
   mockEnrollmentsList: vi.fn(),
 }));
 
-vi.mock('@/lib/api', () => ({
-  studentsApi: {
-    get: (...args: unknown[]) => mockGet(...args),
-    assignGroup: (...args: unknown[]) => mockAssignGroup(...args),
-    removeGroup: (...args: unknown[]) => mockRemoveGroup(...args),
-    getParents: (...args: unknown[]) => mockGetParents(...args),
-    addParent: (...args: unknown[]) => mockAddParent(...args),
-    updateParent: (...args: unknown[]) => mockUpdateParent(...args),
-    unlinkParent: (...args: unknown[]) => mockUnlinkParent(...args),
-  },
-  groupsApi: {
-    list: (...args: unknown[]) => mockGroupsList(...args),
-  },
-  faceApi: {
-    enrollments: (...args: unknown[]) => mockEnrollmentsList(...args),
-  },
-}));
+vi.mock('@/lib/api', () => {
+  class MockApiError extends Error {
+    status = 500;
+    details: unknown = {};
+  }
+  return {
+    ApiError: MockApiError,
+    aiApi: {
+      diagnoseStudent: vi.fn().mockResolvedValue(null),
+    },
+    studentsApi: {
+      get: (...args: unknown[]) => mockGet(...args),
+      assignGroup: (...args: unknown[]) => mockAssignGroup(...args),
+      removeGroup: (...args: unknown[]) => mockRemoveGroup(...args),
+      getParents: (...args: unknown[]) => mockGetParents(...args),
+      addParent: (...args: unknown[]) => mockAddParent(...args),
+      updateParent: (...args: unknown[]) => mockUpdateParent(...args),
+      unlinkParent: (...args: unknown[]) => mockUnlinkParent(...args),
+    },
+    groupsApi: {
+      list: (...args: unknown[]) => mockGroupsList(...args),
+    },
+    faceApi: {
+      enrollments: (...args: unknown[]) => mockEnrollmentsList(...args),
+    },
+  };
+});
 
 function renderComponent(studentId = 'student-007') {
   const queryClient = new QueryClient({

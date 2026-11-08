@@ -19,7 +19,6 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { aiApi, type AiStudentDiagnostic } from '@/lib/api';
-import { getErrorMessage } from '@/lib/errorMessages';
 import { cn } from '@/lib/design';
 
 export interface AiStudentMessageModalOptions {
@@ -45,6 +44,7 @@ export function AiStudentDiagnosticWidget({
   const [expanded, setExpanded] = useState(true);
 
   const loadDiagnostic = async () => {
+    if (!aiApi || typeof aiApi.diagnoseStudent !== 'function') return;
     setLoading(true);
     setError(null);
     try {
@@ -52,7 +52,11 @@ export function AiStudentDiagnosticWidget({
       setData(res);
     } catch (err: unknown) {
       setData(null);
-      setError(getErrorMessage(err));
+      const message =
+        err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string'
+          ? (err as { message: string }).message
+          : 'Diagnostikani yuklashda xatolik yuz berdi';
+      setError(message);
     } finally {
       setLoading(false);
     }

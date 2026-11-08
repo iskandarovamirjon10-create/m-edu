@@ -2965,16 +2965,12 @@ export function StudentsPage() {
                 title={
                   hasActiveFilters
                     ? t('students.emptyFiltered')
-                    : search.trim()
-                      ? t('students.emptySearch')
-                      : t('students.title')
+                    : t('students.emptySearch', 'No students found')
                 }
                 message={
                   hasActiveFilters
                     ? t('students.emptyFilteredHint')
-                    : search.trim()
-                      ? t('students.emptyHint')
-                      : 'Hozircha talaba yo‘q. Birinchi talabani qo‘shing.'
+                    : t('students.emptyHint', 'Hozircha talaba yo‘q. Birinchi talabani qo‘shing.')
                 }
                 action={
                   hasActiveFilters ? (

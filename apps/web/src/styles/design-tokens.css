@@ -436,6 +436,7 @@
   [data-theme="oled"] {
     color-scheme: dark;
     --bg-base: #000000;
+    --bg-page: #000000;
     --bg-surface: #07090E;
     --bg-raised: #0E1116;
     --bg-elevated: #15181E;
