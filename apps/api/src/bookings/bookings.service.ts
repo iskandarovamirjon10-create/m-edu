@@ -62,6 +62,11 @@ export class BookingsService {
         throw new NotFoundException(`Resource ${dto.resourceId} not found`);
       }
 
+      // Serialize concurrent bookings on this resource to eliminate TOCTOU race conditions
+      if (typeof (tx as any).$executeRaw === 'function') {
+        await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'resource_booking:' + orgId + ':' + dto.resourceId}))`;
+      }
+
       // Check for overlapping bookings for this resource in this org
       const conflicts = await tx.resourceBooking.findMany({
         where: {

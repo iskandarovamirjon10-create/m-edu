@@ -722,12 +722,21 @@ export class GamificationService {
       );
     }
 
-    // If reward was in DB and has finite stock, decrement stock
-    if (dbReward && dbReward.stock !== null && dbReward.stock > 0 && this.prisma.gamificationReward) {
-      await this.prisma.gamificationReward.update({
-        where: { id: dbReward.id },
+    // If reward was in DB and has finite stock, decrement stock atomically.
+    // If concurrent claims exhausted the stock, revert debited coins and reject.
+    if (dbReward && dbReward.stock !== null && this.prisma.gamificationReward) {
+      const stockRes = await this.prisma.gamificationReward.updateMany({
+        where: { id: dbReward.id, organizationId, stock: { gt: 0 } },
         data: { stock: { decrement: 1 } },
-      }).catch(() => {});
+      }).catch(() => ({ count: 0 }));
+
+      if (stockRes && stockRes.count === 0) {
+        await this.prisma.studentGamification.updateMany({
+          where: { studentId, organizationId },
+          data: { coins: { increment: costCoins } },
+        }).catch(() => {});
+        throw new BadRequestException('Ushbu mukofot omborda tugagan');
+      }
     }
 
     // Create claim record in DB

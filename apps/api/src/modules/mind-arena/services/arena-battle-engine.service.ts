@@ -465,7 +465,7 @@ export class ArenaBattleEngineService {
    */
   async finishDuel(roomId: string, surrenderedByStudentId?: string) {
     const room = this.activeRooms.get(roomId);
-    if (!room) return;
+    if (!room || room.roundStatus === 'FINISHED') return;
 
     room.roundStatus = 'FINISHED';
     if (room.roundTimer) clearTimeout(room.roundTimer);
