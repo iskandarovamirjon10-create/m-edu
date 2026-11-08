@@ -18,6 +18,7 @@
  */
 
 import { memo, useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   useSidecarOpen,
@@ -151,16 +152,17 @@ export const SplitViewSidecar = memo(function SplitViewSidecar() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isOpen, handleClose, sound]);
 
-  if (!isOpen || !data) return null;
+  if (typeof document === 'undefined') return null;
 
-  const badgeText = typeof data.badge === 'string' ? data.badge : data.badge?.text;
-  const badgeToneKey = typeof data.badge === 'object' && data.badge?.tone ? data.badge.tone : 'blue';
+  const badgeText = typeof data?.badge === 'string' ? data.badge : data?.badge?.text;
+  const badgeToneKey = typeof data?.badge === 'object' && data?.badge?.tone ? data.badge.tone : 'blue';
   const tone = STATUS_TONES[badgeToneKey] || STATUS_TONES.blue;
+  const visible = isOpen && !!data;
 
-  return (
+  return createPortal(
     <AnimatePresence>
-      {isOpen && (
-        <div className="pointer-events-none fixed inset-0 z-50 flex justify-end">
+      {visible && (
+        <div className="pointer-events-none fixed inset-0 z-[140] flex justify-end">
           {/* Mobile backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -550,6 +552,7 @@ export const SplitViewSidecar = memo(function SplitViewSidecar() {
           </motion.aside>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 });

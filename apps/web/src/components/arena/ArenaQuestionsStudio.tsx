@@ -1116,11 +1116,17 @@ export const ArenaQuestionsStudio: React.FC = () => {
       </div>
 
       {/* =====================================================================
-          LIVE TEST SOLVER MODAL (With Real Countdown & Reset)
+          STUDIO MODALS (Portaled to document.body to avoid stacking traps)
       ===================================================================== */}
-      <AnimatePresence>
-        {testQuestion && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <>
+              {/* =====================================================================
+                  LIVE TEST SOLVER MODAL (With Real Countdown & Reset)
+              ===================================================================== */}
+              <AnimatePresence>
+                {testQuestion && (
+                  <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1275,7 +1281,7 @@ export const ArenaQuestionsStudio: React.FC = () => {
       ===================================================================== */}
       <AnimatePresence>
         {isAiModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-md">
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1474,7 +1480,7 @@ export const ArenaQuestionsStudio: React.FC = () => {
       ===================================================================== */}
       <AnimatePresence>
         {isManualModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-md">
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1714,7 +1720,7 @@ export const ArenaQuestionsStudio: React.FC = () => {
       ===================================================================== */}
       <AnimatePresence>
         {isRejectModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-md">
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1782,6 +1788,10 @@ export const ArenaQuestionsStudio: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+            </>,
+            document.body
+          )
+        : null}
     </div>
   );
 };

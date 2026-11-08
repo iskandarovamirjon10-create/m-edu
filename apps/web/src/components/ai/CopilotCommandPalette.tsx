@@ -14,6 +14,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { IconChevronRight, IconCommand, IconSearch } from './copilotIcons';
 import { CopilotKbd } from './CopilotControls';
@@ -102,7 +103,9 @@ export function CopilotCommandPalette({
     command.run();
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-[170] flex items-start justify-center p-3 pt-[12vh] sm:pt-[16vh]">
@@ -252,7 +255,8 @@ export function CopilotCommandPalette({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 

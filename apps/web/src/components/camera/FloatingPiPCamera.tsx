@@ -12,6 +12,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Camera,
@@ -123,20 +124,21 @@ export const FloatingPiPCamera = memo(function FloatingPiPCamera() {
     setIsMuted((prev) => !prev);
   }, [sound]);
 
-  if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <AnimatePresence>
-      <motion.div
-        drag
-        dragMomentum={false}
-        dragConstraints={{ left: -window.innerWidth + 360, right: 0, top: -window.innerHeight + 260, bottom: 0 }}
-        initial={{ opacity: 0, scale: 0.85, y: 30 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.85, y: 30 }}
-        transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] right-3 md:bottom-6 md:right-6 z-[9980] select-none"
-      >
+      {isOpen ? (
+        <motion.div
+          drag
+          dragMomentum={false}
+          dragConstraints={{ left: -window.innerWidth + 360, right: 0, top: -window.innerHeight + 260, bottom: 0 }}
+          initial={{ opacity: 0, scale: 0.85, y: 30 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.85, y: 30 }}
+          transition={{ type: 'spring', stiffness: 360, damping: 28 }}
+          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] right-3 md:bottom-6 md:right-6 z-[9980] select-none"
+        >
         <GlassSurface
           tone="frost"
           elevation="floating"
@@ -262,6 +264,8 @@ export const FloatingPiPCamera = memo(function FloatingPiPCamera() {
           </div>
         </GlassSurface>
       </motion.div>
-    </AnimatePresence>
+      ) : null}
+    </AnimatePresence>,
+    document.body,
   );
 });

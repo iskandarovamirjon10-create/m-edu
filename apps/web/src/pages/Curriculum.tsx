@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef, useId } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { curriculumApi, subjectsApi } from '@/lib/api';
@@ -1036,9 +1037,11 @@ export function CurriculumPage() {
       </motion.div>
 
       {/* CREATE MODAL (WCAG >= 44x44px Touch Targets) */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>
+              {isModalOpen && (
+                <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1158,9 +1161,12 @@ export function CurriculumPage() {
                 </div>
               </form>
             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                </div>
+              )}
+            </AnimatePresence>,
+            document.body
+          )
+        : null}
 
       {/* Gemini 3 AI Pedagogical Lesson Studio Modal */}
       <GlassModal

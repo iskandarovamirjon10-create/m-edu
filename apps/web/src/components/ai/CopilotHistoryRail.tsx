@@ -47,6 +47,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   MessageSquare,
   Trash2,
@@ -861,44 +862,47 @@ export function CopilotHistoryRail({
         </div>
       </div>
 
-      {/* Delete confirmation */}
-      {pendingDelete && (
-        <div
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby={`${liveId}-confirm`}
-          className="fixed inset-0 z-[160] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
-        >
-          <div className="w-full max-w-sm rounded-2xl border border-black/[0.08] bg-white/95 p-4 shadow-2xl dark:border-white/[0.10] dark:bg-[#1C1C1E]/95">
-            <h4 id={`${liveId}-confirm`} className="text-sm font-semibold text-[var(--text-primary)]">
-              {t('ai.history.deleteTitle') || "Suhbatni o'chirish"}
-            </h4>
-            <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
-              <strong className="font-semibold text-[var(--text-secondary)]">
-                {pendingDelete.title}
-              </strong>{' '}
-              {t('ai.history.deleteBody') || "butunlay o'chiriladi. Davom etasizmi?"}
-            </p>
-            <div className="mt-3 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingDelete(null)}
-                autoFocus
-                className="rounded-lg border border-black/[0.08] px-3 py-1.5 text-[11.5px] font-medium outline-none hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:border-white/[0.10] dark:hover:bg-white/[0.06]"
-              >
-                {t('common.cancel') || 'Bekor qilish'}
-              </button>
-              <button
-                type="button"
-                onClick={confirmDelete}
-                className="rounded-lg bg-[#FF3B30] px-3 py-1.5 text-[11.5px] font-semibold text-white outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[#FF3B30]/50"
-              >
-                {t('common.delete') || "O'chirish"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete confirmation (Portaled to document.body to avoid rail stacking context) */}
+      {pendingDelete && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby={`${liveId}-confirm`}
+              className="fixed inset-0 z-[160] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+            >
+              <div className="w-full max-w-sm rounded-2xl border border-black/[0.08] bg-white/95 p-4 shadow-2xl dark:border-white/[0.10] dark:bg-[#1C1C1E]/95">
+                <h4 id={`${liveId}-confirm`} className="text-sm font-semibold text-[var(--text-primary)]">
+                  {t('ai.history.deleteTitle') || "Suhbatni o'chirish"}
+                </h4>
+                <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
+                  <strong className="font-semibold text-[var(--text-secondary)]">
+                    {pendingDelete.title}
+                  </strong>{' '}
+                  {t('ai.history.deleteBody') || "butunlay o'chiriladi. Davom etasizmi?"}
+                </p>
+                <div className="mt-3 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPendingDelete(null)}
+                    autoFocus
+                    className="rounded-lg border border-black/[0.08] px-3 py-1.5 text-[11.5px] font-medium outline-none hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-[#007AFF]/50 dark:border-white/[0.10] dark:hover:bg-white/[0.06]"
+                  >
+                    {t('common.cancel') || 'Bekor qilish'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDelete}
+                    className="rounded-lg bg-[#FF3B30] px-3 py-1.5 text-[11.5px] font-semibold text-white outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[#FF3B30]/50"
+                  >
+                    {t('common.delete') || "O'chirish"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </aside>
   );
 }

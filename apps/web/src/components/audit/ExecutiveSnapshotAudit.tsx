@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback, memo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useToasts } from '@/components/ui';
@@ -121,18 +122,19 @@ export const ExecutiveSnapshotAudit = memo(function ExecutiveSnapshotAudit({
     window.print();
   };
 
-  if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <AnimatePresence>
-      <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
-        onClick={onClose}
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.94 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.94 }}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.94 }}
           onClick={(e) => e.stopPropagation()}
           className={cn(
             'w-full max-w-xl max-h-[92dvh] overflow-y-auto rounded-3xl sm:rounded-[2.5rem] border border-white/40 bg-white/90 p-4 sm:p-6 shadow-2xl backdrop-blur-3xl',
@@ -254,6 +256,8 @@ export const ExecutiveSnapshotAudit = memo(function ExecutiveSnapshotAudit({
           )}
         </motion.div>
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>,
+  document.body
+);
 });

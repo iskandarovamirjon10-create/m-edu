@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassButton, GlassBadge, useToast } from '@/components/ui';
 import { cn, Icon } from '@/lib/design';
@@ -138,11 +139,11 @@ export function CampusDigitalSignageStudio({
     toast.push('warning', 'Kampus bo‘ylab tezkor e’lon barcha ekranlarga translyatsiya qilindi');
   }, [sound, toast]);
 
-  return (
+  const content = (
     <div
       className={cn(
         'relative overflow-hidden transition-all duration-300',
-        isFullscreen ? 'fixed inset-0 z-50 bg-[#0B0F1A] p-8 overflow-y-auto' : 'rounded-3xl border border-white/10 p-6 md:p-8 bg-gradient-to-br from-[#0B0F1A] via-slate-900 to-black',
+        isFullscreen ? 'fixed inset-0 z-[140] bg-[#0B0F1A] p-8 overflow-y-auto' : 'rounded-3xl border border-white/10 p-6 md:p-8 bg-gradient-to-br from-[#0B0F1A] via-slate-900 to-black',
         className
       )}
     >
@@ -339,4 +340,10 @@ export function CampusDigitalSignageStudio({
       </div>
     </div>
   );
+
+  if (isFullscreen && typeof document !== 'undefined') {
+    return createPortal(content, document.body);
+  }
+
+  return content;
 }

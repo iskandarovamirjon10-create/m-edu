@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, memo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useToasts } from '@/components/ui';
@@ -112,11 +113,13 @@ export const SystemTelemetryHUD = memo(function SystemTelemetryHUD({
     }, 1200);
   }, [playLaserScan, playSuccess, push]);
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <div
-          className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md"
+          className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md"
           onClick={onClose}
         >
         <motion.div
@@ -259,6 +262,7 @@ export const SystemTelemetryHUD = memo(function SystemTelemetryHUD({
         </motion.div>
       </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 });

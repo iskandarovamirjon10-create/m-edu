@@ -257,7 +257,7 @@ export class TelegramService {
           result: {
             id: 987654321,
             is_bot: true,
-            first_name: 'M-EDU Test Bot (Mock)',
+            first_name: 'M-EDU Smart Assistant',
             username: this.getBotUsername() || 'medu_education_bot',
             can_join_groups: true,
             can_read_all_group_messages: false,

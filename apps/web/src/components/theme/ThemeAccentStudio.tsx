@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useToasts } from '@/components/ui';
@@ -113,11 +114,13 @@ export const ThemeAccentStudio = memo(function ThemeAccentStudio({
     onClose();
   }, [playSuccess, push, onClose]);
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+          className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
           onClick={onClose}
         >
         <motion.div
@@ -266,6 +269,7 @@ export const ThemeAccentStudio = memo(function ThemeAccentStudio({
         </motion.div>
       </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 });

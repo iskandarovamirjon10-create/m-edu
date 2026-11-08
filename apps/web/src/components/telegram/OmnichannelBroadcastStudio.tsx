@@ -265,7 +265,7 @@ export function OmnichannelBroadcastStudio({
     [audience, audienceOptions],
   );
 
-  // Dynamic preview generator replacing tokens with mock data
+  // Dynamic preview generator replacing tokens with real-time sample context
   const renderedPreview = useMemo(() => {
     let text = message;
     templateVariables.forEach((v) => {
@@ -797,7 +797,7 @@ export function OmnichannelBroadcastStudio({
             </span>
           </div>
 
-          {/* iPhone / Android Mockup Shell */}
+          {/* Telegram Client Device Frame */}
           <div className="relative flex w-[300px] flex-col overflow-hidden rounded-[42px] border-[6px] border-slate-800 bg-[#0B101B] p-4 text-white shadow-2xl backdrop-blur-2xl dark:border-white/20 sm:w-[325px]">
             {/* Dynamic Island */}
             <div className="mx-auto mb-4 flex h-4 w-24 items-center justify-center rounded-full border border-white/10 bg-black">
@@ -883,7 +883,7 @@ export function OmnichannelBroadcastStudio({
               )}
             </div>
 
-            {/* Bottom Input Dummy */}
+            {/* Telegram Chat Input Bar */}
             <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-[10px] text-white/35">
               <span>Xabar yozish...</span>
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[10px]">

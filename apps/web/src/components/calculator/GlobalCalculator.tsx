@@ -32,6 +32,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Calculator as CalculatorIcon,
   X,
@@ -779,19 +780,21 @@ export function GlobalCalculator() {
     <>
       <style>{CALC_LIQUID_CSS}</style>
 
-      <AnimatePresence>
-        {isCalculatorOpen && (
-          <motion.div
-            key="calc-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            className="fixed inset-0 z-[140] bg-black/50 backdrop-blur-md lg:hidden"
-            onClick={() => setCalculatorOpen(false)}
-            aria-hidden="true"
-          />
-        )}
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>
+              {isCalculatorOpen && (
+                <motion.div
+                  key="calc-backdrop"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.22 }}
+                  className="fixed inset-0 z-[140] bg-black/50 backdrop-blur-md lg:hidden"
+                  onClick={() => setCalculatorOpen(false)}
+                  aria-hidden="true"
+                />
+              )}
 
         {isCalculatorOpen && (
           <motion.div
@@ -1413,7 +1416,10 @@ export function GlobalCalculator() {
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+    )
+  : null}
 
       {/* Polite announcer for screen readers — only final results. */}
       <span aria-live="polite" aria-atomic="true" className="sr-only">

@@ -17,6 +17,7 @@
  */
 
 import { memo, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { SPRING } from '@/layouts/core/tokens';
@@ -78,15 +79,16 @@ export const ExecutivePDFStudio = memo(function ExecutivePDFStudio({
     window.print();
   }, [sound]);
 
-  if (!open) return null;
+  if (typeof document === 'undefined') return null;
 
   const verifyUrl = typeof window !== 'undefined' && (doc.verificationCode || doc.id)
     ? `${window.location.origin}/verify/${doc.verificationCode || doc.id}`
     : `https://m-edu.uz/verify/${doc.verificationCode || doc.id}`;
 
-  return (
+  return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-6 overflow-y-auto print:p-0 print:static print:z-0">
+      {open && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-6 overflow-y-auto print:p-0 print:static print:z-0">
         {/* Print orientation styles */}
         <style dangerouslySetInnerHTML={{ __html: `
           @media print {
@@ -524,8 +526,10 @@ export const ExecutivePDFStudio = memo(function ExecutivePDFStudio({
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>,
+  document.body
+);
 });
 
 export default ExecutivePDFStudio;

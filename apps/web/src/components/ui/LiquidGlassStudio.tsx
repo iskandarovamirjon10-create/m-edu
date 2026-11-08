@@ -22,6 +22,7 @@
  */
 
 import { memo, useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { SPRING } from '@/layouts/core/tokens';
@@ -195,10 +196,12 @@ export const LiquidGlassStudio = memo(function LiquidGlassStudio() {
     playPop();
   }, [playPop]);
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -426,6 +429,7 @@ export const LiquidGlassStudio = memo(function LiquidGlassStudio() {
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 });

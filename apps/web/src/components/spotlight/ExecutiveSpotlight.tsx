@@ -12,6 +12,7 @@ import {
   useCallback,
   memo,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
@@ -308,11 +309,13 @@ export const ExecutiveSpotlight = memo(function ExecutiveSpotlight({
     }
   }, [selectedIndex]);
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {isCurrentlyOpen && (
         <div
-          className="fixed inset-0 z-[9999] flex items-start justify-center pt-16 sm:pt-24 px-4 bg-black/60 backdrop-blur-xl"
+          className="fixed inset-0 z-[140] flex items-start justify-center pt-16 sm:pt-24 px-4 bg-black/60 backdrop-blur-xl"
           onClick={handleClose}
         >
           <motion.div
@@ -452,6 +455,7 @@ export const ExecutiveSpotlight = memo(function ExecutiveSpotlight({
         </motion.div>
       </div>
     )}
-  </AnimatePresence>
+  </AnimatePresence>,
+  document.body
 );
 });

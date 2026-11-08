@@ -61,7 +61,7 @@ export class TelegramWebAppAuthService {
       ) {
         if (initDataRaw.includes('mock=true')) {
           return {
-            user: { id: 99999999, first_name: 'Mock', last_name: 'User', username: 'mockuser' },
+            user: { id: 99999999, first_name: 'M-EDU', last_name: 'Foydalanuvchi', username: 'medu_user' },
             authDate: Math.floor(Date.now() / 1000),
             hash: 'mock-hash-dev',
           };

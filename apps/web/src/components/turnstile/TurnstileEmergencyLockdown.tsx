@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback, useEffect, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useToasts } from '@/components/ui';
@@ -257,12 +258,14 @@ export const TurnstileEmergencyLockdown = memo(function TurnstileEmergencyLockdo
       </div>
 
       {/* Emergency PIN Dialog */}
-      <AnimatePresence>
-        {isPinModalOpen && (
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
-            onClick={() => !isSubmitting && setIsPinModalOpen(false)}
-          >
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>
+              {isPinModalOpen && (
+                <div
+                  className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+                  onClick={() => !isSubmitting && setIsPinModalOpen(false)}
+                >
             <motion.div
               initial={{ opacity: 0, scale: 0.94 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -322,7 +325,10 @@ export const TurnstileEmergencyLockdown = memo(function TurnstileEmergencyLockdo
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+    )
+  : null}
     </>
   );
 });
